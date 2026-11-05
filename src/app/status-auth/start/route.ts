@@ -5,6 +5,10 @@ import prisma from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-config';
 import { createStatusAuthTicket } from '@/lib/status-pages/status-auth';
 import {
+  resolveStatusAuthReturn,
+  statusAuthStartQuerySchema,
+} from '@/lib/status-pages/status-auth-return';
+import {
   normalizeHostname,
   matchesStatusPageDomain,
 } from '@/lib/status-pages/status-route-resolver';
@@ -12,13 +16,12 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = req.nextUrl;
-  const pageId = searchParams.get('pageId')?.trim();
-  const returnTo = searchParams.get('returnTo')?.trim() || '/';
-
-  if (!pageId) {
-    return new NextResponse('Missing pageId parameter', { status: 400 });
+  const parsed = statusAuthStartQuerySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
+  if (!parsed.success) {
+    return new NextResponse('Invalid status sign-in request', { status: 400 });
   }
+  const query = parsed.data;
+  const pageId = query.pageId;
 
   const appUrl = await getAppUrl();
   const session = await getServerSession(await getAuthOptions());
@@ -38,10 +41,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Validate returnTo target host against registered domains
-  let targetUrl: URL;
-  try {
-    targetUrl = new URL(returnTo, appUrl);
-  } catch {
+  const targetUrl = resolveStatusAuthReturn(query, appUrl);
+  if (!targetUrl) {
     return new NextResponse('Invalid returnTo URL', { status: 400 });
   }
 

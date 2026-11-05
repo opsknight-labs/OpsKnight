@@ -1,3 +1,5 @@
+import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
+
 export type AppSurface = 'desktop' | 'mobile';
 
 function root(surface: AppSurface) {
@@ -40,21 +42,42 @@ export const appRoutes = {
 } as const;
 
 /**
- * Forces a NextAuth sign-out and lands the responder back on the login
- * surface they were on, never on the other surface's login page. Use this
- * instead of hand-assembling `/api/auth/signout?callbackUrl=/login...`,
- * which is exactly how a mobile session-expiry redirect previously escaped
- * to the desktop login page.
+ * Forces a sign-out and lands the responder back on the login surface they
+ * were on, never on the other surface's login page.
+ *
+ * Points straight at the sign-out page with flat query parameters. Going
+ * through `/api/auth/signout?callbackUrl=...` does not work: NextAuth drops
+ * the whole query when it forwards GET requests to `pages.signOut`, and a
+ * login URL nested inside `callbackUrl` is encoded twice (`%252F`), which
+ * WAFs block as multiple URL encoding (OWASP CRS 920230).
  */
 export function forcedSignOutUrl(
   surface: AppSurface,
   options: { error?: string; callbackUrl?: string } = {}
 ): string {
-  const loginUrl = appRoutes.login(surface, options.callbackUrl);
-  const destination = options.error
-    ? `${loginUrl}${loginUrl.includes('?') ? '&' : '?'}error=${encodeURIComponent(options.error)}`
-    : loginUrl;
-  return `/api/auth/signout?callbackUrl=${encodeURIComponent(destination)}`;
+  const params = new URLSearchParams({ surface });
+  if (options.error) params.set('error', options.error);
+  if (options.callbackUrl) params.set('callbackUrl', options.callbackUrl);
+  return `/auth/signout?${params.toString()}`;
+}
+
+/**
+ * Where the sign-out page sends the browser once the session is gone. Mirrors
+ * `forcedSignOutUrl`: a `surface` parameter means a forced sign-out, so the
+ * login page for that surface is rebuilt from the flat parameters. Without
+ * one, any safe internal `callbackUrl` is kept, falling back to `/login`.
+ */
+export function signOutDestination(params: URLSearchParams): string {
+  const rawSurface = params.get('surface');
+  if (rawSurface !== 'mobile' && rawSurface !== 'desktop') {
+    return safeInternalCallbackUrl(params.get('callbackUrl'), '/login');
+  }
+  const surface: AppSurface = rawSurface;
+  const callbackUrl = safeInternalCallbackUrl(params.get('callbackUrl'), '') || undefined;
+  const loginUrl = appRoutes.login(surface, callbackUrl);
+  const error = params.get('error');
+  if (!error || !/^[A-Za-z0-9_-]{1,64}$/.test(error)) return loginUrl;
+  return `${loginUrl}${loginUrl.includes('?') ? '&' : '?'}error=${encodeURIComponent(error)}`;
 }
 
 export const SUPPORTED_MOBILE_ROUTE_PREFIXES = [

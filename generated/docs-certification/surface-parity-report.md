@@ -1,9 +1,9 @@
 # Product surface parity report
 
 - Release: 2.0.0
-- Documentation pages scanned: 342
-- Task-oriented pages scanned: 200
-- Action-bearing lines inspected by the automated guard: 2956
+- Documentation pages scanned: 355
+- Task-oriented pages scanned: 201
+- Action-bearing lines inspected by the automated guard: 3115
 - Explicit cross-surface contracts: 3
 - Forbidden surface-pattern violations remaining: 0
 

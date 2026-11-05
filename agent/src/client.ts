@@ -4,6 +4,12 @@ import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
 import { verifyLeaseAcknowledgement } from './envelope';
 import { getAgentVersion } from './version';
 
+// The default `node` user agent is flagged by WAF bot rules in front of the
+// control plane; identify the agent explicitly so operators can allow it.
+function agentUserAgent(): string {
+  return `OpsKnight-Agent/${getAgentVersion()}`;
+}
+
 type JsonObject = Record<string, unknown>;
 
 export class AgentApiError extends Error {
@@ -58,6 +64,7 @@ export class AgentClient {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        'user-agent': agentUserAgent(),
         'x-opsknight-agent-id': this.identity.agentId,
         'x-opsknight-timestamp': timestamp,
         'x-opsknight-nonce': nonce,
@@ -196,7 +203,7 @@ export class AgentClient {
   async checkServerClock(): Promise<{ serverTime: string; skewSeconds: number }> {
     const response = await fetch(new URL('/api/runbook-agent/v1/time', this.baseUrl), {
       method: 'GET',
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', 'user-agent': agentUserAgent() },
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) {
@@ -235,7 +242,7 @@ export async function enrollAgent(baseUrl: string, token: string): Promise<Agent
   try {
     const timeRes = await fetch(new URL('/api/runbook-agent/v1/time', baseUrl), {
       method: 'GET',
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', 'user-agent': agentUserAgent() },
       signal: AbortSignal.timeout(10_000),
     });
     if (timeRes.ok) {
@@ -265,7 +272,7 @@ export async function enrollAgent(baseUrl: string, token: string): Promise<Agent
   });
   const response = await fetch(new URL('/api/runbook-agent/v1/enroll', baseUrl), {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'user-agent': agentUserAgent() },
     signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({
       token,

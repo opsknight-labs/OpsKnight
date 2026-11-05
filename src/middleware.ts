@@ -3,7 +3,12 @@ import { sessionEndMessage } from '@/lib/auth-control/messages';
 import { getToken } from 'next-auth/jwt';
 import { logger } from '@/lib/logger';
 import { getNextAuthSecret } from '@/lib/secret-manager';
-import { SESSION_TOKEN_COOKIE_NAME, useSecureCookies } from '@/lib/auth-cookies';
+import {
+  CALLBACK_URL_COOKIE_NAME,
+  SESSION_TOKEN_COOKIE_NAME,
+  useSecureCookies,
+} from '@/lib/auth-cookies';
+import { relativeToAppOrigin, safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { recoveryOriginPin } from '@/lib/recovery-origin-pin';
 import { toMobilePath } from '@/lib/app-routes';
 import { statusDomainRequestHeaders } from '@/lib/status-pages/internal-request';
@@ -507,6 +512,24 @@ type CachedDomainConfig = {
 let cachedStatusDomain: CachedDomainConfig | null = null;
 let inflightStatusDomainFetch: Promise<StatusDomainConfig | null> | null = null;
 
+let warnedInternalApiIsPublic = false;
+
+// A self-fetch through the public URL crosses the WAF, and a block there makes
+// every database-configured host answer 421. Say so once instead of failing quietly.
+function warnIfInternalApiIsPublic() {
+  if (warnedInternalApiIsPublic || !process.env.INTERNAL_API_URL) return;
+  try {
+    if (new URL(INTERNAL_API_BASE).host !== new URL(DEFAULT_APP_HOST).host) return;
+  } catch {
+    return;
+  }
+  warnedInternalApiIsPublic = true;
+  logger.warn(
+    'Status domain lookup failed and INTERNAL_API_URL points at the public app URL; set it to a loopback or in-cluster address that bypasses the WAF',
+    { component: 'middleware' }
+  );
+}
+
 async function fetchStatusDomainConfig(forceRefresh = false): Promise<StatusDomainConfig | null> {
   const now = Date.now();
   if (!forceRefresh && cachedStatusDomain && cachedStatusDomain.expiresAt > now)
@@ -528,6 +551,7 @@ async function fetchStatusDomainConfig(forceRefresh = false): Promise<StatusDoma
       };
       return value;
     } catch {
+      warnIfInternalApiIsPublic();
       cachedStatusDomain = {
         value: cachedStatusDomain?.value ?? null,
         expiresAt: Date.now() + Math.min(STATUS_DOMAIN_CACHE_TTL, 10) * 1000,
@@ -1035,6 +1059,40 @@ export default async function middleware(req: NextRequest) {
       redirectResponse.headers.set(key, value)
     );
     applySensitiveAuthHeaders(redirectResponse, '/reset-password');
+    return redirectResponse;
+  }
+
+  // NextAuth reaches GET /api/auth/signin after every SSO error (and from
+  // useSession({ required })) and answers with /login?callbackUrl=<absolute URL>.
+  // WAF RFI rules block a full URL in the query, so answer that hop here with
+  // a relative callback taken from the query or NextAuth's callback cookie.
+  if (pathname === '/api/auth/signin' && req.method === 'GET') {
+    const authoritativeOrigin = resolveAuthoritativeOrigin(
+      req,
+      requestHost,
+      statusConfig,
+      usedConfiguredForwardedHost
+    );
+    const rawCallback =
+      req.nextUrl.searchParams.get('callbackUrl') ??
+      req.cookies.get(CALLBACK_URL_COOKIE_NAME)?.value;
+    const callbackUrl = safeInternalCallbackUrl(
+      relativeToAppOrigin(rawCallback, authoritativeOrigin),
+      ''
+    );
+    const loginUrl = new URL(
+      /^\/m(?:[/?#]|$)/.test(callbackUrl) ? '/m/login' : '/login',
+      authoritativeOrigin
+    );
+    if (callbackUrl) loginUrl.searchParams.set('callbackUrl', callbackUrl);
+    const error = req.nextUrl.searchParams.get('error');
+    if (error && /^[A-Za-z0-9_-]{1,64}$/.test(error)) loginUrl.searchParams.set('error', error);
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      redirectResponse.headers.set(key, value)
+    );
+    redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    redirectResponse.headers.set('Pragma', 'no-cache');
     return redirectResponse;
   }
 

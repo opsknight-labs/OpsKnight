@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import OperationalStatus from '@/components/OperationalStatus';
 import { redirect } from 'next/navigation';
+import { forcedSignOutUrl } from '@/lib/app-routes';
 
 import Sidebar from '@/components/Sidebar';
 import DatabaseOffline from '@/components/DatabaseOffline';
@@ -88,7 +89,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       />
     );
   }
-  if (!shell) redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
+  if (!shell) redirect(forcedSignOutUrl('desktop', { error: 'SessionExpired' }));
   const activeShell: AppShellContext = shell;
 
   const userName = activeShell.user.name;

@@ -9,11 +9,15 @@ import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import AuthBrand from '@/components/auth/AuthBrand';
 import Spinner from '@/components/ui/Spinner';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
-import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
+import { signOutDestination } from '@/lib/app-routes';
 
 export default function SignOutClient() {
   const searchParams = useSearchParams();
-  const callbackUrl = safeInternalCallbackUrl(searchParams.get('callbackUrl'), '/login');
+  const destination = signOutDestination(new URLSearchParams(searchParams.toString()));
+  // The sign-out APIs get only the path. Sending the full destination nests its
+  // query a second time (`%252F`), which WAFs block as multiple URL encoding;
+  // the browser goes to the full destination itself afterwards.
+  const callbackUrl = destination.split(/[?#]/)[0];
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState('');
 
@@ -40,7 +44,7 @@ export default function SignOutClient() {
         // Cache cleanup is defense-in-depth; it must never prevent server logout.
       }
       await signOut({ redirect: false, callbackUrl });
-      window.location.assign(providerLogoutUrl ?? callbackUrl);
+      window.location.assign(providerLogoutUrl ?? destination);
     } catch {
       setError('Sign out could not be completed. Please try again.');
       setIsSigningOut(false);
@@ -86,7 +90,7 @@ export default function SignOutClient() {
             )}
           </button>
           <Link
-            href={callbackUrl}
+            href={destination}
             className="group flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
           >
             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />

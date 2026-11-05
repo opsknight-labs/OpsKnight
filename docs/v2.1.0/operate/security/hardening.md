@@ -35,6 +35,7 @@ Generate unique secrets for this installation. Never copy session, encryption, p
 4. Enable `TRUST_PROXY_HEADERS` only when requests always traverse controlled proxies; set `TRUSTED_PROXY_HOPS` to the real hop count.
 5. Restrict request/body sizes and timeouts at both proxy and application boundaries without breaking documented webhook limits.
 6. Keep administrative and operator endpoints off anonymous public paths where network segmentation is available.
+7. If a web application firewall fronts OpsKnight, keep it in blocking mode and add only the narrow exclusions in [WAF compatibility](../deploy/waf-compatibility).
 
 `CF-Connecting-IP` is trusted only when you set `TRUSTED_PROXY_HEADER=cf-connecting-ip` (use it only behind Cloudflare), because any other ingress passes a client-supplied value through. `TRUSTED_PROXIES` accepts addresses and CIDRs and, when the peer address is known, limits trust to those peers even if `TRUST_PROXY_HEADERS=true`. Without a trusted proxy every client is treated as one unidentified client; REST API v2 then protects authentication with bounded verification concurrency instead of a per-address quota (see `API_V2_UNIDENTIFIED_AUTH_CONCURRENCY`, `API_V2_OVER_BUDGET_IP_CONCURRENCY`, `API_V2_PRIORITY_AUTH_CONCURRENCY` in `env.example`).
 
