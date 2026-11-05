@@ -1166,10 +1166,20 @@ const extraSchemas: Json = {
             start: { type: 'string', format: 'date-time' },
             end: { type: 'string', format: 'date-time' },
             current: { type: 'boolean' },
+            startClamped: {
+              type: 'boolean',
+              description:
+                'True when coverage runs back past the lookback limit, so start is that limit, not the real start.',
+            },
+            endClamped: {
+              type: 'boolean',
+              description:
+                'True when coverage runs on past the lookahead limit, so end is that limit, not the real end.',
+            },
             handoffTo: {
               type: ['object', 'null'],
               description:
-                'Who is on call in the same schedule when this shift ends; null for a gap.',
+                'Who is on call in the same schedule when this shift ends; null for a gap or a clamped end.',
               properties: { userId: { type: 'string' }, name: { type: ['string', 'null'] } },
               required: ['userId', 'name'],
             },
@@ -1181,6 +1191,8 @@ const extraSchemas: Json = {
             'start',
             'end',
             'current',
+            'startClamped',
+            'endClamped',
             'handoffTo',
           ],
         },

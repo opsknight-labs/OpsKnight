@@ -253,6 +253,8 @@ describe('my on-call shifts (listMyOnCallShifts, oncall_my_shifts)', () => {
       start: string;
       end: string;
       current: boolean;
+      startClamped: boolean;
+      endClamped: boolean;
       handoffTo: { userId: string; name: string | null } | null;
     }[];
     truncated: boolean;
@@ -325,6 +327,45 @@ describe('my on-call shifts (listMyOnCallShifts, oncall_my_shifts)', () => {
     expect([...starts].sort()).toEqual(starts);
     expect(data.shifts.every(shift => Date.parse(shift.start) < Date.now() + 7 * DAY)).toBe(true);
     expect(data.shifts.filter(shift => shift.scheduleId === primary.id)).toHaveLength(4);
+  });
+
+  it('keeps the real boundaries of multi-day rotations and flags coverage it cannot bound', async () => {
+    const caller = await principal('USER', ['schedules:read']);
+    const other = await createTestUser({ name: `Weekly ${unique()}` });
+    // A seven-day rotation that began three days ago: the real start is not "one day before now".
+    const weekStart = new Date(Date.now() - 3 * DAY);
+    const weekly = await createTestOnCallSchedule('Weekly', [
+      { start: weekStart, rotationLengthHours: 7 * 24, userIds: [caller.user.id, other.id] },
+    ]);
+    // A one-person rotation is continuous coverage: no real start or end exists to report.
+    const solo = await createTestOnCallSchedule('Solo', [
+      {
+        start: new Date(Date.now() - 400 * DAY),
+        rotationLengthHours: 24,
+        userIds: [caller.user.id],
+      },
+    ]);
+
+    const result = (await callMcpOperation(caller.ctx(), 'listMyOnCallShifts', {
+      query: { days: 3 },
+    })) as Envelope<Shifts>;
+    const data = result.data.data;
+    expect(data.shifts.find(shift => shift.scheduleId === weekly.id)).toMatchObject({
+      start: weekStart.toISOString(),
+      end: new Date(weekStart.getTime() + 7 * DAY).toISOString(),
+      current: true,
+      startClamped: false,
+      endClamped: false,
+      handoffTo: { userId: other.id },
+    });
+    expect(data.shifts.find(shift => shift.scheduleId === solo.id)).toMatchObject({
+      current: true,
+      startClamped: true,
+      endClamped: true,
+      handoffTo: null,
+    });
+    // The only real status change is the weekly handoff, never the solo schedule's lookahead limit.
+    expect(data.nextHandoff).toMatchObject({ change: 'SHIFT_ENDS', scheduleId: weekly.id });
   });
 
   it('bounds the window and the count, and reports truncation', async () => {
