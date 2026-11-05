@@ -78,7 +78,7 @@ describe('D6 copy', () => {
   it('states the 90-day maximum and the real navigation path', () => {
     const overview = source('src/components/settings/mcp/sections/McpOverviewSection.tsx');
     expect(overview).not.toMatch(/Days Sliding/);
-    expect(overview).toContain('-day max');
+    expect(overview).toContain('at most {MCP_ABSOLUTE_SESSION_DAYS} days');
     expect(overview).toContain('Settings → Integrations &amp; ChatOps →');
     expect(source('src/components/settings/mcp/sections/McpConnectSection.tsx')).toContain(
       'MCP_ABSOLUTE_SESSION_DAYS'

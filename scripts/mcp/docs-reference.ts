@@ -70,7 +70,7 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     area: 'approvals',
     meaning:
       'The request was not reviewed within the review window, or was approved but not applied within the commit window.',
-    fix: 'Prepare the change again with a new idempotencyKey. Administrators can lengthen both windows under Access policy → Advanced → Reviewed actions.',
+    fix: 'Prepare the change again with a new idempotencyKey. Administrators can lengthen both windows under Access policy → Reviewed actions.',
   },
   MCP_APPROVAL_GUARD_NOT_ENFORCED: {
     area: 'server',
@@ -555,6 +555,8 @@ export const MCP_LOG_GUIDE: Record<string, string> = {
     'The authorization request failed validation. `fields` lists the parameters (never their values).',
   'mcp.authorize.unexpected_error':
     'An unexpected error on the authorization endpoint. `name` is the error class.',
+  'mcp.call_log.write_failed':
+    'A batch of activity-log rows could not be written and was dropped (counted in `opsknight_mcp_call_log_dropped_total`). `rows` is the batch size, `errorName` the error class.',
   'mcp.cimd.client_denied':
     'A metadata-document assistant was refused by policy. `reason`: automatic_connections_off, host_not_in_allowlist or no_scopes.',
   'mcp.cimd.client_id_rejected':

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import { MCP_WRITE_MODE_SUMMARY } from '@/lib/mcp/policy-copy';
+import McpUnsavedChangesGuard from '@/components/settings/mcp/McpUnsavedChangesGuard';
 
 /** A save either succeeds with the new revision or is refused because the policy moved on. */
 export type McpPolicySaveResult =
@@ -29,6 +30,8 @@ export default function McpPolicyForm({
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<'idle' | 'saved' | 'error' | 'conflict'>('idle');
   const [current, setCurrent] = useState(revision);
+  // Edits not yet saved: leaving the page asks first.
+  const [dirty, setDirty] = useState(false);
   const submitting = useRef(false);
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -45,6 +48,7 @@ export default function McpPolicyForm({
           return;
         }
         if (result) setCurrent(result.revision);
+        setDirty(false);
         setStatus('saved');
         notify.success('MCP configuration saved', { id: 'settings:mcp:save' });
       } catch (error) {
@@ -60,9 +64,19 @@ export default function McpPolicyForm({
     <form
       action={action as (form: FormData) => Promise<void>}
       onSubmit={submit}
-      onChange={() => setStatus(previous => (previous === 'conflict' ? previous : 'idle'))}
+      onChange={() => {
+        setDirty(true);
+        setStatus(previous => (previous === 'conflict' ? previous : 'idle'));
+      }}
+      // A field the browser refuses inside a closed section cannot be focused or seen, so the
+      // save would silently do nothing: open the section that holds it.
+      onInvalidCapture={event => {
+        const section = (event.target as Element).closest('details');
+        if (section && !section.open) section.open = true;
+      }}
       aria-busy={pending}
     >
+      <McpUnsavedChangesGuard dirty={dirty} />
       {current !== undefined && <input type="hidden" name="policyRevision" value={current} />}
       <SettingsSection
         title="Access and workload policy"
