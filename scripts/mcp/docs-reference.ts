@@ -1049,6 +1049,12 @@ export const MCP_METRIC_GUIDE: Record<string, { normal: string; action: string }
     action:
       'Sustained growth: OpsKnightMcpShedding. Raise the limit, add replicas, or find the busy connection.',
   },
+  opsknight_mcp_call_log_dropped_total: {
+    normal:
+      'Zero. Each increment is one activity-log row (the Connections tab drawer) not written because the queue was full or a batch write failed; requests themselves are unaffected.',
+    action:
+      'Any growth: search the log for mcp.call_log.write_failed and check database health. Audit rows for changes are written separately and are not affected.',
+  },
   opsknight_mcp_subscriptions_active: {
     normal: `Open listen streams on this process, at most ${MCP_STREAM_LIMITS.perProcess}.`,
     action: 'At the cap, new streams get MCP_SUBSCRIPTIONS_BUSY (counted as outcome `busy`).',

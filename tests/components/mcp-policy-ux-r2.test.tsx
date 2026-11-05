@@ -22,6 +22,12 @@ const policy = {
   requestsPerMinute: 60,
   approvalTtlMinutes: 240,
   approvalCommitWindowMinutes: 30,
+  allowedBrowserOrigins: [],
+  scopeStepUpEnabled: false,
+  patEnabled: false,
+  patMaxDays: 30,
+  patAllowedScopes: [],
+  requireReadOnlyConnections: false,
 };
 
 function section() {

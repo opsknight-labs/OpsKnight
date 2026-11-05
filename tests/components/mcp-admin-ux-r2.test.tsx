@@ -19,6 +19,8 @@ const now = new Date('2026-11-05T12:00:00Z');
 function grant(overrides: Partial<McpGrantRow> = {}): McpGrantRow {
   return {
     id: 'g1',
+    kind: 'oauth',
+    label: null,
     scopes: ['incidents:read'],
     effectiveScopes: ['incidents:read'],
     blockedReason: null,
