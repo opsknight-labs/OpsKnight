@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync as fsRead } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
 import {
@@ -20,6 +20,9 @@ import { mcpHttpError } from '@/lib/mcp/auth/http';
 import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+
+// eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed repository paths in this test
+const readFileSync = (path: string, encoding: 'utf8') => fsRead(path, encoding);
 
 const allScopes = [...supportedMcpScopes()].filter(scope => scope !== 'admin:manage');
 const actorWith = (

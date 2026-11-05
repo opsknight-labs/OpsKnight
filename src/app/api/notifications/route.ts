@@ -15,6 +15,14 @@ const LEGACY_NOT_FOUND_MESSAGE =
   'The requested item could not be found. It may have been deleted or you may not have access to it.';
 const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
 
+const NOTIFICATION_TYPES = new Map<string, 'incident' | 'service' | 'schedule' | 'system'>([
+  ['incident', 'incident'],
+  ['schedule', 'schedule'],
+  ['service', 'service'],
+  ['team', 'service'],
+  ['system', 'system'],
+]);
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(await getAuthOptions());
@@ -64,14 +72,7 @@ export async function GET(req: NextRequest) {
     const formattedNotifications = notifications.map(notification => {
       const timeAgo = formatDateTime(notification.createdAt, userTimeZone, { format: 'relative' });
       const typeKey = notification.type.toLowerCase();
-      const typeMap: Record<string, 'incident' | 'service' | 'schedule' | 'system'> = {
-        incident: 'incident',
-        schedule: 'schedule',
-        service: 'service',
-        team: 'service',
-        system: 'system',
-      };
-      const type = typeMap[typeKey] || 'incident';
+      const type = NOTIFICATION_TYPES.get(typeKey) ?? 'incident';
       const incidentId = notification.entityType === 'INCIDENT' ? notification.entityId : null;
 
       return {

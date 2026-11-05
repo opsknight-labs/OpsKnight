@@ -133,28 +133,30 @@ export function RequestedBy({
   );
 }
 
-const STATUS_COPY: Record<string, { label: string; body: string }> = {
-  PENDING: {
-    label: 'Waiting for review',
-    body: 'Reviewers were notified in OpsKnight. You can also send them this page link.',
-  },
-  APPROVED: {
-    label: 'Approved',
-    body: 'Ask your assistant to continue; it can apply the approved request once before the deadline below.',
-  },
-  REJECTED: {
-    label: 'Rejected',
-    body: 'Nothing was changed. Ask your assistant to prepare a corrected request if needed.',
-  },
-  EXPIRED: {
-    label: 'Expired',
-    body: 'It was not used in time. Ask your assistant to prepare it again with a new idempotency key.',
-  },
-  EXECUTING: { label: 'Running', body: 'Your assistant is applying the approved request.' },
-  COMMITTED: { label: 'Completed', body: 'The approved request was applied.' },
-  CONSUMED: { label: 'Completed', body: 'The approved plan was started.' },
-  FAILED: { label: 'Failed', body: 'The approved request could not be applied.' },
-};
+const STATUS_COPY = new Map<string, { label: string; body: string }>(
+  Object.entries({
+    PENDING: {
+      label: 'Waiting for review',
+      body: 'Reviewers were notified in OpsKnight. You can also send them this page link.',
+    },
+    APPROVED: {
+      label: 'Approved',
+      body: 'Ask your assistant to continue; it can apply the approved request once before the deadline below.',
+    },
+    REJECTED: {
+      label: 'Rejected',
+      body: 'Nothing was changed. Ask your assistant to prepare a corrected request if needed.',
+    },
+    EXPIRED: {
+      label: 'Expired',
+      body: 'It was not used in time. Ask your assistant to prepare it again with a new idempotency key.',
+    },
+    EXECUTING: { label: 'Running', body: 'Your assistant is applying the approved request.' },
+    COMMITTED: { label: 'Completed', body: 'The approved request was applied.' },
+    CONSUMED: { label: 'Completed', body: 'The approved plan was started.' },
+    FAILED: { label: 'Failed', body: 'The approved request could not be applied.' },
+  })
+);
 
 /** What a requester sees on their own request: status only, never the review controls. */
 export function RequesterStatus({
@@ -176,7 +178,7 @@ export function RequesterStatus({
   decisionReason: string | null;
   children?: ReactNode;
 }) {
-  const copy = STATUS_COPY[status] ?? { label: status, body: '' };
+  const copy = STATUS_COPY.get(status) ?? { label: status, body: '' };
   const open = status === 'PENDING' || status === 'APPROVED';
   return (
     <div className="max-w-3xl space-y-4 rounded-lg border p-6">

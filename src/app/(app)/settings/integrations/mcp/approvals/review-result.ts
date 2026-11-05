@@ -54,12 +54,14 @@ export const REVIEW_MESSAGES: Readonly<Record<string, string>> = {
 };
 
 /** Own keys only: an inherited name such as "constructor" is not an expected refusal. */
-const isReviewCode = (code: string) => Object.hasOwn(REVIEW_MESSAGES, code);
+const REVIEW_MESSAGE_BY_CODE = new Map(Object.entries(REVIEW_MESSAGES));
+const isReviewCode = (code: string) => REVIEW_MESSAGE_BY_CODE.has(code);
 
 export function reviewMessage(code: string) {
-  return isReviewCode(code)
-    ? REVIEW_MESSAGES[code]
-    : 'This decision could not be recorded. Reload the page and try again.';
+  return (
+    REVIEW_MESSAGE_BY_CODE.get(code) ??
+    'This decision could not be recorded. Reload the page and try again.'
+  );
 }
 
 /** The code of an expected refusal, or null for anything that should surface as a real error. */

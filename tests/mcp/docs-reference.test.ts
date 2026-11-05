@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync as fsExists, readFileSync as fsRead } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   MCP_ERROR_GUIDE,
@@ -23,6 +23,12 @@ import {
   MCP_APPROVAL_TTL_MIN_MINUTES,
 } from '@/lib/mcp/approvals/timing';
 import { MCP_ABSOLUTE_SESSION_DAYS, MCP_DEFAULT_IDLE_DAYS } from '@/lib/mcp/auth/session-lifetime';
+
+// Repository paths only: generated pages, checked-in docs and source files named in this test.
+// eslint-disable-next-line security/detect-non-literal-fs-filename -- repository paths only
+const readFileSync = (path: string, encoding: 'utf8') => fsRead(path, encoding);
+// eslint-disable-next-line security/detect-non-literal-fs-filename -- repository paths only
+const existsSync = (path: string) => fsExists(path);
 
 describe('F3: generated MCP reference pages', () => {
   it.each(MCP_GENERATED_PAGES.map(page => [page.path, page] as const))(
@@ -129,11 +135,10 @@ describe('F4: MCP docs are findable', () => {
     const readme = readFileSync('README.md', 'utf8');
     expect(readme).toContain('## 🤖 AI assistants (MCP)');
     expect(readme).toContain('(docs/v2.2.0/guides/mcp/self-hosted-setup.md)');
-    for (const key of Object.keys(MCP_DOCS_PATHS) as (keyof typeof MCP_DOCS_PATHS)[]) {
-      expect(existsSync(MCP_DOCS_PATHS[key]), MCP_DOCS_PATHS[key]).toBe(true);
-      expect(MCP_DOCS_LINKS[key].endsWith(MCP_DOCS_PATHS[key].replace(/^docs\/v2\.2\.0/, ''))).toBe(
-        true
-      );
+    const links = new Map(Object.entries(MCP_DOCS_LINKS));
+    for (const [key, path] of Object.entries(MCP_DOCS_PATHS)) {
+      expect(existsSync(path), path).toBe(true);
+      expect(links.get(key)?.endsWith(path.replace(/^docs\/v2\.2\.0/, ''))).toBe(true);
     }
     for (const file of [
       'src/components/settings/mcp/McpConnectGuide.tsx',

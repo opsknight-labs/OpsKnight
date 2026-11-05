@@ -295,6 +295,7 @@ export default function TopbarNotifications() {
   // Demand-driven loading: only fetch 50 notifications when the user actually opens the drawer
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetches from the server when the drawer opens.
       void fetchNotifications();
     }
   }, [open, fetchNotifications]);
@@ -304,6 +305,7 @@ export default function TopbarNotifications() {
     if (!pollingRequired) return;
 
     // Initialize badge count immediately when EventSource is unsupported
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetches from the server; state is set after the response.
     void fetchUnreadCount();
 
     let interval: ReturnType<typeof setInterval> | null = null;
