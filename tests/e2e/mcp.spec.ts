@@ -256,7 +256,11 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   await expect(page.getByText('Connection revoked', { exact: true })).toBeVisible();
   // The default view lists active connections; the revoked one moves to the Revoked filter.
   await expect(grant).toHaveCount(0);
-  await page.goto('/settings/integrations/mcp?tab=connections&status=revoked');
+  // The dialog's router.refresh() can still be settling (WebKit reports it as a navigation), so
+  // retry the move to the Revoked filter instead of racing it.
+  await expect(async () => {
+    await page.goto('/settings/integrations/mcp?tab=connections&status=revoked');
+  }).toPass({ timeout: 15_000 });
   await expect(
     main.getByRole('row').filter({ hasText: name }).first().getByText('Revoked', { exact: true })
   ).toBeVisible();
