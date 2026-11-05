@@ -162,7 +162,6 @@ interface BearerSnapshot extends Partial<GrantAuthoritySnapshot> {
   rotatedAt: Date | null;
   accessExpiresAt: Date;
   lastUsedAt: Date | null;
-  clientId: string | null;
 }
 
 /**
@@ -172,7 +171,7 @@ interface BearerSnapshot extends Partial<GrantAuthoritySnapshot> {
 async function resolveBearer(accessHash: string) {
   const [row] = await prisma.$queryRaw<BearerSnapshot[]>`
     SELECT t.id AS "tokenId", t."grantId" AS "tokenGrantId", t.scopes AS "tokenScopes",
-      t."rotatedAt", t."accessExpiresAt", t."lastUsedAt", g."clientId", ${AUTHORITY_COLUMNS}
+      t."rotatedAt", t."accessExpiresAt", t."lastUsedAt", ${AUTHORITY_COLUMNS}
     FROM "McpToken" t
     LEFT JOIN "McpGrant" g ON g.id = t."grantId"
     LEFT JOIN "McpClient" c ON c.id = g."clientId"
