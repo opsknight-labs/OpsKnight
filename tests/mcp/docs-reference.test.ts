@@ -356,9 +356,8 @@ describe('F4: MCP docs are findable', () => {
         );
         expect(entry, `${client}: no checkpoint for ${version} on ${date}`).toBeTruthy();
         expect(entry).toMatch(/\b[0-9a-f]{40}\b/);
-        expect(entry).toMatch(
-          /\b20\d{2}-\d{2}-\d{2}\b.*revision|revision.*\b20\d{2}-\d{2}-\d{2}\b/is
-        );
+        // The negotiated MCP revision.
+        expect(entry).toMatch(/revision[^\n]*(?:2025-06-18|2025-11-25|2026-07-28)/i);
         for (const check of CHECKS)
           expect(entry!.includes(`- ${check}: pass`), `${client}: ${check}`).toBe(true);
       }

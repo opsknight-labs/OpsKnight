@@ -12,10 +12,13 @@ function playwrightFetch(request: APIRequestContext, target: string, host: strin
       data: typeof init?.body === 'string' ? init.body : undefined,
     });
     const status = response.status();
-    return new Response([204, 205, 304].includes(status) ? null : await response.body(), {
-      status,
-      headers: response.headers(),
-    });
+    return new Response(
+      [204, 205, 304].includes(status) ? null : new Uint8Array(await response.body()),
+      {
+        status,
+        headers: response.headers(),
+      }
+    );
   };
 }
 
