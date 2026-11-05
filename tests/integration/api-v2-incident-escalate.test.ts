@@ -103,6 +103,29 @@ describe('POST /api/v2/incidents/{id}/escalate', () => {
     expect(await requests(second.id)).toBe(0);
   });
 
+  it('replays a successful escalation after the incident moves on, and still refuses a reused key', async () => {
+    const { id } = await createTestIncident('REST escalate then ack', serviceId, {
+      status: 'OPEN',
+    });
+    const key = `escalate-${randomUUID()}`;
+    const first = await post(admin, id, key);
+    expect(first.status).toBe(200);
+    const body = (await first.json()).data;
+    await db.incident.update({ where: { id }, data: { status: 'ACKNOWLEDGED' } });
+    const replay = await post(admin, id, key);
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    expect((await replay.json()).data).toMatchObject({ requested: true, paged: body.paged });
+    expect(await requests(id)).toBe(1);
+    // The same key on another incident that is not OPEN is still a conflict, not a quiet no-op.
+    const other = await createTestIncident('REST escalate resolved', serviceId, {
+      status: 'RESOLVED',
+    });
+    const conflict = await post(admin, other.id, key);
+    expect(conflict.status).toBe(409);
+    expect((await conflict.json()).code).toBe('IDEMPOTENCY_KEY_CONFLICT');
+  });
+
   it('leaves an incident that is not OPEN alone', async () => {
     const { id } = await createTestIncident('REST escalate acked', serviceId, {
       status: 'ACKNOWLEDGED',

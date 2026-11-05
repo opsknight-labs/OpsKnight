@@ -118,6 +118,11 @@ export async function requestIncidentEscalation(input: {
   });
   if (!incident) return { requested: false, reason: 'INCIDENT_NOT_FOUND' };
 
+  // A retry of a request that already ran replays its result, even if the incident has since
+  // been acknowledged or resolved; reusing the key for a different incident still conflicts.
+  const receipt = await savedManualEscalation(input);
+  if (receipt?.result) return { requested: true, execution: receipt.result, replayed: true };
+
   // Escalation only moves an incident that is still demanding a responder.
   // Paging a new tier for a resolved incident is noise, not urgency.
   if (incident.status !== 'OPEN') {
@@ -179,11 +184,7 @@ async function planManualEscalation(
   if (!input.idempotency) {
     return { recordId: null, created: true, ...cursor, payload: {}, result: null };
   }
-  const key = input.idempotency.key.trim();
-  const principalId = input.idempotency.principalId.trim();
-  if (!key || !principalId) throw new Error('Invalid escalation idempotency context');
-  const digest = createHash('sha256').update(`${principalId}:${key}`).digest('hex');
-  const recordId = `idem:manual-escalation:${digest}`;
+  const { key, principalId, recordId } = manualEscalationRecord(input.idempotency);
   const payload = {
     task: 'MANUAL_ESCALATION_IDEMPOTENCY',
     incidentId: input.incidentId,
@@ -210,31 +211,61 @@ async function planManualEscalation(
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
       throw error;
-    const existing = await prisma.backgroundJob.findUnique({
-      where: { id: recordId },
-      select: { payload: true },
-    });
-    const saved = existing?.payload as Record<string, unknown> | null | undefined;
-    if (
-      !saved ||
-      saved.incidentId !== input.incidentId ||
-      saved.actorId !== input.actor.userId ||
-      saved.source !== input.source
-    ) {
-      throw new AppError({
-        code: 'IDEMPOTENCY_KEY_CONFLICT',
-        userMessage: 'This Idempotency-Key was already used for a different escalation request.',
-      });
-    }
+    const saved = await savedManualEscalation(input);
+    if (!saved) throw conflictingEscalationKey();
     return {
       recordId,
       created: false,
-      generation: Number(saved.generation),
-      stepIndex: Number(saved.stepIndex),
-      payload: saved,
-      result: (saved.result as EscalationExecutionResult | undefined) ?? null,
+      generation: Number(saved.payload.generation),
+      stepIndex: Number(saved.payload.stepIndex),
+      payload: saved.payload,
+      result: saved.result,
     };
   }
+}
+
+function manualEscalationRecord(idempotency: IdempotencyContext) {
+  const key = idempotency.key.trim();
+  const principalId = idempotency.principalId.trim();
+  if (!key || !principalId) throw new Error('Invalid escalation idempotency context');
+  const digest = createHash('sha256').update(`${principalId}:${key}`).digest('hex');
+  return { key, principalId, recordId: `idem:manual-escalation:${digest}` };
+}
+
+const conflictingEscalationKey = () =>
+  new AppError({
+    code: 'IDEMPOTENCY_KEY_CONFLICT',
+    userMessage: 'This Idempotency-Key was already used for a different escalation request.',
+  });
+
+/**
+ * The stored request for this Idempotency-Key, or null when the key is new. A key already used
+ * for a different incident, actor or source is a conflict.
+ */
+async function savedManualEscalation(input: {
+  incidentId: string;
+  actor: ManualEscalationActor;
+  source: ManualEscalationSource;
+  idempotency?: IdempotencyContext;
+}): Promise<{ payload: Record<string, unknown>; result: EscalationExecutionResult | null } | null> {
+  if (!input.idempotency) return null;
+  const { recordId } = manualEscalationRecord(input.idempotency);
+  const existing = await prisma.backgroundJob.findUnique({
+    where: { id: recordId },
+    select: { payload: true },
+  });
+  const saved = existing?.payload as Record<string, unknown> | null | undefined;
+  if (!saved) return null;
+  if (
+    saved.incidentId !== input.incidentId ||
+    saved.actorId !== input.actor.userId ||
+    saved.source !== input.source
+  )
+    throw conflictingEscalationKey();
+  return {
+    payload: saved,
+    result: (saved.result as EscalationExecutionResult | undefined) ?? null,
+  };
 }
 
 async function recordManualEscalationRequest(input: {

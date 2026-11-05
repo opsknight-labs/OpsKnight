@@ -85,7 +85,9 @@ async function list<T>(method: 'tools/list' | 'prompts/list', writes: boolean, s
   }
 }
 
-const cell = (value: string) => value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+// Backslashes first, so an escaped pipe in the input cannot end a table cell.
+const cell = (value: string) =>
+  value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
 
 function typeOf(schema: JsonSchema): string {
   // Long enums (operation ids) would swamp the table; their members are listed elsewhere.

@@ -203,18 +203,22 @@ describe('requestIncidentEscalation', () => {
     vi.mocked(prisma.backgroundJob.create)
       .mockResolvedValueOnce({} as never)
       .mockRejectedValueOnce(duplicate);
-    vi.mocked(prisma.backgroundJob.findUnique).mockResolvedValueOnce({
-      payload: {
-        task: 'MANUAL_ESCALATION_IDEMPOTENCY',
-        incidentId: 'inc-1',
-        actorId: 'user-1',
-        source: 'SLACK',
-        requestId: 'intent-1',
-        principalId: 'chatops:user-1',
-        generation: 4,
-        stepIndex: 2,
-      },
-    } as never);
+    // First request: no receipt yet. Retry: the record exists without a result (the effect
+    // ran but the result was not saved), both for the up-front lookup and after the conflict.
+    vi.mocked(prisma.backgroundJob.findUnique)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({
+        payload: {
+          task: 'MANUAL_ESCALATION_IDEMPOTENCY',
+          incidentId: 'inc-1',
+          actorId: 'user-1',
+          source: 'SLACK',
+          requestId: 'intent-1',
+          principalId: 'chatops:user-1',
+          generation: 4,
+          stepIndex: 2,
+        },
+      } as never);
     const input = { ...request, idempotency: { key: 'intent-1', principalId: 'chatops:user-1' } };
 
     await requestIncidentEscalation(input);
