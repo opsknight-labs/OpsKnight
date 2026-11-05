@@ -18,6 +18,7 @@ import { executeEscalation } from './index';
 import type { EscalationExecutionResult } from './types';
 import { createHash } from 'node:crypto';
 import type { IdempotencyContext } from '@/lib/idempotency';
+import { AppError } from '@/lib/errors';
 import { Prisma } from '@prisma/client';
 
 export type ManualEscalationSource = 'WEB' | 'MOBILE' | 'REST_API' | 'SLACK' | 'MICROSOFT_TEAMS';
@@ -218,7 +219,10 @@ async function planManualEscalation(
       saved.actorId !== input.actor.userId ||
       saved.source !== input.source
     ) {
-      throw new Error('Escalation idempotency key conflict');
+      throw new AppError({
+        code: 'IDEMPOTENCY_KEY_CONFLICT',
+        userMessage: 'This Idempotency-Key was already used for a different escalation request.',
+      });
     }
     return {
       recordId,

@@ -43,19 +43,13 @@ export const POST = defineV2Route({
     // An in-process MCP call re-checks live authority on the locked incident before paging anyone.
     const guard = internalV2MutationGuard();
     if (guard) await prisma.$transaction(tx => guard(tx, 'mutation'));
-    let outcome;
-    try {
-      outcome = await requestIncidentEscalation({
-        incidentId: params.id,
-        actor: { userId: actor.id },
-        source: 'REST_API',
-        idempotency: key ? { key, principalId: apiKey.id } : undefined,
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message === 'Escalation idempotency key conflict')
-        throw new AppError({ code: 'IDEMPOTENCY_KEY_CONFLICT', cause: error });
-      throw error;
-    }
+    // A key reused for another incident or actor raises IDEMPOTENCY_KEY_CONFLICT (409).
+    const outcome = await requestIncidentEscalation({
+      incidentId: params.id,
+      actor: { userId: actor.id },
+      source: 'REST_API',
+      idempotency: key ? { key, principalId: apiKey.id } : undefined,
+    });
     if (!outcome.requested && outcome.reason === 'INCIDENT_NOT_FOUND')
       throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
     const incident = await prisma.incident.findUnique({
