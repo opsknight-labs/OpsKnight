@@ -96,7 +96,8 @@ export default function AuthenticationRolesWorkspace() {
           <span className="flex items-center gap-1 text-xs font-semibold text-foreground">
             Default role
             <HelpHint label="About the default role">
-              The role for someone whose groups match no rule. Most teams use User or Responder.
+              The role for someone whose groups match no rule, and for new accounts. Most teams use
+              User or Responder. Administrator is not offered: give it with a rule instead.
             </HelpHint>
           </span>
           <select
@@ -107,7 +108,7 @@ export default function AuthenticationRolesWorkspace() {
               update('defaultRole', event.target.value as typeof configuration.defaultRole)
             }
           >
-            {ROLE_OPTIONS.map(option => (
+            {ROLE_OPTIONS.filter(option => option.value !== 'ADMIN').map(option => (
               <option key={option.value} value={option.value}>
                 {option.label} — {option.hint}
               </option>

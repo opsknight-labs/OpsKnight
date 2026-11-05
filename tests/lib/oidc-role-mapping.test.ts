@@ -142,12 +142,54 @@ describe('resolving the role a person ends up with', () => {
     });
   });
 
-  it('keeps the current role when claims are incomplete', () => {
-    expect(resolveSignInRole(incomplete, { role: 'ADMIN', roleSource: 'OIDC' })).toEqual({
+  it('lets a matching rule take over a SCIM role but never falls back over one', () => {
+    expect(resolveSignInRole(matched, { role: 'USER', roleSource: 'SCIM' })).toEqual({
       role: 'ADMIN',
+      roleSource: 'OIDC',
+      changed: true,
+    });
+    expect(resolveSignInRole(unmatched, { role: 'ADMIN', roleSource: 'SCIM' })).toEqual({
+      role: 'ADMIN',
+      roleSource: 'SCIM',
+      changed: false,
+    });
+    const noRules = evaluateOidcRoleClaims({ groups: ['anything'] }, []);
+    expect(resolveSignInRole(noRules, { role: 'RESPONDER', roleSource: 'SCIM' })).toMatchObject({
+      role: 'RESPONDER',
+      roleSource: 'SCIM',
+      changed: false,
+    });
+  });
+
+  it('fails safe when claims are incomplete: lowers only an elevated SSO role', () => {
+    // Removed from the admin group but in more than 200 groups: the admin role must not stick.
+    expect(resolveSignInRole(incomplete, { role: 'ADMIN', roleSource: 'OIDC' })).toEqual({
+      role: 'USER',
+      roleSource: 'OIDC',
+      changed: true,
+    });
+    expect(resolveSignInRole(incomplete, { role: 'USER', roleSource: 'OIDC' })).toEqual({
+      role: 'USER',
       roleSource: 'OIDC',
       changed: false,
     });
+    const responderDefault = evaluateOidcRoleClaims({ hasgroups: true }, legacyRules, {
+      defaultRole: 'RESPONDER',
+    });
+    expect(resolveSignInRole(responderDefault, { role: 'AUDITOR', roleSource: 'OIDC' })).toEqual({
+      role: 'AUDITOR',
+      roleSource: 'OIDC',
+      changed: false,
+    });
+    for (const roleSource of ['MANUAL', 'SCIM'] as const)
+      expect(resolveSignInRole(incomplete, { role: 'ADMIN', roleSource })).toEqual({
+        role: 'ADMIN',
+        roleSource,
+        changed: false,
+      });
+    expect(
+      resolveSignInRole(incomplete, { role: 'USER', roleSource: 'MANUAL' }, { firstLink: true })
+    ).toMatchObject({ roleSource: 'MANUAL', changed: false });
   });
 });
 

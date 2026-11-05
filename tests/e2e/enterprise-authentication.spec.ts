@@ -1,10 +1,24 @@
 import { resolve } from 'node:path';
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 // Run only against a disposable, migrated installation with an active fixture admin.
 // SSO_E2E_BASE_URL=http://localhost:3005 SSO_E2E_ADMIN_EMAIL=... SSO_E2E_ADMIN_PASSWORD=...
+
+/**
+ * Picks an identity provider. The first choice applies immediately; switching from a chosen
+ * provider asks for confirmation because it clears provider-specific fields.
+ */
+async function chooseProvider(page: Page, name: RegExp) {
+  const radio = page.getByRole('radio', { name });
+  if ((await radio.getAttribute('aria-checked')) === 'true') return;
+  await radio.click();
+  const confirm = page.getByRole('button', { name: /Change provider/ });
+  if (await confirm.isVisible({ timeout: 2000 }).catch(() => false)) await confirm.click();
+  await expect(radio).toHaveAttribute('aria-checked', 'true');
+}
+
 test('enterprise console and independent hardware recovery work in a real browser', async ({
   browser,
   browserName,
@@ -215,7 +229,7 @@ test('enterprise console and independent hardware recovery work in a real browse
     await recoveryPage.goto(`${origin}/incidents`, { waitUntil: 'domcontentloaded' });
     await expect(recoveryPage).toHaveURL(/\/login/);
     await recoveryPage.goto(`${origin}/recovery`);
-    await recoveryPage.getByRole('tab', { name: 'Emergency Recovery', exact: true }).click();
+    await recoveryPage.getByRole('tab', { name: 'Emergency recovery', exact: true }).click();
     await recoveryPage.getByRole('button', { name: 'Sign out of recovery', exact: true }).click();
     await recoveryPage.waitForURL(`${origin}/login/emergency`, { waitUntil: 'domcontentloaded' });
     await recoveryPage.goto(`${origin}/recovery`);
@@ -253,9 +267,14 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
     const saved = await context.request.get(`${origin}/api/auth/control?section=connection`);
     const dashboard = (await saved.json()).data;
     await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
-    await expect(
-      page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
-    ).toBeEnabled();
+    // Saved configurations are offered only once there are some; a fresh install asks for a
+    // provider first instead of showing an empty selector.
+    if (dashboard.revisions.length === 0)
+      await expect(page.getByText('Choose your provider above to continue.')).toBeVisible();
+    else
+      await expect(
+        page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
+      ).toBeEnabled();
     for (const revision of dashboard.revisions.slice(0, 2)) {
       await page
         .getByRole('combobox', { name: 'Saved provider configuration', exact: true })
@@ -303,8 +322,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
     }
     // Local presentation walkthrough: no live tenant or discovery request is required.
-    await page.getByRole('radio', { name: /Microsoft Entra ID/ }).click();
-    await page.getByRole('button', { name: /Change provider/ }).click();
+    await chooseProvider(page, /Microsoft Entra ID/);
     await page
       .getByRole('textbox', { name: /^Directory \(tenant\) ID/ })
       .fill('11111111-2222-3333-4444-555555555555');
@@ -323,8 +341,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await expect(page.getByRole('textbox', { name: /^Exact issuer/ })).toHaveValue(issuer);
       await expect(page.getByRole('textbox', { name: /^Directory \(tenant\) ID/ })).toHaveCount(0);
     }
-    await page.getByRole('radio', { name: /Google Workspace/ }).click();
-    await page.getByRole('button', { name: /Change provider/ }).click();
+    await chooseProvider(page, /Google Workspace/);
     await expect(page.getByRole('radio', { name: /Google Workspace/ })).toHaveAttribute(
       'aria-checked',
       'true'
@@ -334,6 +351,8 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
       await page.getByRole('button', { name: 'Discard draft changes', exact: true }).click();
     }
+    // A discarded draft on a fresh install has no provider again; the layout checks use one.
+    await chooseProvider(page, /Okta/);
     await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
     for (const name of [
       'Sign-in & sessions',
@@ -362,7 +381,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await connection.focus();
       await page.keyboard.press('Enter');
       await expect(
-        page.getByRole('heading', { name: '1 · Connect provider', exact: true })
+        page.getByRole('heading', { name: 'Connect provider', exact: true })
       ).toBeVisible();
       await page.getByLabel('Client ID', { exact: true }).fill('preview-client');
       await page.getByLabel('Client ID', { exact: true }).fill('');
@@ -405,7 +424,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       ).toBe(true);
       await page.getByRole('button', { name: 'Save changes', exact: true }).click();
       await expect(
-        page.getByRole('alert').filter({ hasText: 'Check the highlighted draft fields' })
+        page.getByRole('alert').filter({ hasText: 'Fix these fields before saving' })
       ).toBeVisible();
     }
   } finally {
@@ -514,7 +533,7 @@ test('independent password recovery, one-time secret and rotation work across br
         timeout: 30000,
       })
       .toBe(200);
-    await rp.getByRole('tab', { name: 'Emergency Recovery', exact: true }).click();
+    await rp.getByRole('tab', { name: 'Emergency recovery', exact: true }).click();
     await rp.getByLabel('Recovery password for fresh verification').fill(created.password);
     const reauthenticated = rp.waitForResponse(
       response =>

@@ -134,9 +134,13 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   expect((await memberAccess()).status()).toBe(200);
 
   await section.getByRole('button', { name: 'Activity', exact: true }).click();
+  // Activity reads as sentences; search works by the label shown and by the action name.
+  const linked = section.getByText('Group linked to a team', { exact: true });
+  await section.getByLabel('Search', { exact: true }).fill('linked to a team');
+  await expect(linked).toHaveCount(2);
+  await expect(linked.first()).toBeVisible();
   await section.getByLabel('Search', { exact: true }).fill('binding.approved');
-  await expect(section.getByText('binding.approved', { exact: true })).toHaveCount(2);
-  await expect(section.getByText('binding.approved', { exact: true }).first()).toBeVisible();
+  await expect(linked).toHaveCount(2);
   await section.getByRole('button', { name: 'Diagnostics', exact: true }).click();
   await expect(
     section.getByRole('heading', { name: 'Troubleshooting', exact: true })

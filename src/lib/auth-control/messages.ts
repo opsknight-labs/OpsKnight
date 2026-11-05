@@ -62,6 +62,14 @@ export const SIGN_IN_MESSAGES: Record<string, AuthMessage> = {
     action: 'Ask your identity administrator to add you to an OpsKnight group.',
     docsHref: `${LOGIN_TROUBLESHOOTING_DOCS}#sso_role_unmatched_denied`,
   },
+  SSO_GROUP_CLAIMS_INCOMPLETE: {
+    title: 'OpsKnight could not read your groups',
+    detail:
+      'Your identity provider sent an incomplete group list, so OpsKnight cannot tell whether you should have access.',
+    action:
+      'Ask your identity administrator to send OpsKnight the groups or app roles it uses (for Microsoft Entra, use App roles instead of the groups claim).',
+    docsHref: `${LOGIN_TROUBLESHOOTING_DOCS}#sso_group_claims_incomplete`,
+  },
   SSO_ACCOUNT_DISABLED: {
     title: 'Your OpsKnight account is disabled',
     detail: 'An administrator or your company directory has deactivated this account.',
@@ -213,6 +221,7 @@ const OIDC_FAILURE_TO_SIGN_IN_CODE: Record<string, keyof typeof SIGN_IN_MESSAGES
   OIDC_EMAIL_ASSURANCE_REQUIRED: 'SSO_EMAIL_UNVERIFIED',
   OIDC_AMBIGUOUS_IDENTITY_CONFLICT: 'SSO_IDENTITY_CONFLICT',
   OIDC_ROLE_UNMATCHED_DENIED: 'SSO_ROLE_UNMATCHED_DENIED',
+  OIDC_GROUP_CLAIMS_INCOMPLETE: 'SSO_GROUP_CLAIMS_INCOMPLETE',
 };
 
 /** Maps an internal OIDC rejection reason to the code shown on the login page. */
