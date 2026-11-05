@@ -14,9 +14,7 @@ const caught = (action: () => unknown) => {
 
 describe('tool error text', () => {
   it('keeps a bare code bare and passes a domain conflict retryability through', () => {
-    expect(toolErrorText(new McpBoundaryError('MCP_RESOURCE_UNAVAILABLE', 404))).toBe(
-      'MCP_RESOURCE_UNAVAILABLE'
-    );
+    expect(toolErrorText(new McpBoundaryError('MCP_CANCELLED', 408))).toBe('MCP_CANCELLED');
     expect(toolErrorText(new McpBoundaryError('MCP_DOMAIN_REJECTED', 409, true))).toBe(
       'MCP_DOMAIN_REJECTED: Retryable.'
     );

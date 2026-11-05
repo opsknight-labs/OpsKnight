@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CostBudget, acquireMcpAuthenticationSlot, acquireMcpSlot } from '@/lib/mcp/core/budget';
-import { acquireMcpOAuthSlot } from '@/lib/mcp/auth/admission';
+import { MCP_OAUTH_SLOTS, acquireMcpOAuthSlot } from '@/lib/mcp/auth/admission';
 import { rejectDuplicateJsonKeys, readMcpBody } from '@/lib/mcp/protocol/input';
 import { projectMcpData } from '@/lib/mcp/core/projection';
 import { MCP_CATALOG, isMcpExecutable } from '@/lib/mcp/catalog';
@@ -15,21 +15,39 @@ import {
 } from '@/lib/api-v2/internal-context';
 
 describe('MCP boundary', () => {
-  it('isolates OAuth token and revocation admission from MCP authentication and releases slots once', () => {
-    const tokenSlots = [acquireMcpOAuthSlot('token'), acquireMcpOAuthSlot('token')];
+  it('isolates OAuth token and revocation admission from MCP authentication and releases slots once', async () => {
+    const tokenSlots = await Promise.all(
+      Array.from({ length: MCP_OAUTH_SLOTS }, () => acquireMcpOAuthSlot('token'))
+    );
     const revokeSlots: (() => void)[] = [];
     const authSlots: (() => void)[] = [];
     try {
-      expect(() => acquireMcpOAuthSlot('token')).toThrow('MCP_BUSY');
-      revokeSlots.push(acquireMcpOAuthSlot('revoke'), acquireMcpOAuthSlot('revoke'));
+      await expect(acquireMcpOAuthSlot('token', 0)).rejects.toThrow('temporarily_unavailable');
+      revokeSlots.push(await acquireMcpOAuthSlot('revoke'), await acquireMcpOAuthSlot('revoke'));
       for (let i = 0; i < 4; i++) authSlots.push(acquireMcpAuthenticationSlot());
       expect(() => acquireMcpAuthenticationSlot()).toThrow('MCP_BUSY');
       tokenSlots[0]();
       tokenSlots[0]();
-      tokenSlots.push(acquireMcpOAuthSlot('token'));
-      expect(() => acquireMcpOAuthSlot('token')).toThrow('MCP_BUSY');
+      tokenSlots.push(await acquireMcpOAuthSlot('token', 0));
+      await expect(acquireMcpOAuthSlot('token', 0)).rejects.toThrow('temporarily_unavailable');
     } finally {
       [...tokenSlots, ...revokeSlots, ...authSlots].forEach(release => release());
+    }
+  });
+  it('lets a token request wait briefly for a slot instead of refusing a burst', async () => {
+    const held = await Promise.all(
+      Array.from({ length: MCP_OAUTH_SLOTS }, () => acquireMcpOAuthSlot('token'))
+    );
+    try {
+      const waiting = acquireMcpOAuthSlot('token', 250);
+      setTimeout(() => held.shift()!(), 20);
+      const slot = await waiting;
+      held.push(slot);
+      const started = Date.now();
+      await expect(acquireMcpOAuthSlot('token', 60)).rejects.toThrow('temporarily_unavailable');
+      expect(Date.now() - started).toBeGreaterThanOrEqual(50);
+    } finally {
+      held.forEach(release => release());
     }
   });
   it('classifies exactly the live registry and denies R3', () => {
@@ -121,12 +139,14 @@ describe('MCP boundary', () => {
     controller.abort();
     expect(() => new CostBudget(8, 100, controller.signal).check()).toThrow();
   });
-  it('releases load-shedding slots exactly once', () => {
-    const release = acquireMcpSlot(1);
-    expect(() => acquireMcpSlot(1)).toThrow('MCP_BUSY');
+  it('releases load-shedding slots exactly once', async () => {
+    const release = await acquireMcpSlot(1);
+    await expect(acquireMcpSlot(1, { waitMs: 0 })).rejects.toThrow('MCP_BUSY');
     release();
     release();
-    const second = acquireMcpSlot(1);
+    const second = await acquireMcpSlot(1, { waitMs: 0 });
+    const third = acquireMcpSlot(1, { waitMs: 0 });
+    await expect(third).rejects.toThrow('MCP_BUSY');
     second();
   });
   it('redacts nested credentials, PII, bearer strings and capability URLs', () => {

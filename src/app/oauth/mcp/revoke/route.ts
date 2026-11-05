@@ -12,9 +12,11 @@ const schema = z
   .object({
     client_id: z.string().min(1).max(256),
     token: z.string().min(1).max(256),
-    token_type_hint: z.enum(['access_token', 'refresh_token']).optional(),
+    // Ignored: both access and refresh tokens are looked up (RFC 7009 section 2.1).
+    token_type_hint: z.string().max(64).optional(),
   })
-  .strict();
+  // RFC 7009 extensions and unknown parameters are ignored; duplicates are still refused.
+  .strip();
 export function POST(request: Request) {
   return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
 }
@@ -23,7 +25,7 @@ async function handlePost(request: Request) {
   let release: (() => void) | undefined;
   try {
     assertMcpHost(request);
-    release = acquireMcpOAuthSlot('revoke');
+    release = await acquireMcpOAuthSlot('revoke');
     await admitMcpOAuthRequest(request, 'revoke');
     requireMcp(
       request.headers.get('content-type')?.split(';')[0] === 'application/x-www-form-urlencoded',

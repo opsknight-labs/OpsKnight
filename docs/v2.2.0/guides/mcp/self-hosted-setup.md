@@ -1,71 +1,170 @@
+---
+title: MCP setup for any self-hosted OpsKnight
+order: 1
+description: Turn on AI assistant access, connect assistants, manage connections and review the changes assistants propose.
+type: how-to
+product_area: mcp
+audience: [administrator, responder]
+verification:
+  level: source
+  verified_at: 2026-11-04
+  evidence:
+    - src/app/(app)/settings/integrations/mcp/page.tsx
+    - src/app/(app)/settings/integrations/mcp/actions.ts
+    - src/lib/mcp/auth/effective-access.ts
+    - src/lib/mcp/approvals/operation.ts
+    - src/lib/runbooks/preview-review.ts
+    - src/lib/mcp/approvals/notify.ts
+    - tests/mcp/docs-reference.test.ts
+---
+
 # MCP setup for any self-hosted OpsKnight
 
-The same setup applies to Docker, Compose, Swarm, Kubernetes and virtual machines. There is no OpsKnight-hosted registration service, special test domain or separate MCP secret. Your installation publishes its own endpoint and OAuth discovery using its configured App URL.
+The same setup applies to Docker, Compose, Swarm, Kubernetes and virtual machines. There is no OpsKnight-hosted registration service, special test domain or separate MCP secret. Your installation publishes its own endpoint and OAuth discovery from its configured App URL.
+
+Everything below lives on one page: **Settings → Integrations & ChatOps → MCP (AI Assistants)**. Its tabs are **Overview**, **Connect**, **Connections** (people other than administrators see **Your connections**), **Assistants**, **Approvals** (runbook approvers who are not administrators see **Runbook approvals**), **Access policy** and **Exposed capabilities**. Assistants, Access policy and Exposed capabilities are for administrators only.
 
 ## Administrator: turn it on (about two minutes)
 
-1. Deploy the updated application and packaged database migrations through your normal OpsKnight upgrade process. Update every replica before turning MCP on.
-2. Open **Settings → System** and set **App URL** to the HTTPS origin users open, such as `https://ops.your-company.com` (an origin without a path). Keep the application authentication and encryption secrets consistent across replicas and restarts.
-3. Open **Settings → Integrations & ChatOps → MCP (AI Assistants)** and click **Turn on AI assistant access**. That one click enables MCP read-only (incidents, services, on-call schedules) with automatic connections. If something blocks it, the page lists exactly what to fix first.
-4. Click **Test connection** on the same page. It checks the App URL, database migrations, sign-in discovery, automatic connections and that anonymous access is refused, and tells you what to fix.
-5. Share the **MCP server URL** shown on the page. Each person adds it to their assistant, signs in with their own OpsKnight account and approves once. You never create a client ID, secret or callback for anyone.
+1. Deploy the application and its packaged database migrations through your normal upgrade process. Update every replica before turning MCP on.
+2. Open **Settings → System** and set **App URL** to the HTTPS origin users open, such as `https://ops.your-company.com` (an origin without a path). Keep the authentication and encryption secrets the same across replicas and restarts.
+3. On the **Overview** tab click **Turn on AI assistant access**. On first use this applies read-only defaults (`incidents:read`, `services:read`, `schedules:read`) with **Automatic connections** on. If something blocks it, the page lists what to fix first.
+4. Click **Test connection** on the same tab. It checks the App URL, migrations, sign-in discovery, automatic connections and that anonymous access is refused.
+5. Share the **MCP server URL** from the **Connect** tab. Each person adds it to their assistant, signs in with their own OpsKnight account and approves once. You never create a client ID, secret or callback for anyone.
 
-Keep the existing scheduler/worker roles running when using a split deployment; MCP uses normal application maintenance and does not require a new queue or worker. No MCP-specific environment variable is required. The optional `MCP_PUBLIC_ORIGIN` override must be identical across replicas or removed.
+Keep the existing scheduler and worker roles running in a split deployment; MCP needs no new queue or worker and no MCP-specific environment variable. The optional `MCP_PUBLIC_ORIGIN` override must be identical across replicas, or removed.
 
-### Fine-tuning (optional)
+### Turning it off and back on
 
-Under the same page's policy form you can choose what assistants may do with scope checkboxes, how long a connection stays signed in, and (under **Advanced**) enable reviewed changes, sensitive reads, workload limits, or restrict automatically identifying assistants to specific hosts. **Automatic connections** is one switch: it covers assistants that register themselves and assistants that identify with a client metadata document, under the same scope ceiling. Leave the host list empty to allow any public HTTPS host; the server fetches such documents without redirects, only from public addresses, with a pinned DNS lookup.
+Unchecking **Enable MCP** on the **Access policy** tab is an immediate, MCP-only shutdown: every assistant request is refused and the rest of OpsKnight is unaffected. It does **not** revoke connections. When MCP is turned back on, existing connections resume.
+
+While MCP is off the Overview button reads **Turn AI assistant access back on**. It restores your previous policy unchanged: the permission ceiling, Automatic connections, reviewed actions, sensitive reads, trusted hosts and workload limits. The card lists what will come back. For a clean restart, use **Revoke all active connections** (below) before turning MCP back on, and review **Access policy** first.
+
+## Access policy
+
+The **Access policy** tab holds:
+
+- **Assistant access**: **Enable MCP** and **Automatic connections**.
+- **What assistants may do**: the permission ceiling. People can approve less on the consent page, and their own OpsKnight permissions always apply on top.
+- **Sign-in sessions**: how long an unused connection stays signed in (1 to 90 days, default 30).
+- **Advanced**: **Reviewed actions** (changes, the review window and commit window), sensitive configuration reads, **Trusted assistant hosts** and **Workload limits**.
+
+**Automatic connections** is one switch for both ways an assistant can identify itself: assistants that register themselves (dynamic client registration, DCR) and assistants that publish a client metadata document (CIMD). Both use the same ceiling. The trusted-hosts list is optional: leave it empty to allow any public HTTPS metadata host, or list hosts to allow only those (other metadata-document assistants are then refused). Documents are fetched without redirects, only from public addresses, with a pinned DNS lookup.
+
+If two administrators edit the policy at once, the second save is refused with a notice and a **Reload policy** button, so nobody overwrites a change they never saw.
+
+See the [permissions reference](../../reference/mcp/permissions.md) for what each permission unlocks and which roles can use it.
 
 ## Users: connect and sign in
 
-Copy the **MCP server URL** from the MCP page (Settings → Integrations & ChatOps → MCP (AI Assistants)). The page also shows per-assistant instructions.
+Copy the **MCP server URL** from the **Connect** tab; it also shows step-by-step instructions per assistant.
 
-- **Claude Code:** `claude mcp add --scope user --transport http opsknight https://ops.your-company.com/mcp`, then `/mcp` to sign in.
-- **Claude and ChatGPT apps:** add a custom connector in the app's connectors settings, paste the URL and choose OAuth. Menu names vary by app version, and some plans require a workspace administrator to allow custom connectors.
-- **Cursor:** add `{"mcpServers":{"opsknight":{"url":"https://ops.your-company.com/mcp"}}}` to `~/.cursor/mcp.json`.
-- **VS Code:** `code --add-mcp '{"name":"opsknight","type":"http","url":"https://ops.your-company.com/mcp"}'`.
+- **Claude Code:** run `claude mcp add --scope user --transport http opsknight 'https://ops.your-company.com/mcp'`, then `/mcp` to sign in.
+- **Claude and ChatGPT apps:** add a custom connector in the app's connector settings, paste the URL and choose OAuth. Menu names vary by version, and some plans need a workspace owner to allow custom connectors.
+- **Cursor:** use **Add to Cursor** on the Connect tab, or add the `opsknight` entry under `mcpServers` in `~/.cursor/mcp.json`, merging it into the file if it already exists so your other servers are kept.
+- **VS Code:** use **Add to VS Code**, or on macOS and Linux run `code --add-mcp '{"name":"opsknight","type":"http","url":"https://ops.your-company.com/mcp"}'`. On Windows use the link or **MCP: Add Server** in the Command Palette.
 
-Your browser opens one focused OpsKnight page: sign in if needed (including your configured SSO), review the plain-language list of what the assistant can do, then click **Allow**. If the page cannot continue it says why in plain words rather than showing a raw error. Automatically registered application names are not verified identities, so only continue if you just started the connection yourself. Ordinary users do not need administrator rights; tools remain constrained by current roles, resource visibility and approved scopes. Never enter the application encryption key or a password in client-ID or client-secret fields.
+### What you see when you approve
 
-Connections stay signed in while they are used. By default a connection ends after 30 days without use and after 90 days in total (administrators can shorten the idle period). Changing your password, an administrator disconnecting you, or turning automatic connections off ends it immediately. Assistants that send generic scopes such as `openid` or `offline_access`, or that omit the optional `resource` parameter, still connect and receive only what policy allows.
+Your browser opens one OpsKnight page. Sign in if needed (including your SSO), then review what the assistant may do:
 
-Desktop loopback callback addresses belong to the user's computer. The assistant chooses its callback and port; do not open a callback port on the OpsKnight server or configure one shared callback for all users.
+- The page says where it returns to ("Returns to _host_") and how the assistant is identified: "Identified by _host_" for a metadata-document assistant, "Name not verified" for one that registered itself, or "Registered by an administrator". Only continue if you just started the connection yourself. A self-registered assistant that returns to a web address that is not on your computer shows a warning.
+- Permissions are checkboxes grouped by area. View permissions are pre-selected. Change permissions are pre-selected only when the assistant asked for them by name, or when the connection you are replacing had them.
+- You can untick anything; **Allow** needs at least one permission.
+- Permissions your role can never use are hidden and noted on the page. `admin:manage` is never offered.
+- When changes are turned off, a banner says so and change permissions show **Changes off**.
+- The page expires after five minutes.
 
-The server targets MCP revision **2026-07-28** over HTTP. Use a client that supports that revision and OAuth PKCE. Older clients using legacy initialization/session semantics are not supported. Supported client versions still require full sign-in, scoped-call, refresh and revocation verification against your deployment; discovery alone is not interoperability certification. A client that only supports private-key (`private_key_jwt`) authentication is rejected, and a published JWKS URL is never fetched or used as proof of identity.
+What the assistant can then do is your selection, capped by the administrator ceiling as it is now and by your current role and teams. Connecting the same assistant again starts with your earlier permissions selected and cleans up any earlier sign-in that was never completed; a connection already in use, such as the same assistant on another device, stays signed in. Never enter the encryption key or a password in client-ID or client-secret fields.
+
+### How long a connection lasts
+
+Connections stay signed in while they are used. A connection ends after the idle period without use (default 30 days) and always after 90 days in total.
+
+Changes to your role or teams do **not** sign you out: what the assistant can do narrows or widens on the next request. These security events end the connection immediately, and you reconnect from your assistant (`MCP_ACCESS_CHANGED`):
+
+- your password is changed or reset, or your email is changed by an administrator or SCIM;
+- you are demoted from Administrator;
+- your account is deactivated (reactivating it does not bring old connections back);
+- you sign out everywhere, or an administrator revokes your sessions.
+
+An administrator revoking your connection or its assistant, or policy no longer trusting the assistant (Automatic connections off, or its host removed from the trusted list), also stops it. Assistants that send generic scopes such as `openid` or `offline_access`, or omit the optional `resource` or `state` parameters, still connect and receive only what policy allows.
+
+Desktop loopback callback addresses belong to the user's computer. The assistant chooses its callback and port; do not open a callback port on the OpsKnight server.
 
 ## Manage connections
 
-Users open the same MCP page to review and disconnect **Your grants**, each showing the assistant, when it was last used and when it will sign out. Administrators see **Clients** and **Client grants** with people's names and emails, can disconnect a client and its grants (and allow it again later; users then sign in again), or use the confirmation-gated **Revoke all MCP connections** action. Changes are recorded in the general Audit log page. Turning off **Enable MCP** is an MCP-only shutdown.
+- **Your connections** (everyone): each assistant you connected, its usable permissions, when it last made a call and with which tool, when it expires, and **Revoke**.
+- **Connections** (administrators): every person's connections, filterable by status and assistant. The **Scopes** column shows "N of M usable": scopes no longer allowed are struck through. The **Status** column says **Blocked by policy** (MCP is off or policy no longer trusts the assistant) or **No longer allowed** (revoked assistant, inactive person, security event), with the reason on hover.
+- **Revoke all active connections**, under **Credential security** on the Connections tab, revokes every connection regardless of the current filter. The dialog shows how many will be revoked and needs a ticked confirmation.
+- **Assistants** (administrators): every registered assistant with its type, effective scope ceiling, connections and last call. Revoking an assistant revokes all its connections; **Restore** allows it again, and people then sign in again.
 
-Keep writes disabled until you need them. When enabled, assistants prepare changes for approval by another authorized human in OpsKnight; an assistant cannot approve its own changes. Revocation, current permissions and scope ceilings are rechecked during authentication and protected operations.
+Every change is recorded in the general Audit log.
 
-Rotating the active application encryption key invalidates MCP credentials. Keeping an old key only for decryption does not keep its MCP credentials valid. Users reconnect after rotation; preserve the key during ordinary restarts and image upgrades.
+## Exposed capabilities
+
+The **Exposed capabilities** tab is a hard deny-list across all roles and consents. Turn off individual tools, catalog operations or whole domains (a disabled domain also covers operations added to it later).
+
+- It applies on the next request; nobody needs to reconnect.
+- Disabled tools disappear from `tools/list`, `search_capabilities` and `describe_operation`, and any attempt to call them returns `MCP_CAPABILITY_DISABLED`, which is not retryable.
+- Turning everything off asks for confirmation. Concurrent edits are detected and refused. Each save is audited with what was added and removed.
+
+## Reviewed changes
+
+Changes are off by default. Turn them on with **Allow reviewed routine mutations and approved runbook executions** under **Access policy → Advanced → Reviewed actions**. Then:
+
+- **Routine incident changes** (acknowledge, assign, add a note, resolve, create, tags and watchers) run directly, each with an `idempotencyKey`, within the person's own permissions.
+- **Configuration changes** go through `operation_prepare` and are approved by an **administrator** who holds every permission the change needs.
+- **Runbook runs** go through `runbook_prepare_execution` and are approved by **anyone with runbook approve permission** (Responders and Administrators by default) who can also read runbooks and see the target incident or service.
+
+Normally a second person with approval rights reviews the exact, frozen request on the review page. An administrator may approve their own request only after ticking an explicit confirmation; the decision is recorded as self-approved in the approval history and the audit entry. Anyone else needs a second person. The assistant can never approve: no MCP, REST or tool path approves.
+
+**Who is told.** Reviewers get an in-app notification (the bell) when a request is prepared, linking to the review page: administrators for configuration changes; runbook approvers for runbook runs (for runbooks that target an incident or service, only approvers who can see every incident or service). At most 50 people are notified; the requester is never notified of their own request. The requester gets an in-app notification when someone else decides. There is no email. Reviewers can also watch the **Approvals** tab, and the assistant is told to share the `reviewUrl`.
+
+**Timing.** A request waits for review for **Time to review** (default 240 minutes, 15 to 1440). Approval opens a fresh **Time to apply after approval** window (default 30 minutes), never later than 24 hours after the request, so an approval near the end of the review window can still be applied. A request not decided or not applied in time expires (`MCP_APPROVAL_EXPIRED`); the assistant prepares it again with a new `idempotencyKey`.
+
+**Deciding.** The review page shows who requested it, through which assistant and when, the catalog summary, the frozen request, and the target. Reject takes an optional reason (up to 500 characters) that the assistant can read through `operation_get_approval` or `runbook_get_approval`; it is labelled as untrusted text. Approving a destructive change needs a sign-in within the last two hours; otherwise the page offers **Confirm it's you**. The requester sees a read-only status view of their own request.
+
+Approvals and rejections are audited. See the [catalog](../../reference/mcp/catalog.md) for the full prepare, review, poll and commit flow.
+
+## Client compatibility
+
+The server serves MCP revision **2026-07-28** natively and also accepts clients on revisions **2025-06-18** and **2025-11-25** (stateless; no sessions). Tasks and resource subscriptions need 2026-07-28. All clients need OAuth with PKCE (S256).
+
+| Client                        | Status                              | Notes                                                                                                                                                                  |
+| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code                   | Verified                            | Sign-in, scoped reads, refresh and revocation verified against a live deployment.                                                                                      |
+| Claude (web and desktop apps) | Expected (2025 revisions supported) | Team and Enterprise plans need an owner to allow custom connectors. Cloud-hosted: your server must be reachable from the internet with a publicly trusted certificate. |
+| ChatGPT                       | Expected (2025 revisions supported) | Cloud-hosted: needs a publicly reachable host and a publicly trusted TLS certificate. Identifies itself with a metadata document or registers itself.                  |
+| Cursor                        | Expected (2025 revisions supported) | Use **Add to Cursor** or merge the entry into `~/.cursor/mcp.json`.                                                                                                    |
+| VS Code                       | Expected (2025 revisions supported) | Use **Add to VS Code**, `code --add-mcp`, or **MCP: Add Server**.                                                                                                      |
+
+"Expected" means the client's protocol revision and OAuth flow are supported, but it has not been verified end to end. Verify sign-in, scoped calls, refresh and revocation against your own deployment before relying on it. A client that supports only private-key (`private_key_jwt`) authentication is refused, and a published JWKS URL is never fetched.
 
 ## Reverse proxies and private installations
 
-Route `/mcp`, `/oauth/mcp/*`, `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server/oauth/mcp` to the application. Native `/login`, `/api/auth/*` and MCP settings/consent routes must remain available too.
+Route `/mcp`, `/oauth/mcp/*`, `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server/oauth/mcp` to the application. Native `/login`, `/api/auth/*` and the MCP settings, consent and review pages must stay available too.
 
-Preserve the public Host, including a non-default port when used. Preserve Authorization, WWW-Authenticate and MCP protocol headers. Do not cache OAuth/consent responses or rewrite their issuer/resource URLs. Support streaming POST responses without proxy buffering; the server's subscription lifetime is bounded to ten minutes. Configure normal connection and upload limits at the ingress. Trust forwarded client IPs only when your ingress removes spoofed forwarding headers.
+Preserve the public Host, including a non-default port. Preserve Authorization, WWW-Authenticate and MCP protocol headers. Do not cache OAuth or consent responses or rewrite their issuer or resource URLs. Support streaming POST responses without proxy buffering; subscription streams last at most ten minutes. Trust forwarded client IPs only when your ingress removes spoofed forwarding headers.
 
-A private installation can serve clients that can reach its network. Cloud-hosted assistants need their own supported network path to it; browser access from an administrator's laptop does not prove cloud-client reachability. Keep normal TLS verification enabled. For a private CA, configure the client's supported CA trust rather than disabling certificate checks. Managed cloud assistants may require a publicly trusted certificate.
+A private installation serves clients that can reach its network. Cloud-hosted assistants need their own network path to it; browser access from your laptop does not prove that. Keep TLS verification on; for a private CA configure the client's CA trust instead of disabling checks.
+
+Rotating the active application encryption key invalidates MCP credentials; users reconnect. Keep the key across ordinary restarts and upgrades.
 
 ## Check and troubleshoot
 
-The **Test connection** button on the MCP page runs these checks from the server. To test from outside (for example a laptop on the public internet), run from an OpsKnight checkout or the application container:
+**Test connection** on the Overview tab runs the checks from the server. To check from outside, run the doctor from an OpsKnight source checkout:
 
 ```sh
-node scripts/mcp/doctor.cjs https://ops.your-company.com/mcp
-# From a checkout, the equivalent command is:
-npm run mcp:doctor -- https://ops.your-company.com/mcp --json
+node scripts/mcp/doctor.cjs 'https://ops.your-company.com/mcp'
 ```
 
-The checker uses bounded, anonymous requests and follows no redirects. It checks discovery/resource binding, PKCE metadata, automatic registration and the protected endpoint's 401 challenge. It creates no credentials or settings. It cannot certify real sign-in, production load, HA or every proxy replica.
+or inside the application container on the server (this does not test reachability from outside):
 
-- **Registration is missing:** turn on **Automatic connections** and save; verify migrations and application rollout. Restart/reconnect a client that cached older metadata.
-- **401 after connecting:** sign in again. Check revocation, account status, permission changes and encryption-key consistency across replicas.
-- **403 or a wrong resource/issuer:** verify App URL and public Host preservation. Do not use an internal container hostname as the public origin.
-- **503/unavailable:** check MCP enablement, configuration issues, application health and database migrations. Admission limits intentionally shed excess work.
-- **Works in a browser but not ChatGPT:** verify reachability and TLS from the cloud client, not just your laptop. Check the client's protocol support and workspace policy.
-- **One replica works intermittently:** verify the same application version, database, App URL/overrides and encryption key on all replicas. Repeated doctor calls do not prove every node is correct.
+```sh
+docker exec <opsknight-container> node scripts/mcp/doctor.cjs 'https://ops.your-company.com/mcp'
+```
 
-Before production rollout, verify actual supported-client consent, scoped reads, refresh and revocation against the intended deployment. Use the existing [local certification workflow](../../operate/mcp/certification.md) and [architecture/rollout limits](../../operate/mcp/architecture.md). Local passing tests are not universal capacity or GA certification. Before rollback to older application code, disable MCP and revoke dynamic client records while the new schema/code is still available, as described in the architecture guide.
+The doctor makes bounded, anonymous requests and follows no redirects. It checks discovery and resource binding, PKCE metadata, automatic registration and the protected endpoint's 401 challenge, and explains a 503 (MCP turned off, busy, or unavailable). It creates no credentials or settings and cannot certify real sign-in, load or every replica.
+
+Every error code and server log event is listed with its fix in [MCP troubleshooting](troubleshooting.md). Before production rollout use the [local certification workflow](../../operate/mcp/certification.md) and read the [architecture and rollout limits](../../operate/mcp/architecture.md).

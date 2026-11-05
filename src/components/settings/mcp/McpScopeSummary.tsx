@@ -14,11 +14,17 @@ import { cn } from '@/lib/utils';
 function McpScopeSummary({
   scopes,
   context,
+  usable,
 }: {
   /** Each scope with its plain-language label, computed on the server. */
   scopes: { scope: string; label: string }[];
   /** Names what the scopes belong to, for the accessible name, e.g. "Claude for Jane Doe". */
   context: string;
+  /**
+   * The scopes the server honours today. When given, the chip reads "N of M usable" and the
+   * others are struck through as no longer allowed.
+   */
+  usable?: readonly string[];
 }) {
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
@@ -32,6 +38,10 @@ function McpScopeSummary({
   }, [scopes, deferredSearch]);
 
   const noun = scopes.length === 1 ? 'scope' : 'scopes';
+  const usableSet = useMemo(() => (usable ? new Set(usable) : null), [usable]);
+  const usableCount = usableSet ? scopes.filter(s => usableSet.has(s.scope)).length : null;
+  const chipText =
+    usableCount === null ? `${scopes.length} ${noun}` : `${usableCount} of ${scopes.length} usable`;
   const hasActions = useMemo(() => scopes.some(s => !s.scope.endsWith(':read')), [scopes]);
 
   if (scopes.length === 0) {
@@ -44,7 +54,7 @@ function McpScopeSummary({
         <button
           type="button"
           data-icon-button
-          aria-label={`${scopes.length} ${noun} for ${context}. Show list`}
+          aria-label={`${chipText} for ${context}. Show list`}
           className={cn(
             'group inline-flex h-6.5 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold transition-all duration-150',
             'border-border/80 bg-background/80 hover:border-primary/50 hover:bg-primary/5 hover:text-foreground',
@@ -59,8 +69,14 @@ function McpScopeSummary({
             )}
             aria-hidden="true"
           />
-          <span>
-            {scopes.length} {noun}
+          <span
+            className={cn(
+              usableCount !== null &&
+                usableCount < scopes.length &&
+                'text-amber-700 dark:text-amber-300'
+            )}
+          >
+            {chipText}
           </span>
           <ChevronDown
             className="h-3 w-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
@@ -78,11 +94,11 @@ function McpScopeSummary({
           <div className="flex items-center gap-1.5">
             <Shield className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
-              Allowed Scopes
+              {usableSet ? 'Approved Scopes' : 'Allowed Scopes'}
             </span>
           </div>
           <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-bold tabular-nums">
-            {scopes.length} {noun}
+            {chipText}
           </Badge>
         </div>
 
@@ -123,16 +139,29 @@ function McpScopeSummary({
             <ul className="space-y-1.5">
               {filteredScopes.map(({ scope, label }) => {
                 const isRead = scope.endsWith(':read');
+                const blocked = usableSet !== null && !usableSet.has(scope);
                 return (
                   <li
                     key={scope}
                     className="group flex items-start justify-between gap-2 rounded-lg border border-border/40 bg-muted/20 p-2 transition-colors hover:border-border hover:bg-muted/40"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-foreground leading-snug">{label}</p>
+                      <p
+                        className={cn(
+                          'text-xs font-medium leading-snug',
+                          blocked ? 'text-muted-foreground line-through' : 'text-foreground'
+                        )}
+                      >
+                        {label}
+                      </p>
                       <code className="block mt-0.5 font-mono text-[10px] text-muted-foreground truncate">
                         {scope}
                       </code>
+                      {blocked && (
+                        <p className="mt-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                          No longer allowed
+                        </p>
+                      )}
                     </div>
                     <span
                       className={cn(
@@ -156,7 +185,7 @@ function McpScopeSummary({
           <span className="truncate" title={context}>
             Target: <strong className="text-foreground">{context}</strong>
           </span>
-          <span>Role-gated</span>
+          {usableSet && <span>Within the current policy</span>}
         </div>
       </PopoverContent>
     </Popover>

@@ -165,10 +165,17 @@ describe('server instructions', () => {
     const instructions = body.result.instructions as string;
     expect(Buffer.byteLength(instructions)).toBeLessThanOrEqual(300);
     for (const step of [
+      'whoami',
       'search_capabilities',
       'describe_operation',
+      'read_operation',
       'call_operation',
+      'query.limit 1-50',
+      'nextCursor',
       'operation_prepare',
+      'reviewUrl',
+      'operation_get_approval',
+      'operation_commit_approved',
     ])
       expect(instructions).toContain(step);
   });

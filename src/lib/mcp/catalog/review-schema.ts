@@ -14,6 +14,17 @@ export const operationReviewSchema = z
     risk: z.enum(['R0', 'R1', 'R2', 'R3', 'R4']),
     reason: z.string().trim().min(1),
     tool: z.string().trim().min(1).nullable(),
+    // A named tool's human-readable name, shown by clients in tool lists and permission prompts.
+    title: z.string().trim().min(3).max(60).optional(),
+    // Client hints only, merged over the risk-derived defaults; never an authorization input.
+    annotations: z
+      .object({
+        destructiveHint: z.boolean().optional(),
+        idempotentHint: z.boolean().optional(),
+        openWorldHint: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     routeSha256: z.string().regex(/^[a-f0-9]{64}$/),
     contractSha256: z.string().regex(/^[a-f0-9]{64}$/),
     resourceFilter: z.string().trim().min(1),
@@ -81,6 +92,10 @@ export const operationReviewSchema = z
       });
     if ((review.status === 'CURATED') !== (review.tool !== null))
       ctx.addIssue({ code: 'custom', message: 'Only curated operations declare a named tool.' });
+    if ((review.title !== undefined || review.annotations !== undefined) && review.tool === null)
+      ctx.addIssue({ code: 'custom', message: 'Only named tools declare a title or annotations.' });
+    if (review.tool !== null && review.title === undefined)
+      ctx.addIssue({ code: 'custom', message: 'A named tool needs a title.' });
     if (new Set(review.actions).size !== review.actions.length)
       ctx.addIssue({ code: 'custom', message: 'Duplicate authorization action.' });
   });

@@ -1,3 +1,18 @@
+---
+title: Full-parity delivery
+order: 4
+description: The plan and acceptance criteria for MCP parity with the UI and REST API.
+type: developer
+product_area: mcp
+audience: [developer]
+verification:
+  level: source
+  verified_at: 2026-11-04
+  evidence:
+    - src/lib/mcp/catalog/parity.ts
+    - scripts/mcp/coverage-matrix.ts
+---
+
 # Full-parity delivery
 
 The full-parity plan supplied against `c95b601c5862e41037df7324d4c20a120afcc319` is the design reference for continuing draft PR #924. Its protocol and release targets are acceptance criteria, not claims about this build. PostgreSQL remains the only required state store; native authorization, domain commands and critical workers remain authoritative.
@@ -105,7 +120,7 @@ Phase D now has its reusable engine: `McpOperationApproval` (additive migration)
 
 ## OAuth checkpoint (history)
 
-CIMD is implemented behind an administrator policy (`cimdEnabled`, exact `cimdAllowedHosts`, `cimdScopes`; additive migration, default off) with an SSRF-resistant pinned fetch and immediate trust-policy revocation (see the catalog reference). Unit tests cover URL canonicalization, address classification, redirect/oversize/DNS-rebinding rejection and document validation; `tests/integration/mcp-client-metadata.test.ts` covers policy, scope ceiling, sticky revocation, identity squatting and grant invalidation. Still open for Phase B: issuer-bound credential validation beyond the existing resource check, scope step-up/incremental consent, and certification against real clients (legacy DCR is retained as an administrator-enabled compatibility path alongside CIMD).
+CIMD is implemented behind the Automatic connections switch (`cimdEnabled` follows `dcrEnabled`; optional exact `cimdAllowedHosts`; the same scope ceiling) with an SSRF-resistant pinned fetch and immediate trust-policy revocation (see the catalog reference). Unit tests cover URL canonicalization, address classification, redirect/oversize/DNS-rebinding rejection and document validation; `tests/integration/mcp-client-metadata.test.ts` covers policy, scope ceiling, sticky revocation, identity squatting and grant invalidation. Still open for Phase B: issuer-bound credential validation beyond the existing resource check, scope step-up/incremental consent, and certification against real clients (legacy DCR is retained as an administrator-enabled compatibility path alongside CIMD).
 
 ## Previous checkpoint
 

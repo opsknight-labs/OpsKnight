@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpConnectGuide from '@/components/settings/mcp/McpConnectGuide';
+import { MCP_ABSOLUTE_SESSION_DAYS } from '@/lib/mcp/auth/session-lifetime';
 
 export default function McpConnectSection({
   isAdmin,
@@ -63,9 +64,9 @@ export default function McpConnectSection({
           <McpConnectGuide endpoint={endpoint} />
         </div>
         <div className="-mx-4 border-t border-border bg-muted/30 px-4 py-3 text-xs leading-relaxed text-muted-foreground md:-mx-6 md:px-6">
-          You stay signed in while you use the assistant
-          {sessionIdleDays ? ` (${sessionIdleDays} days of inactivity signs you out)` : ''}. See or
-          disconnect access in{' '}
+          You stay signed in while you use the assistant (
+          {sessionIdleDays ? `${sessionIdleDays} days without use signs you out, and ` : ''}you sign
+          in again at least every {MCP_ABSOLUTE_SESSION_DAYS} days). See or disconnect access in{' '}
           <Link
             href={hrefs.connections}
             className="font-medium text-foreground underline underline-offset-2"

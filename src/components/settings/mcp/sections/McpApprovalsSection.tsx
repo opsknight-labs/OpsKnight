@@ -49,6 +49,7 @@ export default function McpApprovalsSection({
   kind,
   state,
   pending,
+  runbooksOnly = false,
   writesEnabled,
   now,
   timeZone,
@@ -59,6 +60,8 @@ export default function McpApprovalsSection({
   kind: ApprovalKind;
   state: ApprovalState;
   pending: { operations: number; runbooks: number };
+  /** Runbook approvers who are not administrators see the runbook queue only. */
+  runbooksOnly?: boolean;
   writesEnabled: boolean;
   now: Date;
   timeZone: string;
@@ -71,28 +74,34 @@ export default function McpApprovalsSection({
   const noun = kind === 'operations' ? 'change' : 'runbook run';
   return (
     <SettingsSection
-      title="Approvals"
-      description="Changes and runbook runs that assistants proposed. Each one waits for a different person than the requester to review the exact, frozen request."
+      title={runbooksOnly ? 'Runbook approvals' : 'Approvals'}
+      description={
+        runbooksOnly
+          ? "Runbook runs that other people's assistants proposed. Each one waits for someone allowed to approve runbooks to approve the exact, frozen plan. Reviewers are notified in OpsKnight."
+          : 'Changes and runbook runs that assistants proposed. Each one waits for an authorized reviewer to approve the exact, frozen request; an administrator may approve their own after confirming. Reviewers are notified in OpsKnight.'
+      }
     >
       <div className="flex flex-col gap-2 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <FilterChips
-          label="Approval type"
-          selected={kind}
-          options={[
-            {
-              value: 'operations',
-              label: 'Configuration changes',
-              count: pending.operations,
-              href: mcpHref({ ...base, kind: null, page: null }),
-            },
-            {
-              value: 'runbooks',
-              label: 'Runbook runs',
-              count: pending.runbooks,
-              href: mcpHref({ ...base, kind: 'runbooks', page: null }),
-            },
-          ]}
-        />
+        {!runbooksOnly && (
+          <FilterChips
+            label="Approval type"
+            selected={kind}
+            options={[
+              {
+                value: 'operations',
+                label: 'Configuration changes',
+                count: pending.operations,
+                href: mcpHref({ ...base, kind: null, page: null }),
+              },
+              {
+                value: 'runbooks',
+                label: 'Runbook runs',
+                count: pending.runbooks,
+                href: mcpHref({ ...base, kind: 'runbooks', page: null }),
+              },
+            ]}
+          />
+        )}
         <FilterChips
           label="Approval state"
           selected={state}
@@ -177,7 +186,7 @@ export default function McpApprovalsSection({
                         <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
                           <span>via</span>
                           <span className="inline-flex items-center gap-1 font-medium text-foreground/90">
-                            {getAssistantIcon(row.assistant, 'h-3 w-3')}
+                            {getAssistantIcon(row.assistant, 'h-3 w-3', row.assistantHost)}
                             {row.assistant}
                           </span>
                         </p>
@@ -197,6 +206,19 @@ export default function McpApprovalsSection({
                     {state === 'decided' && row.reviewer && (
                       <span className="block truncate text-xs text-muted-foreground">
                         by {personLabel(row.reviewer)}
+                      </span>
+                    )}
+                    {state === 'decided' && row.selfApproved && (
+                      <span className="mt-1 block">
+                        <StatusPill tone="warning">Self-approved</StatusPill>
+                      </span>
+                    )}
+                    {state === 'decided' && row.decisionReason && (
+                      <span
+                        className="block truncate text-xs text-muted-foreground"
+                        title={row.decisionReason}
+                      >
+                        “{row.decisionReason}”
                       </span>
                     )}
                   </ResponsiveCell>

@@ -119,7 +119,11 @@ describe('administrator self-service password access recovery', () => {
     );
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 'admin-self' },
-      data: { passwordHash: expect.any(String), tokenVersion: { increment: 1 } },
+      data: {
+        passwordHash: expect.any(String),
+        tokenVersion: { increment: 1 },
+        mcpRevocationVersion: { increment: 1 },
+      },
     });
     expect(securityEvent).toHaveBeenCalledWith(
       tx,

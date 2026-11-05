@@ -10,7 +10,7 @@ type InAppNotificationStore = {
 
 type InAppNotificationInput = {
   userIds: string[];
-  type: 'INCIDENT' | 'SCHEDULE' | 'TEAM' | 'SERVICE';
+  type: 'INCIDENT' | 'SCHEDULE' | 'TEAM' | 'SERVICE' | 'SYSTEM';
   title: string;
   message: string;
   entityType?: string | null;

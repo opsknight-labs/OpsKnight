@@ -137,14 +137,15 @@ async function checkMcpSetup(value, fetcher = globalThis.fetch) {
     const challenge = response.headers.get('www-authenticate') ?? '';
     const protectedEndpoint =
       response.status === 401 && challenge.includes(`resource_metadata="${resourceMetadata}"`);
+    // A 503 names its cause in a small JSON body: an administrator switch, load, or a fault.
+    const unavailable = response.status === 503 ? await unavailableReason(response) : null;
     add(
       'authentication',
       protectedEndpoint ? 'pass' : 'fail',
       protectedEndpoint
         ? 'Anonymous access is denied with the expected OAuth discovery challenge.'
-        : response.status === 503
-          ? 'MCP is disabled or unavailable. Check MCP settings, App URL, the application encryption key and migrations.'
-          : 'Expected an OAuth 401 challenge. Check authentication enforcement and proxy routing.'
+        : (unavailable ??
+            'Expected an OAuth 401 challenge. Check authentication enforcement and proxy routing.')
     );
     void response.body?.cancel().catch(() => {});
   } catch {
@@ -161,6 +162,24 @@ async function checkMcpSetup(value, fetcher = globalThis.fetch) {
     limitation:
       'Discovery checks only. Verify sign-in, scoped tools and revocation in each supported client; this does not certify production capacity or security.',
   };
+}
+
+/** The doctor's advice for a 503 from /mcp, from the bounded `error` code in its body. */
+async function unavailableReason(response) {
+  let code;
+  try {
+    const text = (await response.text()).slice(0, 4096);
+    code = JSON.parse(text).error;
+  } catch {
+    code = undefined;
+  }
+  if (code === 'MCP_DISABLED')
+    return 'MCP is turned off. An administrator can enable it in Settings > Integrations > MCP.';
+  if (code === 'MCP_BUSY' || code === 'temporarily_unavailable') {
+    const retry = response.headers.get('retry-after');
+    return `MCP is at capacity (in-flight limit reached)${retry ? `; retry after ${retry}s` : ''}. Raise the in-flight limit in MCP settings or add capacity.`;
+  }
+  return 'MCP is unavailable. Check the App URL, the application encryption key and migrations.';
 }
 
 module.exports = { checkMcpSetup, mcpEndpoint };

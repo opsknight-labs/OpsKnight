@@ -472,6 +472,27 @@ describe('saving the policy form', () => {
       cimdEnabled: false,
     });
   });
+  it('saves the approval windows and keeps them when a form leaves them out', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    const { updateMcpPolicy } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    await updateMcpPolicy(
+      form({ enabled: 'on', approvalTtlMinutes: '60', approvalCommitWindowMinutes: '10' })
+    );
+    const windows = { approvalTtlMinutes: 60, approvalCommitWindowMinutes: 10 };
+    expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject(
+      windows
+    );
+    // A form without the fields (an older page, or another section) must not reset them.
+    await updateMcpPolicy(form({ enabled: 'on' }));
+    expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject(
+      windows
+    );
+    await expect(
+      updateMcpPolicy(form({ enabled: 'on', approvalTtlMinutes: '5' }))
+    ).rejects.toThrow();
+  });
   it('does not silently drop an existing host-restricted metadata setup', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     actor.id = admin.id;

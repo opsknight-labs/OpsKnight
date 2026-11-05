@@ -16,6 +16,9 @@ runs:
   steps:
     - name: Build application
       shell: bash
+      # Same heap as the Docker build (Dockerfile BUILD_NODE_MAX_OLD_SPACE_SIZE).
+      env:
+        NODE_OPTIONS: --max-old-space-size=4096
       run: npm run build
 
     - name: Performance architecture budgets

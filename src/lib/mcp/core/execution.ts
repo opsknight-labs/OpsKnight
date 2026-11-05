@@ -29,6 +29,7 @@ import { McpBoundaryError, requireMcp } from './errors';
 import { lockMcpMutationAuthority } from './mutation-authority';
 import { projectMcpData } from './projection';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
+import { ERROR_REGISTRY } from '@/lib/errors';
 
 // Static: the reads that some approval-gated destructive operation declares as its preview.
 const MCP_CATALOG_PREVIEW_IDS = new Set(
@@ -162,6 +163,42 @@ export function hasOperationAuthority(
   );
 }
 
+/**
+ * Scopes this connection would need for an operation the person's role already allows; empty
+ * when nothing is missing or when the role itself forbids the operation.
+ */
+export function missingConsentScopes(
+  actor: AuthorizationActor,
+  operation: (typeof MCP_CATALOG)[number]
+) {
+  const granted = actor.apiKey?.scopes ?? [];
+  const missing = operation.requiredScopes.filter(scope => !granted.includes(scope));
+  if (!missing.length || !operation.authorizationActions.length) return [];
+  // Judge the role alone: the same person without the connection's scope narrowing.
+  const person = { ...actor, apiKey: undefined };
+  return operation.authorizationActions.every(
+    action => authorize({ actor: person, action }).allowed
+  )
+    ? missing
+    : [];
+}
+
+/** Tell a missing consent apart from a missing role, so the assistant can explain the fix. */
+export function requireOperationAuthority(
+  actor: AuthorizationActor,
+  operation: (typeof MCP_CATALOG)[number]
+) {
+  if (hasOperationAuthority(actor, operation)) return;
+  const missing = missingConsentScopes(actor, operation);
+  requireMcp(
+    !missing.length,
+    'MCP_SCOPE_NOT_GRANTED',
+    403,
+    `This connection was not granted ${missing.join(', ')}. Reconnect OpsKnight from your assistant and allow ${missing.length === 1 ? 'that permission' : 'those permissions'}.`
+  );
+  requireMcp(false, 'MCP_OPERATION_FORBIDDEN', 403);
+}
+
 function mcpCapabilityDisabled(
   policy: { disabledCapabilities: readonly string[] } | null,
   operation: (typeof MCP_CATALOG)[number]
@@ -254,7 +291,7 @@ async function executeMcpOperation(
   const { auth } = resolved;
   auth.apiKey.scopes = auth.apiKey.scopes.filter(scope => context.tokenScopes.includes(scope));
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: auth.apiKey.scopes };
-  requireMcp(hasOperationAuthority(auth.actor, operation), 'MCP_OPERATION_FORBIDDEN', 403);
+  requireOperationAuthority(auth.actor, operation);
   const loadHandler = (
     mode === 'approved'
       ? MCP_APPROVAL_HANDLERS
@@ -276,7 +313,13 @@ async function executeMcpOperation(
   );
   for (const [key, value] of Object.entries(args.query ?? {})) {
     requireMcp(typeof value !== 'object', 'MCP_INVALID_QUERY');
-    url.searchParams.set(key, String(value));
+    // "Assigned to me": the caller's own id, never an argument the assistant had to look up.
+    url.searchParams.set(
+      key,
+      key === 'assigneeId' && operation.kind === 'list' && value === 'me'
+        ? auth.actor.id
+        : String(value)
+    );
   }
   // Bound page size only where the route accepts one; some list routes take no query at all.
   const pageSize = mcpPageSize(operation, url.searchParams.get('limit'));
@@ -376,22 +419,9 @@ async function executeMcpOperation(
     'MCP_APPROVAL_GUARD_NOT_ENFORCED',
     500
   );
-  // A conflict carries its own retryability: a lost race may succeed later, a duplicate never will.
-  // Only that boolean is read; problem details are not passed to the agent.
-  if (response.status === 409) {
-    const problem = await readBoundedDomainResult(response, 16384).catch(() => null);
-    const retryable =
-      problem && typeof problem === 'object' && 'retryable' in problem
-        ? (problem as { retryable?: unknown }).retryable === true
-        : true;
-    throw new McpBoundaryError('MCP_DOMAIN_REJECTED', 409, retryable);
-  }
-  // Do not pass REST problem details or stack traces through to an agent.
-  requireMcp(
-    response.ok,
-    response.status === 404 ? 'MCP_RESOURCE_UNAVAILABLE' : 'MCP_DOMAIN_REJECTED',
-    response.status
-  );
+  // Do not pass REST problem details or stack traces through to an agent; only the bounded,
+  // registry-checked facts read by domainRejection.
+  if (!response.ok) throw await domainRejection(response);
   const raw =
     response.status === 204
       ? null
@@ -414,6 +444,65 @@ async function executeMcpOperation(
   };
   context.budget.consumeResult(result);
   return result;
+}
+
+const DOMAIN_PROBLEM_BYTES = 16384;
+const MAX_REJECTED_FIELDS = 10;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * A non-2xx domain response as an agent may see it: the MCP code, and from the problem body only
+ * a code listed in ERROR_REGISTRY, the failing field names with their rule codes, the domain's
+ * own retryability and, for 429 and 503, how long to wait. Titles, details, messages and values
+ * are never read into the error.
+ */
+export async function domainRejection(response: Response) {
+  const problem = await readBoundedDomainResult(response, DOMAIN_PROBLEM_BYTES).catch(() => null);
+  const body = isRecord(problem) ? problem : {};
+  const domainCode =
+    typeof body.code === 'string' && Object.hasOwn(ERROR_REGISTRY, body.code)
+      ? body.code
+      : undefined;
+  const fields = Array.isArray(body.fields)
+    ? body.fields
+        .filter(isRecord)
+        .flatMap(item =>
+          typeof item.field === 'string' &&
+          /^[A-Za-z0-9_.[\]-]{1,128}$/.test(item.field) &&
+          typeof item.code === 'string' &&
+          /^[A-Za-z0-9_]{1,64}$/.test(item.code)
+            ? [{ field: item.field, code: item.code }]
+            : []
+        )
+        .slice(0, MAX_REJECTED_FIELDS)
+    : [];
+  // A conflict carries its own retryability: a lost race may succeed later, a duplicate never will.
+  const retryable =
+    typeof body.retryable === 'boolean'
+      ? body.retryable
+      : response.status === 409 || response.status === 429 || response.status === 503
+        ? true
+        : undefined;
+  let retryAfterSeconds: number | undefined;
+  if (response.status === 429 || response.status === 503) {
+    const header = Number(response.headers.get('retry-after'));
+    const meta = isRecord(body.meta) ? Number(body.meta.retryAfter) : NaN;
+    const seconds = Number.isFinite(header) && header > 0 ? header : meta;
+    if (Number.isFinite(seconds) && seconds > 0)
+      retryAfterSeconds = Math.min(3600, Math.max(1, Math.ceil(seconds)));
+  }
+  return new McpBoundaryError(
+    response.status === 404 ? 'MCP_RESOURCE_UNAVAILABLE' : 'MCP_DOMAIN_REJECTED',
+    response.status,
+    retryable,
+    undefined,
+    {
+      ...(domainCode ? { domainCode } : {}),
+      ...(fields.length ? { fields } : {}),
+      ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+    }
+  );
 }
 
 async function readBoundedDomainResult(response: Response, maxBytes: number): Promise<unknown> {

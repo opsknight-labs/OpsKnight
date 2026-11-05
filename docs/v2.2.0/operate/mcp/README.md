@@ -1,0 +1,22 @@
+---
+title: Operating MCP
+order: 1
+description: Architecture, certification evidence and parity planning for the OpsKnight MCP server.
+type: concept
+product_area: mcp
+audience: [operator, developer]
+verification:
+  level: source
+  verified_at: 2026-11-04
+  evidence:
+    - src/app/mcp/route.ts
+---
+
+# Operating MCP
+
+- [Architecture and threat model](architecture.md): authentication, authorization, workload isolation and outstanding work.
+- [Certification status](certification.md): what is and is not certified, and how release evidence is collected.
+- [Exclusion review packet](exclusion-review.md): open operations with proposed dispositions.
+- [Full-parity delivery](full-parity.md): the parity plan and acceptance criteria.
+
+To set MCP up, see the [self-hosted setup guide](../../guides/mcp/self-hosted-setup.md).

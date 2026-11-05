@@ -500,7 +500,11 @@ export async function updatePassword(
         );
       await tx.user.update({
         where: { id: user.id },
-        data: { passwordHash, tokenVersion: { increment: 1 } },
+        data: {
+          passwordHash,
+          tokenVersion: { increment: 1 },
+          mcpRevocationVersion: { increment: 1 },
+        },
       });
       await logAudit(
         {

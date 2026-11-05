@@ -203,9 +203,17 @@ describe('compact evidence results', () => {
 
 describe('actionable tool errors', () => {
   it('say how to correct the commonest mistakes', async () => {
+    // A named tool advertises the enforced maximum, so the SDK refuses it with the bound.
     const page = await call('incident_search', { query: { limit: 200 } });
     expect(page.isError).toBe(true);
-    expect(page.content[0].text).toBe(
+    expect(page.content[0].text).toContain('limit must be <= 50');
+    // The generic path validates against the canonical contract and says the same.
+    const generic = await call('read_operation', {
+      operationId: 'listIncidents',
+      args: { query: { limit: 200 } },
+    });
+    expect(generic.isError).toBe(true);
+    expect(generic.content[0].text).toBe(
       'MCP_INVALID_PAGE_SIZE: query.limit must be an integer from 1 to 50.'
     );
     const unknown = await call('call_operation', { operationId: 'listServicez', args: {} });

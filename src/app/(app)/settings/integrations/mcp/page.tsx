@@ -18,7 +18,6 @@ import {
   XCircle,
 } from 'lucide-react';
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
 import { getMcpConfigurationStatus } from '@/lib/mcp/auth/config';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -50,8 +49,10 @@ import {
   countActiveConnections,
   countPendingApprovals,
   listMcpApprovals,
+  listMcpAssistantFilter,
   listMcpClients,
   listMcpGrants,
+  loadMcpPagePermissions,
   loadMcpViewer,
 } from './queries';
 
@@ -88,27 +89,32 @@ export default async function McpSettings({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   // Signed-in users see their own MCP access; every admin-only read below is gated on isAdmin.
-  const permissions = await getUserPermissions();
+  const permissions = await loadMcpPagePermissions();
   const isAdmin = permissions.isAdmin;
   const viewer = await loadMcpViewer(permissions);
-  const params = parseMcpListParams(await searchParams, isAdmin);
+  // Runbook approvers who are not administrators get the runbook approvals queue only.
+  const approvalAccess = isAdmin ? 'all' : viewer.canApproveRunbooks ? 'runbooks' : 'none';
+  const params = parseMcpListParams(await searchParams, isAdmin, approvalAccess);
   const { section } = params;
   const now = new Date();
 
-  const [configuration, policy, activeConnections, pending, activeClients] = await Promise.all([
-    getMcpConfigurationStatus(),
-    prisma.mcpPolicy.findUnique({ where: { id: 'default' } }),
-    countActiveConnections(viewer, now),
-    isAdmin ? countPendingApprovals(viewer, now) : Promise.resolve(null),
-    isAdmin && section === 'overview' ? countActiveClients(viewer) : Promise.resolve(null),
-  ]);
-  const systemSettings =
-    isAdmin && !configuration.origin
-      ? await prisma.systemSettings.findUnique({
-          where: { id: 'default' },
-          select: { updatedAt: true },
-        })
-      : null;
+  // Everything the header and navigation need, in parallel. The System settings revision is only
+  // used when no address is configured, but reading it alongside costs no extra round trip.
+  const [configuration, policy, activeConnections, pending, activeClients, systemRevision] =
+    await Promise.all([
+      getMcpConfigurationStatus(),
+      prisma.mcpPolicy.findUnique({ where: { id: 'default' } }),
+      countActiveConnections(viewer, now),
+      approvalAccess !== 'none' ? countPendingApprovals(viewer, now) : Promise.resolve(null),
+      isAdmin && section === 'overview' ? countActiveClients(viewer) : Promise.resolve(null),
+      isAdmin
+        ? prisma.systemSettings.findUnique({
+            where: { id: 'default' },
+            select: { updatedAt: true },
+          })
+        : Promise.resolve(null),
+    ]);
+  const systemSettings = !configuration.origin ? systemRevision : null;
 
   const enabled = policy?.enabled ?? false;
   const ready = configuration.issues.length === 0;
@@ -140,16 +146,22 @@ export default async function McpSettings({
       count: activeConnections,
     },
     ...(isAdmin
+      ? [{ id: 'assistants', label: 'Assistants', href: hrefs.assistants, icon: <Bot /> }]
+      : []),
+    ...(approvalAccess !== 'none'
       ? [
-          { id: 'assistants', label: 'Assistants', href: hrefs.assistants, icon: <Bot /> },
           {
             id: 'approvals',
-            label: 'Approvals',
+            label: isAdmin ? 'Approvals' : 'Runbook approvals',
             href: hrefs.approvals,
             icon: <ClipboardCheck />,
             count: pending?.total ?? 0,
             attention: true,
           },
+        ]
+      : []),
+    ...(isAdmin
+      ? [
           { id: 'policy', label: 'Access policy', href: hrefs.policy, icon: <SlidersHorizontal /> },
           {
             id: 'capabilities',
@@ -179,7 +191,7 @@ export default async function McpSettings({
               className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
             >
               <Shield className="mr-1 h-3 w-3" aria-hidden="true" />
-              {isAdmin ? 'Admin Only' : 'Your Access'}
+              {isAdmin ? 'Administrator view' : 'Your Access'}
             </Badge>
             <Badge
               variant="outline"
@@ -341,15 +353,11 @@ export default async function McpSettings({
         );
       case 'connections': {
         const input = { status: params.grantStatus, q: params.q, clientId: params.clientId };
-        const [initialResult, availableClients] = await Promise.all([
+        const [initialResult, assistantFilter] = await Promise.all([
           listMcpGrants(viewer, { ...input, page: params.page }, now),
           isAdmin
-            ? prisma.mcpClient.findMany({
-                select: { id: true, name: true },
-                orderBy: { name: 'asc' },
-                take: 100,
-              })
-            : Promise.resolve([]),
+            ? listMcpAssistantFilter(viewer)
+            : Promise.resolve({ clients: [], truncated: false }),
         ]);
         const page = clampPage(params.page, initialResult.total);
         const result =
@@ -366,7 +374,9 @@ export default async function McpSettings({
             status={params.grantStatus}
             q={params.q}
             client={result.client}
-            availableClients={availableClients}
+            availableClients={assistantFilter.clients}
+            availableClientsTruncated={assistantFilter.truncated}
+            revocable={result.revocable}
             now={now}
             timeZone={viewer.timeZone}
             describeScope={describeMcpScope}
@@ -419,6 +429,7 @@ export default async function McpSettings({
             kind={params.approvalKind}
             state={params.approvalState}
             pending={result.pending}
+            runbooksOnly={!isAdmin}
             writesEnabled={policy?.writesEnabled ?? false}
             now={now}
             timeZone={viewer.timeZone}
@@ -439,10 +450,12 @@ export default async function McpSettings({
               maxInFlight: policy?.maxInFlight ?? 4,
               maxOperations: policy?.maxOperations ?? 8,
               requestsPerMinute: policy?.requestsPerMinute ?? 60,
+              approvalTtlMinutes: policy?.approvalTtlMinutes ?? 240,
+              approvalCommitWindowMinutes: policy?.approvalCommitWindowMinutes ?? 30,
             }}
+            revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}
             selectedScopes={ceiling}
-            describeScope={describeMcpScope}
             action={updateMcpPolicy}
           />
         );
@@ -450,7 +463,10 @@ export default async function McpSettings({
         return (
           <div id="exposed-capabilities">
             {/* Self-contained: loads its own data and saves through its own audited action. */}
-            <McpCapabilityControls />
+            <McpCapabilityControls
+              isAdmin={isAdmin}
+              disabledCapabilities={policy?.disabledCapabilities ?? []}
+            />
           </div>
         );
     }

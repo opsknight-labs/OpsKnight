@@ -1,3 +1,18 @@
+---
+title: MCP exclusion review packet
+order: 3
+description: Every operation still open in the MCP parity inventory, with a proposed disposition.
+type: reference
+product_area: mcp
+audience: [developer, operator]
+verification:
+  level: source
+  verified_at: 2026-11-04
+  evidence:
+    - src/lib/mcp/catalog/review.json
+    - src/lib/mcp/catalog/parity.ts
+---
+
 # MCP exclusion review packet
 
 This packet lists every operation still open in the MCP parity inventory, with a proposed disposition. It was generated from `npm run --silent mcp:coverage` to help reviewers; it does not record any decision. Automated tooling must not author `exclusion` records. An exclusion counts only when a named reviewer records it in `src/lib/mcp/catalog/review.json`. The record needs a date, a rationale of at least 20 characters, and a safe equivalent where one exists. The schema rejects anything else.

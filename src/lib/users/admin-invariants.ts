@@ -14,7 +14,27 @@ type UserSecurityMutation = {
   roleSource?: RoleSource;
   status?: UserStatus;
   tokenVersion?: Prisma.IntFieldUpdateOperationsInput | number;
+  mcpRevocationVersion?: Prisma.IntFieldUpdateOperationsInput | number;
 };
+
+/**
+ * Leaving ACTIVE (deactivation) and demotion from ADMIN are security events that sign assistants
+ * out (MCP grants pin `mcpRevocationVersion`). Other role and team edits narrow access live
+ * through authorize().
+ */
+function revokesMcpGrants(
+  target: { role: Role; status: UserStatus },
+  nextRole: Role,
+  nextStatus: UserStatus
+) {
+  return (
+    (target.role === 'ADMIN' && nextRole !== 'ADMIN') ||
+    // Any departure from ACTIVE, so a later reactivation never revives an old connection.
+    (target.status === 'ACTIVE' && nextStatus !== 'ACTIVE') ||
+    (target.status !== 'DISABLED' && nextStatus === 'DISABLED')
+  );
+}
+const MCP_REVOCATION_BUMP = { mcpRevocationVersion: { increment: 1 } } as const;
 type SecurityMutationSideEffects = (tx: Prisma.TransactionClient) => Promise<void>;
 
 export async function updateUserSecurityState(
@@ -55,9 +75,13 @@ export async function updateUserSecurityState(
       }
     }
 
+    const bumpsMcp =
+      mutation.mcpRevocationVersion === undefined &&
+      additionalData.mcpRevocationVersion === undefined &&
+      revokesMcpGrants(target, nextRole, nextStatus);
     const updated = await tx.user.update({
       where: { id: userId },
-      data: { ...additionalData, ...mutation },
+      data: { ...additionalData, ...mutation, ...(bumpsMcp ? MCP_REVOCATION_BUMP : {}) },
     });
     await sideEffects?.(tx);
     return updated;
@@ -104,6 +128,17 @@ export async function bulkUpdateUserSecurityState(
       where: { id: { in: ids } },
       data: { ...additionalData, ...mutation },
     });
+    const revoked = targets
+      .filter(target =>
+        revokesMcpGrants(target, mutation.role ?? target.role, mutation.status ?? target.status)
+      )
+      .map(target => target.id);
+    if (
+      revoked.length &&
+      mutation.mcpRevocationVersion === undefined &&
+      additionalData.mcpRevocationVersion === undefined
+    )
+      await tx.user.updateMany({ where: { id: { in: revoked } }, data: MCP_REVOCATION_BUMP });
     await sideEffects?.(tx);
     return updated;
   });
