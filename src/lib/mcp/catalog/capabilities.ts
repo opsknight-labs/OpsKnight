@@ -173,6 +173,11 @@ export const MCP_PROMPT_NAMES = [
   'prepare_postmortem',
   'review_automation_rule',
   'preview_remediation',
+  'catch_up',
+  'find_precedent',
+  'draft_status_update',
+  'request_shift_cover',
+  'getting_started',
 ] as const;
 
 const PROMPT_DOMAIN = 'prompts';

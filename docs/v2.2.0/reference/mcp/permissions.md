@@ -62,7 +62,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 21 | 12 | 2 | 16 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 23 | 12 | 2 | 16 |
 | `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 11 | 10 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
@@ -117,7 +117,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | escalation-policies | 8 | 5 | 3 | 0 |
-| incidents | 40 | 30 | 10 | 0 |
+| incidents | 41 | 31 | 10 | 0 |
 | integrations | 11 | 6 | 2 | 3 |
 | notification-providers | 6 | 0 | 0 | 6 |
 | notifications | 4 | 3 | 1 | 0 |
@@ -132,8 +132,8 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | settings | 8 | 3 | 4 | 1 |
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
-| users | 12 | 3 | 0 | 9 |
-| **All** | 322 | 144 | 106 | 72 |
+| users | 13 | 4 | 0 | 9 |
+| **All** | 324 | 146 | 106 | 72 |
 
 <details>
 <summary>Operations by area</summary>
@@ -221,6 +221,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `listIncidentWatchers` | `read_operation` (sensitive reads on) |
 | `listIncidents` | `incident_search` |
 | `listRelatedIncidents` | `read_operation` |
+| `listSimilarIncidents` | `incident_find_similar` |
 | `removeIncidentTag` | `call_operation` |
 | `removeIncidentWatcher` | `operation_prepare`, then approval |
 | `reopenIncident` | `incident_reopen` |
@@ -554,6 +555,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | --- | --- |
 | `administerUser` | not available: restricted to native administration (exclusion review pending) |
 | `createUserInvitation` | not available: restricted to native administration (exclusion review pending) |
+| `getMyCatchUp` | `oncall_catch_up` |
 | `getMyNotificationPreferences` | not available: restricted to native administration (exclusion review pending) |
 | `getUser` | `read_operation` |
 | `getUserAdministration` | not available: restricted to native administration (exclusion review pending) |
