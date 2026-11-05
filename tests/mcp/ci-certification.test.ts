@@ -48,10 +48,10 @@ describe('CERT-03: every MCP database suite runs, without hand-kept lists', () =
 });
 
 describe('CERT-01: REST route and routing changes re-run MCP certification', () => {
-  it('watches REST routes, middleware, Next config and the browser suite config', () => {
+  it('watches every API route (src/app/api/**), middleware, Next config and the browser suite config', () => {
     const workflow = readFileSync('.github/workflows/mcp-certification.yml');
     for (const pattern of [
-      'src/app/api/v2/',
+      '|src/app/api/|',
       'src/middleware\\.ts$',
       'next\\.config\\.[cm]?[jt]s$',
       'playwright\\.mcp\\.config\\.ts$',
