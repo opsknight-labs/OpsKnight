@@ -77,19 +77,25 @@ export const MCP_PAT_ENTITY_TYPE = 'MCP_PERSONAL_TOKEN';
 const PAT_NOTICE_MS = 7 * 86_400_000;
 
 /**
- * Tells each owner, in OpsKnight only, that a personal access token expires within seven days,
- * once per token. Tokens are never renewed, so this is the owner's cue to create a new one. Rows
- * locked by a concurrent sweep are skipped this tick; expired tokens are removed by the cleanup.
+ * Tells each owner, in OpsKnight only, that a personal access token expires within seven days
+ * (halfway through, for a token of a week or less), once per token. Tokens are never renewed, so
+ * this is the owner's cue to create a new one. Rows locked by a concurrent sweep are skipped this
+ * tick; expired tokens are removed by the cleanup.
  */
 export async function notifyExpiringMcpPersonalTokens(now = new Date()) {
   return prisma.$transaction(async tx => {
     const rows = await tx.$queryRaw<
       { id: string; userId: string; label: string | null; expiresAt: Date }[]
     >`
-      SELECT id, "userId", label, "expiresAt" FROM "McpGrant"
-      WHERE kind = 'PAT' AND "revokedAt" IS NULL AND "expiryNotifiedAt" IS NULL
-        AND "expiresAt" > ${now} AND "expiresAt" <= ${new Date(now.getTime() + PAT_NOTICE_MS)}
-      ORDER BY "expiresAt" ASC, id ASC LIMIT ${MCP_CLEANUP_BATCH} FOR UPDATE SKIP LOCKED`;
+      SELECT g.id, g."userId", g.label, g."expiresAt" FROM "McpGrant" g
+      JOIN "User" u ON u.id = g."userId"
+      WHERE g.kind = 'PAT' AND g."revokedAt" IS NULL AND g."expiryNotifiedAt" IS NULL
+        AND g."expiresAt" > ${now} AND g."expiresAt" <= ${new Date(now.getTime() + PAT_NOTICE_MS)}
+        -- A token of a week or less is announced halfway, not the moment it is created.
+        AND g."expiresAt" - LEAST(interval '7 days', (g."expiresAt" - g."createdAt") / 2) <= ${now}
+        -- Only tokens that still work: an owner whose access a security event ended is not told.
+        AND u.status::text = 'ACTIVE' AND u."mcpRevocationVersion" = g."userRevocationVersion"
+      ORDER BY g."expiresAt" ASC, g.id ASC LIMIT ${MCP_CLEANUP_BATCH} FOR UPDATE OF g SKIP LOCKED`;
     for (const row of rows) {
       const days = Math.max(1, Math.ceil((row.expiresAt.getTime() - now.getTime()) / 86_400_000));
       const name = (row.label ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'unnamed';

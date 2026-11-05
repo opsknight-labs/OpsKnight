@@ -123,8 +123,15 @@ export async function createMcpPersonalToken(
   )
     return { ok: false, code: 'MCP_PAT_INVALID_EXPIRY', field: 'expiresInDays' };
   const now = new Date();
+  // Tokens a security event already ended (sign-out everywhere, password change) do not count.
   const live = await tx.mcpGrant.count({
-    where: { userId: actor.id, kind: 'PAT', revokedAt: null, expiresAt: { gt: now } },
+    where: {
+      userId: actor.id,
+      kind: 'PAT',
+      revokedAt: null,
+      expiresAt: { gt: now },
+      userRevocationVersion: user.mcpRevocationVersion,
+    },
   });
   if (live >= MCP_PAT_PER_USER_LIMIT) return { ok: false, code: 'MCP_PAT_LIMIT_REACHED' };
   await tx.mcpClient.upsert({

@@ -79,7 +79,7 @@ What a personal token can and cannot do:
 - Its permissions are capped live by the access policy: narrowing the allowed list, or turning on **Require view-only connections**, takes effect on the next request.
 - It never carries `runbooks:execute`, so it cannot request runbook runs.
 - Changes it prepares always need a second person to approve them, even when its owner is an administrator.
-- It is never renewed. The owner is reminded in OpsKnight seven days before it expires; create a new token and update the agent before then.
+- It is never renewed. The owner is reminded in OpsKnight seven days before it expires (halfway through, for a token of a week or less); create a new token and update the agent before then.
 - It is listed under **Connections** with a **Personal token** badge, its expiry and its last call, and can be revoked there. **Revoke all active connections** includes personal tokens.
 - Turning personal tokens off in the access policy revokes every token immediately. Turning them back on does not restore them.
 

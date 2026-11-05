@@ -306,6 +306,12 @@ describe('personal access token creation', () => {
     await signIn('USER');
     for (let index = 0; index < MCP_PAT_PER_USER_LIMIT; index++) await created();
     expect(await createToken()).toMatchObject({ ok: false, code: 'MCP_PAT_LIMIT_REACHED' });
+    // Tokens a security event ended (sign-out everywhere) no longer hold a place.
+    await db.user.update({
+      where: { id: actor.id },
+      data: { mcpRevocationVersion: { increment: 1 } },
+    });
+    expect(await createToken()).toMatchObject({ ok: true });
   });
 
   it('the settings action takes the sign-in time from the session, never the form', async () => {
@@ -723,6 +729,12 @@ describe('expiry notices', () => {
     const user = await signIn('USER');
     const soon = await created({ label: 'Nightly CI', expiresInDays: 5 });
     const later = await created({ label: 'Later', expiresInDays: 30 });
+    // A five-day token is not announced the moment it is created; one that is older is.
+    expect(await notifyExpiringMcpPersonalTokens()).toBe(0);
+    await db.mcpGrant.update({
+      where: { id: soon.grantId },
+      data: { createdAt: new Date(Date.now() - 10 * 86_400_000) },
+    });
     expect(await notifyExpiringMcpPersonalTokens()).toBe(1);
     const notices = await db.inAppNotification.findMany({ where: { userId: user.id } });
     expect(notices).toHaveLength(1);
@@ -742,5 +754,24 @@ describe('expiry notices', () => {
       data: { expiresAt: new Date(Date.now() + 86_400_000), revokedAt: new Date() },
     });
     expect(await notifyExpiringMcpPersonalTokens()).toBe(0);
+    // Nor is one a security event already ended (sign-out everywhere).
+    const ended = await created({ label: 'Ended', expiresInDays: 30 });
+    await db.mcpGrant.update({
+      where: { id: ended.grantId },
+      data: {
+        createdAt: new Date(Date.now() - 29 * 86_400_000),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    });
+    await db.user.update({
+      where: { id: user.id },
+      data: { mcpRevocationVersion: { increment: 1 } },
+    });
+    expect(await notifyExpiringMcpPersonalTokens()).toBe(0);
+    await db.user.update({
+      where: { id: user.id },
+      data: { mcpRevocationVersion: { decrement: 1 } },
+    });
+    expect(await notifyExpiringMcpPersonalTokens()).toBe(1);
   });
 });
