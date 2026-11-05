@@ -1,6 +1,6 @@
 ---
-title: MCP developer quickstart
-order: 3
+title: Contributing to MCP
+order: 5
 description: Run the local MCP checks, call the server by hand and exercise the reviewed-change workflows in development.
 type: developer
 product_area: mcp
@@ -16,11 +16,11 @@ verification:
     - src/lib/mcp/approvals/runbook.ts
 ---
 
-# MCP developer quickstart
+# Contributing to MCP
 
-This page is for developers and operators working on OpsKnight itself. To turn MCP on and connect an assistant, follow [Self-hosted setup](self-hosted-setup.md); for error codes see [Troubleshooting](troubleshooting.md).
+This page is for developers and operators working on OpsKnight itself. To build your own agent or integration against an OpsKnight server, see [Build an agent](../../guides/mcp/build-an-agent.md). To turn MCP on and connect an assistant, follow [Self-hosted setup](../../guides/mcp/self-hosted-setup.md); for error codes see [Troubleshooting](../../guides/mcp/troubleshooting.md).
 
-MCP is off by default and an administrator turns it on in one click. It is not certified for production capacity; two-replica shared-state behaviour is checked locally but is not a high-availability claim. See [architecture and outstanding work](../../operate/mcp/architecture.md).
+MCP is off by default and an administrator turns it on in one click. It is not certified for production capacity; two-replica shared-state behaviour is checked locally but is not a high-availability claim. See [architecture and outstanding work](architecture.md).
 
 ## Local checks
 
@@ -30,7 +30,7 @@ After a completed unit and database run, `npm run check:mcp:local -- --browser-o
 
 The evidence directory also has `query-profile.json`: statement counts for discovery, single reads, joined incident context, a three-step plan and four concurrent searches against the small fixture. For an existing disposable test database, set `MCP_QUERY_PROFILE_OUTPUT` to an absolute path outside the repository and run `npm run test:mcp:db`. The test resets data and accepts only a loopback PostgreSQL database whose name ends in `_test`. It records no SQL text, parameters, credentials or business content.
 
-The generated [troubleshooting](troubleshooting.md) and [permissions](../../reference/mcp/permissions.md) pages are written by `npm run mcp:docs`; `npm run mcp:docs:check` fails when they drift from the code.
+The generated [troubleshooting](../../guides/mcp/troubleshooting.md) and [permissions](../../reference/mcp/permissions.md) pages are written by `npm run mcp:docs`; `npm run mcp:docs:check` fails when they drift from the code.
 
 ## Manual development setup
 
@@ -63,7 +63,7 @@ With changes on, call `operation_prepare` with the operationId and its arguments
 
 Consent to `runbooks:execute runbooks:read incidents:read services:read` and turn changes on. Call `runbook_prepare_execution` with `runbookId`, the native execute `body` (without `expectedPlanDigest`) and a stable `idempotencyKey`. No job starts. Someone with runbook approve permission (Responders and Administrators by default) opens the `reviewUrl`, inspects the frozen actions, target and digest, and approves or rejects; runbook approvers are notified in OpsKnight. Normally that is a second person; an administrator may approve their own request after ticking a confirmation. The MCP client can never submit an approval.
 
-Poll `runbook_get_approval`, then call `runbook_execute_approved` with only `previewId` and a stable `idempotencyKey`, reusing both after a lost response. The preview waits for review for the policy's **Time to review** (default 240 minutes) and must be executed within **Time to apply after approval** (default 30 minutes). An expired, rejected or changed plan needs preparing and review again. Execution creates one native durable execution and returns its id, status and UI link. Step approvals and Agent controls still apply. A refreshed token may continue the same grant's pending approval while its current scopes and authority still suffice. See [approval boundaries](../../operate/mcp/architecture.md#independently-reviewed-runbook-execution).
+Poll `runbook_get_approval`, then call `runbook_execute_approved` with only `previewId` and a stable `idempotencyKey`, reusing both after a lost response. The preview waits for review for the policy's **Time to review** (default 240 minutes) and must be executed within **Time to apply after approval** (default 30 minutes). An expired, rejected or changed plan needs preparing and review again. Execution creates one native durable execution and returns its id, status and UI link. Step approvals and Agent controls still apply. A refreshed token may continue the same grant's pending approval while its current scopes and authority still suffice. See [approval boundaries](architecture.md#independently-reviewed-runbook-execution).
 
 ## Rollout and rollback
 
@@ -71,4 +71,4 @@ Existing installations keep automatic registration off after the additive migrat
 
 Upgrading from the earlier `MCP_TOKEN_HASH_SECRET` implementation changes the credential key: existing tokens and codes stop validating and users reconnect. Administrators can revoke the old connections with **Revoke all active connections** under **Credential security** on the Connections tab.
 
-Client compatibility is tracked in the [setup guide](self-hosted-setup.md#client-compatibility): only Claude Code is verified end to end. External issuers, machine grants, stdio and MCP Apps are not implemented. Do not substitute REST tokens or disable resource validation to work around a client problem.
+Client compatibility is tracked in the [setup guide](../../guides/mcp/self-hosted-setup.md#client-compatibility): only Claude Code is verified end to end. External issuers, machine grants, stdio and MCP Apps are not implemented. Do not substitute REST tokens or disable resource validation to work around a client problem.

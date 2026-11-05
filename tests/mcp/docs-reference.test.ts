@@ -6,11 +6,20 @@ import {
   MCP_GENERATED_PAGES,
   MCP_LOG_GUIDE,
   MCP_NON_ERROR_CODES,
+  fillGeneratedBlocks,
+  redactedFieldRule,
+  renderCatalogCounts,
+  renderSecurityBlocks,
   renderPermissions,
   renderTroubleshooting,
   scanMcpCodes,
   scanMcpLogEvents,
 } from '../../scripts/mcp/docs-reference';
+import { renderTools } from '../../scripts/mcp/docs-tools';
+import { MCP_CAPABILITIES, MCP_PROMPT_NAMES } from '@/lib/mcp/catalog/capabilities';
+import { MCP_CATALOG } from '@/lib/mcp/catalog';
+import { projectMcpData } from '@/lib/mcp/core/projection';
+import { CALL_OPERATION_READS_REMOVED_IN } from '@/lib/mcp/protocol/server';
 import { friendlyMcpError } from '@/lib/mcp/auth/friendly-error';
 import { mcpScopesUsableByRole } from '@/lib/mcp/auth/role-scopes';
 import {
@@ -40,8 +49,8 @@ const existsSync = (path: string) => fsExists(path);
 describe('F3: generated MCP reference pages', () => {
   it.each(MCP_GENERATED_PAGES.map(page => [page.path, page] as const))(
     '%s matches what the code generates (run npm run mcp:docs)',
-    (path, page) => {
-      expect(readFileSync(path, 'utf8')).toBe(page.render());
+    async (path, page) => {
+      expect(readFileSync(path, 'utf8')).toBe(await page.render());
     }
   );
 
@@ -98,6 +107,92 @@ describe('F3: generated MCP reference pages', () => {
     expect(readFileSync('src/lib/mcp/auth/friendly-error.ts', 'utf8')).toContain(
       'mcpTroubleshootingLink(code)'
     );
+  });
+
+  it('documents every tool the server offers and every prompt, from the live tool list (DX-6)', async () => {
+    const page = await renderTools('2026-11-04');
+    const standalone = MCP_CAPABILITIES.filter(capability => capability.kind === 'tool');
+    for (const tool of standalone) expect(page, tool.id).toContain(`### \`${tool.id}\``);
+    for (const tool of new Set(
+      MCP_CATALOG.flatMap(operation => (operation.tool ? [operation.tool] : []))
+    ))
+      expect(page, tool).toContain(`### \`${tool}\``);
+    for (const prompt of MCP_PROMPT_NAMES) expect(page, prompt).toContain(`| \`${prompt}\` |`);
+    // Hints and requirements come from the server: a change tool says it needs changes on.
+    expect(page).toMatch(
+      /### `incident_resolve`[\s\S]*?\| no \| [^|]+ \| [^|]+ \| `incidents:write` \| Changes \|/
+    );
+  });
+
+  it('keeps the catalog counts and the coverage table in step with the registry (DX-12)', () => {
+    const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
+    const counts = renderCatalogCounts();
+    for (const [name, text] of counts)
+      expect(catalog).toContain(`<!-- generated:${name} -->${text}<!-- /generated:${name} -->`);
+    expect(counts.get('mcp-counts')).toContain(`${MCP_CATALOG.length} classified operations`);
+    expect(() => fillGeneratedBlocks('no markers', counts)).toThrow('Missing generated block');
+    const total = renderPermissions()
+      .split('\n')
+      .find(line => line.startsWith('| **All** |'))!
+      .split('|')
+      .slice(2, 6)
+      .map(value => Number(value.trim()));
+    expect(total[0]).toBe(MCP_CATALOG.length);
+    expect(total[1] + total[2] + total[3]).toBe(total[0]);
+  });
+
+  it('lists exactly the fields the projection removes, and every listed field is removed (DX-5)', () => {
+    const page = readFileSync('docs/v2.2.0/guides/mcp/security-and-data.md', 'utf8');
+    for (const [name, text] of renderSecurityBlocks())
+      expect(page).toContain(`<!-- generated:${name} -->${text}<!-- /generated:${name} -->`);
+    const { contains, exact } = redactedFieldRule();
+    expect(contains).toContain('password');
+    expect(exact).toContain('environment');
+    for (const field of [
+      ...contains.map(value => `my${value.replace(/\.\?/g, '_')}Value`),
+      ...exact,
+    ])
+      expect(projectMcpData({ [field]: 'x' }), field).toEqual({ [field]: '[REDACTED]' });
+    expect(projectMcpData({ title: 'x' })).toEqual({ title: 'x' });
+    expect(page).toContain('Secrets typed into free text are not detected.');
+  });
+
+  it('names one removal release for call_operation reads everywhere it is announced (DX-7)', () => {
+    expect(CALL_OPERATION_READS_REMOVED_IN).toMatch(/^v\d+\.\d+\.\d+$/);
+    const changelog = readFileSync('CHANGELOG.md', 'utf8').split('\n## [')[1];
+    const deprecated = changelog.split('### Deprecated')[1]?.split('\n### ')[0] ?? '';
+    expect(deprecated).toContain('`call_operation`');
+    expect(deprecated).toContain(CALL_OPERATION_READS_REMOVED_IN);
+    const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
+    expect(catalog).toContain(`until ${CALL_OPERATION_READS_REMOVED_IN}, still serves reads`);
+    expect(catalog).not.toContain('for this release, still serves reads');
+    expect(readFileSync('src/lib/mcp/protocol/server.ts', 'utf8')).toContain(
+      'version: APP_VERSION'
+    );
+  });
+
+  it('names only real tools, prompts and codes in the hand-written guides (DX-4, DX-10)', async () => {
+    const page = await renderTools('2026-11-04');
+    const known = new Set(
+      [...page.matchAll(/^### `([a-z_]+)`/gm), ...page.matchAll(/^\| `([a-z_]+)` \|/gm)].map(
+        match => match[1]
+      )
+    );
+    const codes = new Set(scanMcpCodes().keys());
+    for (const file of [
+      'docs/v2.2.0/guides/mcp/what-to-ask.md',
+      'docs/v2.2.0/guides/mcp/build-an-agent.md',
+    ]) {
+      const text = readFileSync(file, 'utf8');
+      for (const [, name] of text.matchAll(/`([a-z_]+)`/g))
+        if (/[a-z]_[a-z]/.test(name)) expect(known, `${file}: ${name}`).toContain(name);
+      for (const [, code] of text.matchAll(/`(MCP_[A-Z_]+)`/g))
+        expect(codes.has(code), `${file}: ${code}`).toBe(true);
+    }
+    // Every built-in prompt has at least one example request.
+    const ask = readFileSync('docs/v2.2.0/guides/mcp/what-to-ask.md', 'utf8');
+    for (const prompt of MCP_PROMPT_NAMES) expect(ask, prompt).toContain(`\`${prompt}\` prompt`);
+    expect(ask).toContain('`assigneeId: "me"`');
   });
 
   it('fails the check script when a committed page drifts', () => {
@@ -297,7 +392,7 @@ describe('F1/F2: the guides describe current behaviour', () => {
   const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
   const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
   const architecture = readFileSync('docs/v2.2.0/operate/mcp/architecture.md', 'utf8');
-  const quickstart = readFileSync('docs/v2.2.0/guides/mcp/quickstart.md', 'utf8');
+  const quickstart = readFileSync('docs/v2.2.0/operate/mcp/contributing.md', 'utf8');
 
   it('uses the tab and control names the settings page renders', () => {
     const page = readFileSync('src/app/(app)/settings/integrations/mcp/page.tsx', 'utf8');

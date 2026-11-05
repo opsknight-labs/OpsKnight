@@ -14,6 +14,7 @@ verification:
 
 # MCP reference
 
-- [Permissions](permissions.md): every permission (scope), the roles that can use it, operation counts and the effective-access rule. Generated from the code.
+- [Permissions and coverage](permissions.md): every permission (scope), the roles that can use it, operation counts, coverage by area and the effective-access rule. Generated from the code.
+- [Tool reference](tools.md): every tool and prompt with its hints, scopes, requirements and inputs. Generated from the server's tool list.
 - [Catalog and limits](catalog.md): tools, operations, approval workflows, protocol features and fixed limits.
 - [Troubleshooting](../../guides/mcp/troubleshooting.md): every MCP error code and log event. Generated from the code.

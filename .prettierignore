@@ -25,3 +25,4 @@ docs/*/reference/
 # Written by npm run mcp:docs; CI fails if it differs from the generator output.
 docs/v2.2.0/guides/mcp/troubleshooting.md
 docs/v2.2.0/operate/mcp/monitoring.md
+docs/v2.2.0/guides/mcp/security-and-data.md

@@ -16,6 +16,8 @@ import {
   isMcpExecutable,
   isMcpSensitiveRead,
 } from '../../src/lib/mcp/catalog';
+import { buildMcpParityReport } from '../../src/lib/mcp/catalog/parity';
+import { MCP_REDACTED_FIELDS } from '../../src/lib/mcp/core/projection';
 import { DEFAULT_ASSISTANT_SCOPES } from '../../src/lib/mcp/auth/client-policy';
 import { buildMcpConsentOffer, isMcpViewScope } from '../../src/lib/mcp/auth/consent-offer';
 import { friendlyMcpError } from '../../src/lib/mcp/auth/friendly-error';
@@ -31,6 +33,7 @@ import {
   MCP_OAUTH_OUTCOMES,
 } from '../../src/lib/mcp/auth/oauth-observability';
 import { MCP_AUTH_CONCURRENCY, MCP_MAX_OPERATIONS } from '../../src/lib/mcp/core/budget';
+import { MCP_TOOLS_PAGE, renderTools } from './docs-tools';
 
 export const MCP_DOCS_ROOT = 'docs/v2.2.0';
 /** Date the hand-written explanations below were last checked against the code. */
@@ -902,7 +905,83 @@ export function renderPermissions() {
     '- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person. The assistant can never approve.',
     ''
   );
+  lines.push(...renderCoverage());
   return lines.join('\n');
+}
+
+/** How an assistant reaches one operation, or why it cannot (DX-12). */
+function reachedBy(entry: ReturnType<typeof buildMcpParityReport>['operations'][number]) {
+  const operation = MCP_CATALOG.find(candidate => candidate.operationId === entry.operationId)!;
+  switch (entry.disposition) {
+    case 'CURATED_TOOL':
+      return `\`${operation.tool}\``;
+    case 'DISCOVERABLE':
+      return operation.method === 'get' || isMcpSensitiveRead(operation)
+        ? isMcpSensitiveRead(operation)
+          ? '`read_operation` (sensitive reads on)'
+          : '`read_operation`'
+        : '`call_operation`';
+    case 'APPROVAL_REQUIRED':
+      return '`operation_prepare`, then approval';
+    case 'MCP_EQUIVALENT':
+      return (entry.equivalent?.tools ?? []).map(tool => `\`${tool}\``).join(', then ');
+    case 'EXCLUDED_WITH_REASON':
+      return 'not available: excluded after review';
+    default:
+      return `not available: ${entry.nextStep.toLowerCase().replace(/_/g, ' ')}`;
+  }
+}
+
+/**
+ * REST-to-MCP coverage per area, from the same parity report the coverage artifact uses, so an
+ * evaluator can see what an assistant can reach without reading the catalog.
+ */
+function renderCoverage() {
+  const report = buildMcpParityReport(MCP_CATALOG);
+  const unavailable = (entry: (typeof report.operations)[number]) =>
+    entry.disposition === 'EXCLUDED_WITH_REASON' || entry.blocker !== null;
+  const domains = [...new Set(report.operations.map(entry => entry.domain))].sort();
+  const lines = [
+    '## Coverage by area',
+    '',
+    'Every REST v2 operation by area: how many an assistant can use directly (curated tools, `read_operation` and `call_operation`), how many need approval first (`operation_prepare` or the runbook approval tools) and how many are not available to assistants. Not available means excluded after review or not yet implemented; the catalog explains each.',
+    '',
+    '| Area | Operations | Direct | With approval | Not available |',
+    '| --- | --: | --: | --: | --: |',
+  ];
+  for (const domain of domains) {
+    const entries = report.operations.filter(entry => entry.domain === domain);
+    lines.push(
+      `| ${domain} | ${entries.length} | ${entries.filter(entry => entry.executableCandidate).length} | ${
+        entries.filter(
+          entry =>
+            entry.disposition === 'APPROVAL_REQUIRED' || entry.disposition === 'MCP_EQUIVALENT'
+        ).length
+      } | ${entries.filter(unavailable).length} |`
+    );
+  }
+  const total = report.operations;
+  lines.push(
+    `| **All** | ${total.length} | ${total.filter(entry => entry.executableCandidate).length} | ${
+      total.filter(
+        entry => entry.disposition === 'APPROVAL_REQUIRED' || entry.disposition === 'MCP_EQUIVALENT'
+      ).length
+    } | ${total.filter(unavailable).length} |`,
+    '',
+    '<details>',
+    '<summary>Operations by area</summary>',
+    ''
+  );
+  for (const domain of domains) {
+    lines.push(`### ${domain}`, '', '| Operation | How an assistant reaches it |', '| --- | --- |');
+    for (const entry of report.operations
+      .filter(candidate => candidate.domain === domain)
+      .sort((a, b) => (a.operationId < b.operationId ? -1 : 1)))
+      lines.push(`| \`${entry.operationId}\` | ${reachedBy(entry)} |`);
+    lines.push('');
+  }
+  lines.push('</details>', '');
+  return lines;
 }
 
 /** What each opsknight_mcp_* series means for an operator. A new MCP metric without one fails CI. */
@@ -1052,8 +1131,92 @@ export function renderMonitoring(repoRoot = process.cwd()) {
   ].join('\n');
 }
 
-export const MCP_GENERATED_PAGES = [
+export const MCP_CATALOG_PAGE = `${MCP_DOCS_ROOT}/reference/mcp/catalog.md`;
+
+/** Replaces each `<!-- generated:name -->…<!-- /generated:name -->` block of a hand-written page. */
+export function fillGeneratedBlocks(page: string, blocks: ReadonlyMap<string, string>) {
+  let result = page;
+  for (const [name, text] of blocks) {
+    const open = `<!-- generated:${name} -->`;
+    const close = `<!-- /generated:${name} -->`;
+    const start = result.indexOf(open);
+    const end = result.indexOf(close);
+    if (start < 0 || end < start) throw new Error(`Missing generated block ${name}`);
+    result = `${result.slice(0, start + open.length)}${text}${result.slice(end)}`;
+  }
+  return result;
+}
+
+/** The catalog's operation counts, from the same registry the coverage gate uses (DX-6, DX-12). */
+export function renderCatalogCounts() {
+  const report = buildMcpParityReport(MCP_CATALOG);
+  const executable = MCP_CATALOG.filter(isMcpExecutable);
+  const sensitive = executable.filter(isMcpSensitiveRead);
+  const ordinary = executable.filter(operation => !isMcpSensitiveRead(operation));
+  // A read changes nothing (risk R0), whatever its HTTP method.
+  const ordinaryReads = ordinary.filter(operation => operation.risk === 'R0').length;
+  const sensitiveGets = sensitive.filter(operation => operation.method === 'get').length;
+  return new Map([
+    [
+      'mcp-counts',
+      `The current snapshot has ${MCP_CATALOG.length} classified operations and ${executable.length} generic candidate adapters. ${ordinary.length} are ordinary (${ordinaryReads} reads and ${ordinary.length - ordinaryReads} routine writes). ${sensitive.length} are sensitive reads that are callable only while an administrator enables them (${sensitiveGets} GET reads and ${sensitive.length - sensitiveGets} reviewed side-effect-free POST reads). A further ${report.approvalGatedOperations} operations are callable only through the approval workflow.`,
+    ],
+    [
+      'mcp-unresolved',
+      `This snapshot has ${report.pendingOperations.length} unresolved operations.`,
+    ],
+  ]);
+}
+
+export const MCP_SECURITY_PAGE = `${MCP_DOCS_ROOT}/guides/mcp/security-and-data.md`;
+
+/** The two halves of the projection rule: name fragments, and exact names. */
+export function redactedFieldRule(rule: RegExp = MCP_REDACTED_FIELDS) {
+  const match = /^\(\?:(.+)\)\|\^\(\?:(.+)\)\$$/.exec(rule.source);
+  if (!match) throw new Error(`Unexpected redaction rule shape: ${rule.source}`);
+  return { contains: match[1].split('|'), exact: match[2].split('|') };
+}
+
+/** The security page's generated facts: redacted fields and the server's log events (DX-5). */
+export function renderSecurityBlocks() {
+  const { contains, exact } = redactedFieldRule();
+  const fragment = (value: string) =>
+    value.includes('.?')
+      ? `\`${value.replace(/\.\?/g, '')}\` (with or without a separator)`
+      : `\`${value}\``;
+  const events = [...scanMcpLogEvents().keys()].sort();
+  return new Map([
+    [
+      'mcp-redacted-fields',
+      `Any field whose name contains ${contains.map(fragment).join(', ')} (in any letter case), and any field named exactly ${exact.map(value => `\`${value}\``).join(', ')}.`,
+    ],
+    [
+      'mcp-log-events',
+      `The server writes ${events.length} MCP log events: ${events.map(event => `\`${event}\``).join(', ')}. Each is explained in [troubleshooting](troubleshooting.md#server-log-events).`,
+    ],
+  ]);
+}
+
+/** Every generated page; render may be async (the tool reference asks the server itself). */
+export const MCP_GENERATED_PAGES: readonly {
+  path: string;
+  render: () => string | Promise<string>;
+}[] = [
   { path: MCP_TROUBLESHOOTING_PAGE, render: () => renderTroubleshooting() },
+  { path: MCP_TOOLS_PAGE, render: () => renderTools(MCP_DOCS_VERIFIED_AT) },
   { path: MCP_PERMISSIONS_PAGE, render: () => renderPermissions() },
   { path: MCP_MONITORING_PAGE, render: () => renderMonitoring() },
-] as const;
+  {
+    path: MCP_SECURITY_PAGE,
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed docs path
+    render: () =>
+      fillGeneratedBlocks(readFileSync(MCP_SECURITY_PAGE, 'utf8'), renderSecurityBlocks()),
+  },
+  {
+    path: MCP_CATALOG_PAGE,
+    // Hand-written prose with generated counts: only the marked blocks are rewritten.
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed docs path
+    render: () =>
+      fillGeneratedBlocks(readFileSync(MCP_CATALOG_PAGE, 'utf8'), renderCatalogCounts()),
+  },
+];

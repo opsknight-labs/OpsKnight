@@ -245,7 +245,7 @@ describe('A3: read_operation and the call_operation deprecation', () => {
     });
     expect(legacyRead.result.isError).not.toBe(true);
     expect(legacyRead.result.structuredContent.evidence.warnings).toContain(
-      'Reads through call_operation are deprecated; use read_operation, which never changes anything.'
+      'Reads through call_operation are deprecated and will be removed in v2.3.0; use read_operation, which never changes anything.'
     );
   });
 });
