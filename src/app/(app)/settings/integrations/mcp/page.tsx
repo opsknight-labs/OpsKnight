@@ -35,6 +35,12 @@ import McpCapabilityControls from './components/McpCapabilityControls';
 import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
 import { describeMcpScope, supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import {
+  MCP_WRITE_MODE_HINT,
+  MCP_WRITE_MODE_LABEL,
+  MCP_WRITE_MODE_VALUE,
+} from '@/lib/mcp/policy-copy';
+import { loadMcpConnectionActivity } from './activity-actions';
+import {
   enableMcpQuickSetup,
   registerMcpClient,
   restoreMcpClient,
@@ -43,7 +49,14 @@ import {
   testMcpConnection,
   updateMcpPolicy,
 } from './actions';
-import { mcpHref, parseMcpListParams, totalPages, type McpSection } from './list-params';
+import {
+  effectiveApprovalKind,
+  mcpHref,
+  parseMcpListParams,
+  totalPages,
+  waitingApprovalKind,
+  type McpSection,
+} from './list-params';
 import {
   countActiveClients,
   countActiveConnections,
@@ -130,7 +143,8 @@ export default async function McpSettings({
     connect: mcpHref({ tab: 'connect' }),
     connections: mcpHref({ tab: 'connections' }),
     assistants: mcpHref({ tab: 'assistants' }),
-    approvals: mcpHref({ tab: 'approvals' }),
+    // Opens the queue that has waiting requests, so the pending badge never lands on an empty list.
+    approvals: mcpHref({ tab: 'approvals', kind: isAdmin ? waitingApprovalKind(pending) : null }),
     policy: mcpHref({ tab: 'policy' }),
     capabilities: mcpHref({ tab: 'capabilities' }),
   };
@@ -178,7 +192,7 @@ export default async function McpSettings({
       <DetailHeroBanner
         tag="AI AGENT PROTOCOL & INTEGRATION"
         title="Model Context Protocol (MCP) Integration"
-        subtitle="Connect Anthropic Claude, ChatGPT, Cursor, and agentic assistants to OpsKnight with explicit user consent, fine-grained RBAC, and administrator approval gates."
+        subtitle="Connect Claude, ChatGPT, Cursor and other assistants to OpsKnight. Each person consents, their own permissions apply, and higher-risk changes wait for human review."
         icon={
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 via-primary/15 to-violet-500/20 border border-primary/30 shadow-inner">
             <McpLogo className="h-7 w-7 text-white" />
@@ -191,7 +205,7 @@ export default async function McpSettings({
               className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
             >
               <Shield className="mr-1 h-3 w-3" aria-hidden="true" />
-              {isAdmin ? 'Administrator view' : 'Your Access'}
+              {isAdmin ? 'Administrator view' : 'Your access'}
             </Badge>
             <Badge
               variant="outline"
@@ -206,17 +220,17 @@ export default async function McpSettings({
               {enabled && ready ? (
                 <>
                   <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
-                  Protocol Active & Ready
+                  Ready
                 </>
               ) : ready ? (
                 <>
                   <ArrowUpRight className="mr-1 h-3 w-3" aria-hidden="true" />
-                  Ready to Connect
+                  Ready to connect
                 </>
               ) : (
                 <>
                   <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
-                  {enabled ? 'Configuration Needed' : 'Setup Required'}
+                  {enabled ? 'Needs configuration' : 'Not set up'}
                 </>
               )}
             </Badge>
@@ -226,7 +240,7 @@ export default async function McpSettings({
                 className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
               >
                 <Sparkles className="mr-1 h-3 w-3 text-sky-300" aria-hidden="true" />
-                Zero-Config DCR
+                Automatic connections on
               </Badge>
             )}
           </div>
@@ -234,7 +248,7 @@ export default async function McpSettings({
         statsPlacement="bottom"
         stats={[
           {
-            label: 'Server Endpoint',
+            label: 'Server endpoint',
             value: endpoint ?? 'Not configured',
             icon: <Globe className="h-4 w-4" />,
             tooltip: endpoint ?? undefined,
@@ -244,17 +258,17 @@ export default async function McpSettings({
             subtext: originSource ?? 'Set App URL in System settings',
           },
           {
-            label: 'Change Safety',
-            value: policy?.writesEnabled ? 'Approval Required' : 'Read Only',
+            label: MCP_WRITE_MODE_LABEL,
+            value: policy?.writesEnabled ? MCP_WRITE_MODE_VALUE.on : MCP_WRITE_MODE_VALUE.off,
             icon: <PencilLine className="h-4 w-4" />,
             valueClassName: policy?.writesEnabled
               ? 'text-amber-300 font-semibold text-sm sm:text-base'
               : 'text-emerald-300 font-semibold text-sm sm:text-base',
-            subtext: policy?.writesEnabled ? 'Admin approval before run' : 'Mutations blocked',
+            subtext: policy?.writesEnabled ? MCP_WRITE_MODE_HINT.on : MCP_WRITE_MODE_HINT.off,
           },
           {
-            label: 'Sensitive Reads',
-            value: policy?.sensitiveReadsEnabled ? 'Permitted' : 'Enforced Off',
+            label: 'Sensitive reads',
+            value: policy?.sensitiveReadsEnabled ? 'Allowed' : 'Off',
             icon: <ShieldAlert className="h-4 w-4" />,
             valueClassName: policy?.sensitiveReadsEnabled
               ? 'text-amber-300 font-semibold text-sm sm:text-base'
@@ -262,8 +276,8 @@ export default async function McpSettings({
             subtext: 'Configuration redaction',
           },
           {
-            label: isAdmin ? 'Active Connections' : 'Your Connections',
-            value: activeConnections === 1 ? '1 Connection' : `${activeConnections} Connections`,
+            label: isAdmin ? 'Active connections' : 'Your connections',
+            value: activeConnections === 1 ? '1 connection' : `${activeConnections} connections`,
             icon: <Bot className="h-4 w-4" />,
             valueClassName: 'text-primary-foreground font-semibold text-sm sm:text-base',
             subtext: 'Consented agent grants',
@@ -382,6 +396,7 @@ export default async function McpSettings({
             describeScope={describeMcpScope}
             revokeAction={revokeMcpAccess}
             revokeAllAction={revokeAllMcpConnections}
+            activityAction={loadMcpConnectionActivity}
           />
         );
       }
@@ -414,7 +429,8 @@ export default async function McpSettings({
         );
       }
       case 'approvals': {
-        const input = { kind: params.approvalKind, state: params.approvalState };
+        const kind = effectiveApprovalKind(params, pending);
+        const input = { kind, state: params.approvalState };
         const initialResult = await listMcpApprovals(viewer, { ...input, page: params.page }, now);
         const page = clampPage(params.page, initialResult.total);
         const result =
@@ -426,7 +442,7 @@ export default async function McpSettings({
             rows={result.rows}
             total={result.total}
             page={page}
-            kind={params.approvalKind}
+            kind={kind}
             state={params.approvalState}
             pending={result.pending}
             runbooksOnly={!isAdmin}

@@ -256,11 +256,13 @@ export default function McpAssistantsSection({
                         Revoked
                       </StatusPill>
                     ) : row.blockedReason ? (
-                      <span title={CLIENT_BLOCK_HINT[row.blockedReason]}>
+                      <span className="flex flex-col gap-0.5">
                         <StatusPill tone="warning" dot>
                           Blocked by policy
                         </StatusPill>
-                        <span className="sr-only">. {CLIENT_BLOCK_HINT[row.blockedReason]}</span>
+                        <span className="line-clamp-2 text-xs text-muted-foreground">
+                          {CLIENT_BLOCK_HINT[row.blockedReason]}
+                        </span>
                       </span>
                     ) : (
                       <StatusPill tone="success" dot>

@@ -6,6 +6,7 @@ import { InlineNotice } from '@/components/ui/InlineNotice';
 import { Button } from '@/components/ui/shadcn/button';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
+import { MCP_WRITE_MODE_SUMMARY } from '@/lib/mcp/policy-copy';
 
 /** A save either succeeds with the new revision or is refused because the policy moved on. */
 export type McpPolicySaveResult =
@@ -65,7 +66,7 @@ export default function McpPolicyForm({
       {current !== undefined && <input type="hidden" name="policyRevision" value={current} />}
       <SettingsSection
         title="Access and workload policy"
-        description="What assistants may do. Every change an assistant proposes still needs an administrator to approve it in OpsKnight; administrators confirm their own."
+        description={`What assistants may do. ${MCP_WRITE_MODE_SUMMARY}`}
         footer={
           <div className="flex flex-wrap items-center justify-end gap-3">
             <SaveIndicator

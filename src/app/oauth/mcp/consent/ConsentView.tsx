@@ -3,6 +3,7 @@ import { AlertTriangle, BadgeCheck, Info } from 'lucide-react';
 import type { McpConsentGroup } from '@/lib/mcp/auth/consent-offer';
 import type { McpConsentIdentity } from '@/lib/mcp/auth/consent-identity';
 import ConsentForm from './ConsentForm';
+import { MCP_CONSENT_WRITES_OFF_NOTE } from '@/lib/mcp/policy-copy';
 
 type Props = {
   action: (form: FormData) => Promise<void>;
@@ -140,10 +141,7 @@ export default function ConsentView({
               className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
             >
               <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>
-                Changes are currently turned off by your administrator. Change permissions take
-                effect only if changes are turned on, and each change still needs approval.
-              </span>
+              <span>{MCP_CONSENT_WRITES_OFF_NOTE}</span>
             </div>
           )}
           {replacesConnectionFrom && (

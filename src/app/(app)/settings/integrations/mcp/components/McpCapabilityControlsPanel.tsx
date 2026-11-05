@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/shadcn/alert-dialog';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import type { McpCapability, McpRisk } from '@/lib/mcp/catalog/capabilities';
+import { MCP_RISK as RISK } from '@/components/settings/mcp/risk';
 import type { UpdateMcpCapabilitiesResult } from '../capability-actions';
 
 const PAGE_SIZE = 25;
@@ -57,29 +58,6 @@ const BODY_FONT = "font-['Inter',var(--font-manrope),system-ui,sans-serif]";
 // Small controls opt out of the page-wide compact-button padding (topbar.css, 1024–1600px) and the
 // 44px touch minimum (globals.css); the whole labelled row is the touch target instead.
 const COMPACT_CONTROL = 'ml-0 min-h-0 min-w-0 p-0';
-
-const RISK: Record<McpRisk, { title: string; className: string }> = {
-  R0: {
-    title: 'Read only',
-    className:
-      'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-200',
-  },
-  R1: {
-    title: 'Routine change',
-    className:
-      'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200',
-  },
-  R2: {
-    title: 'Sensitive change',
-    className:
-      'border-orange-300 bg-orange-50 text-orange-900 dark:border-orange-500/50 dark:bg-orange-500/10 dark:text-orange-200',
-  },
-  R3: {
-    title: 'Destructive or high-impact change',
-    className:
-      'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-200',
-  },
-};
 
 const DOMAIN_LABELS: Record<string, string> = {
   mcp: 'Generic MCP tools',
