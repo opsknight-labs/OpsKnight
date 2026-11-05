@@ -1,4 +1,4 @@
-import Image from 'next/image';
+import AuthBrand from '@/components/auth/AuthBrand';
 import type { ReactNode } from 'react';
 import { CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
 import { friendlyMcpError } from '@/lib/mcp/auth/friendly-error';
@@ -27,24 +27,7 @@ function Shell({ children }: { children: ReactNode }) {
       className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-sans text-slate-900 sm:px-6 sm:py-12 dark:bg-slate-950 dark:text-slate-100"
     >
       <div className="w-full max-w-md space-y-6 min-[1440px]:max-w-lg">
-        <a
-          href="https://opsknight.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="OpsKnight official website"
-          className="inline-flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:focus-visible:ring-white"
-        >
-          <Image
-            src="/logo.png"
-            alt=""
-            width={32}
-            height={32}
-            className="h-8 w-8 object-contain"
-            priority
-            unoptimized
-          />
-          <span className="font-display text-lg font-bold tracking-tight">OpsKnight</span>
-        </a>
+        <AuthBrand />
         <section
           aria-labelledby="mcp-device-title"
           className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7 dark:border-slate-800 dark:bg-slate-900"

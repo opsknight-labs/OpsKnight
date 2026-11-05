@@ -1,4 +1,4 @@
-import Image from 'next/image';
+import AuthBrand from '@/components/auth/AuthBrand';
 import { AlertTriangle, BadgeCheck, Info, ShieldAlert } from 'lucide-react';
 import type { McpConsentGroup } from '@/lib/mcp/auth/consent-offer';
 import type { McpConsentIdentity } from '@/lib/mcp/auth/consent-identity';
@@ -82,26 +82,7 @@ export default function ConsentView({
             : 'w-full max-w-xl space-y-6 min-[1440px]:max-w-2xl'
         }
       >
-        <a
-          href="https://opsknight.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="OpsKnight official website"
-          className="inline-flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:focus-visible:ring-white"
-        >
-          <Image
-            src="/logo.png"
-            alt=""
-            width={32}
-            height={32}
-            className="h-8 w-8 object-contain min-[1440px]:h-9 min-[1440px]:w-9"
-            priority
-            unoptimized
-          />
-          <span className="font-display text-lg font-bold tracking-tight">
-            OpsKnight
-          </span>
-        </a>
+        <AuthBrand />
         <section
           aria-labelledby="mcp-consent-title"
           className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7 min-[1440px]:p-9 dark:border-slate-800 dark:bg-slate-900"
