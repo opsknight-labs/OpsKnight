@@ -254,8 +254,15 @@ function knowledgeUrl(kind: KnowledgeKind, id: string, row: Record<string, unkno
   return origin && page ? `${origin}${page}` : `opsknight://${kind}s/${id}`;
 }
 
-const titleOf = (row: Record<string, unknown>, fallback: string) =>
-  (text(row.title) ?? text(row.name) ?? fallback).slice(0, 200);
+/**
+ * A stored title on one line: it heads the fetched markdown and is shown as a search result, so a
+ * line break in business text must not start a heading or section of its own.
+ */
+export const titleOf = (row: Record<string, unknown>, fallback: string) =>
+  (text(row.title) ?? text(row.name) ?? fallback)
+    .replace(/[\p{Cc}\s]+/gu, ' ')
+    .trim()
+    .slice(0, 200) || fallback;
 
 /**
  * Search the kinds this connection can list. A source the caller cannot read, or that fails, is

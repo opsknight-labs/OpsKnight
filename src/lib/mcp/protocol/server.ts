@@ -108,7 +108,8 @@ const SCHEMAS = {
           .array(z.string().regex(/^[A-Za-z0-9_-]{1,128}$/))
           .min(1)
           .max(BULK_ACKNOWLEDGE_LIMIT),
-        note: z.string().max(2000).optional(),
+        // The acknowledge route's own bound: a longer note would fail every incident one by one.
+        note: z.string().max(1000).optional(),
         idempotencyKey: z
           .string()
           .min(16)
@@ -1318,7 +1319,8 @@ function listLinks(
     links.push({
       type: 'resource_link',
       uri: `${origin}${page}/${encodeURIComponent(id)}`,
-      name: `Open ${label.slice(0, 80)} in OpsKnight`,
+      // Stored text on one line: a link name is not a place for business text to add lines.
+      name: `Open ${label.replace(/[\p{Cc}\s]+/gu, ' ').slice(0, 80)} in OpsKnight`,
       mimeType: 'text/html',
       annotations: { audience: ['user'] },
     });

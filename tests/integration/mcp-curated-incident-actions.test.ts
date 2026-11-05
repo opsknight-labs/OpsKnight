@@ -246,6 +246,11 @@ describe('incident_escalate', () => {
     const escalation = data(first);
     expect(escalation).toMatchObject({ requested: true, incident: { id, status: 'OPEN' } });
     expect(escalation.incident).toHaveProperty('escalation');
+    // The impact a responder needs to confirm: which step paged whom.
+    expect(escalation).toMatchObject({
+      escalated: true,
+      paged: { stepIndex: 0, targetType: 'USER', targetName: 'Second responder', targetCount: 1 },
+    });
     const replay = await call(admin.bearer, 'incident_escalate', { path: { id }, idempotencyKey });
     expect(replay.isError, JSON.stringify(replay)).not.toBe(true);
     expect(data(replay).outcome).toBe(escalation.outcome);
@@ -352,6 +357,15 @@ describe('incident_acknowledge_many', () => {
       idempotencyKey: key(),
     });
     expect(repeated.isError).toBe(true);
+    expect(await statusOf(id)).toBe('OPEN');
+    // A note longer than acknowledge accepts is refused up front, not once per incident.
+    const tooLong = await call(admin.bearer, 'incident_acknowledge_many', {
+      ids: [id],
+      note: 'n'.repeat(1001),
+      idempotencyKey: key(),
+    });
+    expect(tooLong.isError, JSON.stringify(tooLong)).toBe(true);
+    expect(JSON.stringify(tooLong)).not.toContain('results');
     expect(await statusOf(id)).toBe('OPEN');
   });
 });
