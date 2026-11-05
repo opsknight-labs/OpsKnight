@@ -149,8 +149,10 @@ describe('deployment configuration invariants', () => {
     expect(onlineIndexes).toContain("searchParams.set('connection_limit', '1')");
     expect(onlineIndexes).toContain('pg_advisory_lock');
     expect(onlineIndexes).toContain('pg_advisory_unlock');
-    expect(read('package.json')).toContain(
-      'scripts/auto-recover-migrations.ts --rootDir . --outDir scripts/dist'
+    // build:scripts bundles the recovery helper to the exact path the entrypoint executes.
+    expect(read('package.json')).toContain('"build:scripts": "node scripts/build-script-bundles.mjs"');
+    expect(read('scripts/build-script-bundles.mjs')).toContain(
+      "['scripts/auto-recover-migrations.ts', 'scripts/dist/scripts/auto-recover-migrations.js']"
     );
     expect(read('scripts/auto-recover-migrations.ts')).toContain('execFileSync');
     expect(read('scripts/auto-recover-migrations.ts')).not.toContain('execSync(');
