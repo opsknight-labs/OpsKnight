@@ -16,6 +16,9 @@ export const operationReviewSchema = z
     tool: z.string().trim().min(1).nullable(),
     // A named tool's human-readable name, shown by clients in tool lists and permission prompts.
     title: z.string().trim().min(3).max(60).optional(),
+    // When an assistant should use a named tool and what it returns. For clients only, like
+    // title: not a contract hash input and never an authorization input.
+    agentDescription: z.string().trim().min(40).max(400).optional(),
     // Client hints only, merged over the risk-derived defaults; never an authorization input.
     annotations: z
       .object({
@@ -92,8 +95,16 @@ export const operationReviewSchema = z
       });
     if ((review.status === 'CURATED') !== (review.tool !== null))
       ctx.addIssue({ code: 'custom', message: 'Only curated operations declare a named tool.' });
-    if ((review.title !== undefined || review.annotations !== undefined) && review.tool === null)
-      ctx.addIssue({ code: 'custom', message: 'Only named tools declare a title or annotations.' });
+    if (
+      (review.title !== undefined ||
+        review.annotations !== undefined ||
+        review.agentDescription !== undefined) &&
+      review.tool === null
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Only named tools declare a title, description or annotations.',
+      });
     if (review.tool !== null && review.title === undefined)
       ctx.addIssue({ code: 'custom', message: 'A named tool needs a title.' });
     if (new Set(review.actions).size !== review.actions.length)

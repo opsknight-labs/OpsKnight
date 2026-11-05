@@ -9,6 +9,20 @@ export const MCP_APPROVAL_COMMIT_WINDOW_MAX_MINUTES = 1440;
 /** No approval, however it was reviewed, can be used later than this after it was requested. */
 export const MCP_APPROVAL_ABSOLUTE_MAX_MS = 24 * 60 * 60_000;
 
+/**
+ * How an assistant should wait on a human review: back off rather than poll at a fixed rate
+ * (each poll costs quota and context), stop at the review deadline, and accept the person saying
+ * it was decided as the cue to look again.
+ */
+export function mcpApprovalPollGuidance(expiresAt: string) {
+  return {
+    afterSeconds: 30,
+    backoff: 'double the wait after each PENDING read, up to 600 seconds',
+    stopAt: expiresAt,
+    waitFor: 'or the person saying it was approved',
+  };
+}
+
 export type McpApprovalTiming = { ttlMinutes: number; commitWindowMinutes: number };
 
 const clamp = (value: number, min: number, max: number, fallback: number) =>

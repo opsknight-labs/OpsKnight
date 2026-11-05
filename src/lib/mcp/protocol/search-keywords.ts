@@ -1,0 +1,22 @@
+/**
+ * Words people use for an operation that its id, tool, domain and summary do not contain
+ * ("open incidents", "error budget", "my shifts"). Search only: not reviewed, not hashed and
+ * never an authorization input. Each key must be a catalog operation id (a test checks this).
+ */
+export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
+  ['listIncidents', ['open', 'active', 'unresolved', 'triage', 'firing', 'outage']],
+  ['getIncident', ['details', 'status']],
+  ['getIncidentTimeline', ['history', 'events', 'happened']],
+  ['acknowledgeIncident', ['ack', 'claim']],
+  ['resolveIncident', ['close', 'fixed']],
+  ['addIncidentNote', ['comment', 'update']],
+  ['createIncident', ['raise', 'declare', 'trigger', 'new']],
+  ['listServiceObjectives', ['slo', 'sla', 'error budget', 'reliability']],
+  ['getScheduleOnCall', ['shift', 'oncall', 'page', 'rota', 'now']],
+  ['listSchedules', ['rota', 'rotation', 'oncall']],
+  ['getEscalationPolicy', ['paged', 'escalate', 'notified']],
+  ['getServiceHealthSummary', ['healthy', 'status', 'down']],
+  ['executeRunbook', ['run', 'execute']],
+  ['listRunbooks', ['remediation', 'playbook']],
+  ['listTeams', ['team']],
+]);

@@ -38,8 +38,9 @@ import {
   TASKS_EXTENSION,
   cancelMcpTask,
   clientSupportsTasks,
-  createRunbookExecutionTask,
+  createMcpTask,
   getMcpTask,
+  taskTargetOf,
   updateMcpTask,
 } from '@/lib/mcp/protocol/tasks';
 import {
@@ -329,7 +330,12 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
         supportsTasks &&
         body.method === 'tools/call' &&
         TASK_CAPABLE_TOOLS.has(String(body.params?.name))
-          ? await asTaskResponse(response, context, identity.auth.actor.id)
+          ? await asTaskResponse(
+              response,
+              context,
+              identity.auth.actor.id,
+              String(body.params?.name)
+            )
           : null;
       if (taskResponse) {
         outcome = 'task_created';
@@ -418,23 +424,26 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
 }
 
 /**
- * A task-capable tool that durably started work becomes a task handle for a client that opted in.
- * Errors and non-JSON responses pass through unchanged.
+ * A task-capable tool whose result is a durable wait (a started runbook execution, or an approval
+ * still PENDING) becomes a task handle for a client that opted in. Errors, non-JSON responses and
+ * results that are already final pass through unchanged.
  */
 async function asTaskResponse(
   response: Response,
-  context: Parameters<typeof createRunbookExecutionTask>[0],
-  actorId: string
+  context: Parameters<typeof createMcpTask>[0],
+  actorId: string,
+  toolName: string
 ) {
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json'))
     return null;
   const message = (await response.clone().json()) as {
     id: string | number | null;
-    result?: { isError?: boolean; structuredContent?: { executionId?: unknown } };
+    result?: { isError?: boolean; structuredContent?: Record<string, unknown> };
   };
-  const executionId = message.result?.structuredContent?.executionId;
-  if (message.result?.isError || typeof executionId !== 'string') return null;
-  const task = await createRunbookExecutionTask(context, actorId, executionId);
+  if (message.result?.isError) return null;
+  const target = taskTargetOf(toolName, message.result?.structuredContent);
+  if (!target) return null;
+  const task = await createMcpTask(context, actorId, toolName, target);
   return Response.json(
     { jsonrpc: '2.0', id: message.id, result: task },
     {
