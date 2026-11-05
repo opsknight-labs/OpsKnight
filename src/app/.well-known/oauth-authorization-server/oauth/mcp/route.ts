@@ -3,6 +3,7 @@ import { withMcpDatabase } from '@/lib/database-workload';
 import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
 import { loadDiscoveryPolicy } from '@/lib/mcp/auth/discovery-policy';
 import { PUBLIC_METADATA_CORS, publicMetadataPreflight } from '@/lib/mcp/auth/cors';
+import { MCP_DEVICE_CODE_GRANT } from '@/lib/mcp/auth/device-flow';
 
 export function GET() {
   return withMcpDatabase(async () => {
@@ -12,6 +13,8 @@ export function GET() {
     // Advertise only what is enabled and usable in this deployment.
     const enabled = mcpPolicyInForce(policy);
     const cimd = Boolean(enabled && policy?.cimdEnabled && policy.cimdScopes.length);
+    // The device flow (RFC 8628) is advertised only while an administrator has it turned on.
+    const device = Boolean(enabled && policy?.deviceFlowEnabled);
     const scopes =
       enabled && policy
         ? [
@@ -30,7 +33,12 @@ export function GET() {
         // Public clients revoke with client_id in the body (RFC 8414 defaults to client_secret_basic).
         revocation_endpoint_auth_methods_supported: ['none'],
         response_types_supported: ['code'],
-        grant_types_supported: ['authorization_code', 'refresh_token'],
+        grant_types_supported: [
+          'authorization_code',
+          'refresh_token',
+          ...(device ? [MCP_DEVICE_CODE_GRANT] : []),
+        ],
+        ...(device ? { device_authorization_endpoint: `${issuer}/device_authorization` } : {}),
         token_endpoint_auth_methods_supported: ['none'],
         code_challenge_methods_supported: ['S256'],
         authorization_response_iss_parameter_supported: true,

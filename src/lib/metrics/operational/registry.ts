@@ -101,8 +101,8 @@ export const OPERATIONAL_METRICS = [
     kind: 'counter',
     labels: ['endpoint', 'outcome'],
     scope: 'counter',
-    // MCP_OAUTH_ENDPOINTS (4) x MCP_OAUTH_OUTCOMES (8).
-    estimatedMaxSeries: 32,
+    // MCP_OAUTH_ENDPOINTS (5) x MCP_OAUTH_OUTCOMES (11).
+    estimatedMaxSeries: 55,
   },
   {
     name: 'opsknight_mcp_maintenance_runs_total',

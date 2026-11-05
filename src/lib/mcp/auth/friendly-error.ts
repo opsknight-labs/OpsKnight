@@ -47,6 +47,26 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
       title: 'This request was already used',
       body: 'Return to your assistant. If it is not connected, start the connection again.',
     },
+    MCP_DEVICE_FLOW_DISABLED: {
+      title: 'Device sign-in is turned off',
+      body: 'An OpsKnight administrator needs to allow device sign-in in Settings → Integrations & ChatOps → MCP (AI Assistants) → Access policy.',
+    },
+    MCP_DEVICE_CODE_INVALID: {
+      title: 'That code did not work',
+      body: 'Check the code shown on your device and enter it again. Codes are eight letters, like BCDF-GHJK.',
+    },
+    MCP_DEVICE_CODE_EXPIRED: {
+      title: 'This code expired or was already used',
+      body: 'Start the sign-in again on your device to get a new code. Codes are valid for ten minutes.',
+    },
+    MCP_DEVICE_CODE_LOCKED: {
+      title: 'Too many wrong codes',
+      body: 'Code entry is paused for 15 minutes after five wrong codes. Wait, then enter the code shown on your device.',
+    },
+    MCP_INVALID_ORIGIN: {
+      title: 'Wrong address',
+      body: 'Open the sign-in page using the address configured in Settings → System, then try again.',
+    },
     MCP_CLIENT_REVOKED: {
       title: 'This assistant was disconnected',
       body: 'An administrator revoked it. Ask them to allow it again, then reconnect.',

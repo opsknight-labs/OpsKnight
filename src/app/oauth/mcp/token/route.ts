@@ -14,11 +14,12 @@ import { readBoundedMcpText } from '@/lib/mcp/core/body';
 import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
 import { observeMcpOAuth } from '@/lib/mcp/auth/oauth-observability';
 import { logger } from '@/lib/logger';
+import { MCP_DEVICE_CODE_GRANT, pollMcpDeviceAuthorization } from '@/lib/mcp/auth/device-flow';
 
 export const runtime = 'nodejs';
 const schema = z
   .object({
-    grant_type: z.enum(['authorization_code', 'refresh_token']),
+    grant_type: z.enum(['authorization_code', 'refresh_token', MCP_DEVICE_CODE_GRANT]),
     client_id: z.string().max(256),
     code: z.string().max(256).optional(),
     code_verifier: z
@@ -27,6 +28,7 @@ const schema = z
       .optional(),
     redirect_uri: z.string().url().max(2048).optional(),
     refresh_token: z.string().max(256).optional(),
+    device_code: z.string().max(256).optional(),
     scope: z.string().max(2048).optional(),
     resource: z.string().url().optional(),
   })
@@ -65,6 +67,12 @@ async function handlePost(request: Request, browserOrigin: string | null) {
       'invalid_request'
     );
     requireMcp(body.grant_type !== 'refresh_token' || body.refresh_token, 'invalid_request');
+    if (body.grant_type === MCP_DEVICE_CODE_GRANT) {
+      // Not offered while the administrator has the device flow off, as metadata says.
+      requireMcp(policy?.deviceFlowEnabled, 'unsupported_grant_type');
+      requireMcp(body.device_code, 'invalid_request');
+      return await deviceTokenResponse(body.device_code, body.client_id);
+    }
     let response = new OAuth2Server.Response();
     const exchange = async () => {
       // Each attempt starts clean: only a genuine reuse in the attempt that failed revokes.
@@ -138,6 +146,42 @@ async function handlePost(request: Request, browserOrigin: string | null) {
   } finally {
     release?.();
   }
+}
+
+/**
+ * RFC 8628 §3.4-3.5. The poll runs serializable with one retry, like a refresh: of two polls at
+ * once, the one that loses the race sees the code already consumed.
+ */
+async function deviceTokenResponse(deviceCode: string, clientId: string) {
+  const poll = () =>
+    prisma.$transaction(tx => pollMcpDeviceAuthorization(tx, { deviceCode, clientId }), {
+      isolationLevel: 'Serializable',
+      timeout: 5000,
+    });
+  const headers = { 'Cache-Control': 'no-store', Pragma: 'no-cache' };
+  let result;
+  try {
+    try {
+      result = await poll();
+    } catch (error) {
+      if (!isSerializationConflict(innerError(error))) throw error;
+      result = await poll();
+    }
+  } catch (error) {
+    // The grant was revoked or the person's access changed between approval and this poll: the
+    // whole transaction rolled back and the code stays unusable.
+    if (error instanceof McpBoundaryError && OAUTH_ERRORS.has(error.code))
+      return Response.json(
+        { error: error.code },
+        { status: error.code === 'invalid_client' ? 401 : 400, headers }
+      );
+    throw error;
+  }
+  if (result.ok) return Response.json(result.body, { headers });
+  return Response.json(
+    { error: result.error, ...(result.interval ? { interval: result.interval } : {}) },
+    { status: result.error === 'invalid_client' ? 401 : 400, headers }
+  );
 }
 
 const OAUTH_ERRORS = new Set([
