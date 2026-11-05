@@ -1,3 +1,4 @@
+import { mcpCompositeCost } from '@/lib/mcp/core/composites';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { randomUUID } from 'node:crypto';
 import { withMcpDatabase } from '@/lib/database-workload';
@@ -163,11 +164,9 @@ async function handlePost(request: Request, requestId: string) {
       ? 1 + subscribedUris.length
       : Array.isArray(steps)
         ? Math.max(1, steps.length)
-        : body.params?.name === 'incident_get_context'
-          ? 3
-          : body.method === 'tools/call' && body.params?.name === 'postmortem_get_context'
-            ? 4
-            : 1;
+        : body.method === 'tools/call'
+          ? (mcpCompositeCost(body.params?.name, body.params?.arguments) ?? 1)
+          : 1;
     requireMcp(cost <= 8, 'MCP_OPERATION_BUDGET_EXCEEDED');
     await chargeMcpRequest(identity, cost);
     budget = new CostBudget(identity.policy.maxOperations, 262144, request.signal);
