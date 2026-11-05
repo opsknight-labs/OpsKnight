@@ -17,6 +17,7 @@ import {
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { isIP } from 'node:net';
 import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
+import { isMcpPolicyInvalidCode, type McpPolicyInvalidCode } from '@/lib/mcp/policy-invalid';
 import type { Prisma } from '@prisma/client';
 import { DEFAULT_ASSISTANT_SCOPES, effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
 import { runMcpSetupCheck } from '@/lib/mcp/auth/setup-check';
@@ -230,6 +231,7 @@ export async function restoreMcpClient(form: FormData): Promise<McpClientFormRes
 export type UpdateMcpPolicyResult =
   | { ok: true; revision: number }
   | { ok: false; code: 'MCP_POLICY_CONFLICT'; revision: number }
+  | { ok: false; code: 'MCP_POLICY_INVALID'; reason: McpPolicyInvalidCode }
   | McpReauthenticationRequired;
 
 /**
@@ -239,6 +241,18 @@ export type UpdateMcpPolicyResult =
  * editor has its own check and does not move this revision.
  */
 export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
+  // A refused value comes back as a typed result: a thrown error's message does not reach the
+  // browser in production, so the form could only say "try again".
+  try {
+    return await saveMcpPolicy(form);
+  } catch (error) {
+    if (error instanceof McpBoundaryError && isMcpPolicyInvalidCode(error.code))
+      return { ok: false, code: 'MCP_POLICY_INVALID', reason: error.code };
+    throw error;
+  }
+}
+
+async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
   const actor = await admin();
   const input = z
     .object({

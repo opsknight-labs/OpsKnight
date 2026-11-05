@@ -513,9 +513,10 @@ describe('SEC-7 widening access needs a recent sign-in', () => {
       'https://x.example/path',
       'https://u@x.example',
     ])
-      await expect(
-        actions.updateMcpPolicy(policyForm(policyRevision, { allowedBrowserOrigins: bad }))
-      ).rejects.toThrow('MCP_INVALID_BROWSER_ORIGIN');
+      // Refused values come back typed, so the form can say what to fix.
+      expect(
+        await actions.updateMcpPolicy(policyForm(policyRevision, { allowedBrowserOrigins: bad }))
+      ).toEqual({ ok: false, code: 'MCP_POLICY_INVALID', reason: 'MCP_INVALID_BROWSER_ORIGIN' });
     expect(
       await actions.updateMcpPolicy(
         policyForm(policyRevision, {

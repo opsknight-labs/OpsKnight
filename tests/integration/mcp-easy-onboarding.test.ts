@@ -477,6 +477,21 @@ describe('saving the policy form', () => {
       cimdEnabled: false,
     });
   });
+  it('says why a save was refused instead of failing generically', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    const { updateMcpPolicy } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    // Automatic connections with no permission selected: refused with a reason, nothing stored.
+    expect(await updateMcpPolicy(form({ enabled: 'on', dcrEnabled: 'on', dcrScopes: '' }))).toEqual(
+      {
+        ok: false,
+        code: 'MCP_POLICY_INVALID',
+        reason: 'MCP_DCR_REQUIRES_SCOPES',
+      }
+    );
+    expect(await db.mcpPolicy.findUnique({ where: { id: 'default' } })).toBeNull();
+  });
   it('saves the approval windows and keeps them when a form leaves them out', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     actor.id = admin.id;
@@ -506,7 +521,11 @@ describe('saving the policy form', () => {
       await import('@/app/(app)/settings/integrations/mcp/actions');
     vi.stubEnv('MCP_FORCE_DISABLED', 'true');
     try {
-      await expect(updateMcpPolicy(form({ enabled: 'on' }))).rejects.toThrow('MCP_FORCE_DISABLED');
+      expect(await updateMcpPolicy(form({ enabled: 'on' }))).toEqual({
+        ok: false,
+        code: 'MCP_POLICY_INVALID',
+        reason: 'MCP_FORCE_DISABLED',
+      });
       await expect(enableMcpQuickSetup()).rejects.toThrow('MCP_FORCE_DISABLED');
       expect((await db.mcpPolicy.findUnique({ where: { id: 'default' } }))?.enabled).not.toBe(true);
       // Switched on before the operator forced it off: limits can still change, and the stored
