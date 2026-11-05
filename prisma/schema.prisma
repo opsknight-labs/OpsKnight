@@ -2116,6 +2116,8 @@ model InAppNotification {
   @@index([userId, readAt, createdAt])
   @@index([createdAt])
   @@index([createdAt, id])
+  // Resolving an MCP approval's reviewer notices inside the decision transaction.
+  @@index([entityType, entityId])
 }
 
 model UserDevice {
@@ -4903,6 +4905,22 @@ model McpGrant {
   @@index([clientId])
 }
 
+// One row per MCP request on a grant, for the per-connection activity drawer. Bounded labels only:
+// never arguments, results or free text. Kept 30 days; no foreign key, so the write never fails.
+model McpCallLog {
+  id String @id @default(cuid())
+  grantId String
+  at DateTime @default(now())
+  tool String
+  operationId String?
+  outcome String
+  durationMs Int
+  requestId String
+  errorCode String?
+  @@index([grantId, at(sort: Desc), id(sort: Desc)])
+  @@index([at])
+}
+
 model McpAuthorizationCode {
   hash String @id
   grantId String
@@ -4968,6 +4986,8 @@ model McpOperationApproval {
   createdAt DateTime @default(now())
   @@index([requesterGrantId, createdAt])
   @@index([status, expiresAt])
+  // Retention purge of finished approvals.
+  @@index([status, createdAt])
 }
 
 model McpTask {

@@ -590,3 +590,135 @@ describe('C4 expiry and clean-up', () => {
     ).not.toBeNull();
   });
 });
+
+describe('UX-3 reviewer notices close when a request is decided or lapses', () => {
+  const unread = (entityId: string, userId: string) =>
+    db.inAppNotification.findFirstOrThrow({ where: { entityId, userId } });
+
+  it("marks the other reviewers' notices read on approval and leaves the requester's unread", async () => {
+    const f = await fixture();
+    const second = await createTestUser({ role: 'ADMIN' });
+    const prepared = await prepareMcpOperation(f.ctx(), f.announcementArgs('Decided'));
+    expect((await unread(prepared.approvalId, second.id)).readAt).toBeNull();
+    await f.review(prepared, 'approve');
+    const closed = await unread(prepared.approvalId, second.id);
+    expect(closed.readAt).not.toBeNull();
+    expect(closed.message).toMatch(/Another reviewer approved/);
+    expect((await unread(prepared.approvalId, f.reviewer.id)).readAt).not.toBeNull();
+    // The requester's decision notice (same entity) stays unread.
+    const decision = await unread(prepared.approvalId, f.user.id);
+    expect(decision.title).toBe('Your change was approved');
+    expect(decision.readAt).toBeNull();
+
+    const rejected = await prepareMcpOperation(f.ctx(), f.announcementArgs('Rejected'));
+    await f.review(rejected, 'reject', second);
+    expect((await unread(rejected.approvalId, f.reviewer.id)).message).toMatch(
+      /Another reviewer rejected/
+    );
+  });
+
+  it('closes runbook reviewer notices on decision, and both kinds when they expire', async () => {
+    const r = await runbookFixture();
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const plan = await r.prepare();
+    await decideMcpRunbookReview(
+      { id: plan.previewId, planDigest: plan.planDigest, decision: 'approve' },
+      r.reviewer
+    );
+    expect((await unread(plan.previewId, admin.id)).readAt).not.toBeNull();
+    expect((await unread(plan.previewId, r.user.id)).readAt).toBeNull();
+
+    await expireMcpApprovals();
+    const f = await fixture();
+    const lapsed = await prepareMcpOperation(f.ctx(), f.announcementArgs('Lapsed'));
+    const lapsedPlan = await (await runbookFixture()).prepare();
+    await db.mcpOperationApproval.update({
+      where: { id: lapsed.approvalId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await db.runbookPreviewAuthorization.update({
+      where: { id: lapsedPlan.previewId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await expireMcpApprovals();
+    for (const id of [lapsed.approvalId, lapsedPlan.previewId]) {
+      const rows = await notificationsFor(id);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(row.readAt).not.toBeNull();
+        expect(row.message).toMatch(/expired before it was used/);
+      }
+    }
+  });
+});
+
+describe('SEC-8 runbook prepares share the pending backlog cap', () => {
+  it('refuses the 21st open plan on one connection without notifying anyone', async () => {
+    const r = await runbookFixture();
+    const prepare = (key: string) =>
+      prepareMcpRunbook(r.ctx(), {
+        runbookId: r.runbook.id,
+        body: { parameters: {} },
+        idempotencyKey: key,
+      });
+    for (let index = 0; index < 20; index++) await prepare(`backlog-${index}`);
+    const before = await db.inAppNotification.count();
+    expect(await codeOf(prepare('backlog-overflow'))).toMatchObject({
+      code: 'MCP_APPROVAL_BACKLOG',
+    });
+    expect(await db.inAppNotification.count()).toBe(before);
+    // A replay of an earlier prepare returns its stored plan instead of the 429.
+    expect((await prepare('backlog-3')).status).toBe('REQUIRES_NATIVE_APPROVAL');
+    // A rejected plan frees a slot.
+    const open = await db.runbookPreviewAuthorization.findFirstOrThrow({
+      where: { requesterGrantId: r.grant.id, independentReview: true },
+    });
+    await db.runbookPreviewAuthorization.update({
+      where: { id: open.id },
+      data: { rejectedAt: new Date() },
+    });
+    expect((await prepare('backlog-after-reject')).status).toBe('REQUIRES_NATIVE_APPROVAL');
+  });
+});
+
+describe('OBS-13 finished approvals are purged after 90 days', () => {
+  it('deletes old committed, rejected and expired rows and never open or executing ones', async () => {
+    const f = await fixture();
+    const old = new Date(Date.now() - 91 * 86_400_000);
+    const rows = [];
+    for (const title of ['committed', 'rejected', 'expired', 'executing', 'pending', 'recent'])
+      rows.push(await prepareMcpOperation(f.ctx(), f.announcementArgs(title)));
+    const [committed, rejected, expired, executing, pending, recent] = rows.map(
+      row => row.approvalId
+    );
+    const set = (id: string, status: string, createdAt: Date) =>
+      db.mcpOperationApproval.update({
+        where: { id },
+        data: {
+          status,
+          createdAt,
+          ...(status === 'REJECTED' ? { rejectedAt: createdAt } : {}),
+          ...(['EXECUTING', 'COMMITTED'].includes(status) ? { reviewedAt: createdAt } : {}),
+        },
+      });
+    await set(committed, 'COMMITTED', old);
+    await set(rejected, 'REJECTED', old);
+    await set(expired, 'EXPIRED', old);
+    await set(executing, 'EXECUTING', old);
+    await set(pending, 'PENDING', old);
+    await set(recent, 'COMMITTED', new Date(Date.now() - 89 * 86_400_000));
+    const result = await cleanupMcpCredentials();
+    expect(result.purgedApprovals).toBeGreaterThanOrEqual(3);
+    const left = new Set(
+      (
+        await db.mcpOperationApproval.findMany({
+          where: { id: { in: rows.map(row => row.approvalId) } },
+          select: { id: true },
+        })
+      ).map(row => row.id)
+    );
+    expect([...left].sort()).toEqual([executing, pending, recent].sort());
+    // The audit trail stays as the durable record.
+    expect(await db.auditLog.count({ where: { entityId: committed } })).toBeGreaterThan(0);
+  });
+});

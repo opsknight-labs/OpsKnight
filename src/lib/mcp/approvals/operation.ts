@@ -26,11 +26,15 @@ import { lockMcpMutationAuthority } from '../core/mutation-authority';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 import { projectMcpData } from '../core/projection';
 import { commitDeadline, readMcpApprovalTiming, reviewDeadline } from './timing';
-import { notifyOperationReviewers, notifyRequesterOfDecision } from './notify';
+import {
+  notifyOperationReviewers,
+  notifyRequesterOfDecision,
+  resolveReviewerNotices,
+} from './notify';
+import { MAX_PENDING_PER_GRANT } from './policy';
 
 // An approved plan that was claimed but not confirmed may be retried for a bounded window only.
 const EXECUTION_WINDOW_MS = 60 * 60_000;
-const MAX_PENDING_PER_GRANT = 20;
 const MAX_STORED_RESULT_BYTES = 16384;
 const PLACEHOLDER_KEY = 'frozen-by-approval-0000';
 
@@ -965,6 +969,7 @@ export async function decideMcpOperationReview(
       },
       tx
     );
+    await resolveReviewerNotices(tx, [approval.id], input.decision, now);
     await notifyRequesterOfDecision(tx, {
       id: approval.id,
       requesterId: approval.actorId,

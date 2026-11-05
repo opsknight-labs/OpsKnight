@@ -47,6 +47,7 @@ import {
 } from '@/lib/metrics/operational/registry';
 import { logger, runWithContext } from '@/lib/logger';
 import { recordMcpGrantCall } from '@/lib/mcp/core/usage';
+import { mcpCallLogOperationId, recordMcpCallLog } from '@/lib/mcp/core/call-log';
 import { MCP_PROTOCOL_REVISION } from '@/lib/mcp/protocol/revision';
 import {
   mcpErrorOutcome,
@@ -76,6 +77,10 @@ async function handlePost(request: Request, requestId: string) {
   let releaseAuth: (() => void) | undefined;
   let budget: CostBudget | undefined;
   let rpcId: string | number | null = null;
+  // Activity log fields: known once the caller is authenticated and the body is read.
+  let grantId: string | undefined;
+  let operationId: string | null = null;
+  let errorCode: string | null = null;
   try {
     assertMcpHost(request);
     releaseAuth = acquireMcpAuthenticationSlot();
@@ -85,6 +90,7 @@ async function handlePost(request: Request, requestId: string) {
     let identity = await authenticateMcp(request, null);
     releaseAuth();
     releaseAuth = undefined;
+    grantId = identity.grantId;
     release = await acquireMcpSlot(identity.policy.maxInFlight, { grantId: identity.grantId });
     let body;
     try {
@@ -111,6 +117,8 @@ async function handlePost(request: Request, requestId: string) {
     }
     method = body.method;
     tool = mcpMetricTool(body.method, body.params?.name);
+    if (body.method === 'tools/call')
+      operationId = mcpCallLogOperationId(tool, body.params?.arguments);
     // A notification (no id) gets no response and does no work: acknowledge it before any
     // quota is charged. notifications/initialized and notifications/cancelled arrive this way.
     if (body.id === undefined) {
@@ -280,6 +288,7 @@ async function handlePost(request: Request, requestId: string) {
     }
   } catch (error) {
     outcome = mcpErrorOutcome(error);
+    errorCode = error instanceof McpBoundaryError ? error.code : null;
     if (
       !(error instanceof McpBoundaryError) ||
       (error.status >= 500 && !['MCP_BUSY', 'MCP_DISABLED'].includes(error.code))
@@ -327,6 +336,17 @@ async function handlePost(request: Request, requestId: string) {
       (performance.now() - started) / 1000,
       { tool }
     );
+    // Same bounded labels as the metrics; never the arguments. Notifications do no work.
+    if (grantId && outcome !== 'notification')
+      recordMcpCallLog({
+        grantId,
+        tool,
+        operationId,
+        outcome,
+        durationMs: performance.now() - started,
+        requestId,
+        errorCode,
+      });
   }
 }
 

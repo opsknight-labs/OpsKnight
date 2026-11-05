@@ -22,6 +22,16 @@ export const MCP_APPROVAL_NOTIFY_LIMIT = 50;
 
 const approvalKey = (id: string) => `mcp-approval:${id}`;
 
+/** Reviewer call-to-action titles; the requester's decision notice uses different ones. */
+export const OPERATION_REVIEW_TITLE = 'Change waiting for your review';
+export const RUNBOOK_REVIEW_TITLE = 'Runbook run waiting for your review';
+
+const RESOLVED_MESSAGE = new Map([
+  ['approve', 'Another reviewer approved this request. Nothing is waiting for you.'],
+  ['reject', 'Another reviewer rejected this request. Nothing is waiting for you.'],
+  ['expire', 'This request expired before it was used. Nothing is waiting for you.'],
+] as const);
+
 /** Untrusted names (a self-registered assistant chooses its own) are quoted and shortened. */
 function quoted(value: string | null | undefined, max = 60) {
   const text = (value ?? '').replace(/\s+/g, ' ').trim();
@@ -136,7 +146,7 @@ export async function notifyOperationReviewers(
     {
       userIds,
       type: 'SYSTEM',
-      title: 'Change waiting for your review',
+      title: OPERATION_REVIEW_TITLE,
       message: `${who} to: ${input.summary}. Review it within ${duration(input.expiresAt.getTime() - Date.now())}.`,
       entityType: MCP_APPROVAL_ENTITY_TYPE,
       entityId: input.approvalId,
@@ -169,7 +179,7 @@ export async function notifyRunbookReviewers(
     {
       userIds,
       type: 'SYSTEM',
-      title: 'Runbook run waiting for your review',
+      title: RUNBOOK_REVIEW_TITLE,
       message: `${who} to run ${quoted(runbook?.name, 80) ?? 'a runbook'}. Review it within ${duration(input.expiresAt.getTime() - Date.now())}.`,
       entityType: MCP_APPROVAL_ENTITY_TYPE,
       entityId: input.previewId,
@@ -209,4 +219,28 @@ export async function notifyRequesterOfDecision(
     },
     tx
   );
+}
+
+/**
+ * Closes the other reviewers' unread calls to action once a request is decided or lapses, in the
+ * caller's transaction. Only the reviewer titles match, so the requester's decision notice (same
+ * entity) stays unread.
+ */
+export async function resolveReviewerNotices(
+  tx: Prisma.TransactionClient,
+  ids: readonly string[],
+  outcome: 'approve' | 'reject' | 'expire',
+  now = new Date()
+) {
+  if (!ids.length) return 0;
+  const resolved = await tx.inAppNotification.updateMany({
+    where: {
+      entityType: MCP_APPROVAL_ENTITY_TYPE,
+      entityId: { in: [...ids] },
+      readAt: null,
+      title: { in: [OPERATION_REVIEW_TITLE, RUNBOOK_REVIEW_TITLE] },
+    },
+    data: { readAt: now, message: RESOLVED_MESSAGE.get(outcome)! },
+  });
+  return resolved.count;
 }
