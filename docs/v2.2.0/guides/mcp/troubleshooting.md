@@ -118,10 +118,10 @@ This page lists 94 MCP codes and 21 log events found in the source.
 | <a id="MCP_ADMIN_REQUIRED"></a>`MCP_ADMIN_REQUIRED` | The settings action needs an administrator (or, for runbook approvals, a runbook approver). | Ask an administrator. |
 | <a id="MCP_CONFIGURATION_INVALID"></a>`MCP_CONFIGURATION_INVALID` | MCP cannot be turned on while a configuration problem is listed (App URL, migrations, encryption key). | Fix the problems shown on the Overview tab, then retry. |
 | <a id="MCP_ALREADY_CONFIGURED"></a>`MCP_ALREADY_CONFIGURED` | Quick setup was clicked while MCP was already on. | Reload the page; use Access policy to change settings. |
+| <a id="MCP_FORCE_DISABLED"></a>`MCP_FORCE_DISABLED` | MCP was switched on in settings while the deployment sets MCP_FORCE_DISABLED=true, which overrides the stored policy. | Ask the operator to remove MCP_FORCE_DISABLED from the environment and restart OpsKnight, then turn MCP on again. |
 | <a id="MCP_CLIENT_NOT_FOUND"></a>`MCP_CLIENT_NOT_FOUND` | The assistant to restore does not exist. | Reload the Assistants tab. |
 | <a id="MCP_POLICY_CONFLICT"></a>`MCP_POLICY_CONFLICT` | Someone else saved the MCP policy or exposed capabilities after this page loaded. | Choose Reload policy, re-apply your change and save. |
 | <a id="MCP_INVALID_CIMD_HOST"></a>`MCP_INVALID_CIMD_HOST` | A trusted assistant host is not a plain DNS name. | Enter one host name per line, without scheme, port or path. |
-| <a id="MCP_FORCE_DISABLED"></a>`MCP_FORCE_DISABLED` | MCP was switched on in settings while the deployment sets MCP_FORCE_DISABLED=true, which overrides the stored policy. | Ask the operator to remove MCP_FORCE_DISABLED from the environment and restart OpsKnight, then turn MCP on again. |
 | <a id="MCP_DCR_REQUIRES_SCOPES"></a>`MCP_DCR_REQUIRES_SCOPES` | Automatic connections was turned on with no permissions ticked. | Tick at least one permission under What assistants may do. |
 | <a id="MCP_INVALID_NAME"></a>`MCP_INVALID_NAME` | A manually registered assistant needs a name. | Enter a name. |
 | <a id="MCP_INVALID_REDIRECT"></a>`MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS or loopback HTTP. | Enter the exact callback the assistant uses. |

@@ -108,6 +108,7 @@ export default function McpOverviewSection({
   enableAction,
   testAction,
   previous = null,
+  forceDisabled = false,
 }: {
   isAdmin: boolean;
   enabled: boolean;
@@ -138,6 +139,8 @@ export default function McpOverviewSection({
     writesEnabled: boolean;
     sensitiveReadsEnabled: boolean;
   } | null;
+  /** MCP_FORCE_DISABLED is set: turning MCP on from here would be refused. */
+  forceDisabled?: boolean;
 }) {
   const needsSetup = isAdmin && !enabled;
   const live = enabled && ready;
@@ -199,12 +202,19 @@ export default function McpOverviewSection({
               </ul>
             </div>
             <div className="space-y-2 md:text-right">
-              <McpQuickSetup action={enableAction} blocked={!ready} />
-              {!ready && (
+              <McpQuickSetup action={enableAction} blocked={!ready || forceDisabled} />
+              {forceDisabled ? (
                 <p className="max-w-xs text-xs text-muted-foreground">
-                  Fix the configuration problems above first. This button unlocks as soon as they
-                  are resolved.
+                  The deployment sets MCP_FORCE_DISABLED. This button unlocks once the operator
+                  removes it and restarts OpsKnight.
                 </p>
+              ) : (
+                !ready && (
+                  <p className="max-w-xs text-xs text-muted-foreground">
+                    Fix the configuration problems above first. This button unlocks as soon as they
+                    are resolved.
+                  </p>
+                )
               )}
             </div>
           </div>

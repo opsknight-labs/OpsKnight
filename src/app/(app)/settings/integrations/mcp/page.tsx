@@ -347,6 +347,7 @@ export default async function McpSettings({
             }}
             hrefs={hrefs}
             enableAction={enableMcpQuickSetup}
+            forceDisabled={forceDisabled}
             testAction={testMcpConnection}
             previous={
               policy && !policy.enabled
@@ -461,7 +462,9 @@ export default async function McpSettings({
         return (
           <McpPolicySection
             policy={{
-              enabled,
+              // The stored switch, not the effective one: saving other settings while
+              // MCP_FORCE_DISABLED is set must not turn MCP off for when the switch is lifted.
+              enabled: policy?.enabled ?? false,
               dcrEnabled: policy?.dcrEnabled ?? false,
               dcrScopes: policy?.dcrScopes ?? [],
               sessionIdleDays: policy?.sessionIdleDays ?? 30,

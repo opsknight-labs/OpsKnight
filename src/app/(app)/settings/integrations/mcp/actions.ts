@@ -84,6 +84,7 @@ export async function enableMcpQuickSetup() {
     await assertCurrentAdmin(tx, actor);
     const existing = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
     requireMcp(!existing?.enabled, 'MCP_ALREADY_CONFIGURED');
+    requireMcp(!mcpForceDisabled(), 'MCP_FORCE_DISABLED');
     // First run gets the defaults. Turning MCP back on keeps the administrator's configuration
     // (scopes, hosts, switches, limits) and only fills scope lists that are empty.
     const update = existing
@@ -254,8 +255,6 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       }),
     'MCP_INVALID_CIMD_HOST'
   );
-  // The deployment kill switch wins: an admin cannot turn MCP on while it is forced off.
-  requireMcp(!input.enabled || !mcpForceDisabled(), 'MCP_FORCE_DISABLED');
   // Refuse to switch MCP on when its bootstrap configuration would fail at request time.
   requireMcp(
     !input.enabled || !(await getMcpConfigurationStatus({ force: true })).issues.length,
@@ -273,6 +272,10 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
     const existing = await tx.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     if (input.policyRevision !== undefined && input.policyRevision !== existing.policyRevision)
       return { ok: false, code: 'MCP_POLICY_CONFLICT', revision: existing.policyRevision };
+    // The deployment kill switch wins: an admin cannot turn MCP on while it is forced off. A
+    // policy that is already on may still be edited (limits, scopes) and stays on for when the
+    // operator lifts the switch.
+    requireMcp(!input.enabled || existing.enabled || !mcpForceDisabled(), 'MCP_FORCE_DISABLED');
     // "Automatic connections" is one switch: assistants may register themselves (DCR) or identify
     // with a metadata document (CIMD) under the same scope ceiling. An optional host list narrows
     // CIMD. A pre-existing host-restricted metadata-document setup keeps working when
