@@ -90,26 +90,39 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
     url => !url.pathname.startsWith('/login') && !url.pathname.startsWith('/api/auth')
   );
   await page.goto('/settings/integrations/mcp');
-  await expect(page.getByRole('heading', { name: 'MCP integration', exact: true })).toBeVisible();
   // Scoped: WebKit can briefly hold a second copy of the page outside the main region.
   const main = page.locator('#main-content');
-  await expect(main.getByText('App URL (Settings → System)', { exact: true })).toBeVisible();
+  await expect(
+    main.getByRole('heading', {
+      level: 1,
+      name: 'Model Context Protocol (MCP) Integration',
+      exact: true,
+    })
+  ).toBeVisible();
+  // The origin source shows in the header stats and again in the overview details.
+  await expect(
+    main.getByText('App URL (Settings → System)', { exact: true }).first()
+  ).toBeVisible();
   await expect(main.getByRole('button', { name: 'Copy MCP endpoint', exact: true })).toBeVisible();
   await page.goto('/settings/integrations/mcp?tab=policy');
-  await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
-  await page.locator('#main-content').getByText('Advanced', { exact: true }).click();
-  await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
-  await page.getByRole('button', { name: 'Save policy' }).click();
+  await main.getByRole('checkbox', { name: /Enable MCP/ }).check();
+  await main.getByText('Advanced', { exact: true }).click();
+  await main.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
+  await main.getByRole('button', { name: 'Save policy' }).click();
   await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
   await page.goto('/settings/integrations/mcp?tab=assistants');
-  await page.getByText('Manual client registration (advanced)', { exact: true }).click();
+  await main.getByText('Manual client registration (advanced)', { exact: true }).click();
 
   const name = `Local ${browserName} ${Date.now()}`;
   const redirectUri = 'http://127.0.0.1:8799/callback';
-  await page.getByLabel('Display name', { exact: true }).fill(name);
-  await page.getByLabel('Exact redirect URI').fill(redirectUri);
+  const registration = main
+    .locator('form')
+    .filter({ has: page.getByRole('button', { name: 'Register client', exact: true }) });
+  const register = registration.getByRole('button', { name: 'Register client', exact: true });
+  await registration.getByLabel('Display name', { exact: true }).fill(name);
+  await registration.getByLabel('Exact redirect URI').fill(redirectUri);
   // Read-only scopes are pre-selected in the manual registration form.
-  await page.getByRole('button', { name: 'Register client', exact: true }).click();
+  await register.click();
   // Newest first, so the new client is on the first page of the Assistants list.
   const clientRow = main.getByRole('row').filter({ hasText: name });
   await expect(clientRow).toHaveCount(1);
@@ -165,7 +178,8 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   expect(forbidden.status()).toBe(200);
   const denial = (await forbidden.json()).result;
   expect(denial.isError).toBe(true);
-  expect(denial.content[0].text).toBe('MCP_OPERATION_FORBIDDEN');
+  // The denial names the missing consent so the assistant can tell the person how to fix it.
+  expect(denial.content[0].text).toMatch(/^MCP_SCOPE_NOT_GRANTED: .*\bservices:read\b/);
 
   // CERT-02: the published 1.x SDK client completes a real handshake at both 2025 revisions
   // against the built server, and against the second replica when one is running.
@@ -236,7 +250,7 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   // Destructive row actions ask for confirmation first.
   await grant.getByRole('button', { name: /^Revoke / }).click();
   await page
-    .getByRole('alertdialog', { name: 'Revoke this connection?' })
+    .getByRole('alertdialog', { name: `Revoke connection for ${name}?`, exact: true })
     .getByRole('button', { name: 'Revoke connection', exact: true })
     .click();
   await expect(page.getByText('Connection revoked', { exact: true })).toBeVisible();
@@ -253,16 +267,30 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   token = await connectClient(page, request, origin, clientId, name, redirectUri);
   expect((await rpc('tools/list')).status()).toBe(200);
   await page.goto('/settings/integrations/mcp?tab=connections');
-  const confirmation = page.getByRole('checkbox', {
-    name: 'I understand every user must reconnect their assistants.',
+  await main
+    .getByRole('button', {
+      name: 'Revoke all active MCP connections across OpsKnight',
+      exact: true,
+    })
+    .click();
+  const revokeAllDialog = page.getByRole('alertdialog', {
+    name: 'Revoke all active MCP connections?',
     exact: true,
   });
+  // The emergency action stays disabled until the administrator acknowledges its reach.
+  const confirmation = revokeAllDialog.getByRole('checkbox', {
+    name: /^I understand this disconnects every assistant for everyone/,
+  });
   await expect(confirmation).toHaveAttribute('required', '');
-  const revokeAll = page.getByRole('button', { name: 'Revoke all MCP connections', exact: true });
-  await revokeAll.click();
   await expect(confirmation).not.toBeChecked();
+  const revokeAll = revokeAllDialog.getByRole('button', {
+    name: 'Revoke all connections',
+    exact: true,
+  });
+  await expect(revokeAll).toBeDisabled();
   expect((await rpc('tools/list')).status()).toBe(200);
   await confirmation.check();
   await revokeAll.click();
+  await expect(page.getByText('All MCP connections revoked', { exact: true })).toBeVisible();
   await expect.poll(async () => (await rpc('tools/list')).status()).toBe(401);
 });
