@@ -291,6 +291,22 @@ export async function sendTestNotification(
 
     if (channel === 'EMAIL') {
       if (!user.email) return { success: false, error: 'No email address configured.' };
+      const sentAt = new Date().toUTCString();
+      const { renderEmail } = await import('@/emails/render');
+      const { DeliveryTestEmail } = await import('@/emails/templates/delivery-test');
+      const testEmail = await renderEmail(
+        DeliveryTestEmail({
+          variant: 'channel',
+          greetingName: user.name || 'there',
+          details: [
+            { label: 'Delivered to', value: user.email, highlight: true },
+            { label: 'Sent at', value: sentAt },
+          ],
+        }),
+        {
+          text: `Hello ${user.name || 'there'},\n\nThis is a test notification confirming that your OpsKnight email alert channel is properly configured and active.\n\nSent at: ${sentAt}`,
+        }
+      );
       await enqueueCentralNotification({
         category: 'SYSTEM',
         channel: 'EMAIL',
@@ -309,8 +325,8 @@ export async function sendTestNotification(
           kind: 'EMAIL',
           to: user.email,
           subject: '🔔 OpsKnight: Test Email Alert',
-          html: `<p>Hello ${user.name || 'there'},</p><p>This is a test notification confirming that your OpsKnight email alert channel is properly configured and active.</p><p><small>Sent at: ${new Date().toUTCString()}</small></p>`,
-          text: `Hello ${user.name || 'there'},\n\nThis is a test notification confirming that your OpsKnight email alert channel is properly configured and active.\n\nSent at: ${new Date().toUTCString()}`,
+          html: testEmail.html,
+          text: testEmail.text,
         },
       });
       return { success: true };

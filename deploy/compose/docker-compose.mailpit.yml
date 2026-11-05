@@ -1,0 +1,17 @@
+# Local email inbox for developing and reviewing OpsKnight email templates.
+#   docker compose -f deploy/compose/docker-compose.mailpit.yml up -d
+#   SMTP: localhost:1025   Web UI: http://localhost:8025 (HTML check, link check, raw source)
+# Point an OpsKnight SMTP provider at host "localhost" (or "mailpit" inside the dev
+# network), port 1025, any username/password, or run `npm run email:send-test`.
+services:
+  mailpit:
+    image: axllent/mailpit:v1.33
+    container_name: opsknight_mailpit
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 'true'
+      MP_SMTP_AUTH_ALLOW_INSECURE: 'true'
+      MP_MAX_MESSAGES: '500'

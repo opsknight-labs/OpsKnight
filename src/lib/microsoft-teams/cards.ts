@@ -1,4 +1,4 @@
-import { sanitizeUrl } from '@/lib/email-components';
+import { sanitizeUrl } from '@/lib/html-sanitize';
 import { INCIDENT_PRIORITIES, getIncidentPriorityDefinition } from '@/lib/incidents/priority';
 import { CHATOPS_ACTIONS, type ChatOpsActionKind } from '@/lib/chatops/action-contract';
 import { TEAMS_CHATOPS_VERBS } from './action-schema';

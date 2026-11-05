@@ -12,15 +12,6 @@ const ACTIONABLE_KINDS = new Set([
   'EVIDENCE_INTEGRITY_MISMATCH',
 ]);
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 /**
  * Handles durable notification dispatch and deduplication for a compliance drift event.
  * Enforces anti-alert-storm rules, per-event generation deduplication, and flapping cooldowns.
@@ -142,11 +133,25 @@ export async function dispatchComplianceDriftNotification(
     tx as never
   );
 
-  // 7. Route through OpsKnight central notification control plane with real EMAIL payload
-  const safeControlId = escapeHtml(params.driftEvent.controlId ?? 'Unknown');
-  const safeSummary = escapeHtml(params.driftEvent.summary);
-  const safeKind = escapeHtml(params.driftEvent.kind);
-  const safeImpact = escapeHtml(params.driftEvent.impact);
+  // 7. Route through OpsKnight central notification control plane with real EMAIL payload.
+  //    Rendered once; every recipient gets the same content.
+  const controlId = params.driftEvent.controlId ?? 'Unknown';
+  const driftText = `Compliance drift observed for control ${controlId}.\n\nSummary: ${params.driftEvent.summary}\nKind: ${params.driftEvent.kind}\nImpact: ${params.driftEvent.impact}\nDetected At: ${params.driftEvent.firstDetectedAt.toISOString()}`;
+  const { renderEmail } = await import('@/emails/render');
+  const { ComplianceDriftEmail } = await import('@/emails/templates/compliance-drift');
+  const { emailBaseUrl } = await import('@/emails/utils');
+  const appBase = emailBaseUrl();
+  const { html: driftHtml } = await renderEmail(
+    ComplianceDriftEmail({
+      controlId,
+      summary: params.driftEvent.summary,
+      kind: params.driftEvent.kind,
+      impact: params.driftEvent.impact,
+      detectedAt: params.driftEvent.firstDetectedAt.toISOString(),
+      reviewUrl: appBase ? `${appBase}/settings/security-compliance` : undefined,
+    }),
+    { text: driftText }
+  );
 
   for (const user of recipients) {
     await createCentralNotificationIntent(
@@ -165,9 +170,9 @@ export async function dispatchComplianceDriftNotification(
         payload: {
           kind: 'EMAIL',
           to: user.email,
-          subject: `[OpsKnight Compliance Drift] Control ${params.driftEvent.controlId ?? 'Unknown'}: ${params.driftEvent.summary}`,
-          text: `Compliance drift observed for control ${params.driftEvent.controlId ?? 'Unknown'}.\n\nSummary: ${params.driftEvent.summary}\nKind: ${params.driftEvent.kind}\nImpact: ${params.driftEvent.impact}\nDetected At: ${params.driftEvent.firstDetectedAt.toISOString()}`,
-          html: `<h2>OpsKnight Compliance Drift Alert</h2><p><strong>Control:</strong> ${safeControlId}</p><p><strong>Summary:</strong> ${safeSummary}</p><p><strong>Kind:</strong> ${safeKind}</p><p><strong>Impact:</strong> ${safeImpact}</p>`,
+          subject: `[OpsKnight Compliance Drift] Control ${controlId}: ${params.driftEvent.summary}`,
+          text: driftText,
+          html: driftHtml,
         },
       },
       tx

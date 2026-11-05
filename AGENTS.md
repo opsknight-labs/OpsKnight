@@ -125,13 +125,24 @@ Email templates and dashboard views must be responsive across all devices. The f
 
 ## 6. Email & Transactional Notification Standards
 
-- **Template Structure**:
-  - `EmailContainer`: Fluid table with Outlook MSO conditional tags and responsive media queries.
-  - `EmailHeader`: Gradient header with hyperlinked transparent logo, brand name, and title.
-  - `EmailContent`: Clean white content section with status badge, metrics table (`InfoCard`), and dedicated `Incident Description` box.
-  - `Incident Description Card`: Framed in `#f8fafc` with status-colored 4px left border, `white-space: pre-wrap; word-break: break-word;`.
-  - `EmailFooter`: Subtle attribution hyperlinked to `https://opsknight.com/`, notification settings, and unsubscribe links.
+Every email OpsKnight sends is a React Email template in `src/emails/templates/` built from the primitives in `src/emails/components.tsx`. No product code hand-writes email HTML; `tests/architecture/email-contract.test.ts` fails if it does.
+
+- **Building blocks** (`src/emails/components.tsx`):
+  - `EmailLayout`: document shell. Color-scheme meta, the three-layer dark-mode stylesheet, the Outlook `OfficeDocumentSettings` block and Segoe UI font fix, the 640px MSO ghost table, the card and the footer slot.
+  - `HeaderBand`: status-coloured band at the top of every card. It holds the brand mark (logo + wordmark), eyebrow, title and subtitle. `bgcolor` = the tone's deep colour (Outlook), CSS gradient deep → base for everyone else. The transparent logo sits on a small white circular chip, so the red shield stays legible on crimson and every other tone (a light chip, never the forbidden dark box). OpsKnight emails link the mark to `https://opsknight.com/`; status-page emails show the page's own logo and name and link to the page.
+  - `Badge`, `InfoTable`, `Callout` (the `#f8fafc` `surface="muted"` description card with a 4px status accent and `white-space: pre-wrap`), `Button`, `LinkFallback`, `EmailFooter`, `SubscriberFooter`.
+- **Rendering**: `renderEmail(element, { text? })` from `src/emails/render.tsx` returns `{ html, text }`. Pass the hand-written `text` for security/auth emails; otherwise plain text is derived from the HTML.
+- **Outlook (Word engine)**: tables only (no flex, grid, position, SVG); solid `bgcolor` under every gradient; bulletproof CTAs (VML `v:roundrect` + padded link); images are absolute https PNGs with explicit `width`/`height`/`alt` (no data: URIs).
+- **Dark mode, three layers**, all generated from `dm-*` classes in `src/emails/styles.ts`:
+  1. `@media (prefers-color-scheme: dark)`: Apple Mail, Outlook for Mac/iOS.
+  2. `[data-ogsc]` (text) / `[data-ogsb]` (backgrounds): Outlook.com and new Outlook.
+  3. Forced inversion (Gmail apps, Outlook for Windows): off-white/off-black surfaces and solid fills so inverted emails stay readable.
+- **Colour**: status tones come from `src/emails/tokens.ts`, which mirrors "Status Color Semantics" above (pinned by the contract test). CTA/badge fills, callout text and body text all meet WCAG AA in both modes.
+- **Width**: 640px base (and always 640px in Outlook desktop), scaling to 860 / 1080 / 1180px at the big-screen tiers in §3.
+- **Size**: keep each email under 102 KB of HTML; Gmail clips anything larger and hides the footer and unsubscribe link.
+- **Bulk subscriber email**: status-page fan-out renders once with `{{unsubscribe_url}}` / `{{start_time}}` / `{{…_section}}` placeholders substituted per recipient at send time, and sends RFC 8058 `List-Unsubscribe` + `List-Unsubscribe-Post` headers pointing at `/api/status/subscriptions/unsubscribe/one-click/<token>`.
 - **No Intrusive Promotions**: Transactional alert emails must remain clean, concise, and focused on operational telemetry.
+- **Tooling**: `npm run email:dev` (live previews of every template with fixture props), `npm run test:email:visual` (Chromium + WebKit screenshots in light, dark and forced-inversion at 375–1440px with contrast checks), `npm run email:send-test -- --to you@example.com` (send the full set to Mailpit from `deploy/compose/docker-compose.mailpit.yml`, or to real inboxes via `--smtp`).
 
 ---
 
