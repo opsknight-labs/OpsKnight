@@ -1129,6 +1129,76 @@ const extraSchemas: Json = {
     },
     required: ['id', 'status', 'updatedAt'],
   },
+  MyOnCallShifts: {
+    type: 'object',
+    description: 'The caller’s current and upcoming on-call shifts across every readable schedule.',
+    properties: {
+      userId: { type: 'string' },
+      now: { type: 'string', format: 'date-time' },
+      windowEnd: { type: 'string', format: 'date-time' },
+      onCallNow: { type: 'boolean' },
+      nextHandoff: {
+        type: ['object', 'null'],
+        description:
+          'The next moment the caller’s on-call status changes, if any within the window.',
+        properties: {
+          at: { type: 'string', format: 'date-time' },
+          change: { type: 'string', enum: ['SHIFT_ENDS', 'SHIFT_STARTS'] },
+          scheduleId: { type: 'string' },
+          scheduleName: { type: 'string' },
+          handoffTo: {
+            type: ['object', 'null'],
+            properties: { userId: { type: 'string' }, name: { type: ['string', 'null'] } },
+            required: ['userId', 'name'],
+          },
+        },
+        required: ['at', 'change', 'scheduleId', 'scheduleName'],
+      },
+      shifts: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          type: 'object',
+          properties: {
+            scheduleId: { type: 'string' },
+            scheduleName: { type: 'string' },
+            scheduleTimeZone: { type: 'string' },
+            start: { type: 'string', format: 'date-time' },
+            end: { type: 'string', format: 'date-time' },
+            current: { type: 'boolean' },
+            handoffTo: {
+              type: ['object', 'null'],
+              description:
+                'Who is on call in the same schedule when this shift ends; null for a gap.',
+              properties: { userId: { type: 'string' }, name: { type: ['string', 'null'] } },
+              required: ['userId', 'name'],
+            },
+          },
+          required: [
+            'scheduleId',
+            'scheduleName',
+            'scheduleTimeZone',
+            'start',
+            'end',
+            'current',
+            'handoffTo',
+          ],
+        },
+      },
+      truncated: { type: 'boolean' },
+      schedulesEvaluated: { type: 'integer', minimum: 0 },
+    },
+    required: [
+      'userId',
+      'now',
+      'windowEnd',
+      'onCallNow',
+      'nextHandoff',
+      'shifts',
+      'truncated',
+      'schedulesEvaluated',
+    ],
+  },
   ScheduleOnCall: {
     type: 'object',
     properties: {

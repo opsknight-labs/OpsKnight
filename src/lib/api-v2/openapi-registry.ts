@@ -2133,6 +2133,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/teams', 'listTeams', 'teams:read', 'list', 'Team'),
   op('post', '/teams', 'createTeam', 'teams:write', 'item', 'Team'),
   op('get', '/users/{id}', 'getUser', 'users:read', 'item', 'User'),
+  op(
+    'get',
+    '/users/me/on-call-shifts',
+    'listMyOnCallShifts',
+    'schedules:read',
+    'item',
+    'MyOnCallShifts'
+  ),
   op('get', '/users', 'listUsers', 'users:read', 'list', 'User'),
 ];
 

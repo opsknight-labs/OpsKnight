@@ -2873,6 +2873,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listMyOnCallShifts": {
+    "method": "GET",
+    "path": "/users/me/on-call-shifts",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listUsers": {
     "method": "GET",
     "path": "/users",
