@@ -2,7 +2,13 @@ import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { runWithContext } from '@/lib/logger';
 import { trustedMcpRequestId } from '../request-id';
 
-export const MCP_OAUTH_ENDPOINTS = ['authorize', 'token', 'register', 'revoke'] as const;
+export const MCP_OAUTH_ENDPOINTS = [
+  'authorize',
+  'token',
+  'register',
+  'revoke',
+  'device_authorization',
+] as const;
 export type McpOAuthEndpoint = (typeof MCP_OAUTH_ENDPOINTS)[number];
 
 /** Every value the `outcome` label of opsknight_mcp_oauth_requests_total can take. */
@@ -13,6 +19,11 @@ export const MCP_OAUTH_OUTCOMES = [
   'invalid_client',
   'invalid_scope',
   'rate_limited',
+  // Device flow polls (RFC 8628 §3.5): still waiting (authorization_pending or slow_down), the
+  // person said no, or the code ran out before anyone approved it.
+  'pending',
+  'denied',
+  'expired',
   'unavailable',
   'server_error',
 ] as const;
@@ -28,7 +39,10 @@ const CODE_OUTCOMES = new Map<string, McpOAuthOutcome>([
   ['invalid_redirect_uri', 'invalid_client'],
   ['unauthorized_client', 'invalid_client'],
   ['invalid_scope', 'invalid_scope'],
-  ['access_denied', 'invalid_request'],
+  ['access_denied', 'denied'],
+  ['authorization_pending', 'pending'],
+  ['slow_down', 'pending'],
+  ['expired_token', 'expired'],
   ['temporarily_unavailable', 'unavailable'],
   ['server_error', 'server_error'],
 ]);

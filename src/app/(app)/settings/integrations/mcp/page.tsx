@@ -526,6 +526,7 @@ export default async function McpSettings({
               patMaxDays: policy?.patMaxDays ?? MCP_PAT_DEFAULT_DAYS,
               patAllowedScopes: policy?.patAllowedScopes ?? [],
               requireReadOnlyConnections: policy?.requireReadOnlyConnections ?? false,
+              deviceFlowEnabled: policy?.deviceFlowEnabled ?? false,
             }}
             revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}

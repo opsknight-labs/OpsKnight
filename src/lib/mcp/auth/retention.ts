@@ -193,6 +193,48 @@ export async function purgeMcpCallLog(now = new Date()) {
   return total;
 }
 
+/**
+ * Device sign-ins (RFC 8628) last ten minutes. Lapsed ones are marked EXPIRED, and an approval the
+ * device never collected has its unused grant revoked; rows are deleted once past the replay
+ * window like other spent credentials. Rows locked by a concurrent poll are skipped this tick.
+ */
+export async function sweepMcpDeviceAuthorizations(now = new Date(), cutoff = now) {
+  const expired = await prisma.$transaction(async tx => {
+    const rows = await tx.$queryRaw<{ id: string; grantId: string | null }[]>`
+      SELECT id, "grantId" FROM "McpDeviceAuthorization"
+      WHERE status IN ('PENDING', 'APPROVED') AND "expiresAt" < ${now}
+      ORDER BY "expiresAt" ASC, id ASC LIMIT ${MCP_CLEANUP_BATCH} FOR UPDATE SKIP LOCKED`;
+    if (!rows.length) return 0;
+    const updated = await tx.mcpDeviceAuthorization.updateMany({
+      where: {
+        id: { in: rows.map(row => row.id) },
+        status: { in: ['PENDING', 'APPROVED'] },
+        expiresAt: { lt: now },
+      },
+      data: { status: 'EXPIRED' },
+    });
+    const grants = rows.flatMap(row => (row.grantId ? [row.grantId] : []));
+    if (grants.length)
+      await tx.mcpGrant.updateMany({
+        where: { id: { in: grants }, revokedAt: null, tokens: { none: {} } },
+        data: { revokedAt: now },
+      });
+    return updated.count;
+  });
+  const stale = await prisma.mcpDeviceAuthorization.findMany({
+    where: { expiresAt: { lt: cutoff } },
+    take: MCP_CLEANUP_BATCH,
+    orderBy: { expiresAt: 'asc' },
+    select: { id: true },
+  });
+  const deleted = stale.length
+    ? await prisma.mcpDeviceAuthorization.deleteMany({
+        where: { id: { in: stale.map(row => row.id) }, expiresAt: { lt: cutoff } },
+      })
+    : { count: 0 };
+  return { expired, deleted: deleted.count };
+}
+
 /** Bounded maintenance on the existing scheduler; no new queue or worker. */
 export async function cleanupMcpCredentials() {
   const now = new Date();
@@ -242,6 +284,7 @@ export async function cleanupMcpCredentials() {
     }),
   ]);
   const expired = await expireMcpApprovals(now);
+  const devices = await sweepMcpDeviceAuthorizations(now, cutoff);
   const expiringTokenNotices = await notifyExpiringMcpPersonalTokens(now);
   const purgedApprovals = await purgeFinishedMcpApprovals(now);
   const purgedCallLog = await purgeMcpCallLog(now);
@@ -273,7 +316,15 @@ export async function cleanupMcpCredentials() {
           },
           select: { clientId: true },
         });
-        const inUse = new Set(pending.map(consent => consent.clientId));
+        const devices = await tx.mcpDeviceAuthorization.findMany({
+          where: {
+            clientId: { in: locked.map(client => client.id) },
+            status: { in: ['PENDING', 'APPROVED'] },
+            expiresAt: { gt: now },
+          },
+          select: { clientId: true },
+        });
+        const inUse = new Set([...pending, ...devices].map(item => item.clientId));
         return tx.mcpClient.deleteMany({
           where: {
             id: { in: locked.filter(client => !inUse.has(client.id)).map(client => client.id) },
@@ -296,5 +347,7 @@ export async function cleanupMcpCredentials() {
     purgedCallLog,
     registrations: registrations.count,
     expiringTokenNotices,
+    expiredDeviceSignIns: devices.expired,
+    deviceSignIns: devices.deleted,
   };
 }

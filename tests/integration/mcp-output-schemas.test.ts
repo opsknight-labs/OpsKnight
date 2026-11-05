@@ -157,6 +157,7 @@ describe('named tool results satisfy their advertised output schemas', () => {
       ['incident_get_timeline', { path: { id: incident.id } }],
       ['schedule_get', { path: { id: schedule.id } }],
       ['oncall_lookup', { path: { id: schedule.id } }],
+      ['oncall_my_shifts', { query: { days: 7 } }],
       ['escalation_explain', { path: { id: escalation.id } }],
       ['status_page_get', { path: { id: page.id } }],
       ['service_get_health', { path: { id: service.id } }],
@@ -189,5 +190,6 @@ describe('named tool results satisfy their advertised output schemas', () => {
     }
     // Most of the curated surface is covered, and every one of these advertises a schema.
     expect(checked.length).toBeGreaterThanOrEqual(12);
+    expect(checked).toContain('oncall_my_shifts');
   }, 120000);
 });

@@ -19,4 +19,8 @@ export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
   ['executeRunbook', ['run', 'execute']],
   ['listRunbooks', ['remediation', 'playbook']],
   ['listTeams', ['team']],
+  ['listMyOnCallShifts', ['me', 'my', 'shift', 'when', 'handoff', 'oncall', 'rota']],
+  ['listUsers', ['people', 'person', 'directory', 'colleague']],
+  ['listAuditLogs', ['audit', 'who changed', 'trail', 'history']],
+  ['getIntegrationDiagnostics', ['health', 'failing', 'deliveries', 'webhook']],
 ]);

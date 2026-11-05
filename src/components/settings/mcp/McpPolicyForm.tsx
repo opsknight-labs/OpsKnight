@@ -12,6 +12,7 @@ import {
   MCP_REAUTHENTICATION_REQUIRED,
 } from '@/lib/mcp/auth/policy-widening';
 import { MCP_WRITE_MODE_SUMMARY } from '@/lib/mcp/policy-copy';
+import { MCP_POLICY_INVALID_MESSAGES, type McpPolicyInvalidCode } from '@/lib/mcp/policy-invalid';
 import McpUnsavedChangesGuard from '@/components/settings/mcp/McpUnsavedChangesGuard';
 
 /**
@@ -21,6 +22,7 @@ import McpUnsavedChangesGuard from '@/components/settings/mcp/McpUnsavedChangesG
 export type McpPolicySaveResult =
   | { ok: true; revision: number }
   | { ok: false; code: 'MCP_POLICY_CONFLICT'; revision: number }
+  | { ok: false; code: 'MCP_POLICY_INVALID'; reason: McpPolicyInvalidCode }
   | { ok: false; code: typeof MCP_REAUTHENTICATION_REQUIRED };
 
 const settingsPath = '/settings/integrations/mcp';
@@ -46,6 +48,8 @@ export default function McpPolicyForm({
 }) {
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<'idle' | 'saved' | 'error' | 'conflict' | 'reauth'>('idle');
+  // Why the server refused the values, when it said; replaces the generic "try again".
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [current, setCurrent] = useState(revision);
   // Edits not yet saved: leaving the page asks first.
   const [dirty, setDirty] = useState(false);
@@ -64,6 +68,13 @@ export default function McpPolicyForm({
           notify.error(MCP_REAUTHENTICATION_MESSAGE, { id: 'settings:mcp:save' });
           return;
         }
+        if (result && !result.ok && result.code === 'MCP_POLICY_INVALID') {
+          const message = MCP_POLICY_INVALID_MESSAGES.get(result.reason) ?? null;
+          setRefusal(message);
+          setStatus('error');
+          notify.error(message ?? 'Configuration was not saved.', { id: 'settings:mcp:save' });
+          return;
+        }
         if (result && !result.ok) {
           setStatus('conflict');
           notify.error(MCP_POLICY_CONFLICT_MESSAGE, { id: 'settings:mcp:save' });
@@ -74,6 +85,7 @@ export default function McpPolicyForm({
         setStatus('saved');
         notify.success('MCP configuration saved', { id: 'settings:mcp:save' });
       } catch (error) {
+        setRefusal(null);
         setStatus('error');
         notify.error(error, { id: 'settings:mcp:save' });
       } finally {
@@ -111,7 +123,11 @@ export default function McpPolicyForm({
               status={
                 pending ? 'saving' : status === 'conflict' || status === 'reauth' ? 'idle' : status
               }
-              error={status === 'error' ? 'Configuration was not saved. Please try again.' : null}
+              error={
+                status === 'error'
+                  ? (refusal ?? 'Configuration was not saved. Please try again.')
+                  : null
+              }
             />
             <Button type="submit" size="sm" disabled={pending}>
               {pending ? 'Saving…' : 'Save policy'}

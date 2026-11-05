@@ -17,6 +17,7 @@ import {
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { isIP } from 'node:net';
 import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
+import { isMcpPolicyInvalidCode, type McpPolicyInvalidCode } from '@/lib/mcp/policy-invalid';
 import type { Prisma } from '@prisma/client';
 import { DEFAULT_ASSISTANT_SCOPES, effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
 import { runMcpSetupCheck } from '@/lib/mcp/auth/setup-check';
@@ -230,6 +231,7 @@ export async function restoreMcpClient(form: FormData): Promise<McpClientFormRes
 export type UpdateMcpPolicyResult =
   | { ok: true; revision: number }
   | { ok: false; code: 'MCP_POLICY_CONFLICT'; revision: number }
+  | { ok: false; code: 'MCP_POLICY_INVALID'; reason: McpPolicyInvalidCode }
   | McpReauthenticationRequired;
 
 /**
@@ -239,6 +241,18 @@ export type UpdateMcpPolicyResult =
  * editor has its own check and does not move this revision.
  */
 export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
+  // A refused value comes back as a typed result: a thrown error's message does not reach the
+  // browser in production, so the form could only say "try again".
+  try {
+    return await saveMcpPolicy(form);
+  } catch (error) {
+    if (error instanceof McpBoundaryError && isMcpPolicyInvalidCode(error.code))
+      return { ok: false, code: 'MCP_POLICY_INVALID', reason: error.code };
+    throw error;
+  }
+}
+
+async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
   const actor = await admin();
   const input = z
     .object({
@@ -262,6 +276,7 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       patMaxDays: z.coerce.number().int().min(1).max(MCP_PAT_MAX_DAYS).optional(),
       patAllowedScopes: z.string().max(2048).optional(),
       requireReadOnlyConnections: z.boolean().optional(),
+      deviceFlowEnabled: z.boolean().optional(),
     })
     .strict()
     .parse({
@@ -295,6 +310,9 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
         : undefined,
       requireReadOnlyConnections: form.has('patControls')
         ? form.get('requireReadOnlyConnections') === 'on'
+        : undefined,
+      deviceFlowEnabled: form.has('deviceControls')
+        ? form.get('deviceFlowEnabled') === 'on'
         : undefined,
     });
   const cimdAllowedHosts = [
@@ -394,6 +412,7 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       })(),
       requireReadOnlyConnections:
         input.requireReadOnlyConnections ?? existing.requireReadOnlyConnections,
+      deviceFlowEnabled: input.deviceFlowEnabled ?? existing.deviceFlowEnabled,
     };
     // Widening access needs a recent sign-in; it is judged against the locked row and refused
     // before the write, so the revision does not move. Narrowing is always allowed.
@@ -453,6 +472,7 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
       name: z.string().trim().min(1).max(100),
       redirectUri: z.string().url().max(2048),
       scopes: z.string().max(2048),
+      deviceCodeGrant: z.boolean(),
     })
     .strict()
     .safeParse({
@@ -460,6 +480,7 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
       redirectUri: form.get('redirectUri'),
       // Scope checkboxes submit one value each.
       scopes: form.getAll('scopes').map(String).join(' '),
+      deviceCodeGrant: form.get('deviceCodeGrant') === 'on',
     });
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path[0];
@@ -485,7 +506,12 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
   const clientId = await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
     const client = await tx.mcpClient.create({
-      data: { name: input.name, redirectUris: [url.href], scopes },
+      data: {
+        name: input.name,
+        redirectUris: [url.href],
+        scopes,
+        deviceCodeGrant: input.deviceCodeGrant,
+      },
     });
     await logAudit(
       {
@@ -494,6 +520,7 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
         entityType: 'SYSTEM_CONFIG',
         entityId: client.id,
         actorId: actor.id,
+        ...(input.deviceCodeGrant ? { details: { deviceCodeGrant: true } } : {}),
       },
       tx
     );

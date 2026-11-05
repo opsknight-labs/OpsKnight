@@ -31,7 +31,9 @@ describe('design system contract: typography', () => {
     expect(layout).toContain("variable: '--font-space-grotesk'");
     expect(layout).not.toMatch(/Manrope|Playfair|fonts\.googleapis/);
     // Variables must sit on <html> so :root-level font tokens can resolve them.
-    expect(layout).toMatch(/<html[\s\S]*?className=\{`\$\{inter\.variable\} \$\{spaceGrotesk\.variable\}`\}/);
+    expect(layout).toMatch(
+      /<html[\s\S]*?className=\{`\$\{inter\.variable\} \$\{spaceGrotesk\.variable\}`\}/
+    );
   });
 
   it('ships the SIL OFL notice for every bundled typeface', () => {
@@ -49,7 +51,9 @@ describe('design system contract: typography', () => {
   it('defines one font token per role and wires Tailwind to it', () => {
     const variables = read('src/styles/foundation/variables.css');
     expect(variables).toMatch(/--font-family-sans: var\(--font-inter\), 'Inter'/);
-    expect(variables).toMatch(/--font-family-display: var\(--font-space-grotesk\), 'Space Grotesk'/);
+    expect(variables).toMatch(
+      /--font-family-display: var\(--font-space-grotesk\), 'Space Grotesk'/
+    );
 
     const tailwind = read('tailwind.config.ts');
     expect(tailwind).toContain("sans: ['var(--font-family-sans)']");
@@ -68,7 +72,9 @@ describe('design system contract: typography', () => {
         offenders.push(`${file}: arbitrary font class (use font-display / font-sans)`);
       }
       if (/font-family:\s*['"]?(Space Grotesk|Inter)\b/.test(source)) {
-        offenders.push(`${file}: literal font-family (use --font-family-display / --font-family-sans)`);
+        offenders.push(
+          `${file}: literal font-family (use --font-family-display / --font-family-sans)`
+        );
       }
     }
     expect(offenders).toEqual([]);
@@ -98,8 +104,13 @@ describe('design system contract: logo', () => {
       'src/app/login/LoginClient.tsx',
       'src/app/setup/page.tsx',
       'src/components/auth/LoginAnimation.tsx',
+      'src/app/oauth/mcp/consent/ConsentView.tsx',
+      'src/app/oauth/mcp/consent/result/page.tsx',
+      'src/app/oauth/mcp/device/DeviceView.tsx',
     ]) {
       expect(read(file), file).toContain('<AuthBrand');
+      // The lockup is not rebuilt by hand next to the shared component.
+      expect(read(file), file).not.toContain('src="/logo.png"');
     }
   });
 });

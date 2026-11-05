@@ -32,6 +32,7 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 | "Investigate incident #A1B2C: what happened, what changed, anything related?" | `investigate_incident` prompt, `incident_get_context` | `incidents:read`                   |
 | "Acknowledge it and add a note that I'm looking at the database."             | `incident_acknowledge`, `incident_add_note`           | `incidents:write`, changes allowed |
 | "Who is on call for payments, and who's next?"                                | `oncall_lookup`                                       | `schedules:read`                   |
+| "When am I on call over the next two weeks, and who takes over from me?"      | `oncall_my_shifts`                                    | `schedules:read`                   |
 
 ### Incident commander
 
@@ -49,6 +50,7 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 | "Summarize last night's shift for the platform schedule."        | `summarize_shift` prompt                              | `schedules:read`, `incidents:read`   |
 | "Draft the postmortem for yesterday's outage from the timeline." | `prepare_postmortem` prompt, `postmortem_get_context` | `postmortems:read`, `incidents:read` |
 | "How did our response times look this month?"                    | `report_get_summary`                                  | `reports:read`                       |
+| "Who is on the platform team, and what are their roles?"         | `read_operation` (listUsers, getUser)                 | `users:read`, `teams:read`           |
 
 ### Administrator
 
@@ -58,6 +60,8 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 | "Find the operation that changes a service's support hours and describe it."          | `search_capabilities`, `describe_operation`                                                        | none to search; the operation's own scope to run |
 | "Change the support hours on the billing service to 08:00 to 18:00."                  | `operation_prepare`, then your approval                                                            | `services:write`, changes allowed                |
 | "List every integration on the checkout service."                                     | `read_operation`                                                                                   | `integrations:read`                              |
+| "Is the checkout webhook integration failing deliveries?"                             | `read_operation` (getIntegrationDiagnostics)                                                       | `integrations:read`                              |
+| "Who changed the payments escalation policy last week?"                               | `read_operation` (listAuditLogs), sensitive reads on                                               | `audit:read` (Administrators and Auditors)       |
 
 If a request needs a permission the connection was not granted, the assistant gets `MCP_SCOPE_NOT_GRANTED`: reconnect and approve that permission. If your role can never do it, it gets `MCP_OPERATION_FORBIDDEN`, and reconnecting will not help.
 

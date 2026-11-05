@@ -21,8 +21,10 @@ export function acquireRegistrationSlot() {
   };
 }
 
-// Grant types assistants commonly declare. Registration records only the two this server issues;
-// the others are known names that are ignored rather than refused (RFC 7591 section 3.2.1).
+export const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
+// Grant types assistants commonly declare. Registration records authorization code and refresh,
+// and the device code grant (RFC 8628) when declared; the others are known names that are
+// ignored rather than refused (RFC 7591 section 3.2.1).
 const KNOWN_GRANT_TYPES = [
   'authorization_code',
   'refresh_token',
@@ -33,43 +35,57 @@ const KNOWN_GRANT_TYPES = [
 const informationalUrl = z.string().url().max(2048);
 // Informational URLs are accepted for standard client compatibility but never fetched,
 // rendered as trusted links, or persisted. Registration conveys no user authority.
-const registrationMetadataSchema = z.object({
-  client_name: z
-    .string()
-    .trim()
-    .min(1)
-    .max(100)
-    .regex(/^[^\u0000-\u001f\u007f]+$/)
-    .default('MCP assistant'),
-  redirect_uris: z
-    .array(z.string().max(2048).refine(isAllowedRedirect))
-    .min(1)
-    .max(5)
-    .refine(uris => new Set(uris).size === uris.length),
-  token_endpoint_auth_method: z.literal('none').default('none'),
-  grant_types: z
-    .array(z.enum(KNOWN_GRANT_TYPES))
-    .min(1)
-    .max(KNOWN_GRANT_TYPES.length)
-    .refine(types => types.includes('authorization_code') && new Set(types).size === types.length)
-    .default(['authorization_code', 'refresh_token']),
-  response_types: z.array(z.literal('code')).length(1).default(['code']),
-  // Some clients (Gemini CLI) send `scope: ""`; that is no request, so the policy ceiling applies.
-  scope: z.preprocess(
-    value => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-    z.string().trim().min(1).max(2048).optional()
-  ),
-  client_uri: informationalUrl.optional(),
-  logo_uri: informationalUrl.optional(),
-  tos_uri: informationalUrl.optional(),
-  policy_uri: informationalUrl.optional(),
-  contacts: z.array(z.string().email().max(254)).max(5).optional(),
-  software_id: z.string().max(256).optional(),
-  software_version: z.string().max(100).optional(),
-  application_type: z.enum(['web', 'native']).optional(),
-  // Accepted for MCP SDK compatibility; never verified or used, since it confers nothing here.
-  software_statement: z.string().max(4096).optional(),
-});
+const registrationMetadataSchema = z
+  .object({
+    client_name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .regex(/^[^\u0000-\u001f\u007f]+$/)
+      .default('MCP assistant'),
+    // Optional only for a device-only client (RFC 8628), which never receives a redirect.
+    redirect_uris: z
+      .array(z.string().max(2048).refine(isAllowedRedirect))
+      .min(1)
+      .max(5)
+      .refine(uris => new Set(uris).size === uris.length)
+      .optional(),
+    token_endpoint_auth_method: z.literal('none').default('none'),
+    grant_types: z
+      .array(z.enum(KNOWN_GRANT_TYPES))
+      .min(1)
+      .max(KNOWN_GRANT_TYPES.length)
+      .refine(
+        types =>
+          (types.includes('authorization_code') || types.includes(DEVICE_CODE_GRANT_TYPE)) &&
+          new Set(types).size === types.length
+      )
+      .default(['authorization_code', 'refresh_token']),
+    // A device-only client may declare no response types.
+    response_types: z.array(z.literal('code')).max(1).default(['code']),
+    // Some clients (Gemini CLI) send `scope: ""`; that is no request, so the policy ceiling applies.
+    scope: z.preprocess(
+      value => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+      z.string().trim().min(1).max(2048).optional()
+    ),
+    client_uri: informationalUrl.optional(),
+    logo_uri: informationalUrl.optional(),
+    tos_uri: informationalUrl.optional(),
+    policy_uri: informationalUrl.optional(),
+    contacts: z.array(z.string().email().max(254)).max(5).optional(),
+    software_id: z.string().max(256).optional(),
+    software_version: z.string().max(100).optional(),
+    application_type: z.enum(['web', 'native']).optional(),
+    // Accepted for MCP SDK compatibility; never verified or used, since it confers nothing here.
+    software_statement: z.string().max(4096).optional(),
+  })
+  // A browser sign-in needs somewhere to return to.
+  .refine(
+    value =>
+      !value.grant_types.includes('authorization_code') ||
+      (value.redirect_uris !== undefined && value.response_types.length === 1)
+  );
 // Unknown metadata (OIDC fields such as post_logout_redirect_uris, newer SDK fields) is dropped by
 // zod's default strip, never persisted or echoed: RFC 7591 §2 has the server ignore what it does
 // not understand.

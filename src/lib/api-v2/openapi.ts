@@ -261,6 +261,15 @@ function buildBaseSpec(): Record<string, unknown> {
             department: { type: 'string', nullable: true },
             jobTitle: { type: 'string', nullable: true },
             createdAt: { type: 'string', format: 'date-time' },
+            teams: {
+              type: 'array',
+              description: 'Teams the user belongs to (at most 20 on list rows).',
+              items: {
+                type: 'object',
+                properties: { id: { type: 'string' }, name: { type: 'string' } },
+                required: ['id', 'name'],
+              },
+            },
           },
           required: ['id', 'name', 'email', 'role', 'status'],
         },
@@ -1433,6 +1442,34 @@ function buildBaseSpec(): Record<string, unknown> {
           ],
           responses: {
             '200': { description: 'Paginated user directory' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/users/me/on-call-shifts': {
+        get: {
+          tags: ['Users'],
+          summary: 'List the caller’s current and upcoming on-call shifts across all schedules',
+          description:
+            'Self-service read over every schedule the caller can read and takes part in (a rotation layer or an override), computed with the same rotation math as the schedule page. Back-to-back blocks in one schedule are one shift. Bounded to 30 days of look-ahead, 50 shifts and 25 schedules; truncated reports when a bound was reached.',
+          parameters: [
+            {
+              name: 'days',
+              in: 'query',
+              description: 'Look-ahead window in days (1-30).',
+              schema: { type: 'integer', minimum: 1, maximum: 30, default: 14 },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum number of shifts to return (1-50).',
+              schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+            },
+          ],
+          responses: {
+            '200': { description: 'The caller’s on-call shifts' },
+            '400': { $ref: '#/components/responses/ProblemError' },
             '401': { $ref: '#/components/responses/ProblemError' },
             '403': { $ref: '#/components/responses/ProblemError' },
           },

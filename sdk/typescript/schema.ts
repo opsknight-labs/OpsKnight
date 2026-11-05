@@ -6,7 +6,7 @@ export type IncidentNote = { "id": string; "incidentId"?: string; "userId"?: str
 export type IncidentTimelineEvent = { "id": string; "incidentId": string; "type": string; "message": string; "metadata"?: Record<string, unknown>; "createdAt": string } & Record<string, unknown>;
 export type Service = { "id": string; "revision"?: number; "name": string; "description"?: string | null; "status": "OPERATIONAL" | "DEGRADED" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE" | "MAINTENANCE"; "teamId": string; "team"?: { "id"?: string; "name"?: string } & Record<string, unknown>; "escalationPolicyId": string; "escalationPolicy"?: { "id"?: string; "name"?: string } & Record<string, unknown>; "openIncidentsCount"?: number; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
 export type Team = { "id": string; "revision"?: number; "name": string; "description"?: string | null; "memberCount"?: number; "serviceCount"?: number; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
-export type User = { "id": string; "name": string; "email": string; "role": string; "status": string; "timeZone"?: string; "department"?: string | null; "jobTitle"?: string | null; "createdAt"?: string } & Record<string, unknown>;
+export type User = { "id": string; "name": string; "email": string; "role": string; "status": string; "timeZone"?: string; "department"?: string | null; "jobTitle"?: string | null; "createdAt"?: string; "teams"?: Array<{ "id": string; "name": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type Schedule = { "id": string; "revision"?: number; "name": string; "timeZone": string; "description"?: string | null; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
 export type EscalationPolicy = { "id": string; "revision"?: number; "name": string; "description"?: string | null; "stepCount"?: number; "serviceCount"?: number; "steps"?: Array<Record<string, unknown>>; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
 export type Integration = { "id": string; "revision"?: number; "name": string; "type": string; "enabled": boolean; "snsTopicArn"?: string | null; "serviceId": string; "service"?: { "id"?: string; "name"?: string } & Record<string, unknown>; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
@@ -186,6 +186,7 @@ export type ActionResult = { "success": boolean; "message"?: string } & Record<s
 export type IncidentTransition = { "id": string; "title": string; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: string | null; "urgency": "LOW" | "MEDIUM" | "HIGH"; "acknowledgedAt"?: string | null; "resolvedAt"?: string | null; "updatedAt": string } & Record<string, unknown>;
 export type IncidentEscalation = { "requested": boolean; "reason": "INCIDENT_NOT_ESCALATABLE" | null; "outcome": string | null; "escalated": boolean; "paged": { "stepIndex"?: number | null; "targetType"?: string | null; "targetName"?: string | null; "targetCount"?: number | null } & Record<string, unknown> | null; "incident": { "id": string; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "escalation": { "step": number | null; "status": string | null; "nextAt": string | null } & Record<string, unknown> } & Record<string, unknown> } & Record<string, unknown>;
 export type IncidentAssignment = { "id": string; "title"?: string; "status": string; "assigneeId"?: string | null; "teamId"?: string | null; "assignee"?: { "id"?: string; "name"?: string; "email"?: string } & Record<string, unknown> | null; "team"?: { "id"?: string; "name"?: string } & Record<string, unknown> | null; "updatedAt": string } & Record<string, unknown>;
+export type MyOnCallShifts = { "userId": string; "now": string; "windowEnd": string; "onCallNow": boolean; "nextHandoff": { "at": string; "change": "SHIFT_ENDS" | "SHIFT_STARTS"; "scheduleId": string; "scheduleName": string; "handoffTo"?: { "userId": string; "name": string | null } & Record<string, unknown> | null } & Record<string, unknown> | null; "shifts": Array<{ "scheduleId": string; "scheduleName": string; "scheduleTimeZone": string; "start": string; "end": string; "current": boolean; "startClamped": boolean; "endClamped": boolean; "handoffTo": { "userId": string; "name": string | null } & Record<string, unknown> | null } & Record<string, unknown>>; "truncated": boolean; "schedulesEvaluated": number } & Record<string, unknown>;
 export type ScheduleOnCall = { "schedule": { "id"?: string; "name"?: string; "timeZone"?: string } & Record<string, unknown>; "at": string; "onCallUsers": Array<{ "id"?: string; "name"?: string; "email"?: string; "role"?: string; "timeZone"?: string | null; "shiftEndsAt"?: string | null } & Record<string, unknown>>; "next": { "userId": string; "name": string | null; "start": string } & Record<string, unknown> | null } & Record<string, unknown>;
 export type ScheduleOverride = { "id": string; "scheduleId": string; "userId": string; "replacesUserId"?: string | null; "startDate": string; "endDate": string; "createdAt"?: string } & Record<string, unknown>;
 export type ScheduleOverrideCancellation = { "id": string; "cancelled": true } & Record<string, unknown>;
@@ -519,6 +520,7 @@ export interface OperationRequests {
   listTeams: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string } };
   createTeam: { "headers"?: { "Idempotency-Key"?: string }; "body": { "name": string; "description"?: string | null } & Record<string, unknown> };
   getUser: { "params": { "id": string } };
+  listMyOnCallShifts: { "query"?: { "days"?: number; "limit"?: number } };
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
@@ -842,6 +844,7 @@ export interface OperationResponses {
   listTeams: { "data": Array<Team>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createTeam: { "data": Team; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getUser: { "data": User; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listMyOnCallShifts: { "data": MyOnCallShifts; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
@@ -3714,6 +3717,14 @@ export const OPERATIONS = {
   "getUser": {
     "method": "GET",
     "path": "/users/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listMyOnCallShifts": {
+    "method": "GET",
+    "path": "/users/me/on-call-shifts",
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],

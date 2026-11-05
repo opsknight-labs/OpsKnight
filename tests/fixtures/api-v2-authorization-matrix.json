@@ -1919,6 +1919,12 @@
     "AUDITOR": "allow:global",
     "USER": "allow:global"
   },
+  "GET /users/me/on-call-shifts [schedules:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /users [users:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

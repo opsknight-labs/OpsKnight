@@ -261,6 +261,18 @@
     "descriptionSha256": "ca3ae3c4e736206a525416d8e2fd816eca8b71de0884d2e264916aff669fc3b7"
   },
   {
+    "name": "oncall_my_shifts",
+    "title": "List my on-call shifts",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "a3a56a865cf618635c3c29d988e2708f6776200129da34124c95af5b9c3b8ae7",
+    "descriptionSha256": "b572891eb41edba9c32804af07f2d489deb2995cde943ae679ee77c504b91b46"
+  },
+  {
     "name": "operation_commit_approved",
     "title": "Apply an approved change",
     "annotations": {
@@ -435,7 +447,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "b3918e7c625a17d70f3012a7e1e1abc2294844cf677b0e234c72c822ab140f59",
+    "inputSchemaSha256": "7107d3b491e8982aaa63b3398ac6b43e2e4e20531c382142978a33f601d8c11f",
     "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
   },
   {

@@ -232,6 +232,21 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     'getScheduleOnCall',
     async () => (await import('@/app/api/v2/schedules/[id]/on-call/route')).GET,
   ],
+  // The caller's own shifts across every readable schedule (curated as oncall_my_shifts).
+  [
+    'listMyOnCallShifts',
+    async () => (await import('@/app/api/v2/users/me/on-call-shifts/route')).GET,
+  ],
+  // Read-only directory; execution keeps only id, name, role, status and teams (projection.ts).
+  ['listUsers', async () => (await import('@/app/api/v2/users/route')).GET],
+  ['getUser', async () => (await import('@/app/api/v2/users/[id]/route')).GET],
+  // Integration health: enabled state and delivery outcomes only, never configuration.
+  [
+    'getIntegrationDiagnostics',
+    async () => (await import('@/app/api/v2/integrations/[id]/diagnostics/route')).GET,
+  ],
+  // Sensitive read (administrator opt-in); IP and actor email are dropped by the field allowlist.
+  ['listAuditLogs', async () => (await import('@/app/api/v2/audit-logs/route')).GET],
   [
     'listScheduleOverrides',
     async () => (await import('@/app/api/v2/schedules/[id]/overrides/route')).GET,

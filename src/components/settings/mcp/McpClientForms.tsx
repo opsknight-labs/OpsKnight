@@ -58,6 +58,7 @@ export function McpRegisterClientForm({
   // Controlled, so a refused submission keeps what was typed (React resets uncontrolled fields).
   const [name, setName] = useState('');
   const [redirectUri, setRedirectUri] = useState('');
+  const [deviceCodeGrant, setDeviceCodeGrant] = useState(false);
   const [state, submit] = useActionState(
     async (_previous: McpClientFormResult | null, form: FormData) => {
       const result = await action(form);
@@ -147,6 +148,22 @@ export function McpRegisterClientForm({
           </p>
         )}
       </div>
+      <label className="flex cursor-pointer items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="deviceCodeGrant"
+          checked={deviceCodeGrant}
+          onChange={event => setDeviceCodeGrant(event.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+        />
+        <span>
+          <span className="font-medium">Allow device sign-in with a code</span>
+          <span className="block text-xs text-muted-foreground">
+            For command-line tools and servers without a browser. Works only while Device sign-in is
+            on in the access policy.
+          </span>
+        </span>
+      </label>
       <div className="flex justify-end">
         <SubmitButton pendingLabel="Registering…">Register client</SubmitButton>
       </div>

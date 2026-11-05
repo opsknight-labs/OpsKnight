@@ -5,6 +5,7 @@ import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import { assertMcpHost, mcpHttpError } from '@/lib/mcp/auth/http';
 import { admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import {
+  DEVICE_CODE_GRANT_TYPE,
   acquireRegistrationSlot,
   MAX_DYNAMIC_CLIENTS,
   registrationSchema,
@@ -42,7 +43,7 @@ async function handlePost(request: Request, browserOrigin: string | null) {
     const raw = await readBoundedMcpText(request, 8192);
     rejectDuplicateJsonKeys(raw);
     const input = registrationSchema.parse(JSON.parse(raw));
-    const client = await prisma.$transaction(
+    const { client, deviceFlowEnabled } = await prisma.$transaction(
       async tx => {
         // Serialize the capacity check with creation, and pin current enablement/scope policy.
         await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR UPDATE`;
@@ -57,6 +58,11 @@ async function handlePost(request: Request, browserOrigin: string | null) {
         const narrowed = asked.filter(scope => allowed.includes(scope));
         const scopes = narrowed.length ? narrowed : allowed;
         requireMcp(scopes.length, 'invalid_client_metadata');
+        // A client that can only use the device flow is useless while it is off.
+        requireMcp(
+          input.grant_types.includes('authorization_code') || current.deviceFlowEnabled,
+          'invalid_client_metadata'
+        );
         if (
           (await tx.mcpClient.count({ where: { dynamicRegistration: true, revokedAt: null } })) >=
           MAX_DYNAMIC_CLIENTS
@@ -69,21 +75,28 @@ async function handlePost(request: Request, browserOrigin: string | null) {
               AND NOT EXISTS (SELECT 1 FROM "McpGrant" g WHERE g."clientId" = c.id)
               AND NOT EXISTS (SELECT 1 FROM "McpConsentRequest" r
                 WHERE r."clientId" = c.id AND r."consumedAt" IS NULL AND r."expiresAt" > now())
+              AND NOT EXISTS (SELECT 1 FROM "McpDeviceAuthorization" d
+                WHERE d."clientId" = c.id AND d.status IN ('PENDING', 'APPROVED')
+                  AND d."expiresAt" > now())
             ORDER BY c."createdAt" ASC LIMIT 1 FOR UPDATE SKIP LOCKED`;
           requireMcp(stale, 'MCP_REGISTRATION_CAPACITY', 503);
           await tx.mcpClient.delete({ where: { id: stale.id } });
         }
-        return tx.mcpClient.create({
+        const created = await tx.mcpClient.create({
           data: {
             name: input.client_name,
-            redirectUris: input.redirect_uris,
+            redirectUris: input.redirect_uris ?? [],
             scopes,
             dynamicRegistration: true,
+            // Recorded as declared; the policy switch decides at sign-in whether it is usable.
+            deviceCodeGrant: input.grant_types.includes(DEVICE_CODE_GRANT_TYPE),
           },
         });
+        return { client: created, deviceFlowEnabled: current.deviceFlowEnabled };
       },
       { timeout: 5000 }
     );
+    const browser = input.grant_types.includes('authorization_code');
     return Response.json(
       {
         client_id: client.id,
@@ -91,8 +104,14 @@ async function handlePost(request: Request, browserOrigin: string | null) {
         client_name: client.name,
         redirect_uris: client.redirectUris,
         token_endpoint_auth_method: 'none',
-        grant_types: ['authorization_code', 'refresh_token'],
-        response_types: ['code'],
+        // What this client can use now: a browser sign-in when it has somewhere to return to,
+        // and the device flow while it is declared and turned on.
+        grant_types: [
+          ...(browser ? ['authorization_code'] : []),
+          'refresh_token',
+          ...(client.deviceCodeGrant && deviceFlowEnabled ? [DEVICE_CODE_GRANT_TYPE] : []),
+        ],
+        response_types: browser ? ['code'] : [],
         scope: client.scopes.join(' '),
       },
       { status: 201, headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' } }

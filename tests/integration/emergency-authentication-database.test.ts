@@ -835,7 +835,7 @@ suite('independent emergency authentication with signed WebAuthn responses and P
         templateKey: 'authentication-security-alert',
         sourceId: event.id,
         payload: expect.objectContaining({
-          html: expect.stringContaining('dm-info-card'),
+          html: expect.stringContaining('dm-info-label'),
           text: expect.stringContaining(`Event reference: ${event.id}`),
         }),
       }),

@@ -54,6 +54,7 @@ describe('challengeScopes', () => {
     cimdScopes: ['services:read'],
     cimdAllowedHosts: [],
     allowedBrowserOrigins: [],
+    deviceFlowEnabled: false,
   };
   it('prefers the registration ceiling, then the metadata-document one, never admin:manage', () => {
     expect(challengeScopes(policy)).toEqual(['incidents:read']);

@@ -1,5 +1,5 @@
-import Image from 'next/image';
-import { AlertTriangle, BadgeCheck, Info } from 'lucide-react';
+import AuthBrand from '@/components/auth/AuthBrand';
+import { AlertTriangle, BadgeCheck, Info, ShieldAlert } from 'lucide-react';
 import type { McpConsentGroup } from '@/lib/mcp/auth/consent-offer';
 import type { McpConsentIdentity } from '@/lib/mcp/auth/consent-identity';
 import ConsentForm from './ConsentForm';
@@ -18,8 +18,8 @@ type Props = {
   roleLabel: string;
   groups: McpConsentGroup[];
   hasUnavailable: boolean;
-  /** Where the browser returns after a decision. */
-  returnHost: string;
+  /** Where the browser returns after a decision; null for a device sign-in, which has none. */
+  returnHost: string | null;
   /** How OpsKnight knows who this assistant is. */
   identity: McpConsentIdentity;
   /**
@@ -36,7 +36,16 @@ type Props = {
   previousConnection: { createdAt: Date; inUse: boolean } | null;
   /** The signed-in person's time zone, for every time shown here. */
   timeZone: string;
+  /**
+   * A device sign-in (RFC 8628): the tokens go to another device, not this browser, so the
+   * person is warned to continue only for a sign-in they started on a device they control.
+   */
+  device?: boolean;
 };
+
+/** The phishing warning of a device sign-in (RFC 8628 §5.4). */
+export const MCP_DEVICE_CONSENT_WARNING =
+  'Only continue if you started this sign-in yourself on a device you control.';
 
 /** The focused consent dialog. Pure presentation: the page loads and authorizes the data. */
 export default function ConsentView({
@@ -53,6 +62,7 @@ export default function ConsentView({
   writesEnabled,
   previousConnection,
   timeZone,
+  device = false,
 }: Props) {
   const hasChanges = groups.some(group => group.change.length > 0);
   // Shown in the person's own time zone, named, so an unfamiliar time is not misread.
@@ -72,26 +82,7 @@ export default function ConsentView({
             : 'w-full max-w-xl space-y-6 min-[1440px]:max-w-2xl'
         }
       >
-        <a
-          href="https://opsknight.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="OpsKnight official website"
-          className="inline-flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:focus-visible:ring-white"
-        >
-          <Image
-            src="/logo.png"
-            alt=""
-            width={32}
-            height={32}
-            className="h-8 w-8 object-contain min-[1440px]:h-9 min-[1440px]:w-9"
-            priority
-            unoptimized
-          />
-          <span className="font-display text-lg font-bold tracking-tight">
-            OpsKnight
-          </span>
-        </a>
+        <AuthBrand />
         <section
           aria-labelledby="mcp-consent-title"
           className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7 min-[1440px]:p-9 dark:border-slate-800 dark:bg-slate-900"
@@ -116,12 +107,16 @@ export default function ConsentView({
               data-testid="mcp-consent-identity"
               className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300"
             >
-              <span>
-                Returns to{' '}
-                <code className="rounded bg-slate-100 px-1 py-px font-mono text-[12px] [overflow-wrap:anywhere] text-slate-900 dark:bg-slate-800 dark:text-slate-100">
-                  {returnHost}
-                </code>
-              </span>
+              {returnHost !== null ? (
+                <span>
+                  Returns to{' '}
+                  <code className="rounded bg-slate-100 px-1 py-px font-mono text-[12px] [overflow-wrap:anywhere] text-slate-900 dark:bg-slate-800 dark:text-slate-100">
+                    {returnHost}
+                  </code>
+                </span>
+              ) : (
+                <span>Signs in another device</span>
+              )}
               {identity.kind === 'metadata' && identity.trusted ? (
                 // Only a host an administrator trusts earns the verified look.
                 <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300">
@@ -153,6 +148,20 @@ export default function ConsentView({
               here, within what your role already permits.
             </p>
           </div>
+          {device && (
+            <div
+              role="note"
+              data-testid="mcp-device-warning"
+              className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                <strong className="font-semibold">{MCP_DEVICE_CONSENT_WARNING}</strong> Someone who
+                sent you this code or link could otherwise get access as you. If you did not start
+                it, choose Cancel.
+              </span>
+            </div>
+          )}
           {redirectWarning && (
             <div
               role="note"

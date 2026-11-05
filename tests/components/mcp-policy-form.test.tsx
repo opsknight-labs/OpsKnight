@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import McpPolicyForm from '@/components/settings/mcp/McpPolicyForm';
+import McpPolicyForm, { type McpPolicySaveResult } from '@/components/settings/mcp/McpPolicyForm';
 import { notify } from '@/lib/toast';
 
 vi.mock('@/lib/toast', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
@@ -88,4 +88,25 @@ it('asks for a fresh sign-in, not a reload, when a widening save is refused', as
   expect(signOut).toHaveBeenCalledWith({
     callbackUrl: `/login?callbackUrl=${encodeURIComponent('/settings/integrations/mcp')}`,
   });
+});
+
+it('says what to change when the server refuses a value', async () => {
+  const action = vi.fn<(form: FormData) => Promise<McpPolicySaveResult>>().mockResolvedValueOnce({
+    ok: false,
+    code: 'MCP_POLICY_INVALID',
+    reason: 'MCP_DCR_REQUIRES_SCOPES',
+  });
+  render(
+    <McpPolicyForm action={action}>
+      <input aria-label="Scopes" name="dcrScopes" defaultValue="" />
+    </McpPolicyForm>
+  );
+  fireEvent.submit(screen.getByRole('button', { name: 'Save policy' }).closest('form')!);
+  const reason = /Automatic connections need at least one permission/;
+  expect(await screen.findByText(reason)).toBeVisible();
+  expect(screen.queryByText(/Please try again/)).not.toBeInTheDocument();
+  expect(notify.error).toHaveBeenCalledWith(expect.stringMatching(reason), {
+    id: 'settings:mcp:save',
+  });
+  expect(notify.success).not.toHaveBeenCalled();
 });
