@@ -51,7 +51,7 @@ Operation columns count catalog operations that need the permission: plain reads
 
 | Permission | Consent label | Area | Kind | Admin | Responder | Auditor | User | Reads | Sensitive reads | Routine changes | Reviewed changes |
 | --- | --- | --- | --- | :-: | :-: | :-: | :-: | --: | --: | --: | --: |
-| `audit:read` | View the audit log | Reports and audit | View | ✓ |  | ✓ |  | 0 | 1 | 0 | 0 |
+| `audit:read` | View the audit log | Reports and audit | View | ✓ |  | ✓ |  | 0 | 2 | 0 | 0 |
 | `automation-settings:read` | View automation settings | Automation | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
 | `automation-settings:write` | Change automation settings (higher-risk changes wait for approval) | Automation | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `automation:publish` | Publish automation | Automation | Change | ✓ |  |  |  | 0 | 0 | 0 | 4 |
@@ -65,7 +65,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 21 | 12 | 2 | 16 |
 | `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 11 | 10 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
-| `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 0 | 3 | 0 | 1 |
+| `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
 | `integrations:test` | Send test messages through integrations | Services | Change | ✓ |  |  |  | 0 | 2 | 0 | 0 |
 | `integrations:write` | Change integrations (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `notifications:read` | View notifications | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 2 | 4 | 0 | 0 |
@@ -86,7 +86,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `runbooks:publish` | Publish runbooks | Runbooks | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `runbooks:read` | View runbooks | Runbooks | View | ✓ | ✓ | ✓ |  | 6 | 3 | 0 | 3 |
 | `runbooks:write` | Change runbooks (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  | 3 | 3 | 0 | 7 |
-| `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ | 11 | 0 | 0 | 4 |
+| `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ | 12 | 0 | 0 | 4 |
 | `schedules:write` | Change on-call schedules (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  | 1 | 2 | 0 | 12 |
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 7 | 0 | 0 |
@@ -98,7 +98,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  | 0 | 0 | 0 | 10 |
 | `teams:read` | View teams | Teams and people | View | ✓ | ✓ | ✓ | ✓ | 6 | 1 | 0 | 2 |
 | `teams:write` | Change teams (higher-risk changes wait for approval) | Teams and people | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 0 | 7 |
-| `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  | 1 | 0 | 0 | 0 |
+| `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  | 3 | 0 | 0 | 0 |
 
 ## Who approves reviewed changes
 
@@ -113,12 +113,12 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | Area | Operations | Direct | With approval | Not available |
 | --- | --: | --: | --: | --: |
 | audit-exports | 3 | 0 | 0 | 3 |
-| audit-logs | 1 | 0 | 0 | 1 |
+| audit-logs | 1 | 1 | 0 | 0 |
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | escalation-policies | 8 | 5 | 3 | 0 |
 | incidents | 40 | 30 | 10 | 0 |
-| integrations | 11 | 5 | 2 | 4 |
+| integrations | 11 | 6 | 2 | 3 |
 | notification-providers | 6 | 0 | 0 | 6 |
 | notifications | 4 | 3 | 1 | 0 |
 | operational-events | 1 | 1 | 0 | 0 |
@@ -132,8 +132,8 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | settings | 8 | 3 | 4 | 1 |
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
-| users | 11 | 0 | 0 | 11 |
-| **All** | 321 | 139 | 106 | 76 |
+| users | 12 | 3 | 0 | 9 |
+| **All** | 322 | 144 | 106 | 72 |
 
 <details>
 <summary>Operations by area</summary>
@@ -150,7 +150,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Operation | How an assistant reaches it |
 | --- | --- |
-| `listAuditLogs` | not available: review private read projection |
+| `listAuditLogs` | `read_operation` (sensitive reads on) |
 
 ### custom-fields
 
@@ -242,7 +242,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `deleteIntegration` | `operation_prepare`, then approval |
 | `getIntegration` | not available: review read projection |
 | `getIntegrationCredentialState` | not available: review private read projection |
-| `getIntegrationDiagnostics` | not available: review read projection |
+| `getIntegrationDiagnostics` | `read_operation` |
 | `getIntegrationUsage` | `read_operation` (sensitive reads on) |
 | `listIntegrationTypes` | `read_operation` (sensitive reads on) |
 | `listIntegrations` | `read_operation` (sensitive reads on) |
@@ -555,12 +555,13 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `administerUser` | not available: needs reauth impact preview and postcondition |
 | `createUserInvitation` | not available: needs reauth impact preview and postcondition |
 | `getMyNotificationPreferences` | not available: review private read projection |
-| `getUser` | not available: review private read projection |
+| `getUser` | `read_operation` |
 | `getUserAdministration` | not available: review private read projection |
 | `getUserDependencies` | not available: review private read projection |
 | `getUserInvitation` | not available: review private read projection |
 | `getUserInvitationPolicy` | not available: review private read projection |
-| `listUsers` | not available: review private read projection |
+| `listMyOnCallShifts` | `oncall_my_shifts` |
+| `listUsers` | `read_operation` |
 | `renewUserInvitation` | not available: needs reauth impact preview and postcondition |
 | `updateMyNotificationPreferences` | not available: needs reauth impact preview and postcondition |
 
