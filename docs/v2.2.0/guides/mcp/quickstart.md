@@ -71,4 +71,4 @@ Existing installations keep automatic registration off after the additive migrat
 
 Upgrading from the earlier `MCP_TOKEN_HASH_SECRET` implementation changes the credential key: existing tokens and codes stop validating and users reconnect. Administrators can revoke the old connections with **Revoke all active connections** under **Credential security** on the Connections tab.
 
-Client compatibility is tracked in the [setup guide](self-hosted-setup.md#client-compatibility): only Claude Code is verified end to end. External issuers, machine grants, stdio and MCP Apps are not implemented. Do not substitute REST tokens or disable resource validation to work around a client problem.
+Client compatibility is tracked in the [setup guide](self-hosted-setup.md#client-compatibility): only Claude Code is verified end to end. Agents without a browser use an OAuth refresh loop or a personal access token; see [API-hosted and headless agents](api-agents.md). External issuers, client-credentials machine grants, stdio and MCP Apps are not implemented. Do not substitute REST tokens or disable resource validation to work around a client problem.

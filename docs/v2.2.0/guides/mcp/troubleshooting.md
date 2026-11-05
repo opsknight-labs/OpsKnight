@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 93 MCP codes and 12 log events found in the source.
+This page lists 96 MCP codes and 12 log events found in the source.
 
 ## Connecting and signing in
 
@@ -104,11 +104,11 @@ This page lists 93 MCP codes and 12 log events found in the source.
 | `MCP_APPROVAL_UNAVAILABLE` | No such approval for this connection and person (another grant or user cannot see it). | Use the approval ID returned by the prepare call, from the same connection. |
 | `MCP_REVIEWER_CHANGED` | The reviewer's account or session changed while reviewing. | Reload the review page and decide again. |
 | `MCP_AUTHORITY_CHANGED` | The requester's connection or permissions changed after the request was made. | The requester reconnects if needed and prepares the change again. |
+| `MCP_REAUTHENTICATION_REQUIRED` | Approving a destructive change, or creating a personal access token, needs a sign-in within the last two hours. | Choose Confirm it's you on the page, sign in again and retry. |
 | `MCP_APPROVAL_BACKLOG` | This connection already has 20 configuration changes waiting or approved but unused. | Review, reject or let the pending requests expire, then prepare again. |
 | `MCP_APPROVAL_REJECTED` | A reviewer rejected the request. The status tools return their reason, labelled untrusted. | Read the reason with operation_get_approval or runbook_get_approval; prepare a new request with a new idempotencyKey if appropriate. |
 | `MCP_APPROVAL_REQUIRED` | The assistant tried to apply a request that is still waiting for review. | Share the reviewUrl and poll the get_approval tool until it reports APPROVED. |
 | `MCP_APPROVAL_PLAN_CHANGED` | The reviewed request no longer matches: its digest differs, or for a destructive change the target changed after review. | Prepare the change again so a reviewer sees the current state. |
-| `MCP_REAUTHENTICATION_REQUIRED` | Approving a destructive change needs a sign-in within the last two hours. | Choose Confirm it's you on the review page, sign in again and approve. |
 | `MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED` | An administrator approving their own request did not tick the self-approval confirmation. | Tick the confirmation on the review page and approve again. |
 
 ## Settings pages
@@ -125,8 +125,11 @@ This page lists 93 MCP codes and 12 log events found in the source.
 | `MCP_INVALID_NAME` | A manually registered assistant needs a name. | Enter a name. |
 | `MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS or loopback HTTP. | Enter the exact callback the assistant uses. |
 | `MCP_CONFIRMATION_REQUIRED` | "Revoke all active connections" was submitted without ticking the confirmation box. | Tick the box in the dialog, then confirm. |
+| `MCP_PAT_INVALID_EXPIRY` | The chosen expiry is outside 1 day to the policy maximum (at most 90 days). | Choose one of the offered expiry options. |
 | `MCP_LOGIN_REQUIRED` | The settings or review page needs a signed-in user. | Sign in. |
 | `MCP_INVALID_CAPABILITY` | Exposed capabilities was saved with a name that is not a tool, operation or domain. | Reload the tab and choose from the list. |
+| `MCP_PAT_DISABLED` | A personal access token was requested while personal access tokens are off in the access policy. Turning them off revokes every token; a revoked token gets MCP_INVALID_GRANT. | Ask an administrator to allow personal access tokens, then create a new token. |
+| `MCP_PAT_LIMIT_REACHED` | The person already holds 20 active personal access tokens. | Revoke a token that is no longer used under Connections, then create the new one. |
 
 ## Server configuration and start-up
 

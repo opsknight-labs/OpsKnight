@@ -18,6 +18,7 @@ verification:
 OpsKnight includes a Model Context Protocol (MCP) server. Each person connects their own assistant, signs in with their OpsKnight account and approves what it may do. Assistants act with that person's current permissions, never more. Changes are off until an administrator allows them, and configuration changes and runbook runs wait for human review.
 
 - [Self-hosted setup](self-hosted-setup.md): turn it on, connect assistants, manage connections, exposed capabilities, reviewed changes and client compatibility.
+- [API-hosted and headless agents](api-agents.md): Anthropic and OpenAI API agents with an OAuth refresh loop, and personal access tokens for CI, n8n and other fixed-header clients.
 - [Troubleshooting](troubleshooting.md): every error code and server log event, with fixes. Generated from the code.
 - [Developer quickstart](quickstart.md): local checks, manual OAuth and protocol calls, and the reviewed workflows.
 

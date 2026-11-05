@@ -436,10 +436,27 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
       'Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person.',
     fix: 'Wait a minute and retry.',
   },
+  MCP_PAT_DISABLED: {
+    area: 'settings',
+    meaning:
+      'A personal access token was requested while personal access tokens are off in the access policy. Turning them off revokes every token; a revoked token gets MCP_INVALID_GRANT.',
+    fix: 'Ask an administrator to allow personal access tokens, then create a new token.',
+  },
+  MCP_PAT_INVALID_EXPIRY: {
+    area: 'settings',
+    meaning: 'The chosen expiry is outside 1 day to the policy maximum (at most 90 days).',
+    fix: 'Choose one of the offered expiry options.',
+  },
+  MCP_PAT_LIMIT_REACHED: {
+    area: 'settings',
+    meaning: 'The person already holds 20 active personal access tokens.',
+    fix: 'Revoke a token that is no longer used under Connections, then create the new one.',
+  },
   MCP_REAUTHENTICATION_REQUIRED: {
     area: 'approvals',
-    meaning: 'Approving a destructive change needs a sign-in within the last two hours.',
-    fix: "Choose Confirm it's you on the review page, sign in again and approve.",
+    meaning:
+      'Approving a destructive change, or creating a personal access token, needs a sign-in within the last two hours.',
+    fix: "Choose Confirm it's you on the page, sign in again and retry.",
   },
   MCP_REGISTRATION_CAPACITY: {
     area: 'sign-in',
@@ -536,6 +553,7 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
 export const MCP_NON_ERROR_CODES: Record<string, string> = {
   MCP_APPROVAL: 'notification entity type',
   MCP_EQUIVALENT: 'parity report disposition',
+  MCP_PERSONAL_TOKEN: 'notification entity type',
   MCP_PUBLIC_ORIGIN: 'optional environment override',
 };
 
