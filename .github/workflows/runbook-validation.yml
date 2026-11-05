@@ -141,7 +141,7 @@ jobs:
       - name: Apply all migrations
         run: npx prisma migrate deploy
       - name: Typecheck
-        run: npx tsc --noEmit --incremental false
+        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit --incremental false
       - name: Agent runtime and authorization regressions
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1

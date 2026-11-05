@@ -53,7 +53,7 @@ jobs:
           fi
 
       - name: TypeScript typecheck
-        run: npx tsc --noEmit
+        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit
 
       - name: Verify generated REST clients and OpenAPI
         run: npm run api:clients:check

@@ -91,7 +91,7 @@ jobs:
           }
           JS
       - run: npx prisma generate && npx prisma migrate deploy
-      - run: npx tsc --noEmit
+      - run: NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit
       - run: npm run test:mcp
       - name: Generated MCP docs, frontmatter and links
         run: npm run --silent mcp:docs:check
