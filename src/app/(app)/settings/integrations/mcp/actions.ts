@@ -1,6 +1,6 @@
 'use server';
 
-import { redirectUriAllowed } from '@/lib/mcp/auth/redirect-uri';
+import { isAllowedRedirect, redirectUriAllowed } from '@/lib/mcp/auth/redirect-uri';
 import { logAudit } from '@/lib/audit';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import { z } from 'zod/v3';
@@ -318,15 +318,8 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
   }
   const input = parsed.data;
   const url = new URL(input.redirectUri);
-  if (
-    url.username ||
-    url.password ||
-    url.hash ||
-    !(
-      url.protocol === 'https:' ||
-      (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
-    )
-  )
+  // The stored form is the parsed href, so an admin may type a non-canonical web address.
+  if (!isAllowedRedirect(url.href))
     return { ok: false, code: 'MCP_INVALID_REDIRECT', field: 'redirectUri' };
   let scopes: string[];
   try {

@@ -92,6 +92,8 @@ An administrator revoking your connection or its assistant, or policy no longer 
 
 Desktop loopback callback addresses belong to the user's computer. The assistant chooses its callback and port; do not open a callback port on the OpsKnight server.
 
+Callback addresses must be HTTPS, http on a loopback host (any port), or a native app's own scheme (RFC 8252): a reverse-DNS scheme such as `com.example.app:/callback`, or one of `cursor`, `vscode`, `vscode-insiders` and `windsurf`. App-scheme and HTTPS callbacks match exactly. For a manually registered Cursor client, the IDE uses `cursor://anysphere.cursor-mcp/oauth/callback`, the CLI `http://localhost:8787/callback` and Cloud Agents `https://www.cursor.com/agents/mcp/oauth/callback`. Assistants may send registration metadata this server does not use (for example OIDC logout addresses); it is ignored and never stored. Client secrets and key material are refused.
+
 ## Manage connections
 
 - **Your connections** (everyone): each assistant you connected, its usable permissions, when it last made a call and with which tool, when it expires, and **Revoke**.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { redirectUriAllowed, urlForLog } from '@/lib/mcp/auth/redirect-uri';
+import { isAllowedRedirect, redirectUriAllowed, urlForLog } from '@/lib/mcp/auth/redirect-uri';
 
 const CLAUDE_CODE = ['http://localhost/callback', 'http://127.0.0.1/callback'];
 
@@ -31,6 +31,56 @@ describe('redirectUriAllowed', () => {
       false
     );
     expect(redirectUriAllowed(registered, 'https://claude.com/api/mcp/auth_callback')).toBe(false);
+  });
+});
+
+describe('isAllowedRedirect', () => {
+  it.each([
+    'https://claude.ai/api/mcp/auth_callback',
+    'http://127.0.0.1:33418',
+    'http://localhost:8787/callback',
+    'cursor://anysphere.cursor-mcp/oauth/callback',
+    'vscode://vscode.github-authentication/did-authenticate',
+    'vscode-insiders://ms-vscode.mcp/callback',
+    'windsurf://codeium.windsurf/oauth',
+    'com.example.app:/oauth2redirect',
+  ])('accepts %s', value => {
+    expect(isAllowedRedirect(value)).toBe(true);
+  });
+
+  it.each([
+    ['plain http off loopback', 'http://evil.example/callback'],
+    ['credentials', 'https://u:p@claude.ai/cb'],
+    ['a fragment', 'https://claude.ai/cb#x'],
+    ['script', 'javascript:alert(1)'],
+    ['inline data', 'data:text/html,hi'],
+    ['a local file', 'file:///etc/passwd'],
+    ['a blob', 'blob:https://x.example/1'],
+    ['a socket', 'wss://x.example/cb'],
+    ['an unknown dotless scheme', 'myapp://callback'],
+    ['credentials on an app scheme', 'cursor://u:p@x/#f'],
+    ['a fragment on an app scheme', 'cursor://anysphere.cursor-mcp/cb#x'],
+    ['a non-canonical app scheme', 'Cursor://anysphere.cursor-mcp/cb'],
+    ['an empty app callback', 'cursor:'],
+    ['a non-canonical web address', 'https://Claude.ai/cb'],
+  ])('refuses %s', (_name, value) => {
+    expect(isAllowedRedirect(value)).toBe(false);
+  });
+
+  it('keeps metadata-document web redirects as written but app schemes exact', () => {
+    expect(isAllowedRedirect('https://Claude.ai/cb', { canonicalWeb: false })).toBe(true);
+    expect(isAllowedRedirect('Cursor://anysphere.cursor-mcp/cb', { canonicalWeb: false })).toBe(
+      false
+    );
+  });
+
+  it('matches an app-scheme callback exactly, with no port or path flexibility', () => {
+    const registered = ['cursor://anysphere.cursor-mcp/oauth/callback'];
+    expect(redirectUriAllowed(registered, registered[0])).toBe(true);
+    expect(redirectUriAllowed(registered, 'cursor://anysphere.cursor-mcp/oauth/other')).toBe(false);
+    expect(redirectUriAllowed(registered, 'cursor://anysphere.cursor-mcp:9/oauth/callback')).toBe(
+      false
+    );
   });
 });
 
