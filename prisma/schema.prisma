@@ -4873,6 +4873,9 @@ model McpPolicy {
   patAllowedScopes String[] @default([])
   // Caps every connection, OAuth and personal, to read scopes.
   requireReadOnlyConnections Boolean @default(false)
+  // OAuth device authorization grant (RFC 8628) for CLIs, SSH sessions and headless servers. Off
+  // by default; only clients registered for the device_code grant may use it.
+  deviceFlowEnabled Boolean @default(false)
   // Optimistic concurrency for policy saves.
   policyRevision Int @default(0)
   updatedAt DateTime @updatedAt
@@ -4888,9 +4891,13 @@ model McpClient {
   metadataUrl String?
   metadataFetchedAt DateTime?
   dynamicRegistration Boolean @default(false)
+  // Registered for the device authorization grant (RFC 8628): declared in dynamic registration
+  // or ticked by the administrator who registered it. Metadata-document clients never are.
+  deviceCodeGrant Boolean @default(false)
   firstAuthorizedAt DateTime?
   createdAt DateTime @default(now())
   grants McpGrant[]
+  deviceAuthorizations McpDeviceAuthorization[]
   @@index([dynamicRegistration, createdAt])
 }
 
@@ -5027,6 +5034,36 @@ model McpTask {
   expiresAt DateTime
   @@index([grantId, createdAt])
   @@index([expiresAt])
+}
+
+// One device sign-in (RFC 8628). Only digests of the device code and the user code are stored.
+// PENDING -> APPROVED (grant created, waiting for the device to poll) -> CONSUMED (tokens issued
+// once), or PENDING -> DENIED, or EXPIRED. The person who entered the code claims it (userId).
+model McpDeviceAuthorization {
+  id String @id @default(cuid())
+  clientId String
+  deviceCodeHash String @unique
+  userCodeHash String @unique
+  // Within the client ceiling when requested; `requestedScopes` is what the client named.
+  scopes String[]
+  requestedScopes String[] @default([])
+  resource String
+  status String @default("PENDING")
+  userId String?
+  grantId String?
+  approvedScopes String[] @default([])
+  // Polling interval in seconds; raised by 5 on every too-fast poll (slow_down).
+  interval Int @default(5)
+  lastPolledAt DateTime?
+  // Times the user code was entered and confirmed on the verification page.
+  attempts Int @default(0)
+  expiresAt DateTime
+  decidedAt DateTime?
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  client McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+  @@index([clientId, status])
 }
 
 model McpConsentRequest {

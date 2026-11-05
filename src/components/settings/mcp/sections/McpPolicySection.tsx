@@ -30,6 +30,7 @@ export type McpPolicyValues = {
   patMaxDays: number;
   patAllowedScopes: string[];
   requireReadOnlyConnections: boolean;
+  deviceFlowEnabled: boolean;
 };
 
 /** Never offered for a personal token, whatever is ticked (effective-access.ts). */
@@ -266,6 +267,20 @@ export default function McpPolicySection({
               ))}
           </div>
         </fieldset>
+      </PolicyGroup>
+
+      <PolicyGroup
+        title="Device sign-in"
+        description="Off by default. Lets command-line tools, SSH sessions and headless servers connect without a browser on the same machine: the tool shows a short code, and the person enters it at /oauth/mcp/device in any browser where they are signed in, then approves the same permissions screen as a browser sign-in. Only assistants registered for device sign-in can use it. Codes last ten minutes; turning this off stops new device sign-ins at once."
+      >
+        {/* Tells the save that this control was on the form, so an unticked box means off. */}
+        <input type="hidden" name="deviceControls" value="1" />
+        <CheckRow
+          name="deviceFlowEnabled"
+          label="Allow device sign-in with a code"
+          description="People are warned to continue only if they started the sign-in themselves on a device they control. Turning this on needs a recent sign-in."
+          defaultChecked={policy.deviceFlowEnabled}
+        />
       </PolicyGroup>
 
       <details className="group border-t border-border">

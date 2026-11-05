@@ -262,6 +262,7 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       patMaxDays: z.coerce.number().int().min(1).max(MCP_PAT_MAX_DAYS).optional(),
       patAllowedScopes: z.string().max(2048).optional(),
       requireReadOnlyConnections: z.boolean().optional(),
+      deviceFlowEnabled: z.boolean().optional(),
     })
     .strict()
     .parse({
@@ -295,6 +296,9 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
         : undefined,
       requireReadOnlyConnections: form.has('patControls')
         ? form.get('requireReadOnlyConnections') === 'on'
+        : undefined,
+      deviceFlowEnabled: form.has('deviceControls')
+        ? form.get('deviceFlowEnabled') === 'on'
         : undefined,
     });
   const cimdAllowedHosts = [
@@ -394,6 +398,7 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       })(),
       requireReadOnlyConnections:
         input.requireReadOnlyConnections ?? existing.requireReadOnlyConnections,
+      deviceFlowEnabled: input.deviceFlowEnabled ?? existing.deviceFlowEnabled,
     };
     // Widening access needs a recent sign-in; it is judged against the locked row and refused
     // before the write, so the revision does not move. Narrowing is always allowed.
@@ -453,6 +458,7 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
       name: z.string().trim().min(1).max(100),
       redirectUri: z.string().url().max(2048),
       scopes: z.string().max(2048),
+      deviceCodeGrant: z.boolean(),
     })
     .strict()
     .safeParse({
@@ -460,6 +466,7 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
       redirectUri: form.get('redirectUri'),
       // Scope checkboxes submit one value each.
       scopes: form.getAll('scopes').map(String).join(' '),
+      deviceCodeGrant: form.get('deviceCodeGrant') === 'on',
     });
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path[0];
@@ -485,7 +492,12 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
   const clientId = await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
     const client = await tx.mcpClient.create({
-      data: { name: input.name, redirectUris: [url.href], scopes },
+      data: {
+        name: input.name,
+        redirectUris: [url.href],
+        scopes,
+        deviceCodeGrant: input.deviceCodeGrant,
+      },
     });
     await logAudit(
       {
@@ -494,6 +506,7 @@ export async function registerMcpClient(form: FormData): Promise<McpClientFormRe
         entityType: 'SYSTEM_CONFIG',
         entityId: client.id,
         actorId: actor.id,
+        ...(input.deviceCodeGrant ? { details: { deviceCodeGrant: true } } : {}),
       },
       tx
     );
