@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { GET as myShiftsRoute } from '@/app/api/v2/users/me/on-call-shifts/route';
+import { GET as listUsersRoute } from '@/app/api/v2/users/route';
 import { describe, expect, it } from 'vitest';
 import { MCP_OPERATION_MAP, isMcpExecutable, isMcpSensitiveRead } from '@/lib/mcp/catalog';
 import { callMcpOperation } from '@/lib/mcp/core/execution';
@@ -81,6 +82,30 @@ describe('user directory (listUsers, getUser)', () => {
       expect(text).not.toMatch(/"(?:email|phoneNumber|department|jobTitle|timeZone)"/);
       expect(unredactedSensitiveKeys(result.data)).toEqual([]);
     }
+  });
+
+  it('searches names only through MCP, so an email cannot be probed; REST is unchanged', async () => {
+    const { user, email } = await colleague();
+    const caller = await principal('ADMIN', ['users:read']);
+    const ids = async (search: string) =>
+      (
+        (await callMcpOperation(caller.ctx(), 'listUsers', {
+          query: { search, limit: 5 },
+        })) as Envelope<{ id: string }[]>
+      ).data.data.map(row => row.id);
+    expect(await ids(user.name!)).toEqual([user.id]);
+    const [local, domain] = email.split('@');
+    for (const probe of [email, email.toUpperCase(), local, `${local}@`, `@${domain}`])
+      expect(await ids(probe), probe).toEqual([]);
+    // A REST API key caller keeps the documented name-or-email search.
+    const rest = await listUsersRoute(
+      new NextRequest(`http://localhost/api/v2/users?search=${encodeURIComponent(email)}`, {
+        headers: { authorization: `Bearer ${caller.restToken}` },
+      })
+    );
+    expect(rest.status).toBe(200);
+    const restIds = ((await rest.json()) as { data: { id: string }[] }).data.map(row => row.id);
+    expect(restIds).toEqual([user.id]);
   });
 
   it('refuses a role without user.read and a connection without users:read', async () => {

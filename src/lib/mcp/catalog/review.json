@@ -3614,9 +3614,9 @@
   "listUsers": {
     "status": "DISCOVERABLE",
     "risk": "R0",
-    "reason": "Reviewed read-only directory: native user.read authorization (Administrators, Responders and Auditors) and an MCP field allowlist that keeps only id, name, role, status and team memberships; email, time zone, department and job title never reach an agent.",
+    "reason": "Reviewed read-only directory: native user.read authorization (Administrators, Responders and Auditors) and an MCP field allowlist that keeps only id, name, role, status and team memberships; email, time zone, department and job title never reach an agent, and an MCP search matches names only so an email cannot be probed.",
     "tool": null,
-    "routeSha256": "9bc072988fe5eec8751baf23f5cb9ae03ad4e3fc437287459df69024fdf13d6b",
+    "routeSha256": "ed75c8d6a830dc19188d9cf6ba42a113ca6269d5b18e237e271002e44ff0480a",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-directory-reads.test.ts",
     "contractSha256": "5b2c795ec6a7a30d43d63f4684e15276ca211e244bc9ac7f746680923a523e59",
