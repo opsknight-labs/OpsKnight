@@ -2881,6 +2881,22 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getMyCatchUp": {
+    "method": "GET",
+    "path": "/users/me/catch-up",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listSimilarIncidents": {
+    "method": "GET",
+    "path": "/incidents/{id}/similar",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listUsers": {
     "method": "GET",
     "path": "/users",

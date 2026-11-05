@@ -1447,6 +1447,58 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/users/me/catch-up': {
+        get: {
+          tags: ['Users'],
+          summary: 'What opened, resolved and is still active since a point in time',
+          description:
+            'Self-service catch-up over the incidents the caller can read: counts of incidents opened and resolved in the last N hours, the active incidents (most urgent first), the ones assigned to the caller and the recently resolved ones. Bounded to 168 hours and 25 rows per list; truncated reports when a list was cut.',
+          parameters: [
+            {
+              name: 'hours',
+              in: 'query',
+              description: 'How far back to look, in hours (1-168).',
+              schema: { type: 'integer', minimum: 1, maximum: 168, default: 12 },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum rows per list (1-25).',
+              schema: { type: 'integer', minimum: 1, maximum: 25, default: 10 },
+            },
+          ],
+          responses: {
+            '200': { description: 'The caller’s catch-up' },
+            '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/incidents/{id}/similar': {
+        get: {
+          tags: ['Incidents'],
+          summary: 'Past resolved incidents that look like this one, with how each ended',
+          description:
+            'Compares this incident with resolved incidents from the last year that the caller can read. Similarity is title-word overlap nudged by the same service and priority; every row lists why it matched. A lead for a human, not proof of a shared cause. Each row carries the resolution kind, how long it took and an excerpt of the last note.',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum similar incidents to return (1-10).',
+              schema: { type: 'integer', minimum: 1, maximum: 10, default: 5 },
+            },
+          ],
+          responses: {
+            '200': { description: 'Similar past incidents' },
+            '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
       '/users/me/on-call-shifts': {
         get: {
           tags: ['Users'],

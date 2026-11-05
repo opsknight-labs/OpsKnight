@@ -2141,6 +2141,15 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'MyOnCallShifts'
   ),
+  op('get', '/users/me/catch-up', 'getMyCatchUp', 'incidents:read', 'item', 'CatchUp'),
+  op(
+    'get',
+    '/incidents/{id}/similar',
+    'listSimilarIncidents',
+    'incidents:read',
+    'item',
+    'SimilarIncidents'
+  ),
   op('get', '/users', 'listUsers', 'users:read', 'list', 'User'),
 ];
 

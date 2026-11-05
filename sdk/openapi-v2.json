@@ -11585,6 +11585,464 @@
           "updatedAt"
         ]
       },
+      "CatchUp": {
+        "type": "object",
+        "description": "What opened, resolved and is still active since a point in time.",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "now": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "opened": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "resolved": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "active": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "opened",
+              "resolved",
+              "active"
+            ]
+          },
+          "active": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "OPEN",
+                    "ACKNOWLEDGED",
+                    "RESOLVED",
+                    "SNOOZED",
+                    "SUPPRESSED"
+                  ]
+                },
+                "urgency": {
+                  "type": "string",
+                  "enum": [
+                    "LOW",
+                    "MEDIUM",
+                    "HIGH"
+                  ]
+                },
+                "priority": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "serviceId": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "assignedToMe": {
+                  "type": "boolean"
+                },
+                "openedSinceThen": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "acknowledgedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "resolvedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "urgency",
+                "priority",
+                "serviceId",
+                "serviceName",
+                "assignedToMe",
+                "openedSinceThen",
+                "createdAt",
+                "acknowledgedAt",
+                "resolvedAt"
+              ]
+            }
+          },
+          "assignedToMe": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "OPEN",
+                    "ACKNOWLEDGED",
+                    "RESOLVED",
+                    "SNOOZED",
+                    "SUPPRESSED"
+                  ]
+                },
+                "urgency": {
+                  "type": "string",
+                  "enum": [
+                    "LOW",
+                    "MEDIUM",
+                    "HIGH"
+                  ]
+                },
+                "priority": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "serviceId": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "assignedToMe": {
+                  "type": "boolean"
+                },
+                "openedSinceThen": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "acknowledgedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "resolvedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "urgency",
+                "priority",
+                "serviceId",
+                "serviceName",
+                "assignedToMe",
+                "openedSinceThen",
+                "createdAt",
+                "acknowledgedAt",
+                "resolvedAt"
+              ]
+            }
+          },
+          "recentlyResolved": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "OPEN",
+                    "ACKNOWLEDGED",
+                    "RESOLVED",
+                    "SNOOZED",
+                    "SUPPRESSED"
+                  ]
+                },
+                "urgency": {
+                  "type": "string",
+                  "enum": [
+                    "LOW",
+                    "MEDIUM",
+                    "HIGH"
+                  ]
+                },
+                "priority": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "serviceId": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "assignedToMe": {
+                  "type": "boolean"
+                },
+                "openedSinceThen": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "acknowledgedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "resolvedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "urgency",
+                "priority",
+                "serviceId",
+                "serviceName",
+                "assignedToMe",
+                "openedSinceThen",
+                "createdAt",
+                "acknowledgedAt",
+                "resolvedAt"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "object",
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "recentlyResolved": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "active",
+              "recentlyResolved"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "since",
+          "now",
+          "counts",
+          "active",
+          "assignedToMe",
+          "recentlyResolved",
+          "truncated"
+        ]
+      },
+      "SimilarIncidents": {
+        "type": "object",
+        "description": "Past resolved incidents that look like one incident, with how each ended.",
+        "properties": {
+          "incidentId": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "TITLE_AND_SERVICE"
+            ]
+          },
+          "candidatesConsidered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "similar": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "priority": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "serviceId": {
+                      "type": "string"
+                    },
+                    "serviceName": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "resolvedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "priority",
+                    "serviceId",
+                    "serviceName",
+                    "createdAt",
+                    "resolvedAt"
+                  ]
+                },
+                "similarity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "TITLE_OVERLAP",
+                      "SAME_SERVICE",
+                      "SAME_PRIORITY"
+                    ]
+                  }
+                },
+                "resolutionKind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "MANUAL",
+                    "SOURCE_RECOVERY",
+                    "AUTOMATION",
+                    "AUTO_TIMEOUT",
+                    "UNKNOWN",
+                    null
+                  ]
+                },
+                "durationMinutes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "lastNote": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "excerpt": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "excerpt",
+                    "createdAt"
+                  ]
+                }
+              },
+              "required": [
+                "incident",
+                "similarity",
+                "reasons",
+                "resolutionKind",
+                "durationMinutes",
+                "lastNote"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "incidentId",
+          "basis",
+          "candidatesConsidered",
+          "similar",
+          "truncated"
+        ]
+      },
       "MyOnCallShifts": {
         "type": "object",
         "description": "The caller’s current and upcoming on-call shifts across every readable schedule.",
@@ -16780,6 +17238,204 @@
         "operationId": "listUsers",
         "x-required-scope": "users:read",
         "description": "Requires API scope `users:read` (Users read)."
+      }
+    },
+    "/users/me/catch-up": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "What opened, resolved and is still active since a point in time",
+        "description": "Self-service catch-up over the incidents the caller can read: counts of incidents opened and resolved in the last N hours, the active incidents (most urgent first), the ones assigned to the caller and the recently resolved ones. Bounded to 168 hours and 25 rows per list; truncated reports when a list was cut.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "description": "How far back to look, in hours (1-168).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 168,
+              "default": 12
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum rows per list (1-25).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 25,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller’s catch-up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CatchUp"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getMyCatchUp",
+        "x-required-scope": "incidents:read"
+      }
+    },
+    "/incidents/{id}/similar": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Past resolved incidents that look like this one, with how each ended",
+        "description": "Compares this incident with resolved incidents from the last year that the caller can read. Similarity is title-word overlap nudged by the same service and priority; every row lists why it matched. A lead for a human, not proof of a shared cause. Each row carries the resolution kind, how long it took and an excerpt of the last note.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum similar incidents to return (1-10).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Similar past incidents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SimilarIncidents"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listSimilarIncidents",
+        "x-required-scope": "incidents:read"
       }
     },
     "/users/me/on-call-shifts": {

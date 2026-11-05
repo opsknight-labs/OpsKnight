@@ -275,6 +275,12 @@
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
+  "GET /incidents/{id}/similar [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "POST /incidents/{id}/snooze [incidents:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -1906,6 +1912,12 @@
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /users/me/catch-up [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
   },
   "GET /users/me/notification-preferences [notification-preferences:read]": {
     "ADMIN": "allow:global",
