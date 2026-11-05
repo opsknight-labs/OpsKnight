@@ -209,7 +209,6 @@ describe('automatic MCP client registration', () => {
       { ...metadata, token_endpoint_auth_method: 'client_secret_post' },
       { ...metadata, grant_types: ['client_credentials'] },
       { ...metadata, client_secret: 'not-supported' },
-      { ...metadata, client_id: 'impersonate-existing' },
       '{"redirect_uris":["http://localhost:19345/callback"],"client_name":"one","client_name":"two"}',
     ])
       expect((await register(request(body))).status).toBe(400);
@@ -217,6 +216,10 @@ describe('automatic MCP client registration', () => {
       413
     );
     expect(await db.mcpClient.count()).toBe(before);
+    // A client cannot choose its id: the field is ignored and the server issues its own.
+    const chosen = await register(request({ ...metadata, client_id: 'impersonate-existing' }));
+    expect(chosen.status).toBe(201);
+    expect((await chosen.json()).client_id).not.toBe('impersonate-existing');
   });
   it('accepts what real assistants send: extra known grants, a bare loopback URI', async () => {
     const response = await register(
@@ -241,16 +244,110 @@ describe('automatic MCP client registration', () => {
     ]);
     expect(registered).not.toHaveProperty('software_statement');
   });
-  it('refuses secrets, key material and unknown or misspelled metadata', async () => {
+  it('refuses secrets, key material and grants this server never issues', async () => {
     for (const extra of [
       { client_secret: 'x' },
+      { client_secret_expires_at: 0 },
+      { jwks: { keys: [] } },
       { jwks_uri: 'https://keys.example/jwks' },
-      { token_endpoint_auth_methd: 'none' },
+      { tls_client_auth_subject_dn: 'CN=x' },
       { grant_types: ['authorization_code', 'password'] },
+      { grant_types: ['implicit'] },
     ]) {
       const response = await register(request({ ...metadata, ...extra }));
       expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'invalid_client_metadata' });
     }
+  });
+  it('ignores unknown metadata and treats an empty scope as no request (RFC 7591 §2)', async () => {
+    const response = await register(
+      request({
+        ...metadata,
+        token_endpoint_auth_methd: 'none',
+        scope: '',
+        post_logout_redirect_uris: ['https://x.example/'],
+        default_max_age: 3600,
+        id_token_signed_response_alg: 'RS256',
+      })
+    );
+    expect(response.status).toBe(201);
+    const registered = await response.json();
+    for (const key of [
+      'token_endpoint_auth_methd',
+      'post_logout_redirect_uris',
+      'default_max_age',
+      'id_token_signed_response_alg',
+    ])
+      expect(registered).not.toHaveProperty(key);
+    const policy = await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    expect(registered.scope.split(' ')).toEqual(
+      policy.dcrScopes.filter(scope => scope !== 'admin:manage')
+    );
+    const row = await db.mcpClient.findUniqueOrThrow({ where: { id: registered.client_id } });
+    expect(JSON.stringify(row)).not.toMatch(/post_logout|default_max_age|x\.example/);
+  });
+  it('accepts a native app scheme callback and refuses script, data and file schemes', async () => {
+    const cursor = 'cursor://anysphere.cursor-mcp/oauth/callback';
+    const accepted = await register(request({ ...metadata, redirect_uris: [cursor] }));
+    expect(accepted.status).toBe(201);
+    expect((await accepted.json()).redirect_uris).toEqual([cursor]);
+    for (const redirect of [
+      'javascript:alert(1)',
+      'data:text/html,hi',
+      'file:///etc/passwd',
+      'cursor://u:p@x/#f',
+      'notanapp://x/cb',
+    ]) {
+      const response = await register(request({ ...metadata, redirect_uris: [redirect] }));
+      expect(response.status).toBe(400);
+    }
+  });
+  it('completes a sign-in that returns to a cursor:// callback', async () => {
+    const cursor = 'cursor://anysphere.cursor-mcp/oauth/callback';
+    const registered = await register(request({ ...metadata, redirect_uris: [cursor] }));
+    const { client_id: clientId } = await registered.json();
+    const user = await createTestUser({ role: 'ADMIN' });
+    actor.id = user.id;
+    actor.tokenVersion = user.tokenVersion;
+    actor.location = '';
+    const verifier = randomBytes(32).toString('base64url');
+    const query = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: cursor,
+      response_type: 'code',
+      resource: `${origin}/mcp`,
+      state: 'cursor-state',
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+      code_challenge_method: 'S256',
+    });
+    const started = await authorize(new Request(`${origin}/oauth/mcp/authorize?${query}`));
+    expect(started.status).toBe(307);
+    const pendingId = new URL(started.headers.get('location')!).searchParams.get('id')!;
+    const { decideMcpConsent } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    const form = new FormData();
+    form.set('id', pendingId);
+    form.set('decision', 'allow');
+    const pending = await db.mcpConsentRequest.findUniqueOrThrow({ where: { id: pendingId } });
+    for (const scope of pending.scopes) form.append('scope', scope);
+    await decideMcpConsent(form);
+    expect(actor.location.startsWith(`${cursor}?`)).toBe(true);
+    const back = new URL(actor.location);
+    expect(back.searchParams.get('state')).toBe('cursor-state');
+    const token = await exchange(
+      new Request(`${origin}/oauth/mcp/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          code: back.searchParams.get('code')!,
+          code_verifier: verifier,
+          redirect_uri: cursor,
+          resource: `${origin}/mcp`,
+        }),
+      })
+    );
+    expect(token.status).toBe(200);
   });
   it('narrows requested scopes to the policy ceiling instead of failing or escalating', async () => {
     for (const scope of ['admin:manage', 'incidents:write', 'openid offline_access']) {

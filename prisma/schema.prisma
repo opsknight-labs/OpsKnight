@@ -4836,9 +4836,10 @@ model McpPolicy {
   maxInFlight Int @default(4)
   maxOperations Int @default(8)
   requestsPerMinute Int @default(60)
-  // Client ID Metadata Documents: off until an administrator lists exact trusted hosts and a scope ceiling.
   // Reviewed configuration reads (SENSITIVE_READ) are off until an administrator enables them.
   sensitiveReadsEnabled Boolean @default(false)
+  // Client ID Metadata Documents. Once cimdEnabled is on, an empty cimdAllowedHosts allows any
+  // public HTTPS host; listing hosts allows only those (and marks them trusted on consent).
   cimdEnabled Boolean @default(false)
   cimdAllowedHosts String[] @default([])
   cimdScopes String[] @default([])
@@ -4856,6 +4857,13 @@ model McpPolicy {
   approvalCommitWindowMinutes Int @default(30)
   // A refresh token replayed within this many seconds, while its successor is unused, is reissued.
   refreshReuseGraceSeconds Int @default(30)
+  // Browser-hosted clients (MCP Inspector, web agents) whose exact Origin may call /mcp and the
+  // token, registration and revocation endpoints with CORS. Never credentialed; consent and
+  // review pages keep the strict same-origin check. Empty refuses every foreign Origin.
+  allowedBrowserOrigins String[] @default([])
+  // Answer a tool call that lacks a consented scope the client could obtain with HTTP 403
+  // insufficient_scope, so step-up capable clients re-authorize in place. Off by default.
+  scopeStepUpEnabled Boolean @default(false)
   // Optimistic concurrency for policy saves.
   policyRevision Int @default(0)
   updatedAt DateTime @updatedAt

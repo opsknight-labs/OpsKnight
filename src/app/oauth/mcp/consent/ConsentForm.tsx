@@ -254,6 +254,12 @@ function ScopeList({
                 />
                 <span className="min-w-0 flex-1 text-slate-800 dark:text-slate-100">
                   {item.label}
+                  {/* An upgrade: what the existing connection did not have. */}
+                  {item.added && (
+                    <span className="ml-2 inline-flex items-center whitespace-nowrap rounded-full border border-sky-300 bg-sky-50 px-1.5 py-px align-middle text-[11px] font-medium text-sky-800 dark:border-sky-700/60 dark:bg-sky-950/40 dark:text-sky-200">
+                      New
+                    </span>
+                  )}
                   {/* Mark exactly the selected permissions that let the assistant change things. */}
                   {changes && on && writesEnabled && (
                     <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px align-middle text-[11px] font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">

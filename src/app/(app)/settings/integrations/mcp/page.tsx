@@ -476,6 +476,8 @@ export default async function McpSettings({
               requestsPerMinute: policy?.requestsPerMinute ?? 60,
               approvalTtlMinutes: policy?.approvalTtlMinutes ?? 240,
               approvalCommitWindowMinutes: policy?.approvalCommitWindowMinutes ?? 30,
+              allowedBrowserOrigins: policy?.allowedBrowserOrigins ?? [],
+              scopeStepUpEnabled: policy?.scopeStepUpEnabled ?? false,
             }}
             revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}

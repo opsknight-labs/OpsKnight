@@ -27,7 +27,7 @@ const base = {
   groups,
   hasUnavailable: false,
   writesEnabled: true,
-  replacesConnectionFrom: null,
+  previousConnection: null,
   redirectWarning: false,
 };
 
@@ -37,7 +37,7 @@ describe('consent identity line', () => {
       <ConsentView
         {...base}
         returnHost="localhost:51505"
-        identity={{ kind: 'metadata', host: 'claude.ai' }}
+        identity={{ kind: 'metadata', host: 'claude.ai', trusted: true }}
       />
     );
     const line = screen.getByTestId('mcp-consent-identity');
@@ -66,13 +66,73 @@ describe('consent identity line', () => {
         writesEnabled={false}
         returnHost="localhost:1"
         identity={{ kind: 'registered' }}
-        replacesConnectionFrom={new Date('2026-10-01T00:00:00Z')}
+        previousConnection={{ createdAt: new Date('2026-10-01T00:00:00Z'), inUse: false }}
       />
     );
     expect(screen.getByRole('note').textContent).toContain('Changes are currently turned off');
     expect(screen.getByText('Changes off')).toBeTruthy();
     expect(screen.queryByText('Can make changes')).toBeNull();
-    expect(screen.getByText(/replaces your connection from Oct 1, 2026/)).toBeTruthy();
+    expect(screen.getByText(/replaces your unfinished sign-in from Oct 1, 2026/)).toBeTruthy();
+  });
+  it('shows an untrusted metadata host as published, not verified (SEC-6)', () => {
+    render(
+      <ConsentView
+        {...base}
+        returnHost="claude-ai-connect.example"
+        identity={{ kind: 'metadata', host: 'claude-ai-connect.example', trusted: false }}
+      />
+    );
+    const line = screen.getByTestId('mcp-consent-identity');
+    expect(line.textContent).toContain('Published by claude-ai-connect.example');
+    expect(line.textContent).not.toContain('Identified by');
+    expect(line.querySelector('svg')).toBeNull();
+    expect(screen.getByText(/has not listed that site as trusted/)).toBeTruthy();
+  });
+  it('warns when a metadata client returns to another site', () => {
+    render(
+      <ConsentView
+        {...base}
+        returnHost="evil.example"
+        identity={{ kind: 'metadata', host: 'claude.ai', trusted: true }}
+        redirectWarning
+      />
+    );
+    expect(screen.getByRole('note').textContent).toContain(
+      'published by claude.ai but sends you to evil.example'
+    );
+  });
+  it('never says an in-use connection is replaced (D3)', () => {
+    render(
+      <ConsentView
+        {...base}
+        returnHost="localhost:1"
+        identity={{ kind: 'registered' }}
+        previousConnection={{ createdAt: new Date('2026-10-01T00:00:00Z'), inUse: true }}
+      />
+    );
+    expect(screen.queryByText(/replaces/)).toBeNull();
+    expect(screen.getByText(/existing connection from Oct 1, 2026 stays signed in/)).toBeTruthy();
+  });
+  it('marks permissions an upgrade adds as New (D3)', () => {
+    render(
+      <ConsentView
+        {...base}
+        returnHost="localhost:1"
+        identity={{ kind: 'registered' }}
+        groups={[
+          {
+            id: 'incidents',
+            label: 'Incidents',
+            view: [{ scope: 'incidents:read', label: 'View incidents', checked: true }],
+            change: [
+              { scope: 'incidents:write', label: 'Change incidents', checked: false, added: true },
+            ],
+          },
+        ]}
+      />
+    );
+    expect(screen.getAllByText('New')).toHaveLength(1);
+    expect(screen.getByText('New').closest('label')?.textContent).toContain('Change incidents');
   });
 });
 

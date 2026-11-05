@@ -130,7 +130,7 @@ export default function McpOverviewSection({
     approvals: string;
     policy: string;
   };
-  enableAction: () => Promise<void>;
+  enableAction: () => Promise<{ ok: false; code: string } | void>;
   testAction: () => Promise<SetupReport>;
   /** The configuration turning MCP back on restores; null on a first run. */
   previous?: {

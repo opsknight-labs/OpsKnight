@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 94 MCP codes and 21 log events found in the source.
+This page lists 97 MCP codes and 21 log events found in the source.
 
 ## Connecting and signing in
 
@@ -38,7 +38,8 @@ This page lists 94 MCP codes and 21 log events found in the source.
 | <a id="MCP_AUTHORIZATION_FAILED"></a>`MCP_AUTHORIZATION_FAILED` | The consent page could not create the authorization code. | Start the connection again from the assistant. Check the server log if it repeats. |
 | <a id="MCP_RATE_LIMITED"></a>`MCP_RATE_LIMITED` | Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person. | Wait a minute and retry. |
 | <a id="MCP_ACCESS_CHANGED"></a>`MCP_ACCESS_CHANGED` | A security event ended the connection: the person's password or email changed, they were demoted from Administrator, deactivated, signed out everywhere, or an administrator revoked their sessions. | Reconnect OpsKnight from the assistant. Team and ordinary role changes do not cause this. |
-| <a id="MCP_INVALID_TOKEN"></a>`MCP_INVALID_TOKEN` | The bearer token is missing, malformed, unknown or expired. | Let the assistant refresh or reconnect. |
+| <a id="MCP_INVALID_TOKEN"></a>`MCP_INVALID_TOKEN` | The bearer token is malformed, unknown or expired. | Let the assistant refresh or reconnect. |
+| <a id="MCP_INSUFFICIENT_SCOPE"></a>`MCP_INSUFFICIENT_SCOPE` | Scope step-up is on and the call needs a permission this connection lacks but a new consent could grant. HTTP 403 with an insufficient_scope challenge naming the scopes to ask for. | A supporting assistant re-opens sign-in for the extra permission; approve it. Others reconnect. |
 | <a id="MCP_CLIENT_UNKNOWN"></a>`MCP_CLIENT_UNKNOWN` | The assistant presented a client ID this server does not know (often a stale cached registration). | Remove OpsKnight from the assistant, add it again with the same URL and sign in. |
 | <a id="MCP_REGISTRATION_DISABLED"></a>`MCP_REGISTRATION_DISABLED` | Automatic connections are off, so assistants cannot register themselves. | An administrator turns on Automatic connections under Access policy. |
 | <a id="MCP_REGISTRATION_CAPACITY"></a>`MCP_REGISTRATION_CAPACITY` | The registry already holds 5,000 automatically registered assistants. | Retry later; unused registrations are cleaned up after an hour. |
@@ -46,10 +47,11 @@ This page lists 94 MCP codes and 21 log events found in the source.
 | <a id="MCP_CLIENT_METADATA_UNAVAILABLE"></a>`MCP_CLIENT_METADATA_UNAVAILABLE` | The assistant's metadata document could not be fetched. | Retry. Check outbound HTTPS from the server; search the log for mcp.cimd.fetch_failed. |
 | <a id="MCP_CLIENT_METADATA_FORBIDDEN"></a>`MCP_CLIENT_METADATA_FORBIDDEN` | The assistant's metadata document host resolves to a private, loopback or otherwise non-public address. | The assistant must publish its metadata document on a public HTTPS host. |
 | <a id="MCP_CLIENT_METADATA_TOO_LARGE"></a>`MCP_CLIENT_METADATA_TOO_LARGE` | The assistant's metadata document is larger than 5 KiB. | Contact the assistant vendor. |
-| <a id="MCP_INVALID_ORIGIN"></a>`MCP_INVALID_ORIGIN` | A browser Origin header does not match the App URL, or the App URL itself is invalid. | Check the App URL in Settings → System. |
+| <a id="MCP_INVALID_ORIGIN"></a>`MCP_INVALID_ORIGIN` | A browser Origin header does not match the App URL and is not listed under Allowed browser origins, or the App URL itself is invalid. | Check the App URL in Settings → System. For a browser-hosted client such as MCP Inspector, an administrator adds its exact origin under Allowed browser origins. |
 | <a id="MCP_CLIENT_REVOKED"></a>`MCP_CLIENT_REVOKED` | An administrator revoked this assistant. | An administrator restores it on the Assistants tab; everyone then signs in again. |
 | <a id="MCP_DUPLICATE_PARAMETER"></a>`MCP_DUPLICATE_PARAMETER` | An OAuth parameter was sent twice. Unknown parameters are ignored; duplicates are refused. | Report it to the assistant vendor; reconnect. |
 | <a id="MCP_INVALID_HOST"></a>`MCP_INVALID_HOST` | The request Host does not match the configured App URL. | Open OpsKnight on the App URL; make the proxy preserve the public Host header. |
+| <a id="MCP_TOKEN_REQUIRED"></a>`MCP_TOKEN_REQUIRED` | The request to /mcp carried no Authorization header: the assistant has not signed in yet. | Let the assistant start sign-in from the challenge; this is normal on a first connection. |
 
 ## Tool calls
 
@@ -108,7 +110,7 @@ This page lists 94 MCP codes and 21 log events found in the source.
 | <a id="MCP_APPROVAL_REJECTED"></a>`MCP_APPROVAL_REJECTED` | A reviewer rejected the request. The status tools return their reason, labelled untrusted. | Read the reason with operation_get_approval or runbook_get_approval; prepare a new request with a new idempotencyKey if appropriate. |
 | <a id="MCP_APPROVAL_REQUIRED"></a>`MCP_APPROVAL_REQUIRED` | The assistant tried to apply a request that is still waiting for review. | Share the reviewUrl and poll the get_approval tool until it reports APPROVED. |
 | <a id="MCP_APPROVAL_PLAN_CHANGED"></a>`MCP_APPROVAL_PLAN_CHANGED` | The reviewed request no longer matches: its digest differs, or for a destructive change the target changed after review. | Prepare the change again so a reviewer sees the current state. |
-| <a id="MCP_REAUTHENTICATION_REQUIRED"></a>`MCP_REAUTHENTICATION_REQUIRED` | Approving a destructive change needs a sign-in within the last two hours. | Choose Confirm it's you on the review page, sign in again and approve. |
+| <a id="MCP_REAUTHENTICATION_REQUIRED"></a>`MCP_REAUTHENTICATION_REQUIRED` | Approving a destructive change, or a settings change that gives assistants more access (turning something on, adding a scope, host or origin, raising a limit, re-exposing a capability, adding or restoring an assistant), needs a sign-in within the last two hours. Changes that only reduce access never need it. | Choose Confirm it's you on the review page, or Sign in again in settings, then repeat the action. |
 | <a id="MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED"></a>`MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED` | An administrator approving their own request did not tick the self-approval confirmation. | Tick the confirmation on the review page and approve again. |
 
 ## Settings pages
@@ -122,6 +124,7 @@ This page lists 94 MCP codes and 21 log events found in the source.
 | <a id="MCP_CLIENT_NOT_FOUND"></a>`MCP_CLIENT_NOT_FOUND` | The assistant to restore does not exist. | Reload the Assistants tab. |
 | <a id="MCP_POLICY_CONFLICT"></a>`MCP_POLICY_CONFLICT` | Someone else saved the MCP policy or exposed capabilities after this page loaded. | Choose Reload policy, re-apply your change and save. |
 | <a id="MCP_INVALID_CIMD_HOST"></a>`MCP_INVALID_CIMD_HOST` | A trusted assistant host is not a plain DNS name. | Enter one host name per line, without scheme, port or path. |
+| <a id="MCP_INVALID_BROWSER_ORIGIN"></a>`MCP_INVALID_BROWSER_ORIGIN` | An Allowed browser origins entry is not an exact origin (scheme, host and optional port), uses plain http off loopback, or the list has more than 10 entries. | Enter origins such as https://inspector.example.com or http://localhost:6274, one per line. |
 | <a id="MCP_DCR_REQUIRES_SCOPES"></a>`MCP_DCR_REQUIRES_SCOPES` | Automatic connections was turned on with no permissions ticked. | Tick at least one permission under What assistants may do. |
 | <a id="MCP_INVALID_NAME"></a>`MCP_INVALID_NAME` | A manually registered assistant needs a name. | Enter a name. |
 | <a id="MCP_INVALID_REDIRECT"></a>`MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS or loopback HTTP. | Enter the exact callback the assistant uses. |
@@ -157,6 +160,7 @@ The sign-in, consent and error pages show these titles and explanations, with th
 | `MCP_RATE_LIMITED` | Too many attempts | Too many requests in the last minute. Wait a moment, then try again. |
 | `MCP_ACCESS_CHANGED` | Your access changed | Your password, email, account status or administrator role changed, or you signed out everywhere. Reconnect OpsKnight from your assistant to sign in again. |
 | `MCP_INVALID_TOKEN` | Sign-in required | Connect OpsKnight again from your assistant to sign in. |
+| `MCP_INSUFFICIENT_SCOPE` | More permission needed | This connection was not granted a permission this call needs. Approve the extra permission when your assistant opens OpsKnight sign-in again. |
 | `MCP_CLIENT_UNKNOWN` | This connection is out of date | OpsKnight no longer recognises the sign-in details this assistant saved. Remove OpsKnight from your assistant, add it again with the same URL, and sign in. |
 | `MCP_CAPABILITY_DISABLED` | This capability is turned off | An OpsKnight administrator disabled this capability for AI assistants in Settings → Integrations & ChatOps → MCP (AI Assistants) → Exposed capabilities. Do not retry; ask an administrator if you need it. |
 | `MCP_CLIENT_METADATA_TIMEOUT` | We could not load this assistant's details | OpsKnight could not fetch the details this assistant publishes about itself in time. Try again, and ask an administrator to check outbound network access from the server if it keeps failing. |
@@ -164,6 +168,7 @@ The sign-in, consent and error pages show these titles and explanations, with th
 | `MCP_CLIENT_METADATA_TOO_LARGE` | This assistant's details are not valid | The details this assistant publishes about itself are larger than OpsKnight accepts. Ask the assistant vendor or an administrator. |
 | `MCP_CLIENT_REVOKED` | This assistant was disconnected | An administrator revoked it. Ask them to allow it again, then reconnect. |
 | `MCP_INVALID_HOST` | Wrong address | Open OpsKnight using the address configured in Settings → System. |
+| `MCP_TOKEN_REQUIRED` | Sign-in required | Sign in to OpsKnight from your assistant to connect. |
 | `invalid_client` | This assistant is not allowed to connect | OpsKnight could not verify this assistant, or an administrator has turned off automatic connections. An administrator can find the exact reason in the server log by searching for client_denied. |
 | `invalid_request` | The assistant sent an incomplete sign-in request | Return to your assistant and connect again. If it keeps happening, remove OpsKnight from the assistant and add it again. |
 | `invalid_scope` | The requested access is not available | An administrator limited what assistants may access. Reconnect to get the allowed access. |

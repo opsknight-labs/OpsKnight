@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 import { buildMcpConsentOffer } from '@/lib/mcp/auth/consent-offer';
-import { consentIdentity, consentRedirectFacts } from '@/lib/mcp/auth/consent-identity';
+import {
+  consentIdentity,
+  consentRedirectFacts,
+  consentRedirectWarning,
+} from '@/lib/mcp/auth/consent-identity';
 import { assistantBrandFor } from '@/components/common/BrandLogos';
 import { mcpHttpError } from '@/lib/mcp/auth/http';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
@@ -32,6 +36,27 @@ describe('B4: re-consent starts from the replaced connection', () => {
       'incidents:write': true,
       'services:write': false,
     });
+  });
+});
+
+describe('D3: an upgrade marks what it adds', () => {
+  it('flags scopes the replaced connection lacked, and nothing on a first connection', () => {
+    const flags = (previouslyGranted: string[]) =>
+      Object.fromEntries(
+        buildMcpConsentOffer({
+          scopes: ['incidents:read', 'incidents:write'],
+          explicitlyRequested: ['incidents:write'],
+          role: 'ADMIN',
+          previouslyGranted,
+        })
+          .groups.flatMap(group => [...group.view, ...group.change])
+          .map(item => [item.scope, item.added ?? false])
+      );
+    expect(flags(['incidents:read'])).toEqual({
+      'incidents:read': false,
+      'incidents:write': true,
+    });
+    expect(flags([])).toEqual({ 'incidents:read': false, 'incidents:write': false });
   });
 });
 
@@ -77,13 +102,52 @@ describe('B8: consent identity', () => {
         metadataUrl: 'https://claude.ai/oauth/claude-code-client-metadata',
         dynamicRegistration: false,
       })
-    ).toEqual({ kind: 'metadata', host: 'claude.ai' });
+    ).toEqual({ kind: 'metadata', host: 'claude.ai', trusted: false });
     expect(consentIdentity({ metadataUrl: null, dynamicRegistration: true })).toEqual({
       kind: 'self-registered',
     });
     expect(consentIdentity({ metadataUrl: null, dynamicRegistration: false })).toEqual({
       kind: 'registered',
     });
+  });
+  it('trusts a metadata host only when an administrator listed it (SEC-6)', () => {
+    const client = {
+      metadataUrl: 'https://claude.ai/oauth/client.json',
+      dynamicRegistration: true,
+    };
+    expect(consentIdentity(client, { cimdAllowedHosts: ['claude.ai'] })).toEqual({
+      kind: 'metadata',
+      host: 'claude.ai',
+      trusted: true,
+    });
+    // Any public host may publish a document when the list is empty: never a verified badge.
+    expect(consentIdentity(client, { cimdAllowedHosts: [] })).toMatchObject({ trusted: false });
+    expect(consentIdentity(client, { cimdAllowedHosts: ['chatgpt.com'] })).toMatchObject({
+      trusted: false,
+    });
+    expect(
+      consentIdentity(
+        {
+          metadataUrl: 'https://claude-ai-connect.example/client.json',
+          dynamicRegistration: false,
+        },
+        { cimdAllowedHosts: ['claude.ai'] }
+      )
+    ).toMatchObject({ host: 'claude-ai-connect.example', trusted: false });
+  });
+  it('warns when a metadata client sends the browser to another site', () => {
+    const published = { kind: 'metadata', host: 'claude.ai', trusted: false } as const;
+    expect(consentRedirectWarning(published, 'https://claude.ai/api/mcp/auth_callback')).toBe(
+      false
+    );
+    expect(consentRedirectWarning(published, 'https://app.claude.ai/cb')).toBe(false);
+    expect(consentRedirectWarning(published, 'https://evil.example/cb')).toBe(true);
+    expect(consentRedirectWarning(published, 'https://notclaude.ai/cb')).toBe(true);
+    // Loopback and app callbacks stay on the device.
+    expect(consentRedirectWarning(published, 'http://localhost:5000/cb')).toBe(false);
+    expect(consentRedirectWarning(published, 'cursor://anysphere.cursor-mcp/cb')).toBe(false);
+    expect(consentRedirectWarning({ kind: 'self-registered' }, 'https://x.example/cb')).toBe(true);
+    expect(consentRedirectWarning({ kind: 'registered' }, 'https://x.example/cb')).toBe(false);
   });
   it('treats loopback and app-scheme redirects as local, web hosts as not', () => {
     expect(consentRedirectFacts('http://127.0.0.1:5173/cb')).toEqual({

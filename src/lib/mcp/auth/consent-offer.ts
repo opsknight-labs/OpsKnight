@@ -7,6 +7,8 @@ export type McpConsentScope = {
   label: string;
   /** Pre-selected when the page opens. */
   checked: boolean;
+  /** Not part of the connection this consent replaces: what an upgrade adds. */
+  added?: boolean;
 };
 
 export type McpConsentGroup = {
@@ -84,7 +86,8 @@ export function buildMcpConsentOffer(input: {
   previouslyGranted?: readonly string[];
 }): McpConsentOffer {
   const { offered, unavailable } = partitionScopesForRole(input.scopes, input.role);
-  const explicit = new Set([...input.explicitlyRequested, ...(input.previouslyGranted ?? [])]);
+  const previous = input.previouslyGranted ?? [];
+  const explicit = new Set([...input.explicitlyRequested, ...previous]);
   const groups = new Map<string, McpConsentGroup>(
     [...AREAS, OTHER].map(area => [
       area.id,
@@ -106,6 +109,8 @@ export function buildMcpConsentOffer(input: {
       scope,
       label: describeMcpScope(scope),
       checked: view || explicit.has(scope),
+      // Only an upgrade of an existing connection has anything to mark as new.
+      ...(previous.length && !previous.includes(scope) ? { added: true } : {}),
     });
   }
   return {

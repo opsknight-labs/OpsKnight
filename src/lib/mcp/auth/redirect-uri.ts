@@ -1,4 +1,52 @@
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+// Private-use schemes (RFC 8252 §7.1) that are never a native-app callback: they run script,
+// read local data or open a socket instead of handing the code to an installed application.
+const REFUSED_SCHEMES = new Set([
+  'javascript:',
+  'data:',
+  'file:',
+  'blob:',
+  'vbscript:',
+  'about:',
+  'ws:',
+  'wss:',
+  'http:',
+  'https:',
+]);
+// Editors whose registered scheme has no dot, so the reverse-DNS rule alone would refuse them.
+const KNOWN_APP_SCHEMES = new Set(['cursor:', 'vscode:', 'vscode-insiders:', 'windsurf:']);
+
+/** An app-scheme callback such as cursor://anysphere.cursor-mcp/oauth/callback. */
+function privateUseRedirect(url: URL) {
+  return (
+    /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) &&
+    !REFUSED_SCHEMES.has(url.protocol) &&
+    (url.protocol.includes('.') || KNOWN_APP_SCHEMES.has(url.protocol)) &&
+    Boolean(url.host || url.pathname)
+  );
+}
+
+/**
+ * Whether a redirect URI may be registered (DCR, CIMD or an administrator): a canonical URL with
+ * no user name, password or fragment that is HTTPS, http on a loopback host, or a native app's
+ * private-use scheme (reverse-DNS, or a known editor's). Requests still match it exactly; only
+ * http loopback redirects get port flexibility (redirectUriAllowed). A client metadata document is
+ * fetched from its publisher rather than stored from a form, so `canonicalWeb: false` keeps its
+ * web redirects accepted as written.
+ */
+export function isAllowedRedirect(value: string, { canonicalWeb = true } = {}) {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.hash) return false;
+    if (url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname)))
+      // Canonical form, allowing the empty path that native clients often register
+      // (http://127.0.0.1:33418 is stored and matched exactly as sent).
+      return !canonicalWeb || url.href === value || url.href === `${value}/`;
+    return url.href === value && privateUseRedirect(url);
+  } catch {
+    return false;
+  }
+}
 
 function loopback(value: string) {
   try {

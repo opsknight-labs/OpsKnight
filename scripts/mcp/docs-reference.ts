@@ -360,11 +360,17 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'A manually registered assistant needs a name.',
     fix: 'Enter a name.',
   },
+  MCP_INVALID_BROWSER_ORIGIN: {
+    area: 'settings',
+    meaning:
+      'An Allowed browser origins entry is not an exact origin (scheme, host and optional port), uses plain http off loopback, or the list has more than 10 entries.',
+    fix: 'Enter origins such as https://inspector.example.com or http://localhost:6274, one per line.',
+  },
   MCP_INVALID_ORIGIN: {
     area: 'sign-in',
     meaning:
-      'A browser Origin header does not match the App URL, or the App URL itself is invalid.',
-    fix: 'Check the App URL in Settings → System.',
+      'A browser Origin header does not match the App URL and is not listed under Allowed browser origins, or the App URL itself is invalid.',
+    fix: 'Check the App URL in Settings → System. For a browser-hosted client such as MCP Inspector, an administrator adds its exact origin under Allowed browser origins.',
   },
   MCP_INVALID_PAGE_SIZE: {
     area: 'tools',
@@ -386,6 +392,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'A resource id or opsknight:// URI is malformed.',
     fix: 'Use an id returned by a list or search.',
   },
+  MCP_INSUFFICIENT_SCOPE: {
+    area: 'sign-in',
+    meaning:
+      'Scope step-up is on and the call needs a permission this connection lacks but a new consent could grant. HTTP 403 with an insufficient_scope challenge naming the scopes to ask for.',
+    fix: 'A supporting assistant re-opens sign-in for the extra permission; approve it. Others reconnect.',
+  },
   MCP_INVALID_SCOPE: {
     area: 'sign-in',
     meaning:
@@ -399,8 +411,14 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   },
   MCP_INVALID_TOKEN: {
     area: 'sign-in',
-    meaning: 'The bearer token is missing, malformed, unknown or expired.',
+    meaning: 'The bearer token is malformed, unknown or expired.',
     fix: 'Let the assistant refresh or reconnect.',
+  },
+  MCP_TOKEN_REQUIRED: {
+    area: 'sign-in',
+    meaning:
+      'The request to /mcp carried no Authorization header: the assistant has not signed in yet.',
+    fix: 'Let the assistant start sign-in from the challenge; this is normal on a first connection.',
   },
   MCP_JSON_DEPTH: {
     area: 'tools',
@@ -460,8 +478,9 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   },
   MCP_REAUTHENTICATION_REQUIRED: {
     area: 'approvals',
-    meaning: 'Approving a destructive change needs a sign-in within the last two hours.',
-    fix: "Choose Confirm it's you on the review page, sign in again and approve.",
+    meaning:
+      'Approving a destructive change, or a settings change that gives assistants more access (turning something on, adding a scope, host or origin, raising a limit, re-exposing a capability, adding or restoring an assistant), needs a sign-in within the last two hours. Changes that only reduce access never need it.',
+    fix: "Choose Confirm it's you on the review page, or Sign in again in settings, then repeat the action.",
   },
   MCP_REGISTRATION_CAPACITY: {
     area: 'sign-in',

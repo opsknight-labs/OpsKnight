@@ -24,6 +24,8 @@ export type McpPolicyValues = {
   requestsPerMinute: number;
   approvalTtlMinutes: number;
   approvalCommitWindowMinutes: number;
+  allowedBrowserOrigins: string[];
+  scopeStepUpEnabled: boolean;
 };
 
 /**
@@ -142,7 +144,7 @@ export default function McpPolicySection({
           <span className="flex flex-col">
             <span>Advanced</span>
             <span className="text-xs font-normal text-muted-foreground">
-              Reviewed changes, sensitive reads, trusted hosts and workload limits
+              Reviewed changes, sensitive reads, trusted hosts, browser clients and workload limits
             </span>
           </span>
           <ChevronDown
@@ -224,6 +226,41 @@ export default function McpPolicySection({
                 Documents are fetched without redirects from public addresses only.
               </p>
             </div>
+          </PolicyGroup>
+          <PolicyGroup
+            title="Browser clients"
+            description="Assistants that run in a web page, such as MCP Inspector, send their page's origin. Every origin not listed here is refused."
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="mcp-browser-origins">
+                Allowed browser origins (optional, one per line)
+              </Label>
+              <textarea
+                id="mcp-browser-origins"
+                className={textareaClass}
+                name="allowedBrowserOrigins"
+                rows={2}
+                maxLength={4096}
+                defaultValue={policy.allowedBrowserOrigins.join('\n')}
+                placeholder="http://localhost:6274"
+                aria-describedby="mcp-browser-origins-help"
+              />
+              <p
+                id="mcp-browser-origins-help"
+                className="text-xs leading-relaxed text-muted-foreground"
+              >
+                Exact origins (scheme, host and port), at most 10; plain http only on localhost.
+                Listed pages may call the MCP endpoint and sign-in endpoints with their own tokens,
+                never with a person&apos;s OpsKnight cookies. Consent and review pages stay
+                same-origin only.
+              </p>
+            </div>
+            <CheckRow
+              name="scopeStepUpEnabled"
+              label="Let assistants ask for a missing permission in place"
+              description="When a call needs a permission the connection lacks but could be granted, answer with an upgrade request (HTTP 403 insufficient_scope) so assistants that support it re-open sign-in for just that permission. Off: the call returns a tool error and the person reconnects."
+              defaultChecked={policy.scopeStepUpEnabled}
+            />
           </PolicyGroup>
           <PolicyGroup
             title="Workload limits"

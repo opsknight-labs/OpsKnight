@@ -147,7 +147,7 @@ const quotaUsed = async (grantId: string) =>
   )._sum.count ?? 0;
 
 describe('A1: 2025-revision clients and notifications', () => {
-  it.each(['2025-06-18', '2025-11-25'])(
+  it.each(['2025-03-26', '2025-06-18', '2025-11-25'])(
     'serves initialize, notifications, tools/list and tools/call to a %s client',
     async version => {
       const { bearer, user, grant } = await principal();
@@ -182,9 +182,43 @@ describe('A1: 2025-revision clients and notifications', () => {
         })
       );
       expect(whoami.result.isError).not.toBe(true);
-      expect(whoami.result.structuredContent.userId).toBe(user.id);
+      // 2025-03-26 predates structured tool output; a text block is all such a client reads.
+      const text = whoami.result.content.find((block: { type: string }) => block.type === 'text');
+      expect(text.text).toContain(user.id);
+      if (version !== '2025-03-26') expect(whoami.result.structuredContent.userId).toBe(user.id);
     }
   );
+
+  it('serves a POST without an MCP-Protocol-Version header (treated as 2025-03-26)', async () => {
+    const { bearer, user } = await principal();
+    const response = await POST(
+      new Request(mcpResource(), {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${bearer}`,
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 9,
+          method: 'tools/call',
+          params: { name: 'whoami', arguments: {} },
+        }),
+      })
+    );
+    expect(response.status).toBe(200);
+    const whoami = await reply(response);
+    expect(whoami.result.isError).not.toBe(true);
+    expect(JSON.stringify(whoami.result.content)).toContain(user.id);
+  });
+
+  it('refuses an unsupported protocol version header with a 400 naming the supported ones', async () => {
+    const { bearer } = await principal();
+    const response = await legacy(bearer, '2023-01-01', { id: 4, method: 'tools/list' });
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await reply(response))).toContain('2025-11-25');
+  });
 
   it('acknowledges a modern notification with 202 before any charge', async () => {
     const { bearer, grant } = await principal();

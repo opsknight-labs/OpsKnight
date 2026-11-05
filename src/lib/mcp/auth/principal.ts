@@ -7,6 +7,7 @@ import { digestMcpSecret, mcpResource } from './config';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { admitMcpBearer, recordMcpBearerFailure } from './admission';
 import { mcpForceDisabled } from '../core/kill-switch';
+import { challengeScopes, loadDiscoveryPolicy } from './discovery-policy';
 import {
   GRANT_ACCESS_COLUMNS,
   grantAccessVerdict,
@@ -23,6 +24,7 @@ interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   maxOperations: number | null;
   requestsPerMinute: number | null;
   disabledCapabilities: string[] | null;
+  scopeStepUpEnabled: boolean | null;
 }
 
 /** The runtime switches and bounds of the MCP policy, read with the grant in one statement. */
@@ -34,6 +36,8 @@ export interface McpRuntimePolicy {
   maxOperations: number;
   requestsPerMinute: number;
   disabledCapabilities: string[];
+  /** Answer a grantable missing permission with 403 insufficient_scope (step-up.ts). */
+  scopeStepUpEnabled: boolean;
 }
 
 const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
@@ -48,6 +52,7 @@ const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
         maxOperations: true,
         requestsPerMinute: true,
         disabledCapabilities: true,
+        scopeStepUpEnabled: true,
       },
     })
   );
@@ -72,7 +77,8 @@ const AUTHORITY_COLUMNS = Prisma.sql`
   ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
-  p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities"`;
+  p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities",
+  p."scopeStepUpEnabled"`;
 
 /**
  * The grant's current authority and the MCP policy as of the same statement. The policy is null
@@ -144,6 +150,7 @@ function authorityFrom(
             maxOperations: grant.maxOperations!,
             requestsPerMinute: grant.requestsPerMinute!,
             disabledCapabilities: grant.disabledCapabilities ?? [],
+            scopeStepUpEnabled: grant.scopeStepUpEnabled ?? false,
           },
   };
 }
@@ -155,6 +162,7 @@ interface BearerSnapshot extends Partial<GrantAuthoritySnapshot> {
   rotatedAt: Date | null;
   accessExpiresAt: Date;
   lastUsedAt: Date | null;
+  clientId: string | null;
 }
 
 /**
@@ -164,7 +172,7 @@ interface BearerSnapshot extends Partial<GrantAuthoritySnapshot> {
 async function resolveBearer(accessHash: string) {
   const [row] = await prisma.$queryRaw<BearerSnapshot[]>`
     SELECT t.id AS "tokenId", t."grantId" AS "tokenGrantId", t.scopes AS "tokenScopes",
-      t."rotatedAt", t."accessExpiresAt", t."lastUsedAt", ${AUTHORITY_COLUMNS}
+      t."rotatedAt", t."accessExpiresAt", t."lastUsedAt", g."clientId", ${AUTHORITY_COLUMNS}
     FROM "McpToken" t
     LEFT JOIN "McpGrant" g ON g.id = t."grantId"
     LEFT JOIN "McpClient" c ON c.id = g."clientId"
@@ -180,7 +188,17 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   // The policy is read with the grant. A disabled MCP still answers MCP_DISABLED ahead of any
   // credential error, so a failure reads the policy on its own before reporting the cause.
   let resolved: Awaited<ReturnType<typeof resolveMcpGrantWithPolicy>>;
-  let token: { id: string; grantId: string; scopes: string[]; lastUsedAt: Date | null };
+  let token: {
+    id: string;
+    grantId: string;
+    scopes: string[];
+    lastUsedAt: Date | null;
+    accessExpiresAt: Date;
+    clientId: string;
+    /** What a new consent for this assistant could grant: its current client ceiling. */
+    clientScopes: string[];
+    bearer: string;
+  };
   admitMcpBearer(request);
   // Only a credential OpsKnight never issued counts against the peer. An expired or revoked token
   // is a normal refresh, and many users can share one egress address (claude.ai), so counting it
@@ -188,6 +206,9 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   let unknownCredential = true;
   try {
     const header = request.headers.get('authorization') ?? '';
+    // No credential at all is a first connection, not a bad token: it is answered with a plain
+    // challenge and never counts against the peer.
+    requireMcp(header.trim() !== '', 'MCP_TOKEN_REQUIRED', 401);
     requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
     const row = await resolveBearer(digestMcpSecret(header.slice(7)));
     unknownCredential = !row;
@@ -198,6 +219,10 @@ export async function authenticateMcp(request: Request, cost: number | null) {
       grantId: row.tokenGrantId,
       scopes: row.tokenScopes,
       lastUsedAt: row.lastUsedAt,
+      accessExpiresAt: row.accessExpiresAt,
+      clientId: row.clientId ?? '',
+      clientScopes: row.clientScopes ?? [],
+      bearer: header.slice(7),
     };
     // The same checks as resolveMcpGrantWithPolicy, judged on the row read with the token.
     resolved = authorityFrom(row.grantId ? (row as GrantAuthoritySnapshot) : undefined, now);
@@ -209,6 +234,8 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     )
       recordMcpBearerFailure(request);
     requireMcp((await loadRuntimePolicy())?.enabled, 'MCP_DISABLED', 503);
+    if (error instanceof McpBoundaryError && error.status === 401)
+      error.challengeScope = challengeScopes(await loadDiscoveryPolicy()).join(' ') || undefined;
     throw error;
   }
   const { auth, policy } = resolved;
@@ -234,7 +261,16 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     clientId: resolved.clientId,
     credentialId: token.id,
     tokenScopes: token.scopes,
+    clientScopes: token.clientScopes,
     policy,
+    // Handed to the SDK as-is (it verifies nothing): the token this request was authenticated by.
+    authInfo: {
+      token: token.bearer,
+      clientId: token.clientId,
+      scopes: effectiveScopes,
+      expiresAt: Math.floor(token.accessExpiresAt.getTime() / 1000),
+      resource: new URL(mcpResource()),
+    },
   };
 }
 

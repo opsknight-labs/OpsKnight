@@ -2,6 +2,7 @@ import { createHmac, hkdfSync } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { getEncryptionKey } from '@/lib/encryption';
 import { McpBoundaryError, requireMcp } from '../core/errors';
+import { clearDiscoveryPolicyCache } from './discovery-policy';
 
 /**
  * MCP needs two values before it can serve a request, and neither is an MCP environment variable:
@@ -144,6 +145,7 @@ export async function withMcpRuntime<T>(callback: () => Promise<T>): Promise<T> 
 export function resetMcpRuntimeForTests() {
   runtime = null;
   loading = null;
+  clearDiscoveryPolicyCache();
 }
 
 export function mcpOrigin(): string {

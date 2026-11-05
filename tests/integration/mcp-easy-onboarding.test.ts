@@ -23,6 +23,8 @@ vi.mock('@/lib/rbac', () => ({
   })),
 }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+// These tests are about the actions themselves; the recent-sign-in rule has its own tests.
+vi.mock('@/lib/mcp/auth/fresh-admin', () => ({ requireFreshMcpAdmin: vi.fn(async () => true) }));
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
     actor.location = url;
@@ -220,6 +222,8 @@ describe('easy assistant onboarding', () => {
     const body = await (await protectedResource()).json();
     expect(body.scopes_supported).toEqual(scopes);
     await db.mcpPolicy.update({ where: { id: 'default' }, data: { enabled: false } });
+    // Discovery memoises the policy; a policy save clears it.
+    resetMcpRuntimeForTests();
     expect(await (await protectedResource()).json()).not.toHaveProperty('scopes_supported');
   });
 });

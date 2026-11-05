@@ -1,23 +1,15 @@
-import prisma from '@/lib/prisma';
 import { loadMcpRuntime, mcpIssuer, mcpResource } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
+import { loadDiscoveryPolicy } from '@/lib/mcp/auth/discovery-policy';
+import { PUBLIC_METADATA_CORS, publicMetadataPreflight } from '@/lib/mcp/auth/cors';
 
 export const dynamic = 'force-dynamic';
 
 export function GET() {
   return withMcpDatabase(async () => {
     await loadMcpRuntime();
-    const policy = await prisma.mcpPolicy.findUnique({
-      where: { id: 'default' },
-      select: {
-        enabled: true,
-        dcrEnabled: true,
-        dcrScopes: true,
-        cimdEnabled: true,
-        cimdScopes: true,
-      },
-    });
+    const policy = await loadDiscoveryPolicy();
     // Tell clients which scopes to ask for so they request something the policy will grant.
     const scopes =
       policy && mcpPolicyInForce(policy)
@@ -36,7 +28,9 @@ export function GET() {
         resource_name: 'OpsKnight MCP',
         ...(scopes.length ? { scopes_supported: scopes } : {}),
       },
-      { headers: { 'Cache-Control': 'public, max-age=60' } }
+      { headers: { 'Cache-Control': 'public, max-age=60', ...PUBLIC_METADATA_CORS } }
     );
   });
 }
+
+export const OPTIONS = publicMetadataPreflight;
