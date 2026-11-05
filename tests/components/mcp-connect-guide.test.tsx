@@ -74,10 +74,11 @@ describe('Connect guide', () => {
     render(
       <McpConnectGuide endpoint={endpoint} version="2.2.0" checkConnection={check} hrefs={hrefs} />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Check connection' }));
+    // The button renders after mount; wait for it rather than racing a slow runner.
+    fireEvent.click(await screen.findByRole('button', { name: 'Check connection' }));
     expect(await screen.findByText(/Not connected yet/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'setup check' }).getAttribute('href')).toBe('/o');
-    fireEvent.click(screen.getByRole('button', { name: 'Check connection' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Check connection' }));
     expect(await screen.findByText(/Connected: Claude Code, just now/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'View connection' }).getAttribute('href')).toBe(
       hrefs.connections

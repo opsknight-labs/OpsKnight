@@ -182,7 +182,10 @@ it('D5: register shows the problem on its field, then the new client_id', async 
   expect(redirect).toHaveValue('http://evil.example/cb');
   fireEvent.click(screen.getByRole('button', { name: 'Register client' }));
   expect(await screen.findByText('client-123')).toBeVisible();
-  expect(notify.success).toHaveBeenCalledWith('Client registered', expect.anything());
+  // The toast fires after the result renders; wait for it rather than racing a slow runner.
+  await waitFor(() =>
+    expect(notify.success).toHaveBeenCalledWith('Client registered', expect.anything())
+  );
 });
 
 it('D5: "Allow again" reports a failure inline and success with a toast', async () => {
