@@ -9,7 +9,6 @@ import {
   DialogHeader,
 } from '@/components/ui/shadcn/dialog';
 import AuthenticationRevisionSelector from './AuthenticationRevisionSelector';
-import AuthenticationAdminTestPanel from './AuthenticationAdminTestPanel';
 import { AuthenticationVerificationBadge } from './AuthenticationVerificationStatus';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 import { authenticationRequest } from './request';
@@ -17,6 +16,10 @@ import AuthenticationActionGuard, { actionAvailability } from './AuthenticationA
 
 import { UserCheck, RotateCcw, ChevronDown } from 'lucide-react';
 
+/**
+ * Saved configurations: pick one to edit, delete drafts, or restore an earlier one. Testing
+ * happens in Test & activate, so this step stays about connecting the provider.
+ */
 export default function AuthenticationRevisionWorkflow() {
   const {
     data,
@@ -65,15 +68,15 @@ export default function AuthenticationRevisionWorkflow() {
     pending && { code: 'busy', message: 'Wait for the current operation to finish.' },
     draftDirty && {
       code: 'draft',
-      message: 'Stage your latest changes before testing or previewing.',
-      resolutionLabel: 'Stage changes in Connection',
+      message: 'Save your latest changes first.',
+      resolutionLabel: 'Save changes in Connect provider',
       resolutionTarget: 'connection' as const,
     },
     !revisionId && {
       code: 'revision',
-      message: 'Select a saved configuration from the selector, or stage a new draft.',
+      message: 'Choose a saved configuration, or save your changes first.',
       resolutionTarget: 'connection' as const,
-      resolutionLabel: 'Go to Connection to stage',
+      resolutionLabel: 'Go to Connect provider',
     },
     Boolean(
       selected &&
@@ -82,9 +85,9 @@ export default function AuthenticationRevisionWorkflow() {
     ) && {
       code: 'stale',
       message:
-        'This saved configuration predates the active provider. Stage a current draft instead.',
+        'This saved configuration is older than the active provider. Save a new one instead.',
       resolutionTarget: 'connection' as const,
-      resolutionLabel: 'Review in Connection',
+      resolutionLabel: 'Review in Connect provider',
     },
     data.freshAuthenticationRequired && {
       code: 'fresh',
@@ -103,10 +106,10 @@ export default function AuthenticationRevisionWorkflow() {
           </div>
           <div>
             <h3 id="auth-test-title" className="text-base font-bold text-foreground">
-              Validate administrator access
+              Saved configurations
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Live authentication drill required before activating any staged configuration.
+              Open a saved configuration to keep editing it, or restore an earlier one.
             </p>
           </div>
         </div>
@@ -114,11 +117,6 @@ export default function AuthenticationRevisionWorkflow() {
           <AuthenticationVerificationBadge verification={selected.verification} compact />
         )}
       </div>
-
-      <p className="text-xs text-muted-foreground leading-relaxed">
-        First stage the shared draft, then complete a real provider sign-in. Discovery success alone
-        does not prove administrator access.
-      </p>
 
       <div className="space-y-4">
         <AuthenticationRevisionSelector
@@ -128,8 +126,6 @@ export default function AuthenticationRevisionWorkflow() {
             else load(id);
           }}
         />
-
-        <AuthenticationAdminTestPanel />
       </div>
 
       {/* Rollback Details Section */}
@@ -142,11 +138,11 @@ export default function AuthenticationRevisionWorkflow() {
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
         </summary>
         <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t">
-          Rollback stages a new candidate and still requires a fresh real administrator test before
-          activation.
+          Restoring saves a copy of the selected configuration. Test it in Test &amp; activate
+          before turning it on.
         </p>
         <AuthenticationActionGuard
-          availability={actionAvailability('Stage rollback', common)}
+          availability={actionAvailability('Restore configuration', common)}
           onResolve={setActiveTab}
         >
           <Button
@@ -161,12 +157,14 @@ export default function AuthenticationRevisionWorkflow() {
                 });
                 setDraftBaseConfigVersion(data.providerConfigVersion);
                 await refresh(result.revisionId);
-                setMessage('Previous configuration staged. Test it before activation.');
+                setMessage(
+                  'Earlier configuration restored as a new copy. Test it in Test & activate.'
+                );
               })
             }
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            Stage selected configuration for rollback
+            Restore the selected configuration
           </Button>
         </AuthenticationActionGuard>
       </details>
@@ -179,10 +177,10 @@ export default function AuthenticationRevisionWorkflow() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Replace the current draft?</DialogTitle>
+            <DialogTitle>Discard your unsaved changes?</DialogTitle>
             <DialogDescription>
-              Your edits across provider, access and session policies will be discarded. The active
-              configuration stays unchanged.
+              Opening another saved configuration discards what you have not saved yet. Your active
+              sign-in settings stay unchanged.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-2 pt-2">

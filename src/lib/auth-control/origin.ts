@@ -4,6 +4,9 @@ import type { Prisma } from '@prisma/client';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
 import { recoveryOriginPin } from '@/lib/recovery-origin-pin';
 
+/** A deployment setting an administrator must fix; safe and useful to show them as is. */
+export class AuthenticationOriginError extends Error {}
+
 export async function authenticationOrigin(
   tx: Pick<Prisma.TransactionClient, 'systemSettings'> = prisma
 ) {
@@ -13,8 +16,8 @@ export async function authenticationOrigin(
   });
   const resolution = resolveAuthPublicOrigin({ dbAppUrl: settings?.appUrl });
   if (resolution.conflicts.length)
-    throw new Error(
-      'Reconcile conflicting canonical authentication origins before administering authentication.'
+    throw new AuthenticationOriginError(
+      'OpsKnight is configured with more than one address (NEXTAUTH_URL, NEXT_PUBLIC_APP_URL or the App URL in System settings). Make them identical, then reload this page.'
     );
   const origin = resolution.origin;
   const url = new URL(origin);
@@ -22,7 +25,9 @@ export async function authenticationOrigin(
     url.protocol !== 'https:' &&
     (process.env.NODE_ENV === 'production' || !['localhost', '127.0.0.1'].includes(url.hostname))
   )
-    throw new Error('Authentication requires a canonical HTTPS application URL.');
+    throw new AuthenticationOriginError(
+      'Single sign-on settings need OpsKnight to run at an HTTPS address. Set NEXTAUTH_URL and the App URL in System settings to your https:// address, then reload this page.'
+    );
   return origin;
 }
 

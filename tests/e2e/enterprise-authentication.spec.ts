@@ -1,10 +1,24 @@
 import { resolve } from 'node:path';
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 // Run only against a disposable, migrated installation with an active fixture admin.
 // SSO_E2E_BASE_URL=http://localhost:3005 SSO_E2E_ADMIN_EMAIL=... SSO_E2E_ADMIN_PASSWORD=...
+
+/**
+ * Picks an identity provider. The first choice applies immediately; switching from a chosen
+ * provider asks for confirmation because it clears provider-specific fields.
+ */
+async function chooseProvider(page: Page, name: RegExp) {
+  const radio = page.getByRole('radio', { name });
+  if ((await radio.getAttribute('aria-checked')) === 'true') return;
+  await radio.click();
+  const confirm = page.getByRole('button', { name: /Change provider/ });
+  if (await confirm.isVisible({ timeout: 2000 }).catch(() => false)) await confirm.click();
+  await expect(radio).toHaveAttribute('aria-checked', 'true');
+}
+
 test('enterprise console and independent hardware recovery work in a real browser', async ({
   browser,
   browserName,
@@ -27,24 +41,17 @@ test('enterprise console and independent hardware recovery work in a real browse
       waitUntil: 'domcontentloaded',
     });
     await page.goto(`${origin}/settings/system?section=sso`);
-    for (const title of [
-      'Overview',
-      'Identity Provider',
-      'Access & provisioning',
-      'Sessions & Policies',
-      'Diagnostics',
-    ]) {
-      await page.getByRole('tab', { name: title, exact: true }).click();
+    for (const [tab, heading] of [
+      ['Overview', /Configure Enterprise SSO|Authentication overview/],
+      ['1 · Connect provider', 'Connect provider'],
+      ['2 · Who can sign in', 'Who can sign in'],
+      ['3 · Roles & teams', 'Roles & teams'],
+      ['4 · Test & activate', 'Test & activate'],
+      ['Diagnostics', 'Authentication diagnostics'],
+    ] as const) {
+      await page.getByRole('tab', { name: tab, exact: true }).click();
       await expect(
-        page.getByRole('heading', {
-          name:
-            title === 'Overview'
-              ? /Configure Enterprise SSO|Authentication overview/
-              : title === 'Diagnostics'
-                ? 'Authentication diagnostics'
-                : title,
-          exact: title !== 'Overview',
-        })
+        page.getByRole('heading', { name: heading, exact: typeof heading === 'string' })
       ).toBeVisible();
     }
     await page.getByRole('tab', { name: 'Overview', exact: true }).click();
@@ -222,7 +229,7 @@ test('enterprise console and independent hardware recovery work in a real browse
     await recoveryPage.goto(`${origin}/incidents`, { waitUntil: 'domcontentloaded' });
     await expect(recoveryPage).toHaveURL(/\/login/);
     await recoveryPage.goto(`${origin}/recovery`);
-    await recoveryPage.getByRole('tab', { name: 'Emergency Recovery', exact: true }).click();
+    await recoveryPage.getByRole('tab', { name: 'Emergency recovery', exact: true }).click();
     await recoveryPage.getByRole('button', { name: 'Sign out of recovery', exact: true }).click();
     await recoveryPage.waitForURL(`${origin}/login/emergency`, { waitUntil: 'domcontentloaded' });
     await recoveryPage.goto(`${origin}/recovery`);
@@ -259,10 +266,15 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
     // Saved revision selection must load its own sanitized configuration, not production.
     const saved = await context.request.get(`${origin}/api/auth/control?section=connection`);
     const dashboard = (await saved.json()).data;
-    await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
-    await expect(
-      page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
-    ).toBeEnabled();
+    await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
+    // Saved configurations are offered only once there are some; a fresh install asks for a
+    // provider first instead of showing an empty selector.
+    if (dashboard.revisions.length === 0)
+      await expect(page.getByText('Choose your provider above to continue.')).toBeVisible();
+    else
+      await expect(
+        page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
+      ).toBeEnabled();
     for (const revision of dashboard.revisions.slice(0, 2)) {
       await page
         .getByRole('combobox', { name: 'Saved provider configuration', exact: true })
@@ -276,10 +288,8 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await page
         .getByRole('combobox', { name: 'Saved provider configuration', exact: true })
         .selectOption('browser-overage-preview');
-      await page.getByRole('tab', { name: 'Access & provisioning', exact: true }).click();
-      const sample = page.getByLabel(
-        'Sample claims for identity and role preview (never paste tokens)'
-      );
+      await page.getByRole('tab', { name: '3 · Roles & teams', exact: true }).click();
+      const sample = page.getByLabel('Sample claims (the decoded payload, not the token)');
       const claims = {
         iss: 'https://accounts.google.com',
         sub: 'browser-ready-subject',
@@ -287,24 +297,13 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         hasgroups: true,
       };
       await sample.fill(JSON.stringify(claims));
-      await page.getByRole('button', { name: 'Preview identity and roles' }).click();
-      await expect(page.getByText('Identity recognized', { exact: true })).toBeVisible();
-      await expect(
-        page.getByText('Administrator verification blocked by incomplete group claims.', {
-          exact: true,
-        })
-      ).toBeVisible();
+      await page.getByRole('button', { name: 'Check these claims' }).click();
+      await expect(page.getByText(/too many groups/)).toBeVisible();
       await sample.fill(
         JSON.stringify({ ...claims, hasgroups: false, groups: ['administrators'] })
       );
-      await expect(page.getByText('Identity recognized', { exact: true })).toHaveCount(0);
-      await page.getByRole('button', { name: 'Preview identity and roles' }).click();
-      await expect(
-        page.getByText(
-          'Sample claims permit an administrator test; real signed-token verification is still required.',
-          { exact: true }
-        )
-      ).toBeVisible();
+      await page.getByRole('button', { name: 'Check these claims' }).click();
+      await expect(page.getByText('Signs in as Administrator', { exact: true })).toBeVisible();
     }
     if (process.env.SSO_E2E_DELIVERY_HISTORY === '1') {
       await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
@@ -320,13 +319,10 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         await page.getByRole('button', { name: 'Apply filters' }).click();
         await expect(page.getByText('Loading security notifications…')).toBeHidden();
       }
-      await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
+      await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
     }
     // Local presentation walkthrough: no live tenant or discovery request is required.
-    await page
-      .getByRole('combobox', { name: 'Identity provider', exact: true })
-      .selectOption('azure');
-    await page.getByRole('button', { name: /Change provider/ }).click();
+    await chooseProvider(page, /Microsoft Entra ID/);
     await page
       .getByRole('textbox', { name: /^Directory \(tenant\) ID/ })
       .fill('11111111-2222-3333-4444-555555555555');
@@ -345,18 +341,18 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await expect(page.getByRole('textbox', { name: /^Exact issuer/ })).toHaveValue(issuer);
       await expect(page.getByRole('textbox', { name: /^Directory \(tenant\) ID/ })).toHaveCount(0);
     }
-    await page
-      .getByRole('combobox', { name: 'Identity provider', exact: true })
-      .selectOption('google');
-    await page.getByRole('button', { name: /Change provider/ }).click();
-    await expect(
-      page.getByRole('combobox', { name: 'Identity provider', exact: true })
-    ).toHaveValue('google');
+    await chooseProvider(page, /Google Workspace/);
+    await expect(page.getByRole('radio', { name: /Google Workspace/ })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
     // Reset all walkthrough edits before checking the untouched provider layout.
     if (await page.getByRole('button', { name: 'Discard changes', exact: true }).isEnabled()) {
       await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
       await page.getByRole('button', { name: 'Discard draft changes', exact: true }).click();
     }
+    // A discarded draft on a fresh install has no provider again; the layout checks use one.
+    await chooseProvider(page, /Okta/);
     await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
     for (const name of [
       'Sign-in & sessions',
@@ -370,7 +366,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       ).toBeVisible();
       await expect(page.getByText(/Unable to load|Request timed out/)).toHaveCount(0);
     }
-    await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
+    await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
     for (const width of [320, 390, 768, 1366, 1920]) {
       await page.setViewportSize({ width, height: 1000 });
       const closeNavigation = page.getByRole('button', {
@@ -381,11 +377,11 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         await closeNavigation.click();
         await expect(closeNavigation).toBeHidden();
       }
-      const connection = page.getByRole('tab', { name: 'Identity Provider', exact: true });
+      const connection = page.getByRole('tab', { name: '1 · Connect provider', exact: true });
       await connection.focus();
       await page.keyboard.press('Enter');
       await expect(
-        page.getByRole('heading', { name: 'Identity Provider', exact: true })
+        page.getByRole('heading', { name: 'Connect provider', exact: true })
       ).toBeVisible();
       await page.getByLabel('Client ID', { exact: true }).fill('preview-client');
       await page.getByLabel('Client ID', { exact: true }).fill('');
@@ -426,9 +422,9 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
       ).toBe(true);
-      await page.getByRole('button', { name: 'Stage configuration', exact: true }).click();
+      await page.getByRole('button', { name: 'Save changes', exact: true }).click();
       await expect(
-        page.getByRole('alert').filter({ hasText: 'Check the highlighted draft fields' })
+        page.getByRole('alert').filter({ hasText: 'Fix these fields before saving' })
       ).toBeVisible();
     }
   } finally {
@@ -537,7 +533,7 @@ test('independent password recovery, one-time secret and rotation work across br
         timeout: 30000,
       })
       .toBe(200);
-    await rp.getByRole('tab', { name: 'Emergency Recovery', exact: true }).click();
+    await rp.getByRole('tab', { name: 'Emergency recovery', exact: true }).click();
     await rp.getByLabel('Recovery password for fresh verification').fill(created.password);
     const reauthenticated = rp.waitForResponse(
       response =>

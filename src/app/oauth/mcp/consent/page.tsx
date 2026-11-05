@@ -2,10 +2,16 @@ import { redirect } from 'next/navigation';
 import { AppError } from '@/lib/errors';
 import { getCurrentUser } from '@/lib/rbac';
 import { isAppRole, roleLabel } from '@/lib/authorization';
-import { assertCanReviewMcpConsent, expiredConsentReturn } from '@/lib/mcp/auth/consent';
+import prisma from '@/lib/prisma';
+import {
+  assertCanReviewMcpConsent,
+  expiredConsentReturn,
+  supersededMcpGrantsWhere,
+} from '@/lib/mcp/auth/consent';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import { buildMcpConsentOffer } from '@/lib/mcp/auth/consent-offer';
 import { decideMcpConsent } from '@/app/(app)/settings/integrations/mcp/actions';
+import { consentIdentity, consentRedirectFacts } from '@/lib/mcp/auth/consent-identity';
 import ConsentView from './ConsentView';
 import './consent.css';
 
@@ -46,15 +52,23 @@ export default async function McpConsent({
   if (!isAppRole(who.role)) redirect('/oauth/mcp/consent/result?code=MCP_INACTIVE_PRINCIPAL');
   // decideMcpConsent repeats this on submit: pending request (already within the client ceiling)
   // ∩ what the person's current role can use. Nothing else is ever shown or grantable.
+  const [policy, previous] = await Promise.all([
+    prisma.mcpPolicy.findUnique({ where: { id: 'default' }, select: { writesEnabled: true } }),
+    // The latest live connection for this assistant; its permissions start selected again.
+    prisma.mcpGrant.findFirst({
+      where: supersededMcpGrantsWhere(who.id, client),
+      orderBy: { createdAt: 'desc' },
+      select: { scopes: true, createdAt: true },
+    }),
+  ]);
   const offer = buildMcpConsentOffer({
     scopes: request.scopes,
     explicitlyRequested: request.requestedScopes,
     role: who.role,
+    previouslyGranted: previous?.scopes ?? [],
   });
-  let host = '';
-  try {
-    host = new URL(request.redirectUri).host;
-  } catch {}
+  const returnTo = consentRedirectFacts(request.redirectUri);
+  const identity = consentIdentity(client);
   return (
     <ConsentView
       action={decideMcpConsent}
@@ -64,7 +78,11 @@ export default async function McpConsent({
       roleLabel={roleLabel(who.role)}
       groups={offer.groups}
       hasUnavailable={offer.unavailable.length > 0}
-      returnHost={client.dynamicRegistration ? host : null}
+      returnHost={returnTo.host}
+      identity={identity}
+      redirectWarning={identity.kind === 'self-registered' && !returnTo.staysLocal}
+      writesEnabled={policy?.writesEnabled ?? false}
+      replacesConnectionFrom={previous?.createdAt ?? null}
     />
   );
 }

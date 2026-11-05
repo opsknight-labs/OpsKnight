@@ -20,7 +20,7 @@ describe('SsoButton', () => {
     render(<SsoButton providerType="google" onClick={vi.fn()} />);
     const button = screen.getByRole('button');
     expect(button).toHaveTextContent('Continue with Google');
-    expect(button).toHaveAttribute('aria-label', 'Sign in with Google');
+    expect(button).toHaveAttribute('aria-label', 'Continue with Google');
   });
 
   it('renders Okta branding correctly', () => {

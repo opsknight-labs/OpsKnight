@@ -32,6 +32,11 @@ vi.mock('@/lib/prisma', () => {
     },
     user: {
       findUnique: vi.fn(),
+      // Email lookup is case-insensitive; scenarios drive both through findUnique.
+      findMany: vi.fn(async (...args: unknown[]) => {
+        const user = await (mockPrisma.user.findUnique as (...a: unknown[]) => unknown)(...args);
+        return user ? [user] : [];
+      }),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -47,7 +52,8 @@ vi.mock('@/lib/prisma', () => {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       create: vi.fn(),
     },
-    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL' }]),
+    // Serves both the policy read and the advisory-lock probe used by role/status writes.
+    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL', acquired: true }]),
     oidcConfig: {
       findUnique: vi.fn().mockImplementation(() => getOidcConfigMock()),
       findFirst: vi.fn(),
@@ -197,7 +203,7 @@ describe('OIDC provider-specific email verification compatibility', () => {
       profile: { sub: 'entra-sub' },
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_LINK_NOT_APPROVED&ref=[0-9a-f]{12}$/);
     expect(prisma.oidcLinkingApproval.findUnique).toHaveBeenCalledWith({
       where: { userId: 'u1' },
       select: expect.objectContaining({
@@ -264,7 +270,7 @@ describe('OIDC provider-specific email verification compatibility', () => {
       profile: { sub: 'entra-sub', email_verified: false },
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=[0-9a-f]{12}$/);
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
@@ -282,7 +288,7 @@ describe('OIDC provider-specific email verification compatibility', () => {
       profile: { sub: 'custom-sub' },
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=[0-9a-f]{12}$/);
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 });

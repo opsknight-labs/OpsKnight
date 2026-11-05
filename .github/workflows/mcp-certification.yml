@@ -47,7 +47,7 @@ jobs:
             echo "mcp=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if printf '%s\n' "$changed" | grep -Eq '^(src/lib/mcp/|src/lib/runbooks/|src/lib/api-v2/|src/lib/idempotency\.ts$|src/lib/rate-limit\.ts$|src/lib/prisma[^/]*\.ts$|src/lib/database-workload\.ts$|src/lib/runtime-capacity\.ts$|deploy/scripts/validate-runtime-capacity\.cjs$|src/lib/authorization[^/]*$|src/app/mcp/|src/app/oauth/mcp/|src/app/\.well-known/|src/app/\(app\)/settings/integrations/mcp/|prisma/|tests/.*mcp|tests/architecture/|scripts/mcp/|package(-lock)?\.json$|env\.example$|docs/v2\.2\.0/(operate|guides|reference)/mcp/|\.github/workflows/mcp-(certification|release-certification)\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(src/lib/mcp/|src/lib/runbooks/|src/lib/api-v2/|src/lib/idempotency\.ts$|src/lib/rate-limit\.ts$|src/lib/prisma[^/]*\.ts$|src/lib/database-workload\.ts$|src/lib/runtime-capacity\.ts$|deploy/scripts/validate-runtime-capacity\.cjs$|src/lib/authorization[^/]*$|src/app/mcp/|src/app/oauth/mcp/|src/app/\.well-known/|src/app/\(app\)/settings/integrations/mcp/|prisma/|tests/.*mcp|tests/architecture/|scripts/mcp/|package(-lock)?\.json$|env\.example$|docs/v2\.2\.0/(operate|guides|reference)/mcp/|docs/v2\.2\.0/metadata\.schema\.json$|src/components/settings/mcp/|\.github/workflows/mcp-(certification|release-certification)\.yml$)'; then
             echo "mcp=true" >> "$GITHUB_OUTPUT"
           else
             echo "mcp=false" >> "$GITHUB_OUTPUT"
@@ -93,6 +93,8 @@ jobs:
       - run: npx prisma generate && npx prisma migrate deploy
       - run: npx tsc --noEmit
       - run: npm run test:mcp
+      - name: Generated MCP docs, frontmatter and links
+        run: npm run --silent mcp:docs:check
       - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/prisma-datasource.test.ts tests/lib/deployment-config-unit.test.ts
       - name: PostgreSQL authority, isolation and investigation query budgets
         env:

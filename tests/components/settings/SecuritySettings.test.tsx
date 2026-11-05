@@ -19,9 +19,6 @@ vi.mock('@/app/(app)/settings/actions', () => ({
   updatePassword: vi.fn().mockResolvedValue({ success: true }),
 }));
 
-vi.mock('@/app/(app)/settings/security/actions', () => ({
-  revokeAllSessions: vi.fn().mockResolvedValue({ success: true }),
-}));
 
 describe('Security Components', () => {
   beforeEach(() => {

@@ -306,6 +306,7 @@ enum InAppNotificationType {
   SERVICE
   ACTION_ITEM
   SECURITY
+  SYSTEM
 }
 
 enum IncidentUrgency {
@@ -490,6 +491,9 @@ model User {
   email                        String     @unique
   emailVerified                DateTime?
   tokenVersion                 Int        @default(0)
+  /// Bumped only on security events (deactivation, password or email change, sign-out everywhere,
+  /// SCIM deprovision, demotion from ADMIN). MCP grants pin this instead of tokenVersion.
+  mcpRevocationVersion         Int        @default(0)
   invitationGeneration         Int        @default(0)
   role                         Role       @default(USER)
   roleSource                   RoleSource @default(MANUAL)
@@ -561,6 +565,7 @@ model User {
   oidcConfigs                 OidcConfig[]
   oidcIdentities              OidcIdentity[]
   oidcLinkingApproval         OidcLinkingApproval?
+  oidcLinkingRequest          OidcLinkingRequest?
   avatar                      UserAvatar?
   dashboards                  Dashboard[]
   savedReports                SavedReport[]
@@ -601,6 +606,8 @@ model OidcIdentity {
   issuerFingerprint String?
   emailAtLink       String?
   lastLoginAt       DateTime?
+  claimSnapshot     Json?
+  claimSnapshotAt   DateTime?
   userId            String
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -638,6 +645,7 @@ model Team {
 
 model TeamMember {
   scimGrant ScimTeamGrant?
+  oidcGrant OidcTeamGrant?
   id                       String   @id @default(cuid())
   userId                   String
   teamId                   String
@@ -987,6 +995,11 @@ model OidcConfig {
   profileMapping            Json?    @default("{}")
   sessionMaxAgeSeconds      Int?
   sessionIdleTimeoutSeconds Int?
+  defaultRole               Role     @default(USER)
+  unmatchedPolicy           String   @default("DEFAULT_ROLE")
+  rolePrecedence            String   @default("HIGHEST_ROLE")
+  domainTrustedLinking      Boolean  @default(false)
+  teamMapping               Json     @default("[]")
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
   updatedBy                 String?
@@ -2190,6 +2203,35 @@ model OidcLinkingApproval {
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([approvedById])
+}
+
+/// A team membership created by a single sign-on group rule. Only these may be removed by
+/// sign-in reconciliation; changing the member's team role releases it (database trigger).
+model OidcTeamGrant {
+  id           String     @id @default(cuid())
+  teamMemberId String     @unique
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  userId       String
+  teamId       String
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, teamId])
+  @@index([teamId])
+}
+
+/// Raised automatically when an existing account's first SSO sign-in needs an administrator's
+/// approval. Deleted when the account links or the request is dismissed.
+model OidcLinkingRequest {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  email         String
+  reason        String
+  requestedAt   DateTime @default(now())
+  lastAttemptAt DateTime @default(now())
+  attempts      Int      @default(1)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lastAttemptAt])
 }
 
 model ApiKey {
@@ -4262,6 +4304,11 @@ model RunbookPreviewAuthorization {
   /// An administrator approved their own request after explicit confirmation.
   selfApproved Boolean @default(false)
   rejectedAt DateTime?
+  rejectedById String?
+  /// Reviewer-supplied, untrusted text (at most 500 characters).
+  decisionReason String?
+  /// Set on approval: the run must start before this time.
+  commitDeadline DateTime?
 
   @@index([expiresAt])
   @@index([actorId, createdAt])
@@ -4603,6 +4650,8 @@ model OidcTestFlow {
   expiresAt           DateTime
   consumedAt          DateTime?
   createdAt           DateTime  @default(now())
+  failureCode         String?
+  diagnostics         Json?
 
   @@index([expiresAt])
 }
@@ -4801,6 +4850,14 @@ model McpPolicy {
   // Capabilities an administrator never exposes through MCP: catalog operationIds, standalone tool
   // and prompt names, and `domain:<name>` markers. Unknown entries are ignored when read.
   disabledCapabilities String[] @default([])
+  // How long a prepared change waits for review (15..1440), and how long an approved change
+  // may wait to be committed.
+  approvalTtlMinutes Int @default(240)
+  approvalCommitWindowMinutes Int @default(30)
+  // A refresh token replayed within this many seconds, while its successor is unused, is reissued.
+  refreshReuseGraceSeconds Int @default(30)
+  // Optimistic concurrency for policy saves.
+  policyRevision Int @default(0)
   updatedAt DateTime @updatedAt
 }
 
@@ -4825,6 +4882,8 @@ model McpGrant {
   clientId String
   userId String
   userTokenVersion Int
+  // Pins User.mcpRevocationVersion; userTokenVersion is kept for one release.
+  userRevocationVersion Int @default(0)
   scopes String[]
   resource String
   revokedAt DateTime?
@@ -4832,12 +4891,16 @@ model McpGrant {
   // Hard cap for sliding renewal; null for grants created before sliding sessions.
   absoluteExpiresAt DateTime?
   lastUsedAt DateTime?
+  // Last tool call through this grant, written at most once a minute.
+  lastCallAt DateTime?
+  lastTool String?
   createdAt DateTime @default(now())
   client McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   codes McpAuthorizationCode[]
   tokens McpToken[]
   @@index([userId, createdAt, id])
   @@index([expiresAt])
+  @@index([clientId])
 }
 
 model McpAuthorizationCode {
@@ -4849,6 +4912,7 @@ model McpAuthorizationCode {
   consumedAt DateTime?
   grant McpGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
   @@index([expiresAt])
+  @@index([grantId])
 }
 
 model McpToken {
@@ -4860,9 +4924,14 @@ model McpToken {
   accessExpiresAt DateTime
   refreshExpiresAt DateTime
   rotatedAt DateTime?
+  // The token issued when this one was rotated; drives the refresh reuse grace window.
+  successorId String?
+  // When the access token last authenticated a request.
+  lastUsedAt DateTime?
   createdAt DateTime @default(now())
   grant McpGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
   @@index([refreshExpiresAt])
+  @@index([grantId])
 }
 
 model McpOperationApproval {
@@ -4885,6 +4954,11 @@ model McpOperationApproval {
   selfApproved Boolean @default(false)
   reviewedAt DateTime?
   rejectedAt DateTime?
+  rejectedById String?
+  /// Reviewer-supplied, untrusted text (at most 500 characters).
+  decisionReason String?
+  /// Set on approval: the change must be committed before this time.
+  commitDeadline DateTime?
   executingAt DateTime?
   committedAt DateTime?
   outcome Json?
@@ -4922,7 +4996,8 @@ model McpConsentRequest {
   // The subset of `scopes` the assistant named explicitly; empty when it asked for the default.
   requestedScopes String[] @default([])
   challenge String
-  state String
+  // Optional in OAuth; PKCE is always required.
+  state String?
   expiresAt DateTime
   consumedAt DateTime?
   @@index([expiresAt])

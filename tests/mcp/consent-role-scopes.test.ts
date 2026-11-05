@@ -135,6 +135,6 @@ describe('the consent offer', () => {
     expect(describeMcpScope('escalation-policies:read')).toBe('View escalation policies');
     expect(describeMcpScope('runbooks:approve')).toBe('Approve runbooks waiting for review');
     expect(describeMcpScope('integrations:delete')).toBe('Delete integrations');
-    expect(describeMcpScope('runbooks:execute')).toBe('Run runbooks after administrator approval');
+    expect(describeMcpScope('runbooks:execute')).toBe('Run runbooks after approval');
   });
 });

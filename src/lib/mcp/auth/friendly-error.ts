@@ -1,4 +1,5 @@
 import { McpBoundaryError } from '../core/errors';
+import { MCP_DOCS_LINKS } from '../docs-links';
 
 const MESSAGES = new Map<string, { title: string; body: string }>(
   Object.entries({
@@ -44,11 +45,19 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
     },
     MCP_RATE_LIMITED: {
       title: 'Too many attempts',
-      body: 'Wait a minute, then connect again from your assistant.',
+      body: 'Too many requests in the last minute. Wait a moment, then try again.',
+    },
+    temporarily_unavailable: {
+      title: 'OpsKnight is busy',
+      body: 'Too many sign-in requests arrived at once. Your connection is still valid; retry in a few seconds.',
     },
     MCP_INACTIVE_PRINCIPAL: {
       title: 'Your account cannot connect assistants',
       body: 'Your OpsKnight account is inactive or was signed out. Sign in again and retry.',
+    },
+    MCP_ACCESS_CHANGED: {
+      title: 'Your access changed',
+      body: 'Your password, email, account status or administrator role changed, or you signed out everywhere. Reconnect OpsKnight from your assistant to sign in again.',
     },
     invalid_client: {
       title: 'This assistant is not allowed to connect',
@@ -90,12 +99,14 @@ export function oauthErrorFor(code: string) {
     case 'MCP_RATE_LIMITED':
     case 'MCP_DISABLED':
     case 'MCP_BUSY':
+    case 'temporarily_unavailable':
       return 'temporarily_unavailable';
     case 'invalid_client':
     case 'MCP_CLIENT_UNKNOWN':
     case 'MCP_CLIENT_REVOKED':
       return 'unauthorized_client';
     case 'MCP_INACTIVE_PRINCIPAL':
+    case 'MCP_ACCESS_CHANGED':
       return 'access_denied';
     case 'invalid_request':
     case 'invalid_target':
@@ -113,7 +124,7 @@ export function mcpErrorPage(error: unknown) {
   const code = error instanceof McpBoundaryError ? error.code : 'MCP_UNAVAILABLE';
   const status = error instanceof McpBoundaryError ? error.status : 503;
   const { title, body } = friendlyMcpError(code);
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(title)} | OpsKnight</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f9;color:#14171f}main{max-width:26rem;margin:1rem;padding:2rem;background:#fff;border:1px solid #e3e6ec;border-radius:12px}h1{font-size:1.25rem;margin:0 0 .5rem}p{margin:.25rem 0;color:#4b5262}small{color:#7b8294}@media(prefers-color-scheme:dark){body{background:#0e1117;color:#e8eaf0}main{background:#171b24;border-color:#2a3040}p{color:#a8afbf}}</style></head><body><main role="alert"><h1>${escape(title)}</h1><p>${escape(body)}</p><p><small>Reference: ${escape(code)}</small></p></main></body></html>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(title)} | OpsKnight</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f9;color:#14171f}main{max-width:26rem;margin:1rem;padding:2rem;background:#fff;border:1px solid #e3e6ec;border-radius:12px}h1{font-size:1.25rem;margin:0 0 .5rem}p{margin:.25rem 0;color:#4b5262}small{color:#7b8294}a{color:inherit}@media(prefers-color-scheme:dark){body{background:#0e1117;color:#e8eaf0}main{background:#171b24;border-color:#2a3040}p{color:#a8afbf}}</style></head><body><main role="alert"><h1>${escape(title)}</h1><p>${escape(body)}</p><p><small>Reference: ${escape(code)} · <a href="${MCP_DOCS_LINKS.troubleshooting}" rel="noopener noreferrer">Troubleshooting guide</a></small></p></main></body></html>`;
   return new Response(html, {
     status,
     headers: {

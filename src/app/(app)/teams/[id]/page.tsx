@@ -59,64 +59,67 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
   }
 
   const [team, permissions, activeIncidentsCount] = await Promise.all([
-      prisma.team.findUnique({
-        where: { id },
-        include: {
-          teamLead: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatarUrl: true,
-              gender: true,
-            },
+    prisma.team.findUnique({
+      where: { id },
+      include: {
+        teamLead: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+            gender: true,
           },
-          members: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  status: true,
-                  avatarUrl: true,
-                  gender: true,
-                },
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                status: true,
+                avatarUrl: true,
+                gender: true,
               },
             },
-            orderBy: { role: 'asc' },
+            // Where a membership comes from, so the roster can say so.
+            scimGrant: { select: { teamMemberId: true } },
+            oidcGrant: { select: { id: true } },
           },
-          services: {
-            select: {
-              id: true,
-              name: true,
-              description: true,
-              status: true,
-              policy: {
-                select: {
-                  id: true,
-                  name: true,
-                  _count: { select: { steps: true } },
-                },
+          orderBy: { role: 'asc' },
+        },
+        services: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            status: true,
+            policy: {
+              select: {
+                id: true,
+                name: true,
+                _count: { select: { steps: true } },
               },
-            },
-          },
-          _count: {
-            select: {
-              members: true,
-              services: true,
             },
           },
         },
-      }),
-      getUserPermissions(),
-      prisma.incident.count({
-        where: {
-          service: { teamId: id },
-          status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+        _count: {
+          select: {
+            members: true,
+            services: true,
+          },
         },
-      }),
-    ]);
+      },
+    }),
+    getUserPermissions(),
+    prisma.incident.count({
+      where: {
+        service: { teamId: id },
+        status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+      },
+    }),
+  ]);
 
   if (!team) {
     notFound();

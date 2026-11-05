@@ -55,7 +55,7 @@ describe('authentication control CSRF origin boundary', () => {
           headers: { Origin: 'https://recovery.example.test' },
         })
       )
-    ).rejects.toThrow('conflicting canonical');
+    ).rejects.toThrow('more than one address');
   });
   it('allows only the deployment-pinned recovery origin during a canonical conflict', async () => {
     vi.stubEnv('AUTH_RECOVERY_ORIGIN', 'https://recovery.example.test');
@@ -66,7 +66,7 @@ describe('authentication control CSRF origin boundary', () => {
       headers: { Origin: 'https://recovery.example.test', 'Sec-Fetch-Site': 'same-origin' },
     });
     await expect(assertAuthenticationOrigin(request, true)).resolves.toBeUndefined();
-    await expect(assertAuthenticationOrigin(request)).rejects.toThrow('conflicting canonical');
+    await expect(assertAuthenticationOrigin(request)).rejects.toThrow('more than one address');
     await expect(
       assertAuthenticationOrigin(
         new Request(request.url, { headers: { Origin: 'https://broken.example.test' } }),

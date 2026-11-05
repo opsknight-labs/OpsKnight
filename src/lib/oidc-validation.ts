@@ -561,8 +561,7 @@ type CachedMetadata = {
 let runtimeMetadataCache: CachedMetadata | undefined;
 let revalidationInFlight: Promise<OidcValidationResult> | undefined;
 let negativeMetadataCache:
-  | { key: string; result: OidcValidationResult; expiresAt: number }
-  | undefined;
+  { key: string; result: OidcValidationResult; expiresAt: number } | undefined;
 
 /**
  * Resolve pinned metadata for the authentication runtime. Successful results
@@ -715,7 +714,8 @@ export type OidcRuntimeCapability = {
  * only when NextAuth runtime metadata validation has actually succeeded.
  */
 export async function getOidcRuntimeCapability(): Promise<OidcRuntimeCapability> {
-  const [config, publicConfig] = await Promise.all([getOidcConfig(), getOidcPublicConfig()]);
+  // The sign-in page must show SSO the moment it is turned on; getOidcConfig is already fresh.
+  const [config, publicConfig] = await Promise.all([getOidcConfig(), getOidcPublicConfig(true)]);
 
   if (!publicConfig?.enabled) {
     return {

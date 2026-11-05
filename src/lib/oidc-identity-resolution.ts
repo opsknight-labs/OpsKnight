@@ -35,7 +35,9 @@ export type OidcIdentityResolutionFailure =
   | 'OIDC_LINK_NOT_APPROVED'
   | 'OIDC_LINK_APPROVAL_EXPIRED'
   | 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT'
-  | 'OIDC_TARGET_NOT_OPERATIONAL';
+  | 'OIDC_TARGET_NOT_OPERATIONAL'
+  | 'OIDC_ROLE_UNMATCHED_DENIED'
+  | 'OIDC_GROUP_CLAIMS_INCOMPLETE';
 
 export type OidcIdentityResolutionResult =
   | {
@@ -44,6 +46,8 @@ export type OidcIdentityResolutionResult =
       identityCreated: boolean;
       userCreated: boolean;
       approvalConsumed: boolean;
+      /** How a new identity was linked to an existing account, for the audit trail. */
+      linkMethod?: 'APPROVAL' | 'DIRECTORY' | 'DOMAIN_TRUSTED';
     }
   | {
       ok: false;
@@ -66,7 +70,51 @@ type ResolveOidcIdentityInput = {
   configVersion?: number;
   requireCurrentRegistration?: boolean;
   organizationId?: string | null;
+  /**
+   * No role rule matched and the workspace denies unmatched people. Refused before any account
+   * is created or linked, unless an administrator set the existing account's role by hand.
+   */
+  denyUnmatched?: boolean;
+  /**
+   * The provider sent an incomplete group list and the workspace denies unmatched people. A new
+   * person cannot be evaluated, so no account is created. Existing accounts are handled by
+   * resolveSignInRole, which only ever lowers an elevated SSO role in this case.
+   */
+  denyNewIncomplete?: boolean;
+  /** The role a newly created account starts with (the workspace default role). */
+  initialRole?: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+  /**
+   * Existing non-administrator accounts in the allowed domains link on first sign-in without a
+   * per-user approval, when the provider proves the email domain.
+   */
+  domainTrustedLinking?: boolean;
 };
+
+/**
+ * Domain-trusted linking needs proof that the person controls a mailbox in an allowed domain,
+ * which differs per provider. Microsoft Entra's email claim is editable and unverified for
+ * guests, so Entra must also send xms_edov (email domain owner verified).
+ */
+export function canTrustEmailDomainForLinking(input: {
+  providerType: string | null | undefined;
+  email: string;
+  emailVerifiedClaim: boolean | undefined;
+  allowedDomains: string[];
+  claims?: OidcClaims;
+}): boolean {
+  const domain = input.email.split('@')[1]?.toLowerCase();
+  const allowed = new Set(input.allowedDomains.map(value => value.trim().toLowerCase()));
+  if (!domain || !allowed.has(domain)) return false;
+  if (input.providerType === 'azure') {
+    const edov = input.claims?.xms_edov;
+    return edov === true || edov === 1 || edov === '1' || edov === 'true';
+  }
+  if (input.providerType === 'google') {
+    const hostedDomain = typeof input.claims?.hd === 'string' ? input.claims.hd.toLowerCase() : '';
+    return input.emailVerifiedClaim === true && hostedDomain === domain;
+  }
+  return input.emailVerifiedClaim === true;
+}
 
 const targetUserSelect = {
   id: true,
@@ -290,12 +338,17 @@ export async function resolveOidcIdentityForSignIn(
           : [];
       if (trustedCandidates.length > 1) throw new Error('OIDC_AMBIGUOUS_IDENTITY_CONFLICT');
       const trustedIdentity = trustedCandidates[0] ?? null;
-      const emailUser =
-        trustedIdentity?.user ??
-        (await tx.user.findUnique({
-          where: { email },
-          select: targetUserSelect,
-        }));
+      // Accounts created before canonical email reservation may differ only in letter case.
+      // Two such accounts are ambiguous: never pick one of them arbitrarily.
+      const emailCandidates = trustedIdentity
+        ? []
+        : await tx.user.findMany({
+            where: { email: { equals: email, mode: 'insensitive' } },
+            select: targetUserSelect,
+            take: 2,
+          });
+      if (emailCandidates.length > 1) throw new Error('OIDC_AMBIGUOUS_IDENTITY_CONFLICT');
+      const emailUser = trustedIdentity?.user ?? emailCandidates[0] ?? null;
 
       if (emailUser?.status === 'DISABLED') {
         throw new Error('OIDC_TARGET_NOT_OPERATIONAL');
@@ -309,7 +362,25 @@ export async function resolveOidcIdentityForSignIn(
           throw new Error('OIDC_EMAIL_ASSURANCE_REQUIRED');
         }
 
-        if (!trustedIdentity) {
+        const domainTrusted =
+          !trustedIdentity &&
+          input.domainTrustedLinking === true &&
+          emailUser.role !== 'ADMIN' &&
+          canTrustEmailDomainForLinking({
+            providerType: input.providerType,
+            email,
+            emailVerifiedClaim: input.emailVerifiedClaim,
+            allowedDomains: input.allowedDomains,
+            claims: input.claims,
+          });
+
+        // Checked before any approval is consumed or identity created, so a refused sign-in
+        // leaves the account exactly as it was.
+        if (input.denyUnmatched && emailUser.roleSource !== 'MANUAL') {
+          throw new Error('OIDC_ROLE_UNMATCHED_DENIED');
+        }
+
+        if (!trustedIdentity && !domainTrusted) {
           const approval = await tx.oidcLinkingApproval.findUnique({
             where: { userId: emailUser.id },
             select: {
@@ -383,12 +454,23 @@ export async function resolveOidcIdentityForSignIn(
           user: emailUser,
           identityCreated: true,
           userCreated: false,
-          approvalConsumed: !trustedIdentity,
+          approvalConsumed: !trustedIdentity && !domainTrusted,
+          linkMethod: trustedIdentity
+            ? ('DIRECTORY' as const)
+            : domainTrusted
+              ? ('DOMAIN_TRUSTED' as const)
+              : ('APPROVAL' as const),
         };
       }
 
       if (!input.autoProvision) {
         throw new Error('OIDC_AUTO_PROVISION_DISABLED');
+      }
+      if (input.denyUnmatched) {
+        throw new Error('OIDC_ROLE_UNMATCHED_DENIED');
+      }
+      if (input.denyNewIncomplete) {
+        throw new Error('OIDC_GROUP_CLAIMS_INCOMPLETE');
       }
 
       // JIT user and immutable identity are one atomic unit. If identity
@@ -397,7 +479,7 @@ export async function resolveOidcIdentityForSignIn(
         data: {
           email,
           name: input.displayName || email.split('@')[0],
-          role: 'USER',
+          role: input.initialRole ?? 'USER',
           roleSource: 'OIDC',
           status: 'ACTIVE',
         },
@@ -447,6 +529,8 @@ export async function resolveOidcIdentityForSignIn(
       'OIDC_LINK_APPROVAL_EXPIRED',
       'OIDC_AMBIGUOUS_IDENTITY_CONFLICT',
       'OIDC_TARGET_NOT_OPERATIONAL',
+      'OIDC_ROLE_UNMATCHED_DENIED',
+      'OIDC_GROUP_CLAIMS_INCOMPLETE',
     ]);
     if (knownReasons.has(reason as OidcIdentityResolutionFailure)) {
       return { ok: false, reason: reason as OidcIdentityResolutionFailure };

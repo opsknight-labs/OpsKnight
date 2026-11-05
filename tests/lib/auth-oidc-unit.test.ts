@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LastAdministratorError } from '@/lib/users/last-administrator-error';
 import type { NextAuthOptions } from 'next-auth';
 
 vi.mock('@/lib/oidc-config', () => ({
@@ -36,6 +37,10 @@ vi.mock('@/lib/users/admin-invariants', () => ({
   updateUserSecurityState: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/lib/auth-control/security-events', () => ({
+  dedupedSecurityEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/lib/prisma', () => ({
   default: {
     authenticationPolicy: {
@@ -60,6 +65,7 @@ import prisma from '@/lib/prisma';
 import { getOidcConfig } from '@/lib/oidc-config';
 import { resolveOidcIdentityForSignIn } from '@/lib/oidc-identity-resolution';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
+import { dedupedSecurityEvent } from '@/lib/auth-control/security-events';
 import { getAuthOptions, resetAuthOptionsCache, revokeUserSessions } from '@/lib/auth';
 
 type SignInCallback = NonNullable<NonNullable<NextAuthOptions['callbacks']>['signIn']>;
@@ -139,7 +145,7 @@ describe('Auth JWT + OIDC callback contract', () => {
       credentials: undefined,
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=[0-9a-f]{12}$/);
     expect(resolveOidcIdentityForSignIn).not.toHaveBeenCalled();
   });
 
@@ -160,7 +166,7 @@ describe('Auth JWT + OIDC callback contract', () => {
       credentials: undefined,
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=[0-9a-f]{12}$/);
     expect(resolveOidcIdentityForSignIn).toHaveBeenCalledWith(
       expect.objectContaining({
         issuer: 'https://login.example.com',
@@ -224,7 +230,7 @@ describe('Auth JWT + OIDC callback contract', () => {
       credentials: undefined,
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_LINK_NOT_APPROVED&ref=[0-9a-f]{12}$/);
   });
 
   it('returns a fixed error code instead of throwing raw errors into the redirect URL', async () => {
@@ -243,7 +249,7 @@ describe('Auth JWT + OIDC callback contract', () => {
       credentials: undefined,
     });
 
-    expect(result).toBe('/login?error=OAuthCallback');
+    expect(result).toMatch(/^\/login\?error=SSO_INTERNAL_ERROR&ref=[0-9a-f]{12}$/);
   });
 
   it('de-provisions an elevated role when no role mapping matches', async () => {
@@ -320,7 +326,7 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(updateUserSecurityState).not.toHaveBeenCalled();
   });
 
-  it('gives a matching IdP rule authority over a manually assigned role', async () => {
+  it('keeps a manually assigned role even when an IdP rule matches', async () => {
     vi.mocked(getOidcConfig).mockResolvedValue({
       enabled: true,
       configVersion: 1,
@@ -337,6 +343,46 @@ describe('Auth JWT + OIDC callback contract', () => {
     vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
       successfulResolution({ role: 'USER', roleSource: 'MANUAL' })
     );
+    resetAuthOptionsCache();
+    const signIn = await getSignInCallback();
+
+    const result = await signIn({
+      user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { email_verified: true, sub: 'oidc-sub', groups: ['responders'] } as never,
+      email: undefined,
+      credentials: undefined,
+    });
+
+    expect(result).toBe(true);
+    expect(updateUserSecurityState).not.toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ role: expect.anything() }),
+      expect.anything(),
+      undefined,
+      expect.any(Function),
+      undefined
+    );
+  });
+
+  it('moves an existing account under directory control on its first SSO link when a rule matches', async () => {
+    vi.mocked(getOidcConfig).mockResolvedValue({
+      enabled: true,
+      configVersion: 1,
+      issuer: 'https://login.example.com/',
+      clientId: 'client-id',
+      clientSecret: 'secret',
+      autoProvision: true,
+      allowedDomains: [],
+      roleMapping: [{ claim: 'groups', value: 'responders', role: 'RESPONDER' }],
+      customScopes: null,
+      providerType: 'custom',
+      profileMapping: null,
+    });
+    vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue({
+      ...successfulResolution({ role: 'USER', roleSource: 'MANUAL' }),
+      identityCreated: true,
+    });
     resetAuthOptionsCache();
     const signIn = await getSignInCallback();
 
@@ -872,11 +918,11 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(new Date(result.expires).getTime()).toBe(sessionExpires * 1000);
   });
 
-  it('revokeUserSessions increments tokenVersion', async () => {
+  it('revokeUserSessions increments tokenVersion and revokes MCP access', async () => {
     await revokeUserSessions('u1');
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { tokenVersion: { increment: 1 } },
+      data: { tokenVersion: { increment: 1 }, mcpRevocationVersion: { increment: 1 } },
     });
   });
 });
@@ -913,5 +959,117 @@ describe('provider activation across auth option caches', () => {
     expect(changed).not.toBe(previous);
     const converged = await getAuthOptions();
     expect(converged).not.toBe(changed);
+  });
+
+  describe('role policy v2 at sign-in', () => {
+    const baseConfig = {
+      enabled: true,
+      configVersion: 1,
+      issuer: 'https://login.example.com/',
+      clientId: 'client-id',
+      clientSecret: 'secret',
+      autoProvision: true,
+      allowedDomains: [],
+      roleMapping: [{ claim: 'groups', value: 'ops-admins', role: 'ADMIN' as const }],
+      customScopes: 'groups',
+      providerType: 'custom',
+      profileMapping: null,
+    };
+    const signInWith = async (profile: Record<string, unknown>) => {
+      resetAuthOptionsCache();
+      const signIn = await getSignInCallback();
+      return signIn({
+        user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
+        account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+        profile: { email_verified: true, sub: 'oidc-sub', ...profile } as never,
+        email: undefined,
+        credentials: undefined,
+      });
+    };
+
+    it('refuses unmatched directory-managed people when the workspace denies them', async () => {
+      vi.mocked(getOidcConfig).mockResolvedValue({ ...baseConfig, unmatchedPolicy: 'DENY' });
+      vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(successfulResolution());
+      const result = await signInWith({ groups: ['other'] });
+      expect(result).toMatch(/^\/login\?error=SSO_ROLE_UNMATCHED_DENIED&ref=/);
+      expect(vi.mocked(resolveOidcIdentityForSignIn).mock.calls.at(-1)?.[0]).toMatchObject({
+        denyUnmatched: true,
+      });
+    });
+
+    it('lets a manually managed account in even when unmatched people are denied', async () => {
+      vi.mocked(getOidcConfig).mockResolvedValue({ ...baseConfig, unmatchedPolicy: 'DENY' });
+      vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
+        successfulResolution({ role: 'RESPONDER', roleSource: 'MANUAL' })
+      );
+      expect(await signInWith({ groups: ['other'] })).toBe(true);
+    });
+
+    it('lowers an elevated SSO role and alerts once when group claims are incomplete', async () => {
+      vi.mocked(getOidcConfig).mockResolvedValue(baseConfig);
+      vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
+        successfulResolution({ role: 'ADMIN', roleSource: 'OIDC' })
+      );
+      vi.mocked(updateUserSecurityState)
+        .mockReset()
+        .mockResolvedValue(undefined as never);
+      expect(await signInWith({ _claim_names: { groups: 'src1' } })).toBe(true);
+      const [userId, mutation] = vi.mocked(updateUserSecurityState).mock.lastCall ?? [];
+      expect(userId).toBe('u1');
+      expect(mutation).toMatchObject({ role: 'USER' });
+      expect(dedupedSecurityEvent).toHaveBeenCalledWith(
+        'oidc-claims-incomplete:u1',
+        expect.any(Number),
+        'auth.oidc.claims.incomplete',
+        'u1',
+        expect.objectContaining({ previousRole: 'ADMIN', roleSource: 'OIDC' })
+      );
+    });
+
+    it('never changes an administrator-set role when group claims are incomplete', async () => {
+      vi.mocked(getOidcConfig).mockResolvedValue(baseConfig);
+      vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
+        successfulResolution({ role: 'ADMIN', roleSource: 'MANUAL' })
+      );
+      vi.mocked(updateUserSecurityState)
+        .mockReset()
+        .mockResolvedValue(undefined as never);
+      expect(await signInWith({ _claim_names: { groups: 'src1' } })).toBe(true);
+      expect(updateUserSecurityState).not.toHaveBeenCalledWith(
+        'u1',
+        expect.objectContaining({ role: expect.anything() }),
+        expect.anything(),
+        undefined,
+        expect.any(Function),
+        expect.anything()
+      );
+    });
+
+    it('keeps the last administrator role instead of failing their sign-in', async () => {
+      vi.mocked(getOidcConfig).mockResolvedValue(baseConfig);
+      vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
+        successfulResolution({ role: 'ADMIN', roleSource: 'OIDC' })
+      );
+      vi.mocked(updateUserSecurityState)
+        .mockReset()
+        .mockRejectedValueOnce(new LastAdministratorError())
+        .mockResolvedValue(undefined as never);
+      expect(await signInWith({ groups: ['everyone'] })).toBe(true);
+      expect(updateUserSecurityState).toHaveBeenLastCalledWith(
+        'u1',
+        {},
+        expect.not.objectContaining({ tokenVersion: expect.anything() }),
+        undefined,
+        expect.any(Function),
+        undefined
+      );
+      expect(dedupedSecurityEvent).toHaveBeenCalledWith(
+        'oidc-last-admin-kept:u1',
+        expect.any(Number),
+        'auth.oidc.last_admin_role_kept',
+        'u1',
+        expect.objectContaining({ mappedRole: 'USER' })
+      );
+    });
   });
 });

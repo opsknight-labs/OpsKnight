@@ -21,7 +21,7 @@ export function GET(request: Request) {
 async function handleGet(request: Request) {
   // Set once the client and its exact redirect URI are verified; only then is it safe to send
   // failures back to the assistant instead of showing them in the browser.
-  let trusted: { redirectUri: string; state: string } | undefined;
+  let trusted: { redirectUri: string; state?: string } | undefined;
   try {
     assertMcpHost(request);
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
@@ -109,7 +109,7 @@ async function handleGet(request: Request) {
           scopes,
           // Consent pre-selects a change permission only when the assistant asked for it by name.
           requestedScopes: narrowed,
-          state: query.state,
+          state: query.state ?? null,
           challenge: query.code_challenge,
           expiresAt: new Date(Date.now() + 300000),
         },
@@ -132,7 +132,7 @@ async function handleGet(request: Request) {
       const target = new URL(trusted.redirectUri);
       target.searchParams.set('error', oauthErrorFor(error.code));
       target.searchParams.set('error_description', friendlyMcpError(error.code).body);
-      target.searchParams.set('state', trusted.state);
+      if (trusted.state) target.searchParams.set('state', trusted.state);
       target.searchParams.set('iss', mcpIssuer());
       return NextResponse.redirect(target);
     }

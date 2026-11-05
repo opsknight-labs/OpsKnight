@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BellRing, CalendarClock, Check, Server } from 'lucide-react';
+import { BellRing, CalendarClock, Check, ClipboardCheck, Server } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import MobileCachedDataNotice from '@/components/mobile/MobileCachedDataNotice';
 import { Button } from '@/components/ui/shadcn/button';
@@ -28,8 +28,9 @@ type NotificationItem = {
   message: string;
   time: string;
   unread: boolean;
-  type: 'incident' | 'service' | 'schedule';
+  type: 'incident' | 'service' | 'schedule' | 'system';
   incidentId: string | null;
+  href?: string | null;
   createdAt: string;
 };
 
@@ -43,6 +44,8 @@ type Filter = 'all' | 'unread';
 
 const resolveNotificationHref = (notification: NotificationItem) => {
   if (notification.incidentId) return appRoutes.incident('mobile', notification.incidentId);
+  if (notification.href?.startsWith('/') && !notification.href.startsWith('//'))
+    return notification.href;
   if (notification.type === 'service') return appRoutes.services('mobile');
   if (notification.type === 'schedule') return appRoutes.schedules('mobile');
   return appRoutes.home('mobile');
@@ -63,6 +66,11 @@ const notificationType = {
     label: 'On-call',
     Icon: CalendarClock,
     tone: 'bg-violet-50 text-violet-700 dark:bg-violet-950/35 dark:text-violet-300',
+  },
+  system: {
+    label: 'Approval',
+    Icon: ClipboardCheck,
+    tone: 'bg-amber-50 text-amber-800 dark:bg-amber-950/35 dark:text-amber-300',
   },
 } as const;
 
@@ -147,10 +155,13 @@ export default function MobileNotificationsClient() {
         if (showLoading) setLoading(false);
       }
     },
+    // The App Router instance is stable, so it is not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeFilter, cacheKey]
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Loads data from the server on mount and filter change.
     void fetchNotifications(true);
   }, [fetchNotifications]);
 

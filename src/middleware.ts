@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { sessionEndMessage } from '@/lib/auth-control/messages';
 import { getToken } from 'next-auth/jwt';
 import { logger } from '@/lib/logger';
 import { getNextAuthSecret } from '@/lib/secret-manager';
@@ -1204,6 +1205,9 @@ export default async function middleware(req: NextRequest) {
     pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
   const url = new URL(loginPath, authoritativeOrigin);
   url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search);
+  // Tell the person why their session ended. Only allow-listed reasons are forwarded.
+  const endedReason = typeof token?.error === 'string' ? token.error : null;
+  if (endedReason && sessionEndMessage(endedReason)) url.searchParams.set('reason', endedReason);
   const redirectResponse = NextResponse.redirect(url);
   redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   redirectResponse.headers.set('Pragma', 'no-cache');

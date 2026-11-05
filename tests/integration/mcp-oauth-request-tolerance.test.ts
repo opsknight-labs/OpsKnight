@@ -159,4 +159,94 @@ describe('OAuth requests from real assistants', () => {
     );
     expect(token.status).toBe(200);
   });
+
+  async function consent(query: URLSearchParams, scopes = ['incidents:read']) {
+    const response = await call(query);
+    expect(response.status).toBe(307);
+    const consentUrl = new URL(response.headers.get('location')!);
+    const { decideMcpConsent } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    const form = new FormData();
+    form.set('id', consentUrl.searchParams.get('id')!);
+    form.set('decision', 'allow');
+    for (const scope of scopes) form.append('scope', scope);
+    actor.location = '';
+    await decideMcpConsent(form);
+    return new URL(actor.location);
+  }
+
+  it('completes a sign-in without state (PKCE still required) and returns no state', async () => {
+    const query = authorizeQuery();
+    query.delete('state');
+    const callback = await consent(query);
+    expect(callback.pathname).toBe('/callback');
+    expect(callback.searchParams.get('code')).toBeTruthy();
+    expect(callback.searchParams.has('state')).toBe(false);
+    const pending = await db.mcpConsentRequest.findFirstOrThrow({ where: { userId: actor.id } });
+    expect(pending.state).toBeNull();
+    const token = await exchange(
+      new Request(`${origin}/oauth/mcp/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: CLAUDE_CODE_ID,
+          code: callback.searchParams.get('code')!,
+          code_verifier: verifier,
+          redirect_uri: CALLBACK,
+        }),
+      })
+    );
+    expect(token.status).toBe(200);
+    // A short state is accepted too, and echoed back unchanged.
+    expect((await consent(authorizeQuery({ state: 'abc' }))).searchParams.get('state')).toBe('abc');
+  });
+
+  it('replaces an abandoned earlier sign-in but keeps a connection in use on another device', async () => {
+    await consent(authorizeQuery(), ['incidents:read']);
+    const first = await db.mcpGrant.findFirstOrThrow({ where: { userId: actor.id } });
+    await consent(authorizeQuery({ scope: 'incidents:read services:read' }), ['services:read']);
+    const live = await db.mcpGrant.findMany({ where: { userId: actor.id, revokedAt: null } });
+    expect(live).toHaveLength(1);
+    expect(live[0].id).not.toBe(first.id);
+    expect(live[0].scopes).toEqual(['services:read']);
+    expect(
+      (await db.mcpGrant.findUniqueOrThrow({ where: { id: first.id } })).revokedAt
+    ).not.toBeNull();
+    const audit = await db.auditLog.findFirstOrThrow({
+      where: { action: 'mcp.grant.superseded', entityId: live[0].id },
+    });
+    expect(audit.details).toMatchObject({ metadata: { supersededGrantIds: [first.id] } });
+    // A connection in use (the same assistant on another device) stays signed in.
+    await db.mcpToken.create({
+      data: {
+        grantId: live[0].id,
+        accessHash: `a-${live[0].id}`,
+        refreshHash: `r-${live[0].id}`,
+        scopes: live[0].scopes,
+        accessExpiresAt: new Date(Date.now() + 300000),
+        refreshExpiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    await consent(authorizeQuery(), ['incidents:read']);
+    expect(
+      (await db.mcpGrant.findUniqueOrThrow({ where: { id: live[0].id } })).revokedAt
+    ).toBeNull();
+    expect(await db.mcpGrant.count({ where: { userId: actor.id, revokedAt: null } })).toBe(2);
+    // Another person's connection to the same assistant is untouched.
+    const other = await createTestUser({ role: 'ADMIN' });
+    const otherGrant = await db.mcpGrant.create({
+      data: {
+        userId: other.id,
+        userTokenVersion: 0,
+        clientId: live[0].clientId,
+        scopes: ['incidents:read'],
+        resource: live[0].resource,
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    await consent(authorizeQuery(), ['incidents:read']);
+    expect(
+      (await db.mcpGrant.findUniqueOrThrow({ where: { id: otherGrant.id } })).revokedAt
+    ).toBeNull();
+  });
 });

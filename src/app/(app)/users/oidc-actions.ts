@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
@@ -8,12 +9,19 @@ import { logger } from '@/lib/logger';
 import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 import { getOidcLinkingApprovalExpiry, type OidcLinkingState } from '@/lib/oidc-linking-approval';
 import {
+  approveBulkLinking,
+  previewBulkLinking,
+  type BulkLinkingInput,
+} from '@/lib/oidc-linking-bulk';
+import {
   getActiveLinkingProvider,
   resolveOidcLinkingStatus,
   type ActiveLinkingProvider,
 } from '@/lib/oidc-linking-status';
 
 export type { OidcLinkingState };
+
+const userIdSchema = z.string().trim().min(1).max(128);
 
 export type OidcLinkingApprovalResult = {
   success?: boolean;
@@ -124,6 +132,7 @@ export async function allowOidcLinking(userId: string): Promise<OidcLinkingAppro
       generation: { increment: 1 },
     },
   });
+  await prisma.oidcLinkingRequest.deleteMany({ where: { userId: user.id } });
 
   await logAudit({
     action: renewed ? 'user.oidc_linking.renewed' : 'user.oidc_linking.approved',
@@ -219,4 +228,120 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
   revalidatePath('/users');
   revalidatePath('/audit');
   return { success: true, state: 'revoked' };
+}
+
+/**
+ * A manual role is sticky: single sign-on never overwrites it. This hands the role back to the
+ * identity provider, which applies the role rules at the person's next SSO sign-in.
+ */
+export async function returnRoleToDirectory(
+  input: string
+): Promise<{ success?: boolean; error?: string }> {
+  let admin: { id: string; email: string };
+  try {
+    admin = await assertAdmin();
+  } catch {
+    return { error: 'Unauthorized. Admin access required.' };
+  }
+  const parsed = userIdSchema.safeParse(input);
+  if (!parsed.success) return { error: 'User not found.' };
+  const userId = parsed.data;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, roleSource: true, oidcIdentities: { select: { id: true } } },
+  });
+  if (!user) return { error: 'User not found.' };
+  if (user.roleSource === 'OIDC') return { success: true };
+  if (user.oidcIdentities.length === 0)
+    return {
+      error:
+        'This person has not signed in with single sign-on yet, so there is no directory role to return to.',
+    };
+  await prisma.user.update({ where: { id: user.id }, data: { roleSource: 'OIDC' } });
+  await logAudit({
+    action: 'user.role.returned_to_directory',
+    entityType: 'USER',
+    entityId: user.id,
+    actorId: admin.id,
+    details: { role: user.role, previousRoleSource: user.roleSource },
+  });
+  revalidatePath('/users');
+  revalidatePath('/settings/system');
+  return { success: true };
+}
+
+export async function previewOidcLinkingBulk(input: BulkLinkingInput) {
+  try {
+    await assertAdmin();
+  } catch {
+    return { error: 'Unauthorized. Admin access required.' };
+  }
+  try {
+    return { success: true as const, ...(await previewBulkLinking(input)) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Could not preview approvals.' };
+  }
+}
+
+/**
+ * Approves first SSO sign-in for many people at once. Each approval is still bound to the
+ * provider registration and the person's own email, expires, and is used once.
+ */
+export async function approveOidcLinkingBulk(input: BulkLinkingInput) {
+  let admin: { id: string; email: string };
+  try {
+    admin = await assertAdmin();
+  } catch {
+    return { error: 'Unauthorized. Admin access required.' };
+  }
+  try {
+    const result = await approveBulkLinking(input, admin.id);
+    await logAudit({
+      action: 'user.oidc_linking.approved.bulk',
+      entityType: 'USER',
+      entityId: 'bulk',
+      actorId: admin.id,
+      details: {
+        scope: input.scope,
+        domains: input.domains ?? null,
+        revisionId: input.revisionId ?? null,
+        approved: result.approved,
+        expiresAt: result.expiresAt,
+        userIds: result.userIds,
+      },
+    });
+    revalidatePath('/users');
+    revalidatePath('/settings/system');
+    return {
+      success: true as const,
+      approved: result.approved,
+      remaining: result.remaining,
+      expiresAt: result.expiresAt,
+    };
+  } catch (error) {
+    logger.error('[OIDC] Bulk linking approval failed', { component: 'oidc-actions', error });
+    return { error: error instanceof Error ? error.message : 'Could not approve SSO access.' };
+  }
+}
+
+export async function dismissOidcLinkingRequest(input: string) {
+  let admin: { id: string; email: string };
+  try {
+    admin = await assertAdmin();
+  } catch {
+    return { error: 'Unauthorized. Admin access required.' };
+  }
+  const parsed = userIdSchema.safeParse(input);
+  if (!parsed.success) return { error: 'Request not found.' };
+  const userId = parsed.data;
+  const removed = await prisma.oidcLinkingRequest.deleteMany({ where: { userId } });
+  if (removed.count > 0)
+    await logAudit({
+      action: 'user.oidc_linking.request_dismissed',
+      entityType: 'USER',
+      entityId: userId,
+      actorId: admin.id,
+    });
+  revalidatePath('/settings/system');
+  return { success: true };
 }

@@ -1,0 +1,871 @@
+/**
+ * Generated MCP reference pages: troubleshooting (error codes and log events) and permissions
+ * (scopes, roles and operation counts). Every list is read from the code; the only hand-written
+ * parts are the explanations in MCP_ERROR_GUIDE and MCP_LOG_GUIDE, and tests require those to
+ * cover exactly the codes and events the source raises.
+ *
+ * Write the pages with `npm run mcp:docs`; CI runs `npm run mcp:docs:check` and the
+ * tests/mcp/docs-reference.test.ts drift test.
+ */
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { APP_ROLES } from '../../src/lib/authorization';
+import {
+  MCP_CATALOG,
+  isMcpApprovalGated,
+  isMcpExecutable,
+  isMcpSensitiveRead,
+} from '../../src/lib/mcp/catalog';
+import { DEFAULT_ASSISTANT_SCOPES } from '../../src/lib/mcp/auth/client-policy';
+import { buildMcpConsentOffer, isMcpViewScope } from '../../src/lib/mcp/auth/consent-offer';
+import { friendlyMcpError } from '../../src/lib/mcp/auth/friendly-error';
+import { mcpScopesUsableByRole } from '../../src/lib/mcp/auth/role-scopes';
+import { describeMcpScope, supportedMcpScopes } from '../../src/lib/mcp/auth/scopes';
+import { McpBoundaryError } from '../../src/lib/mcp/core/errors';
+import { toolErrorText } from '../../src/lib/mcp/protocol/server';
+
+export const MCP_DOCS_ROOT = 'docs/v2.2.0';
+/** Date the hand-written explanations below were last checked against the code. */
+export const MCP_DOCS_VERIFIED_AT = '2026-11-04';
+export const MCP_TROUBLESHOOTING_PAGE = `${MCP_DOCS_ROOT}/guides/mcp/troubleshooting.md`;
+export const MCP_PERMISSIONS_PAGE = `${MCP_DOCS_ROOT}/reference/mcp/permissions.md`;
+
+type Area = 'sign-in' | 'tools' | 'approvals' | 'settings' | 'server';
+
+const AREA_TITLE: Record<Area, string> = {
+  'sign-in': 'Connecting and signing in',
+  tools: 'Tool calls',
+  approvals: 'Reviewed changes',
+  settings: 'Settings pages',
+  server: 'Server configuration and start-up',
+};
+
+type Guide = { area: Area; meaning: string; fix: string };
+
+/** One explanation per MCP_* code the source raises. A new code without an entry fails CI. */
+export const MCP_ERROR_GUIDE: Record<string, Guide> = {
+  MCP_ACCESS_CHANGED: {
+    area: 'sign-in',
+    meaning:
+      "A security event ended the connection: the person's password or email changed, they were demoted from Administrator, deactivated, signed out everywhere, or an administrator revoked their sessions.",
+    fix: 'Reconnect OpsKnight from the assistant. Team and ordinary role changes do not cause this.',
+  },
+  MCP_ADMIN_REQUIRED: {
+    area: 'settings',
+    meaning:
+      'The settings action needs an administrator (or, for runbook approvals, a runbook approver).',
+    fix: 'Ask an administrator.',
+  },
+  MCP_ALREADY_CONFIGURED: {
+    area: 'settings',
+    meaning: 'Quick setup was clicked while MCP was already on.',
+    fix: 'Reload the page; use Access policy to change settings.',
+  },
+  MCP_APPROVAL_BACKLOG: {
+    area: 'approvals',
+    meaning: 'This connection already has 20 configuration changes waiting or approved but unused.',
+    fix: 'Review, reject or let the pending requests expire, then prepare again.',
+  },
+  MCP_APPROVAL_EXPIRED: {
+    area: 'approvals',
+    meaning:
+      'The request was not reviewed within the review window, or was approved but not applied within the commit window.',
+    fix: 'Prepare the change again with a new idempotencyKey. Administrators can lengthen both windows under Access policy → Advanced → Reviewed actions.',
+  },
+  MCP_APPROVAL_GUARD_NOT_ENFORCED: {
+    area: 'server',
+    meaning: 'An approved change reached a route that did not run the shared approval check.',
+    fix: 'Report it: this is a server defect. Nothing is retried automatically.',
+  },
+  MCP_APPROVAL_PLAN_CHANGED: {
+    area: 'approvals',
+    meaning:
+      'The reviewed request no longer matches: its digest differs, or for a destructive change the target changed after review.',
+    fix: 'Prepare the change again so a reviewer sees the current state.',
+  },
+  MCP_APPROVAL_REJECTED: {
+    area: 'approvals',
+    meaning:
+      'A reviewer rejected the request. The status tools return their reason, labelled untrusted.',
+    fix: 'Read the reason with operation_get_approval or runbook_get_approval; prepare a new request with a new idempotencyKey if appropriate.',
+  },
+  MCP_APPROVAL_REQUIRED: {
+    area: 'approvals',
+    meaning: 'The assistant tried to apply a request that is still waiting for review.',
+    fix: 'Share the reviewUrl and poll the get_approval tool until it reports APPROVED.',
+  },
+  MCP_APPROVAL_UNAVAILABLE: {
+    area: 'approvals',
+    meaning:
+      'No such approval for this connection and person (another grant or user cannot see it).',
+    fix: 'Use the approval ID returned by the prepare call, from the same connection.',
+  },
+  MCP_APPROVER_REQUIRED: {
+    area: 'approvals',
+    meaning: 'The signed-in person cannot approve runbook runs.',
+    fix: 'Ask someone with the runbook approve permission (Responders and Administrators by default).',
+  },
+  MCP_AUTHORITY_CHANGED: {
+    area: 'approvals',
+    meaning: "The requester's connection or permissions changed after the request was made.",
+    fix: 'The requester reconnects if needed and prepares the change again.',
+  },
+  MCP_AUTHORIZATION_FAILED: {
+    area: 'sign-in',
+    meaning: 'The consent page could not create the authorization code.',
+    fix: 'Start the connection again from the assistant. Check the server log if it repeats.',
+  },
+  MCP_BODY_TIMEOUT: {
+    area: 'tools',
+    meaning: 'The request body took longer than five seconds to arrive.',
+    fix: 'Retry; check proxy buffering and network health.',
+  },
+  MCP_BODY_TOO_LARGE: {
+    area: 'tools',
+    meaning: 'The request body is larger than 64 KiB.',
+    fix: 'Send smaller arguments.',
+  },
+  MCP_BUSY: {
+    area: 'tools',
+    meaning:
+      'The server is at its concurrent-request limit and the request waited too long in the queue (or the queue is full, or this connection already uses half the slots).',
+    fix: 'Retry after the Retry-After interval (1 second). Administrators can raise Concurrent requests per process under Workload limits.',
+  },
+  MCP_CANCELLED: {
+    area: 'tools',
+    meaning: 'The client cancelled the request or closed the connection.',
+    fix: 'Nothing to fix. A change may still have committed; retry with the same idempotencyKey.',
+  },
+  MCP_CAPABILITY_DISABLED: {
+    area: 'tools',
+    meaning:
+      'An administrator turned this tool, operation or domain off under Exposed capabilities.',
+    fix: 'Do not retry. Ask an administrator if you need it.',
+  },
+  MCP_CLIENT_METADATA_FORBIDDEN: {
+    area: 'sign-in',
+    meaning:
+      "The assistant's metadata document host resolves to a private, loopback or otherwise non-public address.",
+    fix: 'The assistant must publish its metadata document on a public HTTPS host.',
+  },
+  MCP_CLIENT_METADATA_TIMEOUT: {
+    area: 'sign-in',
+    meaning: "Fetching the assistant's metadata document took longer than three seconds.",
+    fix: 'Retry. Check outbound HTTPS and DNS from the server.',
+  },
+  MCP_CLIENT_METADATA_TOO_LARGE: {
+    area: 'sign-in',
+    meaning: "The assistant's metadata document is larger than 5 KiB.",
+    fix: 'Contact the assistant vendor.',
+  },
+  MCP_CLIENT_METADATA_UNAVAILABLE: {
+    area: 'sign-in',
+    meaning: "The assistant's metadata document could not be fetched.",
+    fix: 'Retry. Check outbound HTTPS from the server; search the log for mcp.cimd.fetch_failed.',
+  },
+  MCP_CLIENT_NOT_FOUND: {
+    area: 'settings',
+    meaning: 'The assistant to restore does not exist.',
+    fix: 'Reload the Assistants tab.',
+  },
+  MCP_CLIENT_REVOKED: {
+    area: 'sign-in',
+    meaning: 'An administrator revoked this assistant.',
+    fix: 'An administrator restores it on the Assistants tab; everyone then signs in again.',
+  },
+  MCP_CLIENT_UNKNOWN: {
+    area: 'sign-in',
+    meaning:
+      'The assistant presented a client ID this server does not know (often a stale cached registration).',
+    fix: 'Remove OpsKnight from the assistant, add it again with the same URL and sign in.',
+  },
+  MCP_CONFIGURATION_INVALID: {
+    area: 'settings',
+    meaning:
+      'MCP cannot be turned on while a configuration problem is listed (App URL, migrations, encryption key).',
+    fix: 'Fix the problems shown on the Overview tab, then retry.',
+  },
+  MCP_CONFIRMATION_REQUIRED: {
+    area: 'settings',
+    meaning: '"Revoke all active connections" was submitted without ticking the confirmation box.',
+    fix: 'Tick the box in the dialog, then confirm.',
+  },
+  MCP_CONSENT_EXPIRED: {
+    area: 'sign-in',
+    meaning: 'The consent page was opened more than five minutes ago.',
+    fix: 'Start the connection again from the assistant.',
+  },
+  MCP_CONSENT_NO_SCOPES: {
+    area: 'sign-in',
+    meaning: 'Allow was clicked with every permission unticked.',
+    fix: 'Tick at least one permission, or choose Cancel.',
+  },
+  MCP_CONSENT_REPLAY: {
+    area: 'sign-in',
+    meaning: 'The consent form was already submitted (for example from another tab).',
+    fix: 'Return to the assistant; start again if it is not connected.',
+  },
+  MCP_CONTENT_TYPE: {
+    area: 'tools',
+    meaning: 'The POST did not send Content-Type: application/json.',
+    fix: 'Use an MCP client or the official SDK.',
+  },
+  MCP_CYCLIC_PLAN: {
+    area: 'tools',
+    meaning: 'execute_plan steps depend on each other in a cycle.',
+    fix: 'Remove the circular dependsOn.',
+  },
+  MCP_DCR_REQUIRES_SCOPES: {
+    area: 'settings',
+    meaning: 'Automatic connections was turned on with no permissions ticked.',
+    fix: 'Tick at least one permission under What assistants may do.',
+  },
+  MCP_DEADLINE_EXCEEDED: {
+    area: 'tools',
+    meaning: 'The request ran past its ten-second deadline.',
+    fix: 'Retry with fewer steps or a smaller query.limit.',
+  },
+  MCP_DEPENDENCY_FAILED: {
+    area: 'tools',
+    meaning: 'An execute_plan step was skipped because a step it depends on failed.',
+    fix: 'Fix the failed step first.',
+  },
+  MCP_DISABLED: {
+    area: 'sign-in',
+    meaning: 'MCP is turned off for this installation.',
+    fix: 'An administrator turns it on from the Overview tab.',
+  },
+  MCP_DISTINCT_REVIEWER_REQUIRED: {
+    area: 'approvals',
+    meaning: 'Someone who is not an administrator tried to approve their own request.',
+    fix: 'Ask a second person with approval rights to review it.',
+  },
+  MCP_DOMAIN_REJECTED: {
+    area: 'tools',
+    meaning:
+      'OpsKnight refused the operation for a business reason. The error carries a domainCode from the application error registry and, for invalid input, the failing fields.',
+    fix: 'Read domainCode and fields in the structured error, correct the input and retry.',
+  },
+  MCP_DUPLICATE_OPERATION: {
+    area: 'server',
+    meaning: 'Start-up check: two REST operations share an operation ID.',
+    fix: 'Build defect; reinstall a released image.',
+  },
+  MCP_DUPLICATE_OR_UNSAFE_KEY: {
+    area: 'tools',
+    meaning: 'The JSON body repeats a key or uses a reserved key such as __proto__.',
+    fix: 'Send plain JSON with unique keys.',
+  },
+  MCP_DUPLICATE_PARAMETER: {
+    area: 'sign-in',
+    meaning:
+      'An OAuth parameter was sent twice. Unknown parameters are ignored; duplicates are refused.',
+    fix: 'Report it to the assistant vendor; reconnect.',
+  },
+  MCP_DUPLICATE_STEP: {
+    area: 'tools',
+    meaning: 'Two execute_plan steps share an id.',
+    fix: 'Give every step a unique id.',
+  },
+  MCP_EMPTY_BODY: {
+    area: 'tools',
+    meaning: 'The POST had no body.',
+    fix: 'Send a JSON-RPC message.',
+  },
+  MCP_EMPTY_DOMAIN_RESULT: {
+    area: 'tools',
+    meaning: 'An operation returned no body where one was expected.',
+    fix: 'Retry; report it if it repeats.',
+  },
+  MCP_HASH_SECRET_UNAVAILABLE: {
+    area: 'server',
+    meaning: 'No active application encryption key is available to derive the credential key.',
+    fix: 'Configure the same ENCRYPTION_KEY on every replica and restart.',
+  },
+  MCP_HTTPS_REQUIRED: {
+    area: 'server',
+    meaning: 'The App URL is plain HTTP on a host other than localhost.',
+    fix: 'Set an HTTPS App URL in Settings → System.',
+  },
+  MCP_INACTIVE_PRINCIPAL: {
+    area: 'sign-in',
+    meaning: 'The person is deactivated, has no valid role, or their session changed.',
+    fix: 'Sign in again; an administrator reactivates the account if needed.',
+  },
+  MCP_INVALID_ARGUMENTS: {
+    area: 'tools',
+    meaning: 'The arguments do not match the operation schema. The hint names the path and rule.',
+    fix: 'Call describe_operation and correct the arguments.',
+  },
+  MCP_INVALID_CAPABILITY: {
+    area: 'settings',
+    meaning: 'Exposed capabilities was saved with a name that is not a tool, operation or domain.',
+    fix: 'Reload the tab and choose from the list.',
+  },
+  MCP_INVALID_CIMD_HOST: {
+    area: 'settings',
+    meaning: 'A trusted assistant host is not a plain DNS name.',
+    fix: 'Enter one host name per line, without scheme, port or path.',
+  },
+  MCP_INVALID_DEPENDENCY: {
+    area: 'tools',
+    meaning: 'An execute_plan step depends on a step id that does not exist.',
+    fix: 'Correct dependsOn.',
+  },
+  MCP_INVALID_ENCODING: {
+    area: 'tools',
+    meaning: 'The body is not valid UTF-8 JSON.',
+    fix: 'Send UTF-8 JSON.',
+  },
+  MCP_INVALID_GRANT: {
+    area: 'sign-in',
+    meaning:
+      'The connection is no longer usable: revoked, expired, issued for another server address, its assistant was revoked, or policy no longer trusts the assistant.',
+    fix: 'Reconnect. On the Connections tab the row shows why (No longer allowed or Blocked by policy).',
+  },
+  MCP_INVALID_HEADERS: {
+    area: 'tools',
+    meaning: 'A Tasks request is missing the matching Mcp-Method or Mcp-Protocol-Version header.',
+    fix: 'Use a client that supports protocol revision 2026-07-28 for Tasks.',
+  },
+  MCP_INVALID_HOST: {
+    area: 'sign-in',
+    meaning: 'The request Host does not match the configured App URL.',
+    fix: 'Open OpsKnight on the App URL; make the proxy preserve the public Host header.',
+  },
+  MCP_INVALID_NAME: {
+    area: 'settings',
+    meaning: 'A manually registered assistant needs a name.',
+    fix: 'Enter a name.',
+  },
+  MCP_INVALID_ORIGIN: {
+    area: 'sign-in',
+    meaning:
+      'A browser Origin header does not match the App URL, or the App URL itself is invalid.',
+    fix: 'Check the App URL in Settings → System.',
+  },
+  MCP_INVALID_PAGE_SIZE: {
+    area: 'tools',
+    meaning: 'query.limit is outside 1 to 50.',
+    fix: 'Use a limit from 1 to 50 and follow nextCursor for more.',
+  },
+  MCP_INVALID_QUERY: {
+    area: 'tools',
+    meaning: 'A query parameter value is an object or array where a scalar is required.',
+    fix: 'Send a string, number or boolean.',
+  },
+  MCP_INVALID_REDIRECT: {
+    area: 'settings',
+    meaning: 'A manual registration redirect URI is not HTTPS or loopback HTTP.',
+    fix: 'Enter the exact callback the assistant uses.',
+  },
+  MCP_INVALID_RESOURCE_ID: {
+    area: 'tools',
+    meaning: 'A resource id or opsknight:// URI is malformed.',
+    fix: 'Use an id returned by a list or search.',
+  },
+  MCP_INVALID_SCOPE: {
+    area: 'sign-in',
+    meaning:
+      'No requested permission is allowed, or the connection carries admin:manage, which MCP never honours.',
+    fix: 'Reconnect; an administrator checks the scope ceiling.',
+  },
+  MCP_INVALID_SUBSCRIPTION: {
+    area: 'tools',
+    meaning: 'subscriptions/listen received more than five URIs or a non-string URI.',
+    fix: 'Subscribe to at most five opsknight:// URIs per stream.',
+  },
+  MCP_INVALID_TOKEN: {
+    area: 'sign-in',
+    meaning: 'The bearer token is missing, malformed, unknown or expired.',
+    fix: 'Let the assistant refresh or reconnect.',
+  },
+  MCP_JSON_DEPTH: {
+    area: 'tools',
+    meaning: 'The JSON body is nested deeper than 24 levels.',
+    fix: 'Flatten the arguments.',
+  },
+  MCP_LOGIN_REQUIRED: {
+    area: 'settings',
+    meaning: 'The settings or review page needs a signed-in user.',
+    fix: 'Sign in.',
+  },
+  MCP_NOT_A_READ: {
+    area: 'tools',
+    meaning: 'read_operation was called with an operation that changes something.',
+    fix: 'Use call_operation for routine changes or operation_prepare for reviewed ones.',
+  },
+  MCP_OPERATION_BUDGET_EXCEEDED: {
+    area: 'tools',
+    meaning: 'The request uses more operations than Operations per request allows (at most 8).',
+    fix: 'Split the work across several calls.',
+  },
+  MCP_OPERATION_DISABLED: {
+    area: 'tools',
+    meaning: 'Changes or sensitive reads are turned off in Access policy.',
+    fix: 'An administrator turns on reviewed actions or sensitive reads under Advanced.',
+  },
+  MCP_OPERATION_FORBIDDEN: {
+    area: 'tools',
+    meaning: "The person's OpsKnight role does not allow this operation.",
+    fix: 'An administrator changes the role. Reconnecting does not help.',
+  },
+  MCP_OPERATION_UNAVAILABLE: {
+    area: 'tools',
+    meaning: 'Unknown operationId, or the operation is not available through this tool.',
+    fix: 'Use search_capabilities to find one.',
+  },
+  MCP_ORIGIN_REQUIRED: {
+    area: 'server',
+    meaning: 'No App URL is configured.',
+    fix: 'Set the App URL in Settings → System.',
+  },
+  MCP_PLAN_READS_ONLY: {
+    area: 'tools',
+    meaning: 'execute_plan accepts reads only.',
+    fix: 'Run changes one at a time with call_operation.',
+  },
+  MCP_POLICY_CONFLICT: {
+    area: 'settings',
+    meaning: 'Someone else saved the MCP policy or exposed capabilities after this page loaded.',
+    fix: 'Choose Reload policy, re-apply your change and save.',
+  },
+  MCP_RATE_LIMITED: {
+    area: 'sign-in',
+    meaning:
+      'Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person.',
+    fix: 'Wait a minute and retry.',
+  },
+  MCP_REAUTHENTICATION_REQUIRED: {
+    area: 'approvals',
+    meaning: 'Approving a destructive change needs a sign-in within the last two hours.',
+    fix: "Choose Confirm it's you on the review page, sign in again and approve.",
+  },
+  MCP_REGISTRATION_CAPACITY: {
+    area: 'sign-in',
+    meaning: 'The registry already holds 5,000 automatically registered assistants.',
+    fix: 'Retry later; unused registrations are cleaned up after an hour.',
+  },
+  MCP_REGISTRATION_DISABLED: {
+    area: 'sign-in',
+    meaning: 'Automatic connections are off, so assistants cannot register themselves.',
+    fix: 'An administrator turns on Automatic connections under Access policy.',
+  },
+  MCP_RESOURCE_UNAVAILABLE: {
+    area: 'tools',
+    meaning: 'Not found, or not visible to this person.',
+    fix: 'Check the id with a list or search read.',
+  },
+  MCP_RESULT_BUDGET_EXCEEDED: {
+    area: 'tools',
+    meaning: 'The result is larger than 256 KiB.',
+    fix: 'Lower query.limit or narrow the filters.',
+  },
+  MCP_REVIEWER_CHANGED: {
+    area: 'approvals',
+    meaning: "The reviewer's account or session changed while reviewing.",
+    fix: 'Reload the review page and decide again.',
+  },
+  MCP_REVIEWER_NOT_AUTHORIZED: {
+    area: 'approvals',
+    meaning:
+      'Configuration changes need an active administrator who holds every permission the change needs.',
+    fix: 'Ask an administrator to review it.',
+  },
+  MCP_RUNTIME_NOT_LOADED: {
+    area: 'server',
+    meaning: 'MCP configuration was used before it loaded.',
+    fix: 'Retry; report it if it repeats.',
+  },
+  MCP_SCHEMA_DEPTH: {
+    area: 'server',
+    meaning: 'Start-up check: an operation schema nests deeper than 24 levels.',
+    fix: 'Build defect; reinstall a released image.',
+  },
+  MCP_SCHEMA_REFERENCE: {
+    area: 'server',
+    meaning: 'Start-up check: an operation schema has an unresolvable reference.',
+    fix: 'Build defect; reinstall a released image.',
+  },
+  MCP_SCOPE_NOT_GRANTED: {
+    area: 'tools',
+    meaning:
+      'The role allows the operation, but this connection was not granted the permission it needs. The hint names the missing scopes.',
+    fix: 'Reconnect and tick the named permission on the consent page (the administrator ceiling must include it).',
+  },
+  MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED: {
+    area: 'approvals',
+    meaning:
+      'An administrator approving their own request did not tick the self-approval confirmation.',
+    fix: 'Tick the confirmation on the review page and approve again.',
+  },
+  MCP_SESSIONS_UNSUPPORTED: {
+    area: 'tools',
+    meaning: 'The client sent an Mcp-Session-Id header. The server is stateless.',
+    fix: 'Use a client that does not require sessions, or remove the header.',
+  },
+  MCP_STALE_REVIEW: {
+    area: 'server',
+    meaning: 'Start-up check: review.json does not classify every operation.',
+    fix: 'Build defect; reinstall a released image.',
+  },
+  MCP_SUBSCRIPTIONS_BUSY: {
+    area: 'tools',
+    meaning: 'The process already holds 32 subscription streams.',
+    fix: 'Retry later.',
+  },
+  MCP_SUBSCRIPTIONS_LIMIT: {
+    area: 'tools',
+    meaning: 'This connection already holds two subscription streams.',
+    fix: 'Close a stream first.',
+  },
+  MCP_TASK_NOT_FOUND: {
+    area: 'tools',
+    meaning:
+      'Unknown task id, or a task that belongs to another connection or has passed its 24-hour retention.',
+    fix: 'Use the task id returned by runbook_execute_approved.',
+  },
+  MCP_UNAVAILABLE: {
+    area: 'tools',
+    meaning: 'An unexpected server error. The structured error carries a requestId.',
+    fix: 'Retry. Administrators search the log for mcp.tool.unexpected_error with that requestId.',
+  },
+};
+
+/** Quoted MCP_* strings in src that are not error codes. */
+export const MCP_NON_ERROR_CODES: Record<string, string> = {
+  MCP_APPROVAL: 'notification entity type',
+  MCP_EQUIVALENT: 'parity report disposition',
+  MCP_PUBLIC_ORIGIN: 'optional environment override',
+};
+
+/** OAuth error codes the sign-in page explains (they reach people, not tools). */
+export const MCP_OAUTH_CODES = [
+  'invalid_client',
+  'invalid_request',
+  'invalid_scope',
+  'temporarily_unavailable',
+] as const;
+
+/** One explanation per mcp.* log event. A new event without an entry fails CI. */
+export const MCP_LOG_GUIDE: Record<string, string> = {
+  'mcp.authorize.client_denied':
+    'Sign-in refused the assistant. `reason`: unknown_client_id, client_revoked, automatic_connections_off and similar, or no_scopes_allowed_for_this_client (the ceiling and role leave nothing).',
+  'mcp.authorize.invalid_request':
+    'The authorization request failed validation. `fields` lists the parameters (never their values).',
+  'mcp.authorize.unexpected_error':
+    'An unexpected error on the authorization endpoint. `name` is the error class.',
+  'mcp.cimd.client_denied':
+    'A metadata-document assistant was refused by policy. `reason`: automatic_connections_off, host_not_in_allowlist or no_scopes.',
+  'mcp.cimd.client_id_rejected':
+    'The client_id is not a canonical HTTPS URL (`reason`: not_canonical_https_url).',
+  'mcp.cimd.document_rejected':
+    'The metadata document was fetched but refused. `reason` names the check, such as http_status_404 or content_type_not_json.',
+  'mcp.cimd.fetch_failed':
+    'The metadata document could not be fetched. `reason` is the MCP code (timeout, too large, forbidden address).',
+  'mcp.grant.last_call_failed':
+    'Recording the Last call column failed. The tool call itself still succeeded.',
+  'mcp.request.unexpected_error':
+    'An unexpected error in the /mcp route. Look up `requestId` (also the X-Request-Id header).',
+  'mcp.subscription.listener_failed': 'A subscription stream failed while delivering a change.',
+  'mcp.subscription.poll_failed': 'The subscription change poll failed; the stream retries.',
+  'mcp.tool.unexpected_error':
+    'A tool failed unexpectedly. Carries requestId, tool, grantId, errorName and prismaCode; never the arguments.',
+};
+
+const SOURCE_EXTENSIONS = /\.(ts|tsx)$/;
+
+function sourceFiles(root: string, dir = root): string[] {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- walks the checked-in src tree
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourceFiles(root, path);
+    return SOURCE_EXTENSIONS.test(entry.name) ? [path] : [];
+  });
+}
+
+function scan(pattern: RegExp, repoRoot: string) {
+  const found = new Map<string, Set<string>>();
+  for (const file of sourceFiles(join(repoRoot, 'src'))) {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- checked-in source only
+    const text = readFileSync(file, 'utf8');
+    for (const match of text.matchAll(pattern)) {
+      const files = found.get(match[1]) ?? new Set<string>();
+      files.add(relative(repoRoot, file));
+      found.set(match[1], files);
+    }
+  }
+  return found;
+}
+
+/** Every quoted MCP_* string in src, with the files that mention it. */
+export function scanMcpCodes(repoRoot = process.cwd()) {
+  return scan(/['"`](MCP_[A-Z0-9_]+)['"`]/g, repoRoot);
+}
+
+/** Every `logger.<level>('mcp.…'` event in src. */
+export function scanMcpLogEvents(repoRoot = process.cwd()) {
+  const found = new Map<string, { level: string; files: Set<string> }>();
+  for (const [key, files] of scan(
+    /logger\.(?:warn|error|info|debug)\(\s*'(mcp\.[a-z_.]+)'/g,
+    repoRoot
+  )) {
+    found.set(key, { level: '', files });
+  }
+  for (const file of sourceFiles(join(repoRoot, 'src'))) {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- checked-in source only
+    const text = readFileSync(file, 'utf8');
+    for (const match of text.matchAll(/logger\.(warn|error|info|debug)\(\s*'(mcp\.[a-z_.]+)'/g)) {
+      const entry = found.get(match[2])!;
+      entry.level =
+        entry.level && entry.level !== match[1] ? `${entry.level}, ${match[1]}` : match[1];
+    }
+  }
+  return found;
+}
+
+const cell = (text: string) => text.replaceAll('|', '\\|').replaceAll('\n', ' ');
+
+function frontmatter(fields: {
+  title: string;
+  description: string;
+  type: string;
+  audience: string[];
+  evidence: string[];
+}) {
+  return [
+    '---',
+    `title: ${fields.title}`,
+    `description: ${fields.description}`,
+    `type: ${fields.type}`,
+    'product_area: mcp',
+    `audience: [${fields.audience.join(', ')}]`,
+    'verification:',
+    '  level: source',
+    `  verified_at: ${MCP_DOCS_VERIFIED_AT}`,
+    '  evidence:',
+    ...fields.evidence.map(path => `    - ${path}`),
+    '---',
+    '',
+  ].join('\n');
+}
+
+const GENERATED_NOTE =
+  '<!-- Generated by `npm run mcp:docs` from scripts/mcp/docs-reference.ts. Do not edit by hand; CI fails when this page drifts from the code. -->';
+
+/** The assistant-facing hint for a code, exactly as tools return it. */
+function toolHint(code: string) {
+  const text = toolErrorText(new McpBoundaryError(code));
+  return text.startsWith(`${code}: `) ? text.slice(code.length + 2) : '';
+}
+
+export function renderTroubleshooting(repoRoot = process.cwd()) {
+  const codes = [...scanMcpCodes(repoRoot).keys()].filter(code => !(code in MCP_NON_ERROR_CODES));
+  const events = scanMcpLogEvents(repoRoot);
+  const lines: string[] = [
+    frontmatter({
+      title: 'MCP troubleshooting',
+      description:
+        'Every MCP error code and diagnostic log event, what it means and how to fix it.',
+      type: 'troubleshooting',
+      audience: ['administrator', 'responder', 'operator'],
+      evidence: [
+        'scripts/mcp/docs-reference.ts',
+        'src/lib/mcp/auth/friendly-error.ts',
+        'src/lib/mcp/protocol/server.ts',
+        'tests/mcp/docs-reference.test.ts',
+      ],
+    }),
+    GENERATED_NOTE,
+    '',
+    '# MCP troubleshooting',
+    '',
+    'Start with **Test connection** on the Overview tab of **Settings → Integrations & ChatOps → MCP (AI Assistants)**. It checks the App URL, migrations, sign-in discovery, automatic connections and that anonymous access is refused. For setup steps see [Self-hosted setup](self-hosted-setup.md); for what each permission unlocks see [Permissions](../../reference/mcp/permissions.md).',
+    '',
+    'Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.',
+    '',
+    `This page lists ${codes.length} MCP codes and ${events.size} log events found in the source.`,
+    '',
+  ];
+  for (const area of Object.keys(AREA_TITLE) as Area[]) {
+    const rows = codes.filter(code => MCP_ERROR_GUIDE[code]?.area === area);
+    if (!rows.length) continue;
+    lines.push(
+      `## ${AREA_TITLE[area]}`,
+      '',
+      '| Code | What it means | What to do |',
+      '| --- | --- | --- |'
+    );
+    for (const code of rows) {
+      const guide = MCP_ERROR_GUIDE[code];
+      lines.push(`| \`${code}\` | ${cell(guide.meaning)} | ${cell(guide.fix)} |`);
+    }
+    lines.push('');
+  }
+  const people = [...codes, ...MCP_OAUTH_CODES]
+    .map(code => ({ code, ...friendlyMcpError(code) }))
+    .filter(entry => entry.known);
+  lines.push(
+    '## Messages people see',
+    '',
+    'The sign-in, consent and error pages show these titles and explanations, with the code as a reference.',
+    '',
+    '| Code | Title | Explanation |',
+    '| --- | --- | --- |',
+    ...people.map(entry => `| \`${entry.code}\` | ${cell(entry.title)} | ${cell(entry.body)} |`),
+    '',
+    'Any other code shows "We could not connect your assistant" with advice to retry or ask an administrator to run the connection test.',
+    ''
+  );
+  const hinted = codes.map(code => ({ code, hint: toolHint(code) })).filter(entry => entry.hint);
+  lines.push(
+    '## Hints assistants receive',
+    '',
+    'When an error has no more specific hint of its own, tools return these fixed corrections.',
+    '',
+    '| Code | Hint |',
+    '| --- | --- |',
+    ...hinted.map(entry => `| \`${entry.code}\` | ${cell(entry.hint)} |`),
+    ''
+  );
+  lines.push(
+    '## Server log events',
+    '',
+    'Search the application log for these event names. Entries never contain tokens, secrets or tool arguments.',
+    '',
+    '| Event | Level | Meaning | Source |',
+    '| --- | --- | --- | --- |',
+    ...[...events.keys()].sort().map(event => {
+      const entry = events.get(event)!;
+      return `| \`${event}\` | ${entry.level} | ${cell(MCP_LOG_GUIDE[event] ?? '')} | ${[
+        ...entry.files,
+      ]
+        .sort()
+        .map(file => `\`${file}\``)
+        .join(', ')} |`;
+    }),
+    ''
+  );
+  lines.push(
+    '## Common symptoms',
+    '',
+    '- **The assistant says registration is missing:** turn on **Automatic connections** under **Access policy** and save. Restart the assistant if it cached older metadata.',
+    '- **401 after connecting:** the assistant refreshes or reconnects. `MCP_ACCESS_CHANGED` means a security event ended the connection; team and ordinary role edits do not.',
+    '- **A permission was granted but the tool still fails:** compare the connection\'s usable permissions on the Connections tab ("N of M usable"). The effective set is the grant ∩ the current ceiling ∩ the person\'s role, minus disabled capabilities.',
+    '- **503 with `MCP_BUSY`:** the concurrent-request limit was reached; the client retries after the `Retry-After` interval.',
+    '- **Works in a browser but not in a cloud assistant:** check that the cloud assistant can reach your host and trusts its TLS certificate.',
+    '- **An approval expired:** prepare it again with a new `idempotencyKey`; lengthen the review or commit window under **Access policy → Advanced** if reviewers need more time.',
+    ''
+  );
+  return lines.join('\n');
+}
+
+const ROLE_LABEL: Record<(typeof APP_ROLES)[number], string> = {
+  ADMIN: 'Admin',
+  RESPONDER: 'Responder',
+  AUDITOR: 'Auditor',
+  USER: 'User',
+};
+
+function scopeArea(scope: string) {
+  const offer = buildMcpConsentOffer({
+    scopes: [scope],
+    explicitlyRequested: [scope],
+    role: 'ADMIN',
+  });
+  return offer.groups[0]?.label ?? 'Other';
+}
+
+export function renderPermissions() {
+  const scopes = [...supportedMcpScopes()].sort();
+  const usable = new Map(APP_ROLES.map(role => [role, mcpScopesUsableByRole(role)]));
+  const counts = (scope: string) => {
+    const operations = MCP_CATALOG.filter(
+      operation =>
+        (isMcpExecutable(operation) || isMcpApprovalGated(operation)) &&
+        operation.requiredScopes.includes(scope)
+    );
+    return {
+      reads: operations.filter(
+        operation =>
+          isMcpExecutable(operation) && operation.risk === 'R0' && !isMcpSensitiveRead(operation)
+      ).length,
+      sensitive: operations.filter(operation => isMcpSensitiveRead(operation)).length,
+      routine: operations.filter(operation => isMcpExecutable(operation) && operation.risk === 'R1')
+        .length,
+      reviewed: operations.filter(operation => isMcpApprovalGated(operation)).length,
+    };
+  };
+  const lines: string[] = [
+    frontmatter({
+      title: 'MCP permissions reference',
+      description: 'Every MCP permission (scope), which roles can use it and what it unlocks.',
+      type: 'reference',
+      audience: ['administrator', 'responder', 'developer'],
+      evidence: [
+        'scripts/mcp/docs-reference.ts',
+        'src/lib/mcp/auth/role-scopes.ts',
+        'src/lib/mcp/auth/effective-access.ts',
+        'tests/mcp/docs-reference.test.ts',
+      ],
+    }),
+    GENERATED_NOTE,
+    '',
+    '# MCP permissions reference',
+    '',
+    'Assistants act as the person who connected them. A permission (OAuth scope) only narrows what that person can already do; it never adds authority.',
+    '',
+    '## Effective access',
+    '',
+    'What a connection can do right now is computed on every request:',
+    '',
+    '```text',
+    'effective scopes = scopes the person ticked on the consent page',
+    '                 ∩ the administrator ceiling as it is now',
+    "                 ∩ what the person's current role and teams allow",
+    '                 − capabilities turned off under Exposed capabilities',
+    '```',
+    '',
+    '- The ceiling for automatically connected assistants (registration or metadata document) is the current **What assistants may do** list, not the copy stored when the assistant registered. Lowering it takes effect on the next request; raising it does not widen existing connections.',
+    '- A connection gives no access at all while it is revoked or expired, its assistant is revoked, policy no longer trusts the assistant (Automatic connections off, or its host is not in the trusted list), the person is inactive, or a security event happened (`MCP_ACCESS_CHANGED`).',
+    '- Role and team changes apply live on the next request without signing anyone out. Demotion from Administrator is a security event and does sign out.',
+    '- The Connections tab shows the same computation: "N of M usable", struck-through **No longer allowed** scopes, and a **Blocked by policy** or **No longer allowed** status with the reason.',
+    '- `admin:manage` is never offered to an assistant.',
+    '',
+    `Quick setup and the default ceiling grant: ${DEFAULT_ASSISTANT_SCOPES.map(scope => `\`${scope}\``).join(', ')}.`,
+    '',
+    '## On the consent page',
+    '',
+    '- View permissions are pre-selected. Change permissions are pre-selected only when the assistant asked for them by name, or the connection being replaced had them.',
+    '- Any permission can be unticked; Allow needs at least one.',
+    "- Permissions the person's role can never use are hidden and noted on the page.",
+    '',
+    '## Permissions',
+    '',
+    'Operation columns count catalog operations that need the permission: plain reads, sensitive reads (only while an administrator allows sensitive reads), routine changes (run directly when changes are allowed) and reviewed changes (need human approval first). Curated tools reuse these operations. A ✓ means the role can use at least one action the permission gates. The consent label is the text the consent page shows; the operation columns are authoritative for whether a change runs directly or waits for review.',
+    '',
+    `| Permission | Consent label | Area | Kind | ${APP_ROLES.map(role => ROLE_LABEL[role]).join(' | ')} | Reads | Sensitive reads | Routine changes | Reviewed changes |`,
+    `| --- | --- | --- | --- | ${APP_ROLES.map(() => ':-:').join(' | ')} | --: | --: | --: | --: |`,
+  ];
+  for (const scope of scopes) {
+    const count = counts(scope);
+    lines.push(
+      `| \`${scope}\` | ${cell(describeMcpScope(scope))} | ${scopeArea(scope)} | ${isMcpViewScope(scope) ? 'View' : 'Change'} | ${APP_ROLES.map(role => (usable.get(role)!.has(scope) ? '✓' : '')).join(' | ')} | ${count.reads} | ${count.sensitive} | ${count.routine} | ${count.reviewed} |`
+    );
+  }
+  lines.push(
+    '',
+    '## Who approves reviewed changes',
+    '',
+    '- **Configuration changes** (`operation_prepare`): an active administrator who holds every permission the change needs.',
+    '- **Runbook runs** (`runbook_prepare_execution`): anyone with the runbook approve and runbook read permissions who can see the target incident or service. By default that is Responders and Administrators.',
+    '- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person. The assistant can never approve.',
+    ''
+  );
+  return lines.join('\n');
+}
+
+export const MCP_GENERATED_PAGES = [
+  { path: MCP_TROUBLESHOOTING_PAGE, render: () => renderTroubleshooting() },
+  { path: MCP_PERMISSIONS_PAGE, render: () => renderPermissions() },
+] as const;

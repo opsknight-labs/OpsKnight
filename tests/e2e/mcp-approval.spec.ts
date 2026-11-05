@@ -34,7 +34,7 @@ test('remote request requires a different native reviewer and commits one recove
   const redirectUri = 'http://127.0.0.1:8799/review-callback';
   await page.getByLabel('Display name', { exact: true }).fill(name);
   await page.getByLabel('Exact redirect URI').fill(redirectUri);
-  for (const label of ['Run runbooks after administrator approval', 'View runbooks'])
+  for (const label of ['Run runbooks after approval', 'View runbooks'])
     await page
       .getByRole('group', { name: 'Allowed scopes' })
       .getByRole('checkbox', { name: label, exact: true })

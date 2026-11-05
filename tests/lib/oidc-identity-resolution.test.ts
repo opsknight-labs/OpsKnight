@@ -17,6 +17,11 @@ const tx = {
   },
   user: {
     findUnique: vi.fn(),
+    // Email lookup is case-insensitive; existing scenarios drive both through findUnique.
+    findMany: vi.fn(async (...args: unknown[]) => {
+      const user = await (tx.user.findUnique as (...a: unknown[]) => unknown)(...args);
+      return user ? [user] : [];
+    }),
     create: vi.fn(),
   },
   oidcLinkingApproval: {
@@ -147,7 +152,7 @@ describe('resolveOidcIdentityForSignIn', () => {
       claims: { email: 'alice@example.com' },
     });
 
-    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(result).toEqual({ ok: false, reason: 'OIDC_DOMAIN_NOT_ALLOWED' });
     expect(tx.user.create).not.toHaveBeenCalled();
   });
 
@@ -173,7 +178,7 @@ describe('resolveOidcIdentityForSignIn', () => {
       claims: { hd: 'former-company.example' },
     });
 
-    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(result).toEqual({ ok: false, reason: 'OIDC_DOMAIN_NOT_ALLOWED' });
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
@@ -292,6 +297,7 @@ describe('resolveOidcIdentityForSignIn', () => {
       identityCreated: true,
       userCreated: false,
       approvalConsumed: true,
+      linkMethod: 'APPROVAL',
     });
     expect(tx.oidcLinkingApproval.updateMany).toHaveBeenCalledWith({
       where: {
@@ -432,8 +438,67 @@ describe('resolveOidcIdentityForSignIn', () => {
       emailVerifiedClaim: undefined,
     });
 
-    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(result).toEqual({ ok: false, reason: 'OIDC_EMAIL_ASSURANCE_REQUIRED' });
     expect(tx.user.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unmatched person before consuming an approval or linking the account', async () => {
+    tx.user.findUnique.mockResolvedValue({ ...linkedUser, roleSource: 'OIDC' });
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue({
+      id: 'approval-1',
+      generation: 1,
+      revokedAt: null,
+      expiresAt: null,
+    });
+
+    const result = await resolveOidcIdentityForSignIn({ ...baseInput, denyUnmatched: true });
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_ROLE_UNMATCHED_DENIED' });
+    expect(tx.oidcLinkingApproval.findUnique).not.toHaveBeenCalled();
+    expect(tx.oidcLinkingApproval.updateMany).not.toHaveBeenCalled();
+    expect(tx.oidcIdentity.create).not.toHaveBeenCalled();
+  });
+
+  it('still links an account whose role an administrator set by hand when unmatched', async () => {
+    tx.user.findUnique.mockResolvedValue({ ...linkedUser, roleSource: 'MANUAL' });
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue({
+      id: 'approval-1',
+      generation: 1,
+      revokedAt: null,
+      expiresAt: null,
+    });
+
+    const result = await resolveOidcIdentityForSignIn({ ...baseInput, denyUnmatched: true });
+
+    expect(result).toMatchObject({ ok: true, linkMethod: 'APPROVAL' });
+  });
+
+  it('does not create a new account from an incomplete group list under the deny policy', async () => {
+    const result = await resolveOidcIdentityForSignIn({ ...baseInput, denyNewIncomplete: true });
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_GROUP_CLAIMS_INCOMPLETE' });
+    expect(tx.user.create).not.toHaveBeenCalled();
+  });
+
+  it('creates new accounts with the workspace default role', async () => {
+    await resolveOidcIdentityForSignIn({ ...baseInput, initialRole: 'RESPONDER' });
+
+    expect(tx.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: 'RESPONDER' }) })
+    );
+  });
+
+  it('refuses to link when two accounts differ only by email letter case', async () => {
+    tx.user.findMany.mockResolvedValueOnce([
+      { ...linkedUser, id: 'user-1', email: 'alice@example.com' },
+      { ...linkedUser, id: 'user-2', email: 'Alice@example.com' },
+    ]);
+
+    const result = await resolveOidcIdentityForSignIn(baseInput);
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT' });
+    expect(tx.oidcIdentity.create).not.toHaveBeenCalled();
+    expect(tx.oidcLinkingApproval.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects ambiguous legacy identity reconciliation when variants belong to different users', async () => {

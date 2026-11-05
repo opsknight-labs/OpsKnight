@@ -1,8 +1,10 @@
 import 'server-only';
 import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
-import { Issuer, custom, generators } from 'openid-client';
-import type { Prisma } from '@prisma/client';
+import { Issuer, custom, generators, errors as openidErrors } from 'openid-client';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 import { encrypt, decrypt } from '@/lib/encryption';
 import {
   validateOidcConnection,
@@ -11,7 +13,12 @@ import {
 } from '@/lib/oidc-validation';
 import { safeOutboundLookup } from '@/lib/network-security';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
-import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
+import {
+  evaluateOidcRoleClaims,
+  oidcRuleMatches,
+  readOidcClaim,
+  resolveSignInRole,
+} from '@/lib/oidc/role-mapping';
 import { validateOidcCustomScopes } from '@/lib/oidc/scopes';
 import { resetAuthOptionsCache } from '@/lib/auth';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
@@ -26,6 +33,7 @@ import { emergencyReadiness } from './emergency-management';
 import { securityEvent } from './security-events';
 import { findRevisionIdentity } from './identity';
 import { evaluateOidcProof, oidcProofLabel, OIDC_PROOF_MAX_AGE_MS } from './proof-status';
+import { isAdminTestFailureCode, type AdminTestFailureCode } from './messages';
 
 export const OIDC_TEST_COOKIE =
   process.env.NODE_ENV === 'production' ? '__Host-opsknight-oidc-test' : 'opsknight-oidc-test';
@@ -46,6 +54,134 @@ export class OidcRevisionTestError extends Error {
   ) {
     super(message);
   }
+}
+
+/** A test failure the result page can explain. Diagnostics never contain tokens or secrets. */
+export class OidcTestFailure extends Error {
+  constructor(
+    readonly code: AdminTestFailureCode,
+    readonly diagnostics: OidcTestDiagnostics = {}
+  ) {
+    super(code);
+  }
+}
+
+export type OidcTestDiagnostics = {
+  /** Every claim name the provider sent, so a missing claim is obvious. */
+  claimNames?: string[];
+  /** Values of the claims OpsKnight uses for access decisions, capped. */
+  claims?: Record<string, string | boolean | string[] | null>;
+  receivedEmail?: string;
+  expectedEmail?: string;
+  role?: { result: string; matchedRule?: string | null; effectiveRole?: string };
+  providerMessage?: string;
+};
+
+const DIAGNOSTIC_CLAIMS = ['email', 'email_verified', 'hd', 'org_id', 'tid', 'groups', 'roles'];
+const MAX_DIAGNOSTIC_VALUES = 50;
+
+function diagnosticValue(value: unknown): string | boolean | string[] | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string' || typeof value === 'number') return String(value).slice(0, 200);
+  if (Array.isArray(value))
+    return value
+      .filter(item => typeof item === 'string' || typeof item === 'number')
+      .slice(0, MAX_DIAGNOSTIC_VALUES)
+      .map(item => String(item).slice(0, 200));
+  if (value && typeof value === 'object') return '[object]';
+  return null;
+}
+
+/** Masks an email for display: the domain is useful for diagnosis, the mailbox is not. */
+export function maskEmail(email: string | null | undefined): string | undefined {
+  if (!email) return undefined;
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return '***';
+  return `${email.slice(0, 1)}***${email.slice(at)}`;
+}
+
+export function claimDiagnostics(
+  claims: Record<string, unknown>,
+  ruleClaims: string[]
+): Pick<OidcTestDiagnostics, 'claimNames' | 'claims'> {
+  const names = Object.keys(claims)
+    .filter(name => !['at_hash', 'c_hash', 'nonce', 'sid'].includes(name))
+    .sort();
+  const selected = new Map<string, string | boolean | string[] | null>();
+  for (const name of [...DIAGNOSTIC_CLAIMS, ...ruleClaims]) {
+    const value = readOidcClaim(claims, name);
+    if (value !== undefined)
+      selected.set(
+        name,
+        name === 'email' ? (maskEmail(String(value)) ?? null) : diagnosticValue(value)
+      );
+  }
+  return { claimNames: names.slice(0, 100), claims: Object.fromEntries(selected) };
+}
+
+function providerFailureCode(error: string | undefined): AdminTestFailureCode {
+  switch (error) {
+    case 'access_denied':
+    case 'login_required':
+    case 'consent_required':
+    case 'interaction_required':
+      return 'PROVIDER_ACCESS_DENIED';
+    case 'invalid_scope':
+      return 'PROVIDER_INVALID_SCOPE';
+    case 'invalid_client':
+    case 'unauthorized_client':
+      return 'PROVIDER_CLIENT_REJECTED';
+    default:
+      return 'PROVIDER_ERROR';
+  }
+}
+
+function sanitizedProviderMessage(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  // Provider text is shown only to the administrator who started the test; strip control
+  // characters and cap it so it cannot dominate the page.
+  return value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .trim()
+    .slice(0, 300);
+}
+
+/** Converts token-exchange and validation errors into a catalogued failure. */
+function classifyTestError(error: unknown): OidcTestFailure {
+  if (error instanceof OidcTestFailure) return error;
+  if (error instanceof openidErrors.OPError)
+    return new OidcTestFailure(providerFailureCode(error.error), {
+      providerMessage: sanitizedProviderMessage(
+        [error.error, error.error_description].filter(Boolean).join(': ')
+      ),
+    });
+  if (error instanceof openidErrors.RPError)
+    return new OidcTestFailure('TOKEN_EXCHANGE_FAILED', {
+      providerMessage: sanitizedProviderMessage(error.message),
+    });
+  return new OidcTestFailure('UNKNOWN');
+}
+
+async function recordTestFailure(
+  flow: { id: string; adminUserId: string; revisionId: string },
+  failure: OidcTestFailure
+) {
+  await prisma.$transaction(async tx => {
+    await tx.oidcTestFlow.update({
+      where: { id: flow.id },
+      data: {
+        failureCode: failure.code,
+        diagnostics: failure.diagnostics as Prisma.InputJsonValue,
+      },
+    });
+    await securityEvent(
+      tx,
+      'auth.oidc.test.failed',
+      flow.adminUserId,
+      { revisionId: flow.revisionId, reason: failure.code },
+      'failed'
+    );
+  });
 }
 
 export function oidcTestClient(config: ProviderConfiguration, metadata: OidcRuntimeMetadata) {
@@ -88,6 +224,11 @@ export function storedProviderConfiguration(
         : {},
     sessionMaxAgeSeconds: active.sessionMaxAgeSeconds,
     sessionIdleTimeoutSeconds: active.sessionIdleTimeoutSeconds,
+    defaultRole: active.defaultRole,
+    unmatchedPolicy: active.unmatchedPolicy,
+    rolePrecedence: active.rolePrecedence,
+    domainTrustedLinking: active.domainTrustedLinking,
+    teamMapping: Array.isArray(active.teamMapping) ? active.teamMapping : [],
   };
 }
 export function activeProviderConfiguration(
@@ -129,6 +270,24 @@ async function validate(config: ProviderConfiguration) {
   return result.metadata;
 }
 
+/**
+ * Every setting that can change who signs in, as whom, or with what role, including whether new
+ * accounts are created. Left out: session limits, the button label, profile fields and team
+ * rules, which never decide admission or role. The secret is compared separately, by ciphertext.
+ */
+function identityFingerprint(config: ProviderConfiguration) {
+  const {
+    clientSecret: _secret,
+    sessionMaxAgeSeconds: _maxAge,
+    sessionIdleTimeoutSeconds: _idle,
+    providerLabel: _label,
+    profileMapping: _profile,
+    teamMapping: _teams,
+    ...identity
+  } = config;
+  return JSON.stringify(identity);
+}
+
 export async function stageOidcRevision(
   actor: ControlActor,
   input: unknown,
@@ -156,6 +315,14 @@ export async function stageOidcRevision(
     );
   if (!config.enabled)
     throw new Error('Staged providers must be enabled. Use Password Only policy to disable SSO.');
+  if (config.teamMapping.length) {
+    const teamIds = [...new Set(config.teamMapping.map(rule => rule.teamId))];
+    const found = await prisma.team.count({ where: { id: { in: teamIds } } });
+    if (found !== teamIds.length)
+      throw new Error('A team rule points at a team that no longer exists. Choose the team again.');
+  }
+  if (config.domainTrustedLinking && config.allowedDomains.length === 0)
+    throw new Error('Domain-trusted linking needs at least one allowed domain.');
   const current = await prisma.oidcConfig.findUnique({ where: { id: 'default' } });
   if (
     expectedConfigVersion !== undefined &&
@@ -195,7 +362,25 @@ export async function stageOidcRevision(
         discoveryVerifiedAt: new Date(),
       },
     });
+    // Changing only settings that cannot affect who signs in or with what role (session
+    // limits, button label, profile fields, team rules, JIT) keeps the administrator test.
+    const carriedProof =
+      sourceRevision &&
+      source &&
+      sourceRevision.baseConfigVersion === (current?.configVersion ?? 0) &&
+      encryptedSecret === source.clientSecret &&
+      identityFingerprint(source) === identityFingerprint(config)
+        ? await tx.oidcRevisionTest.findFirst({
+            where: { revisionId: sourceRevision.id },
+            orderBy: { verifiedAt: 'desc' },
+          })
+        : null;
+    if (carriedProof) {
+      const { id: _id, revisionId: _revisionId, ...proof } = carriedProof;
+      await tx.oidcRevisionTest.create({ data: { ...proof, revisionId: revision.id } });
+    }
     await securityEvent(tx, 'auth.oidc.revision.staged', actor.id, {
+      carriedAdministratorTest: Boolean(carriedProof),
       revisionId: revision.id,
       issuer: config.issuer,
       clientId: config.clientId,
@@ -283,6 +468,20 @@ export async function completeOidcRevisionTest(
 ): Promise<{ flowId: string; revisionId: string }> {
   const flow = await prisma.oidcTestFlow.findUnique({ where: { stateHash: digest(state) } });
   if (
+    flow &&
+    !flow.consumedAt &&
+    flow.expiresAt.getTime() <= Date.now() &&
+    flow.browserHash === digest(browserToken)
+  ) {
+    // Same browser, too slow: record why so the result page can say so.
+    const claimedExpired = await prisma.oidcTestFlow.updateMany({
+      where: { id: flow.id, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    if (claimedExpired.count === 1)
+      await recordTestFailure(flow, new OidcTestFailure('FLOW_EXPIRED'));
+  }
+  if (
     !flow ||
     flow.consumedAt ||
     flow.expiresAt.getTime() <= Date.now() ||
@@ -304,20 +503,13 @@ export async function completeOidcRevisionTest(
     select: { id: true },
   });
   if (!revisionExists) {
-    await prisma.$transaction(tx =>
-      securityEvent(
-        tx,
-        'auth.oidc.test.failed',
-        flow.adminUserId,
-        { revisionId: flow.revisionId, reason: 'REVISION_DELETED' },
-        'failed'
-      )
-    );
+    await recordTestFailure(flow, new OidcTestFailure('REVISION_DELETED'));
     throw new OidcRevisionTestError(
       'The configuration under test was deleted before sign-in completed. Production configuration is unchanged.',
       flow.id
     );
   }
+  let diagnostics: OidcTestDiagnostics = {};
   try {
     const secrets = JSON.parse(await decrypt(flow.secrets)) as {
       nonce: string;
@@ -326,7 +518,7 @@ export async function completeOidcRevisionTest(
       origin: string;
     };
     const origin = await authenticationOrigin();
-    if (origin !== secrets.origin) throw new Error('Application origin changed. Begin a new test.');
+    if (origin !== secrets.origin) throw new OidcTestFailure('ORIGIN_CHANGED');
     const revision = await prisma.oidcRevision.findUniqueOrThrow({
       where: { id: flow.revisionId },
     });
@@ -340,50 +532,89 @@ export async function completeOidcRevisionTest(
       { state, nonce: secrets.nonce, code_verifier: secrets.verifier }
     );
     const claims = tokens.claims();
+    diagnostics = claimDiagnostics(
+      claims,
+      config.roleMapping.map(rule => rule.claim)
+    );
     const provider = getOidcProviderPolicy(config.issuer, config.providerType);
-    if (
-      !provider.validateOrganizationBoundary(
-        normalizeOidcBoundaryClaims(claims),
-        config.allowedDomains,
-        config.organizationId
-      ).ok
-    )
-      throw new Error('Provider organization boundary rejected the login.');
-    if (!claims.sub) throw new Error('A subject claim is required for administrator verification.');
+    const boundary = provider.validateOrganizationBoundary(
+      normalizeOidcBoundaryClaims(claims),
+      config.allowedDomains,
+      config.organizationId
+    );
+    if (!boundary.ok)
+      throw new OidcTestFailure(
+        boundary.reason === 'OIDC_DOMAIN_NOT_ALLOWED'
+          ? 'DOMAIN_NOT_ALLOWED'
+          : boundary.reason === 'OIDC_EMAIL_ASSURANCE_REQUIRED'
+            ? 'EMAIL_UNVERIFIED'
+            : 'ORGANIZATION_REJECTED',
+        diagnostics
+      );
+    if (!claims.sub) throw new OidcTestFailure('SUBJECT_MISSING', diagnostics);
     const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
     const emailVerified = coerceBooleanClaim(claims.email_verified);
-    if (emailVerified === false) throw new Error('Provider explicitly reports unverified email.');
+    if (emailVerified === false) throw new OidcTestFailure('EMAIL_UNVERIFIED', diagnostics);
     const emailOwnershipVerified =
       Boolean(email) && (emailVerified === true || provider.allowsMissingEmailVerified());
-    const role = evaluateOidcRoleClaims(claims, config.roleMapping);
-    if (!role.ok || role.groupsOverage)
-      throw new Error('Resolve missing/group-overage role claims before activation.');
+    const role = evaluateOidcRoleClaims(claims, config.roleMapping, config);
+    if (role.outcome === 'INCOMPLETE')
+      throw new OidcTestFailure('GROUP_CLAIMS_INCOMPLETE', {
+        ...diagnostics,
+        role: { result: 'incomplete group claims (too many groups)' },
+      });
     await prisma.$transaction(async tx => {
       await lockControlActor(tx, secrets.actor, false);
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${flow.adminUserId} FOR UPDATE`;
       const active = await tx.oidcConfig.findUnique({ where: { id: 'default' } });
       if ((active?.configVersion ?? 0) !== flow.testedConfigVersion)
-        throw new Error('Production configuration changed during the test.');
+        throw new OidcTestFailure('CONFIG_CHANGED', diagnostics);
       const admin = await tx.user.findUniqueOrThrow({ where: { id: flow.adminUserId } });
       if (
         admin.role !== 'ADMIN' ||
         admin.status !== 'ACTIVE' ||
         admin.tokenVersion !== flow.adminTokenVersion
       )
-        throw new Error('Administrator security state changed during the test.');
+        throw new OidcTestFailure('ADMIN_STATE_CHANGED', diagnostics);
       const identity = await findRevisionIdentity(tx, config.issuer, claims.sub);
       if (identity && identity.userId !== admin.id)
-        throw new Error('This external identity belongs to another OpsKnight user.');
-      if (
-        !identity &&
-        (!flow.linkApproved || !emailOwnershipVerified || email !== admin.email.toLowerCase())
-      )
-        throw new Error(
-          'Explicit same-account linking approval and matching verified email are required.'
-        );
-      const effectiveRole = role.matched || admin.roleSource === 'OIDC' ? role.role : admin.role;
+        throw new OidcTestFailure('IDENTITY_OWNED_BY_OTHER_USER', diagnostics);
+      if (!identity) {
+        const emails = {
+          receivedEmail: maskEmail(email),
+          expectedEmail: maskEmail(admin.email.toLowerCase()),
+        };
+        if (!flow.linkApproved) throw new OidcTestFailure('LINK_NOT_ALLOWED', diagnostics);
+        if (!email) throw new OidcTestFailure('EMAIL_MISSING', { ...diagnostics, ...emails });
+        if (!emailOwnershipVerified)
+          throw new OidcTestFailure('EMAIL_UNVERIFIED', { ...diagnostics, ...emails });
+        if (email !== admin.email.toLowerCase())
+          throw new OidcTestFailure('EMAIL_MISMATCH', { ...diagnostics, ...emails });
+      }
+      const resolved = resolveSignInRole(
+        role,
+        { role: admin.role, roleSource: admin.roleSource },
+        { firstLink: !identity }
+      );
+      const denied = role.deny && resolved.roleSource !== 'MANUAL';
+      const effectiveRole = denied ? 'DENIED' : resolved.role;
+      diagnostics = {
+        ...diagnostics,
+        role: {
+          result:
+            role.outcome === 'MATCHED'
+              ? `matched ${role.matchedRule?.claim} = ${role.matchedRule?.value}`
+              : role.missingClaims.length > 0
+                ? `no rule matched; missing claims: ${role.missingClaims.join(', ')}`
+                : 'no rule matched',
+          effectiveRole:
+            resolved.roleSource === 'MANUAL' && !denied
+              ? `${effectiveRole} (set manually, kept)`
+              : effectiveRole,
+        },
+      };
       if (effectiveRole !== 'ADMIN')
-        throw new Error('These role mappings would remove administrator access.');
+        throw new OidcTestFailure('ROLE_WOULD_DROP_ADMIN', diagnostics);
       await tx.oidcRevisionTest.create({
         data: {
           revisionId: revision.id,
@@ -399,6 +630,10 @@ export async function completeOidcRevisionTest(
           linkApproved: !identity && flow.linkApproved,
         },
       });
+      await tx.oidcTestFlow.update({
+        where: { id: flow.id },
+        data: { diagnostics: diagnostics as Prisma.InputJsonValue },
+      });
       await securityEvent(tx, 'auth.oidc.test.success', admin.id, {
         revisionId: revision.id,
         preservedUserId: admin.id,
@@ -407,26 +642,63 @@ export async function completeOidcRevisionTest(
       });
     });
     return { flowId: flow.id, revisionId: flow.revisionId };
-  } catch {
-    await prisma.$transaction(tx =>
-      securityEvent(
-        tx,
-        'auth.oidc.test.failed',
-        flow.adminUserId,
-        { revisionId: flow.revisionId, reason: 'PROVIDER_OR_IDENTITY_VERIFICATION_FAILED' },
-        'failed'
-      )
-    );
+  } catch (error) {
+    const failure = classifyTestError(error);
+    if (failure.code === 'UNKNOWN')
+      logger.error('[OIDC test] Unclassified administrator test failure', {
+        component: 'auth-control:oidc-test',
+        flowId: flow.id,
+        error,
+      });
+    await recordTestFailure(flow, failure);
     throw new OidcRevisionTestError(
-      'SSO administrator test failed. Check provider diagnostics, claims, linking approval and role mapping. Production configuration is unchanged.',
+      'SSO administrator test failed. Production configuration is unchanged.',
       flow.id
     );
   }
 }
 
+/**
+ * The provider ended the test with an OAuth error instead of a code (cancelled, not assigned,
+ * bad scope). The flow is still bound to this browser, so record why and show it.
+ */
+export async function recordOidcRevisionTestProviderError(
+  state: string,
+  browserToken: string,
+  error: string,
+  description: string | null
+): Promise<string | null> {
+  const flow = await prisma.oidcTestFlow.findUnique({ where: { stateHash: digest(state) } });
+  if (!flow || flow.browserHash !== digest(browserToken)) return null;
+  const claimed = await prisma.oidcTestFlow.updateMany({
+    where: { id: flow.id, consumedAt: null },
+    data: { consumedAt: new Date() },
+  });
+  if (claimed.count !== 1) return flow.id;
+  await recordTestFailure(
+    flow,
+    new OidcTestFailure(providerFailureCode(error), {
+      providerMessage: sanitizedProviderMessage([error, description].filter(Boolean).join(': ')),
+    })
+  );
+  return flow.id;
+}
+
 export type OidcTestResult =
-  | { outcome: 'verified'; revisionId: string; verifiedAt: string; expiresAt: string }
-  | { outcome: 'failed'; revisionId: string | null; reason: 'deleted' | 'failed' }
+  | {
+      outcome: 'verified';
+      revisionId: string;
+      verifiedAt: string;
+      expiresAt: string;
+      diagnostics: OidcTestDiagnostics;
+    }
+  | {
+      outcome: 'failed';
+      revisionId: string | null;
+      reason: 'deleted' | 'failed';
+      code: AdminTestFailureCode;
+      diagnostics: OidcTestDiagnostics;
+    }
   | { outcome: 'unavailable' };
 
 /**
@@ -450,7 +722,15 @@ export async function readOidcTestResult(reference: string | undefined): Promise
     where: { id: flow.revisionId },
     select: { id: true },
   });
-  if (!revision) return { outcome: 'failed', revisionId: null, reason: 'deleted' };
+  const diagnostics = (flow.diagnostics ?? {}) as OidcTestDiagnostics;
+  if (!revision)
+    return {
+      outcome: 'failed',
+      revisionId: null,
+      reason: 'deleted',
+      code: 'REVISION_DELETED',
+      diagnostics,
+    };
   const proof = await prisma.oidcRevisionTest.findFirst({
     where: {
       revisionId: flow.revisionId,
@@ -459,13 +739,194 @@ export async function readOidcTestResult(reference: string | undefined): Promise
     },
     orderBy: { verifiedAt: 'desc' },
   });
-  if (!proof) return { outcome: 'failed', revisionId: flow.revisionId, reason: 'failed' };
+  if (!proof)
+    return {
+      outcome: 'failed',
+      revisionId: flow.revisionId,
+      reason: 'failed',
+      code: isAdminTestFailureCode(flow.failureCode) ? flow.failureCode : 'UNKNOWN',
+      diagnostics,
+    };
   return {
     outcome: 'verified',
     revisionId: flow.revisionId,
     verifiedAt: proof.verifiedAt.toISOString(),
     expiresAt: new Date(proof.verifiedAt.getTime() + PROOF_MAX_AGE_MS).toISOString(),
+    diagnostics,
   };
+}
+
+/**
+ * Who can use single sign-on the moment this configuration is activated, and who still needs
+ * an administrator. Mirrors the sign-in rules in oidc-identity-resolution.ts.
+ */
+async function linkingReadiness(tx: Prisma.TransactionClient, config: ProviderConfiguration) {
+  const fingerprint = oidcTrustFingerprint(config.issuer, config.clientId);
+  const now = new Date();
+  const unlinked: Prisma.UserWhereInput = {
+    status: { in: ['ACTIVE', 'INVITED'] },
+    oidcIdentities: { none: { issuer: config.issuer } },
+  };
+  const [approvalsCarriedOver, approvalsRevoked, approvedUsers] = await Promise.all([
+    tx.oidcLinkingApproval.count({
+      where: {
+        consumedAt: null,
+        revokedAt: null,
+        issuerFingerprint: fingerprint,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    }),
+    tx.oidcLinkingApproval.count({
+      where: {
+        consumedAt: null,
+        revokedAt: null,
+        OR: [{ issuerFingerprint: { not: fingerprint } }, { issuerFingerprint: null }],
+      },
+    }),
+    tx.user.count({
+      where: {
+        ...unlinked,
+        oidcLinkingApproval: {
+          consumedAt: null,
+          revokedAt: null,
+          issuerFingerprint: fingerprint,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+      },
+    }),
+  ]);
+  const domainTrusted =
+    config.domainTrustedLinking && config.allowedDomains.length > 0
+      ? await tx.user.count({
+          where: {
+            ...unlinked,
+            role: { not: 'ADMIN' },
+            OR: config.allowedDomains.map(domain => ({
+              email: { endsWith: `@${domain}`, mode: 'insensitive' as const },
+            })),
+            NOT: {
+              oidcLinkingApproval: {
+                consumedAt: null,
+                revokedAt: null,
+                issuerFingerprint: fingerprint,
+              },
+            },
+          },
+        })
+      : 0;
+  const total = await tx.user.count({ where: unlinked });
+  return {
+    total,
+    approved: approvedUsers,
+    // Whether these accounts really connect automatically depends on claims the provider sends
+    // at sign-in (xms_edov, hd, email_verified), which cannot be known in advance. They stay
+    // in needApproval so the count never understates who could be locked out.
+    domainTrusted,
+    needApproval: Math.max(0, total - approvedUsers),
+    approvalsCarriedOver,
+    approvalsRevoked,
+  };
+}
+
+const ROLE_IMPACT_SCAN_LIMIT = 5000;
+const ROLE_IMPACT_SAMPLE = 25;
+
+/**
+ * Which directory-managed people would get a different role at their next sign-in under these
+ * rules, using the mapped claim values remembered from their last sign-in.
+ */
+async function roleChangeImpact(tx: Prisma.TransactionClient, config: ProviderConfiguration) {
+  const identities = await tx.oidcIdentity.findMany({
+    where: { issuer: config.issuer, claimSnapshot: { not: Prisma.DbNull } },
+    select: {
+      claimSnapshot: true,
+      user: {
+        select: { id: true, name: true, email: true, role: true, roleSource: true, status: true },
+      },
+    },
+    orderBy: { lastLoginAt: 'desc' },
+    take: ROLE_IMPACT_SCAN_LIMIT,
+  });
+  const changes: Array<{ userId: string; name: string; from: string; to: string }> = [];
+  let changed = 0;
+  let denied = 0;
+  for (const identity of identities) {
+    const user = identity.user;
+    if (user.status === 'DISABLED') continue;
+    const evaluation = evaluateOidcRoleClaims(
+      snapshotAsClaims(identity.claimSnapshot),
+      config.roleMapping,
+      config
+    );
+    const resolved = resolveSignInRole(evaluation, {
+      role: user.role,
+      roleSource: user.roleSource,
+    });
+    if (evaluation.deny && resolved.roleSource !== 'MANUAL') {
+      denied += 1;
+      continue;
+    }
+    if (resolved.role === user.role) continue;
+    changed += 1;
+    if (changes.length < ROLE_IMPACT_SAMPLE)
+      changes.push({
+        userId: user.id,
+        name: user.name || user.email,
+        from: user.role,
+        to: resolved.role,
+      });
+  }
+  const teamChanges = await teamChangeImpact(tx, config, identities);
+  return {
+    evaluated: identities.length,
+    changed,
+    denied,
+    changes,
+    teamAdditions: teamChanges.additions,
+    teamRemovals: teamChanges.removals,
+    truncated: identities.length === ROLE_IMPACT_SCAN_LIMIT,
+  };
+}
+
+/** Memberships team rules would add or remove at people's next sign-in, from snapshots. */
+async function teamChangeImpact(
+  tx: Prisma.TransactionClient,
+  config: ProviderConfiguration,
+  identities: Array<{ claimSnapshot: Prisma.JsonValue; user: { id: string; status: string } }>
+) {
+  const active = identities.filter(identity => identity.user.status !== 'DISABLED');
+  const userIds = active.map(identity => identity.user.id);
+  if (userIds.length === 0) return { additions: 0, removals: 0 };
+  const memberships = await tx.teamMember.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true, teamId: true, role: true, oidcGrant: { select: { id: true } } },
+  });
+  const byUser = new Map<string, typeof memberships>();
+  for (const member of memberships)
+    byUser.set(member.userId, [...(byUser.get(member.userId) ?? []), member]);
+  let additions = 0;
+  let removals = 0;
+  for (const identity of active) {
+    const claims = snapshotAsClaims(identity.claimSnapshot);
+    const wanted = new Set(
+      config.teamMapping.filter(rule => oidcRuleMatches(claims, rule)).map(rule => rule.teamId)
+    );
+    const current = byUser.get(identity.user.id) ?? [];
+    const currentTeams = new Set(current.map(member => member.teamId));
+    additions += [...wanted].filter(teamId => !currentTeams.has(teamId)).length;
+    removals += current.filter(
+      member => member.oidcGrant && member.role === 'MEMBER' && !wanted.has(member.teamId)
+    ).length;
+  }
+  return { additions, removals };
+}
+
+/** Snapshots store values by claim path; rebuild an object the rule engine can read. */
+export function snapshotAsClaims(snapshot: unknown): Record<string, unknown> {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return {};
+  return Object.fromEntries(
+    Object.entries(snapshot as Record<string, unknown>).filter(([, value]) => Array.isArray(value))
+  );
 }
 
 async function preview(tx: Prisma.TransactionClient, revisionId: string) {
@@ -501,29 +962,42 @@ async function preview(tx: Prisma.TransactionClient, revisionId: string) {
       OR: [{ sessionExpiresAt: null }, { sessionExpiresAt: { gt: new Date() } }],
     },
   });
-  const usersRequiringLinking = await tx.user.count({
-    where: {
-      status: { in: ['ACTIVE', 'INVITED'] },
-      oidcIdentities: { none: { issuer: config.issuer } },
-    },
-  });
-  const blockers = [
-    !adminVerified ? oidcProofLabel(verification.state).detail : '',
-    ready.length < 2 ? 'Enroll and sign in with two independent emergency identities.' : '',
+  const linking = await linkingReadiness(tx, config);
+  const usersRequiringLinking = linking.needApproval;
+  const roleImpact = await roleChangeImpact(tx, config);
+  const staleRevision =
     !isActive && (active?.configVersion ?? 0) !== revision.baseConfigVersion
-      ? 'Active provider changed; create and test a new revision.'
-      : '',
-    replicas ? 'Reconcile conflicting legacy settings on active replicas.' : '',
-  ].filter(Boolean);
+      ? 'The active provider changed after this configuration was saved. Save and test again.'
+      : '';
+  // What each mode needs. SSO Optional keeps passwords working, so it never needs emergency
+  // identities; SSO Required does.
+  const blockersByMode = {
+    SSO_OPTIONAL: [
+      !adminVerified ? oidcProofLabel(verification.state).detail : '',
+      staleRevision,
+    ].filter(Boolean),
+    SSO_REQUIRED: [
+      !adminVerified ? oidcProofLabel(verification.state).detail : '',
+      ready.length < 2
+        ? 'Create two independent emergency identities and sign in with each once.'
+        : '',
+      staleRevision,
+      replicas ? 'Reconcile conflicting legacy settings on active replicas.' : '',
+    ].filter(Boolean),
+  };
+  const blockers = blockersByMode.SSO_REQUIRED;
   return {
     policyVersion: policy.version,
     revisionId,
     passwordSessionCount,
     usersRequiringLinking,
+    linking,
+    roleImpact,
     verifiedEmergencyAccounts: ready.length,
     adminVerified,
     verification,
     blockers,
+    blockersByMode,
     proof,
     config,
     revision,
@@ -541,10 +1015,13 @@ export async function enforcementPreview(revisionId: string) {
       revisionId,
       passwordSessionCount: value.passwordSessionCount,
       usersRequiringLinking: value.usersRequiringLinking,
+      linking: value.linking,
+      roleImpact: value.roleImpact,
       verifiedEmergencyAccounts: value.verifiedEmergencyAccounts,
       adminVerified: value.adminVerified,
       verification: value.verification,
       blockers: value.blockers,
+      blockersByMode: value.blockersByMode,
     };
   });
 }
@@ -602,6 +1079,11 @@ export async function activateOidcRevision(
             issuer: proof.issuer,
             subject: proof.subject,
             email: proof.email,
+            emailAtLink: proof.email,
+            providerConfigId: 'default',
+            // Without the fingerprint, the directory showed the administrator who just turned
+            // SSO on as "not linked to the current provider".
+            issuerFingerprint: oidcTrustFingerprint(proof.issuer, data.config.clientId),
           },
         });
       }
@@ -633,8 +1115,20 @@ export async function activateOidcRevision(
           where: { id: revisionId },
           data: { activatedAt: new Date(), previousRevisionId },
         });
+      // Approvals granted for this same issuer and client (including ones prepared before
+      // activation) stay valid and move to the new version; approvals for any other
+      // provider registration can never be used and are revoked.
+      const activatedFingerprint = oidcTrustFingerprint(data.config.issuer, data.config.clientId);
       await tx.oidcLinkingApproval.updateMany({
-        where: { consumedAt: null, revokedAt: null },
+        where: { consumedAt: null, revokedAt: null, issuerFingerprint: activatedFingerprint },
+        data: { configVersion: version },
+      });
+      await tx.oidcLinkingApproval.updateMany({
+        where: {
+          consumedAt: null,
+          revokedAt: null,
+          OR: [{ issuerFingerprint: { not: activatedFingerprint } }, { issuerFingerprint: null }],
+        },
         data: { revokedAt: new Date() },
       });
       const policy = await tx.authenticationPolicy.update({

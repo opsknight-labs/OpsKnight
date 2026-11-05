@@ -149,7 +149,7 @@ describe('MCP postmortem evidence workflow', () => {
     const f = await fixture();
     await db.mcpClient.update({ where: { id: f.client.id }, data: { scopes: ['incidents:read'] } });
     await expect(getMcpPostmortemContext(f.ctx(), { id: f.postmortem.id })).rejects.toThrow(
-      'MCP_OPERATION_FORBIDDEN'
+      'MCP_SCOPE_NOT_GRANTED'
     );
     await db.mcpGrant.update({ where: { id: f.grant.id }, data: { revokedAt: new Date() } });
     await expect(getMcpPostmortemContext(f.ctx(), { id: f.postmortem.id })).rejects.toThrow(
@@ -158,10 +158,10 @@ describe('MCP postmortem evidence workflow', () => {
     const other = await fixture();
     await db.user.update({
       where: { id: other.user.id },
-      data: { tokenVersion: { increment: 1 } },
+      data: { mcpRevocationVersion: { increment: 1 } },
     });
     await expect(getMcpPostmortemContext(other.ctx(), { id: other.postmortem.id })).rejects.toThrow(
-      'MCP_INACTIVE_PRINCIPAL'
+      'MCP_ACCESS_CHANGED'
     );
   });
   it('rejects unknown arguments, oversized history pages and exhausted operation/result budgets', async () => {

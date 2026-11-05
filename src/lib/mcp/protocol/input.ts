@@ -5,7 +5,8 @@ import { readBoundedMcpText } from '../core/body';
 export const rpcSchema = z
   .object({
     jsonrpc: z.literal('2.0'),
-    id: z.union([z.string().max(128), z.number().int()]),
+    // Absent on a notification (JSON-RPC 2.0 section 4.1), which gets no response body.
+    id: z.union([z.string().max(128), z.number().int()]).optional(),
     method: z.string().min(1).max(128),
     params: z.record(z.string(), z.unknown()).optional(),
   })

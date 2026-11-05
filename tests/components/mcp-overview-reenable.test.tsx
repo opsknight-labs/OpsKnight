@@ -43,7 +43,11 @@ it('discloses the write and sensitive access that turning MCP back on restores',
   expect(screen.getByRole('heading', { name: 'Turn AI assistant access back on' })).toBeTruthy();
   expect(screen.queryByText(/Read-only to start/)).toBeNull();
   expect(screen.getByText(/48 permissions for automatic connections/)).toBeTruthy();
-  expect(screen.getByText(/Assistants can propose changes again/)).toBeTruthy();
+  expect(
+    screen.getByText(
+      /Assistants can make changes again; configuration changes and runbook runs still wait for human review/
+    )
+  ).toBeTruthy();
   expect(screen.getByText(/Sensitive configuration reads are turned back on/)).toBeTruthy();
   expect(screen.getByRole('link', { name: 'Review the access policy' }).getAttribute('href')).toBe(
     '?tab=policy'

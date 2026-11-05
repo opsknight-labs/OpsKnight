@@ -37,6 +37,7 @@ type User = {
   jobTitle?: string | null;
   department?: string | null;
   createdAt?: Date;
+  roleSource?: string | null;
   teamMemberships?: Array<{
     id: string;
     role: string;
@@ -55,6 +56,7 @@ type UserListProps = {
   currentUserId: string;
   isAdmin: boolean;
   teams: Team[];
+  passwordResetAvailable?: boolean;
   updateUserRole: (userId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   addUserToTeam: (userId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   deactivateUser: (userId: string, formData?: FormData) => Promise<{ error?: string } | undefined>;
@@ -78,6 +80,7 @@ export default function UserList({
   users,
   currentUserId,
   isAdmin,
+  passwordResetAvailable = true,
   teams,
   updateUserRole,
   addUserToTeam,
@@ -334,6 +337,7 @@ export default function UserList({
               onGenerateInvite={user.status === 'INVITED' ? handleGenerateInvite : undefined}
               onUpdateRole={handleUpdateRole}
               onAddToTeam={handleAddToTeam}
+              passwordResetAvailable={passwordResetAvailable}
             />
           );
         })}

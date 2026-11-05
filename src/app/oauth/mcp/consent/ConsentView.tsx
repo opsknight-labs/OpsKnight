@@ -1,5 +1,7 @@
 import Image from 'next/image';
+import { AlertTriangle, BadgeCheck, Info } from 'lucide-react';
 import type { McpConsentGroup } from '@/lib/mcp/auth/consent-offer';
+import type { McpConsentIdentity } from '@/lib/mcp/auth/consent-identity';
 import ConsentForm from './ConsentForm';
 
 type Props = {
@@ -12,8 +14,16 @@ type Props = {
   roleLabel: string;
   groups: McpConsentGroup[];
   hasUnavailable: boolean;
-  /** Set for self-registered clients: where the browser returns after a decision. */
-  returnHost: string | null;
+  /** Where the browser returns after a decision. */
+  returnHost: string;
+  /** How OpsKnight knows who this assistant is. */
+  identity: McpConsentIdentity;
+  /** A self-registered client returns to a non-loopback web address. */
+  redirectWarning: boolean;
+  /** False while an administrator has turned changes off. */
+  writesEnabled: boolean;
+  /** When the connection this consent replaces was created, if there is one. */
+  replacesConnectionFrom: Date | null;
 };
 
 /** The focused consent dialog. Pure presentation: the page loads and authorizes the data. */
@@ -26,7 +36,12 @@ export default function ConsentView({
   groups,
   hasUnavailable,
   returnHost,
+  identity,
+  redirectWarning,
+  writesEnabled,
+  replacesConnectionFrom,
 }: Props) {
+  const hasChanges = groups.some(group => group.change.length > 0);
   // Many areas get a two-column grid on large screens; a short list stays a compact dialog.
   const wide =
     groups.length > 2 && groups.reduce((n, g) => n + g.view.length + g.change.length, 0) > 8;
@@ -73,6 +88,30 @@ export default function ConsentView({
             >
               Connect {clientName}?
             </h1>
+            <p
+              data-testid="mcp-consent-identity"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300"
+            >
+              <span>
+                Returns to{' '}
+                <code className="rounded bg-slate-100 px-1 py-px font-mono text-[12px] [overflow-wrap:anywhere] text-slate-900 dark:bg-slate-800 dark:text-slate-100">
+                  {returnHost}
+                </code>
+              </span>
+              {identity.kind === 'metadata' ? (
+                <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300">
+                  <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                  Identified by{' '}
+                  <code className="font-mono [overflow-wrap:anywhere]">{identity.host}</code>
+                </span>
+              ) : identity.kind === 'self-registered' ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+                  Name not verified
+                </span>
+              ) : (
+                <span>Registered by an administrator</span>
+              )}
+            </p>
             <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
               Signed in as{' '}
               <strong className="font-semibold [overflow-wrap:anywhere] text-slate-900 dark:text-white">
@@ -82,6 +121,41 @@ export default function ConsentView({
               here, within what your role already permits.
             </p>
           </div>
+          {redirectWarning && (
+            <div
+              role="note"
+              className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                This assistant named itself and sends you to the website{' '}
+                <strong className="[overflow-wrap:anywhere]">{returnHost}</strong>. Only continue if
+                you just started this connection yourself and recognise that address.
+              </span>
+            </div>
+          )}
+          {!writesEnabled && hasChanges && (
+            <div
+              role="note"
+              className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+            >
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                Changes are currently turned off by your administrator. Change permissions take
+                effect only if changes are turned on, and each change still needs approval.
+              </span>
+            </div>
+          )}
+          {replacesConnectionFrom && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Allowing replaces your connection from{' '}
+              {replacesConnectionFrom.toLocaleDateString('en-US', {
+                dateStyle: 'medium',
+                timeZone: 'UTC',
+              })}
+              .
+            </p>
+          )}
           <ConsentForm
             action={action}
             requestId={requestId}
@@ -93,15 +167,12 @@ export default function ConsentView({
                 : null
             }
             wide={wide}
+            writesEnabled={writesEnabled}
           />
           <p className="border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500 dark:border-slate-800 dark:text-slate-400">
             You can disconnect any time in Settings → Integrations & ChatOps → MCP (AI Assistants).
-            {returnHost !== null && (
-              <>
-                {' '}
-                Only continue if you just started this connection yourself
-                {returnHost ? <> (it will return to {returnHost})</> : null}.
-              </>
+            {identity.kind === 'self-registered' && !redirectWarning && (
+              <> Only continue if you just started this connection yourself.</>
             )}
           </p>
         </section>

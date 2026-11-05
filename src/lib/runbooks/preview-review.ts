@@ -114,6 +114,10 @@ export async function reviewRunbookPreview(
     planDigest: string;
     decision: 'approve' | 'reject';
     confirmSelfApproval?: 'yes';
+    /** Reviewer note (at most 500 characters), stored as untrusted text. */
+    reason?: string;
+    /** Approval only: the run must start before this time; it becomes the plan's expiry. */
+    commitDeadline?: Date;
   },
   actor: { id: string; tokenVersion: number }
 ) {
@@ -147,8 +151,17 @@ export async function reviewRunbookPreview(
             reviewedAt: new Date(),
             reviewedPlanDigest: preview.planDigest,
             selfApproved: selfReview,
+            decisionReason: input.reason ?? null,
+            ...(input.commitDeadline
+              ? { commitDeadline: input.commitDeadline, expiresAt: input.commitDeadline }
+              : {}),
           }
-        : { rejectedAt: new Date(), requestEnvelope: null },
+        : {
+            rejectedAt: new Date(),
+            rejectedById: actor.id,
+            decisionReason: input.reason ?? null,
+            requestEnvelope: null,
+          },
   });
   requireReview(changed.count === 1, 'PREVIEW_ALREADY_REVIEWED');
   await logAudit(
@@ -163,6 +176,7 @@ export async function reviewRunbookPreview(
         planDigest: preview.planDigest,
         requesterGrantId: preview.requesterGrantId,
         selfApproved: selfReview && input.decision === 'approve',
+        ...(input.reason ? { reason: input.reason } : {}),
       },
     },
     tx

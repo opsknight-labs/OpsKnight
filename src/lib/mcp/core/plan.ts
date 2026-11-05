@@ -2,6 +2,7 @@ import { z } from 'zod/v3';
 import { MCP_OPERATION_MAP } from '../catalog';
 import { callMcpOperation, type ExecutionContext } from './execution';
 import { McpBoundaryError, requireMcp } from './errors';
+import { logger } from '@/lib/logger';
 
 export const planSchema = z
   .object({
@@ -39,7 +40,10 @@ export async function executeMcpPlan(context: ExecutionContext, input: z.infer<t
       if (step.dependsOn.every(id => visited.has(id))) visited.add(step.id);
   }
   requireMcp(visited.size === pending.size, 'MCP_CYCLIC_PLAN');
-  const results = new Map<string, { status: string; result?: unknown; error?: string }>();
+  const results = new Map<
+    string,
+    { status: string; result?: unknown; error?: string; hint?: string }
+  >();
   while (pending.size) {
     context.budget.check();
     const ready = [...pending.values()]
@@ -58,9 +62,20 @@ export async function executeMcpPlan(context: ExecutionContext, input: z.infer<t
             result: await callMcpOperation(context, step.operationId, step.args),
           });
         } catch (error) {
+          // A step failure is reported in the result, so log the unexpected ones here.
+          if (!(error instanceof McpBoundaryError) || error.status >= 500)
+            logger.error('mcp.tool.unexpected_error', {
+              requestId: context.requestId,
+              tool: 'execute_plan',
+              grantId: context.grantId,
+              errorName: error instanceof Error ? error.name : typeof error,
+              ...(error instanceof McpBoundaryError ? { code: error.code } : {}),
+            });
+          // The same correction the step would have carried as a tool call of its own.
           results.set(step.id, {
             status: 'failed',
             error: error instanceof McpBoundaryError ? error.code : 'MCP_UNAVAILABLE',
+            ...(error instanceof McpBoundaryError && error.hint ? { hint: error.hint } : {}),
           });
         }
       })

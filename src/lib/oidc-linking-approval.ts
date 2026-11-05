@@ -72,6 +72,14 @@ export function isOidcLinkingApprovalUsable(
  * from silently creating non-expiring approvals. If customer configurability
  * is added later it should be a validated, typed OIDC setting.
  */
-export function getOidcLinkingApprovalExpiry(now = new Date()): Date {
-  return new Date(now.getTime() + OIDC_LINKING_APPROVAL_TTL_HOURS * 60 * 60 * 1000);
+export function getOidcLinkingApprovalExpiry(now = new Date(), days?: number): Date {
+  const hours = days === undefined ? OIDC_LINKING_APPROVAL_TTL_HOURS : clampApprovalDays(days) * 24;
+  return new Date(now.getTime() + hours * 60 * 60 * 1000);
+}
+
+/** Administrators may choose 1 to 30 days; anything else falls back to the safe bounds. */
+export const OIDC_LINKING_APPROVAL_MAX_DAYS = 30;
+export function clampApprovalDays(days: number): number {
+  if (!Number.isFinite(days)) return OIDC_LINKING_APPROVAL_TTL_HOURS / 24;
+  return Math.min(OIDC_LINKING_APPROVAL_MAX_DAYS, Math.max(1, Math.round(days)));
 }

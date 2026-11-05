@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Server,
   CalendarClock,
+  ClipboardCheck,
   ArrowRight,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
@@ -35,8 +36,10 @@ type Notification = {
   message: string;
   time: string;
   unread: boolean;
-  type: 'incident' | 'service' | 'schedule';
+  type: 'incident' | 'service' | 'schedule' | 'system';
   incidentId?: string;
+  /** Page the notification opens when it is not about an incident. */
+  href?: string | null;
   channel?: string;
   createdAt?: string;
 };
@@ -45,7 +48,7 @@ interface NotificationListProps {
   items: Notification[];
   emptyMessage?: string;
   emptySub?: string;
-  onNavigate: (incidentId?: string) => void;
+  onNavigate: (notification: Notification) => void;
   onMarkAsRead: (id: string, e: React.MouseEvent) => void;
 }
 
@@ -90,17 +93,11 @@ const NotificationList = memo(function NotificationList({
                     : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-purple-200 dark:border-purple-900/40 border-l-[3.5px] border-l-purple-500 hover:border-purple-300 dark:hover:border-purple-800/60 hover:shadow-xs'
                 : 'bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800/80 border-zinc-200/80 dark:border-zinc-800/80 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 opacity-85 hover:opacity-100'
             )}
-            onClick={() => {
-              if (notification.incidentId) {
-                onNavigate(notification.incidentId);
-              }
-            }}
+            onClick={() => onNavigate(notification)}
             role="button"
             tabIndex={0}
             onKeyDown={e => {
-              if ((e.key === 'Enter' || e.key === ' ') && notification.incidentId) {
-                onNavigate(notification.incidentId);
-              }
+              if (e.key === 'Enter' || e.key === ' ') onNavigate(notification);
             }}
           >
             {/* Type Icon */}
@@ -120,6 +117,11 @@ const NotificationList = memo(function NotificationList({
                   <CalendarClock className="h-4 w-4" />
                 </div>
               )}
+              {notification.type === 'system' && (
+                <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-400 flex items-center justify-center shadow-2xs">
+                  <ClipboardCheck className="h-4 w-4" />
+                </div>
+              )}
             </div>
 
             {/* Content */}
@@ -136,7 +138,13 @@ const NotificationList = memo(function NotificationList({
                           : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-400 dark:border-purple-500/30'
                     )}
                   >
-                    {isIncident ? 'Incident' : isService ? 'Service' : 'Shift'}
+                    {isIncident
+                      ? 'Incident'
+                      : isService
+                        ? 'Service'
+                        : isSchedule
+                          ? 'Shift'
+                          : 'System'}
                   </span>
                   <p
                     className={cn(
@@ -170,7 +178,7 @@ const NotificationList = memo(function NotificationList({
                 <span className="text-[10.5px] text-zinc-400 dark:text-zinc-500 font-mono">
                   {notification.time}
                 </span>
-                {notification.incidentId && (
+                {(notification.incidentId || notification.href) && (
                   <span
                     className={cn(
                       'text-[11px] font-medium inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform',
@@ -181,7 +189,8 @@ const NotificationList = memo(function NotificationList({
                           : 'text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
                     )}
                   >
-                    View incident <ArrowRight className="h-3 w-3" />
+                    {notification.incidentId ? 'View incident' : 'Open'}{' '}
+                    <ArrowRight className="h-3 w-3" />
                   </span>
                 )}
               </div>
@@ -286,6 +295,7 @@ export default function TopbarNotifications() {
   // Demand-driven loading: only fetch 50 notifications when the user actually opens the drawer
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetches from the server when the drawer opens.
       void fetchNotifications();
     }
   }, [open, fetchNotifications]);
@@ -295,6 +305,7 @@ export default function TopbarNotifications() {
     if (!pollingRequired) return;
 
     // Initialize badge count immediately when EventSource is unsupported
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetches from the server; state is set after the response.
     void fetchUnreadCount();
 
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -372,10 +383,18 @@ export default function TopbarNotifications() {
   );
 
   const onNavigate = useCallback(
-    (incidentId?: string) => {
-      if (!incidentId) return;
+    (notification: Notification) => {
+      const { incidentId, href } = notification;
       const isMobileContext = pathname?.startsWith('/m');
-      const targetUrl = isMobileContext ? `/m/incidents/${incidentId}` : `/incidents/${incidentId}`;
+      const targetUrl = incidentId
+        ? isMobileContext
+          ? `/m/incidents/${incidentId}`
+          : `/incidents/${incidentId}`
+        : // Only same-origin application paths are followed.
+          href?.startsWith('/') && !href.startsWith('//')
+          ? href
+          : null;
+      if (!targetUrl) return;
       setOpen(false);
       router.push(targetUrl);
     },

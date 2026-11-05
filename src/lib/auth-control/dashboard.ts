@@ -2,22 +2,65 @@ import 'server-only';
 import { z } from 'zod/v3';
 import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 import { providerConfigSchema } from './provider-config';
 import { storedProviderConfiguration } from './oidc-revisions';
-import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
+import {
+  evaluateOidcRoleClaims,
+  oidcRuleMatches,
+  resolveSignInRole,
+} from '@/lib/oidc/role-mapping';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
-import { type ControlActor, isAuthenticationFresh } from './actor';
+import { type ControlActor, freshAuthenticationMaxAge, isAuthenticationFresh } from './actor';
 import { emergencyReadiness } from './emergency-management';
 import { findRevisionIdentity } from './identity';
-import { authenticationOrigin, recoveryOrigin } from './origin';
+import { AuthenticationOriginError, authenticationOrigin, recoveryOrigin } from './origin';
 import { getActiveLinkingProvider, resolveOidcLinkingStatuses } from '@/lib/oidc-linking-status';
 import { evaluateOidcProof } from './proof-status';
 
 export type AuthenticationSection =
-  'overview' | 'connection' | 'access' | 'policy' | 'emergency' | 'diagnostics';
+  'overview' | 'connection' | 'access' | 'roles' | 'policy' | 'emergency' | 'diagnostics';
+
+const SUGGESTION_IDENTITY_SAMPLE = 500;
+const SUGGESTIONS_PER_CLAIM = 200;
+
+/**
+ * Group and role values people actually sent at recent sign-ins, per claim, so rule editors
+ * can pick a real value instead of guessing its spelling or case.
+ */
+async function claimValueSuggestions(issuer: string | null) {
+  if (!issuer) return {};
+  const identities = await prisma.oidcIdentity.findMany({
+    where: { issuer, claimSnapshot: { not: Prisma.DbNull } },
+    select: { claimSnapshot: true },
+    orderBy: { lastLoginAt: 'desc' },
+    take: SUGGESTION_IDENTITY_SAMPLE,
+  });
+  const counts = new Map<string, Map<string, number>>();
+  for (const identity of identities) {
+    const snapshot = identity.claimSnapshot;
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) continue;
+    for (const [claim, values] of Object.entries(snapshot)) {
+      if (!Array.isArray(values)) continue;
+      const perClaim = counts.get(claim) ?? new Map<string, number>();
+      for (const value of values)
+        if (typeof value === 'string') perClaim.set(value, (perClaim.get(value) ?? 0) + 1);
+      counts.set(claim, perClaim);
+    }
+  }
+  return Object.fromEntries(
+    [...counts].map(([claim, values]) => [
+      claim,
+      [...values]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, SUGGESTIONS_PER_CLAIM)
+        .map(([value, people]) => ({ value, people })),
+    ])
+  ) as Record<string, Array<{ value: string; people: number }>>;
+}
 export async function authenticationDashboard(
   actor: ControlActor,
   section: AuthenticationSection = 'overview'
@@ -113,7 +156,7 @@ export async function authenticationDashboard(
       orderBy: { email: 'asc' },
     }),
     emergencyReadiness(prisma).catch(error => {
-      if (error instanceof Error && error.message.includes('conflicting canonical')) return [];
+      if (error instanceof AuthenticationOriginError) return [];
       throw error;
     }),
     Promise.resolve([] as Array<{ id: string; lastSeenAt: Date; differs: boolean }>),
@@ -151,6 +194,32 @@ export async function authenticationDashboard(
         lastActive: string;
       }>
     ),
+  ]);
+  const [teams, linkingRequests, linkingRequestCount, suggestions] = await Promise.all([
+    section === 'roles' || section === 'access'
+      ? prisma.team.findMany({
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+          take: 500,
+        })
+      : Promise.resolve([]),
+    section === 'access' || section === 'overview'
+      ? prisma.oidcLinkingRequest.findMany({
+          orderBy: { lastAttemptAt: 'desc' },
+          take: 50,
+          select: {
+            userId: true,
+            email: true,
+            reason: true,
+            attempts: true,
+            requestedAt: true,
+            lastAttemptAt: true,
+            user: { select: { name: true, role: true } },
+          },
+        })
+      : Promise.resolve([]),
+    prisma.oidcLinkingRequest.count(),
+    section === 'roles' ? claimValueSuggestions(active?.issuer ?? null) : Promise.resolve({}),
   ]);
   const [canonical, pinnedOrigin] = await Promise.all([
     authenticationOrigin()
@@ -224,6 +293,10 @@ export async function authenticationDashboard(
     }),
     inheritedSessionPolicy: getEnterpriseSessionPolicy(),
     freshAuthenticationRequired: !isAuthenticationFresh(actor.authenticatedAt, actor.kind),
+    // Lets the console show "sign in again in 40 min" before the two-hour window closes.
+    freshAuthenticationExpiresAt: actor.authenticatedAt
+      ? new Date(actor.authenticatedAt + freshAuthenticationMaxAge(actor.kind)).toISOString()
+      : null,
     originConflict: canonical.conflict,
     recoveryOrigin: pinnedOrigin,
     recoveryOriginPinned: Boolean(process.env.AUTH_RECOVERY_ORIGIN),
@@ -301,6 +374,19 @@ export async function authenticationDashboard(
     acceptedEmailAlertCount: acceptedAlertCount,
     cancelledEmailAlertCount: cancelledAlertCount,
     failedEmailAlertCount: failedAlertCount,
+    teams,
+    linkingRequests: linkingRequests.map(request => ({
+      userId: request.userId,
+      email: request.email,
+      name: request.user.name,
+      role: request.user.role,
+      reason: request.reason,
+      attempts: request.attempts,
+      requestedAt: request.requestedAt.toISOString(),
+      lastAttemptAt: request.lastAttemptAt.toISOString(),
+    })),
+    linkingRequestCount,
+    claimSuggestions: suggestions as Record<string, Array<{ value: string; people: number }>>,
   };
 }
 
@@ -361,77 +447,129 @@ export async function searchAuthenticationUsers(
   };
 }
 
-export async function identityClaimsPreview(revisionId: string, claims: Record<string, unknown>) {
+/** Role-related draft settings the sandbox may evaluate before they are saved. No secrets. */
+export const claimsPreviewRulesSchema = providerConfigSchema
+  .innerType()
+  .pick({
+    roleMapping: true,
+    defaultRole: true,
+    unmatchedPolicy: true,
+    rolePrecedence: true,
+    teamMapping: true,
+  })
+  .strict();
+export type ClaimsPreviewRules = z.infer<typeof claimsPreviewRulesSchema>;
+
+export async function identityClaimsPreview(
+  revisionId: string,
+  claims: Record<string, unknown>,
+  draftRules?: ClaimsPreviewRules
+) {
   const revision = await prisma.oidcRevision.findUniqueOrThrow({ where: { id: revisionId } });
-  const config = providerConfigSchema.parse(revision.configuration);
-  const role = evaluateOidcRoleClaims(claims, config.roleMapping);
+  const config = { ...providerConfigSchema.parse(revision.configuration), ...(draftRules ?? {}) };
+  const role = evaluateOidcRoleClaims(claims, config.roleMapping, config);
+  const teams = config.teamMapping.filter(rule => oidcRuleMatches(claims, rule));
+  const teamNames = teams.length
+    ? await prisma.team.findMany({
+        where: { id: { in: teams.map(rule => rule.teamId) } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const roleSummary = {
+    outcome: role.outcome,
+    role: role.role,
+    matchedRule: role.matchedRule,
+    missingClaims: role.missingClaims,
+    deny: role.deny,
+    teams: teamNames.map(team => team.name),
+  };
+  const reject = (reason: string) => ({
+    outcome: 'REJECT' as const,
+    reason,
+    role: roleSummary,
+    effectiveRole: null,
+    userId: null,
+    roleSource: null,
+    identityRecognized: false,
+    administratorVerification: { ready: false, reason },
+    warning: null,
+  });
   const provider = getOidcProviderPolicy(config.issuer, config.providerType);
   const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : null;
   const subject = typeof claims.sub === 'string' ? claims.sub : null;
   if (typeof claims.iss !== 'string' || normalizeOidcIssuer(claims.iss) !== config.issuer)
-    return { outcome: 'REJECT', reason: 'Issuer must exactly match this staged revision.', role };
-  if (!subject) return { outcome: 'REJECT', reason: 'A stable subject claim is required.', role };
-  if (
-    !provider.validateOrganizationBoundary(
-      normalizeOidcBoundaryClaims(claims),
-      config.allowedDomains,
-      config.organizationId
-    ).ok
-  )
-    return { outcome: 'REJECT', reason: 'Organization boundary rejected these claims.', role };
+    return reject(`The "iss" claim must be exactly ${config.issuer}.`);
+  if (!subject) return reject('A stable "sub" claim is required.');
+  const boundary = provider.validateOrganizationBoundary(
+    normalizeOidcBoundaryClaims(claims),
+    config.allowedDomains,
+    config.organizationId
+  );
+  if (!boundary.ok)
+    return reject(
+      boundary.reason === 'OIDC_DOMAIN_NOT_ALLOWED'
+        ? 'The email (or Google hd) domain is not in the allowed domains.'
+        : boundary.reason === 'OIDC_EMAIL_ASSURANCE_REQUIRED'
+          ? 'Allowed domains require "email_verified": true.'
+          : 'The organization claim does not match the configured organization.'
+    );
   const emailVerified = coerceBooleanClaim(claims.email_verified);
-  if (emailVerified === false)
-    return { outcome: 'REJECT', reason: 'Provider explicitly reports unverified email.', role };
+  if (emailVerified === false) return reject('The provider reports the email is not verified.');
   let identity;
   try {
     identity = await findRevisionIdentity(prisma, config.issuer, subject);
   } catch {
-    return { outcome: 'REJECT', reason: 'Ambiguous external identity ownership.', role };
+    return reject('More than one OpsKnight user owns this identity.');
   }
   if (!identity && (!email || (!provider.allowsMissingEmailVerified() && emailVerified !== true)))
-    return {
-      outcome: 'REJECT',
-      reason: 'Verified email ownership is required for a new identity link.',
-      role,
-    };
-  const user = await prisma.user.findUnique({
-    where: identity ? { id: identity.userId } : { email: email! },
+    return reject('A verified email is required to link a new identity.');
+  const user = await prisma.user.findFirst({
+    where: identity ? { id: identity.userId } : { email: { equals: email!, mode: 'insensitive' } },
   });
-  if (user?.status === 'DISABLED') return { outcome: 'REJECT', reason: 'User is disabled.', role };
-  const effectiveRole =
-    role.ok && user
-      ? role.matched || user.roleSource === 'OIDC'
-        ? role.role
-        : user.role
-      : role.ok
-        ? role.role
-        : null;
+  if (user?.status === 'DISABLED') return reject('This OpsKnight user is disabled.');
+  const resolved = user
+    ? resolveSignInRole(
+        role,
+        { role: user.role, roleSource: user.roleSource },
+        { firstLink: !identity }
+      )
+    : // New accounts start with the default role; incomplete claims leave it unchanged.
+      { role: role.role, roleSource: 'OIDC' as const, changed: true };
+  const denied = role.deny && resolved.roleSource !== 'MANUAL';
+  if (denied) return reject('No role rule matches and unmatched people are denied access.');
+  if (!user && role.outcome === 'INCOMPLETE' && config.unmatchedPolicy === 'DENY')
+    return reject(
+      'The group list is incomplete and unmatched people are denied access, so no account is created.'
+    );
+  const effectiveRole = resolved.role;
   return {
     outcome: identity
-      ? 'EXISTING_IDENTITY'
+      ? ('EXISTING_IDENTITY' as const)
       : user
-        ? 'LINK_APPROVAL_REQUIRED'
+        ? ('LINK_APPROVAL_REQUIRED' as const)
         : config.autoProvision
-          ? 'JIT_PROVISION'
-          : 'REJECT',
+          ? ('JIT_PROVISION' as const)
+          : ('REJECT' as const),
     reason: identity
       ? 'Issuer and subject identify the same existing user; email changes do not relink it.'
       : user
-        ? 'An explicit first-link approval is required; email matching alone never grants access.'
+        ? config.domainTrustedLinking && user.role !== 'ADMIN'
+          ? 'Links automatically through domain-trusted linking on first sign-in.'
+          : 'An administrator approval is required before the first SSO sign-in.'
         : config.autoProvision
-          ? 'Unknown identity can be provisioned after real token verification.'
-          : 'JIT is disabled.',
+          ? 'A new account will be created on first sign-in.'
+          : 'New accounts are not created automatically (JIT is off).',
     userId: user?.id ?? null,
-    roleSource: user?.roleSource ?? 'OIDC',
+    roleSource: resolved.roleSource,
     effectiveRole,
-    role,
+    role: roleSummary,
     identityRecognized: Boolean(identity),
     administratorVerification: {
       ready: Boolean(
-        user?.status === 'ACTIVE' && effectiveRole === 'ADMIN' && role.ok && !role.groupsOverage
+        user?.status === 'ACTIVE' && effectiveRole === 'ADMIN' && role.outcome !== 'INCOMPLETE'
       ),
       reason:
-        !role.ok || role.groupsOverage
+        role.outcome === 'INCOMPLETE'
           ? 'Administrator verification blocked by incomplete group claims.'
           : user?.status !== 'ACTIVE'
             ? 'Select an active administrator for verification.'
@@ -440,9 +578,11 @@ export async function identityClaimsPreview(revisionId: string, claims: Record<s
               : 'Sample claims permit an administrator test; real signed-token verification is still required.',
     },
     warning:
-      role.ok && role.groupsOverage
-        ? 'Entra group overage prevents mapped elevation. Resolve claims before rollout.'
-        : null,
+      role.outcome === 'INCOMPLETE'
+        ? 'The provider sent a "too many groups" marker instead of the group list. No rule can raise this person\'s role, and a role from SSO above the default is lowered to the default. Use app roles (the "roles" claim) instead.'
+        : role.missingClaims.length > 0
+          ? `These rule claims are missing from the sample: ${role.missingClaims.join(', ')}.`
+          : null,
   };
 }
 

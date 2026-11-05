@@ -52,7 +52,7 @@ describe('authentication section request cancellation', () => {
         testCallbackUrl="https://instance.example.test/api/auth/oidc/test/callback"
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Identity Provider' }));
+    fireEvent.click(screen.getByRole('button', { name: '1 · Connect provider' }));
     expect(screen.getByText('Loading this section…')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
     expect(screen.queryByText('Loading this section…')).not.toBeInTheDocument();
