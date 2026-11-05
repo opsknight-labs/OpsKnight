@@ -8,8 +8,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "4d683849ddd9b289ae1e024ee2983b9cbeb3b86605eaa6f107cfe0d61740968c",
-    "descriptionSha256": "94d4294df688b4de35bd12a382508b98ab5727c7cd4ebcb2a4cfdee84b7ed30d"
+    "inputSchemaSha256": "37c6956395b33c3642b959d78b158a3f92691557da9567a2c7526c1a48bbc42e",
+    "descriptionSha256": "c5b9ec649f55ecbf7b0dfe7e0ff7899162cfea6e3ff06c590587e93cdaa29f54"
   },
   {
     "name": "automation_get_effective",
@@ -20,20 +20,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "28c3e6fbcdb1983c50e8f20fa5062117f52588440cbe2bb9f9e6f7386070bc56",
-    "descriptionSha256": "f314d6bce0de21baaae32242fc095f590ff23827725751422aae946cf85fec8d"
-  },
-  {
-    "name": "automation_simulate",
-    "title": "Simulate automation rules",
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": false
-    },
-    "inputSchemaSha256": "8dbb959f0c2046071cf923130a917e167067b7cb1305057d41f58fbe1709492f",
-    "descriptionSha256": "decdcfe686eb3ac6220e1bcc5000ead07decc1a7a01f5959064d70948667a0bc"
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "39acdb8bdd74359b41cf5f256b8b0f1773096edcb6ab3de27dc71de6446af993"
   },
   {
     "name": "describe_operation",
@@ -56,8 +44,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
-    "descriptionSha256": "d2886e35ff87eec8ffaa60d50331af3f95236cb0d0a8d277946a539600b8a5f9"
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "77043bdfcef5820157035414fc238973826b4e75969cd7277adffc252411164a"
   },
   {
     "name": "execute_plan",
@@ -80,8 +68,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
-    "descriptionSha256": "cae7601b0f9e310e70f17b23294d01b2f1897b42f0665f314d6635d643abd367"
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "73371a1fa1e23f91de8664978b0aacfbfef91b9475c0027da4afd704d727e107"
   },
   {
     "name": "incident_get_context",
@@ -104,8 +92,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "a7e63e70cc1809f2e51c3ded560ee9d327613d8868aed46f7aea7a613eb79365",
-    "descriptionSha256": "8e954f1e60fb6edee6c2ca3d743dfacca3a988e832d962a5225307d233df57bb"
+    "inputSchemaSha256": "27e714747f49a4d078b8604fe316da59d4251e4a4c487755666c36bf3c9ba3fc",
+    "descriptionSha256": "411985fffd9836c1e7b5d709c4a972baa9a10644b8742b10d108be5ca9328b71"
   },
   {
     "name": "incident_search",
@@ -116,8 +104,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "9efc7fe242aa0488be448bc31b4974ef4d2a472c658b0ec08e558c261c974c22",
-    "descriptionSha256": "84aa110ef249b8621ec6aca6acea10e2f0d9d275f5e4a3bd73aa222ec5ea994e"
+    "inputSchemaSha256": "bb307bb81b1360546684d1bbf0d5925c9f02e5c11c3fb9d6c1622e5190c6ff2b",
+    "descriptionSha256": "947523813b413e8076c1e5db54440a2a0fe64dd5389ad61195c8a642732a8e97"
   },
   {
     "name": "oncall_lookup",
@@ -128,8 +116,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "c2f520233c74906105497d5f2bae0817b44b96648da5dd7b630c56654911443e",
-    "descriptionSha256": "986bacd556a1c7e31a8af6d80d31190c8636275acbb05945b6a03c7b273ff83a"
+    "inputSchemaSha256": "a16c47ea89aaf901d1d462536c9feb48aa8c666e327e926c94cf75f14325dd63",
+    "descriptionSha256": "6c8ffa0f26322b532302e16a6e41a1d629856b2474c0ba347f06c23b313c716d"
   },
   {
     "name": "postmortem_get_context",
@@ -164,8 +152,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "28c3e6fbcdb1983c50e8f20fa5062117f52588440cbe2bb9f9e6f7386070bc56",
-    "descriptionSha256": "080462256b3e282ec01b3a964d0453a3535676d1987b931eff56108827226767"
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "bfab33df7d525d5b495a204bcf08f2b0429ee5900bcd1a8c1d10b619d44d9b23"
   },
   {
     "name": "runbook_find",
@@ -176,8 +164,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "df03725b59320bdbaa920fbd52a2195e506130bbdbc1dd607f2e28c630dc6d9e",
-    "descriptionSha256": "88e2e049e0046bfee8b8f1499037811edaa12e6d2f38ea0cadfa6b1aa0dcced5"
+    "inputSchemaSha256": "79d2d56ae83f8da5c6242c53088a40d8d4fd59de3540b38b475ae916c0999339",
+    "descriptionSha256": "b4a861fc1653028c88c2cb62ab2d3bc046ff545d51c2fcace88f8dae8df56fda"
   },
   {
     "name": "runbook_get_execution",
@@ -188,8 +176,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
-    "descriptionSha256": "f5e896acf257f4abb3bff10301114fede73b4d9ecd6b234623f942339e50021f"
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "7273f9eba1d897027bdb550d8f54295756c8f78bad93158ac2845e93533265a3"
   },
   {
     "name": "runbook_preview",
@@ -200,8 +188,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "b87538d50d84f204fd6f909d1bb0406975b78daf3d3c415ac1b9277ba0fbf890",
-    "descriptionSha256": "e39537728f72f2fd1ad4d133caafbebc6474fcfd90241b129e2e0efa7afdeed4"
+    "inputSchemaSha256": "cd2f0b807434a10447fbfb21304372e0129e1b0ecf378bc667e90a9f69e9557d",
+    "descriptionSha256": "ea8103d3d89ddad9b11d304965e624ef8f84149acf21f2974c543a695df71f2b"
   },
   {
     "name": "schedule_get",
@@ -212,8 +200,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
-    "descriptionSha256": "12584fa89e44ef59bf015b8b2742f7363d3f2386c0d1631da4184f53bd5004df"
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "8ce1143f5ce4e01199eafbd85308c60fad8d01a72131b07e649e9c25179b4a6c"
   },
   {
     "name": "search_capabilities",
@@ -225,7 +213,7 @@
       "openWorldHint": false
     },
     "inputSchemaSha256": "dc9367bdd755769e752c56ebb005af45041eed6f364c4287aa25cd54b547db15",
-    "descriptionSha256": "c5ef3027eee25b5685e6c5d8dd962dfaa0a80c415f6651943af151aee662a848"
+    "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
   },
   {
     "name": "service_get_health",
@@ -236,8 +224,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "28c3e6fbcdb1983c50e8f20fa5062117f52588440cbe2bb9f9e6f7386070bc56",
-    "descriptionSha256": "4360086d4fb5a9cf654ea6c24958a20e08b8674c3f0e3f65c49815badc6cecbd"
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "e411ca7554dac771aa43d9afa55721212734660fb3c6dac77380abf16e1a3bae"
   },
   {
     "name": "status_page_get",
@@ -248,8 +236,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
-    "descriptionSha256": "0d5ef9a1c2889a956fa54376e10bd3a033cd8c7d7e391aea4a2682e755b74e6d"
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "7e9dbf45838dda3831c6e13e23945b889ec7aeb57a3196eb8eab5146433396af"
   },
   {
     "name": "whoami",
@@ -261,6 +249,6 @@
       "openWorldHint": false
     },
     "inputSchemaSha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
-    "descriptionSha256": "84194aebdc4fe22cd38b988e221f30e5f28fdb1728dec76e0dfd79c6a6b4529c"
+    "descriptionSha256": "de684898b53a757df2bfb7627e31586d5a3a2ba4683a70fc9876d972a31a6092"
   }
 ]

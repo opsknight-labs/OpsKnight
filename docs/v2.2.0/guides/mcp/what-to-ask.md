@@ -52,12 +52,12 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 
 ### Administrator
 
-| Ask                                                                                   | Uses                                                                               | Needs                                            |
-| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------ |
-| "Review the automation rule on the billing service: what would it do to a new alert?" | `review_automation_rule` prompt, `automation_get_effective`, `automation_simulate` | `automation:read`                                |
-| "Find the operation that changes a service's support hours and describe it."          | `search_capabilities`, `describe_operation`                                        | none to search; the operation's own scope to run |
-| "Change the support hours on the billing service to 08:00 to 18:00."                  | `operation_prepare`, then your approval                                            | `services:write`, changes allowed                |
-| "List every integration on the checkout service."                                     | `read_operation`                                                                   | `integrations:read`                              |
+| Ask                                                                                   | Uses                                                                                               | Needs                                            |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| "Review the automation rule on the billing service: what would it do to a new alert?" | `review_automation_rule` prompt, `automation_get_effective`, `read_operation` (simulateAutomation) | `automation:read`                                |
+| "Find the operation that changes a service's support hours and describe it."          | `search_capabilities`, `describe_operation`                                                        | none to search; the operation's own scope to run |
+| "Change the support hours on the billing service to 08:00 to 18:00."                  | `operation_prepare`, then your approval                                                            | `services:write`, changes allowed                |
+| "List every integration on the checkout service."                                     | `read_operation`                                                                                   | `integrations:read`                              |
 
 If a request needs a permission the connection was not granted, the assistant gets `MCP_SCOPE_NOT_GRANTED`: reconnect and approve that permission. If your role can never do it, it gets `MCP_OPERATION_FORBIDDEN`, and reconnecting will not help.
 

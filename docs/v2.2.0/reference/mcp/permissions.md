@@ -469,7 +469,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `requestRunbookRulePolicyChecks` | `operation_prepare`, then approval |
 | `restoreAutomationDraft` | `operation_prepare`, then approval |
 | `saveAutomationDraft` | `operation_prepare`, then approval |
-| `simulateAutomation` | `automation_simulate` |
+| `simulateAutomation` | `call_operation` |
 | `updateService` | `operation_prepare`, then approval |
 | `updateServiceAutomationMode` | `operation_prepare`, then approval |
 | `updateServiceClassificationPolicy` | `operation_prepare`, then approval |
