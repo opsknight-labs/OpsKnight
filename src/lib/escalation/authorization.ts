@@ -228,8 +228,10 @@ function manualEscalationRecord(idempotency: IdempotencyContext) {
   const key = idempotency.key.trim();
   const principalId = idempotency.principalId.trim();
   if (!key || !principalId) throw new Error('Invalid escalation idempotency context');
-  const digest = createHash('sha256').update(`${principalId}:${key}`).digest('hex');
-  return { key, principalId, recordId: `idem:manual-escalation:${digest}` };
+  // The principal is an opaque credential or user id, kept readable; only the client-chosen key
+  // is digested so the receipt id stays bounded however long the key is.
+  const digest = createHash('sha256').update(key).digest('hex');
+  return { key, principalId, recordId: `idem:manual-escalation:${principalId}:${digest}` };
 }
 
 const conflictingEscalationKey = () =>

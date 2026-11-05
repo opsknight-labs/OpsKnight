@@ -42,14 +42,14 @@ jobs:
         continue-on-error: true
 
       - name: Changed-source ESLint gate (blocking)
-        # Large changesets exceed Node's default heap; match the build's 4096 MB.
+        # Large changesets exceed one process's heap: lint in batches, each with the build's 4096 MB.
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: |
           base="$(git merge-base origin/main HEAD)"
           git diff --name-only --diff-filter=d "$base" HEAD -- '*.ts' '*.tsx' '*.mjs' '*.cjs' > changed-source.txt
           if [ -s changed-source.txt ]; then
-            xargs -a changed-source.txt npx eslint --max-warnings 0 --no-warn-ignored
+            xargs -a changed-source.txt -n 60 npx eslint --max-warnings 0 --no-warn-ignored
           fi
 
       - name: TypeScript typecheck
