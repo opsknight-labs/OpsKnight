@@ -164,6 +164,54 @@ async function pendingConsumed(id: string) {
   return (await db.mcpConsentRequest.findUniqueOrThrow({ where: { id } })).consumedAt;
 }
 
+/** The props the consent page hands its presentational view. */
+async function renderViewProps(id: string) {
+  const { default: McpConsent } = await import('@/app/oauth/mcp/consent/page');
+  const tree = (await McpConsent({ searchParams: Promise.resolve({ id }) })) as {
+    type: { name?: string };
+    props: Record<string, unknown>;
+  };
+  expect(tree.type.name).toBe('ConsentView');
+  return tree.props;
+}
+
+describe('D3: upgrading a connection', () => {
+  it('keeps an in-use connection, says so, and marks what the upgrade adds', async () => {
+    await signIn('ADMIN');
+    const first = await startConsent('incidents:read');
+    await decide(first.id, 'allow', ['incidents:read']);
+    await tokenFor(first);
+    const upgrade = await db.mcpConsentRequest.create({
+      data: {
+        ...(({ id: _id, consumedAt: _consumed, ...rest }) => rest)(
+          await db.mcpConsentRequest.findUniqueOrThrow({ where: { id: first.id } })
+        ),
+        scopes: ['incidents:read', 'incidents:write'],
+        requestedScopes: ['incidents:read', 'incidents:write'],
+        expiresAt: new Date(Date.now() + 600000),
+      },
+    });
+    const props = await renderViewProps(upgrade.id);
+    expect(props.previousConnection).toMatchObject({ inUse: true });
+    const items = (props.groups as McpConsentGroup[]).flatMap(g => [...g.view, ...g.change]);
+    expect(items.find(item => item.scope === 'incidents:write')?.added).toBe(true);
+    expect(items.find(item => item.scope === 'incidents:read')?.added).toBeUndefined();
+  });
+
+  it('calls an unused earlier sign-in replaceable', async () => {
+    await signIn('ADMIN');
+    const first = await startConsent('incidents:read');
+    await decide(first.id, 'allow', ['incidents:read']);
+    const second = await startConsent('incidents:read');
+    // A new client row per startConsent; point the second request at the first client.
+    await db.mcpConsentRequest.update({
+      where: { id: second.id },
+      data: { clientId: first.client.id },
+    });
+    expect((await renderViewProps(second.id)).previousConnection).toMatchObject({ inUse: false });
+  });
+});
+
 describe('role-aware MCP consent', () => {
   it('offers a responder only the permissions a responder can use', async () => {
     await signIn('RESPONDER');

@@ -1,6 +1,9 @@
 export type McpConsentIdentity =
-  /** A client metadata document (CIMD): the host that published it vouches for the name. */
-  | { kind: 'metadata'; host: string }
+  /**
+   * A client metadata document (CIMD): the host that published it chose the name. `trusted` only
+   * when an administrator listed that host; otherwise any public HTTPS site could have published it.
+   */
+  | { kind: 'metadata'; host: string; trusted: boolean }
   /** Dynamic registration (DCR): the name is whatever the client sent. */
   | { kind: 'self-registered' }
   /** Registered by an OpsKnight administrator. */
@@ -22,15 +25,41 @@ export function consentRedirectFacts(redirectUri: string) {
   }
 }
 
-/** Only a metadata document's host identifies an assistant; a registered name is self-chosen. */
-export function consentIdentity(client: {
-  metadataUrl: string | null;
-  dynamicRegistration: boolean;
-}): McpConsentIdentity {
+/**
+ * Only a metadata document's host identifies an assistant; a registered name is self-chosen. The
+ * host is trusted only when it is on the administrator's list (compared by hostname, as
+ * isCimdHostAllowed does).
+ */
+export function consentIdentity(
+  client: { metadataUrl: string | null; dynamicRegistration: boolean },
+  policy: { cimdAllowedHosts: readonly string[] } | null = null
+): McpConsentIdentity {
   if (client.metadataUrl) {
     try {
-      return { kind: 'metadata', host: new URL(client.metadataUrl).host };
+      const host = new URL(client.metadataUrl).hostname.toLowerCase();
+      const allowed = policy?.cimdAllowedHosts ?? [];
+      return { kind: 'metadata', host, trusted: allowed.length > 0 && allowed.includes(host) };
     } catch {}
   }
   return client.dynamicRegistration ? { kind: 'self-registered' } : { kind: 'registered' };
+}
+
+/**
+ * Whether to warn before the browser returns to a web address the assistant's own identity does
+ * not vouch for: any web redirect of a self-registered assistant, or a metadata-document
+ * assistant whose redirect host is neither its publisher's host nor a subdomain of it. Loopback
+ * and app-scheme redirects stay on the person's device and are not warned about.
+ */
+export function consentRedirectWarning(identity: McpConsentIdentity, redirectUri: string) {
+  const facts = consentRedirectFacts(redirectUri);
+  if (facts.staysLocal) return false;
+  if (identity.kind === 'self-registered') return true;
+  if (identity.kind !== 'metadata') return false;
+  let redirectHost: string;
+  try {
+    redirectHost = new URL(redirectUri).hostname.toLowerCase();
+  } catch {
+    return true;
+  }
+  return !(redirectHost === identity.host || redirectHost.endsWith(`.${identity.host}`));
 }
