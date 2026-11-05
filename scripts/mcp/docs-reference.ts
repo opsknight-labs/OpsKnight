@@ -490,6 +490,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'execute_plan accepts reads only.',
     fix: 'Run changes one at a time with call_operation.',
   },
+  MCP_POLICY_INVALID: {
+    area: 'settings',
+    meaning:
+      'The MCP settings save refused a value; the form shows which one (for example no permission for automatic connections, a bad host or browser origin, or setup not ready).',
+    fix: 'Change the value the message names, then save again.',
+  },
   MCP_POLICY_CONFLICT: {
     area: 'settings',
     meaning: 'Someone else saved the MCP policy or exposed capabilities after this page loaded.',

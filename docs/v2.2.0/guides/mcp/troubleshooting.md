@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 104 MCP codes and 24 log events found in the source.
+This page lists 105 MCP codes and 24 log events found in the source.
 
 ## Connecting and signing in
 
@@ -127,6 +127,7 @@ This page lists 104 MCP codes and 24 log events found in the source.
 | <a id="MCP_FORCE_DISABLED"></a>`MCP_FORCE_DISABLED` | MCP was switched on in settings while the deployment sets MCP_FORCE_DISABLED=true, which overrides the stored policy. | Ask the operator to remove MCP_FORCE_DISABLED from the environment and restart OpsKnight, then turn MCP on again. |
 | <a id="MCP_CLIENT_NOT_FOUND"></a>`MCP_CLIENT_NOT_FOUND` | The assistant to restore does not exist. | Reload the Assistants tab. |
 | <a id="MCP_POLICY_CONFLICT"></a>`MCP_POLICY_CONFLICT` | Someone else saved the MCP policy or exposed capabilities after this page loaded. | Choose Reload policy, re-apply your change and save. |
+| <a id="MCP_POLICY_INVALID"></a>`MCP_POLICY_INVALID` | The MCP settings save refused a value; the form shows which one (for example no permission for automatic connections, a bad host or browser origin, or setup not ready). | Change the value the message names, then save again. |
 | <a id="MCP_INVALID_CIMD_HOST"></a>`MCP_INVALID_CIMD_HOST` | A trusted assistant host is not a plain DNS name. | Enter one host name per line, without scheme, port or path. |
 | <a id="MCP_INVALID_BROWSER_ORIGIN"></a>`MCP_INVALID_BROWSER_ORIGIN` | An Allowed browser origins entry is not an exact origin (scheme, host and optional port), uses plain http off loopback, or the list has more than 10 entries. | Enter origins such as https://inspector.example.com or http://localhost:6274, one per line. |
 | <a id="MCP_DCR_REQUIRES_SCOPES"></a>`MCP_DCR_REQUIRES_SCOPES` | Automatic connections was turned on with no permissions ticked. | Tick at least one permission under What assistants may do. |
