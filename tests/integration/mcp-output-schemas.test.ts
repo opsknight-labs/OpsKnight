@@ -158,6 +158,8 @@ describe('named tool results satisfy their advertised output schemas', () => {
       ['schedule_get', { path: { id: schedule.id } }],
       ['oncall_lookup', { path: { id: schedule.id } }],
       ['oncall_my_shifts', { query: { days: 7 } }],
+      ['oncall_catch_up', { query: { hours: 24 } }],
+      ['incident_find_similar', { path: { id: incident.id } }],
       ['escalation_explain', { path: { id: escalation.id } }],
       ['status_page_get', { path: { id: page.id } }],
       ['service_get_health', { path: { id: service.id } }],
@@ -191,5 +193,7 @@ describe('named tool results satisfy their advertised output schemas', () => {
     // Most of the curated surface is covered, and every one of these advertises a schema.
     expect(checked.length).toBeGreaterThanOrEqual(12);
     expect(checked).toContain('oncall_my_shifts');
+    expect(checked).toContain('oncall_catch_up');
+    expect(checked).toContain('incident_find_similar');
   }, 120000);
 });

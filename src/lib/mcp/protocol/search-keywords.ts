@@ -20,6 +20,11 @@ export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
   ['listRunbooks', ['remediation', 'playbook']],
   ['listTeams', ['team']],
   ['listMyOnCallShifts', ['me', 'my', 'shift', 'when', 'handoff', 'oncall', 'rota']],
+  ['getMyCatchUp', ['catch up', 'missed', 'what happened', 'on fire', 'overnight']],
+  [
+    'listSimilarIncidents',
+    ['similar', 'seen before', 'happened before', 'last time', 'what fixed', 'precedent'],
+  ],
   ['listUsers', ['people', 'person', 'directory', 'colleague']],
   ['listAuditLogs', ['audit', 'who changed', 'trail', 'history']],
   ['getIntegrationDiagnostics', ['health', 'failing', 'deliveries', 'webhook']],

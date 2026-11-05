@@ -109,6 +109,8 @@ describe('golden queries against the real catalog', () => {
     ['run runbook', 'executeRunbook'],
     ['acknowledge incident', 'acknowledgeIncident'],
     ['incident_get_timeline', 'getIncidentTimeline'],
+    ['what did I miss overnight', 'getMyCatchUp'],
+    ['has this happened before, what fixed it last time', 'listSimilarIncidents'],
   ])('%s -> %s', (query, expected) => {
     expect(first(query)).toBe(expected);
   });
