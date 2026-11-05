@@ -5330,6 +5330,8 @@ model AiSettings {
   allowExternalFallback   Boolean  @default(false)
   requestsPerMinutePerUser Int     @default(20)
   dailyTokenBudget        Int      @default(500000)
+  // A sub-limit inside the global budget; background backfills cannot consume it all.
+  backgroundEmbeddingBudgetPercent Int @default(20)
   // Per person per UTC day, so one heavy user cannot spend the whole budget for everyone.
   userDailyTokenBudget    Int      @default(100000)
   maxOutputTokens         Int      @default(1024)
@@ -5374,6 +5376,7 @@ model AiUsageDay {
   requests     Int      @default(0)
   inputTokens  Int      @default(0)
   outputTokens Int      @default(0)
+  backgroundEmbeddingTokens Int @default(0)
   updatedAt    DateTime @updatedAt
 }
 

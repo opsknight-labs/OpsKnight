@@ -3,13 +3,18 @@ import {
   DEFAULT_POLICY_DEFINITION,
   INTELLIGENCE_SETTINGS_DEFAULTS,
 } from '@/lib/intelligence/contract';
-import { breakers, embeddingBreakers, invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
-import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
+import {
+  breakers,
+  embeddingBreakers,
+  invalidateGatewayCache,
+  resolveGatewayEmbedding,
+} from '@/lib/intelligence/ai/gateway';
+import { getAiSettings, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import { purgeExpiredIntelligenceData } from '@/lib/intelligence/jobs/retention';
 import { DEFAULT_HANDLERS } from '@/lib/intelligence/jobs/runner';
 import { WORK_KINDS } from '@/lib/intelligence/jobs/work-queue';
-import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
+import { getIntelligenceSettings, publishPolicyVersion } from '@/lib/intelligence/settings/service';
 import {
   currentEmbeddingModel,
   embedIncidents,
@@ -625,4 +630,59 @@ it('keeps the embedding space pinned across a circuit outage and recovery', asyn
     embeddingBreakers.recordSuccess(provider.id);
     embeddingBreakers.recordSuccess(backup.id);
   }
+});
+
+it('pauses a budget-exhausted backfill without provider egress or dead letters and keeps interactive embeddings available', async () => {
+  const { admin, ctx } = await setup();
+  const shop = await createTestService('Embedding allocation');
+  const original = await indexed('Checkout failing', shop.id);
+  const precedent = await indexed('Payment transactions declined', shop.id);
+  await embedIncidents([original.id, precedent.id]);
+  const pending = await indexed('Checkout newly failing', shop.id);
+  const space = await currentEmbeddingModel();
+  const before = await db.incidentEmbedding.findMany({ orderBy: { incidentId: 'asc' } });
+  const day = new Date().toISOString().slice(0, 10);
+  await db.aiUsageDay.update({
+    where: { day },
+    data: { inputTokens: 100000, outputTokens: 0, backgroundEmbeddingTokens: 100000 },
+  });
+  const requests = embeddingCalls().length;
+  const handler = DEFAULT_HANDLERS[WORK_KINDS.EMBED_PENDING]!;
+  await expect(
+    handler(
+      {
+        id: 'budget-work',
+        kind: WORK_KINDS.EMBED_PENDING,
+        subjectKey: 'pending',
+        generation: 1,
+        claimToken: 'budget-claim',
+        attempts: 1,
+      },
+      { settings: await getIntelligenceSettings(), signal: new AbortController().signal }
+    )
+  ).resolves.toBeUndefined();
+  expect(embeddingCalls()).toHaveLength(requests);
+  expect(await currentEmbeddingModel()).toBe(space);
+  expect(await db.incidentEmbedding.findMany({ orderBy: { incidentId: 'asc' } })).toEqual(before);
+  const cached = await findSimilarIncidents(original.id, { ...options, semanticModel: space });
+  expect(
+    cached?.results.find(row => row.incidentId === precedent.id)?.components.semantic
+  ).toBeGreaterThan(0.99);
+  const interactive = await resolveGatewayEmbedding('PERSONAL');
+  expect(interactive).not.toBeNull();
+  await expect(
+    interactive!.embed(['Payment search query'], { actorId: admin.id })
+  ).resolves.toMatchObject({ vectors: expect.any(Array) });
+  expect(embeddingCalls()).toHaveLength(requests + 1);
+  expect(
+    (await db.aiUsageDay.findUniqueOrThrow({ where: { day } })).backgroundEmbeddingTokens
+  ).toBe(100000);
+  const settings = await getAiSettings();
+  const { revision, ...values } = settings;
+  await updateAiSettings(
+    { ...values, backgroundEmbeddingBudgetPercent: 40, expectedRevision: revision },
+    ctx
+  );
+  invalidateGatewayCache();
+  expect(await embedIncidents([pending.id])).toMatchObject({ embedded: [pending.id] });
 });

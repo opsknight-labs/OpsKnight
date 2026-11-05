@@ -36,6 +36,7 @@ export interface AiSettingsView {
   allowExternalFallback: boolean;
   requestsPerMinutePerUser: number;
   dailyTokenBudget: number;
+  backgroundEmbeddingBudgetPercent: number;
   userDailyTokenBudget: number;
   maxOutputTokens: number;
   requestTimeoutMs: number;
@@ -57,6 +58,7 @@ const SETTINGS_SELECT = {
   allowExternalFallback: true,
   requestsPerMinutePerUser: true,
   dailyTokenBudget: true,
+  backgroundEmbeddingBudgetPercent: true,
   userDailyTokenBudget: true,
   maxOutputTokens: true,
   requestTimeoutMs: true,
@@ -102,11 +104,21 @@ export async function updateAiSettings(
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('ai-settings', 0))`;
     const previous = await getAiSettings(tx);
     if (previous.revision !== expectedRevision) throw new AppError({ code: 'PRECONDITION_FAILED' });
+    // Older clients do not send the allocation control. Preserve an administrator's saved share
+    // rather than silently resetting it when an unrelated setting is changed.
+    const allocation =
+      typeof input === 'object' &&
+      input !== null &&
+      'backgroundEmbeddingBudgetPercent' in input &&
+      input.backgroundEmbeddingBudgetPercent !== undefined
+        ? values.backgroundEmbeddingBudgetPercent
+        : previous.backgroundEmbeddingBudgetPercent;
+    const savedValues = { ...values, backgroundEmbeddingBudgetPercent: allocation };
     const next = toSettingsView(
       await tx.aiSettings.upsert({
         where: { id: 'default' },
-        create: { ...values, revision: 1, updatedBy: actor.actorId },
-        update: { ...values, revision: { increment: 1 }, updatedBy: actor.actorId },
+        create: { ...savedValues, revision: 1, updatedBy: actor.actorId },
+        update: { ...savedValues, revision: { increment: 1 }, updatedBy: actor.actorId },
         select: SETTINGS_SELECT,
       })
     );

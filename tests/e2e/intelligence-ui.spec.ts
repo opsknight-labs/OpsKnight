@@ -278,6 +278,41 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(page.getByRole('radio', { name: 'Knight' })).toBeChecked();
   });
 
+  test('administrators can pause and adjust the background allocation through the settings form', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/settings/intelligence/ai');
+    await noHorizontalOverflow(page);
+    const allocation = page.getByRole('spinbutton', {
+      name: 'Background embedding allocation (%)',
+      exact: true,
+    });
+    await expect(allocation).toHaveValue('20');
+    await expect(allocation).toHaveAttribute('min', '0');
+    await expect(allocation).toHaveAttribute('max', '80');
+    const form = page.locator('form').filter({ has: allocation });
+    for (const percent of [0, 40, 20]) {
+      await allocation.fill(String(percent));
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect
+        .poll(
+          async () =>
+            (await prisma.aiSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+              .backgroundEmbeddingBudgetPercent
+        )
+        .toBe(percent);
+      await page.reload();
+      await expect(allocation).toHaveValue(String(percent));
+      await expect(page.locator('#main-content').getByText(/Background embedding:/)).toContainText(
+        `${percent}% of the total allowance`
+      );
+    }
+    expect(
+      (await prisma.aiSettings.findUniqueOrThrow({ where: { id: 'default' } })).dailyTokenBudget
+    ).toBe(500000);
+  });
+
   test('an incident shows explainable suggestions and accepts feedback', async ({ page }) => {
     await page.goto(`/incidents/${incidentId}`);
     const similar = page.getByRole('region', { name: 'Similar past incidents' });
@@ -668,9 +703,13 @@ test.describe.serial('intelligence responder workflows', () => {
     });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/incidents/${pending.id}`);
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Waiting for recommendation analysis.' })
-    ).toBeVisible();
+    // A web-only fixture can retain paging work from the earlier action cases. With the held
+    // analysis lease, both waiting and deliberately yielding are valid unfinished states.
+    // Completed, unavailable and failed analysis must still fail this assertion.
+    const freshness = page.getByRole('group', { name: 'Recommendation freshness' });
+    await expect(freshness.getByRole('status')).toHaveText(
+      /^(?:Waiting for recommendation analysis\. An empty panel does not mean analysis found no matches\.|Analysis is yielding to paging work\. Earlier suggestions have not been refreshed\.)$/
+    );
     await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(1);
     await page.getByRole('tab', { name: 'Related', exact: true }).click();
     await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(0);

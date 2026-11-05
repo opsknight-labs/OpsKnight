@@ -3,6 +3,13 @@ import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { AiUsage } from './port';
+import { BACKGROUND_EMBEDDING_ACTOR, backgroundEmbeddingTokenBudget } from './contract';
+
+type TokenLimits = {
+  dailyTokenBudget: number;
+  userDailyTokenBudget?: number;
+  backgroundEmbeddingBudgetPercent?: number;
+};
 
 export type AdmissionDecision =
   { allowed: true } | { allowed: false; reason: 'RATE_LIMITED' | 'BUDGET_EXHAUSTED' };
@@ -19,10 +26,8 @@ const isPerson = (actorId: string) => !actorId.includes(':');
  */
 export async function admitAiRequest(
   actorId: string,
-  limits: {
+  limits: TokenLimits & {
     requestsPerMinutePerUser: number;
-    dailyTokenBudget: number;
-    userDailyTokenBudget?: number;
   },
   now: Date = new Date()
 ): Promise<AdmissionDecision> {
@@ -32,7 +37,7 @@ export async function admitAiRequest(
   const [row, personal] = await Promise.all([
     prisma.aiUsageDay.findUnique({
       where: { day },
-      select: { inputTokens: true, outputTokens: true },
+      select: { inputTokens: true, outputTokens: true, backgroundEmbeddingTokens: true },
     }),
     limits.userDailyTokenBudget && isPerson(actorId)
       ? prisma.aiUsageUserDay.findUnique({
@@ -43,6 +48,11 @@ export async function admitAiRequest(
   ]);
   const used = (row?.inputTokens ?? 0) + (row?.outputTokens ?? 0);
   if (used >= limits.dailyTokenBudget) return { allowed: false, reason: 'BUDGET_EXHAUSTED' };
+  if (
+    actorId === BACKGROUND_EMBEDDING_ACTOR &&
+    (row?.backgroundEmbeddingTokens ?? 0) >= backgroundEmbeddingTokenBudget(limits)
+  )
+    return { allowed: false, reason: 'BUDGET_EXHAUSTED' };
   if (limits.userDailyTokenBudget && (personal?.tokens ?? 0) >= limits.userDailyTokenBudget) {
     return { allowed: false, reason: 'BUDGET_EXHAUSTED' };
   }
@@ -61,7 +71,7 @@ export interface AiReservation {
 /** Serialize admission and settlement by UTC day, including all active reservations. */
 export async function reserveAiTokens(
   actorId: string,
-  limits: { dailyTokenBudget: number; userDailyTokenBudget?: number },
+  limits: TokenLimits,
   estimate: number,
   ttlMs = 120_000,
   now = new Date()
@@ -77,14 +87,18 @@ export async function reserveAiTokens(
       isPerson(actorId)
         ? tx.aiUsageUserDay.findUnique({ where: { day_userId: { day, userId: actorId } } })
         : null,
-      tx.$queryRaw<Array<{ total: bigint; personal: bigint }>>(Prisma.sql`
+      tx.$queryRaw<Array<{ total: bigint; personal: bigint; background: bigint }>>(Prisma.sql`
         SELECT coalesce(sum(tokens),0)::bigint AS total,
-          coalesce(sum(tokens) FILTER (WHERE "actorId" = ${actorId}),0)::bigint AS personal
+          coalesce(sum(tokens) FILTER (WHERE "actorId" = ${actorId}),0)::bigint AS personal,
+          coalesce(sum(tokens) FILTER (WHERE "actorId" = ${BACKGROUND_EMBEDDING_ACTOR}),0)::bigint AS background
         FROM "AiTokenReservation" WHERE day = ${day} AND "settledAt" IS NULL AND "expiresAt" > ${now}`),
     ]);
     if (
       (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0) + Number(reserved[0].total) + tokens >
         limits.dailyTokenBudget ||
+      (actorId === BACKGROUND_EMBEDDING_ACTOR &&
+        (usage?.backgroundEmbeddingTokens ?? 0) + Number(reserved[0].background) + tokens >
+          backgroundEmbeddingTokenBudget(limits)) ||
       (isPerson(actorId) &&
         limits.userDailyTokenBudget &&
         (personal?.tokens ?? 0) + Number(reserved[0].personal) + tokens >
@@ -125,13 +139,16 @@ export async function recordAiUsage(
       : null;
     if (reservation && (!held || held.settledAt)) return;
     const person = held?.actorId ?? actorId;
+    const backgroundEmbeddingTokens =
+      person === BACKGROUND_EMBEDDING_ACTOR ? inputTokens + outputTokens : 0;
     await tx.aiUsageDay.upsert({
       where: { day },
-      create: { day, requests: 1, inputTokens, outputTokens },
+      create: { day, requests: 1, inputTokens, outputTokens, backgroundEmbeddingTokens },
       update: {
         requests: { increment: 1 },
         inputTokens: { increment: inputTokens },
         outputTokens: { increment: outputTokens },
+        backgroundEmbeddingTokens: { increment: backgroundEmbeddingTokens },
       },
     });
     if (person && isPerson(person)) {
@@ -161,6 +178,7 @@ export async function getTodayUsage(now: Date = new Date()) {
     requests: row?.requests ?? 0,
     inputTokens: row?.inputTokens ?? 0,
     outputTokens: row?.outputTokens ?? 0,
+    backgroundEmbeddingTokens: row?.backgroundEmbeddingTokens ?? 0,
   };
 }
 

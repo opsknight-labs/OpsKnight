@@ -185,6 +185,24 @@ AI requests reserve estimated tokens atomically against global and personal UTC-
 calling a provider. Usage settles per attempt, including failed/aborted requests and connection tests.
 Expired reservations and confirmed-action receipts are purged in bounded sweeps, including while OFF.
 
+Background incident embedding has its own allocation within the same global budget. In **Assistant & AI**,
+set **Background embedding allocation (%)** from 0 to 80 (default 20). Zero pauses new backfills;
+interactive semantic queries still use the person's normal allowance and existing vectors stay usable.
+The usage panel shows the charged background tokens and its daily allowance. Both settled usage and
+unexpired in-flight reservations count toward admission, across replicas. Reaching the allocation
+completes the current background pass without quarantining it; scheduled discovery retries when
+allowance is available, including after the next UTC midnight. Increasing the allocation also resumes
+work without rebuilding compatible vectors. Estimates are pre-call guards, not a provider billing
+hard cap: actual reported usage is always charged and can exceed an estimate.
+
+Apply the new migration before starting the updated application. Earlier aggregate usage cannot be
+classified by task; on the migration day it is conservatively charged to the background allocation
+as well as the unchanged total. This can pause a backfill until midnight, but grants no extra spend
+and does not change personal accounting. Older settings clients preserve an already saved allocation.
+Complete the rollout to every web/worker replica before relying on the background sub-limit: an older
+application process still enforces only the previous global/personal limits. A rolling-deployment
+certification has not been claimed by these local fixtures.
+
 ### Finding services and reviewing failed work
 
 On **Grouping quality**, search for a service by name, use **More services** to browse additional

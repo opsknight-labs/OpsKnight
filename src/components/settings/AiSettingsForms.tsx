@@ -166,6 +166,7 @@ type SettingsValues = {
   allowExternalFallback: boolean;
   requestsPerMinutePerUser: number;
   dailyTokenBudget: number;
+  backgroundEmbeddingBudgetPercent: number;
   userDailyTokenBudget: number;
   maxOutputTokens: number;
   requestTimeoutMs: number;
@@ -270,11 +271,22 @@ export function AiSettingsForm({
         <Field
           name="dailyTokenBudget"
           label="Daily token budget"
-          help="Across all users, UTC day. At the limit the assistant switches to basic answers."
+          help="Across people and background work, per UTC day. At the limit the assistant switches to basic answers."
           type="number"
           min={b.dailyTokenBudget.min}
           max={b.dailyTokenBudget.max}
           defaultValue={settings.dailyTokenBudget}
+          disabled={disabled}
+          required
+        />
+        <Field
+          name="backgroundEmbeddingBudgetPercent"
+          label="Background embedding allocation (%)"
+          help="Part of the daily budget, not extra spend. Default 20%; maximum 80%. Set 0 to pause backfills. Interactive search and saved vectors remain available. Token reservations use estimates; actual provider usage is charged when the call finishes."
+          type="number"
+          min={b.backgroundEmbeddingBudgetPercent.min}
+          max={b.backgroundEmbeddingBudgetPercent.max}
+          defaultValue={settings.backgroundEmbeddingBudgetPercent}
           disabled={disabled}
           required
         />

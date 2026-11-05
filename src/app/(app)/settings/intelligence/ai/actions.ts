@@ -54,6 +54,9 @@ export async function saveAiSettingsAction(
         allowExternalFallback: checked(form, 'allowExternalFallback'),
         requestsPerMinutePerUser: integer(form, 'requestsPerMinutePerUser'),
         dailyTokenBudget: integer(form, 'dailyTokenBudget'),
+        backgroundEmbeddingBudgetPercent: form.has('backgroundEmbeddingBudgetPercent')
+          ? integer(form, 'backgroundEmbeddingBudgetPercent')
+          : undefined,
         userDailyTokenBudget: integer(form, 'userDailyTokenBudget'),
         maxOutputTokens: integer(form, 'maxOutputTokens'),
         requestTimeoutMs: integer(form, 'requestTimeoutMs'),

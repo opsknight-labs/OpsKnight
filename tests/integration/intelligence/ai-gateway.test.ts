@@ -308,7 +308,12 @@ describe('gateway', () => {
     expect(sent).not.toContain('hunter2');
     expect(sent).not.toContain('abcdefghijklmnopqrstuvwxyz');
     expect(sent).toContain('[redacted]');
-    expect(await getTodayUsage()).toEqual({ requests: 1, inputTokens: 20, outputTokens: 9 });
+    expect(await getTodayUsage()).toEqual({
+      requests: 1,
+      inputTokens: 20,
+      outputTokens: 9,
+      backgroundEmbeddingTokens: 0,
+    });
     const audit = await db.auditLog.findFirstOrThrow({
       where: { action: 'intelligence.ai.interaction' },
     });

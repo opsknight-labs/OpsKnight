@@ -262,9 +262,27 @@ The three regressions failed before their fixes. Focused verification passed 82 
 cases and 67 unit/architecture cases, plus typecheck and zero-warning changed-source lint. Full push
 and browser checks are recorded in the PR validation after they finish.
 
-The pasted review's remaining proposals are not marked complete: separate embedding spend allocation,
-input-aware freshness fan-out, feature metrics/alerts, a reviewable PR-scope decision and external
-certification evidence remain open. Freshness optimization must preserve status, urgency, service and
+The pasted review's input-aware freshness fan-out, feature metrics/alerts, a reviewable PR-scope
+decision and external certification evidence remain open. Background spend allocation has local
+implementation and verification in the follow-up below. Freshness optimization must preserve status, urgency, service and
 resolution/outcome changes that affect grouping eligibility and recommendations; restricting it to
 only title/description/labels would omit correctness-relevant changes. Historical shared-machine load
 results do not certify this later revision.
+
+## Review follow-up: background embedding allocation — 2026-11-05
+
+Five new database regressions first failed against the shared-budget implementation. Background
+embedding now has a configurable 0–80% sub-limit inside the existing global token budget (default
+20%), including live reservations and idempotent actual-usage settlement under the existing UTC-day
+lock. Zero pauses backfills. Interactive queries keep personal/global limits, compatible vectors
+remain available, and budget pauses finish without dead-lettering normal work. The settings form
+controls the allocation and shows charged usage; older clients preserve a saved value. The migration
+conservatively charges upgrade-day unclassified usage to the sub-limit rather than granting an extra
+allowance. Reservations remain estimates, not a provider billing guarantee.
+
+Local verification passed 63 gateway/reservation/semantic/worker database cases, one actual legacy
+migration execution, 60 pure/architecture cases, typecheck, zero-warning changed-source lint, the
+production build and all 15 Intelligence browser journeys. The new settings journey saves 0/40/20%
+allocations at 390 px and checks persistence without increasing the global allowance. Full push hooks
+and new-head CI are recorded separately in the PR after publication. Input-aware freshness fan-out,
+feature metrics/alerts, PR scope/reviewability and external certification gates remain open.

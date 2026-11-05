@@ -10,13 +10,14 @@ import { candidatePolicyModeSql } from '../settings/mode-sql';
 import { withDbBudget } from '../jobs/db-budget';
 import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
 import { registerAiGateway } from '../ai/gateway';
+import { BACKGROUND_EMBEDDING_ACTOR } from '../ai/contract';
 import { resolveEmbeddingModel, type EmbeddingPort } from '../ai/port';
 import { templateHash } from '../jobs/indexer';
 import { ensureAnnIndex } from './search';
 import { MIN_DIMENSIONS, normalizeVector } from './vector';
 
 /** Rate-limit and audit identity for background embedding; it is never a person. */
-export const EMBEDDING_ACTOR = 'intelligence:embedder';
+export const EMBEDDING_ACTOR = BACKGROUND_EMBEDDING_ACTOR;
 /** Values sent per provider call. */
 export const EMBED_BATCH_SIZE = 32;
 /** How often the lane checks for incidents still to embed. */

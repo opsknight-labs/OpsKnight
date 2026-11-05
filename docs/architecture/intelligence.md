@@ -279,6 +279,16 @@ port, so moving to a newer SDK later is a one-adapter change.
 
 ## Semantic search (optional)
 
+Background incident embedding additionally reserves against a configurable sub-limit (default 20%,
+maximum 80% of the same global daily budget). Interactive query embeddings use the signed-in person's
+allowance. The UTC-day advisory lock serializes global, personal and background admission with
+settlement; live holds count toward all applicable limits. Actual usage is charged once using the
+reservation's stored identity and day. Expected budget/rate pauses complete the background pass and
+leave it for periodic discovery, rather than spending retry attempts. Existing vectors and embedding
+space identity are unaffected by budget changes. Reservations use estimates, so actual provider
+charges can exceed an estimate and block subsequent calls. Upgrade-day unclassified usage is
+conservatively charged against the background allocation; global and personal totals are unchanged.
+
 With AI on, an administrator can turn on semantic search and give a provider an embedding model. Masked
 incident titles can still contain names or other personal text after numbers and identifiers are removed. They are classified as Personal and are then
 embedded, and similar-incident search also matches by meaning, not just wording.

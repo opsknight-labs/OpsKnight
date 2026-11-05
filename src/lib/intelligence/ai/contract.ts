@@ -33,6 +33,7 @@ export const AI_SETTINGS_BOUNDS = {
   squireNameMax: 32,
   requestsPerMinute: { min: 1, max: 600 },
   dailyTokenBudget: { min: 1_000, max: 1_000_000_000 },
+  backgroundEmbeddingBudgetPercent: { min: 0, max: 80 },
   userDailyTokenBudget: { min: 1_000, max: 1_000_000_000 },
   maxOutputTokens: { min: 64, max: 8_192 },
   requestTimeoutMs: { min: 1_000, max: 120_000 },
@@ -48,6 +49,7 @@ export const AI_SETTINGS_DEFAULTS = {
   allowExternalFallback: false,
   requestsPerMinutePerUser: 20,
   dailyTokenBudget: 500_000,
+  backgroundEmbeddingBudgetPercent: 20,
   userDailyTokenBudget: 100_000,
   maxOutputTokens: 1_024,
   requestTimeoutMs: 30_000,
@@ -56,6 +58,24 @@ export const AI_SETTINGS_DEFAULTS = {
   squireHistoryEnabled: false,
   squireHistoryRetentionDays: 30,
 } as const;
+
+/** Shared internal identity; interactive semantic queries continue to use the person's identity. */
+export const BACKGROUND_EMBEDDING_ACTOR = 'intelligence:embedder';
+
+/** A sub-limit inside the global allowance, never an additional spend allowance. */
+export function backgroundEmbeddingTokenBudget(limits: {
+  dailyTokenBudget: number;
+  backgroundEmbeddingBudgetPercent?: number;
+}): number {
+  if (!Number.isFinite(limits.dailyTokenBudget) || limits.dailyTokenBudget <= 0) return 0;
+  const configured =
+    limits.backgroundEmbeddingBudgetPercent ??
+    AI_SETTINGS_DEFAULTS.backgroundEmbeddingBudgetPercent;
+  const percent = Number.isFinite(configured)
+    ? Math.max(0, Math.min(80, Math.trunc(configured)))
+    : 0;
+  return Math.max(0, Math.floor((limits.dailyTokenBudget * percent) / 100));
+}
 
 /** The assistant's display name is rendered everywhere, so it is limited to plain, harmless text. */
 const squireName = z
@@ -82,6 +102,9 @@ export const aiSettingsInputSchema = z
     allowExternalFallback: z.boolean(),
     requestsPerMinutePerUser: intIn(AI_SETTINGS_BOUNDS.requestsPerMinute),
     dailyTokenBudget: intIn(AI_SETTINGS_BOUNDS.dailyTokenBudget),
+    backgroundEmbeddingBudgetPercent: intIn(
+      AI_SETTINGS_BOUNDS.backgroundEmbeddingBudgetPercent
+    ).default(AI_SETTINGS_DEFAULTS.backgroundEmbeddingBudgetPercent),
     userDailyTokenBudget: intIn(AI_SETTINGS_BOUNDS.userDailyTokenBudget).default(
       AI_SETTINGS_DEFAULTS.userDailyTokenBudget
     ),

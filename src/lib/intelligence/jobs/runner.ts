@@ -18,6 +18,7 @@ import { correlateIncident } from '../correlation/handler';
 import { OBSERVE_INTERVAL_MS, suggestObservedDependencies } from '../dependencies/observer';
 import { analyzeResponse } from '../response/handler';
 import { purgeConversations } from '../conversations/store';
+import { AiGatewayError } from '../ai/gateway';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
 import {
   currentEmbeddingModel,
@@ -95,7 +96,19 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
     if (!model) return;
     const pending = await findIncidentsToEmbed(model);
     if (pending.length === 0) return;
-    const outcome = await embedIncidents(pending, signal);
+    let outcome: Awaited<ReturnType<typeof embedIncidents>>;
+    try {
+      outcome = await embedIncidents(pending, signal);
+    } catch (error) {
+      // Expected spend/rate pauses are rediscovered by the next scheduled pass. They must not
+      // exhaust retries and quarantine a healthy backfill before the next UTC allowance opens.
+      if (
+        error instanceof AiGatewayError &&
+        (error.code === 'BUDGET_EXHAUSTED' || error.code === 'RATE_LIMITED')
+      )
+        return;
+      throw error;
+    }
     if (outcome.status !== 'done') return;
     const next: Array<{ kind: WorkKind; subjectKey: string }> = outcome.embedded.map(id => ({
       kind: WORK_KINDS.ANALYZE_INCIDENT,

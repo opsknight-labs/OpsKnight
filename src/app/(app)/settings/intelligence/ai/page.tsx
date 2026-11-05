@@ -15,6 +15,7 @@ import AiUsageChart from '@/components/settings/AiUsageChart';
 import { getAiSettings, listAiProviders } from '@/lib/intelligence/ai/settings';
 import { BUILT_IN_PROMPTS, listGuidance, promptHash } from '@/lib/intelligence/ai/prompts';
 import { getSemanticIndexStatus } from '@/lib/intelligence/semantic/embedder';
+import { backgroundEmbeddingTokenBudget } from '@/lib/intelligence/ai/contract';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -94,6 +95,14 @@ export default async function IntelligenceAiPage() {
           </div>
         </div>
         {history && <AiUsageChart history={history} budget={settings.dailyTokenBudget} />}
+        <p className="py-2 text-sm text-muted-foreground">
+          Background embedding:{' '}
+          {usage ? usage.backgroundEmbeddingTokens.toLocaleString('en-US') : 'Unavailable'}
+          {' / '}
+          {backgroundEmbeddingTokenBudget(settings).toLocaleString('en-US')} tokens today (
+          {settings.backgroundEmbeddingBudgetPercent}% of the total allowance). When its allocation
+          is reached, backfills wait and existing vectors remain searchable.
+        </p>
       </SettingsSection>
 
       {settings.embeddingsEnabled && (
