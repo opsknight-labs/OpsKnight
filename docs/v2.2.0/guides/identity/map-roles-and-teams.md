@@ -1,5 +1,3 @@
-<!-- prettier-ignore-start -->
-
 ---
 title: Map groups to roles and teams
 description: Give people an OpsKnight role and team membership from their identity provider groups or roles, and understand exactly when roles change.
@@ -21,6 +19,8 @@ verification:
     - prisma/migrations/20261104000200_oidc_role_policy_v2/migration.sql
     - prisma/migrations/20261104000400_oidc_team_mapping/migration.sql
 ---
+
+<!-- prettier-ignore-start -->
 
 # Map groups to roles and teams
 

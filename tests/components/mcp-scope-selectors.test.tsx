@@ -172,7 +172,7 @@ it('names the manual-client scope group and its controls without decorative labe
   const group = screen.getByRole('group', { name: 'Allowed scopes' });
   expect(within(group).getByRole('checkbox', { name: 'View runbooks' })).toBeChecked();
   const execute = within(group).getByRole('checkbox', {
-    name: 'Run runbooks after administrator approval',
+    name: 'Run runbooks after approval',
   });
   expect(execute).not.toBeChecked();
   fireEvent.click(execute);
