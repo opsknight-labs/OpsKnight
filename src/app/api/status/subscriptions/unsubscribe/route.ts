@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { statusPageSlugMatches } from '@/lib/status-page-resolver';
-import { findUnsubscribeSubscription } from '@/lib/status-pages/subscription-tokens';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
+import { unsubscribeByToken } from '@/lib/status-pages/unsubscribe';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,35 +23,11 @@ export async function POST(req: NextRequest) {
     } catch {}
   }
 
-  if (token) {
-    const subscription = await findUnsubscribeSubscription(token);
-    if (
-      subscription &&
-      statusPageSlugMatches(subscription.statusPage.slug, expectedSlug || undefined)
-    ) {
-      await prisma.$transaction([
-        prisma.statusPageSubscription.updateMany({
-          where: { id: subscription.id, unsubscribedAt: null },
-          data: { unsubscribedAt: new Date(), state: 'UNSUBSCRIBED' },
-        }),
-        prisma.notification.updateMany({
-          where: {
-            recipientType: 'SUBSCRIBER',
-            recipientId: subscription.id,
-            status: { in: ['PENDING', 'FAILED'] },
-          },
-          data: {
-            status: 'SKIPPED',
-            payloadEncrypted: null,
-            errorMsg: 'Subscription was revoked before delivery.',
-          },
-        }),
-      ]);
-
-      const publicBase = getStatusPagePublicUrl(subscription.statusPage);
-      const destination = `${publicBase.replace(/\/$/, '')}/unsubscribe/${encodeURIComponent(token)}?done=1`;
-      return NextResponse.redirect(new URL(destination, req.url), 303);
-    }
+  const subscription = await unsubscribeByToken(token, expectedSlug);
+  if (subscription) {
+    const publicBase = getStatusPagePublicUrl(subscription.statusPage);
+    const destination = `${publicBase.replace(/\/$/, '')}/unsubscribe/${encodeURIComponent(token)}?done=1`;
+    return NextResponse.redirect(new URL(destination, req.url), 303);
   }
 
   return NextResponse.redirect(new URL('/status', req.url), 303);

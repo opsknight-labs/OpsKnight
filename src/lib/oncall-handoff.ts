@@ -69,7 +69,7 @@ export async function processUpcomingShiftReminders(
               const baseUrl = getBaseUrl();
               const scheduleUrl = `${baseUrl}/schedules/${shift.scheduleId}`;
               const subject = `⏰ [Upcoming Shift] You are on-call for "${shift.schedule.name}" in ~${minutesUntilStart}m`;
-              const html = generateShiftReminderEmailHTML({
+              const html = await generateShiftReminderEmailHTML({
                 userName: shift.user.name || 'Team Member',
                 scheduleName: shift.schedule.name,
                 scheduleUrl,
@@ -236,7 +236,7 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
                 const baseUrl = getBaseUrl();
                 const scheduleUrl = `${baseUrl}/schedules/${scheduleId}`;
                 const subject = `🔄 [Shift Handoff] You are now On-Call for "${incomingShift.schedule.name}" (${incidentsToReassign.length} active incidents)`;
-                const html = generateShiftHandoffEmailHTML({
+                const html = await generateShiftHandoffEmailHTML({
                   userName: incomingShift.user.name || 'Team Member',
                   scheduleName: incomingShift.schedule.name,
                   scheduleUrl,

@@ -5,23 +5,38 @@ description: Expert runbook for designing, modifying, and testing responsive Ops
 
 # OpsKnight Email Design Runbook
 
-This skill provides step-by-step instructions for creating, updating, and previewing OpsKnight email templates.
+Step-by-step instructions for creating, updating, and verifying OpsKnight email templates.
 
-## Architecture & Components
-All templates are built using primitives from `src/lib/email-components.ts`:
-- `EmailContainer(content, styles)`: Wraps content in a fluid responsive container with MSO tags and big-screen media queries (up to 1180px).
-- `EmailHeader(title, subtitle, styles)`: Renders the gradient header with the authentic transparent OpsKnight logo and brand name hyperlinked to `https://opsknight.com/`.
-- `StatusBadge(status, type)`: Rounded pill with glowing status dot.
-- `InfoCard(items, styles)`: Tabular metrics display with alternating background rows.
-- `EmailButton(text, url, styles)`: Primary CTA button with gradient background and subtle shadow.
-- `EmailFooter(unsubscribeUrl, settingsUrl, brandUrl)`: Minimalist footer with `https://opsknight.com/` links.
+## Architecture
+- **Templates**: `src/emails/templates/*.tsx`. One email per file, default-exported with `PreviewProps`.
+- **Primitives**: `src/emails/components.tsx`.
+  - `EmailLayout({ preview, title, footer })`: head, dark mode, Outlook ghost table, card.
+  - `HeaderBand({ tone, brand, eyebrow, title, subtitle })` at the top of every card (logo on a white chip + wordmark, then the title), then `Content`.
+  - `Badge`, `Heading`, `Paragraph`, `Strong`, `TextLink`, `InfoTable({ items, tone })`, `Callout({ tone, title, surface, preformatted })`, `BulletList`, `Button({ href, tone })`, `LinkFallback`.
+  - `EmailFooter({ settingsUrl, unsubscribeUrl, reason })` / `SubscriberFooter({ pageName, unsubscribeUrl })`.
+- **Tokens**: `src/emails/tokens.ts` (tones `critical | elevated | ok | info | shift | neutral`, surfaces, fonts).
+- **Styles**: `src/emails/styles.ts` (responsive + big-screen tiers, three-layer dark mode from `dm-*` classes).
+- **Render**: `await renderEmail(<Template {...props} />, { text })` returns `{ html, text }`. Library code in `.ts` files calls the component as a function: `renderEmail(Template(props))`.
 
-## Testing & Previewing
-1. **Unit Tests**:
-   Verify templates with Vitest:
+## Adding or changing an email
+1. Build it from the primitives. Give anything coloured a `dm-*` class and use token colours only.
+2. Add realistic `PreviewProps` (long titles, optional fields present).
+3. Wire it from the sender with `await renderEmail(...)` and put `html` + `text` in the EMAIL payload.
+
+## Verify
+1. Contract and unit tests:
    ```bash
-   npx vitest run tests/lib/email-templates.test.ts tests/lib/status-page-email-templates.test.ts
+   npx vitest run tests/architecture/email-contract.test.ts tests/lib/email-templates.test.ts tests/lib/status-page-email-templates.test.ts tests/lib/authentication-email-template.test.ts
    ```
-
-2. **Visual Verification**:
-   Render HTML using Playwright or export to a local HTML file to inspect rendering across mobile (375px), tablet (768px), desktop (1024px), and 27-inch (1440px) viewports.
+2. Visual check, Chromium + WebKit, light / dark / forced inversion, 375 / 640 / 1440px, with contrast assertions. Screenshots land in `test-results/email/`:
+   ```bash
+   npm run test:email:visual
+   ```
+3. Live preview: `npm run email:dev`, then open http://localhost:3030.
+4. Real inboxes:
+   ```bash
+   docker compose -f deploy/compose/docker-compose.mailpit.yml up -d
+   npm run email:send-test -- --to you@example.com      # then open http://localhost:8025
+   SMTP_USER=… SMTP_PASS=… npm run email:send-test -- --smtp smtp.gmail.com:587 --to you@gmail.com,you@outlook.com
+   ```
+   Check Outlook for Windows desktop, new Outlook, Gmail web + iOS/Android, and Apple Mail, each in light and dark.

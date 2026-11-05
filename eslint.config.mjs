@@ -108,6 +108,15 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // Email templates render static HTML for mail clients, not Next.js pages:
+    // next/image and next/head cannot work in an inbox.
+    files: ['src/emails/**/*.{ts,tsx}'],
+    rules: {
+      '@next/next/no-img-element': 'off',
+      '@next/next/no-head-element': 'off',
+    },
+  },
   // Global ignores merged from .eslintignore and defaults
   globalIgnores([
     "**/node_modules/**",

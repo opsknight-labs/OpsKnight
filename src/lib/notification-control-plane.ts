@@ -135,6 +135,8 @@ export type CentralNotificationPayload =
       html?: string;
       contentId?: string;
       unsubscribeUrl?: string;
+      /** RFC 8058 one-click endpoint; sent as List-Unsubscribe + List-Unsubscribe-Post. */
+      listUnsubscribeUrl?: string;
       startTime?: string;
       endTimeSection?: string;
       postedAtSection?: string;
@@ -1234,6 +1236,7 @@ async function dispatchPayload(
             html,
             text: payload.text,
             idempotencyKey: notificationId,
+            headers: listUnsubscribeHeaders(payload.listUnsubscribeUrl),
           },
           config
         );
@@ -3437,3 +3440,15 @@ export const CENTRAL_NOTIFICATION_LIMITS = Object.freeze({
   concurrency: SYSTEM_NOTIFICATION_CONCURRENCY,
   claimTimeoutMs: CLAIM_TIMEOUT_MS,
 });
+
+/**
+ * One-click unsubscribe headers (RFC 2369 + RFC 8058). Gmail and Yahoo require them for
+ * bulk senders and show a native "Unsubscribe" control when present.
+ */
+export function listUnsubscribeHeaders(url: string | undefined): Record<string, string> | undefined {
+  if (!url || !/^https:\/\//i.test(url)) return undefined;
+  return {
+    'List-Unsubscribe': `<${url}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
+}
