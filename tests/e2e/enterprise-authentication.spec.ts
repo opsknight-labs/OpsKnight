@@ -215,7 +215,7 @@ test('enterprise console and independent hardware recovery work in a real browse
     await recoveryPage.goto(`${origin}/incidents`, { waitUntil: 'domcontentloaded' });
     await expect(recoveryPage).toHaveURL(/\/login/);
     await recoveryPage.goto(`${origin}/recovery`);
-    await recoveryPage.getByRole('tab', { name: 'Emergency Recovery', exact: true }).click();
+    await recoveryPage.getByRole('tab', { name: 'Emergency recovery', exact: true }).click();
     await recoveryPage.getByRole('button', { name: 'Sign out of recovery', exact: true }).click();
     await recoveryPage.waitForURL(`${origin}/login/emergency`, { waitUntil: 'domcontentloaded' });
     await recoveryPage.goto(`${origin}/recovery`);
@@ -251,7 +251,10 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
     ).toBeVisible();
     // Saved revision selection must load its own sanitized configuration, not production.
     const saved = await context.request.get(`${origin}/api/auth/control?section=connection`);
+    expect(saved.ok()).toBe(true);
     const dashboard = (await saved.json()).data;
+    // The disposable fixture contains two distinct saved configurations; never pass vacuously.
+    expect(dashboard.revisions.length).toBeGreaterThanOrEqual(2);
     await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
     await expect(
       page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
@@ -362,7 +365,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await connection.focus();
       await page.keyboard.press('Enter');
       await expect(
-        page.getByRole('heading', { name: '1 · Connect provider', exact: true })
+        page.getByRole('heading', { name: 'Connect provider', exact: true })
       ).toBeVisible();
       await page.getByLabel('Client ID', { exact: true }).fill('preview-client');
       await page.getByLabel('Client ID', { exact: true }).fill('');
@@ -404,9 +407,14 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
       ).toBe(true);
       await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+      const validation = page
+        .getByRole('alert')
+        .filter({ hasText: 'Resolve these fields before staging:' });
+      await expect(validation).toBeVisible();
       await expect(
-        page.getByRole('alert').filter({ hasText: 'Check the highlighted draft fields' })
+        validation.getByRole('button', { name: 'Enter the application Client ID.', exact: true })
       ).toBeVisible();
+      await expect(client).toHaveAttribute('aria-invalid', 'true');
     }
   } finally {
     await context.close().catch(() => {});
@@ -514,7 +522,7 @@ test('independent password recovery, one-time secret and rotation work across br
         timeout: 30000,
       })
       .toBe(200);
-    await rp.getByRole('tab', { name: 'Emergency Recovery', exact: true }).click();
+    await rp.getByRole('tab', { name: 'Emergency recovery', exact: true }).click();
     await rp.getByLabel('Recovery password for fresh verification').fill(created.password);
     const reauthenticated = rp.waitForResponse(
       response =>
