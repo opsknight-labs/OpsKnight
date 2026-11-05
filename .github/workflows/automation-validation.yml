@@ -88,8 +88,6 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: npm run build
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
       - name: Live TypeScript and Python SDK workflows
         run: |
           npx tsc --project sdk/typescript/tsconfig.json
