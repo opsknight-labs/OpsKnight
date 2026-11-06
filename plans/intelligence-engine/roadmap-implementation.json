@@ -113,19 +113,25 @@
     {
       "id": 6,
       "name": "UI polish and new surfaces",
-      "status": "pending",
+      "status": "in_progress",
       "remaining": [
-        "Split chat components, memoized stable turns and safe lazy markdown",
-        "Copy/regenerate/edit-and-resend, scroll stick and jump to latest",
-        "Accessible log and completion announcement",
-        "Resizable docked panel and mobile full screen",
-        "Shortcut and error-state retry UX; timezone context",
-        "Shared primitives, toasts, dark mode, configured assistant name and touch targets",
+        "Finish extracting composer/history/list/panel from the launcher",
+        "Resizable docked Sheet panel",
+        "Complete shared settings form primitives, toasts and remaining dark-mode fixes",
         "Lazy server tab content, Intelligence timeline, post-summary note and collapse preference",
         "User-facing AIOps overview",
         "Grouping timeline and incident-list badges",
         "Citation layouts and breadcrumbs",
-        "Production browser, accessibility and bundle certification"
+        "Complete browser coverage and incident bundle certification"
+      ],
+      "implemented": [
+        "Memoized messages, stable ids, safe lazy markdown and code copying",
+        "Copy, regenerate, edit-and-resend, scroll stick and jump to latest",
+        "Accessible log and separate completion announcement",
+        "Expandable docked desktop panel and mobile full screen",
+        "Global shortcut, distinct availability states, retry and app-timezone history dates",
+        "Configured assistant name, shared chat buttons and 44px touch targets",
+        "Production browser journeys with mobile, dark mode and accessibility checks"
       ]
     }
   ],
@@ -163,7 +169,7 @@
     },
     "browser": "Passed Similar percentages, Related link, deployment lead, runbook, freshness, basic Squire citations, 390px layout and lane settings on updated dev server.",
     "demo_queue": "0 ready/running items, 0 dead letters after native reindex of 358 incidents.",
-    "remote_status": "Changes remain local; no commit, push or merge during this implementation pass."
+    "remote_status": "Implementation commits 8d98e09b9 and 7cf9e8cf8 pushed to feat/intelligence-engine through normal hooks; existing draft PR #928 carries ci:full. No merge."
   },
   "squire_history_followup": {
     "status": "implemented",
@@ -226,7 +232,7 @@
     "local_demo": "http://localhost:3100; AI remains off, 90-day private history and optional mascot animation enabled"
   },
   "basic_mode_expansion": {
-    "status": "implemented_pending_production_browser_verification",
+    "status": "implemented_verified_locally",
     "capabilities": [
       "Personal and team incident work queues with exclusive assignment semantics",
       "Filtered incident search by status, urgency, priority, service/title keywords and time",
@@ -247,9 +253,24 @@
       "existing_database_suites": "41 existing tests passed in prior combined run; broader rerun subsequently blocked by database connection failures",
       "typecheck_and_lint": "Passed",
       "production_build": "Passed (.next/squire-basic-production)",
-      "production_browser": "New journey added; cannot run while Docker engine is unresponsive"
+      "production_browser": "4 production journeys passed: keyboard launcher, AI-off reports and persisted citations without provider calls, chat accessibility and mascot states, and 390px mobile layout",
+      "unit_full_repository": "11161 passed, 7 skipped across 1073 suites on Node 20 after pre-push fixes",
+      "focused_database_squire": "53 passed across four suites after Docker restart",
+      "live_demo": "Passed AI-off answer, auto-save, reload/reopen, cross-page history guard, supplied mascot, mobile and dark mode after restart",
+      "all_intelligence_database": "435 passed across 38 suites after Docker restart"
     },
-    "blocker": "Docker Desktop reports running but docker ps/status time out and ports 55433/55434 are unavailable. Requested approval before any shared-engine restart because user plan protects mcp939-testdb. No restart performed.",
+    "blocker": null,
     "guide": "docs/v2.2.0/guides/intelligence/basic-mode.md"
+  },
+  "local_runtime_recovery": {
+    "verified_at": "2026-11-06",
+    "restart": "User explicitly approved Docker Desktop restart; hung Docker app processes restarted without deleting containers or volumes.",
+    "restored_containers": ["opsknight-intel-dev", "opsknight-intel-roadmap-test"],
+    "other_containers": "Other containers, including mcp939-testdb, were not individually operated and remain stopped after the engine restart.",
+    "demo_url": "http://localhost:3100",
+    "login": "HTTP 200; root redirects to the local login path with callbackUrl.",
+    "full_intelligence_database": "435 tests passed across all 38 Intelligence database suites on the disposable pgvector test database after restart.",
+    "pre_push": "11161 unit tests passed, 7 skipped; production build passed through normal pre-push hook.",
+    "ci": "ci:full label applied to PR #928. No workflow runs reported for pushed head. Read-only merge preview against current main reports conflicts in 17 files; branch integration is still required before CI can certify the PR."
   }
 }
