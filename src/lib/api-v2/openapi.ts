@@ -1447,18 +1447,77 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/schedules/on-call-now': {
+        get: {
+          tags: ['Schedules'],
+          summary: 'Who is on call now, and who is next, across schedules',
+          description:
+            'For each schedule the caller can read: who is on call right now (with the real start and end of the shift), who takes over next within seven days, and whether nobody is on call (a gap). scope=mine (default) keeps schedules the caller, or someone on one of their teams, takes part in; scope=all is every schedule they may read. Names only, never contact details. Bounded to 50 schedules; truncated reports when more matched.',
+          parameters: [
+            {
+              name: 'scope',
+              in: 'query',
+              description: 'mine (default) or all.',
+              schema: { type: 'string', enum: ['mine', 'all'], default: 'mine' },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum schedules to return (1-50).',
+              schema: { type: 'integer', minimum: 1, maximum: 50, default: 25 },
+            },
+          ],
+          responses: {
+            '200': { description: 'Who is on call now across schedules' },
+            '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
       '/users/me/catch-up': {
         get: {
           tags: ['Users'],
           summary: 'What opened, resolved and is still active since a point in time',
           description:
-            'Self-service catch-up over the incidents the caller can read: counts of incidents opened and resolved in the last N hours, the active incidents (most urgent first), the ones assigned to the caller and the recently resolved ones. Bounded to 168 hours and 25 rows per list; truncated reports when a list was cut.',
+            'Self-service catch-up over incidents the caller can read. scope=mine (default) narrows to incidents assigned to, watched by, or owned by a team of the caller; scope=all is everything they may read. Returns counts of incidents opened and resolved, the active incidents (most urgent first), the ones assigned to the caller, the recently resolved ones, and which incidents paged the caller (from their own notification history only). The window is explicit: hours back from now (default 12) or a since timestamp, at most 168 hours; nothing is stored between calls. Bounded to 25 rows per list; truncated reports when a list was cut.',
           parameters: [
             {
               name: 'hours',
               in: 'query',
-              description: 'How far back to look, in hours (1-168).',
-              schema: { type: 'integer', minimum: 1, maximum: 168, default: 12 },
+              description: 'How far back to look, in hours (1-168). Not with since.',
+              schema: { type: 'integer', minimum: 1, maximum: 168 },
+            },
+            {
+              name: 'since',
+              in: 'query',
+              description:
+                'Start of the window as an RFC 3339 timestamp, in the past and within 168 hours. Not with hours.',
+              schema: { type: 'string', format: 'date-time' },
+            },
+            {
+              name: 'scope',
+              in: 'query',
+              description: 'mine (default) or all.',
+              schema: { type: 'string', enum: ['mine', 'all'], default: 'mine' },
+            },
+            {
+              name: 'serviceId',
+              in: 'query',
+              description: 'Only incidents on this service.',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'teamId',
+              in: 'query',
+              description: 'Only incidents owned by this team or on its services.',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'urgency',
+              in: 'query',
+              description: 'Only incidents with this urgency.',
+              schema: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
             },
             {
               name: 'limit',
@@ -1480,7 +1539,7 @@ function buildBaseSpec(): Record<string, unknown> {
           tags: ['Incidents'],
           summary: 'Past resolved incidents that look like this one, with how each ended',
           description:
-            'Compares this incident with resolved incidents from the last year that the caller can read. Similarity is title-word overlap nudged by the same service and priority; every row lists why it matched. A lead for a human, not proof of a shared cause. Each row carries the resolution kind, how long it took and an excerpt of the last note.',
+            'Compares this incident with resolved incidents from the last year that the caller can read. Similarity is title and description word overlap, after light stemming and a small synonym table, nudged by the same service and priority; every row lists why it matched. Candidates come from the same service and from each title word separately, so a busy service or a very common word cannot crowd out older matches elsewhere. A lead for a human, not proof of a shared cause. Each row carries the resolution kind, how long it took and an excerpt of the note written at resolution (flagged when only a later note exists).',
           parameters: [
             { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
             {

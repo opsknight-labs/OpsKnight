@@ -27,7 +27,7 @@ export const GET = defineV2Route({
     const readWhere = incidentReadWhere(actor);
     const incident = await prisma.incident.findFirst({
       where: { AND: [{ id: params.id }, readWhere] },
-      select: { id: true, title: true, serviceId: true, priority: true },
+      select: { id: true, title: true, description: true, serviceId: true, priority: true },
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
     const data = await findSimilarIncidents({ incident, readWhere, limit: query.limit });

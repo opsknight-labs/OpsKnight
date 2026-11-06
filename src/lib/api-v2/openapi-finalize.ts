@@ -1129,6 +1129,74 @@ const extraSchemas: Json = {
     },
     required: ['id', 'status', 'updatedAt'],
   },
+  OnCallNow: {
+    type: 'object',
+    description: 'Who is on call now, and who is next, for each schedule the caller can read.',
+    properties: {
+      userId: { type: 'string' },
+      now: { type: 'string', format: 'date-time' },
+      scope: { type: 'string', enum: ['mine', 'all'] },
+      iAmOnCall: { type: 'boolean' },
+      schedules: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          type: 'object',
+          properties: {
+            scheduleId: { type: 'string' },
+            scheduleName: { type: 'string' },
+            scheduleTimeZone: { type: 'string' },
+            onCall: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'string' },
+                  name: { type: ['string', 'null'] },
+                  start: { type: 'string', format: 'date-time' },
+                  end: { type: 'string', format: 'date-time' },
+                  startClamped: {
+                    type: 'boolean',
+                    description: 'Coverage runs back past the lookback limit; start is that limit.',
+                  },
+                  endClamped: {
+                    type: 'boolean',
+                    description: 'Coverage runs on past the lookahead limit; end is that limit.',
+                  },
+                },
+                required: ['userId', 'name', 'start', 'end', 'startClamped', 'endClamped'],
+              },
+            },
+            next: {
+              type: ['object', 'null'],
+              properties: {
+                userId: { type: 'string' },
+                name: { type: ['string', 'null'] },
+                start: { type: 'string', format: 'date-time' },
+                end: { type: 'string', format: 'date-time' },
+              },
+              required: ['userId', 'name', 'start', 'end'],
+            },
+            gap: { type: 'boolean', description: 'Nobody is on call right now.' },
+          },
+          required: ['scheduleId', 'scheduleName', 'scheduleTimeZone', 'onCall', 'next', 'gap'],
+        },
+      },
+      gaps: { type: 'integer', minimum: 0 },
+      truncated: { type: 'boolean' },
+      schedulesEvaluated: { type: 'integer', minimum: 0 },
+    },
+    required: [
+      'userId',
+      'now',
+      'scope',
+      'iAmOnCall',
+      'schedules',
+      'gaps',
+      'truncated',
+      'schedulesEvaluated',
+    ],
+  },
   CatchUp: {
     type: 'object',
     description: 'What opened, resolved and is still active since a point in time.',
@@ -1136,6 +1204,21 @@ const extraSchemas: Json = {
       userId: { type: 'string' },
       since: { type: 'string', format: 'date-time' },
       now: { type: 'string', format: 'date-time' },
+      scope: { type: 'string', enum: ['mine', 'all'] },
+      filters: {
+        type: 'object',
+        properties: {
+          serviceId: { type: ['string', 'null'] },
+          teamId: { type: ['string', 'null'] },
+          urgency: { type: ['string', 'null'], enum: ['HIGH', 'MEDIUM', 'LOW', null] },
+        },
+        required: ['serviceId', 'teamId', 'urgency'],
+      },
+      myTeamCount: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Teams the caller belongs to; 0 explains an empty scope=mine result.',
+      },
       counts: {
         type: 'object',
         properties: {
@@ -1259,20 +1342,64 @@ const extraSchemas: Json = {
           ],
         },
       },
+      pagedMe: {
+        type: 'object',
+        description:
+          'Incidents that notified the caller in the window, from their own notification history.',
+        properties: {
+          count: { type: 'integer', minimum: 0 },
+          items: {
+            type: 'array',
+            maxItems: 25,
+            items: {
+              type: 'object',
+              properties: {
+                incident: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    title: { type: 'string' },
+                    urgency: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+                    status: {
+                      type: 'string',
+                      enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'],
+                    },
+                  },
+                  required: ['id', 'title', 'urgency', 'status'],
+                },
+                lastEventType: { type: 'string' },
+                lastAt: { type: 'string', format: 'date-time' },
+                channels: { type: 'array', items: { type: 'string' } },
+                delivered: { type: 'boolean' },
+              },
+              required: ['incident', 'lastEventType', 'lastAt', 'channels', 'delivered'],
+            },
+          },
+        },
+        required: ['count', 'items'],
+      },
       truncated: {
         type: 'object',
-        properties: { active: { type: 'boolean' }, recentlyResolved: { type: 'boolean' } },
-        required: ['active', 'recentlyResolved'],
+        properties: {
+          active: { type: 'boolean' },
+          recentlyResolved: { type: 'boolean' },
+          pagedMe: { type: 'boolean' },
+        },
+        required: ['active', 'recentlyResolved', 'pagedMe'],
       },
     },
     required: [
       'userId',
       'since',
       'now',
+      'scope',
+      'filters',
+      'myTeamCount',
       'counts',
       'active',
       'assignedToMe',
       'recentlyResolved',
+      'pagedMe',
       'truncated',
     ],
   },
@@ -1325,8 +1452,13 @@ const extraSchemas: Json = {
               properties: {
                 excerpt: { type: 'string' },
                 createdAt: { type: 'string', format: 'date-time' },
+                writtenBeforeResolution: {
+                  type: 'boolean',
+                  description:
+                    'True when the note was written at or before resolution; false means it is the newest note, written later.',
+                },
               },
-              required: ['excerpt', 'createdAt'],
+              required: ['excerpt', 'createdAt', 'writtenBeforeResolution'],
             },
           },
           required: [

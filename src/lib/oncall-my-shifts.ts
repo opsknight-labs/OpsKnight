@@ -35,7 +35,7 @@ export interface MyShift {
 }
 
 /** The longest rotation, shift or overlapping override in these schedules, plus a day for the handoff. */
-async function rotationMargin(scheduleIds: string[], now: Date, windowEnd: Date) {
+export async function rotationMargin(scheduleIds: string[], now: Date, windowEnd: Date) {
   const [layers, overrides] = await Promise.all([
     prisma.onCallLayer.findMany({
       where: { scheduleId: { in: scheduleIds } },

@@ -2889,6 +2889,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getOnCallNow": {
+    "method": "GET",
+    "path": "/schedules/on-call-now",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listSimilarIncidents": {
     "method": "GET",
     "path": "/incidents/{id}/similar",
