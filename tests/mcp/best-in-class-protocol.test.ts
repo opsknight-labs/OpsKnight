@@ -189,14 +189,21 @@ describe('A3: read_operation', () => {
     const listServices = search.structuredContent.operations.find(
       (operation: { operationId: string }) => operation.operationId === 'listServices'
     );
-    expect(listServices.workflow).toBe('read_operation');
+    // Curated in round 5: search points straight at the named tool.
+    expect(listServices.workflow).toBe('service_list (pass args directly, no operationId wrapper)');
+    const tags = await callTool('search_capabilities', { query: 'incident tags', intent: 'read' });
+    expect(
+      tags.structuredContent.operations.find(
+        (operation: { operationId: string }) => operation.operationId === 'listIncidentTags'
+      ).workflow
+    ).toBe('read_operation');
     const writes = await callTool('search_capabilities', { query: 'resolve incident' });
     expect(
       writes.structuredContent.operations.find(
         (operation: { operationId: string }) => operation.operationId === 'resolveIncident'
       ).workflow
     ).toBe('incident_resolve (pass args directly, no operationId wrapper)');
-    const described = await callTool('describe_operation', { operationId: 'listServices' });
+    const described = await callTool('describe_operation', { operationId: 'listIncidentTags' });
     expect(described.structuredContent.workflow).toBe('read_operation');
     expect(described.structuredContent.tool).toBeNull();
     expect(described.structuredContent).not.toHaveProperty('reason');

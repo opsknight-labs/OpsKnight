@@ -34,6 +34,18 @@
     "descriptionSha256": "e4751e3d062bda9736fab7deea15eb6ff0ba0fb038cc6d095600ab8449d7f6ce"
   },
   {
+    "name": "incident_available_actions",
+    "title": "What can I do with this incident",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "e39969791185a12b0bacf30a0e4e906a98997b9cc06ae0be7b470bc5555fbc5e"
+  },
+  {
     "name": "incident_find_similar",
     "title": "Find similar past incidents",
     "annotations": {
@@ -82,6 +94,18 @@
     "descriptionSha256": "411985fffd9836c1e7b5d709c4a972baa9a10644b8742b10d108be5ca9328b71"
   },
   {
+    "name": "incident_list_notes",
+    "title": "List incident notes",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "5a3cdba3e1757b0817373a8f6e0deb431212427364c901a5a336f848fe756b53"
+  },
+  {
     "name": "incident_search",
     "title": "Search incidents",
     "annotations": {
@@ -102,7 +126,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "ed4bfea7149676d7e82eb8b48ca237ca6e0f7850989469e03bf6e6906e86238e",
+    "inputSchemaSha256": "9a2889c88beb752a4f1fc64474650627280eb2bf66b7c455ed5c64213cbbd94b",
     "descriptionSha256": "33373702a4d1d74cabe873256220f7118ff136d32a18b95126d4e2d324ac82c9"
   },
   {
@@ -136,8 +160,20 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "5ff9819e8c4f1d231b7ee8d2424079c5c082a28cc7b9689df77519456a05672a",
+    "inputSchemaSha256": "2f83710534fd3eec06ebb18aa9a4bb1231bd53d678a7d09f6ec7bfb0b7f6c76d",
     "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
+  },
+  {
+    "name": "service_list",
+    "title": "List services",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "47bdcd5243e8a0ce84a9a190f85c5b89962d7a04b615598eb02f9f70994193cc",
+    "descriptionSha256": "2a8c979512a94a92b4546ab37aea50fd830d48fbbd885818e11f3f08779220dc"
   },
   {
     "name": "whoami",

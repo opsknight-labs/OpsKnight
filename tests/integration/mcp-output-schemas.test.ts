@@ -158,7 +158,14 @@ describe('named tool results satisfy their advertised output schemas', () => {
       ['schedule_get', { path: { id: schedule.id } }],
       ['oncall_lookup', { path: { id: schedule.id } }],
       ['oncall_my_shifts', { query: { days: 7 } }],
-      ['oncall_catch_up', { query: { hours: 24 } }],
+      ['oncall_catch_up', { query: { hours: 24, scope: 'all' } }],
+      ['oncall_now', { query: { scope: 'all' } }],
+      ['schedule_list', {}],
+      ['service_list', {}],
+      ['team_list', {}],
+      ['incident_list_notes', { path: { id: incident.id } }],
+      ['incident_available_actions', { path: { id: incident.id } }],
+      ['schedule_list_overrides', { path: { id: schedule.id } }],
       ['incident_find_similar', { path: { id: incident.id } }],
       ['escalation_explain', { path: { id: escalation.id } }],
       ['status_page_get', { path: { id: page.id } }],
@@ -194,6 +201,7 @@ describe('named tool results satisfy their advertised output schemas', () => {
     expect(checked.length).toBeGreaterThanOrEqual(12);
     expect(checked).toContain('oncall_my_shifts');
     expect(checked).toContain('oncall_catch_up');
+    expect(checked).toContain('oncall_now');
     expect(checked).toContain('incident_find_similar');
   }, 120000);
 });

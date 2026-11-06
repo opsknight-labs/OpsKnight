@@ -42,7 +42,7 @@ describe('honest MCP workflow inventory', () => {
     expect(report.equivalentMappings).toBe(1);
   });
   it('rejects unknown risk/status, empty reasons and sensitive generic exposure', () => {
-    const review = MCP_CATALOG.find(op => op.operationId === 'getPostmortem')!;
+    const review = MCP_CATALOG.find(op => op.operationId === 'listIncidentTags')!;
     const base = {
       status: review.status,
       risk: review.risk,

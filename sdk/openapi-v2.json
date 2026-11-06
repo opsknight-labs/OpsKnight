@@ -11585,6 +11585,152 @@
           "updatedAt"
         ]
       },
+      "OnCallNow": {
+        "type": "object",
+        "description": "Who is on call now, and who is next, for each schedule the caller can read.",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "now": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "mine",
+              "all"
+            ]
+          },
+          "iAmOnCall": {
+            "type": "boolean"
+          },
+          "schedules": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "scheduleId": {
+                  "type": "string"
+                },
+                "scheduleName": {
+                  "type": "string"
+                },
+                "scheduleTimeZone": {
+                  "type": "string"
+                },
+                "onCall": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "userId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "start": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "end": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "startClamped": {
+                        "type": "boolean",
+                        "description": "Coverage runs back past the lookback limit; start is that limit."
+                      },
+                      "endClamped": {
+                        "type": "boolean",
+                        "description": "Coverage runs on past the lookahead limit; end is that limit."
+                      }
+                    },
+                    "required": [
+                      "userId",
+                      "name",
+                      "start",
+                      "end",
+                      "startClamped",
+                      "endClamped"
+                    ]
+                  }
+                },
+                "next": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "start": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "end": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "name",
+                    "start",
+                    "end"
+                  ]
+                },
+                "gap": {
+                  "type": "boolean",
+                  "description": "Nobody is on call right now."
+                }
+              },
+              "required": [
+                "scheduleId",
+                "scheduleName",
+                "scheduleTimeZone",
+                "onCall",
+                "next",
+                "gap"
+              ]
+            }
+          },
+          "gaps": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "schedulesEvaluated": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "userId",
+          "now",
+          "scope",
+          "iAmOnCall",
+          "schedules",
+          "gaps",
+          "truncated",
+          "schedulesEvaluated"
+        ]
+      },
       "CatchUp": {
         "type": "object",
         "description": "What opened, resolved and is still active since a point in time.",
@@ -11599,6 +11745,52 @@
           "now": {
             "type": "string",
             "format": "date-time"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "mine",
+              "all"
+            ]
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "serviceId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "teamId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "urgency": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW",
+                  null
+                ]
+              }
+            },
+            "required": [
+              "serviceId",
+              "teamId",
+              "urgency"
+            ]
+          },
+          "myTeamCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Teams the caller belongs to; 0 explains an empty scope=mine result."
           },
           "counts": {
             "type": "object",
@@ -11871,6 +12063,87 @@
               ]
             }
           },
+          "pagedMe": {
+            "type": "object",
+            "description": "Incidents that notified the caller in the window, from their own notification history.",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "items": {
+                "type": "array",
+                "maxItems": 25,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "incident": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "urgency": {
+                          "type": "string",
+                          "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "OPEN",
+                            "ACKNOWLEDGED",
+                            "RESOLVED",
+                            "SNOOZED",
+                            "SUPPRESSED"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "urgency",
+                        "status"
+                      ]
+                    },
+                    "lastEventType": {
+                      "type": "string"
+                    },
+                    "lastAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "delivered": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "incident",
+                    "lastEventType",
+                    "lastAt",
+                    "channels",
+                    "delivered"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "count",
+              "items"
+            ]
+          },
           "truncated": {
             "type": "object",
             "properties": {
@@ -11879,11 +12152,15 @@
               },
               "recentlyResolved": {
                 "type": "boolean"
+              },
+              "pagedMe": {
+                "type": "boolean"
               }
             },
             "required": [
               "active",
-              "recentlyResolved"
+              "recentlyResolved",
+              "pagedMe"
             ]
           }
         },
@@ -11891,10 +12168,14 @@
           "userId",
           "since",
           "now",
+          "scope",
+          "filters",
+          "myTeamCount",
           "counts",
           "active",
           "assignedToMe",
           "recentlyResolved",
+          "pagedMe",
           "truncated"
         ]
       },
@@ -12013,11 +12294,16 @@
                     "createdAt": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "writtenBeforeResolution": {
+                      "type": "boolean",
+                      "description": "True only when the note was written at or before the incident was resolved; false means it was written afterwards (a closing note typed moments after the click, or a later follow-up)."
                     }
                   },
                   "required": [
                     "excerpt",
-                    "createdAt"
+                    "createdAt",
+                    "writtenBeforeResolution"
                   ]
                 }
               },
@@ -17240,23 +17526,174 @@
         "description": "Requires API scope `users:read` (Users read)."
       }
     },
+    "/schedules/on-call-now": {
+      "get": {
+        "tags": [
+          "Schedules"
+        ],
+        "summary": "Who is on call now, and who is next, across schedules",
+        "description": "For each schedule the caller can read: who is on call right now (with the real start and end of the shift), who takes over next within seven days, and whether nobody is on call (a gap). scope=mine (default) keeps schedules the caller, or someone on one of their teams, takes part in; scope=all is every schedule they may read. Names only, never contact details. Bounded to 50 schedules; truncated reports when more matched.\n\nRequires API scope `schedules:read` (Schedules read).",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "mine (default) or all.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mine",
+                "all"
+              ],
+              "default": "mine"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum schedules to return (1-50).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 25
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who is on call now across schedules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OnCallNow"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getOnCallNow",
+        "x-required-scope": "schedules:read"
+      }
+    },
     "/users/me/catch-up": {
       "get": {
         "tags": [
           "Users"
         ],
         "summary": "What opened, resolved and is still active since a point in time",
-        "description": "Self-service catch-up over the incidents the caller can read: counts of incidents opened and resolved in the last N hours, the active incidents (most urgent first), the ones assigned to the caller and the recently resolved ones. Bounded to 168 hours and 25 rows per list; truncated reports when a list was cut.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "description": "Self-service catch-up over incidents the caller can read. scope=mine (default) narrows to incidents assigned to, watched by, or owned by a team of the caller; scope=all is everything they may read. Returns counts of incidents opened and resolved, the active incidents (most urgent first), the ones assigned to the caller, the recently resolved ones, and which incidents paged the caller (from their own notification history only). The window is explicit: hours back from now (default 12) or a since timestamp, at most 168 hours; nothing is stored between calls. Bounded to 25 rows per list; truncated reports when a list was cut.\n\nRequires API scope `incidents:read` (Incidents read).",
         "parameters": [
           {
             "name": "hours",
             "in": "query",
-            "description": "How far back to look, in hours (1-168).",
+            "description": "How far back to look, in hours (1-168). Not with since.",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 168,
-              "default": 12
+              "maximum": 168
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Start of the window as an RFC 3339 timestamp, in the past and within 168 hours. Not with hours.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "mine (default) or all.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mine",
+                "all"
+              ],
+              "default": "mine"
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "query",
+            "description": "Only incidents on this service.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Only incidents owned by this team or on its services.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "urgency",
+            "in": "query",
+            "description": "Only incidents with this urgency.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "HIGH",
+                "MEDIUM",
+                "LOW"
+              ]
             }
           },
           {
@@ -17345,7 +17782,7 @@
           "Incidents"
         ],
         "summary": "Past resolved incidents that look like this one, with how each ended",
-        "description": "Compares this incident with resolved incidents from the last year that the caller can read. Similarity is title-word overlap nudged by the same service and priority; every row lists why it matched. A lead for a human, not proof of a shared cause. Each row carries the resolution kind, how long it took and an excerpt of the last note.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "description": "Compares this incident with resolved incidents from the last year that the caller can read. Similarity is title and description word overlap, after light stemming and a small synonym table, nudged by the same service and priority; every row lists why it matched. Candidates come from the same service and from each title word separately, so a busy service or a very common word cannot crowd out older matches elsewhere. A lead for a human, not proof of a shared cause. Each row carries the resolution kind, how long it took and an excerpt of the note written at resolution (flagged when only a later note exists).\n\nRequires API scope `incidents:read` (Incidents read).",
         "parameters": [
           {
             "name": "id",

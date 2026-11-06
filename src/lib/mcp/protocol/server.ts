@@ -1347,7 +1347,7 @@ export function createOpsKnightMcpServer(
     {
       name: 'catch_up',
       title: 'Catch up on what I missed',
-      instruction: `Call ${via('getMyCatchUp')} (query.hours defaults to 12; use the time the person gives you). Lead with what needs action: active incidents assigned to the person, then the most urgent unassigned ones, then one line with how many opened and resolved. Name each incident with its service, urgency and age. Say when a list is truncated. Read-only: change nothing.`,
+      instruction: `Call ${via('getMyCatchUp')}. It looks at your teams, assigned and watched incidents by default (query.scope=all for everything you may read), and goes back 12 hours unless you pass query.hours or an exact query.since. Lead with what needs action: incidents that paged the person (pagedMe), those assigned to them, then the most urgent others, then one line with how many opened and resolved. Name each incident with its service, urgency and age. If the result is empty and myTeamCount is 0, say the person is on no team and offer scope=all. Say when a list is truncated and offer to narrow by serviceId, teamId or urgency. Read-only: change nothing.`,
       requires: ['getMyCatchUp'],
     },
     {
@@ -1370,11 +1370,11 @@ export function createOpsKnightMcpServer(
     {
       name: 'request_shift_cover',
       title: 'Get my shift covered',
-      instruction: `Call oncall_my_shifts to find the shift the person wants covered (ask which one if it is not clear), then ${via('listScheduleOverrides')} for that schedule to see existing overrides. Suggest a colleague from the same schedule and draft a short request to them with the exact start and end in the schedule's time zone. Do not create anything on your own.${when(
+      instruction: `Call oncall_my_shifts to find the shift the person wants covered (ask which one if it is not clear), then ${via('listScheduleOverrides')} for that schedule to see existing overrides. Suggest a colleague from the same schedule (oncall_now shows who else is on it) and draft a short request to them with the exact start and end in the schedule's time zone. Do not create anything on your own.${when(
         'createScheduleOverride',
         ' Once the colleague agrees, call describe_operation for createScheduleOverride, then operation_prepare with that person, and wait for a person to approve it in OpsKnight (operation_get_approval) before operation_commit_approved.'
       )}`,
-      requires: ['oncall_my_shifts', 'listScheduleOverrides'],
+      requires: ['oncall_my_shifts', 'listScheduleOverrides', 'oncall_now'],
     },
     {
       name: 'getting_started',

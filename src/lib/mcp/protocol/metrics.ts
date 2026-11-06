@@ -33,8 +33,12 @@ export const MCP_TIMED_OUTCOMES: ReadonlySet<McpMetricOutcome> = new Set([
   'result_too_large',
 ]);
 
-/** Upper bound on distinct `tool` label values; a test pins the actual set below it. */
-export const MCP_METRIC_TOOL_LABEL_LIMIT = 48;
+/**
+ * Upper bound on distinct `tool` label values; a test pins the actual set below it. Raised from 48
+ * to 64 in round 5 (55 named tools): still a small fixed set (64 tools x a handful of outcomes), and
+ * every label is a registered tool name, never caller input.
+ */
+export const MCP_METRIC_TOOL_LABEL_LIMIT = 64;
 
 const STANDALONE_TOOLS = [
   'whoami',
