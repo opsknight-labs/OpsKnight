@@ -108,16 +108,59 @@ type PolicyStep = {
  * call now for each schedule target, when their shift ends and who is next. User and team targets
  * are returned as configured.
  */
+const SERVICE_NAME_CANDIDATES = 5;
+
+/**
+ * A service by name, for "who is on call for payments". One exact (case-insensitive) match is
+ * used; anything else returns the closest candidates for the assistant to choose from. It never
+ * guesses between services, because paging the wrong team is worse than one more question.
+ */
+export async function resolveMcpServiceName(context: ExecutionContext, name: string) {
+  const wanted = name.trim();
+  const page = entity(
+    await callMcpOperation(context, 'listServices', {
+      query: { search: wanted.slice(0, 100), limit: SERVICE_NAME_CANDIDATES },
+    })
+  );
+  const rows = (Array.isArray(page) ? page : []).filter(isRecord);
+  const candidates = rows.flatMap(row => {
+    const id = text(row.id);
+    return id && RESOURCE_ID.test(id) ? [{ id, name: text(row.name) ?? id }] : [];
+  });
+  const exact = candidates.filter(
+    candidate => candidate.name.toLowerCase() === wanted.toLowerCase()
+  );
+  if (exact.length === 1) return { serviceId: exact.at(0)!.id };
+  return {
+    candidates,
+    note: candidates.length
+      ? 'More than one service matches, or none matches exactly. Ask which one is meant, then call again with its serviceId.'
+      : `No service you can read matches "${wanted.slice(0, 60)}". Use service_list to browse.`,
+  };
+}
+
 export async function getMcpOncallForService(
   context: ExecutionContext,
-  input: { serviceId: string; at?: string }
+  input: { serviceId?: string; serviceName?: string; at?: string }
 ) {
+  requireMcp(
+    Boolean(input.serviceId) !== Boolean(input.serviceName),
+    'MCP_INVALID_ARGUMENTS',
+    400,
+    'Pass exactly one of serviceId or serviceName.'
+  );
+  let serviceId = input.serviceId;
+  if (!serviceId) {
+    const resolved = await resolveMcpServiceName(context, input.serviceName!);
+    if (!('serviceId' in resolved)) return { service: null, ...resolved };
+    serviceId = resolved.serviceId;
+  }
   const service = entity(
-    await callMcpOperation(context, 'getService', { path: { id: input.serviceId } })
+    await callMcpOperation(context, 'getService', { path: { id: serviceId } })
   );
   requireMcp(isRecord(service), 'MCP_RESOURCE_UNAVAILABLE', 404);
   const policyId = text(service.escalationPolicyId);
-  const summary = { id: text(service.id) ?? input.serviceId, name: text(service.name) ?? null };
+  const summary = { id: text(service.id) ?? serviceId, name: text(service.name) ?? null };
   if (!policyId)
     return {
       service: summary,
@@ -403,7 +446,11 @@ export function mcpCompositeCost(tool: unknown, args: unknown): number | undefin
     case 'postmortem_get_context':
       return 4;
     case 'oncall_for_service':
-      return ONCALL_FOR_SERVICE_COST;
+      // A name costs one more read: the lookup before the policy and schedules.
+      return (
+        ONCALL_FOR_SERVICE_COST +
+        (typeof (args as { serviceName?: unknown } | undefined)?.serviceName === 'string' ? 1 : 0)
+      );
     case 'incident_acknowledge_many':
       return Array.isArray(input.ids) ? Math.max(1, input.ids.length) : 1;
     case 'search':

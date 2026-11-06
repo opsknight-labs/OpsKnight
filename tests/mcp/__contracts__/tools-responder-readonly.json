@@ -174,8 +174,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "96e8194319ee0af9028efdfd139b79068fee1387e330fbfba9744782496d2b30",
-    "descriptionSha256": "8c0e67af9d8b7ebda81dfe3ff4f22cc614ef74b1ee3f23be25a9b30cce3cb22e"
+    "inputSchemaSha256": "552632e873aefd9c2adeffa709f9b1adad9ba3bdcd1b420f8e8ecdfaeb14d78c",
+    "descriptionSha256": "af074e48cfdb0ab369bea0f9958051d9568400bc7dffe0b8fdb5c49c2847d8f2"
   },
   {
     "name": "oncall_lookup",

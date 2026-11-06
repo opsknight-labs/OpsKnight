@@ -191,6 +191,13 @@ describe('A3: read_operation', () => {
     );
     // Curated in round 5: search points straight at the named tool.
     expect(listServices.workflow).toBe('service_list (pass args directly, no operationId wrapper)');
+    // Results carry what the call needs, so a read takes two calls instead of three.
+    const getIncident = (
+      await callTool('search_capabilities', { query: 'get incident', intent: 'read' })
+    ).structuredContent.operations.find(
+      (operation: { operationId: string }) => operation.operationId === 'getIncident'
+    );
+    expect(getIncident.requiredArgs).toEqual({ path: ['id'] });
     const tags = await callTool('search_capabilities', { query: 'incident tags', intent: 'read' });
     expect(
       tags.structuredContent.operations.find(

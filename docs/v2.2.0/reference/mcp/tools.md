@@ -546,7 +546,7 @@ No parameters.
 
 ### `oncall_for_service`
 
-**Who is on call for a service.** Answer 'who is on call for this service' in one call: the service's escalation policy step by step, the people on call now for each schedule, when their shift ends and who is next. Pass at (ISO 8601) for another time. Read-only; pages nobody.
+**Who is on call for a service.** Answer 'who is on call for this service' in one call: the service's escalation policy step by step, the people on call now for each schedule, when their shift ends and who is next. Pass serviceName (for example "payments") or serviceId; a name that is ambiguous returns candidates to choose from, never a guess. Pass at (ISO 8601) for another time. Read-only; pages nobody.
 
 | Read only | Destructive | Idempotent | Scopes | Requires |
 | --- | --- | --- | --- | --- |
@@ -554,7 +554,8 @@ No parameters.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `serviceId` | string | yes |  |
+| `serviceId` | string | no |  |
+| `serviceName` | string | no |  |
 | `at` | string | no |  |
 
 ### `oncall_lookup`

@@ -1,5 +1,6 @@
 import { APP_VERSION } from '@/lib/version';
 import { searchCapabilities } from './capability-search';
+import { compactRequiredArguments } from './argument-hints';
 import {
   McpServer,
   ResourceTemplate,
@@ -103,7 +104,12 @@ const SCHEMAS = {
   oncallForService: sdkSchema(
     z
       .object({
-        serviceId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+        // Exactly one of the two; the composite enforces it with a clear correction.
+        serviceId: z
+          .string()
+          .regex(/^[A-Za-z0-9_-]{1,128}$/)
+          .optional(),
+        serviceName: z.string().trim().min(2).max(100).optional(),
         at: z.string().datetime({ offset: true }).optional(),
       })
       .strict()
@@ -926,7 +932,7 @@ export function createOpsKnightMcpServer(
       {
         title: 'Who is on call for a service',
         description:
-          "Answer 'who is on call for this service' in one call: the service's escalation policy step by step, the people on call now for each schedule, when their shift ends and who is next. Pass at (ISO 8601) for another time. Read-only; pages nobody.",
+          "Answer 'who is on call for this service' in one call: the service's escalation policy step by step, the people on call now for each schedule, when their shift ends and who is next. Pass serviceName (for example \"payments\") or serviceId; a name that is ambiguous returns candidates to choose from, never a guess. Pass at (ISO 8601) for another time. Read-only; pages nobody.",
         inputSchema: SCHEMAS.oncallForService,
         annotations: {
           readOnlyHint: true,
@@ -937,7 +943,10 @@ export function createOpsKnightMcpServer(
       },
       async args =>
         evidenceTool(context, 'oncall_for_service', () =>
-          getMcpOncallForService(context, args as { serviceId: string; at?: string })
+          getMcpOncallForService(
+            context,
+            args as { serviceId?: string; serviceName?: string; at?: string }
+          )
         )
     );
   }
@@ -1056,6 +1065,8 @@ export function createOpsKnightMcpServer(
             tool,
             domain,
             risk,
+            // What the call needs, so a read takes search then read, without describe_operation.
+            requiredArgs: compactRequiredArguments(operation.inputSchema),
             workflow: missing.length
               ? 'reconnect OpsKnight and allow the listed permissions first'
               : workflowOf(operation),
