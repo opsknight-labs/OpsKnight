@@ -9,6 +9,7 @@ import { getSemanticBacklogStatus } from './semantic/embedder';
 
 export const ACTION_METRIC_SAMPLE_CAP = 5000;
 export const DIGEST_METRIC_SAMPLE_CAP = 8;
+export const SUGGESTION_METRIC_SAMPLE_CAP = 5000;
 const ACTION_WINDOW_MS = 86400000;
 const DIGEST_WINDOW_MS = 7 * ACTION_WINDOW_MS;
 const UNFINISHED_ACTION_STALE_MS = 5 * 60000;
@@ -26,6 +27,9 @@ export type FeatureMetricName =
   | 'opsknight_intelligence_squire_actions_failed_last_24h'
   | 'opsknight_intelligence_squire_actions_uncertain_last_24h'
   | 'opsknight_intelligence_squire_actions_sample_truncated'
+  | 'opsknight_intelligence_suggestions_reviewed_last_24h'
+  | 'opsknight_intelligence_suggestion_acceptance_ratio_last_24h'
+  | 'opsknight_intelligence_suggestions_sample_truncated'
   | 'opsknight_intelligence_feature_probe_failed';
 export interface FeatureMetricSample {
   name: FeatureMetricName;
@@ -140,6 +144,41 @@ export async function collectFeatureMetrics(now = new Date()): Promise<FeatureMe
   } catch {
     failed = true;
     logger.debug('[Intelligence] Feature metrics probe unavailable', { probe: 'actions' });
+  }
+  try {
+    const [reviews] = await withDbBudget(PROBE_BUDGET, tx =>
+      tx.$queryRaw<Array<{ accepted: bigint; reviewed: bigint; sampled: bigint }>>(Prisma.sql`
+      WITH candidates AS MATERIALIZED (
+        SELECT id, "createdAt", "toDecision" FROM "IncidentRelationshipEvent"
+        WHERE "actorType" = 'USER' AND "fromDecision" = 'SUGGESTED'
+          AND "toDecision" IN ('ACCEPTED', 'REJECTED')
+          AND "createdAt" > ${new Date(+now - ACTION_WINDOW_MS)} AND "createdAt" <= ${now}
+        ORDER BY "createdAt" DESC, id DESC LIMIT ${SUGGESTION_METRIC_SAMPLE_CAP + 1}
+      ), sampled AS (
+        SELECT * FROM candidates ORDER BY "createdAt" DESC, id DESC LIMIT ${SUGGESTION_METRIC_SAMPLE_CAP}
+      ) SELECT count(*) FILTER (WHERE "toDecision" = 'ACCEPTED')::bigint AS accepted,
+        count(*)::bigint AS reviewed, (SELECT count(*) FROM candidates)::bigint AS sampled
+        FROM sampled`)
+    );
+    samples.push(
+      {
+        name: 'opsknight_intelligence_suggestions_reviewed_last_24h',
+        value: Number(reviews.reviewed),
+      },
+      {
+        name: 'opsknight_intelligence_suggestions_sample_truncated',
+        value: Number(reviews.sampled) > SUGGESTION_METRIC_SAMPLE_CAP ? 1 : 0,
+      }
+    );
+    // No reviews is unknown acceptance, rather than a fabricated zero-percent result.
+    if (Number(reviews.reviewed) > 0)
+      samples.push({
+        name: 'opsknight_intelligence_suggestion_acceptance_ratio_last_24h',
+        value: Number(reviews.accepted) / Number(reviews.reviewed),
+      });
+  } catch {
+    failed = true;
+    logger.debug('[Intelligence] Feature metrics probe unavailable', { probe: 'suggestions' });
   }
   samples.push({ name: 'opsknight_intelligence_feature_probe_failed', value: failed ? 1 : 0 });
   return samples;

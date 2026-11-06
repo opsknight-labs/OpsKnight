@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import prisma from '@/lib/prisma';
 import {
   DEFAULT_POLICY_DEFINITION,
   INTELLIGENCE_SETTINGS_DEFAULTS,
+  INTELLIGENCE_ENGINE_VERSION,
   type CorrelationRule,
 } from '@/lib/intelligence/contract';
 import { closeExpiredGroups } from '@/lib/intelligence/correlation/groups';
@@ -146,6 +148,85 @@ describe('SUGGEST correlation', () => {
 });
 
 describe('anchor election', () => {
+  it('re-elects more than one batch of members with bounded relationship/event writes', async () => {
+    await configure('SUGGEST');
+    const service = await createTestService('Batch re-election');
+    const previous = await incident('Database errors', service.id, at(60));
+    const earliest = await incident('Database errors', service.id, at(0));
+    await correlate(previous.id);
+    const group = await db.correlationGroup.findFirstOrThrow();
+    const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({
+      where: { incidentId: previous.id },
+    });
+    const ids = Array.from(
+      { length: 120 },
+      (_, i) => `reanchor-member-${i.toString().padStart(3, '0')}`
+    );
+    await db.incident.createMany({
+      data: ids.map(id => ({
+        id,
+        title: 'Database errors',
+        serviceId: service.id,
+        urgency: 'LOW',
+        createdAt: at(100),
+      })),
+    });
+    await db.incidentFingerprint.createMany({
+      data: ids.map(incidentId => ({
+        incidentId,
+        serviceId: service.id,
+        template: fingerprint.template,
+        tokens: fingerprint.tokens,
+        labels: {},
+        engineVersion: INTELLIGENCE_ENGINE_VERSION,
+        incidentCreatedAt: at(100),
+      })),
+    });
+    await db.correlationMember.createMany({
+      data: ids.map(incidentId => ({
+        incidentId,
+        groupId: group.id,
+        role: 'MEMBER',
+        decision: 'SUGGESTED',
+        score: 1,
+        evidence: {},
+        policyVersion: group.policyVersion,
+        engineVersion: INTELLIGENCE_ENGINE_VERSION,
+      })),
+    });
+    await db.incidentRelationship.createMany({
+      data: ids.map(sourceIncidentId => ({
+        sourceIncidentId,
+        targetIncidentId: previous.id,
+        type: 'RELATED',
+        origin: 'RULE',
+        decision: 'SUGGESTED',
+        score: 1,
+        evidence: { groupId: group.id },
+        engineVersion: INTELLIGENCE_ENGINE_VERSION,
+      })),
+    });
+    const queries: string[] = [];
+    let capture = true;
+    prisma.$on('query', event => {
+      if (capture) queries.push(event.query);
+    });
+    try {
+      await correlate(earliest.id);
+    } finally {
+      capture = false;
+    }
+    const links = await db.incidentRelationship.findMany();
+    expect(links).toHaveLength(121);
+    expect(links.every(row => row.targetIncidentId === earliest.id)).toBe(true);
+    expect(await db.incidentRelationshipEvent.count()).toBe(121);
+    expect(queries.filter(sql => /INSERT INTO "IncidentRelationship"/.test(sql))).toHaveLength(2);
+    expect(
+      queries.filter(sql => /INSERT INTO (?:"public"\.)?"IncidentRelationshipEvent"/.test(sql))
+    ).toHaveLength(2);
+    await correlate(earliest.id);
+    expect(await db.incidentRelationshipEvent.count()).toBe(121);
+  });
   it('anchors the earliest incident even when a later one is processed first', async () => {
     await configure('SUGGEST');
     const service = await createTestService('Checkout');
@@ -215,6 +296,27 @@ describe('concurrency', () => {
 });
 
 describe('safety rules', () => {
+  it('honors a reversed human veto even when historical evidence has no automatic marker', async () => {
+    await configure('SUGGEST');
+    const service = await createTestService('Veto scope');
+    const anchor = await incident('Database errors', service.id, at(0));
+    const member = await incident('Database errors', service.id, at(10));
+    await correlate(anchor.id);
+    await db.incidentRelationship.create({
+      data: {
+        sourceIncidentId: anchor.id,
+        targetIncidentId: member.id,
+        type: 'RELATED',
+        origin: 'HUMAN',
+        decision: 'REVERTED',
+        evidence: {},
+        engineVersion: INTELLIGENCE_ENGINE_VERSION,
+      },
+    });
+    await correlate(member.id);
+    expect(await db.incidentRelationship.count()).toBe(1);
+    expect(await db.incidentRelationship.count({ where: { decision: 'SUGGESTED' } })).toBe(0);
+  });
   it('never groups highest-urgency (page-immediately) incidents', async () => {
     await configure('SUGGEST');
     const service = await createTestService('Checkout');

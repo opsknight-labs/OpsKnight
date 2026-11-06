@@ -42,6 +42,104 @@ it('exports zero feature failures and disabled embedding on an unused installati
   expect(samples.opsknight_intelligence_digest_failed_recipients_last_7d).toBe(0);
   expect(samples.opsknight_intelligence_squire_actions_uncertain_last_24h).toBe(0);
   expect(samples.opsknight_intelligence_feature_probe_failed).toBe(0);
+  expect(samples.opsknight_intelligence_suggestions_reviewed_last_24h).toBe(0);
+  expect(samples.opsknight_intelligence_suggestion_acceptance_ratio_last_24h).toBeUndefined();
+});
+
+async function suggestedRelationship() {
+  const service = await createTestService('Review metrics');
+  const source = await createTestIncident('Source', service.id);
+  const target = await createTestIncident('Target', service.id);
+  return db.incidentRelationship.create({
+    data: {
+      sourceIncidentId: source.id,
+      targetIncidentId: target.id,
+      type: 'RELATED',
+      origin: 'RULE',
+      decision: 'SUGGESTED',
+      evidence: {},
+      engineVersion: 'test',
+    },
+  });
+}
+
+it('counts only recent human suggestion reviews, excluding AUTO and undo transitions', async () => {
+  const relationship = await suggestedRelationship();
+  await db.incidentRelationshipEvent.createMany({
+    data: [
+      {
+        relationshipId: relationship.id,
+        actorType: 'USER',
+        fromDecision: 'SUGGESTED',
+        toDecision: 'ACCEPTED',
+        reasonCode: 'USER_ACCEPTED',
+        createdAt: new Date(+now - 1000),
+      },
+      {
+        relationshipId: relationship.id,
+        actorType: 'USER',
+        fromDecision: 'SUGGESTED',
+        toDecision: 'REJECTED',
+        reasonCode: 'USER_REJECTED',
+        createdAt: new Date(+now - 1000),
+      },
+      {
+        relationshipId: relationship.id,
+        actorType: 'SYSTEM',
+        fromDecision: 'SUGGESTED',
+        toDecision: 'ACCEPTED',
+        reasonCode: 'AUTO',
+        createdAt: new Date(+now - 1000),
+      },
+      {
+        relationshipId: relationship.id,
+        actorType: 'USER',
+        fromDecision: 'ACCEPTED',
+        toDecision: 'REJECTED',
+        reasonCode: 'UNDO',
+        createdAt: new Date(+now - 1000),
+      },
+      {
+        relationshipId: relationship.id,
+        actorType: 'USER',
+        fromDecision: 'SUGGESTED',
+        toDecision: 'ACCEPTED',
+        reasonCode: 'OLD',
+        createdAt: new Date(+now - 2 * 86400000),
+      },
+      {
+        relationshipId: relationship.id,
+        actorType: 'USER',
+        fromDecision: 'SUGGESTED',
+        toDecision: 'ACCEPTED',
+        reasonCode: 'FUTURE',
+        createdAt: new Date(+now + 1000),
+      },
+    ],
+  });
+  const samples = names(await collectIntelligenceMetrics(+now));
+  expect(samples.opsknight_intelligence_suggestions_reviewed_last_24h).toBe(2);
+  expect(samples.opsknight_intelligence_suggestion_acceptance_ratio_last_24h).toBe(0.5);
+  expect(samples.opsknight_intelligence_suggestions_sample_truncated).toBe(0);
+});
+
+it('makes the bounded review sample visible instead of claiming complete coverage', async () => {
+  const relationship = await suggestedRelationship();
+  await db.incidentRelationshipEvent.createMany({
+    data: Array.from({ length: 5001 }, (_, i) => ({
+      id: `review-${i.toString().padStart(5, '0')}`,
+      relationshipId: relationship.id,
+      actorType: 'USER' as const,
+      fromDecision: 'SUGGESTED' as const,
+      toDecision: 'ACCEPTED' as const,
+      reasonCode: 'USER_ACCEPTED',
+      createdAt: new Date(+now - 1000),
+    })),
+  });
+  const samples = names(await collectIntelligenceMetrics(+now));
+  expect(samples.opsknight_intelligence_suggestions_reviewed_last_24h).toBe(5000);
+  expect(samples.opsknight_intelligence_suggestion_acceptance_ratio_last_24h).toBe(1);
+  expect(samples.opsknight_intelligence_suggestions_sample_truncated).toBe(1);
 });
 
 it('reports bounded recent digest and confirmed-action outcomes without identifiers or private payloads', async () => {

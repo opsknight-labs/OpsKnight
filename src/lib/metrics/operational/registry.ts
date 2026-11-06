@@ -29,6 +29,38 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_intelligence_pool_waiting_queries',
+    help: 'Prisma queries waiting for a connection on this lane process at its last measured cycle; unavailable samples are omitted',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_suggestions_reviewed_last_24h',
+    help: 'Human accept or reject decisions in the most recent 5000 suggestion reviews within 24 hours; automatic actions are excluded',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_suggestion_acceptance_ratio_last_24h',
+    help: 'Fraction of sampled human suggestion reviews accepted within 24 hours; omitted when no reviews exist',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_suggestions_sample_truncated',
+    help: '1 when the 24-hour human suggestion review sample exceeds 5000 decisions, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_intelligence_time_to_first_insight_seconds',
     help: 'Time from incident creation to first completed similarity analysis; backfill is separated from live incidents',
     kind: 'histogram',
@@ -144,7 +176,7 @@ export const OPERATIONAL_METRICS = [
   },
   {
     name: 'opsknight_intelligence_feature_probe_failed',
-    help: '1 if any embedding, digest or confirmed-action metric probe failed in this scrape, else 0',
+    help: '1 if any embedding, digest, confirmed-action or suggestion metric probe failed in this scrape, else 0',
     kind: 'gauge',
     labels: [],
     scope: 'cluster_snapshot',

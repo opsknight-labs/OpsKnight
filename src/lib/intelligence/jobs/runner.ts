@@ -13,7 +13,8 @@ import {
   withIntelligenceReadMemo,
   type IntelligenceSettingsView,
 } from '../settings/service';
-import { evaluatePause, getCriticalBacklogLagMs, type PauseState } from './backpressure';
+import { evaluateLanePause, getCriticalBacklogLagMs, type PauseState } from './backpressure';
+import { getPrismaPoolWaitCount } from '@/lib/prisma-pool-pressure';
 import { withDbBudget } from './db-budget';
 import { reconcileFingerprints, discoverNewIncidents } from './discovery';
 import { indexIncident } from './indexer';
@@ -156,6 +157,7 @@ export function workBudgetMs(
 
 export interface LaneState {
   pause: PauseState;
+  poolWaitingQueries?: number | null;
   lastReconcileAt: number;
   lastRetentionAt: number;
   lastObserveAt: number;
@@ -203,6 +205,7 @@ export interface CycleDependencies {
   handlers?: WorkHandlers;
   now?: () => number;
   getCriticalLagMs?: () => Promise<number>;
+  getPoolWaitingQueries?: () => Promise<number | null>;
 }
 
 class WorkTimeoutError extends Error {
@@ -320,17 +323,27 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
         now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS);
     if (!settings.enabled && !sweepDue) return { ...EMPTY_RESULT, status: 'disabled' };
 
-    const criticalLagMs = await (
-      dependencies.getCriticalLagMs ?? (() => getCriticalBacklogLagMs())
-    )();
-    const pause = evaluatePause(state.pause, criticalLagMs, settings.backpressureEscalationLagMs);
-    state.pause = { paused: pause.paused };
-    if (pause.changed) {
+    const waitingQueries = await (dependencies.getPoolWaitingQueries ?? getPrismaPoolWaitCount)();
+    state.poolWaitingQueries = waitingQueries;
+    // Do not add a SQL probe behind work already waiting for a pool connection.
+    const criticalLagMs =
+      waitingQueries !== null && waitingQueries > 0
+        ? 0
+        : await (dependencies.getCriticalLagMs ?? (() => getCriticalBacklogLagMs()))();
+    const pause = evaluateLanePause(
+      state.pause,
+      criticalLagMs,
+      settings.backpressureEscalationLagMs,
+      waitingQueries
+    );
+    const { changed, ...nextPause } = pause;
+    state.pause = nextPause;
+    if (changed) {
       logger.warn(
         pause.paused
-          ? '[Intelligence] Pausing: critical job backlog exceeded threshold'
-          : '[Intelligence] Resuming: critical job backlog recovered',
-        { criticalLagMs, thresholdMs: settings.backpressureEscalationLagMs }
+          ? '[Intelligence] Pausing to protect paging and database capacity'
+          : '[Intelligence] Resuming after paging and database capacity recovered',
+        { criticalLagMs, waitingQueries, thresholdMs: settings.backpressureEscalationLagMs }
       );
     }
     if (pause.paused)
@@ -478,6 +491,8 @@ export interface LaneStatus {
   lastCycleAt: Date | null;
   lastResult: CycleResult | null;
   paused: boolean;
+  poolWaitingQueries?: number | null;
+  pauseReason?: 'pool' | 'paging' | null;
   /** Cumulative since process start; lets operators and benchmarks see real throughput. */
   totals: LaneTotals;
 }
@@ -626,6 +641,12 @@ export function getIntelligenceLaneStatus(): LaneStatus {
     lastCycleAt: lane.lastCycleAt,
     lastResult: lane.lastResult,
     paused: lane.state.pause.paused,
+    poolWaitingQueries: lane.state.poolWaitingQueries ?? null,
+    pauseReason: lane.state.pause.paused
+      ? (lane.state.pause.poolRecoverySamples ?? 0) > 0
+        ? 'pool'
+        : 'paging'
+      : null,
     totals: { ...lane.totals },
   };
 }

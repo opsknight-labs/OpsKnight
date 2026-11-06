@@ -128,6 +128,50 @@ async function fresh(serviceId: string, ageSeconds: number, urgency: 'LOW' | 'HI
 }
 
 describe('service-scoped AUTO certification', () => {
+  it('re-elects an automatic anchor without mistaking system reversals for human vetoes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Math.floor(Date.now() / 300000) * 300000 + 150000);
+    try {
+      const { actor, admin, service } = await setup();
+      const policy = await reviewedFixture(service.id, admin.id);
+      await evaluateServiceQuality(service.id, policy, actor, true);
+      await publishPolicyVersion(
+        { serviceId: service.id },
+        { mode: 'AUTO', definition, expectedHeadVersion: 0 },
+        actor
+      );
+      const earliest = await fresh(service.id, 50);
+      const previous = await fresh(service.id, 30);
+      const child = await fresh(service.id, 10);
+      await correlateIncident({ subjectKey: previous.id }, settings);
+      await correlateIncident({ subjectKey: child.id }, settings);
+      const original = await db.incidentRelationship.findFirstOrThrow({
+        where: { sourceIncidentId: child.id },
+      });
+      expect(original.decision).toBe('ACCEPTED');
+      await correlateIncident({ subjectKey: earliest.id }, settings);
+      expect(
+        await db.incidentRelationship.findUniqueOrThrow({ where: { id: original.id } })
+      ).toMatchObject({ decision: 'REVERTED' });
+      const replacement = await db.incidentRelationship.findMany({
+        where: { targetIncidentId: earliest.id },
+      });
+      expect(replacement).toHaveLength(2);
+      expect(replacement.every(row => row.decision === 'ACCEPTED')).toBe(true);
+      expect(
+        await db.incidentRelationshipEvent.count({ where: { reasonCode: 'ANCHOR_REELECTED' } })
+      ).toBe(1);
+      const audits = await db.auditLog.findMany({
+        where: { action: 'intelligence.group.automatic' },
+      });
+      expect(audits).toHaveLength(3);
+      expect(
+        audits.every(row => (row.details as { contractVersion: number }).contractVersion === 1)
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('fails closed without reviewed evidence and never enables global AUTO', async () => {
     const { actor, service } = await setup();
     expect((await getAutoGate(service.id, definition)).allowed).toBe(false);

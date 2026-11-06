@@ -101,6 +101,28 @@ describe('lane lifecycle', () => {
 });
 
 describe('intelligence cycle', () => {
+  it('leaves queued work untouched during pool pressure and resumes after two quiet samples', async () => {
+    await enable();
+    await enqueueWorkItems([{ kind: 'INDEX_INCIDENT', subjectKey: 'pool-pressure-test' }]);
+    const state = createLaneState();
+    const lag = vi.fn().mockResolvedValue(0);
+    const waiting = vi.fn().mockResolvedValueOnce(2).mockResolvedValue(0);
+    const handler = vi.fn().mockResolvedValue(undefined);
+    const deps = {
+      getCriticalLagMs: lag,
+      getPoolWaitingQueries: waiting,
+      handlers: { INDEX_INCIDENT: handler },
+    };
+    expect(await runIntelligenceCycle(state, deps)).toMatchObject({ status: 'paused', claimed: 0 });
+    expect(lag).not.toHaveBeenCalled();
+    expect((await db.intelligenceWorkItem.findFirstOrThrow()).attempts).toBe(0);
+    expect((await runIntelligenceCycle(state, deps)).status).toBe('paused');
+    expect(await runIntelligenceCycle(state, deps)).toMatchObject({
+      status: 'worked',
+      completed: 1,
+    });
+    expect(handler).toHaveBeenCalledOnce();
+  });
   it('does nothing and touches no queue while intelligence is disabled', async () => {
     await enqueueWorkItems([{ kind: 'INDEX_INCIDENT', subjectKey: 'x' }]);
     const result = await runIntelligenceCycle(createLaneState(), { getCriticalLagMs: noLag });

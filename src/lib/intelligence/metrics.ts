@@ -21,7 +21,13 @@ export function evaluateLaneHealth(status: LaneStatus, now: number = Date.now())
   if (!status.running || status.lastResult?.status === 'disabled')
     return { status: 'disabled', expected: false };
   if (status.paused)
-    return { status: 'degraded', error: 'Paused to protect paging; resumes automatically' };
+    return {
+      status: 'degraded',
+      error:
+        status.pauseReason === 'pool'
+          ? 'Paused for database pool pressure; resumes after measured recovery'
+          : 'Paused to protect paging; resumes automatically',
+    };
   if (status.lastCycleAt && now - status.lastCycleAt.getTime() > LANE_STALE_AFTER_MS) {
     return { status: 'degraded', error: 'Lane has not completed a cycle recently' };
   }
@@ -39,6 +45,7 @@ export interface IntelligenceMetricSample {
     | 'opsknight_intelligence_queue_oldest_ready_age_seconds'
     | 'opsknight_intelligence_dead_letters'
     | 'opsknight_intelligence_lane_paused'
+    | 'opsknight_intelligence_pool_waiting_queries'
     | 'opsknight_intelligence_lane_last_cycle_age_seconds';
   value: number;
 }
@@ -51,6 +58,11 @@ export async function collectIntelligenceMetrics(
   const lane = getIntelligenceLaneStatus();
   if (lane.running) {
     samples.push({ name: 'opsknight_intelligence_lane_paused', value: lane.paused ? 1 : 0 });
+    if (lane.poolWaitingQueries !== null && lane.poolWaitingQueries !== undefined)
+      samples.push({
+        name: 'opsknight_intelligence_pool_waiting_queries',
+        value: lane.poolWaitingQueries,
+      });
     if (lane.lastCycleAt) {
       samples.push({
         name: 'opsknight_intelligence_lane_last_cycle_age_seconds',

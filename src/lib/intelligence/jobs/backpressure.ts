@@ -27,6 +27,8 @@ export async function getCriticalBacklogLagMs(client: typeof prisma = prisma): P
 
 export interface PauseState {
   paused: boolean;
+  criticalPaused?: boolean;
+  poolRecoverySamples?: number;
 }
 
 /**
@@ -40,4 +42,31 @@ export function evaluatePause(
 ): { paused: boolean; changed: boolean } {
   const paused = state.paused ? lagMs > thresholdMs / 2 : lagMs > thresholdMs;
   return { paused, changed: paused !== state.paused };
+}
+
+/** Resume only after two consecutive measured quiet pool samples and recovered paging lag. */
+export function evaluateLanePause(
+  state: PauseState,
+  lagMs: number,
+  thresholdMs: number,
+  waitingQueries: number | null
+): PauseState & { changed: boolean } {
+  const critical = evaluatePause(
+    { paused: state.criticalPaused ?? state.paused },
+    lagMs,
+    thresholdMs
+  );
+  const poolRecoverySamples =
+    waitingQueries === null
+      ? (state.poolRecoverySamples ?? 0)
+      : waitingQueries > 0
+        ? 2
+        : Math.max(0, (state.poolRecoverySamples ?? 0) - 1);
+  const paused = critical.paused || poolRecoverySamples > 0;
+  return {
+    paused,
+    criticalPaused: critical.paused,
+    poolRecoverySamples,
+    changed: paused !== state.paused,
+  };
 }
