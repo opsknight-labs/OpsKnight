@@ -1,6 +1,21 @@
 ---
 title: Use Squire without an AI provider
 description: Ask permission-scoped operational questions and get product guidance in basic mode.
+type: how-to
+product_area: intelligence
+audience: [responder, administrator]
+reader:
+  status: SOURCE_VERIFIED
+  task: Ask operational questions and understand reporting limits without an AI provider.
+verification:
+  level: test
+  verified_at: 2026-11-06
+  evidence:
+    [
+      src/lib/intelligence/squire/basic,
+      tests/unit/intelligence-squire-basic-query.test.ts,
+      tests/integration/intelligence/squire-basic-capabilities.test.ts,
+    ]
 ---
 
 # Use Squire without an AI provider

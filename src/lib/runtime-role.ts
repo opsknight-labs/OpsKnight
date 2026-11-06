@@ -190,3 +190,10 @@ export function shouldRunIngestionConsumer(
 export function isDedicatedHttpRole(role: string): role is 'web' | 'http' {
   return role === 'web' || role === 'http';
 }
+
+/** Deployment-only isolation: feature policy remains database-backed. */
+export function isIntelligenceDedicatedProcess(
+  value = process.env.OPSKNIGHT_INTELLIGENCE_DEDICATED
+): boolean {
+  return value === 'true';
+}

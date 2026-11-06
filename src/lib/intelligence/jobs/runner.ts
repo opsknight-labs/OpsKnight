@@ -1,4 +1,5 @@
 import 'server-only';
+import { isIntelligenceDedicatedProcess } from '@/lib/runtime-role';
 import { encodeWorkFailure } from './failures';
 import { logger } from '@/lib/logger';
 import {
@@ -517,7 +518,7 @@ const LANE_ROLES: ReadonlySet<string> = new Set([
 
 export function shouldRunIntelligenceLane(
   role: string,
-  dedicated = process.env.OPSKNIGHT_INTELLIGENCE_DEDICATED === 'true'
+  dedicated = isIntelligenceDedicatedProcess()
 ): boolean {
   if (dedicated) return role === 'intelligence-worker';
   return LANE_ROLES.has(role);

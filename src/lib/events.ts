@@ -10,7 +10,7 @@ import type { ProcessingLease } from './ingestion/contract';
 import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { logger } from './logger';
-import { signalIntelligenceIncident } from './intelligence/jobs/wake-publisher';
+import { signalIntelligenceIncident } from './intelligence/ingest-hooks';
 import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import {
