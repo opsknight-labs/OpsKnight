@@ -1,4 +1,5 @@
 import { mcpCompositeCost } from '@/lib/mcp/core/composites';
+import { endMcpSpan, startMcpSpan } from '@/lib/mcp/protocol/tracing';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -106,6 +107,7 @@ export const OPTIONS = browserPreflight;
 
 async function handlePost(request: Request, requestId: string, browserOrigin: string | null) {
   const started = performance.now();
+  const span = startMcpSpan(requestId);
   let outcome: McpMetricOutcome = 'error';
   let tool = 'none';
   let method: string | undefined;
@@ -411,6 +413,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     release?.();
     const durationMs = performance.now() - started;
     addOperationalMetric('opsknight_mcp_requests_total', 1, { outcome, tool });
+    endMcpSpan(span, { method, tool, outcome, durationMs });
     // Rejections are counted above, never timed: a flood of fast 429s must not hide slow calls.
     if (MCP_TIMED_OUTCOMES.has(outcome))
       observeOperationalHistogram('opsknight_mcp_request_duration_seconds', durationMs / 1000, {

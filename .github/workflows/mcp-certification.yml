@@ -1,8 +1,10 @@
 name: Enterprise MCP PR validation
-# Runs on main for MCP-related changes; on a pull request only when labelled `ci:full`.
+# Runs on main and on every pull request. The cheap detect-changes job decides whether anything
+# MCP-related changed; the heavy jobs skip otherwise. No label is needed (a skipped job reports
+# success, so required checks never sit pending).
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
   workflow_dispatch:
@@ -14,7 +16,6 @@ concurrency:
 jobs:
   detect-changes:
     name: Detect MCP-related changes
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     outputs:
       mcp: ${{ steps.detect.outputs.mcp }}

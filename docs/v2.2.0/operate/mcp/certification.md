@@ -11,6 +11,7 @@ verification:
   evidence:
     - .github/workflows/mcp-certification.yml
     - scripts/mcp/certify.cjs
+    - tests/e2e/mcp-lifecycle.spec.ts
 ---
 
 # MCP certification status
@@ -117,3 +118,11 @@ Record a new entry after each live run against a released build, using the steps
 - Revocation: not recorded for an individual grant in this run.
 
 This is a "Tested" entry, not "Verified": the client version, revision, full SHA, refresh and revocation are missing. It predates this release.
+
+## Credential lifecycle through the official SDK client (round 6)
+
+`tests/e2e/mcp-lifecycle.spec.ts` drives the published 1.x SDK client **over HTTP against the production-built server** (the same server the browser flows use) and checks what the in-process tests cannot: a direct write and its replay under one idempotency key; turning changes off hiding the write tool and refusing the call on the next request; a role change narrowing what a connected client sees on its very next call with no reconnect; refresh-token rotation retiring the previous access token; replaying a used refresh token revoking the whole grant, including the token just issued; and revocation ending a connected client on its next request. The spec removes everything it creates and restores the policy, so the browser flows that follow see the database they expect, and it runs once rather than once per browser.
+
+Observed on 6 November 2026 against a local development server (not a production build): all six checks passed. It has **not yet been observed in the GitHub workflow against the production build**; that run is the evidence to record. It mints credentials directly in the database, so the OAuth consent and code exchange are covered only by the browser flows, not by this spec. The SDK negotiates revision 2025-11-25; revision 2026-07-28 is exercised by the raw-protocol tests and the listen-stream check, not by an SDK client.
+
+Pull requests now run this workflow whenever they change MCP-related paths (no label needed); the heavy jobs skip otherwise.
