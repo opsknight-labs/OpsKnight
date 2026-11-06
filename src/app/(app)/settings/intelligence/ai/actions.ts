@@ -48,7 +48,7 @@ export async function saveAiSettingsAction(
         enabled: checked(form, 'enabled'),
         squireEnabled: checked(form, 'squireEnabled'),
         squireName: text(form, 'squireName'),
-        squireAvatar: text(form, 'squireAvatar') || 'ICON',
+        squireAvatar: text(form, 'squireAvatar') || 'SQUIRE',
         squireLauncher: text(form, 'squireLauncher') || 'FLOATING',
         squireAnimations: checked(form, 'squireAnimations'),
         allowExternalFallback: checked(form, 'allowExternalFallback'),
@@ -66,7 +66,7 @@ export async function saveAiSettingsAction(
           .filter(Boolean),
         embeddingsEnabled: checked(form, 'embeddingsEnabled'),
         squireHistoryEnabled: checked(form, 'squireHistoryEnabled'),
-        squireHistoryRetentionDays: integer(form, 'squireHistoryRetentionDays') || 30,
+        squireHistoryRetentionDays: integer(form, 'squireHistoryRetentionDays') || 90,
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }

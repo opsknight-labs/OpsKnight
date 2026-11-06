@@ -279,7 +279,7 @@ function calculateRuntimeCapacity(customEnv) {
     env.DATABASE_POOL_SIZE_INTELLIGENCE_WORKER,
     5
   );
-  const intelligenceConnections = intelligenceReplicas * intelligencePool;
+  const intelligenceConnections = intelligenceReplicas * (intelligencePool + 1);
   const reserveValue = env.DATABASE_CONNECTION_RESERVE;
   const connectionReserve =
     reserveValue === '0'

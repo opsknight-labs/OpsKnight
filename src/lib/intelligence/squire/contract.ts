@@ -49,7 +49,7 @@ export type SquireRequest = z.infer<typeof squireRequestSchema>;
 
 /** A link the answer relied on, checked to be readable by the person before it is shown. */
 export interface SquireCitation {
-  kind: 'incident' | 'runbook' | 'change' | 'alert';
+  kind: 'incident' | 'runbook' | 'change' | 'alert' | 'service' | 'schedule' | 'postmortem';
   id: string;
   label: string;
   href: string;
@@ -60,7 +60,13 @@ export interface SquireCitation {
 }
 
 export type SquireEvent =
-  | { type: 'meta'; mode: 'ai' | 'basic'; name: string }
+  | {
+      type: 'meta';
+      mode: 'ai' | 'basic';
+      name: string;
+      availability?: 'ready' | 'disabled' | 'quota' | 'unavailable';
+      attention?: boolean;
+    }
   | { type: 'delta'; text: string }
   /** The assistant is looking something up; `label` is a short present-tense description. */
   | { type: 'tool'; label: string }
@@ -76,4 +82,4 @@ export type SquireEvent =
   | { type: 'done' }
   /** Sent after `done` when the exchange was saved, so the next question continues the same conversation. */
   | { type: 'conversation'; id: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; availability?: 'quota' | 'unavailable' };

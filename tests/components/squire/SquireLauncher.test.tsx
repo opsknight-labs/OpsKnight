@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const nav = vi.hoisted(() => ({ pathname: '/', refresh: vi.fn() }));
@@ -46,7 +46,7 @@ describe('SquireLauncher', () => {
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
     expect(screen.getByRole('dialog', { name: /Pip/ })).toBeInTheDocument();
     expect(screen.getByLabelText('Message Pip')).toHaveFocus();
-    expect(screen.getByText(/they only happen if you confirm them/)).toBeInTheDocument();
+    expect(screen.getByText(/built-in investigation guidance/)).toBeInTheDocument();
   });
 
   it('closes with Escape and the close button', () => {
@@ -469,8 +469,14 @@ it('keeps a saved incident conversation in its original context', async () => {
   fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Saved conversations' }));
   fireEvent.click(await screen.findByRole('button', { name: /^Incident A conversation/ }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('another incident');
-  expect(screen.queryByText('Wrong context canary')).not.toBeInTheDocument();
+  expect(await screen.findByText('Wrong context canary')).toBeInTheDocument();
+  expect(
+    screen.getByText('This chat keeps its original context. Choose where to continue.')
+  ).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Return to original context' })).toHaveAttribute(
+    'href',
+    '/incidents/incident-a'
+  );
 });
 
 it('keeps the original incident scope across navigation until the user starts a new chat', async () => {
@@ -529,4 +535,237 @@ it('passes server context proofs on the next question and leaves unretrieved lin
       contextProof: 'answer-proof',
     },
   ]);
+});
+
+it('loads older chat pages and keeps already loaded history', async () => {
+  const row = (id: string) => ({
+    id,
+    title: `Chat ${id}`,
+    incidentId: null,
+    messageCount: 2,
+    updatedAt: new Date().toISOString(),
+  });
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ data: { conversations: [row('new')], nextCursor: 'older-cursor' } }),
+  });
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ data: { conversations: [row('old')], nextCursor: null } }),
+  });
+  render(<SquireLauncher name="Squire" history={{ retentionDays: 90 }} />);
+  fireEvent.click(screen.getByRole('button', { name: /Ask Squire/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Saved conversations' }));
+  expect(await screen.findByText(/after the last message/)).toHaveTextContent('90');
+  fireEvent.click(await screen.findByRole('button', { name: 'Load older chats' }));
+  expect(await screen.findByText('Chat old')).toBeInTheDocument();
+  expect(screen.getByText('Chat new')).toBeInTheDocument();
+  expect(fetchMock.mock.calls[1][0]).toContain('?cursor=older-cursor');
+  expect(screen.queryByRole('button', { name: 'Load older chats' })).not.toBeInTheDocument();
+});
+
+it('can page past chats filtered out by source permissions', async () => {
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ data: { conversations: [], nextCursor: 'next-page' } }),
+  });
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      data: {
+        conversations: [
+          {
+            id: 'allowed',
+            title: 'Readable older chat',
+            incidentId: null,
+            messageCount: 2,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  });
+  render(<SquireLauncher name="Squire" history={{ retentionDays: 90 }} />);
+  fireEvent.click(screen.getByRole('button', { name: /Ask Squire/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Saved conversations' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Load older chats' }));
+  expect(await screen.findByText('Readable older chat')).toBeInTheDocument();
+});
+
+describe('supplied Squire mascot lifecycle', () => {
+  it('stays ready without AI and reflects typing, lookup, streaming and completion', async () => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(value) {
+        controller = value;
+      },
+    });
+    fetchMock.mockResolvedValue({ ok: true, status: 200, body });
+    render(<SquireLauncher name="Pip" animated aiEnabled={false} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    const dialog = screen.getByRole('dialog');
+    const avatar = () => dialog.querySelector('[data-avatar="SQUIRE"] svg')!;
+    expect(avatar()).toHaveAttribute('data-state', 'greeting');
+    expect(avatar()).toHaveAttribute('data-motion', 'on');
+    expect(dialog.querySelector('svg[data-variant="full"]')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'Help' } });
+    expect(avatar()).toHaveAttribute('data-state', 'listening');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(avatar()).toHaveAttribute('data-state', 'thinking'));
+    await act(async () => {
+      controller.enqueue(
+        new TextEncoder().encode(
+          JSON.stringify({ type: 'delta', text: 'Here is some guidance.' }) + '\n'
+        )
+      );
+    });
+    expect(avatar()).toHaveAttribute('data-state', 'speaking');
+    await act(async () => {
+      controller.enqueue(new TextEncoder().encode('{"type":"done"}\n'));
+      controller.close();
+    });
+    await waitFor(() => expect(avatar()).toHaveAttribute('data-state', 'offline'));
+    expect(dialog).toHaveTextContent('Basic mode · AI disabled');
+  });
+
+  it('uses the error expression for a failed request and respects disabled animations', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    render(<SquireLauncher name="Pip" animated={false} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'Help' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText(/I could not answer that/);
+    const avatar = screen.getByRole('dialog').querySelector('[data-avatar="SQUIRE"] svg');
+    expect(avatar).toHaveAttribute('data-state', 'error');
+    expect(avatar).toHaveAttribute('data-motion', 'off');
+  });
+});
+
+describe('chat editing and recovery', () => {
+  it('regenerates into a new saved thread without deleting or appending to the original', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        streamOf([
+          { type: 'delta', text: 'Original response' },
+          { type: 'conversation', id: 'original-thread' },
+          { type: 'done' },
+        ])
+      )
+      .mockResolvedValueOnce(
+        streamOf([{ type: 'delta', text: 'Fresh response' }, { type: 'done' }])
+      );
+    render(<SquireLauncher name="Pip" history={{ retentionDays: 90 }} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    fireEvent.change(screen.getByLabelText('Message Pip'), {
+      target: { value: 'Help me investigate' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Original response');
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await screen.findByText('Fresh response');
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(payload).toEqual({ message: 'Help me investigate', history: [] });
+    expect(screen.queryByText('Original response')).not.toBeInTheDocument();
+    expect(screen.getByText(/Existing saved chats are unchanged/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.every(([, options]) => options.method === 'POST')).toBe(true);
+  });
+  it('edits a question with a visible branch notice and supports the keyboard shortcut in the composer', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        streamOf([{ type: 'delta', text: 'First response' }, { type: 'done' }])
+      )
+      .mockResolvedValueOnce(
+        streamOf([{ type: 'delta', text: 'Edited response' }, { type: 'done' }])
+      );
+    render(<SquireLauncher name="Pip" />);
+    fireEvent.keyDown(window, { key: 'j', ctrlKey: true });
+    fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'Help' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('First response');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit question' }));
+    expect(screen.getByLabelText('Message Pip')).toHaveValue('Help');
+    expect(screen.getByText(/Editing a question starts a new version/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Message Pip'), {
+      target: { value: 'What is on fire?' },
+    });
+    fireEvent.keyDown(screen.getByLabelText('Message Pip'), { key: 'Enter' });
+    await screen.findByText('Edited response');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      message: 'What is on fire?',
+      history: [],
+    });
+  });
+  it('shows server-verified incident attention and does not send while disconnected', async () => {
+    nav.pathname = '/incidents/inc_42';
+    fetchMock.mockResolvedValueOnce(
+      streamOf([
+        { type: 'meta', mode: 'basic', availability: 'quota', attention: true },
+        { type: 'delta', text: 'A high urgency incident needs attention.' },
+        { type: 'done' },
+      ])
+    );
+    const { container } = render(<SquireLauncher name="Pip" />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'Help' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('A high urgency incident needs attention.');
+    expect(container.querySelector('[data-avatar="SQUIRE"] svg')).toHaveAttribute(
+      'data-state',
+      'alert'
+    );
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      act(() => window.dispatchEvent(new Event('offline')));
+      fireEvent.change(screen.getByLabelText('Message Pip'), {
+        target: { value: 'Keep this draft' },
+      });
+      expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+      expect(screen.getByLabelText('Message Pip')).toHaveValue('Keep this draft');
+      expect(container.querySelector('[data-avatar="SQUIRE"] svg')).toHaveAttribute(
+        'data-state',
+        'offline'
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      online.mockRestore();
+      act(() => window.dispatchEvent(new Event('online')));
+    }
+  });
+});
+
+it('lets the reader stay above a streaming answer and jump back deliberately', async () => {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  fetchMock.mockResolvedValue({
+    ok: true,
+    body: new ReadableStream<Uint8Array>({
+      start(value) {
+        controller = value;
+      },
+    }),
+  });
+  render(<SquireLauncher name="Pip" aiEnabled />);
+  fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+  fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'Investigate' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  const log = screen.getByRole('log', { name: 'Conversation' });
+  Object.defineProperties(log, {
+    scrollHeight: { configurable: true, value: 2000 },
+    clientHeight: { configurable: true, value: 400 },
+  });
+  log.scrollTop = 0;
+  fireEvent.scroll(log);
+  const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+  scroll.mockClear();
+  await act(async () =>
+    controller.enqueue(new TextEncoder().encode('{"type":"delta","text":"New evidence"}\n'))
+  );
+  expect(scroll).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Jump to latest' }));
+  expect(scroll).toHaveBeenCalled();
+  await act(async () => {
+    controller.enqueue(new TextEncoder().encode('{"type":"done"}\n'));
+    controller.close();
+  });
+  scroll.mockRestore();
 });

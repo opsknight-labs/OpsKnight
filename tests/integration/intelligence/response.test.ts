@@ -145,6 +145,7 @@ describe('recording changes', () => {
   });
 
   it('re-analyses incidents that opened after a change which arrived late', async () => {
+    await setup('SUGGEST');
     const service = await createTestService('API');
     const other = await createTestService('Other');
     const opened = await createTestIncident('Latency high', service.id, {
@@ -745,4 +746,42 @@ describe('retention and alert quality', () => {
     await db.teamMember.create({ data: { userId: member.id, teamId: teamA.id, role: 'MEMBER' } });
     expect(await getAlertQualityLeaderboard(await actorOf(member.id))).toEqual([]);
   });
+});
+
+it('records change evidence while disabled without fanning out analysis', async () => {
+  const service = await createTestService('Disabled changes');
+  const opened = await createTestIncident('Latency', service.id, {
+    createdAt: new Date(Date.now() - 60000),
+  });
+  await db.$transaction(tx => indexIncident(opened.id, tx));
+  expect(
+    (
+      await recordChange({
+        serviceId: service.id,
+        source: 'test',
+        kind: 'DEPLOY',
+        summary: 'A deployment',
+        occurredAt: new Date(Date.now() - 120000),
+        component: 'checkout',
+        labels: { environment: 'prod' },
+      })
+    ).status
+  ).toBe('created');
+  expect(await db.intelligenceWorkItem.count()).toBe(0);
+  expect(await db.changeEvent.findFirst()).toMatchObject({
+    component: 'checkout',
+    labels: { environment: 'prod' },
+  });
+});
+
+it('does not infer dependencies from two continuously noisy services in a short observed history', async () => {
+  const up = await createTestService('Always noisy upstream');
+  const down = await createTestService('Always noisy downstream');
+  const end = Math.floor(Date.now() / 600000) * 600000;
+  for (let i = 0; i < 20; i++) {
+    const at = end - (20 - i) * 600000;
+    await createTestIncident('Up noise', up.id, { createdAt: new Date(at) });
+    await createTestIncident('Down noise', down.id, { createdAt: new Date(at + MIN) });
+  }
+  expect(await suggestObservedDependencies(settings, new Date(end))).toBe(0);
 });

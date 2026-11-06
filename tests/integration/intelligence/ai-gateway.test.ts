@@ -192,17 +192,17 @@ describe('assistant personalisation and usage history', () => {
     requestTimeoutMs: 5000,
   };
 
-  it('defaults to a plain icon, floating button and no motion, and round-trips every option', async () => {
+  it('defaults to the Squire mascot, floating button and no motion, and round-trips every option', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     const actor = { actorId: admin.id, source: 'UI' as const };
     expect(await getAiSettings()).toMatchObject({
-      squireAvatar: 'ICON',
+      squireAvatar: 'SQUIRE',
       squireLauncher: 'FLOATING',
       squireAnimations: false,
     });
     await updateAiSettings({ ...base, expectedRevision: 0 }, actor);
     expect(await getAiSettings()).toMatchObject({
-      squireAvatar: 'ICON',
+      squireAvatar: 'SQUIRE',
       squireLauncher: 'FLOATING',
       squireAnimations: false,
     });

@@ -185,6 +185,26 @@ describe('intelligence cycle', () => {
     expect(
       (await db.intelligenceWorkItem.findMany({ orderBy: { priority: 'asc' } })).map(i => i.kind)
     ).toEqual(['ANALYZE_INCIDENT', 'ANALYZE_RESPONSE']);
+    await db.intelligenceWorkItem.deleteMany();
+    const item = {
+      id: 'direct',
+      kind: 'INDEX_INCIDENT',
+      subjectKey: created.id,
+      generation: 1,
+      claimToken: 'direct',
+      attempts: 1,
+    };
+    const settings = { ...INTELLIGENCE_SETTINGS_DEFAULTS, revision: 1, enabled: true };
+    await DEFAULT_HANDLERS.INDEX_INCIDENT!(item, {
+      settings,
+      signal: new AbortController().signal,
+    });
+    expect(await db.intelligenceWorkItem.count()).toBe(0);
+    await DEFAULT_HANDLERS.INDEX_INCIDENT!(
+      { ...item, force: true },
+      { settings, signal: new AbortController().signal }
+    );
+    expect(await db.intelligenceWorkItem.count()).toBe(2);
   });
 
   it('chains response analysis only when the policy allows it, and produces findings end to end', async () => {
@@ -334,4 +354,44 @@ describe('intelligence cycle', () => {
       spy.mockRestore();
     }
   });
+});
+
+it('isolates the lane when a dedicated worker owns analysis', () => {
+  expect(shouldRunIntelligenceLane('general-worker', true)).toBe(false);
+  expect(shouldRunIntelligenceLane('integrated', true)).toBe(false);
+  expect(shouldRunIntelligenceLane('intelligence-worker', true)).toBe(true);
+});
+
+it('expires saved chats even when the Intelligence engine has never been configured', async () => {
+  const { recordExchange } = await import('@/lib/intelligence/conversations/store');
+  const user = await db.user.create({
+    data: {
+      email: 'history-only@example.com',
+      name: 'History only',
+      passwordHash: 'x',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    },
+  });
+  await db.aiSettings.create({
+    data: {
+      id: 'default',
+      enabled: false,
+      squireEnabled: true,
+      squireHistoryEnabled: true,
+      squireHistoryRetentionDays: 90,
+    },
+  });
+  const id = await recordExchange({
+    userId: user.id,
+    question: 'An old chat',
+    answer: 'Saved without AI.',
+  });
+  await db.$executeRaw`UPDATE "SquireConversation" SET "updatedAt" = now() - interval '91 days' WHERE "id" = ${id}`;
+  expect(await db.intelligenceSettings.count()).toBe(0);
+  expect(await runIntelligenceCycle(createLaneState(), { getCriticalLagMs: noLag })).toMatchObject({
+    status: 'disabled',
+    claimed: 0,
+  });
+  expect(await db.squireConversation.findUnique({ where: { id } })).toBeNull();
 });

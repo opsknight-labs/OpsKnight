@@ -986,7 +986,8 @@ describe('deployment configuration invariants', () => {
       INTELLIGENCE_WORKER_REPLICAS: '2',
       DATABASE_POOL_SIZE_INTELLIGENCE_WORKER: '4',
     });
-    expect(withIntelligence.totalDemand).toBe(defaultSplit.totalDemand + 8);
+    // Each lane also reserves one direct PostgreSQL LISTEN session.
+    expect(withIntelligence.totalDemand).toBe(defaultSplit.totalDemand + 10);
 
     // Integrated mode accounts for webReplicas * webPool
     const singleIntegrated = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'integrated' });

@@ -5,6 +5,10 @@ import { squireRequestSchema } from '@/lib/intelligence/squire/contract';
 describe('routeIntent', () => {
   it.each([
     ['help', false, 'HELP'],
+    ['thank you!', false, 'THANKS'],
+    ['Show checkout incidents from last week', false, 'SEARCH_INCIDENTS'],
+    ['show the timeline', true, 'TIMELINE'],
+    ['How do I acknowledge this incident?', true, 'GUIDANCE'],
     ['What can you do?', true, 'HELP'],
     ["what's on fire", false, 'ACTIVE_INCIDENTS'],
     ['Any open incidents right now?', true, 'ACTIVE_INCIDENTS'],
@@ -16,7 +20,7 @@ describe('routeIntent', () => {
     ['which runbook should I use', true, 'RUNBOOKS'],
     ['what should I do next', true, 'RUNBOOKS'],
     ['tell me about this', true, 'INCIDENT_SUMMARY'],
-    ['hello there', false, 'UNKNOWN'],
+    ['hello there', false, 'GREETING'],
     ['similar incidents?', false, 'UNKNOWN'],
   ])('%s (onIncident=%s) -> %s', (message, onIncident, intent) => {
     expect(routeIntent(message, onIncident)).toBe(intent);

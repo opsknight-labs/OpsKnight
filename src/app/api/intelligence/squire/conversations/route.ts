@@ -1,7 +1,14 @@
 import { jsonOk } from '@/lib/api-response';
-import { conversationActor, NO_STORE } from '@/lib/intelligence/conversations/http';
-import { listConversationsForActor } from '@/lib/intelligence/conversations/view';
-import { deleteAllConversations } from '@/lib/intelligence/conversations/store';
+import {
+  conversationActor,
+  denyConversation,
+  NO_STORE,
+} from '@/lib/intelligence/conversations/http';
+import { listConversationPageForActor } from '@/lib/intelligence/conversations/view';
+import {
+  decodeConversationCursor,
+  deleteAllConversations,
+} from '@/lib/intelligence/conversations/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +16,16 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const actor = await conversationActor(request);
   if (actor instanceof Response) return actor;
-  return jsonOk({ conversations: await listConversationsForActor(actor) }, 200, NO_STORE);
+  const encoded = new URL(request.url).searchParams.get('cursor');
+  let cursor;
+  if (encoded !== null) {
+    try {
+      cursor = decodeConversationCursor(encoded);
+    } catch {
+      return denyConversation(400, 'Invalid conversation cursor');
+    }
+  }
+  return jsonOk(await listConversationPageForActor(actor, cursor), 200, NO_STORE);
 }
 
 /** DELETE: removes all of the signed-in person's saved conversations. */

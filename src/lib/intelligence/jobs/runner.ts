@@ -1,6 +1,10 @@
 import 'server-only';
 import { encodeWorkFailure } from './failures';
 import { logger } from '@/lib/logger';
+import {
+  addOperationalMetric,
+  observeOperationalHistogram,
+} from '@/lib/metrics/operational/registry';
 import { withSpan } from '../telemetry';
 import {
   getIntelligenceSettings,
@@ -12,6 +16,7 @@ import { evaluatePause, getCriticalBacklogLagMs, type PauseState } from './backp
 import { withDbBudget } from './db-budget';
 import { reconcileFingerprints, discoverNewIncidents } from './discovery';
 import { indexIncident } from './indexer';
+import { listenForIntelligenceWake } from './wake-listener';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
 import { correlateIncident } from '../correlation/handler';
@@ -63,7 +68,11 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
       if (!incident) return;
       const policy = await resolveEffectivePolicy(incident.serviceId);
       const active = policy.effectiveMode !== 'OFF';
-      const outcome = await indexIncident(item.subjectKey, tx, { suppressed: !active });
+      const outcome = await indexIncident(item.subjectKey, tx, {
+        suppressed: !active,
+        force: item.force,
+        policy: { id: policy.policyId, version: policy.version, mode: policy.effectiveMode },
+      });
       if (outcome !== 'indexed' || !active) return;
       // Correlation and response analysis are chained only when the policy uses them, so installs
       // without rules pay no extra write per incident.
@@ -226,6 +235,10 @@ async function processItem(
   settings: IntelligenceSettingsView,
   handlers: WorkHandlers
 ): Promise<'completed' | 'requeued' | 'failed' | 'lost'> {
+  const startedAt = performance.now();
+  const metricKind = Object.values(WORK_KINDS).includes(item.kind as WorkKind)
+    ? item.kind
+    : 'UNKNOWN';
   const budgetMs = workBudgetMs(item.kind, settings);
   try {
     const handler = handlers[item.kind as WorkKind];
@@ -239,6 +252,7 @@ async function processItem(
     );
     return completeWorkItem(item);
   } catch (error) {
+    addOperationalMetric('opsknight_intelligence_work_failures_total', 1, { kind: metricKind });
     // A timed-out handler may still be inside a transaction; keep the item unclaimable until that
     // transaction's own hard timeout has passed, so a retry never runs alongside it.
     const minDelayMs = error instanceof WorkTimeoutError ? settings.maxDbMs + 5_000 : 0;
@@ -249,6 +263,12 @@ async function processItem(
       })
     );
     return 'failed';
+  } finally {
+    observeOperationalHistogram(
+      'opsknight_intelligence_work_duration_seconds',
+      (performance.now() - startedAt) / 1000,
+      { kind: metricKind }
+    );
   }
 }
 
@@ -294,10 +314,9 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
     // backlog is read only when a sweep is actually due, so a disabled install still reads one settings
     // row per poll.
     const sweepDue =
-      settings.revision > 0 &&
-      (now() - state.lastRetentionAt >= RETENTION_INTERVAL_MS ||
-        (handlers === DEFAULT_HANDLERS &&
-          now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS));
+      (settings.revision > 0 && now() - state.lastRetentionAt >= RETENTION_INTERVAL_MS) ||
+      (handlers === DEFAULT_HANDLERS &&
+        now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS);
     if (!settings.enabled && !sweepDue) return { ...EMPTY_RESULT, status: 'disabled' };
 
     const criticalLagMs = await (
@@ -496,11 +515,52 @@ const LANE_ROLES: ReadonlySet<string> = new Set([
   'intelligence-worker',
 ]);
 
-export function shouldRunIntelligenceLane(role: string): boolean {
+export function shouldRunIntelligenceLane(
+  role: string,
+  dedicated = process.env.OPSKNIGHT_INTELLIGENCE_DEDICATED === 'true'
+): boolean {
+  if (dedicated) return role === 'intelligence-worker';
   return LANE_ROLES.has(role);
 }
 
+let wakeListener: ReturnType<typeof listenForIntelligenceWake> | undefined;
+let wakeRequested = false;
+const signalled = new Set<string>();
+let acceptingSignals = false;
+
+async function acceptWakeSignals(ids: string[]): Promise<void> {
+  for (const id of ids) if (signalled.size < 1000) signalled.add(id);
+  if (acceptingSignals) return;
+  acceptingSignals = true;
+  try {
+    while (lane.running && signalled.size) {
+      const batch = [...signalled].slice(0, 50);
+      for (const id of batch) signalled.delete(id);
+      if (!(await getIntelligenceSettings()).enabled) {
+        signalled.clear();
+        break;
+      }
+      await enqueueWorkItems(
+        batch.map(subjectKey => ({ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey }))
+      );
+      wakeRequested = true;
+      if (!lane.active) {
+        if (lane.timer) clearTimeout(lane.timer);
+        schedule(0);
+      }
+    }
+  } catch {
+    signalled.clear(); // Durable discovery is authoritative on any hint failure.
+  } finally {
+    acceptingSignals = false;
+  }
+}
+
 function nextDelayMs(result: CycleResult): number {
+  if (wakeRequested) {
+    wakeRequested = false;
+    return BUSY_POLL_MS;
+  }
   if (result.status === 'worked') return BUSY_POLL_MS;
   return result.status === 'disabled' ? DISABLED_POLL_MS : IDLE_POLL_MS;
 }
@@ -542,12 +602,18 @@ function schedule(delayMs: number) {
 export function startIntelligenceLane(options: { initialDelayMs?: number } = {}): void {
   if (lane.running) return;
   lane.running = true;
+  wakeListener = listenForIntelligenceWake(ids => {
+    void acceptWakeSignals(ids);
+  });
   schedule(jittered(options.initialDelayMs ?? IDLE_POLL_MS));
 }
 
 /** Stops scheduling and waits for the in-flight cycle so shutdown never abandons claimed work. */
 export async function stopIntelligenceLane(): Promise<void> {
   lane.running = false;
+  await wakeListener?.stop();
+  wakeListener = undefined;
+  signalled.clear();
   if (lane.timer) clearTimeout(lane.timer);
   lane.timer = null;
   await lane.active;

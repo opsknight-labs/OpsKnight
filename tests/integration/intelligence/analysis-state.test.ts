@@ -272,3 +272,18 @@ it('hides retained similarity results when that recommendation feature is disabl
     canRefresh: false,
   });
 });
+
+it('keeps completed analysis current after an unrelated update without changing completion time', async () => {
+  const { actor, incident } = await fixture();
+  await analyze(incident.id);
+  const before = await db.intelligenceAnalysisSnapshot.findFirstOrThrow();
+  await db.incident.update({
+    where: { id: incident.id },
+    data: { updatedAt: new Date(Date.now() + 1000) },
+  });
+  expect(await db.$transaction(tx => indexIncident(incident.id, tx))).toBe('unchanged');
+  expect(await readIncidentAnalysisState(actor, incident.id)).toMatchObject({ status: 'CURRENT' });
+  expect((await db.intelligenceAnalysisSnapshot.findFirstOrThrow()).completedAt).toEqual(
+    before.completedAt
+  );
+});

@@ -1350,6 +1350,7 @@ model WarRoomProviderEventStage {
 }
 
 model Alert {
+  fingerprint AlertFingerprint?
   id         String    @id @default(cuid())
   dedupKey   String?
   status     String    @default("TRIGGERED")
@@ -5099,6 +5100,9 @@ model IncidentRelationshipEvent {
 // Rebuildable masked text, refreshed by bounded background work after creation, source edits or
 // resolution. Full-text and trigram indexes are SQL expression indexes.
 model IncidentFingerprint {
+  alertFingerprints AlertFingerprint[]
+  /// Digest of analysis inputs, excluding incidental source timestamps.
+  analysisInputHash String?
   /// Incident version actually consumed by the indexer; independent of later aggregate updates.
   sourceUpdatedAt DateTime?
   incidentId        String    @id
@@ -5124,6 +5128,27 @@ model IncidentFingerprint {
   @@index([serviceId, incidentCreatedAt(sort: Desc)], map: "idx_incident_fingerprint_service_recent")
   @@index([incidentCreatedAt], map: "idx_incident_fingerprint_retention")
   @@index([serviceId, template, incidentCreatedAt], map: "idx_incident_fingerprint_problem")
+}
+
+/// Derived in the Intelligence lane; never written inside event ingestion.
+model AlertFingerprint {
+  alertId        String @id
+  alert          Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  incidentId     String
+  fingerprint    IncidentFingerprint @relation(fields: [incidentId], references: [incidentId], onDelete: Cascade)
+  serviceId      String
+  template       String
+  templateHash   String?
+  tokens         String[]
+  labels         Json
+  sourceHash     String
+  engineVersion  String
+  alertCreatedAt DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([incidentId])
+  @@index([serviceId, templateHash, alertCreatedAt(sort: Desc)], map: "idx_alert_fingerprint_match")
 }
 
 // Aggregate counters only; never raw alert payloads. scopeKey is a service id or "global".
@@ -5207,6 +5232,8 @@ model IntelligenceEvaluationRun {
 
 // Coalesced dirty markers: an alert storm yields one unit of work per (kind, subject), never one per alert.
 model IntelligenceWorkItem {
+  /// Explicit operator refresh bypasses input-aware fan-out suppression.
+  force       Boolean   @default(false)
   id          String    @id @default(cuid())
   kind        String
   subjectKey  String
@@ -5329,15 +5356,15 @@ model AiSettings {
   squireEnabled           Boolean  @default(false)
   squireName              String   @default("Squire")
   // Personalisation is opt-in: the default is a plain icon, a floating button and no motion.
-  squireAvatar            String   @default("ICON")
+  squireAvatar            String   @default("SQUIRE")
   squireLauncher          String   @default("FLOATING")
   squireAnimations        Boolean  @default(false)
   // Residency: when non-empty, only providers tagged with one of these regions are ever used.
   allowedDataRegions      String[] @default([])
   embeddingsEnabled       Boolean  @default(false)
   // Saved assistant conversations are opt-in, encrypted and visible only to their owner.
-  squireHistoryEnabled    Boolean  @default(false)
-  squireHistoryRetentionDays Int   @default(30)
+  squireHistoryEnabled    Boolean  @default(true)
+  squireHistoryRetentionDays Int   @default(90)
   allowExternalFallback   Boolean  @default(false)
   requestsPerMinutePerUser Int     @default(20)
   dailyTokenBudget        Int      @default(500000)

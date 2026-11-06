@@ -1,0 +1,209 @@
+<svg class="sq" data-state="idle" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpsKnight Squire">
+<style>
+.sq{--sq-size:96px;--sq-dur:1;--sq-helm:#F4F1F3;--sq-helm-shade:#D9D2D7;--sq-rim:#BDB5BB;--sq-armor:#F1EDF0;--sq-armor-shade:#D6CED4;
+--sq-joint:#3F434D;--sq-glove:#4B4F59;--sq-visor:#161A24;--sq-red:#D21A1B;--sq-red-shade:#9F1239;--sq-red-hi:#EF4444;
+--sq-eye:#FFFFFF;--sq-glow:rgba(255,255,255,.55);--sq-accent:#D21A1B;
+display:inline-block;width:var(--sq-size);height:var(--sq-size);overflow:visible}
+.sq[data-state="listening"]{--sq-eye:#BFDBFE;--sq-glow:rgba(96,165,250,.7);--sq-accent:#60A5FA}
+.sq[data-state="thinking"]{--sq-eye:#C4B5FD;--sq-glow:rgba(167,139,250,.75);--sq-accent:#A78BFA}
+.sq[data-state="success"]{--sq-eye:#A7F3D0;--sq-glow:rgba(16,185,129,.75);--sq-accent:#10B981}
+.sq[data-state="alert"]{--sq-eye:#FDE68A;--sq-glow:rgba(245,158,11,.8);--sq-accent:#F59E0B}
+.sq[data-state="error"]{--sq-eye:#FECACA;--sq-glow:rgba(244,63,94,.8);--sq-accent:#F43F5E}
+.sq[data-state="offline"]{--sq-eye:#64748B;--sq-glow:transparent;--sq-visor:#1F2430}
+.sq *{transform-box:fill-box;transform-origin:center}
+.sq .sq-shadow{fill:#0F172A;opacity:.18}
+.sq .sq-helm{fill:var(--sq-helm)}.sq .sq-helm-shade{fill:var(--sq-helm-shade)}
+.sq .sq-armor{fill:var(--sq-armor)}.sq .sq-armor-shade{fill:var(--sq-armor-shade)}
+.sq .sq-rim{fill:var(--sq-rim)}.sq .sq-fin{fill:var(--sq-rim)}
+.sq .sq-joint{fill:var(--sq-joint)}.sq .sq-glove{fill:var(--sq-glove)}
+.sq .sq-vent{fill:none;stroke:#6E6872;stroke-width:3.8;stroke-linecap:round}
+.sq .sq-seam{fill:none;stroke:var(--sq-armor-shade);stroke-width:2;stroke-linecap:round}
+.sq .sq-cape,.sq .sq-red{fill:var(--sq-red)}.sq .sq-cape-shade,.sq .sq-red-shade{fill:var(--sq-red-shade)}
+.sq .sq-red-hi{fill:var(--sq-red-hi);opacity:.55}
+.sq .sq-red-hi-line{fill:none;stroke:var(--sq-red-hi);stroke-width:2.2;stroke-linecap:round;opacity:.8}
+.sq .sq-visor{fill:var(--sq-visor);transition:fill .3s}
+.sq .sq-gloss{fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;opacity:.28}
+.sq .sq-face{filter:drop-shadow(0 0 2.2px var(--sq-glow))}
+.sq .sq-fill{fill:var(--sq-eye);transition:fill .3s}
+.sq .sq-ink{fill:none;stroke:var(--sq-eye);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;transition:stroke .3s}
+.sq .sq-crest-ring,.sq .sq-ear-ring{fill:none;stroke:var(--sq-accent);stroke-width:2;opacity:0}
+.sq .sq-z{fill:none;stroke:#94A3B8;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sq .sq-spark{fill:var(--sq-accent)}
+.sq[data-variant="avatar"] .sq-body,.sq[data-variant="avatar"] .sq-shadow{display:none}
+/* visibility per state */
+.sq .sq-eyes-happy,.sq .sq-eyes-closed,.sq .sq-mouth-o,.sq .sq-dots,.sq .sq-zzz,.sq .sq-spark{opacity:0}
+.sq[data-state="greeting"] .sq-eyes-open,.sq[data-state="success"] .sq-eyes-open{opacity:0}
+.sq[data-state="greeting"] .sq-eyes-happy,.sq[data-state="success"] .sq-eyes-happy{opacity:1}
+.sq[data-state="offline"] .sq-eyes-open{opacity:0}
+.sq[data-state="offline"] .sq-eyes-closed,.sq[data-state="offline"] .sq-zzz{opacity:1}
+.sq[data-state="offline"] .sq-mouth{transform:scale(.6,.4)}
+.sq[data-state="thinking"] .sq-mouth{opacity:0}
+.sq[data-state="thinking"] .sq-dots{opacity:1}
+.sq[data-state="alert"] .sq-mouth{opacity:0}
+.sq[data-state="alert"] .sq-mouth-o{opacity:1}
+.sq[data-state="error"] .sq-mouth{transform:translateY(1.5px) scaleY(-1)}
+.sq[data-state="error"] .sq-brow.l{transform:translateY(1px) rotate(-16deg)}
+.sq[data-state="error"] .sq-brow.r{transform:translateY(1px) rotate(16deg)}
+.sq[data-state="alert"] .sq-brows{transform:translateY(-2.2px)}
+.sq[data-state="thinking"] .sq-brow.r{transform:translateY(-2px) rotate(-6deg)}
+.sq[data-state="success"] .sq-spark{opacity:1}
+.sq[data-state="offline"] .sq-brows{opacity:.5}
+.sq[data-state="error"] .sq-eye{transform:scale(.8)}
+.sq .sq-brow,.sq .sq-brows,.sq .sq-mouth{transition:transform .25s ease,opacity .2s}
+/* arm pivots */
+.sq .sq-arm-r{transform-box:view-box;transform-origin:84px 90px;transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
+.sq .sq-arm-l{transform-box:view-box;transform-origin:37px 92px}
+.sq .sq-head{transform-box:view-box;transform-origin:60px 78px;transition:transform .35s ease}
+.sq .sq-plume{transform-box:view-box;transform-origin:47px 22px}
+.sq[data-state="greeting"] .sq-arm-r,.sq[data-state="success"] .sq-arm-r{transform:rotate(-140deg)}
+.sq[data-state="listening"] .sq-head{transform:rotate(-7deg)}
+.sq[data-state="error"] .sq-head{transform:translateY(2px) rotate(6deg)}
+.sq[data-state="offline"] .sq-head{transform:translateY(2.5px) rotate(4deg)}
+@media (prefers-reduced-motion:no-preference){
+.sq .sq-rig{animation:sq-float calc(4s*var(--sq-dur)) ease-in-out infinite}
+.sq .sq-shadow{animation:sq-shadow calc(4s*var(--sq-dur)) ease-in-out infinite}
+.sq .sq-eye{animation:sq-blink calc(5s*var(--sq-dur)) ease-in-out infinite}
+.sq .sq-plume{animation:sq-sway calc(4s*var(--sq-dur)) ease-in-out infinite}
+/* greeting: wave */
+.sq[data-state="greeting"] .sq-arm-r{animation:sq-wave calc(1.2s*var(--sq-dur)) ease-in-out infinite}
+/* listening: ear rings ripple */
+.sq[data-state="listening"] .sq-ear-ring{animation:sq-ripple calc(1.4s*var(--sq-dur)) ease-out infinite}
+.sq[data-state="listening"] .sq-eye{animation:sq-nod calc(1.4s*var(--sq-dur)) ease-in-out infinite}
+/* thinking: eyes look around, dots bounce */
+.sq[data-state="thinking"] .sq-eyes-open{animation:sq-look calc(2.4s*var(--sq-dur)) ease-in-out infinite}
+.sq[data-state="thinking"] .sq-eye{animation:none}
+.sq[data-state="thinking"] .sq-dots circle{animation:sq-dot calc(1s*var(--sq-dur)) ease-in-out infinite}
+.sq[data-state="thinking"] .sq-dots circle:nth-child(2){animation-delay:calc(.15s*var(--sq-dur))}
+.sq[data-state="thinking"] .sq-dots circle:nth-child(3){animation-delay:calc(.3s*var(--sq-dur))}
+/* speaking: mouth talks, head bobs */
+.sq[data-state="speaking"] .sq-mouth{animation:sq-talk calc(.3s*var(--sq-dur)) ease-in-out infinite alternate}
+.sq[data-state="speaking"] .sq-head{animation:sq-bob calc(.9s*var(--sq-dur)) ease-in-out infinite}
+/* success: hop, sparkles, fist pump */
+.sq[data-state="success"] .sq-rig{animation:sq-hop calc(.9s*var(--sq-dur)) cubic-bezier(.3,1.5,.5,1) infinite}
+.sq[data-state="success"] .sq-spark{animation:sq-twinkle calc(.9s*var(--sq-dur)) ease-in-out infinite}
+.sq[data-state="success"] .sq-spark.s2{animation-delay:calc(-.45s*var(--sq-dur))}
+.sq[data-state="success"] .sq-crest-ring{animation:sq-ripple calc(.9s*var(--sq-dur)) ease-out infinite}
+/* alert: shake, plume flick, crest pulse */
+.sq[data-state="alert"] .sq-head{animation:sq-shake calc(1.6s*var(--sq-dur)) ease-in-out infinite}
+.sq[data-state="alert"] .sq-plume{animation:sq-flick calc(.4s*var(--sq-dur)) ease-in-out infinite alternate}
+.sq[data-state="alert"] .sq-crest-ring{animation:sq-ripple calc(1s*var(--sq-dur)) ease-out infinite}
+.sq[data-state="alert"] .sq-eye{animation:none;transform:scale(1.12)}
+/* error: droop + glitch flicker */
+.sq[data-state="error"] .sq-face{animation:sq-glitch calc(2.2s*var(--sq-dur)) steps(1) infinite}
+.sq[data-state="error"] .sq-plume{animation:none;transform:rotate(-14deg)}
+.sq[data-state="error"] .sq-rig{animation:sq-float calc(6s*var(--sq-dur)) ease-in-out infinite}
+/* offline: slow breathe, z's */
+.sq[data-state="offline"] .sq-rig{animation:sq-breathe calc(5s*var(--sq-dur)) ease-in-out infinite}
+.sq[data-state="offline"] .sq-plume{animation:none;transform:rotate(-10deg)}
+.sq[data-state="offline"] .sq-z{animation:sq-zz calc(3s*var(--sq-dur)) ease-in-out infinite}
+.sq[data-state="offline"] .sq-z.s{animation-delay:calc(-1.5s*var(--sq-dur))}
+}
+@keyframes sq-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes sq-shadow{0%,100%{transform:scaleX(1);opacity:.18}50%{transform:scaleX(.88);opacity:.11}}
+@keyframes sq-blink{0%,45%,49%,100%{transform:scaleY(1)}47%{transform:scaleY(.1)}}
+@keyframes sq-sway{0%,100%{transform:rotate(0)}50%{transform:rotate(-5deg)}}
+@keyframes sq-wave{0%,100%{transform:rotate(-140deg)}50%{transform:rotate(-165deg)}}
+@keyframes sq-ripple{0%{transform:scale(.9);opacity:.9}100%{transform:scale(1.7);opacity:0}}
+@keyframes sq-nod{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.1)}}
+@keyframes sq-look{0%,100%{transform:translate(-2px,-2px)}40%,60%{transform:translate(2.5px,-2.5px)}}
+@keyframes sq-dot{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-2px);opacity:1}}
+@keyframes sq-chin{0%,100%{transform:rotate(-120deg)}50%{transform:rotate(-126deg)}}
+@keyframes sq-talk{0%{transform:scaleY(.5)}100%{transform:scaleY(1.9)}}
+@keyframes sq-bob{0%,100%{transform:rotate(0)}50%{transform:rotate(2.5deg)}}
+@keyframes sq-hop{0%,100%{transform:translateY(0)}35%{transform:translateY(-6px)}}
+@keyframes sq-twinkle{0%,100%{transform:scale(.6) rotate(0);opacity:.4}50%{transform:scale(1.15) rotate(20deg);opacity:1}}
+@keyframes sq-shake{0%,55%,100%{transform:rotate(0)}62%{transform:rotate(-5deg)}70%{transform:rotate(5deg)}78%{transform:rotate(-3deg)}86%{transform:rotate(2deg)}}
+@keyframes sq-flick{from{transform:rotate(-6deg)}to{transform:rotate(6deg)}}
+@keyframes sq-glitch{0%,88%,94%{opacity:1;transform:none}90%{opacity:.4;transform:translateX(1.5px)}96%{opacity:.6;transform:translateX(-1px)}}
+@keyframes sq-breathe{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(.8px) scaleY(.99)}}
+@keyframes sq-zz{0%{transform:translate(0,3px);opacity:0}30%,70%{opacity:1}100%{transform:translate(3px,-4px);opacity:0}}
+</style>
+<ellipse class="sq-shadow" cx="60" cy="117" rx="24" ry="2.6"/>
+<g class="sq-rig">
+ <g class="sq-body">
+  <path class="sq-cape" d="M47 80C37 84 27 96 17 113C26 110.5 33 112 41 116.5L54 95Z"/>
+  <path class="sq-cape-shade" d="M41 116.5L54 95L49 91C43 99 39 107 36 114.5C38 115 39.5 115.7 41 116.5Z"/>
+  <!-- left arm -->
+  <g class="sq-arm-l">
+    <circle class="sq-joint" cx="37" cy="92" r="4.5"/>
+    <rect class="sq-armor" x="30.5" y="93" width="13" height="15" rx="6.5"/>
+    <circle class="sq-glove" cx="37" cy="110" r="6"/>
+  </g>
+  <!-- torso -->
+  <path class="sq-armor-shade" d="M41 84C41 80 50 77 60 77S79 80 79 84L81 106C81 113 72 118.5 60 118.5S39 113 39 106Z"/>
+  <path class="sq-armor" d="M42.5 84C42.5 80.5 50.5 78 60 78S77.5 80.5 77.5 84L79 104C79 110 71 114.5 60 114.5S41 110 41 104Z"/>
+  <path class="sq-seam" d="M45 106.5C50 109 70 109 75 106.5"/>
+  <!-- chest crest -->
+  <g class="sq-crest">
+    <circle class="sq-crest-ring" cx="60" cy="96" r="9"/>
+    <path class="sq-rim" d="M51.5 88.5H68.5V96C68.5 101.8 64.5 105.4 60 107.4C55.5 105.4 51.5 101.8 51.5 96Z"/>
+    <path class="sq-red" d="M54 90.8H66V96C66 100.2 63.2 103 60 104.6C56.8 103 54 100.2 54 96Z"/>
+    <path class="sq-red-hi" d="M54 90.8H60V104.6C56.8 103 54 100.2 54 96Z"/>
+  </g>
+  <ellipse class="sq-armor-shade" cx="40" cy="86" rx="9.5" ry="7.5"/>
+  <ellipse class="sq-armor" cx="39.5" cy="85" rx="8.5" ry="6.5"/>
+  <ellipse class="sq-armor-shade" cx="80" cy="86" rx="9.5" ry="7.5"/>
+  <ellipse class="sq-armor" cx="80.5" cy="85" rx="8.5" ry="6.5"/>
+  <!-- right arm (waves) -->
+  <g class="sq-arm-r">
+    <circle class="sq-joint" cx="84" cy="90" r="4.5"/>
+    <rect class="sq-armor" x="77.5" y="91" width="13" height="15" rx="6.5"/>
+    <g class="sq-hand">
+      <circle class="sq-glove" cx="84" cy="108" r="6"/>
+      <ellipse class="sq-glove" cx="78.6" cy="105.5" rx="2.4" ry="3.2"/>
+    </g>
+  </g>
+  </g>
+  <!-- scarf -->
+  <path class="sq-cape" d="M37.5 80.5C45 74.5 75 74.5 82.5 80.5C77 87 43 87 37.5 80.5Z"/>
+  <path class="sq-cape-shade" d="M40 82.2C48 85.6 72 85.6 80 82.2C74 86.6 46 86.6 40 82.2Z"/>
+  <circle class="sq-rim" cx="60" cy="84" r="3.6"/>
+  <circle class="sq-armor" cx="59.4" cy="83.4" r="1.6"/>
+  <!-- head -->
+  <g class="sq-head">
+    <g class="sq-plume">
+      <path class="sq-red" d="M49 16C44 5 31 1.5 20 7C28 7.5 32.5 10 35 13.5C26 13.5 17.5 19.5 13 30C23 24 33.5 22 43 24.5Z"/>
+      <path class="sq-red-shade" d="M43 24.5C33.5 22 23 24 13 30C20 26.5 30 25.5 37 27Z"/>
+      <path class="sq-red-hi-line" d="M44 15C40 9.5 33 7 27 8"/>
+    </g>
+    <path class="sq-fin" d="M53.5 17.5C55.5 12.5 58 9.5 61 8C63 10 65 13.5 66.5 17.5Z"/>
+    <circle class="sq-ear-ring" cx="24.5" cy="50" r="9"/>
+    <circle class="sq-ear-ring" cx="95.5" cy="50" r="9"/>
+    <circle class="sq-rim" cx="24.5" cy="50" r="9"/>
+    <circle class="sq-armor" cx="23.6" cy="49.4" r="5.8"/>
+    <circle class="sq-rim" cx="95.5" cy="50" r="9"/>
+    <circle class="sq-armor" cx="96.4" cy="49.4" r="5.8"/>
+    <ellipse class="sq-helm-shade" cx="60" cy="46" rx="36" ry="33"/>
+    <ellipse class="sq-helm" cx="58.6" cy="44.2" rx="34.4" ry="31.2"/>
+    <path class="sq-vent" d="M47.2 21.8L48.3 26.2M72.8 21.8L71.7 26.2"/>
+    <!-- visor -->
+    <path class="sq-visor" d="M39 29.5H81C87.5 29.5 92 34.5 92 41.5V54.5C92 62.5 86 68 78 68H42C34 68 28 62.5 28 54.5V41.5C28 34.5 32.5 29.5 39 29.5Z"/>
+    <path class="sq-gloss" d="M77 33C82.5 33.5 87 36.5 88.3 41.5"/>
+    <g class="sq-face">
+      <g class="sq-brows">
+        <path class="sq-ink sq-brow l" d="M42.5 39Q47 35 52.5 37"/>
+        <path class="sq-ink sq-brow r" d="M67.5 37Q73 35 77.5 39"/>
+      </g>
+      <g class="sq-eyes">
+        <g class="sq-eyes-open">
+          <ellipse class="sq-fill sq-eye l" cx="48" cy="49" rx="5" ry="6.6"/>
+          <ellipse class="sq-fill sq-eye r" cx="72" cy="49" rx="5" ry="6.6"/>
+        </g>
+        <path class="sq-ink sq-eyes-happy" d="M42.6 52Q48 43.5 53.4 52M66.6 52Q72 43.5 77.4 52"/>
+        <path class="sq-ink sq-eyes-closed" d="M42.6 49.5Q48 54 53.4 49.5M66.6 49.5Q72 54 77.4 49.5"/>
+      </g>
+      <path class="sq-ink sq-mouth" d="M54.5 59.5Q60 64.2 65.5 59.5"/>
+      <ellipse class="sq-fill sq-mouth-o" cx="60" cy="61" rx="2.8" ry="3.3"/>
+      <g class="sq-dots">
+        <circle class="sq-fill" cx="54" cy="61.5" r="1.8"/>
+        <circle class="sq-fill" cx="60" cy="61.5" r="1.8"/>
+        <circle class="sq-fill" cx="66" cy="61.5" r="1.8"/>
+      </g>
+    </g>
+  </g>
+  <!-- badges -->
+  <g class="sq-zzz"><path class="sq-z" d="M98 22H104L98 28H104"/><path class="sq-z s" d="M106 12H110L106 16H110"/></g>
+  <path class="sq-spark s1" d="M104 26L105.5 30.5L110 32L105.5 33.5L104 38L102.5 33.5L98 32L102.5 30.5Z"/>
+  <path class="sq-spark s2" d="M16 40L17 43L20 44L17 45L16 48L15 45L12 44L15 43Z"/>
+</g>
+</svg>

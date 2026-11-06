@@ -205,7 +205,8 @@ describe('POST /api/intelligence/squire', () => {
       .trim()
       .split('\n')
       .map(line => JSON.parse(line));
-    expect(lines.map(line => line.type)).toEqual(['meta', 'delta', 'done']);
+    expect(lines.map(line => line.type)).toEqual(['meta', 'delta', 'done', 'notice']);
+    expect(lines.at(-1).text).toContain('could not be saved');
   });
 
   it('rejects malformed conversation ids', async () => {

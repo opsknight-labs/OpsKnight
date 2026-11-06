@@ -319,3 +319,18 @@ it('keeps raw exception canaries out of stored failures and legacy diagnostic re
   expect(JSON.stringify(diagnostic)).not.toContain(canary);
   expect(diagnostic[0]).not.toHaveProperty('lastError');
 });
+
+it('serves first insight before a fresh reindex storm, while aging old optional work', async () => {
+  await enqueueWorkItems(Array.from({ length: 100 }, (_, i) => item(`backfill-${i}`)));
+  await enqueueWorkItems([{ kind: 'ANALYZE_INCIDENT', subjectKey: 'new-insight' }]);
+  expect((await claimWorkItems({ limit: 1 }))[0].subjectKey).toBe('new-insight');
+  await enqueueWorkItems([{ kind: 'SEND_DIGEST', subjectKey: 'old-digest' }]);
+  await db.$executeRaw`UPDATE "IntelligenceWorkItem" SET "createdAt" = now() - interval '2 hours' WHERE "subjectKey" = 'old-digest'`;
+  expect((await claimWorkItems({ limit: 1 }))[0].subjectKey).toBe('old-digest');
+});
+
+it('preserves an explicit force request when a routine signal coalesces into it', async () => {
+  await enqueueWorkItems([{ ...item('force'), force: true }, item('force')]);
+  await enqueueWorkItems([item('force')]);
+  expect((await claimWorkItems({ limit: 1 }))[0].force).toBe(true);
+});

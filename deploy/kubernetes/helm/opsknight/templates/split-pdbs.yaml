@@ -3,6 +3,7 @@
 {{- $roles := list
   (dict "name" "web" "values" .Values.web)
   (dict "name" "scheduler" "values" .Values.scheduler)
+  (dict "name" "intelligence-worker" "values" .Values.intelligenceWorker)
   (dict "name" "general-worker" "values" .Values.generalWorker)
   (dict "name" "critical-worker" "values" .Values.criticalWorker)
   (dict "name" "bulk-worker" "values" .Values.bulkWorker)

@@ -11,7 +11,10 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-import IntelligenceSubNav, { INTELLIGENCE_SECTIONS, isSectionActive } from '@/components/settings/layout/IntelligenceSubNav';
+import IntelligenceSubNav, {
+  INTELLIGENCE_SECTIONS,
+  isSectionActive,
+} from '@/components/settings/layout/IntelligenceSubNav';
 import SquireAvatar from '@/components/squire/SquireAvatar';
 import AskSquirePanel from '@/components/squire/AskSquirePanel';
 import AiUsageChart from '@/components/settings/AiUsageChart';
@@ -26,7 +29,9 @@ describe('IntelligenceSubNav', () => {
     for (const section of INTELLIGENCE_SECTIONS) {
       nav.pathname = section.href;
       const { unmount } = render(<IntelligenceSubNav />);
-      const current = screen.getAllByRole('link').filter(link => link.getAttribute('aria-current') === 'page');
+      const current = screen
+        .getAllByRole('link')
+        .filter(link => link.getAttribute('aria-current') === 'page');
       expect(current.map(link => link.getAttribute('href'))).toEqual([section.href]);
       unmount();
     }
@@ -40,13 +45,16 @@ describe('IntelligenceSubNav', () => {
 });
 
 describe('SquireAvatar', () => {
-  it.each(['KNIGHT', 'OWL', 'ROBOT'] as const)('renders %s as decorative inline SVG with no network request', kind => {
-    const { container } = render(<SquireAvatar kind={kind} />);
-    const wrapper = container.querySelector(`[data-avatar="${kind}"]`)!;
-    expect(wrapper.getAttribute('aria-hidden')).toBe('true');
-    expect(wrapper.querySelector('svg')).not.toBeNull();
-    expect(container.querySelector('img, image, [href]')).toBeNull();
-  });
+  it.each(['SQUIRE', 'KNIGHT', 'OWL', 'ROBOT'] as const)(
+    'renders %s as decorative inline SVG with no network request',
+    kind => {
+      const { container } = render(<SquireAvatar kind={kind} />);
+      const wrapper = container.querySelector(`[data-avatar="${kind}"]`)!;
+      expect(wrapper.getAttribute('aria-hidden')).toBe('true');
+      expect(wrapper.querySelector('svg')).not.toBeNull();
+      expect(container.querySelector('img, image, [href]')).toBeNull();
+    }
+  );
 
   it('only animates when asked, and only behind motion-safe', () => {
     const still = render(<SquireAvatar kind="OWL" />);
@@ -66,7 +74,9 @@ describe('AskSquirePanel', () => {
     expect(screen.getByRole('heading', { name: 'Ask Pip' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'What could have caused this?' }));
     expect(opened).toHaveBeenCalledTimes(1);
-    expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({ message: 'What could have caused this?' });
+    expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      message: 'What could have caused this?',
+    });
     window.removeEventListener('squire:open', opened);
   });
 });

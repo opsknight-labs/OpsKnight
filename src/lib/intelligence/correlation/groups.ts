@@ -215,15 +215,15 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
           AND r."evidence"->>'groupId' = ${group.id} AND r."evidence"->>'automatic' = 'true'
           AND NOT EXISTS (SELECT 1 FROM "IncidentRelationshipEvent" e WHERE e."relationshipId" = r."id" AND e."actorType" = 'USER')
         RETURNING r."id", r."sourceIncidentId" AS source`);
-      for (const row of moved)
-        await tx.incidentRelationshipEvent.create({
-          data: {
+      if (moved.length)
+        await tx.incidentRelationshipEvent.createMany({
+          data: moved.map(row => ({
             relationshipId: row.id,
-            fromDecision: 'ACCEPTED',
-            toDecision: 'REVERTED',
-            actorType: 'SYSTEM',
+            fromDecision: 'ACCEPTED' as const,
+            toDecision: 'REVERTED' as const,
+            actorType: 'SYSTEM' as const,
             reasonCode: 'ANCHOR_REELECTED',
-          },
+          })),
         });
       for (const source of [previous, ...moved.map(row => row.source)]) {
         if (source !== incident.id)

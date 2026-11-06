@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { RESPONSE_LIMITS } from '../contract';
 import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
-import { parseOrThrow } from '../settings/service';
+import { getIntelligenceSettings, parseOrThrow } from '../settings/service';
 import { canonicalizeLabels } from '../normalization/labels';
 import { maskVolatileIdentifiers } from '../normalization/text';
 import { loadActiveEdges } from '../dependencies/service';
@@ -144,7 +144,9 @@ export async function recordChange(
   try {
     const row = await prisma.$transaction(async tx => {
       const created = await tx.changeEvent.create({ data, select: { id: true } });
-      await reanalyzeAfterLateChange(data.serviceId, data.occurredAt, tx);
+      if ((await getIntelligenceSettings(tx)).enabled) {
+        await reanalyzeAfterLateChange(data.serviceId, data.occurredAt, tx);
+      }
       return created;
     });
     return { status: 'created', id: row.id };

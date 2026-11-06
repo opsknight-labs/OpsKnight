@@ -79,3 +79,5 @@ When AI is set up for it, an incident page offers **Summarise this incident**: i
 happened so far, the current state and suggested next steps. In the postmortem editor, **Draft with AI**
 fills in sections that are still empty and proposes action items. Nothing is saved until you save the
 postmortem, and you should edit the draft: it only knows what is recorded on the incident.
+
+For supported operational questions, product guidance, reporting windows and query limits without a provider, see [Use Squire without an AI provider](./basic-mode.md).

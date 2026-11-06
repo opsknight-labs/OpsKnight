@@ -42,7 +42,10 @@ export async function requestIncidentAnalysis(
       select: { id: true },
     });
     if (failed) return 'review_required';
-    await enqueueWorkItems([{ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: incidentId }], tx);
+    await enqueueWorkItems(
+      [{ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: incidentId, force: true }],
+      tx
+    );
     await logAudit(
       {
         action: 'intelligence.analysis.requested',

@@ -219,7 +219,8 @@ describe('provider and settings validation', () => {
       allowedDataRegions: ['EU', 'eu', 'us-east'],
     });
     expect(parsed.allowedDataRegions).toEqual(['eu', 'us-east']);
-    expect(parsed.squireHistoryEnabled).toBe(false);
+    expect(parsed.squireHistoryEnabled).toBe(true);
+    expect(parsed.squireHistoryRetentionDays).toBe(90);
     expect(
       aiSettingsInputSchema.safeParse({ ...settings, squireHistoryRetentionDays: 0 }).success
     ).toBe(false);

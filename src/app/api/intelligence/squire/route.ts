@@ -125,7 +125,10 @@ export async function POST(request: NextRequest) {
       logger.warn('[Squire] Could not save the conversation', {
         error: error instanceof Error ? error.name : 'error',
       });
-      return null;
+      return {
+        type: 'notice',
+        text: 'This answer could not be saved to history. Copy it before leaving this chat.',
+      };
     }
   };
 

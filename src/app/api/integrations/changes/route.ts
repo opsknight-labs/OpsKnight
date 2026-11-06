@@ -17,6 +17,8 @@ const bodySchema = z
     kind: z.string().optional(),
     summary: z.string().optional(),
     version: z.string().optional(),
+    component: z.string().optional(),
+    labels: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
     url: z.string().optional(),
     dedupKey: z.string().optional(),
     occurredAt: z.union([z.string(), z.number()]).optional(),
@@ -36,6 +38,8 @@ export const POST = createIntegrationHandler<z.infer<typeof bodySchema>>(
       kind: (payload.kind ?? 'DEPLOY').toUpperCase() as 'DEPLOY',
       summary: payload.summary ?? '',
       version: payload.version,
+      component: payload.component,
+      labels: payload.labels,
       url: payload.url,
       dedupKey: payload.dedupKey,
       occurredAt:

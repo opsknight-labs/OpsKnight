@@ -10,12 +10,14 @@ import {
   type AiActionState,
 } from '@/app/(app)/settings/intelligence/ai/actions';
 import { Button } from '@/components/ui/shadcn/button';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import {
   AI_SETTINGS_BOUNDS,
   type SquireAvatar,
   type SquireLauncherStyle,
 } from '@/lib/intelligence/ai/contract';
 import SquireAvatarIcon from '@/components/squire/SquireAvatar';
+import SquireAppearancePreview from '@/components/squire/SquireAppearancePreview';
 
 const initial: AiActionState = { message: '', ok: false };
 const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
@@ -114,6 +116,7 @@ function Field({
 }
 
 const AVATARS: ReadonlyArray<readonly [SquireAvatar, string]> = [
+  ['SQUIRE', 'Squire mascot'],
   ['ICON', 'Simple icon'],
   ['KNIGHT', 'Knight'],
   ['OWL', 'Owl'],
@@ -185,10 +188,29 @@ export function AiSettingsForm({
   canManage: boolean;
 }) {
   const [state, action, pending] = useActionState(saveAiSettingsAction, initial);
+  const [preview, setPreview] = useState({
+    name: settings.squireName,
+    avatar: settings.squireAvatar,
+    animated: settings.squireAnimations,
+  });
   const b = AI_SETTINGS_BOUNDS;
   const disabled = !canManage || pending;
   return (
-    <form action={action} className="space-y-4 py-4">
+    <form
+      action={action}
+      className="space-y-4 py-4"
+      onChange={event => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (input.name === 'squireName') setPreview(current => ({ ...current, name: input.value }));
+        if (input.name === 'squireAnimations')
+          setPreview(current => ({ ...current, animated: input.checked }));
+        if (input.name === 'squireAvatar' && input.checked) {
+          const selected = AVATARS.find(([kind]) => kind === input.value);
+          if (selected) setPreview(current => ({ ...current, avatar: selected[0] }));
+        }
+      }}
+    >
       <input type="hidden" name="expectedRevision" value={settings.revision} />
       <Check
         name="enabled"
@@ -246,9 +268,14 @@ export function AiSettingsForm({
       <Check
         name="squireAnimations"
         label="Gentle animation"
-        help="A small idle motion on the mascot. Always off for people whose system asks for reduced motion."
+        help="Animate expressions while greeting, listening, investigating and responding. Always off for people whose system asks for reduced motion."
         defaultChecked={settings.squireAnimations}
         disabled={disabled}
+      />
+      <SquireAppearancePreview
+        name={preview.name}
+        avatar={preview.avatar}
+        animated={preview.animated}
       />
       <Check
         name="allowExternalFallback"
@@ -339,13 +366,13 @@ export function AiSettingsForm({
       <Check
         name="squireHistoryEnabled"
         label="Let people save assistant conversations"
-        help="Off by default. Conversations are encrypted, visible only to the person who had them (up to 50 each), and expire after the retention period without use. Pausing AI or hiding the assistant keeps unexpired history. Turning this setting off deletes saved conversations in batches."
+        help="Saved automatically when enabled, including without AI. Conversations are encrypted, private to each person, and kept for 90 days by default after the last message. Reading a chat does not extend its retention. Pausing AI or hiding the assistant keeps unexpired history. Turning this setting off deletes saved conversations in batches."
         defaultChecked={settings.squireHistoryEnabled}
         disabled={disabled}
       />
       <Field
         name="squireHistoryRetentionDays"
-        label="Keep saved conversations for (days)"
+        label="Keep conversations after the last message (days)"
         type="number"
         min={1}
         max={365}
@@ -664,19 +691,31 @@ export function ProviderForm({
 export function DeleteProviderButton({ id, name }: { id: string; name: string }) {
   const [state, action, pending] = useActionState(deleteAiProviderAction, initial);
   return (
-    <form action={action} className="inline-flex items-center gap-2">
-      <input type="hidden" name="id" value={id} />
-      <Button
-        type="submit"
-        size="sm"
-        variant="ghost"
+    <div className="inline-flex items-center gap-2">
+      <DeleteConfirmDialog
+        title={`Remove ${name}?`}
+        description="This removes the provider and its stored credentials from the fallback chain."
+        confirmText="Remove provider"
         disabled={pending}
-        aria-label={`Remove ${name}`}
-      >
-        Remove
-      </Button>
+        trigger={
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            aria-label={`Remove ${name}`}
+          >
+            Remove
+          </Button>
+        }
+        onConfirm={() => {
+          const data = new FormData();
+          data.set('id', id);
+          action(data);
+        }}
+      />
       <Status state={state} />
-    </form>
+    </div>
   );
 }
 

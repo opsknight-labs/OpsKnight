@@ -1,5 +1,5 @@
 import 'server-only';
-import type { Prisma } from '@prisma/client';
+import { Prisma, type ChangeEvent } from '@prisma/client';
 import { RESPONSE_LIMITS } from '../contract';
 import { loadActiveEdges } from '../dependencies/service';
 import { upstreamDistances, type DependencyEdge } from '../dependencies/graph';
@@ -13,6 +13,35 @@ export interface CauseFindings {
 }
 
 const MINUTE_MS = 60_000;
+export const MAX_CHANGE_SOURCES = 32;
+export const MAX_CHANGE_CANDIDATES_PER_SOURCE = 50;
+
+/** A noisy emitter cannot consume the entire response-analysis candidate budget. */
+async function recentChangeCandidates(
+  tx: Prisma.TransactionClient,
+  serviceIds: string[],
+  since: Date,
+  until: Date,
+  global: boolean
+) {
+  const scope = global
+    ? Prisma.sql`"serviceId" IS NULL`
+    : Prisma.sql`"serviceId" IN (${Prisma.join(serviceIds)})`;
+  return tx.$queryRaw<ChangeEvent[]>(Prisma.sql`
+    WITH sources AS (
+      SELECT "source", max("occurredAt") AS latest FROM "ChangeEvent"
+      WHERE "occurredAt" >= ${since} AND "occurredAt" <= ${until} AND ${scope}
+      GROUP BY "source" ORDER BY latest DESC, "source" ASC LIMIT ${MAX_CHANGE_SOURCES}
+    )
+    SELECT candidate.* FROM sources CROSS JOIN LATERAL (
+      SELECT * FROM "ChangeEvent"
+      WHERE "source" = sources."source" AND "occurredAt" >= ${since} AND "occurredAt" <= ${until}
+        AND ${scope}
+      ORDER BY "occurredAt" DESC, "id" DESC LIMIT ${MAX_CHANGE_CANDIDATES_PER_SOURCE}
+    ) candidate
+    ORDER BY candidate."occurredAt" DESC, candidate."id" DESC
+  `);
+}
 
 /**
  * Candidate causes for one incident: recent changes on the same or an upstream service (or global
@@ -30,30 +59,11 @@ export async function computeCauseFindings(
   const upstream = upstreamDistances(edges, incident.serviceId, RESPONSE_LIMITS.maxUpstreamDepth);
   const serviceIds = [incident.serviceId, ...upstream.keys()];
 
-  // Score every indexed candidate in the six-hour service/global window before taking top-k.
-  // A recency limit here could hide an older, stronger cause behind a noisy change source.
-  const changeWindow = { gte: windowStart, lte: incident.createdAt };
-  const changeSelect = {
-    id: true,
-    serviceId: true,
-    source: true,
-    component: true,
-    labels: true,
-    kind: true,
-    occurredAt: true,
-  } as const;
+  // Separate scoped/global budgets preserve local evidence during a noisy global rollout.
   const [scopedChanges, globalChanges, upstreamIncidents, baselines, fingerprint] =
     await Promise.all([
-      tx.changeEvent.findMany({
-        where: { occurredAt: changeWindow, serviceId: { in: serviceIds } },
-        orderBy: { occurredAt: 'desc' },
-        select: changeSelect,
-      }),
-      tx.changeEvent.findMany({
-        where: { occurredAt: changeWindow, serviceId: null },
-        orderBy: { occurredAt: 'desc' },
-        select: changeSelect,
-      }),
+      recentChangeCandidates(tx, serviceIds, windowStart, incident.createdAt, false),
+      recentChangeCandidates(tx, serviceIds, windowStart, incident.createdAt, true),
       upstream.size === 0
         ? Promise.resolve([])
         : tx.incident.findMany({

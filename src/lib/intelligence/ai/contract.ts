@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import { AI_DATA_CLASSES } from './port';
 
-export const SQUIRE_AVATARS = ['ICON', 'KNIGHT', 'OWL', 'ROBOT'] as const;
+export const SQUIRE_AVATARS = ['SQUIRE', 'ICON', 'KNIGHT', 'OWL', 'ROBOT'] as const;
 export type SquireAvatar = (typeof SQUIRE_AVATARS)[number];
 export const SQUIRE_LAUNCHERS = ['FLOATING', 'SEARCH_ONLY'] as const;
 export type SquireLauncherStyle = (typeof SQUIRE_LAUNCHERS)[number];
@@ -43,7 +43,7 @@ export const AI_SETTINGS_DEFAULTS = {
   enabled: false,
   squireEnabled: false,
   squireName: 'Squire',
-  squireAvatar: 'ICON' as SquireAvatar,
+  squireAvatar: 'SQUIRE' as SquireAvatar,
   squireLauncher: 'FLOATING' as SquireLauncherStyle,
   squireAnimations: false,
   allowExternalFallback: false,
@@ -55,8 +55,8 @@ export const AI_SETTINGS_DEFAULTS = {
   requestTimeoutMs: 30_000,
   allowedDataRegions: [] as string[],
   embeddingsEnabled: false,
-  squireHistoryEnabled: false,
-  squireHistoryRetentionDays: 30,
+  squireHistoryEnabled: true,
+  squireHistoryRetentionDays: 90,
 } as const;
 
 /** Shared internal identity; interactive semantic queries continue to use the person's identity. */
@@ -96,7 +96,7 @@ export const aiSettingsInputSchema = z
     enabled: z.boolean(),
     squireEnabled: z.boolean(),
     squireName,
-    squireAvatar: z.enum(SQUIRE_AVATARS).default('ICON'),
+    squireAvatar: z.enum(SQUIRE_AVATARS).default('SQUIRE'),
     squireLauncher: z.enum(SQUIRE_LAUNCHERS).default('FLOATING'),
     squireAnimations: z.boolean().default(false),
     allowExternalFallback: z.boolean(),
@@ -122,8 +122,8 @@ export const aiSettingsInputSchema = z
       .default([])
       .transform(regions => [...new Set(regions)]),
     embeddingsEnabled: z.boolean().default(false),
-    squireHistoryEnabled: z.boolean().default(false),
-    squireHistoryRetentionDays: z.number().int().min(1).max(365).default(30),
+    squireHistoryEnabled: z.boolean().default(true),
+    squireHistoryRetentionDays: z.number().int().min(1).max(365).default(90),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();

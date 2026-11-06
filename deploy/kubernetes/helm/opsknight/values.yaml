@@ -440,3 +440,15 @@ externalSecrets:
 # Chart-owned name/instance/component/version/managed-by and helm.sh/chart keys
 # are reserved; the schema rejects attempts to override them.
 podLabels: {}
+
+# Split installations run advisory analysis separately from paging. One session per replica is
+# reserved for LISTEN in addition to its Prisma pool (included in the connection budget).
+intelligenceWorker:
+  replicaCount: 2
+  database: { poolSize: 2 }
+  worker: { batchSize: 20, concurrency: 2, idlePollMs: 5000, busyPollMs: 250 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60

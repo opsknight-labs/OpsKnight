@@ -79,7 +79,9 @@ async function seed() {
       enabled: false,
       squireEnabled: true,
       squireName: 'Pip',
-      squireAvatar: 'KNIGHT',
+      squireAvatar: 'SQUIRE',
+      squireAnimations: true,
+      squireHistoryEnabled: false,
       updatedAt: new Date(),
     },
   });
@@ -388,6 +390,145 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(dialog).toBeVisible();
   });
 
+  test('basic mode answers reports and service questions with durable citations and no provider call', async ({
+    page,
+  }) => {
+    const owner = await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+    await prisma.aiSettings.update({
+      where: { id: 'default' },
+      data: { enabled: false, squireHistoryEnabled: true },
+    });
+    try {
+      await page.goto('/services');
+      await assistantReady(page);
+      await page.getByRole('button', { name: /Ask Pip/ }).click();
+      const dialog = page.getByRole('dialog', { name: /Pip/ });
+      const requests = fake.requests.length;
+      await page.getByLabel('Message Pip').fill('How many incidents this week?');
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(dialog.getByRole('heading', { name: /Incident report/ })).toBeVisible();
+      await expect(dialog.getByText(/Basic answer from your incident data/)).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(
+        0
+      );
+      await page.getByLabel('Message Pip').fill(`Who owns "${tag}"?`);
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(dialog.getByRole('heading', { name: tag, exact: true })).toBeVisible();
+      await expect(dialog.getByText(/Recorded service status/)).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(
+        0
+      );
+      await expect
+        .poll(() =>
+          prisma.squireConversation.count({ where: { userId: owner.id, incidentId: null } })
+        )
+        .toBeGreaterThan(0);
+      const response = await page.request.get('/api/intelligence/squire/conversations');
+      expect(response.status()).toBe(200);
+      const saved = (await response.json()).data.conversations.find(
+        (item: { title: string }) => item.title === 'How many incidents this week?'
+      );
+      expect(saved).toBeTruthy();
+      const detail = await page.request.get(`/api/intelligence/squire/conversations/${saved.id}`);
+      expect(detail.status()).toBe(200);
+      const messages = (await detail.json()).data.conversation.messages;
+      expect(
+        messages.some((message: { envelope?: { citations?: Array<{ kind: string }> } }) =>
+          message.envelope?.citations?.some(citation => citation.kind === 'service')
+        )
+      ).toBe(true);
+      expect(fake.requests.length).toBe(requests);
+      await expectAccessible(page, 'section[role="dialog"]');
+    } finally {
+      await prisma.aiSettings.update({
+        where: { id: 'default' },
+        data: { squireHistoryEnabled: false },
+      });
+    }
+  });
+
+  test('Squire chat uses meaningful expressions, readable markdown and accessible mobile controls', async ({
+    page,
+  }, testInfo) => {
+    await page.goto(`/incidents/${precedentId}`);
+    await assistantReady(page);
+    await page.keyboard.press('Control+j');
+    const dialog = page.getByRole('dialog', { name: /Pip/ });
+    const face = dialog.locator('header svg[data-variant="avatar"]');
+    await expect(dialog).toBeVisible();
+    await dialog.screenshot({
+      path: testInfo.outputPath('squire-welcome-desktop.png'),
+      animations: 'disabled',
+    });
+    await page.getByLabel('Message Pip').fill('Investigate this incident');
+    await expect(face).toHaveAttribute('data-state', 'listening');
+    let release!: () => void;
+    const waiting = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const proposal = {
+      token: 'browser-contract',
+      action: 'add_incident_note',
+      kind: 'WRITE',
+      title: 'Add incident note',
+      detail: 'A fixture action for this browser contract.',
+      incidentId: precedentId,
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+    };
+    await page.route('**/api/intelligence/squire', async route => {
+      await waiting;
+      await route.fulfill({
+        contentType: 'application/x-ndjson',
+        body:
+          [
+            { type: 'meta', mode: 'ai', availability: 'ready', name: 'Pip' },
+            {
+              type: 'delta',
+              text: '## Investigation\n\n**Compare the evidence.**\n\n- Inspect connection usage\n- Check the deployment\n\n```sh\nprintf "read only"\n```',
+            },
+            { type: 'proposal', proposal },
+            { type: 'done' },
+          ]
+            .map(event => JSON.stringify(event))
+            .join('\n') + '\n',
+      });
+    });
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(face).toHaveAttribute('data-state', 'thinking');
+    release();
+    await expect(dialog.getByRole('heading', { name: 'Investigation' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Copy code' })).toBeVisible();
+    await expect(face).toHaveAttribute('data-state', 'idle');
+    await page.route('**/api/intelligence/squire/actions', route =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, message: 'Fixture action completed.' }),
+      })
+    );
+    await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await expect(face).toHaveAttribute('data-state', 'success');
+    await expect(dialog.getByText('Your confirmed action completed.')).toBeVisible();
+    await expectAccessible(page, 'section[role="dialog"]');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await noHorizontalOverflow(page);
+    await expectAccessible(page, 'section[role="dialog"]');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(
+      await face.locator('.oksq-rig').evaluate(element => getComputedStyle(element).animationName)
+    ).toBe('none');
+    await dialog.screenshot({
+      path: testInfo.outputPath('squire-chat-mobile-dark.png'),
+      animations: 'disabled',
+    });
+    await page.context().setOffline(true);
+    await page.getByLabel('Message Pip').fill('Keep my draft');
+    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+    await expect(face).toHaveAttribute('data-state', 'offline');
+    await page.context().setOffline(false);
+    await expect(page.getByLabel('Message Pip')).toHaveValue('Keep my draft');
+  });
+
   test('fits a 390px phone screen', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     for (const path of [
@@ -611,7 +752,10 @@ test.describe.serial('intelligence responder workflows', () => {
     await page.getByRole('button', { name: /Ask Pip/ }).click();
     await page.getByRole('button', { name: 'Saved conversations', exact: true }).click();
     await page.getByRole('button', { name: /^Help with original incident context/ }).click();
-    await expect(page.getByRole('dialog').getByRole('alert')).toContainText('another incident');
+    await expect(
+      page.getByRole('dialog').getByRole('link', { name: 'Return to original context' })
+    ).toBeVisible();
+    await expect(page.getByRole('dialog')).toContainText('This chat keeps its original context.');
     await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
     await expectAccessible(page, 'section[role="dialog"]');
   });

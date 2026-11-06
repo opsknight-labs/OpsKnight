@@ -1,6 +1,7 @@
 import 'server-only';
 import { analysisPolicyHash } from '../analysis/contract';
 import prisma from '@/lib/prisma';
+import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
 import { withDbBudget } from '../jobs/db-budget';
 import { resolveEffectivePolicy, type IntelligenceSettingsView } from '../settings/service';
 import type { ClaimedWorkItem } from '../jobs/work-queue';
@@ -25,7 +26,7 @@ export async function analyzeIncident(
   const incidentId = item.subjectKey;
   const fingerprint = await prisma.incidentFingerprint.findUnique({
     where: { incidentId },
-    select: { serviceId: true, updatedAt: true, sourceUpdatedAt: true },
+    select: { serviceId: true, updatedAt: true, sourceUpdatedAt: true, incidentCreatedAt: true },
   });
   if (!fingerprint) {
     const exists = await prisma.incident.findUnique({
@@ -52,8 +53,13 @@ export async function analyzeIncident(
   });
   if (!similar) throw new Error('Incident fingerprint disappeared during analysis');
 
-  const written = await withDbBudget(settings, tx =>
-    replaceSimilarFindings(tx, {
+  const { written, first } = await withDbBudget(settings, async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`intelligence-finding:SIMILAR_INCIDENT:${incidentId}`}, 0))`;
+    const previous = await tx.intelligenceAnalysisSnapshot.findUnique({
+      where: { incidentId_kind: { incidentId, kind: 'SIMILAR_INCIDENT' } },
+      select: { incidentId: true },
+    });
+    const written = await replaceSimilarFindings(tx, {
       incidentId,
       generation: item.generation,
       policyVersion: policy.version,
@@ -62,7 +68,14 @@ export async function analyzeIncident(
       fingerprintUpdatedAt: fingerprint.updatedAt,
       tier: similar.tier,
       results: similar.results,
-    })
-  );
+    });
+    return { written, first: !previous };
+  });
+  if (first && written === 'written') {
+    const age = Math.max(0, (Date.now() - fingerprint.incidentCreatedAt.getTime()) / 1000);
+    observeOperationalHistogram('opsknight_intelligence_time_to_first_insight_seconds', age, {
+      origin: age < 3600 ? 'live' : 'backfill',
+    });
+  }
   return written === 'stale' ? 'stale' : 'analyzed';
 }

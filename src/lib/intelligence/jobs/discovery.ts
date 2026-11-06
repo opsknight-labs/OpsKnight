@@ -90,35 +90,59 @@ export async function reconcileFingerprints(
       SELECT pg_try_advisory_xact_lock(hashtextextended('intelligence-reconcile', 0)) AS locked`;
     if (!locked) return { missing: 0, staleResolution: 0, suppressed: 0, staleSource: 0 };
 
-    const missing = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT i."id" FROM "Incident" i
-      LEFT JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
-      WHERE i."createdAt" > ${lowerBound} AND i."createdAt" <= ${upperBound} AND f."incidentId" IS NULL
-      ORDER BY i."createdAt" DESC
-      LIMIT ${options.limit}
+    // Persist a keyset cursor across passes. A healthy seven-day history is visited one bounded
+    // page at a time rather than joined in full every minute. Cursor and signals commit together.
+    const name = 'fingerprint-reconcile';
+    const cursor = await tx.intelligenceCursor.findUnique({ where: { name } });
+    const after =
+      cursor && cursor.watermarkAt >= lowerBound && cursor.watermarkAt <= upperBound
+        ? cursor
+        : { watermarkAt: lowerBound, lastId: '' };
+    const pageSize = Math.max(100, Math.min(5000, options.limit * 10));
+    const page = await tx.incident.findMany({
+      where: {
+        createdAt: { gt: lowerBound, lte: upperBound },
+        OR: [
+          { createdAt: { gt: after.watermarkAt } },
+          { createdAt: after.watermarkAt, id: { gt: after.lastId } },
+        ],
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: pageSize,
+      select: { id: true, createdAt: true },
+    });
+    const last = page[page.length - 1];
+    const next =
+      page.length === pageSize && last
+        ? { watermarkAt: last.createdAt, lastId: last.id }
+        : { watermarkAt: lowerBound, lastId: '' };
+    await tx.intelligenceCursor.upsert({
+      where: { name },
+      create: { name, ...next },
+      update: next,
+    });
+    if (!page.length) return { missing: 0, staleResolution: 0, suppressed: 0, staleSource: 0 };
+    const ids = Prisma.join(page.map(row => row.id));
+    const candidates = await tx.$queryRaw<Array<{ id: string; reason: string }>>(Prisma.sql`
+      SELECT i."id", CASE
+        WHEN f."incidentId" IS NULL THEN 'missing'
+        WHEN (i."resolvedAt" IS NULL) <> (f."resolvedAt" IS NULL) THEN 'staleResolution'
+        WHEN f."template" = '' AND f."updatedAt" < ${recheckBefore} THEN 'suppressed'
+        WHEN f."template" <> '' AND i."updatedAt" IS DISTINCT FROM f."sourceUpdatedAt" THEN 'staleSource'
+        ELSE NULL END AS reason
+      FROM "Incident" i LEFT JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
+      WHERE i."id" IN (${ids})
     `);
-    // Resolved after indexing, or reopened after being indexed as resolved.
-    const staleResolution = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT i."id" FROM "Incident" i
-      JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
-      WHERE i."createdAt" > ${lowerBound} AND (i."resolvedAt" IS NULL) <> (f."resolvedAt" IS NULL)
-      ORDER BY i."createdAt" DESC
-      LIMIT ${options.limit}
-    `);
-    const staleSource = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT i."id" FROM "Incident" i JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
-      WHERE i."createdAt" > ${lowerBound} AND i."createdAt" <= ${upperBound}
-        AND f."template" <> '' AND i."updatedAt" IS DISTINCT FROM f."sourceUpdatedAt"
-        AND (i."resolvedAt" IS NULL) = (f."resolvedAt" IS NULL)
-      ORDER BY i."createdAt" DESC LIMIT ${options.limit}
-    `);
-    const suppressed = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT f."incidentId" AS id FROM "IncidentFingerprint" f
-      WHERE f."incidentCreatedAt" > ${lowerBound} AND f."template" = '' AND f."updatedAt" < ${recheckBefore}
-      ORDER BY f."updatedAt" ASC
-      LIMIT ${options.limit}
-    `);
-
+    const missing = candidates.filter(row => row.reason === 'missing').slice(0, options.limit);
+    const staleResolution = candidates
+      .filter(row => row.reason === 'staleResolution')
+      .slice(0, options.limit);
+    const staleSource = candidates
+      .filter(row => row.reason === 'staleSource')
+      .slice(0, options.limit);
+    const suppressed = candidates
+      .filter(row => row.reason === 'suppressed')
+      .slice(0, options.limit);
     await enqueueWorkItems(
       [...missing, ...staleResolution, ...staleSource, ...suppressed].map(row => ({
         kind: WORK_KINDS.INDEX_INCIDENT,
@@ -129,8 +153,8 @@ export async function reconcileFingerprints(
     return {
       missing: missing.length,
       staleResolution: staleResolution.length,
-      suppressed: suppressed.length,
       staleSource: staleSource.length,
+      suppressed: suppressed.length,
     };
   });
 }

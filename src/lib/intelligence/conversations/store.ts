@@ -4,6 +4,8 @@ import { sha256 } from '../ai/digest';
 import { highestDataClass, type AiDataClass } from '../ai/port';
 import {
   conversationScopeSchema,
+  conversationCursorSchema,
+  type ConversationCursor,
   savedTurnInputSchema,
   storedTurnEnvelopeSchema,
   scopeForIncident,
@@ -17,15 +19,15 @@ import { getAiSettings } from '../ai/settings';
 import { withDbBudget } from '../jobs/db-budget';
 
 /**
- * Saved assistant conversations. Off unless an administrator turns history on; each conversation is
+ * Saved assistant conversations. Enabled by default, with an administrator opt-out; each conversation is
  * visible only to the person who had it (every read and write is keyed by owner, and a conversation
  * someone else owns is indistinguishable from one that does not exist); titles and messages are
- * encrypted at rest; storage per person is bounded; retention removes old conversations, turning
+ * encrypted at rest; reads and individual threads are bounded; retention removes old conversations, turning
  * history off removes all of them, and deleting a person removes theirs.
  */
 
 export const CONVERSATION_LIMITS = {
-  perUser: 50,
+  pageSize: 50,
   messagesPerConversation: 100,
   titleLength: 80,
   storedAnswerLength: 8_000,
@@ -63,7 +65,7 @@ export interface HistoryStatus {
 export async function getHistoryStatus(): Promise<HistoryStatus> {
   const settings = await getAiSettings();
   return {
-    enabled: settings.enabled && settings.squireEnabled && settings.squireHistoryEnabled,
+    enabled: settings.squireHistoryEnabled,
     retentionDays: settings.squireHistoryRetentionDays,
   };
 }
@@ -128,6 +130,8 @@ export async function recordExchange(input: {
     encrypt(envelope(questionText, { verified: true, dataClass })),
     encrypt(envelope(answerText, turn)),
   ]);
+  const settings = await getAiSettings();
+  const cutoff = new Date(Date.now() - settings.squireHistoryRetentionDays * 86_400_000);
   return prisma.$transaction(async tx => {
     let conversationId: string | null = null;
     if (input.conversationId) {
@@ -137,6 +141,7 @@ export async function recordExchange(input: {
           id: input.conversationId,
           userId: input.userId,
           incidentId,
+          updatedAt: { gt: cutoff },
           messageCount: { lte: CONVERSATION_LIMITS.messagesPerConversation - 2 },
         },
         data: { messageCount: { increment: 2 } },
@@ -154,14 +159,6 @@ export async function recordExchange(input: {
         select: { id: true },
       });
       conversationId = created.id;
-      const stale = await tx.squireConversation.findMany({
-        where: { userId: input.userId },
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        skip: CONVERSATION_LIMITS.perUser,
-        select: { id: true },
-      });
-      if (stale.length > 0)
-        await tx.squireConversation.deleteMany({ where: { id: { in: stale.map(row => row.id) } } });
     }
     const now = Date.now();
     await tx.squireMessage.createMany({
@@ -188,11 +185,40 @@ export async function recordExchange(input: {
   });
 }
 
-export async function listConversations(userId: string): Promise<ConversationSummary[]> {
+export function decodeConversationCursor(encoded: string): ConversationCursor {
+  if (encoded.length > 512 || !/^[A-Za-z0-9_-]+$/.test(encoded)) throw new Error('Invalid cursor');
+  return conversationCursorSchema.parse(
+    JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
+  );
+}
+
+export interface ConversationPage {
+  conversations: ConversationSummary[];
+  nextCursor: string | null;
+}
+
+/** No capacity eviction: every unexpired chat remains reachable through owner-scoped cursor pages. */
+export async function listConversationPage(
+  userId: string,
+  cursor?: ConversationCursor
+): Promise<ConversationPage> {
+  const settings = await getAiSettings();
+  const cutoff = new Date(Date.now() - settings.squireHistoryRetentionDays * 86_400_000);
   const rows = await prisma.squireConversation.findMany({
-    where: { userId },
+    where: {
+      userId,
+      updatedAt: { gt: cutoff },
+      ...(cursor
+        ? {
+            OR: [
+              { updatedAt: { lt: new Date(cursor.updatedAt) } },
+              { updatedAt: new Date(cursor.updatedAt), id: { lt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
     orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-    take: CONVERSATION_LIMITS.perUser,
+    take: CONVERSATION_LIMITS.pageSize + 1,
     select: {
       id: true,
       titleEncrypted: true,
@@ -201,24 +227,43 @@ export async function listConversations(userId: string): Promise<ConversationSum
       updatedAt: true,
     },
   });
-  return Promise.all(
-    rows.map(async row => ({
-      id: row.id,
-      title: (await readable(row.titleEncrypted)) || 'Conversation',
-      incidentId: row.incidentId,
-      scope: scopeForIncident(row.incidentId),
-      messageCount: row.messageCount,
-      updatedAt: row.updatedAt,
-    }))
-  );
+  const page = rows.slice(0, CONVERSATION_LIMITS.pageSize);
+  const last = page[page.length - 1];
+  return {
+    conversations: await Promise.all(
+      page.map(async row => ({
+        id: row.id,
+        title: (await readable(row.titleEncrypted)) || 'Conversation',
+        incidentId: row.incidentId,
+        scope: scopeForIncident(row.incidentId),
+        messageCount: row.messageCount,
+        updatedAt: row.updatedAt,
+      }))
+    ),
+    nextCursor:
+      rows.length > CONVERSATION_LIMITS.pageSize && last
+        ? Buffer.from(
+            JSON.stringify({ updatedAt: last.updatedAt.toISOString(), id: last.id })
+          ).toString('base64url')
+        : null,
+  };
+}
+
+export async function listConversations(userId: string): Promise<ConversationSummary[]> {
+  return (await listConversationPage(userId)).conversations;
 }
 
 export async function getConversation(
   userId: string,
   id: string
 ): Promise<ConversationDetail | null> {
+  const settings = await getAiSettings();
   const row = await prisma.squireConversation.findFirst({
-    where: { id, userId },
+    where: {
+      id,
+      userId,
+      updatedAt: { gt: new Date(Date.now() - settings.squireHistoryRetentionDays * 86_400_000) },
+    },
     select: {
       id: true,
       titleEncrypted: true,
@@ -295,7 +340,7 @@ export async function purgeConversations(
     const where = settings.squireHistoryEnabled
       ? {
           updatedAt: {
-            lt: new Date(now.getTime() - settings.squireHistoryRetentionDays * 86_400_000),
+            lte: new Date(now.getTime() - settings.squireHistoryRetentionDays * 86_400_000),
           },
         }
       : {};

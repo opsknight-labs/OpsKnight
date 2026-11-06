@@ -31,10 +31,10 @@ export const WORK_KINDS = {
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
-/** Lower number = served first. Indexing precedes analysis; both outrank derived/optional work. */
+/** Lower number = served first. New insight outranks indexing a backlog; aging prevents starvation. */
 export const WORK_PRIORITY: Record<WorkKind, number> = {
   INDEX_INCIDENT: 10,
-  ANALYZE_INCIDENT: 20,
+  ANALYZE_INCIDENT: 5,
   CORRELATE_INCIDENT: 25,
   ANALYZE_RESPONSE: 30,
   EMBED_PENDING: 40,
@@ -48,8 +48,10 @@ const BACKOFF_MAX_MS = 15 * 60_000;
 /** A dead letter signalled again after this long gets a fresh set of attempts (the outage is likely over). */
 export const DEAD_LETTER_REVIVE_MS = 30 * 60_000;
 const ENQUEUE_CHUNK = 1_000;
+export const PRIORITY_AGE_BUCKET_MS = 30_000;
 
 export interface WorkItemInput {
+  force?: boolean;
   kind: WorkKind;
   subjectKey: string;
   priority?: number;
@@ -58,6 +60,7 @@ export interface WorkItemInput {
 }
 
 export interface ClaimedWorkItem {
+  force?: boolean;
   id: string;
   kind: string;
   subjectKey: string;
@@ -86,7 +89,27 @@ export async function enqueueWorkItems(
   if (items.length === 0) return 0;
   // One row per (kind, subject): ON CONFLICT cannot touch the same row twice in a single statement.
   const unique = new Map<string, WorkItemInput>();
-  for (const item of items) unique.set(`${item.kind}\u0000${item.subjectKey}`, item);
+  for (const item of items) {
+    const key = `${item.kind}\u0000${item.subjectKey}`;
+    const previous = unique.get(key);
+    unique.set(
+      key,
+      previous
+        ? {
+            ...item,
+            force: Boolean(previous.force || item.force),
+            priority: Math.min(
+              previous.priority ?? WORK_PRIORITY[item.kind],
+              item.priority ?? WORK_PRIORITY[item.kind]
+            ),
+            scheduledAt:
+              previous.scheduledAt && item.scheduledAt
+                ? new Date(Math.min(+previous.scheduledAt, +item.scheduledAt))
+                : undefined,
+          }
+        : item
+    );
+  }
   const revive = Prisma.sql`"IntelligenceWorkItem"."attempts" >= ${MAX_WORK_ATTEMPTS}
         AND "IntelligenceWorkItem"."failedAt" < now() - (${DEAD_LETTER_REVIVE_MS} * interval '1 millisecond')`;
   const values = [...unique.values()];
@@ -97,13 +120,14 @@ export async function enqueueWorkItems(
       .slice(start, start + ENQUEUE_CHUNK)
       .map(
         item =>
-          Prisma.sql`(gen_random_uuid()::text, ${item.kind}, ${item.subjectKey}, ${item.priority ?? WORK_PRIORITY[item.kind]}, ${item.scheduledAt ?? Prisma.sql`now()`}, nextval('"IntelligenceWorkItem_generation_seq"')::int, now())`
+          Prisma.sql`(gen_random_uuid()::text, ${item.kind}, ${item.subjectKey}, ${item.priority ?? WORK_PRIORITY[item.kind]}, ${item.scheduledAt ?? Prisma.sql`now()`}, nextval('"IntelligenceWorkItem_generation_seq"')::int, now(), ${item.force ?? false})`
       );
     written += await client.$executeRaw(Prisma.sql`
-      INSERT INTO "IntelligenceWorkItem" ("id", "kind", "subjectKey", "priority", "scheduledAt", "generation", "updatedAt")
+      INSERT INTO "IntelligenceWorkItem" ("id", "kind", "subjectKey", "priority", "scheduledAt", "generation", "updatedAt", "force")
       VALUES ${Prisma.join(rows)}
       ON CONFLICT ("kind", "subjectKey") DO UPDATE SET
         "generation" = EXCLUDED."generation",
+        "force" = "IntelligenceWorkItem"."force" OR EXCLUDED."force",
         "priority" = LEAST("IntelligenceWorkItem"."priority", EXCLUDED."priority"),
         "scheduledAt" = LEAST("IntelligenceWorkItem"."scheduledAt", EXCLUDED."scheduledAt"),
         "attempts" = CASE WHEN ${revive} THEN 0 ELSE "IntelligenceWorkItem"."attempts" END,
@@ -126,14 +150,21 @@ export async function claimWorkItems(
   const maxAttempts = options.maxAttempts ?? MAX_WORK_ATTEMPTS;
   return client.$queryRaw<ClaimedWorkItem[]>(Prisma.sql`
     WITH unleased AS (
-      SELECT "id", "priority", "scheduledAt" FROM "IntelligenceWorkItem"
+      SELECT "id", "priority", "scheduledAt", "createdAt" FROM "IntelligenceWorkItem"
       WHERE "claimToken" IS NULL AND "attempts" < ${maxAttempts} AND "scheduledAt" <= now()
       ORDER BY "priority" ASC, "scheduledAt" ASC, "id" ASC
       LIMIT ${options.limit}
       FOR UPDATE SKIP LOCKED
     ),
+    aged AS (
+      SELECT "id", "priority", "scheduledAt", "createdAt" FROM "IntelligenceWorkItem"
+      WHERE "claimToken" IS NULL AND "attempts" < ${maxAttempts} AND "scheduledAt" <= now()
+      ORDER BY "createdAt" ASC, "id" ASC
+      LIMIT ${options.limit}
+      FOR UPDATE SKIP LOCKED
+    ),
     expired AS (
-      SELECT "id", "priority", "scheduledAt" FROM "IntelligenceWorkItem"
+      SELECT "id", "priority", "scheduledAt", "createdAt" FROM "IntelligenceWorkItem"
       WHERE "claimToken" IS NOT NULL AND "leaseUntil" < now() AND "attempts" < ${maxAttempts}
         AND "scheduledAt" <= now()
       ORDER BY "leaseUntil" ASC
@@ -141,8 +172,9 @@ export async function claimWorkItems(
       FOR UPDATE SKIP LOCKED
     ),
     ready AS (
-      SELECT "id" FROM (SELECT * FROM unleased UNION ALL SELECT * FROM expired) candidates
-      ORDER BY "priority" ASC, "scheduledAt" ASC, "id" ASC
+      SELECT "id" FROM (SELECT * FROM unleased UNION SELECT * FROM aged UNION SELECT * FROM expired) candidates
+      ORDER BY ("priority" - floor(extract(epoch FROM (now() - "createdAt")) * 1000 / ${PRIORITY_AGE_BUCKET_MS})) ASC,
+        "scheduledAt" ASC, "id" ASC
       LIMIT ${options.limit}
     )
     UPDATE "IntelligenceWorkItem" AS w SET
@@ -153,7 +185,7 @@ export async function claimWorkItems(
       "updatedAt" = now()
     FROM ready
     WHERE w."id" = ready."id"
-    RETURNING w."id", w."kind", w."subjectKey", w."generation", w."claimToken", w."attempts"
+    RETURNING w."id", w."kind", w."subjectKey", w."generation", w."claimToken", w."attempts", w."force"
   `);
 }
 

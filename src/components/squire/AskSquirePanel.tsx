@@ -1,20 +1,36 @@
 'use client';
 
-import { openSquire } from '@/components/squire/SquireLauncher';
+import { openSquire } from '@/components/squire/squire-bus';
 import SquireAvatar, { type SquireAvatarKind } from '@/components/squire/SquireAvatar';
 
-const QUESTIONS = ['Summarise this incident', 'Have we seen this before?', 'What could have caused this?', 'Which runbook fits?'];
+const QUESTIONS = [
+  'Summarise this incident',
+  'Have we seen this before?',
+  'What could have caused this?',
+  'Which runbook fits?',
+];
 
-export default function AskSquirePanel({ name, avatar }: { name: string; avatar: SquireAvatarKind }) {
+export default function AskSquirePanel({
+  name,
+  avatar,
+}: {
+  name: string;
+  avatar: SquireAvatarKind;
+}) {
   return (
-    <section aria-labelledby="ask-squire-heading" className="space-y-3 rounded-lg border border-border bg-card p-4">
+    <section
+      aria-labelledby="ask-squire-heading"
+      className="space-y-3 rounded-lg border border-border bg-card p-4"
+    >
       <div className="flex items-center gap-2">
         <SquireAvatar kind={avatar} size="md" />
         <div>
           <h2 id="ask-squire-heading" className="text-sm font-semibold">
             Ask {name}
           </h2>
-          <p className="text-xs text-muted-foreground">Answers use only what you can already see. Nothing is changed.</p>
+          <p className="text-xs text-muted-foreground">
+            Answers use only what you can already see. Nothing is changed.
+          </p>
         </div>
       </div>
       <div className="flex flex-wrap gap-2">

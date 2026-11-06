@@ -19,6 +19,7 @@ import {
   resolveEffectivePolicy,
 } from '@/lib/intelligence/settings/service';
 import { detectCapabilities } from '@/lib/intelligence/similarity/capabilities';
+import { getOpsKnightProcessRole } from '@/lib/runtime-role';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -121,6 +122,17 @@ export default async function IntelligenceSettingsPage() {
           />
         </div>
       </SettingsSection>
+
+      {['integrated', 'worker', 'general-worker'].includes(getOpsKnightProcessRole()) &&
+        process.env.OPSKNIGHT_INTELLIGENCE_DEDICATED !== 'true' && (
+          <p
+            role="status"
+            className="rounded-lg border border-amber-600/30 bg-amber-500/5 p-3 text-sm"
+          >
+            Intelligence shares this process with paging work. For isolated capacity, use the
+            dedicated Intelligence worker in a split deployment.
+          </p>
+        )}
 
       <SettingsSection
         title="General"

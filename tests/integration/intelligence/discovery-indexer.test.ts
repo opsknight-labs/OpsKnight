@@ -261,3 +261,75 @@ it('repairs an edited source even when unrelated fingerprint metadata was touche
   await db.$transaction(tx => indexIncident(source.id, tx));
   expect((await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).staleSource).toBe(0);
 });
+
+describe('input-aware indexing', () => {
+  it('skips 100 unrelated source updates, but honors changed inputs and an explicit refresh', async () => {
+    const service = await createTestService('Hash checks');
+    const created = await createTestIncident('Pool exhausted', service.id);
+    const policy = { id: 'policy', version: 1, mode: 'SUGGEST' };
+    expect(await db.$transaction(tx => indexIncident(created.id, tx, { policy }))).toBe('indexed');
+    for (let i = 0; i < 100; i++) {
+      await db.incident.update({
+        where: { id: created.id },
+        data: { updatedAt: new Date(Date.now() + i) },
+      });
+      expect(await db.$transaction(tx => indexIncident(created.id, tx, { policy }))).toBe(
+        'unchanged'
+      );
+    }
+    expect(
+      await db.$transaction(tx => indexIncident(created.id, tx, { policy, force: true }))
+    ).toBe('indexed');
+    await db.incident.update({ where: { id: created.id }, data: { urgency: 'LOW' } });
+    expect(await db.$transaction(tx => indexIncident(created.id, tx, { policy }))).toBe('indexed');
+    expect(
+      await db.$transaction(tx =>
+        indexIncident(created.id, tx, { policy: { ...policy, version: 2 } })
+      )
+    ).toBe('indexed');
+  });
+
+  it('includes later alerts and their labels, without retaining credentials', async () => {
+    const service = await createTestService('Multi-alert inputs');
+    const created = await createTestIncident('Pool exhausted', service.id);
+    await db.alert.create({
+      data: {
+        incidentId: created.id,
+        serviceId: service.id,
+        payload: { custom_details: { environment: 'prod' } },
+      },
+    });
+    await db.$transaction(tx => indexIncident(created.id, tx));
+    await db.alert.create({
+      data: {
+        incidentId: created.id,
+        serviceId: service.id,
+        payload: { custom_details: { component: 'checkout', token: 'do-not-store' } },
+      },
+    });
+    expect(await db.$transaction(tx => indexIncident(created.id, tx))).toBe('indexed');
+    const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({
+      where: { incidentId: created.id },
+    });
+    expect(fingerprint.labels).toEqual({ component: 'checkout', environment: 'prod' });
+    expect(await db.alertFingerprint.count()).toBe(2);
+    expect(JSON.stringify(await db.alertFingerprint.findMany())).not.toContain('do-not-store');
+    expect(JSON.stringify(fingerprint)).not.toContain('do-not-store');
+    expect(await db.$transaction(tx => indexIncident(created.id, tx))).toBe('unchanged');
+  });
+
+  it('walks past a healthy page to repair an older lost signal without rescanning the whole window', async () => {
+    const service = await createTestService('Cursor repair');
+    const at = ago(600000);
+    for (let i = 0; i < 101; i++) {
+      const row = await createTestIncident('Healthy', service.id, { createdAt: new Date(+at + i) });
+      await db.$transaction(tx => indexIncident(row.id, tx));
+    }
+    const lost = await createTestIncident('Lost', service.id, { createdAt: new Date(+at + 102) });
+    expect((await reconcileFingerprints({ limit: 1, lookbackDays: 7 })).missing).toBe(0);
+    expect((await reconcileFingerprints({ limit: 1, lookbackDays: 7 })).missing).toBe(1);
+    expect(
+      await db.intelligenceWorkItem.findFirst({ where: { subjectKey: lost.id } })
+    ).not.toBeNull();
+  });
+});

@@ -28,9 +28,11 @@ type State =
 export default function SquireProposalCard({
   proposal,
   reviewContextValid = true,
+  onOutcome,
 }: {
   proposal: SquireProposalView;
   reviewContextValid?: boolean;
+  onOutcome?: (outcome: 'success' | 'error') => void;
 }) {
   const { refresh } = useRouter();
   const attempted = useRef(false);
@@ -136,9 +138,11 @@ export default function SquireProposalCard({
         error?: string;
       } | null;
       if (response.ok && body?.ok) {
+        onOutcome?.('success');
         setState({ phase: 'done', message: body.message ?? 'Done.' });
         refresh();
       } else {
+        onOutcome?.('error');
         setState({
           phase: 'failed',
           message:
@@ -148,6 +152,7 @@ export default function SquireProposalCard({
         });
       }
     } catch {
+      onOutcome?.('error');
       setState({
         phase: 'failed',
         message:

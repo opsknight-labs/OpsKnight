@@ -17,6 +17,8 @@ import {
   type LanguageModelPort,
   type AiDataClass,
 } from '../ai/port';
+import { redactSecrets } from '../ai/redact';
+import { routeIntent } from './intents';
 import { getAiSettings } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
 import { getHistoryStatus, type ConversationDetail } from '../conversations/store';
@@ -145,7 +147,12 @@ export async function* streamSquire(
     }
 
     if (port) {
-      yield { type: 'meta', mode: 'ai', name: settings.squireName };
+      yield {
+        type: 'meta',
+        mode: 'ai',
+        name: settings.squireName,
+        ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
+      };
       const evidence = new SquireEvidenceRegistry(actor, dataClass);
       const prepared = briefing ? await evidence.briefing(briefing) : null;
       const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
@@ -199,7 +206,11 @@ export async function* streamSquire(
           }
         } else if (event.type === 'error') {
           if (answer || proposals > 0) {
-            yield { type: 'error', message: event.message };
+            yield {
+              type: 'error',
+              message: event.message,
+              availability: /budget|quota|too many/i.test(event.message) ? 'quota' : 'unavailable',
+            };
             failed = true;
             break;
           }
@@ -211,7 +222,15 @@ export async function* streamSquire(
                 ? `${event.message}. Showing a basic answer.`
                 : 'AI is unavailable right now. Showing a basic answer.',
           };
-          yield* basicAnswer(actor, request, incident, settings.squireName, dataClass);
+          yield* basicAnswer(
+            actor,
+            request,
+            incident,
+            settings.squireName,
+            dataClass,
+            savedConversation,
+            /budget|quota|too many/i.test(event.message) ? 'quota' : 'unavailable'
+          );
           return;
         }
       }
@@ -219,7 +238,15 @@ export async function* streamSquire(
       // The model can spend its whole step budget on tools and end without a word; never answer with nothing.
       if (!answer.trim() && proposals === 0) {
         yield { type: 'notice', text: 'I could not finish that answer. Here is what I know.' };
-        yield* basicAnswer(actor, request, incident, settings.squireName, dataClass);
+        yield* basicAnswer(
+          actor,
+          request,
+          incident,
+          settings.squireName,
+          dataClass,
+          savedConversation,
+          'ready'
+        );
         return;
       }
       const citations = evidence.citations(answer);
@@ -254,7 +281,15 @@ export async function* streamSquire(
         text: `AI conversation requires a provider permitted to receive ${dataClass === 'SENSITIVE' ? 'Sensitive' : 'Personal'} data. Showing a basic answer.`,
       };
     }
-    yield* basicAnswer(actor, request, incident, settings.squireName, dataClass);
+    yield* basicAnswer(
+      actor,
+      request,
+      incident,
+      settings.squireName,
+      dataClass,
+      savedConversation,
+      settings.enabled ? 'unavailable' : 'disabled'
+    );
   } catch (error) {
     if (signal?.aborted) return;
     logger.error('[Squire] Turn failed', {
@@ -269,17 +304,42 @@ async function* basicAnswer(
   request: SquireRequest,
   incident: ReadableIncident | null,
   name: string,
-  dataClass: AiDataClass = 'PERSONAL'
+  dataClass: AiDataClass = 'PERSONAL',
+  savedConversation: ConversationDetail | null = null,
+  availability: 'ready' | 'disabled' | 'quota' | 'unavailable' = 'disabled'
 ): AsyncGenerator<SquireEvent> {
-  yield { type: 'meta', mode: 'basic', name };
+  yield {
+    type: 'meta',
+    mode: 'basic',
+    name,
+    availability,
+    ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
+  };
   const evidence = new SquireEvidenceRegistry(actor, dataClass);
   const snapshots: EvidenceSnapshot[] = [];
-  const answer = await answerDeterministically(actor, request.message, incident, source =>
-    snapshots.push(source)
+  const answer = await answerDeterministically(
+    actor,
+    request.message,
+    incident,
+    source => snapshots.push(source),
+    {
+      name,
+      // Earlier user questions supply intent only. Every answer is rebuilt from fresh scoped data.
+      previousQuestions: (savedConversation?.messages ?? request.history)
+        .filter(turn => turn.role === 'user')
+        .slice(-3)
+        .map(turn => turn.content),
+    }
   );
   const readable = await evidence.capture(snapshots);
+  const templateOnly =
+    snapshots.length === 0 &&
+    ['HELP', 'GREETING', 'THANKS', 'GUIDANCE', 'UNKNOWN'].includes(
+      routeIntent(request.message, incident !== null)
+    );
+  const verified = Boolean(readable) && (evidence.verified || templateOnly);
   const text = readable
-    ? answer
+    ? redactSecrets(answer)
     : 'The source changed or became unavailable. Please ask for a fresh answer.';
   yield* typed(text);
   const citations = evidence.citations(text);
@@ -292,7 +352,7 @@ async function* basicAnswer(
       dataClass,
       completion: 'COMPLETED',
       sources: evidence.sources(),
-      verified: evidence.verified,
+      verified,
       authorizationHash: authorizationContextHash(actor),
     },
   };
@@ -302,7 +362,7 @@ async function* basicAnswer(
     text,
     dataClass,
     evidence.sources(),
-    evidence.verified
+    verified
   );
   yield { type: 'done' };
 }
@@ -501,6 +561,9 @@ export function followUps(incident: ReadableIncident | null, ai: boolean): strin
     return [
       'What is on fire right now?',
       'Who is on call?',
+      ...(!ai
+        ? ['My open incidents', 'How many incidents this week?', 'Show overdue action items']
+        : []),
       ...(ai ? ['Any incidents like this in the last week?'] : []),
     ];
   if (incident.status === 'RESOLVED') {

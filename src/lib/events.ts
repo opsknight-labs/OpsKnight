@@ -10,6 +10,7 @@ import type { ProcessingLease } from './ingestion/contract';
 import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { logger } from './logger';
+import { signalIntelligenceIncident } from './intelligence/jobs/wake-publisher';
 import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import {
@@ -719,6 +720,9 @@ export async function processEvent(
     performance.now() - transactionStarted,
     { action: result.action }
   );
+
+  // The paging transaction is already durable. A lost hint only delays optional analysis.
+  if ('incident' in result && result.incident?.id) signalIntelligenceIncident(result.incident.id);
 
   const telemetry = 'telemetry' in result ? result.telemetry : undefined;
   if (telemetry) {

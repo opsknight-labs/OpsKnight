@@ -73,7 +73,7 @@ function toSettingsView(row: SettingsRow): AiSettingsView {
     ...row,
     squireAvatar: (SQUIRE_AVATARS as readonly string[]).includes(row.squireAvatar)
       ? (row.squireAvatar as SquireAvatar)
-      : 'ICON',
+      : 'SQUIRE',
     squireLauncher: row.squireLauncher === 'SEARCH_ONLY' ? 'SEARCH_ONLY' : 'FLOATING',
   };
 }
@@ -529,7 +529,7 @@ export async function getAiPublicStatus(client: Client = prisma) {
     squireLauncher: settings.squireLauncher,
     squireAnimations: settings.squireAnimations,
     aiEnabled: settings.enabled,
-    historyEnabled: settings.enabled && settings.squireHistoryEnabled,
+    historyEnabled: settings.squireHistoryEnabled,
     historyRetentionDays: settings.squireHistoryRetentionDays,
   };
 }

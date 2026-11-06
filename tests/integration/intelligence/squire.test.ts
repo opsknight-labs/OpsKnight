@@ -138,7 +138,12 @@ describe('basic mode (no AI)', () => {
   it('answers help and reports basic mode with the configured name', async () => {
     const admin = await setup({ name: 'Pip' });
     const events = await turn(admin.id, 'help');
-    expect(events[0]).toEqual({ type: 'meta', mode: 'basic', name: 'Pip' });
+    expect(events[0]).toEqual({
+      type: 'meta',
+      mode: 'basic',
+      name: 'Pip',
+      availability: 'disabled',
+    });
     expect(textOf(events)).toContain('I never change anything');
     expect(events.at(-1)).toEqual({ type: 'done' });
   });
@@ -353,7 +358,7 @@ describe('AI mode', () => {
       type: 'notice',
       text: expect.stringMatching(/unavailable/i),
     });
-    expect(events[2]).toMatchObject({ type: 'meta', mode: 'basic' });
+    expect(events[2]).toMatchObject({ type: 'meta', mode: 'basic', availability: 'unavailable' });
     expect(textOf(events)).toContain('I never change anything');
   });
 
@@ -366,6 +371,9 @@ describe('AI mode', () => {
     expect(events.find(e => e.type === 'notice')).toBeTruthy();
     expect(textOf(events)).toContain('I never change anything');
     expect(model.requests.length).toBe(calls);
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: 'meta', mode: 'basic', availability: 'quota' })
+    );
   });
 
   it('never throws and stops quietly when the client aborts', async () => {
@@ -515,4 +523,42 @@ it('shows an explicit coverage notice when a semantic tool cannot search', async
   );
   expect(textOf(events)).toContain('check the incident list');
   expect(JSON.stringify(model.requests.at(-1)!.body)).toContain('UNAVAILABLE');
+});
+
+it('provides friendly scoped searches and timeline facts without calling a model', async () => {
+  const admin = await setup({ name: 'Squire' });
+  const { member, mine, theirs } = await scopedWorld();
+  expect(textOf(await turn(admin.id, 'hello'))).toContain("I'm Squire");
+  const found = textOf(await turn(member.id, 'Find checkout incidents from last week'));
+  expect(found).toContain(mine.title);
+  expect(found).not.toContain(theirs.title);
+  await db.incidentEvent.create({
+    data: { incidentId: mine.id, type: 'ACKNOWLEDGED', message: 'private-event-text-canary' },
+  });
+  const chronology = textOf(await turn(member.id, 'Show the timeline', { incidentId: mine.id }));
+  expect(chronology).toContain('Recorded timeline');
+  expect(chronology).toContain('acknowledged');
+  expect(chronology).not.toContain('private-event-text-canary');
+  expect(model.requests).toHaveLength(0);
+});
+
+it('gives concrete basic investigation checks and understands a follow-up without replaying old answer facts', async () => {
+  const admin = await setup();
+  const service = await createTestService('Database');
+  const incident = await createTestIncident('Postgres connection pool exhausted', service.id);
+  const events = await turn(admin.id, 'What should I do next?', { incidentId: incident.id });
+  expect(textOf(events)).toContain('active connections');
+  expect(textOf(events)).toContain('No action has been executed');
+  const followup = textOf(
+    await turn(admin.id, 'Tell me more', {
+      incidentId: incident.id,
+      history: [
+        { role: 'user', content: 'What should I do next?' },
+        { role: 'assistant', content: 'invented-old-fact-canary' },
+      ],
+    })
+  );
+  expect(followup).toContain('active connections');
+  expect(followup).not.toContain('invented-old-fact-canary');
+  expect(model.requests).toHaveLength(0);
 });

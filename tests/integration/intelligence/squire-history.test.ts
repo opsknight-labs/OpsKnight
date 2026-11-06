@@ -6,6 +6,8 @@ import {
   getConversation,
   getHistoryStatus,
   listConversations,
+  listConversationPage,
+  decodeConversationCursor,
   purgeConversations,
   recordExchange,
 } from '@/lib/intelligence/conversations/store';
@@ -52,7 +54,7 @@ async function configure(
       requestTimeoutMs: 10_000,
       allowedDataRegions: [],
       squireHistoryEnabled: history.enabled,
-      squireHistoryRetentionDays: history.retentionDays ?? 30,
+      squireHistoryRetentionDays: history.retentionDays ?? 90,
       expectedRevision: current?.revision ?? 0,
     },
     { actorId: adminId, source: 'UI' }
@@ -185,17 +187,27 @@ describe('saved assistant conversations', () => {
     expect((await list(request())).status).toBe(401);
   });
 
-  it('keeps storage bounded per person and per conversation', async () => {
+  it('paginates without deleting unexpired chats and bounds individual conversations', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     await configure(admin.id, { enabled: true });
     let first = '';
-    for (let i = 0; i < CONVERSATION_LIMITS.perUser + 2; i += 1) {
+    for (let i = 0; i < CONVERSATION_LIMITS.pageSize + 2; i += 1) {
       const id = await recordExchange({ userId: admin.id, question: `q${i}`, answer: 'a' });
       if (i === 0) first = id;
     }
     const conversations = await listConversations(admin.id);
-    expect(conversations).toHaveLength(CONVERSATION_LIMITS.perUser);
+    expect(conversations).toHaveLength(CONVERSATION_LIMITS.pageSize);
     expect(conversations.map(c => c.id)).not.toContain(first);
+    expect(await db.squireConversation.count({ where: { userId: admin.id } })).toBe(
+      CONVERSATION_LIMITS.pageSize + 2
+    );
+    expect(await getConversation(admin.id, first)).not.toBeNull();
+    const page = await listConversationPage(admin.id);
+    expect(page.nextCursor).not.toBeNull();
+    const older = await listConversationPage(admin.id, decodeConversationCursor(page.nextCursor!));
+    expect(older.conversations.map(row => row.id)).toContain(first);
+    expect(older.conversations).toHaveLength(2);
+    expect(older.nextCursor).toBeNull();
 
     const latest = conversations[0].id;
     await db.squireConversation.update({
@@ -331,7 +343,7 @@ it.each([
   const expired = await recordExchange({ userId: other.id, question: 'Expired', answer: 'Old.' });
   await db.$executeRaw`UPDATE "SquireConversation" SET "updatedAt" = now() - interval '8 days' WHERE id = ${expired}`;
   await configure(admin.id, { enabled: true, retentionDays: 7, ...flags });
-  expect((await getHistoryStatus()).enabled).toBe(false);
+  expect((await getHistoryStatus()).enabled).toBe(true);
   expect(await purgeConversations()).toEqual({ deleted: 1, more: false });
   expect((await db.squireConversation.findMany()).map(row => row.id).sort()).toEqual(
     [mine, theirs].sort()
@@ -340,4 +352,38 @@ it.each([
   await configure(admin.id, { enabled: true, retentionDays: 7 });
   expect((await getConversation(admin.id, mine))?.messages[1].content).toBe('Saved.');
   expect(await getConversation(admin.id, theirs)).toBeNull();
+});
+
+it('keeps 89-day chats readable without extending retention and rejects expired chats before sweeping', async () => {
+  const admin = await createTestUser({ role: 'ADMIN' });
+  await configure(admin.id, { enabled: true, aiEnabled: false });
+  actor.get.mockResolvedValue({ id: admin.id, role: 'ADMIN', status: 'ACTIVE', teamIds: [] });
+  const valid = await recordExchange({
+    userId: admin.id,
+    question: '89 days old',
+    answer: 'Still here.',
+  });
+  const expired = await recordExchange({
+    userId: admin.id,
+    question: '91 days old',
+    answer: 'Expired.',
+  });
+  await db.$executeRaw`UPDATE "SquireConversation" SET "updatedAt" = now() - interval '89 days' WHERE id = ${valid}`;
+  await db.$executeRaw`UPDATE "SquireConversation" SET "updatedAt" = now() - interval '91 days' WHERE id = ${expired}`;
+  const before = await db.squireConversation.findUniqueOrThrow({ where: { id: valid } });
+  expect((await getOne(request(`/${valid}`), params(valid))).status).toBe(200);
+  expect((await getOne(request(`/${expired}`), params(expired))).status).toBe(404);
+  expect((await listConversations(admin.id)).map(row => row.id)).toEqual([valid]);
+  expect(
+    (await db.squireConversation.findUniqueOrThrow({ where: { id: valid } })).updatedAt
+  ).toEqual(before.updatedAt);
+  const replacement = await recordExchange({
+    userId: admin.id,
+    conversationId: expired,
+    question: 'New question',
+    answer: 'New answer',
+  });
+  expect(replacement).not.toBe(expired);
+  expect(await purgeConversations()).toMatchObject({ deleted: 1 });
+  expect((await list(request('?cursor=not-valid-json'))).status).toBe(400);
 });

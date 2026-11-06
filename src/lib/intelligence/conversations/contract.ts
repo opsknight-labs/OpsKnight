@@ -32,7 +32,7 @@ export type SourceReference = z.infer<typeof sourceReferenceSchema>;
 
 export const savedCitationSchema = z
   .object({
-    kind: z.enum(['incident', 'runbook', 'change', 'alert']),
+    kind: z.enum(['incident', 'runbook', 'change', 'alert', 'service', 'schedule', 'postmortem']),
     id: z.string().min(1).max(64),
     label: z.string().max(200),
     href: z.string().max(256),
@@ -53,7 +53,13 @@ export const savedCitationSchema = z
           ? '/runbooks/'
           : citation.kind === 'change'
             ? '/changes/'
-            : '/alerts/';
+            : citation.kind === 'service'
+              ? '/services/'
+              : citation.kind === 'schedule'
+                ? '/schedules/'
+                : citation.kind === 'postmortem'
+                  ? '/postmortems/'
+                  : '/alerts/';
     return citation.href === `${prefix}${encodeURIComponent(citation.id)}`;
   }, 'A saved citation must use its canonical internal destination');
 
@@ -99,3 +105,11 @@ export type StoredTurnEnvelope = z.infer<typeof storedTurnEnvelopeSchema>;
 
 export const scopeForIncident = (incidentId: string | null | undefined): ConversationScope =>
   incidentId ? { kind: 'INCIDENT', incidentId } : { kind: 'GLOBAL' };
+
+export const conversationCursorSchema = z
+  .object({
+    updatedAt: z.string().datetime(),
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  })
+  .strict();
+export type ConversationCursor = z.infer<typeof conversationCursorSchema>;

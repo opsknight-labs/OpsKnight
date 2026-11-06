@@ -4,7 +4,7 @@
 {{- end }}
 {{- $name := printf "%s-auth-cutover" (include "opsknight.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- $base := include "opsknight.fullname" . }}
-{{- $deployments := list $base (printf "%s-web" $base) (printf "%s-scheduler" $base) (printf "%s-general-worker" $base) (printf "%s-critical-worker" $base) (printf "%s-bulk-worker" $base) (printf "%s-runbook-worker" $base) (printf "%s-status-projector" $base) }}
+{{- $deployments := list $base (printf "%s-web" $base) (printf "%s-scheduler" $base) (printf "%s-intelligence-worker" $base) (printf "%s-general-worker" $base) (printf "%s-critical-worker" $base) (printf "%s-bulk-worker" $base) (printf "%s-runbook-worker" $base) (printf "%s-status-projector" $base) }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

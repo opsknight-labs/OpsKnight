@@ -19,6 +19,9 @@ const prefixes = new Map<SourceReference['kind'], string>([
   ['runbook', '/runbooks/'],
   ['change', '/changes/'],
   ['alert', '/alerts/'],
+  ['service', '/services/'],
+  ['schedule', '/schedules/'],
+  ['postmortem', '/postmortems/'],
 ]);
 
 /** Turn-local provenance. Handles are minted only after an actual read and a current visibility check. */
@@ -237,7 +240,10 @@ export class SquireEvidenceRegistry {
           source.kind !== 'incident' &&
           source.kind !== 'runbook' &&
           source.kind !== 'change' &&
-          source.kind !== 'alert'
+          source.kind !== 'alert' &&
+          source.kind !== 'service' &&
+          source.kind !== 'schedule' &&
+          source.kind !== 'postmortem'
         )
           return [];
         const kind = source.kind;
@@ -247,7 +253,7 @@ export class SquireEvidenceRegistry {
           text.includes(`[evidence:${source.handle}]`) ||
           [
             ...text.matchAll(
-              /\/(?:incidents|runbooks|changes|alerts)\/[A-Za-z0-9_-]{1,64}(?![A-Za-z0-9_-])/g
+              /\/(?:incidents|runbooks|changes|alerts|services|schedules|postmortems)\/[A-Za-z0-9_-]{1,64}(?![A-Za-z0-9_-])/g
             ),
           ].some(match => match[0] === href);
         return referenced

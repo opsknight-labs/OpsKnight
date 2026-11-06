@@ -29,6 +29,32 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_intelligence_time_to_first_insight_seconds',
+    help: 'Time from incident creation to first completed similarity analysis; backfill is separated from live incidents',
+    kind: 'histogram',
+    labels: ['origin'],
+    scope: 'instance',
+    estimatedMaxSeries: 24,
+    buckets: [0.25, 0.5, 1, 2, 5, 10, 30, 60, 300],
+  },
+  {
+    name: 'opsknight_intelligence_work_duration_seconds',
+    help: 'Duration of an intelligence work item by bounded work kind',
+    kind: 'histogram',
+    labels: ['kind'],
+    scope: 'instance',
+    estimatedMaxSeries: 84,
+    buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 60, 120],
+  },
+  {
+    name: 'opsknight_intelligence_work_failures_total',
+    help: 'Failed intelligence work item attempts by bounded work kind',
+    kind: 'counter',
+    labels: ['kind'],
+    scope: 'counter',
+    estimatedMaxSeries: 7,
+  },
+  {
     name: 'opsknight_intelligence_embedding_enabled',
     help: '1 when background semantic indexing is enabled and has an eligible configured deployment, else 0',
     kind: 'gauge',

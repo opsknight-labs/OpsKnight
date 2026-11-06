@@ -6,10 +6,12 @@ import { readSourceStates, sourceKey, type SourceIdentity } from '../squire/evid
 import {
   getConversation,
   getHistoryStatus,
-  listConversations,
+  listConversationPage,
+  type ConversationPage,
   type ConversationDetail,
   type ConversationSummary,
 } from './store';
+import type { ConversationCursor } from './contract';
 
 const mayRead = (actor: AuthorizationActor) =>
   actor.status === 'ACTIVE' &&
@@ -20,15 +22,26 @@ const mayRead = (actor: AuthorizationActor) =>
 export async function listConversationsForActor(
   actor: AuthorizationActor
 ): Promise<ConversationSummary[]> {
-  if (!mayRead(actor) || !(await getHistoryStatus()).enabled) return [];
-  const conversations = await listConversations(actor.id);
-  const sources = conversations.flatMap(row =>
+  return (await listConversationPageForActor(actor)).conversations;
+}
+
+export async function listConversationPageForActor(
+  actor: AuthorizationActor,
+  cursor?: ConversationCursor
+): Promise<ConversationPage> {
+  if (!mayRead(actor) || !(await getHistoryStatus()).enabled)
+    return { conversations: [], nextCursor: null };
+  const page = await listConversationPage(actor.id, cursor);
+  const sources = page.conversations.flatMap(row =>
     row.incidentId ? [{ kind: 'incident' as const, id: row.incidentId }] : []
   );
   const states = await readSourceStates(actor, sources);
-  return conversations.filter(
-    row => !row.incidentId || states.has(sourceKey({ kind: 'incident', id: row.incidentId }))
-  );
+  return {
+    ...page,
+    conversations: page.conversations.filter(
+      row => !row.incidentId || states.has(sourceKey({ kind: 'incident', id: row.incidentId }))
+    ),
+  };
 }
 
 /**
