@@ -59,8 +59,14 @@ No metric carries a user, client, grant or incident identifier. `tool` is a boun
 | <a id="OpsKnightMcpInvalidGrantSpike"></a>`OpsKnightMcpInvalidGrantSpike` | warning | 15m | Most MCP token requests are rejected as invalid_grant |
 | <a id="OpsKnightMcpMaintenanceFailing"></a>`OpsKnightMcpMaintenanceFailing` | warning | 2m | MCP retention maintenance keeps failing |
 | <a id="OpsKnightMcpMaintenanceStalled"></a>`OpsKnightMcpMaintenanceStalled` | warning | 15m | No successful MCP maintenance run in 15 minutes |
+| <a id="OpsKnightMcpCallLogDropping"></a>`OpsKnightMcpCallLogDropping` | warning | 5m | MCP request-log rows are being dropped |
+| <a id="OpsKnightMcpStreamsNearLimit"></a>`OpsKnightMcpStreamsNearLimit` | warning | 10m | MCP listen streams on {{ $labels.instance }} are close to the 32-stream cap |
 
 Each alert's description in the rules file names the log event to search. Thresholds are starting points; tune them to your traffic.
+
+## Dashboard
+
+Import `monitoring/grafana/opsknight-mcp.json` into Grafana (choose your Prometheus data source when asked). It shows requests by outcome, the server error share, the slowest 5% of calls by tool, work slots and shedding, open listen streams against the cap, dropped request-log rows and OAuth outcomes. Every panel reads a metric listed above; none is labelled by person, assistant or connection. For per-assistant and per-person usage, use the **Usage** tab in the MCP settings, which is built from the request log.
 
 ## Per-request log
 

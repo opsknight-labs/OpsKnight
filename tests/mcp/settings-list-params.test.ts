@@ -21,14 +21,26 @@ describe('MCP settings URL state', () => {
       approvalKind: 'operations',
       approvalKindExplicit: false,
       approvalState: 'pending',
+      usageWindow: '24h',
+      usageBy: 'tool',
     });
   });
 
   it('keeps administrator sections away from everyone else', () => {
-    for (const tab of ['assistants', 'approvals', 'policy', 'capabilities'])
+    for (const tab of ['assistants', 'approvals', 'policy', 'capabilities', 'usage'])
       expect(parseMcpListParams({ tab }, false).section).toBe('overview');
     expect(parseMcpListParams({ tab: 'connections' }, false).section).toBe('connections');
     expect(parseMcpListParams({ tab: 'policy' }, true).section).toBe('policy');
+    expect(parseMcpListParams({ tab: 'usage' }, true).section).toBe('usage');
+    // The Usage view falls back to safe defaults on anything unknown.
+    expect(parseMcpListParams({ tab: 'usage', window: '7d', by: 'user' }, true)).toMatchObject({
+      usageWindow: '7d',
+      usageBy: 'user',
+    });
+    expect(parseMcpListParams({ tab: 'usage', window: '90y', by: 'sql' }, true)).toMatchObject({
+      usageWindow: '24h',
+      usageBy: 'tool',
+    });
     // Only administrators can narrow connections to one assistant.
     expect(parseMcpListParams({ client: 'cm1' }, false).clientId).toBeNull();
     expect(parseMcpListParams({ client: 'cm1' }, true).clientId).toBe('cm1');

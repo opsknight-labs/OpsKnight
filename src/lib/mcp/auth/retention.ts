@@ -174,7 +174,13 @@ export const MCP_CALL_LOG_PURGE_BATCHES = 20;
 
 /** Deletes activity rows older than the retention window, in bounded batches. */
 export async function purgeMcpCallLog(now = new Date()) {
-  const before = new Date(now.getTime() - MCP_CALL_LOG_RETENTION_MS);
+  // The administrator's retention window (7 to 365 days); the default when no policy row exists.
+  const policy = await prisma.mcpPolicy.findUnique({
+    where: { id: 'default' },
+    select: { callLogRetentionDays: true },
+  });
+  const retentionMs = policy ? policy.callLogRetentionDays * 86_400_000 : MCP_CALL_LOG_RETENTION_MS;
+  const before = new Date(now.getTime() - retentionMs);
   let total = 0;
   for (let batch = 0; batch < MCP_CALL_LOG_PURGE_BATCHES; batch++) {
     const count = await prisma.$transaction(async tx => {

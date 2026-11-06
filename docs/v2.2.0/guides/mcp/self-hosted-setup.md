@@ -27,7 +27,7 @@ verification:
 
 The same setup applies to Docker, Compose, Swarm, Kubernetes and virtual machines. There is no OpsKnight-hosted registration service, special test domain or separate MCP secret. Your installation publishes its own endpoint and OAuth discovery from its configured App URL.
 
-Everything below lives on one page: **Settings → Integrations & ChatOps → MCP (AI Assistants)**. Its tabs are **Overview**, **Connect**, **Connections** (people other than administrators see **Your connections**), **Assistants**, **Approvals** (runbook approvers who are not administrators see **Runbook approvals**), **Access policy** and **Exposed capabilities**. Assistants, Access policy and Exposed capabilities are for administrators only.
+Everything below lives on one page: **Settings → Integrations & ChatOps → MCP (AI Assistants)**. Its tabs are **Overview**, **Connect**, **Connections** (people other than administrators see **Your connections**), **Assistants**, **Approvals** (runbook approvers who are not administrators see **Runbook approvals**), **Access policy**, **Exposed capabilities** and **Usage**. Assistants, Access policy, Exposed capabilities and Usage are for administrators only.
 
 ## Administrator: turn it on (about two minutes)
 

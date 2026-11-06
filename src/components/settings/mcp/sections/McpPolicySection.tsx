@@ -31,6 +31,8 @@ export type McpPolicyValues = {
   patAllowedScopes: string[];
   requireReadOnlyConnections: boolean;
   deviceFlowEnabled: boolean;
+  /** How long the request log is kept (7 to 365). Absent means the 30-day default. */
+  callLogRetentionDays?: number;
 };
 
 /** Never offered for a personal token, whatever is ticked (effective-access.ts). */
@@ -197,6 +199,29 @@ export default function McpPolicySection({
         description="How long an unused connection stays signed in."
       >
         <SessionIdleSelect defaultValue={policy.sessionIdleDays} />
+      </PolicyGroup>
+
+      <PolicyGroup
+        title="Request log"
+        description="The Usage tab and each connection's activity come from a log of every request: the tool, the outcome, how long it took and who made it. It never records what was asked or returned."
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="mcp-call-log-retention">Keep the request log for (days)</Label>
+          <Input
+            id="mcp-call-log-retention"
+            name="callLogRetentionDays"
+            type="number"
+            min="7"
+            max="365"
+            defaultValue={policy.callLogRetentionDays ?? 30}
+            aria-describedby="mcp-call-log-retention-help"
+            required
+          />
+          <p id="mcp-call-log-retention-help" className="text-xs text-muted-foreground">
+            7 to 365. Older entries are deleted automatically, so shortening this removes history
+            you can no longer see.
+          </p>
+        </div>
       </PolicyGroup>
 
       <PolicyGroup

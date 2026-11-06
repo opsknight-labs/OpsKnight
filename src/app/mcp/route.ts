@@ -116,6 +116,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
   // Attribution for the completion log, set as soon as the bearer resolves so 429/busy count too.
   let grantId: string | undefined;
   let clientId: string | undefined;
+  let userId: string | undefined;
   let errorCode: string | undefined;
   // Activity log: the catalog operation this call ran, once the body is read.
   let operationId: string | null = null;
@@ -129,6 +130,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     let identity = await authenticateMcp(request, null);
     grantId = identity.grantId;
     clientId = identity.clientId;
+    userId = identity.auth.actor.id;
     releaseAuth();
     releaseAuth = undefined;
     // Fairness is per person: all of one user's connections share one slot cap.
@@ -428,6 +430,8 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     if (grantId && outcome !== 'notification')
       recordMcpCallLog({
         grantId,
+        clientId: clientId ?? null,
+        userId: userId ?? null,
         tool,
         operationId,
         outcome,

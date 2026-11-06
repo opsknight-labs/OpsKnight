@@ -195,3 +195,46 @@ tests:
         exp_samples:
           - labels: '{}'
             value: 1
+
+  - name: dropped request-log rows alert, and a quiet log stays quiet
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_call_log_dropped_total{job="opsknight",instance="web-a"}
+        values: 0+2x40
+      - series: opsknight_mcp_call_log_dropped_total{job="opsknight",instance="web-b"}
+        values: 7x40
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpCallLogDropping",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="OpsKnightMcpCallLogDropping",alertstate="firing"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: listen streams near the cap alert only on the busy process
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_subscriptions_active{job="opsknight",instance="web-a"}
+        values: 30x40
+      - series: opsknight_mcp_subscriptions_active{job="opsknight",instance="web-b"}
+        values: 12x40
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpStreamsNearLimit",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="OpsKnightMcpStreamsNearLimit",alertstate="firing",instance="web-a"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="OpsKnightMcpStreamsNearLimit",alertstate="firing",instance="web-b"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 0

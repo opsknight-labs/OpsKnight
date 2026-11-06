@@ -277,6 +277,7 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       patAllowedScopes: z.string().max(2048).optional(),
       requireReadOnlyConnections: z.boolean().optional(),
       deviceFlowEnabled: z.boolean().optional(),
+      callLogRetentionDays: z.coerce.number().int().min(7).max(365).optional(),
     })
     .strict()
     .parse({
@@ -314,6 +315,8 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       deviceFlowEnabled: form.has('deviceControls')
         ? form.get('deviceFlowEnabled') === 'on'
         : undefined,
+      // Absent keeps the stored window, so older callers do not reset it.
+      callLogRetentionDays: form.get('callLogRetentionDays') ?? undefined,
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -413,6 +416,7 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       requireReadOnlyConnections:
         input.requireReadOnlyConnections ?? existing.requireReadOnlyConnections,
       deviceFlowEnabled: input.deviceFlowEnabled ?? existing.deviceFlowEnabled,
+      callLogRetentionDays: input.callLogRetentionDays ?? existing.callLogRetentionDays,
     };
     // Widening access needs a recent sign-in; it is judged against the locked row and refused
     // before the write, so the revision does not move. Narrowing is always allowed.
