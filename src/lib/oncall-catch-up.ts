@@ -138,6 +138,8 @@ export async function getCatchUp(input: {
         where: {
           userId: input.userId,
           createdAt: { gte: since },
+          // A page is a "triggered" notification; acknowledged, resolved and updated are follow-ups.
+          eventType: 'triggered',
           incident: { is: scope({}) },
         },
         select: {

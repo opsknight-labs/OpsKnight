@@ -7,6 +7,7 @@ import { principal, setupMcpReadDatabase } from '../helpers/mcp-read-scenarios';
 import {
   createTestIncident,
   createTestOnCallSchedule,
+  createTestScheduleOverride,
   createTestService,
   createTestTeam,
   createTestUser,
@@ -269,12 +270,27 @@ describe('catch up scope, window, filters and pages', () => {
     await mk(paged.id, caller.user.id, 'PUSH', 'SENT');
     await mk(paged.id, caller.user.id, 'SMS', 'FAILED');
     await mk(onlyOther.id, other.id, 'PUSH', 'SENT');
+    // Follow-ups on an incident are not pages: a resolved or acknowledged notice alone must not count.
+    const followUpOnly = await createTestIncident(`Follow-up ${unique()}`, service.id, {
+      assigneeId: caller.user.id,
+    });
+    for (const eventType of ['acknowledged', 'resolved', 'updated'])
+      await db.notification.create({
+        data: {
+          incidentId: followUpOnly.id,
+          userId: caller.user.id,
+          channel: 'PUSH',
+          status: 'SENT',
+          eventType,
+        },
+      });
 
     const result = (await callMcpOperation(caller.ctx(), 'getMyCatchUp', {
       query: { scope: 'all' },
     })) as Envelope<CatchUp>;
     const items = result.data.data.pagedMe.items;
     expect(items.map(item => item.incident.id)).toEqual([paged.id]);
+    expect(result.data.data.pagedMe.count).toBe(1);
     expect(items[0]).toMatchObject({
       lastEventType: 'triggered',
       channels: ['PUSH', 'SMS'],
@@ -584,6 +600,31 @@ describe('on call now (getOnCallNow, oncall_now)', () => {
     expect(all.schedules.map(row => row.scheduleId)).toContain(strangerSchedule.id);
   });
 
+  it('counts a schedule a teammate is on only through an override', async () => {
+    const me = await principal('RESPONDER', ['schedules:read']);
+    const teammate = await createTestUser({ name: `Override mate ${unique()}` });
+    const lead = await createTestUser({ name: `Rota lead ${unique()}` });
+    const team = await createTestTeam(`Override team ${unique()}`);
+    await db.teamMember.createMany({
+      data: [
+        { teamId: team.id, userId: me.user.id },
+        { teamId: team.id, userId: teammate.id },
+      ],
+    });
+    const schedule = await createTestOnCallSchedule(`Override only ${unique()}`, [
+      { start: new Date(Date.now() - HOUR), rotationLengthHours: 24, userIds: [lead.id] },
+    ]);
+    await createTestScheduleOverride(
+      schedule.id,
+      teammate.id,
+      new Date(Date.now() - HOUR),
+      new Date(Date.now() + 5 * HOUR),
+      lead.id
+    );
+    const result = await ask(me, {});
+    expect(result.schedules.map(row => row.scheduleId)).toContain(schedule.id);
+  });
+
   it('flags a schedule nobody is on call for, and reports truncation', async () => {
     const admin = await principal('ADMIN', ['schedules:read']);
     const empty = await createTestOnCallSchedule(`Empty ${unique()}`, []);
@@ -610,5 +651,72 @@ describe('on call now (getOnCallNow, oncall_now)', () => {
       );
     const noScope = await principal('RESPONDER', ['incidents:read']);
     expect(await refused(callMcpOperation(noScope.ctx(), 'getOnCallNow', {}))).not.toBe('allowed');
+  });
+});
+
+describe('similar incidents, review follow-ups', () => {
+  const who = () => principal('RESPONDER', ['incidents:read']);
+  const ids = (result: Envelope<Similar>) => result.data.data.similar.map(row => row.incident.id);
+
+  it('finds an incident on another service whose likeness is only in the description', async () => {
+    const asker = await who();
+    const here = await createTestService(`Here ${unique()}`);
+    const there = await createTestService(`There ${unique()}`);
+    const source = await createTestIncident('Checkout failing', here.id, {
+      description: 'connection pool exhausted at payment gateway during checkout',
+    });
+    const match = await createTestIncident('Payments outage', there.id, {
+      status: 'RESOLVED',
+      resolvedAt: new Date(Date.now() - DAY),
+      description: 'payment gateway connection pool exhausted during checkout',
+    });
+    const result = (await callMcpOperation(asker.ctx(), 'listSimilarIncidents', {
+      path: { id: source.id },
+    })) as Envelope<Similar>;
+    expect(ids(result)).toContain(match.id);
+  });
+
+  it('finds a synonym match on another service that shares no literal word', async () => {
+    const asker = await who();
+    const here = await createTestService(`Syn here ${unique()}`);
+    const there = await createTestService(`Syn there ${unique()}`);
+    const source = await createTestIncident('Postgres slow', here.id);
+    const match = await createTestIncident('Database latency', there.id, {
+      status: 'RESOLVED',
+      resolvedAt: new Date(Date.now() - DAY),
+    });
+    const result = (await callMcpOperation(asker.ctx(), 'listSimilarIncidents', {
+      path: { id: source.id },
+    })) as Envelope<Similar>;
+    expect(ids(result)).toContain(match.id);
+  });
+
+  it('is exact about whether the note came before resolution', async () => {
+    const asker = await who();
+    const tag = unique();
+    const service = await createTestService(`Grace ${tag}`);
+    const source = await createTestIncident(`Webhook retries piling up ${tag}`, service.id);
+    const resolvedAt = new Date(Date.now() - 2 * DAY);
+    const match = await createTestIncident(`Webhook retries piling up again ${tag}`, service.id, {
+      status: 'RESOLVED',
+      resolvedAt,
+    });
+    // The only note is typed two minutes after the incident was closed.
+    await db.incidentNote.create({
+      data: {
+        incidentId: match.id,
+        content: 'Drained the dead-letter queue.',
+        createdAt: new Date(resolvedAt.getTime() + 2 * MINUTE),
+      },
+    });
+    const result = (await callMcpOperation(asker.ctx(), 'listSimilarIncidents', {
+      path: { id: source.id },
+    })) as Envelope<Similar>;
+    const row = result.data.data.similar.find(entry => entry.incident.id === match.id)!;
+    // Returned as the closing note, but honestly flagged as written after resolution.
+    expect(row.lastNote).toMatchObject({
+      excerpt: 'Drained the dead-letter queue.',
+      writtenBeforeResolution: false,
+    });
   });
 });

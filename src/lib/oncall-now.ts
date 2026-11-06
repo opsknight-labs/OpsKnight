@@ -71,6 +71,15 @@ export async function getOnCallNow(input: {
                 },
               },
             },
+            // A teammate who is on a schedule only through a current or future override counts too.
+            {
+              overrides: {
+                some: {
+                  end: { gt: now },
+                  user: { teamMemberships: { some: { teamId: { in: teamIds } } } },
+                },
+              },
+            },
           ]
         : []),
     ],

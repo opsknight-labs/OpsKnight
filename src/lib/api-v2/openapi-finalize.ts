@@ -1455,7 +1455,7 @@ const extraSchemas: Json = {
                 writtenBeforeResolution: {
                   type: 'boolean',
                   description:
-                    'True when the note was written at or before resolution; false means it is the newest note, written later.',
+                    'True only when the note was written at or before the incident was resolved; false means it was written afterwards (a closing note typed moments after the click, or a later follow-up).',
                 },
               },
               required: ['excerpt', 'createdAt', 'writtenBeforeResolution'],

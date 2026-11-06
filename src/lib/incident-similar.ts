@@ -10,7 +10,7 @@ export const SIMILAR_LOOKBACK_DAYS = 365;
 /** The same-service candidate pool holds at most this many incidents. */
 export const SIMILAR_POOL_LIMIT = 150;
 /**
- * Each title word is searched on its own with this quota, so one very common word (a product or
+ * Each searched word (with its synonyms, in title or description) has its own quota, so one very common word (a product or
  * service name) cannot fill the pool and crowd out the rarer words that actually discriminate.
  */
 export const SIMILAR_WORD_LIMIT = 40;
@@ -20,6 +20,7 @@ const MIN_OVERLAP = 0.2;
 const NOTE_EXCERPT_CHARS = 400;
 const DESCRIPTION_CHARS = 600;
 const SEARCH_WORDS = 5;
+const DESCRIPTION_SEARCH_WORDS = 3;
 const NOTES_PER_INCIDENT = 30;
 /** A note written up to this long after the incident closed still counts as its resolution note. */
 const RESOLUTION_NOTE_GRACE_MS = 5 * MINUTE_MS;
@@ -105,7 +106,7 @@ const bodyOf = (title: string, description: string | null) =>
 
 /**
  * Past resolved incidents that look like this one, with how each ended. Similarity is the overlap of
- * title words (70%) and title-plus-description words (30%), after light stemming and a small
+ * title words (70%) and title-plus-description words (30%), or 60% of the wider overlap when that is stronger,, after light stemming and a small
  * synonym table, nudged up by the same service and priority. It is a lead for a human, not proof of
  * the same cause: every row says why it matched, and a shared service or one shared word is never
  * enough on its own.
@@ -125,10 +126,27 @@ export async function findSimilarIncidents(input: {
   const now = input.now ?? new Date();
   const sourceTitle = titleTokens(input.incident.title);
   const sourceBody = titleTokens(bodyOf(input.incident.title, input.incident.description ?? null));
-  // The database matches the words as written; the scoring below folds them.
-  const searchWords = [...new Set(rawWords(input.incident.title))]
-    .sort((a, b) => b.length - a.length)
-    .slice(0, SEARCH_WORDS);
+  // The database matches words as written, so each searched word also carries its synonym group
+  // (the scoring folds them); the longest title words come first, then description words that
+  // the title does not already cover.
+  const longest = (words: string[], count: number) =>
+    [...new Set(words)].sort((a, b) => b.length - a.length).slice(0, count);
+  const titleWords = longest(rawWords(input.incident.title), SEARCH_WORDS);
+  const descriptionWords = longest(
+    rawWords(input.incident.description?.slice(0, DESCRIPTION_CHARS) ?? '').filter(
+      word => !titleWords.includes(word)
+    ),
+    DESCRIPTION_SEARCH_WORDS
+  );
+  const synonymsOf = (word: string): string[] => {
+    const canonical = SYNONYM.get(word) ?? SYNONYM.get(normalise(word));
+    return canonical
+      ? (SYNONYM_GROUPS.find(group => group[0] === canonical)?.map(String) ?? [word])
+      : [word];
+  };
+  const searchGroups = [...titleWords, ...descriptionWords].map(word => [
+    ...new Set([word, ...synonymsOf(word)]),
+  ]);
   const base: Prisma.IncidentWhereInput = {
     AND: [
       input.readWhere,
@@ -160,9 +178,19 @@ export async function findSimilarIncidents(input: {
       orderBy: order,
       take: SIMILAR_POOL_LIMIT,
     }),
-    ...searchWords.map(word =>
+    ...searchGroups.map(group =>
       prisma.incident.findMany({
-        where: { AND: [base, { title: { contains: word, mode: 'insensitive' as const } }] },
+        where: {
+          AND: [
+            base,
+            {
+              OR: group.flatMap(word => [
+                { title: { contains: word, mode: 'insensitive' as const } },
+                { description: { contains: word, mode: 'insensitive' as const } },
+              ]),
+            },
+          ],
+        },
         select,
         orderBy: order,
         take: SIMILAR_WORD_LIMIT,
@@ -179,7 +207,9 @@ export async function findSimilarIncidents(input: {
         sourceBody,
         titleTokens(bodyOf(candidate.title, candidate.description))
       );
-      const overlap = titleOverlap * 0.7 + bodyOverlap * 0.3;
+      // Titles lead; a strong match on the wider text (title plus description) also counts on its
+      // own, so two differently titled incidents with the same described failure still connect.
+      const overlap = Math.max(titleOverlap * 0.7 + bodyOverlap * 0.3, bodyOverlap * 0.6);
       const sameServiceMatch = candidate.serviceId === input.incident.serviceId;
       const samePriority =
         Boolean(candidate.priority) && candidate.priority === input.incident.priority;
@@ -215,16 +245,27 @@ export async function findSimilarIncidents(input: {
     list.push(note);
     notesByIncident.set(note.incidentId, list);
   }
-  /** The last note written at or before resolution, else the newest note (flagged as later). */
+  /**
+   * The note people wrote as they closed the incident: the latest one at or shortly after
+   * resolution (a closing note is often typed a moment after the click), else the newest note.
+   * `writtenBeforeResolution` is exact: true only when the note predates `resolvedAt`.
+   */
   const resolutionNote = (incidentId: string, resolvedAt: Date | null) => {
     const list = notesByIncident.get(incidentId) ?? [];
-    if (resolvedAt) {
-      const cutoff = resolvedAt.getTime() + RESOLUTION_NOTE_GRACE_MS;
-      const atResolution = list.find(note => note.createdAt.getTime() <= cutoff);
-      if (atResolution) return { note: atResolution, writtenBeforeResolution: true };
-    }
-    const newest = list[0];
-    return newest ? { note: newest, writtenBeforeResolution: false } : null;
+    const closing = resolvedAt
+      ? list.find(
+          note => note.createdAt.getTime() <= resolvedAt.getTime() + RESOLUTION_NOTE_GRACE_MS
+        )
+      : undefined;
+    const note = closing ?? list[0];
+    return note
+      ? {
+          note,
+          writtenBeforeResolution: resolvedAt
+            ? note.createdAt.getTime() <= resolvedAt.getTime()
+            : false,
+        }
+      : null;
   };
 
   return {
