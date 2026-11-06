@@ -44,12 +44,13 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 
 ### Incident commander
 
-| Ask                                                                               | Uses                                                            | Needs                                                      |
-| --------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------- |
-| "Why did this page go to the database team, and who gets it next?"                | `explain_escalation` prompt, `escalation_explain`               | `escalation-policies:read`                                 |
-| "Is the checkout service healthy, and what's its recent incident history?"        | `service_get_health`                                            | `services:read`                                            |
-| "Which runbook fits this incident? Show me what it would do, without running it." | `preview_remediation` prompt, `runbook_find`, `runbook_preview` | `runbooks:read`                                            |
-| "Prepare that runbook run for approval."                                          | `runbook_prepare_execution`                                     | `runbooks:execute` and the reads it lists, changes allowed |
+| Ask                                                                               | Uses                                                            | Needs                                                                                          |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| "Why did this page go to the database team, and who gets it next?"                | `explain_escalation` prompt, `escalation_explain`               | `escalation-policies:read`                                                                     |
+| "Is the checkout service healthy, and what's its recent incident history?"        | `service_get_health`                                            | `services:read`                                                                                |
+| "What changed on the payments service this week?"                                 | `service_get_changes`                                           | `services:read`, `incidents:read` (config history also needs `audit:read` and sensitive reads) |
+| "Which runbook fits this incident? Show me what it would do, without running it." | `preview_remediation` prompt, `runbook_find`, `runbook_preview` | `runbooks:read`                                                                                |
+| "Prepare that runbook run for approval."                                          | `runbook_prepare_execution`                                     | `runbooks:execute` and the reads it lists, changes allowed                                     |
 
 ### Team lead
 

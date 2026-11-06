@@ -1,4 +1,5 @@
 import { mcpCompositeCost } from '@/lib/mcp/core/composites';
+import { endMcpSpan, startMcpSpan } from '@/lib/mcp/protocol/tracing';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -106,6 +107,7 @@ export const OPTIONS = browserPreflight;
 
 async function handlePost(request: Request, requestId: string, browserOrigin: string | null) {
   const started = performance.now();
+  const span = startMcpSpan(requestId);
   let outcome: McpMetricOutcome = 'error';
   let tool = 'none';
   let method: string | undefined;
@@ -116,6 +118,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
   // Attribution for the completion log, set as soon as the bearer resolves so 429/busy count too.
   let grantId: string | undefined;
   let clientId: string | undefined;
+  let userId: string | undefined;
   let errorCode: string | undefined;
   // Activity log: the catalog operation this call ran, once the body is read.
   let operationId: string | null = null;
@@ -129,6 +132,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     let identity = await authenticateMcp(request, null);
     grantId = identity.grantId;
     clientId = identity.clientId;
+    userId = identity.auth.actor.id;
     releaseAuth();
     releaseAuth = undefined;
     // Fairness is per person: all of one user's connections share one slot cap.
@@ -221,7 +225,10 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
           ? (mcpCompositeCost(body.params?.name, body.params?.arguments) ?? 1)
           : 1;
     requireMcp(cost <= MCP_MAX_OPERATIONS, 'MCP_OPERATION_BUDGET_EXCEEDED');
-    await chargeMcpRequest(identity, cost);
+    await chargeMcpRequest(
+      { grantId: identity.grantId, userId: identity.auth.actor.id, policy: identity.policy },
+      cost
+    );
     // A policy saved before the cap existed may hold 9 to 16; the cap is what is enforced.
     budget = new CostBudget(
       Math.min(identity.policy.maxOperations, MCP_MAX_OPERATIONS),
@@ -406,6 +413,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     release?.();
     const durationMs = performance.now() - started;
     addOperationalMetric('opsknight_mcp_requests_total', 1, { outcome, tool });
+    endMcpSpan(span, { method, tool, outcome, durationMs });
     // Rejections are counted above, never timed: a flood of fast 429s must not hide slow calls.
     if (MCP_TIMED_OUTCOMES.has(outcome))
       observeOperationalHistogram('opsknight_mcp_request_duration_seconds', durationMs / 1000, {
@@ -428,6 +436,8 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     if (grantId && outcome !== 'notification')
       recordMcpCallLog({
         grantId,
+        clientId: clientId ?? null,
+        userId: userId ?? null,
         tool,
         operationId,
         outcome,

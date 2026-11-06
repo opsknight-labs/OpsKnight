@@ -284,7 +284,7 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   MCP_DISTINCT_REVIEWER_REQUIRED: {
     area: 'approvals',
     meaning:
-      'Someone tried to approve their own request without being an administrator, or the request was made with a personal access token, which always needs a second person.',
+      'Someone tried to approve their own request without being an administrator, the request was made with a personal access token (which always needs a second person), or the administrator-set option Require a different reviewer is on.',
     fix: 'Ask a second person with approval rights to review it.',
   },
   MCP_DOMAIN_REJECTED: {
@@ -956,6 +956,15 @@ export function renderPermissions() {
     '- Any permission can be unticked; Allow needs at least one.',
     "- Permissions the person's role can never use are hidden and noted on the page.",
     '',
+    '## Why some changes run directly and others wait for approval',
+    '',
+    'Each change is reviewed once and given a risk tier. The tier, not the tool, decides whether it waits for a person.',
+    '',
+    '- **Routine incident actions run directly** (acknowledge, resolve, assign, escalate, reopen, unsnooze, add a note, create an incident, add a watcher or tag). They are what a responder does all night; they already require the person to hold the permission; each is recorded in the audit log under the person who connected the assistant; and each can be undone or corrected by another action. Making them wait for a second person would defeat the point of on-call tooling.',
+    '- **Everything that can hide, delay or reconfigure waits for approval** (snooze, suppress, unacknowledge, removing a watcher, schedule overrides, status-page announcements, configuration, runbook runs). These can silence a page, change who is paged, or reach customers, so a person reviews the exact, frozen request first.',
+    "- **Neither tier widens anyone's access.** A direct action still runs only within the connected person's current role and team scope, and only while an administrator has turned changes on.",
+    '- A tier changes only by a documented review: see the catalog page for the tier of every operation.',
+    '',
     '## Permissions',
     '',
     'Operation columns count catalog operations that need the permission: plain reads, sensitive reads (only while an administrator allows sensitive reads), routine changes (run directly when changes are allowed) and reviewed changes (need human approval first). Curated tools reuse these operations. A ✓ means the role can use at least one action the permission gates. The consent label is the text the consent page shows; the operation columns are authoritative for whether a change runs directly or waits for review.',
@@ -975,7 +984,7 @@ export function renderPermissions() {
     '',
     '- **Configuration changes** (`operation_prepare`): an active administrator who holds every permission the change needs.',
     '- **Runbook runs** (`runbook_prepare_execution`): anyone with the runbook approve and runbook read permissions who can see the target incident or service. By default that is Responders and Administrators.',
-    '- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. The assistant can never approve.',
+    '- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. When an administrator turns on **Require a different reviewer** (Access policy), nobody may approve their own request, whatever their role. The assistant can never approve.',
     ''
   );
   lines.push(...renderCoverage());
@@ -1187,6 +1196,14 @@ export function renderMonitoring(repoRoot = process.cwd()) {
     ),
     '',
     "Each alert's description in the rules file names the log event to search. Thresholds are starting points; tune them to your traffic.",
+    '',
+    '## Tracing',
+    '',
+    'Each /mcp request also produces one OpenTelemetry span named `mcp.request`, with the attributes `mcp.request_id`, `mcp.method`, `mcp.tool`, `mcp.outcome` and `mcp.duration_ms`: the same bounded labels as the metrics, never a person, assistant, connection, argument or result. Server failures (`error`, `unavailable`) set the span status to error; refusals the caller caused do not. OpsKnight only calls the OpenTelemetry API, so nothing is recorded or exported until you register a tracer provider in your deployment, and there is no setting to turn on.',
+    '',
+    '## Dashboard',
+    '',
+    'Import `monitoring/grafana/opsknight-mcp.json` into Grafana (choose your Prometheus data source when asked). It shows requests by outcome, the server error share, the slowest 5% of calls by tool, work slots and shedding, open listen streams against the cap, dropped request-log rows and OAuth outcomes. Every panel reads a metric listed above; none is labelled by person, assistant or connection. For per-assistant and per-person usage, use the **Usage** tab in the MCP settings, which is built from the request log.',
     '',
     '## Per-request log',
     '',

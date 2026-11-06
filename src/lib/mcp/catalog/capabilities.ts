@@ -135,6 +135,14 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     summary: "Read a service's escalation steps with who is on call now and when shifts end.",
   },
   {
+    id: 'service_get_changes',
+    domain: 'services',
+    risk: 'R0',
+    approval: false,
+    summary:
+      'Read what changed on a service: configuration edits, runbook runs and incidents (no deploy data).',
+  },
+  {
     id: 'incident_acknowledge_many',
     domain: 'incidents',
     risk: 'R1',

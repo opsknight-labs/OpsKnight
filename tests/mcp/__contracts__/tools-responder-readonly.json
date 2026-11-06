@@ -174,8 +174,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "96e8194319ee0af9028efdfd139b79068fee1387e330fbfba9744782496d2b30",
-    "descriptionSha256": "8c0e67af9d8b7ebda81dfe3ff4f22cc614ef74b1ee3f23be25a9b30cce3cb22e"
+    "inputSchemaSha256": "552632e873aefd9c2adeffa709f9b1adad9ba3bdcd1b420f8e8ecdfaeb14d78c",
+    "descriptionSha256": "af074e48cfdb0ab369bea0f9958051d9568400bc7dffe0b8fdb5c49c2847d8f2"
   },
   {
     "name": "oncall_lookup",
@@ -366,6 +366,18 @@
     },
     "inputSchemaSha256": "2f83710534fd3eec06ebb18aa9a4bb1231bd53d678a7d09f6ec7bfb0b7f6c76d",
     "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
+  },
+  {
+    "name": "service_get_changes",
+    "title": "What changed on a service",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "a2d1ae0d589935514cb44ad12442db43793dfe29fb3c0df921de7484718e96ba",
+    "descriptionSha256": "81b018bf1dbb7198df97df6fe9c3a3c5a50eb2c75a53273859b408c297d5e201"
   },
   {
     "name": "service_get_health",

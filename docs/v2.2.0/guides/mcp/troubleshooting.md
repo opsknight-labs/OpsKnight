@@ -104,7 +104,7 @@ This page lists 105 MCP codes and 24 log events found in the source.
 | Code | What it means | What to do |
 | --- | --- | --- |
 | <a id="MCP_APPROVER_REQUIRED"></a>`MCP_APPROVER_REQUIRED` | The signed-in person cannot approve runbook runs. | Ask someone with the runbook approve permission (Responders and Administrators by default). |
-| <a id="MCP_DISTINCT_REVIEWER_REQUIRED"></a>`MCP_DISTINCT_REVIEWER_REQUIRED` | Someone tried to approve their own request without being an administrator, or the request was made with a personal access token, which always needs a second person. | Ask a second person with approval rights to review it. |
+| <a id="MCP_DISTINCT_REVIEWER_REQUIRED"></a>`MCP_DISTINCT_REVIEWER_REQUIRED` | Someone tried to approve their own request without being an administrator, the request was made with a personal access token (which always needs a second person), or the administrator-set option Require a different reviewer is on. | Ask a second person with approval rights to review it. |
 | <a id="MCP_REVIEWER_NOT_AUTHORIZED"></a>`MCP_REVIEWER_NOT_AUTHORIZED` | Configuration changes need an active administrator who holds every permission the change needs. | Ask an administrator to review it. |
 | <a id="MCP_APPROVAL_EXPIRED"></a>`MCP_APPROVAL_EXPIRED` | The request was not reviewed within the review window, or was approved but not applied within the commit window. | Prepare the change again with a new idempotencyKey. Administrators can lengthen both windows under Access policy → Reviewed actions. |
 | <a id="MCP_APPROVAL_UNAVAILABLE"></a>`MCP_APPROVAL_UNAVAILABLE` | No such approval for this connection and person (another grant or user cannot see it). | Use the approval ID returned by the prepare call, from the same connection. |

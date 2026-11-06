@@ -175,6 +175,58 @@ describe('easy assistant onboarding', () => {
     expect(capped.expiresAt.getTime()).toBe(capped.absoluteExpiresAt!.getTime());
   });
 
+  it('audits the first issue of credentials and a dormant connection resuming, not every refresh', async () => {
+    const user = await createTestUser({ role: 'ADMIN' });
+    const { client_id } = await registerClient();
+    const token = await connectWithoutResource(client_id, user);
+    const grant = await db.mcpGrant.findFirstOrThrow({ where: { userId: user.id } });
+    const count = (action: string) => db.auditLog.count({ where: { action, entityId: grant.id } });
+
+    // The exchange that minted the first credentials is recorded once, for the person.
+    expect(await count('mcp.token.issued')).toBe(1);
+    const issued = await db.auditLog.findFirstOrThrow({
+      where: { action: 'mcp.token.issued', entityId: grant.id },
+    });
+    expect(issued).toMatchObject({ actorId: user.id });
+    const metadata = (issued.details as { metadata: unknown }).metadata;
+    expect(metadata).toMatchObject({ clientId: client_id, clientName: 'Assistant' });
+    // What the row says about the credentials is only who and which assistant, never a secret.
+    expect(JSON.stringify(metadata)).not.toMatch(/token|secret|@|hash/i);
+
+    // Quick, ordinary refreshes write nothing.
+    const first = await refresh(client_id, token.refresh_token);
+    expect(first.status).toBe(200);
+    const second = await refresh(
+      client_id,
+      ((await first.json()) as { refresh_token: string }).refresh_token
+    );
+    expect(second.status).toBe(200);
+    expect(await count('mcp.token.issued')).toBe(1);
+    expect(await count('mcp.token.resumed')).toBe(0);
+
+    // The same connection coming back after three idle days is worth a record.
+    await db.mcpGrant.update({
+      where: { id: grant.id },
+      data: { lastUsedAt: new Date(Date.now() - 3 * DAY - 60_000) },
+    });
+    const third = await refresh(
+      client_id,
+      ((await second.json()) as { refresh_token: string }).refresh_token
+    );
+    expect(third.status).toBe(200);
+    expect(await count('mcp.token.resumed')).toBe(1);
+    expect(
+      (
+        await db.auditLog.findFirstOrThrow({
+          where: { action: 'mcp.token.resumed', entityId: grant.id },
+        })
+      ).details
+    ).toMatchObject({ metadata: { idleDays: 3 } });
+    // And only once: the connection is no longer idle.
+    await refresh(client_id, ((await third.json()) as { refresh_token: string }).refresh_token);
+    expect(await count('mcp.token.resumed')).toBe(1);
+  });
+
   it('does not renew a revoked or expired connection', async () => {
     const user = await createTestUser({ role: 'ADMIN' });
     const { client_id } = await registerClient();
@@ -512,6 +564,70 @@ describe('saving the policy form', () => {
     await expect(
       updateMcpPolicy(form({ enabled: 'on', approvalTtlMinutes: '5' }))
     ).rejects.toThrow();
+  });
+  it('saves "Require a different reviewer" and the request-log window, keeps them when a form leaves them out, and rejects a bad window', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    const { updateMcpPolicy } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    await updateMcpPolicy(
+      form({
+        enabled: 'on',
+        reviewControls: '1',
+        requireDistinctReviewer: 'on',
+        callLogRetentionDays: '90',
+      })
+    );
+    const stored = { requireDistinctReviewer: true, callLogRetentionDays: 90 };
+    expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject(
+      stored
+    );
+    // A form without the controls (an older page) must not switch strict review off.
+    await updateMcpPolicy(form({ enabled: 'on' }));
+    expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject(
+      stored
+    );
+    for (const days of ['6', '366'])
+      await expect(
+        updateMcpPolicy(form({ enabled: 'on', callLogRetentionDays: days }))
+      ).rejects.toThrow();
+  });
+  it('turning strict review off needs a recent sign-in; turning it on does not', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    const { updateMcpPolicy } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    const { requireFreshMcpAdmin } = await import('@/lib/mcp/auth/fresh-admin');
+    const fresh = vi.mocked(requireFreshMcpAdmin);
+    const strictRule = async () =>
+      (await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).requireDistinctReviewer;
+    // MCP is already on, so only the review rule changes in this test.
+    await db.mcpPolicy.deleteMany();
+    await db.mcpPolicy.create({
+      data: { id: 'default', enabled: true, requireDistinctReviewer: false },
+    });
+    try {
+      // The administrator's sign-in is stale from here on.
+      fresh.mockResolvedValue(false);
+      // Narrowing: turning it on works even then.
+      const on = await updateMcpPolicy(
+        form({ enabled: 'on', reviewControls: '1', requireDistinctReviewer: 'on' })
+      );
+      expect(on).not.toMatchObject({ ok: false });
+      expect(await strictRule()).toBe(true);
+      // Widening: turning it off with a stale sign-in is refused, and nothing changes.
+      expect(await updateMcpPolicy(form({ enabled: 'on', reviewControls: '1' }))).toEqual({
+        ok: false,
+        code: 'MCP_REAUTHENTICATION_REQUIRED',
+      });
+      expect(await strictRule()).toBe(true);
+      // With a recent sign-in it is allowed.
+      fresh.mockResolvedValue(true);
+      await updateMcpPolicy(form({ enabled: 'on', reviewControls: '1' }));
+      expect(await strictRule()).toBe(false);
+    } finally {
+      fresh.mockResolvedValue(true);
+    }
   });
   it('refuses turning MCP on while MCP_FORCE_DISABLED is set, but keeps an enabled policy editable', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });

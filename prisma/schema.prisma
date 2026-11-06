@@ -4876,6 +4876,12 @@ model McpPolicy {
   // OAuth device authorization grant (RFC 8628) for CLIs, SSH sessions and headless servers. Off
   // by default; only clients registered for the device_code grant may use it.
   deviceFlowEnabled Boolean @default(false)
+  // How long the per-request activity log is kept (7..365 days).
+  callLogRetentionDays Int @default(30)
+  // Strict four-eyes: nobody, administrators included, approves their own prepared change.
+  requireDistinctReviewer Boolean @default(false)
+  // Optional cap on one person's requests per minute across all their connections (null = off).
+  perUserRequestsPerMinute Int?
   // Optimistic concurrency for policy saves.
   policyRevision Int @default(0)
   updatedAt DateTime @updatedAt
@@ -4946,8 +4952,13 @@ model McpCallLog {
   durationMs Int
   requestId String
   errorCode String?
+  // Who made the call. Ids only, never names or content; null on rows written before round 6.
+  clientId String?
+  userId String?
   @@index([grantId, at(sort: Desc), id(sort: Desc)])
   @@index([at])
+  @@index([clientId, at(sort: Desc)])
+  @@index([userId, at(sort: Desc)])
 }
 
 model McpAuthorizationCode {

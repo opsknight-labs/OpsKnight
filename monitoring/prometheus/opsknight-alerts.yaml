@@ -258,3 +258,19 @@ groups:
         annotations:
           summary: No successful MCP maintenance run in 15 minutes
           description: The cron scheduler ran MCP maintenance in the last hour but none succeeded recently. Check scheduler leadership and database locks.
+      - alert: OpsKnightMcpCallLogDropping
+        expr: sum(increase(opsknight_mcp_call_log_dropped_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP request-log rows are being dropped
+          description: The Usage tab and each connection's activity are missing entries because the queue was full or a batch write failed. Requests and audit rows are unaffected. Search for mcp.call_log.write_failed and check database health.
+      - alert: OpsKnightMcpStreamsNearLimit
+        expr: max by (instance) (opsknight_mcp_subscriptions_active) >= 28
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'MCP listen streams on {{ $labels.instance }} are close to the 32-stream cap'
+          description: At the cap new streams get MCP_SUBSCRIPTIONS_BUSY. Streams last at most ten minutes and each connection may hold two; add web replicas or find the connection holding streams in mcp.request.completed (outcome subscription_opened).

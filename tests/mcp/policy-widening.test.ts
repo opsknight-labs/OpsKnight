@@ -53,6 +53,36 @@ describe('mcpPolicyWidening', () => {
     ).toEqual(['allowedBrowserOrigins']);
   });
 
+  it('treats lifting strict review as widening and turning it on as narrowing', () => {
+    // Unset on both sides (an older caller) is no change.
+    expect(mcpPolicyWidening(base, base)).toEqual([]);
+    expect(
+      mcpPolicyWidening(
+        { ...base, requireDistinctReviewer: true },
+        { ...base, requireDistinctReviewer: false }
+      )
+    ).toEqual(['requireDistinctReviewer']);
+    expect(
+      mcpPolicyWidening(
+        { ...base, requireDistinctReviewer: false },
+        { ...base, requireDistinctReviewer: true }
+      )
+    ).toEqual([]);
+  });
+
+  it('treats raising or removing the per-person cap as widening and lowering it as narrowing', () => {
+    const capped = { ...base, perUserRequestsPerMinute: 60 };
+    expect(mcpPolicyWidening(capped, { ...capped, perUserRequestsPerMinute: 120 })).toEqual([
+      'perUserRequestsPerMinute',
+    ]);
+    expect(mcpPolicyWidening(capped, { ...capped, perUserRequestsPerMinute: null })).toEqual([
+      'perUserRequestsPerMinute',
+    ]);
+    expect(mcpPolicyWidening(capped, { ...capped, perUserRequestsPerMinute: 30 })).toEqual([]);
+    expect(mcpPolicyWidening(base, { ...base, perUserRequestsPerMinute: 30 })).toEqual([]);
+    expect(mcpPolicyWidening(base, base)).toEqual([]);
+  });
+
   it('treats turning device sign-in on as widening and turning it off as narrowing', () => {
     expect(mcpPolicyWidening(base, { ...base, deviceFlowEnabled: true })).toEqual([
       'deviceFlowEnabled',

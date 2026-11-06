@@ -2,6 +2,7 @@ import Link from 'next/link';
 import {
   AlertTriangle,
   ArrowUpRight,
+  BarChart3,
   Bot,
   CheckCircle2,
   ClipboardCheck,
@@ -40,6 +41,9 @@ import { isAppRole } from '@/lib/authorization';
 import McpAssistantsSection from '@/components/settings/mcp/sections/McpAssistantsSection';
 import McpApprovalsSection from '@/components/settings/mcp/sections/McpApprovalsSection';
 import McpPolicySection from '@/components/settings/mcp/sections/McpPolicySection';
+import McpUsageSection from '@/components/settings/mcp/sections/McpUsageSection';
+import { getMcpUsage } from './usage';
+import { exportMcpUsage } from './usage-actions';
 import McpCapabilityControls from './components/McpCapabilityControls';
 import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
 import { describeMcpScope, supportedMcpScopes } from '@/lib/mcp/auth/scopes';
@@ -99,6 +103,7 @@ const SECTION_LABEL = new Map<McpSection, string>(
     approvals: 'Approvals',
     policy: 'Access policy',
     capabilities: 'Exposed capabilities',
+    usage: 'Usage',
   }) as [McpSection, string][]
 );
 
@@ -159,6 +164,7 @@ export default async function McpSettings({
     approvals: mcpHref({ tab: 'approvals', kind: isAdmin ? waitingApprovalKind(pending) : null }),
     policy: mcpHref({ tab: 'policy' }),
     capabilities: mcpHref({ tab: 'capabilities' }),
+    usage: mcpHref({ tab: 'usage' }),
   };
 
   const navItems: McpNavItem[] = [
@@ -195,6 +201,7 @@ export default async function McpSettings({
             href: hrefs.capabilities,
             icon: <Layers />,
           },
+          { id: 'usage', label: 'Usage', href: hrefs.usage, icon: <BarChart3 /> },
         ]
       : []),
   ];
@@ -527,13 +534,27 @@ export default async function McpSettings({
               patAllowedScopes: policy?.patAllowedScopes ?? [],
               requireReadOnlyConnections: policy?.requireReadOnlyConnections ?? false,
               deviceFlowEnabled: policy?.deviceFlowEnabled ?? false,
+              callLogRetentionDays: policy?.callLogRetentionDays ?? 30,
+              requireDistinctReviewer: policy?.requireDistinctReviewer ?? false,
+              perUserRequestsPerMinute: policy?.perUserRequestsPerMinute ?? null,
             }}
             revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}
             selectedScopes={ceiling}
             action={updateMcpPolicy}
+            activeAdminCount={await prisma.user.count({
+              where: { role: 'ADMIN', status: 'ACTIVE' },
+            })}
           />
         );
+      case 'usage': {
+        const usage = await getMcpUsage(viewer, {
+          window: params.usageWindow,
+          by: params.usageBy,
+          q: params.q,
+        });
+        return <McpUsageSection usage={usage} q={params.q} exportAction={exportMcpUsage} />;
+      }
       case 'capabilities':
         return (
           <div id="exposed-capabilities">

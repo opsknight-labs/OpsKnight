@@ -14,6 +14,7 @@ import { MCP_CATALOG, MCP_OPERATION_MAP, isMcpApprovalGated, isMcpExecutable } f
 import { resolveMcpGrant } from '../auth/principal';
 import { mcpOrigin } from '../auth/config';
 import { McpBoundaryError, requireMcp } from '../core/errors';
+import { enforceDistinctReviewer } from './distinct-reviewer';
 import { isAuthenticationFresh } from '@/lib/auth-control/actor';
 import {
   callApprovedMcpOperation,
@@ -415,6 +416,8 @@ async function assertOperationReviewer(
     });
     requireMcp(requester?.kind !== 'PAT', 'MCP_DISTINCT_REVIEWER_REQUIRED', 403);
   }
+  // Strict four-eyes, when an administrator has required it.
+  await enforceDistinctReviewer(tx, selfReview);
   // Several actions are allowed without a resource (resource checks happen later), so a
   // resource-less authorize() is not enough for a sensitive R2 change: require an administrator.
   requireMcp(

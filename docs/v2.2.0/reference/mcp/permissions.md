@@ -45,6 +45,15 @@ Quick setup and the default ceiling grant: `incidents:read`, `services:read`, `s
 - Any permission can be unticked; Allow needs at least one.
 - Permissions the person's role can never use are hidden and noted on the page.
 
+## Why some changes run directly and others wait for approval
+
+Each change is reviewed once and given a risk tier. The tier, not the tool, decides whether it waits for a person.
+
+- **Routine incident actions run directly** (acknowledge, resolve, assign, escalate, reopen, unsnooze, add a note, create an incident, add a watcher or tag). They are what a responder does all night; they already require the person to hold the permission; each is recorded in the audit log under the person who connected the assistant; and each can be undone or corrected by another action. Making them wait for a second person would defeat the point of on-call tooling.
+- **Everything that can hide, delay or reconfigure waits for approval** (snooze, suppress, unacknowledge, removing a watcher, schedule overrides, status-page announcements, configuration, runbook runs). These can silence a page, change who is paged, or reach customers, so a person reviews the exact, frozen request first.
+- **Neither tier widens anyone's access.** A direct action still runs only within the connected person's current role and team scope, and only while an administrator has turned changes on.
+- A tier changes only by a documented review: see the catalog page for the tier of every operation.
+
 ## Permissions
 
 Operation columns count catalog operations that need the permission: plain reads, sensitive reads (only while an administrator allows sensitive reads), routine changes (run directly when changes are allowed) and reviewed changes (need human approval first). Curated tools reuse these operations. A ✓ means the role can use at least one action the permission gates. The consent label is the text the consent page shows; the operation columns are authoritative for whether a change runs directly or waits for review.
@@ -104,7 +113,7 @@ Operation columns count catalog operations that need the permission: plain reads
 
 - **Configuration changes** (`operation_prepare`): an active administrator who holds every permission the change needs.
 - **Runbook runs** (`runbook_prepare_execution`): anyone with the runbook approve and runbook read permissions who can see the target incident or service. By default that is Responders and Administrators.
-- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. The assistant can never approve.
+- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. When an administrator turns on **Require a different reviewer** (Access policy), nobody may approve their own request, whatever their role. The assistant can never approve.
 
 ## Coverage by area
 

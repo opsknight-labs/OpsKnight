@@ -277,6 +277,12 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       patAllowedScopes: z.string().max(2048).optional(),
       requireReadOnlyConnections: z.boolean().optional(),
       deviceFlowEnabled: z.boolean().optional(),
+      callLogRetentionDays: z.coerce.number().int().min(7).max(365).optional(),
+      requireDistinctReviewer: z.boolean().optional(),
+      // Empty means no cap; absent keeps the stored value.
+      perUserRequestsPerMinute: z
+        .union([z.literal(''), z.coerce.number().int().min(1).max(6000)])
+        .optional(),
     })
     .strict()
     .parse({
@@ -314,6 +320,13 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       deviceFlowEnabled: form.has('deviceControls')
         ? form.get('deviceFlowEnabled') === 'on'
         : undefined,
+      // Absent keeps the stored window, so older callers do not reset it.
+      callLogRetentionDays: form.get('callLogRetentionDays') ?? undefined,
+      // The review controls send a marker, because an unticked checkbox cannot say "off".
+      requireDistinctReviewer: form.has('reviewControls')
+        ? form.get('requireDistinctReviewer') === 'on'
+        : undefined,
+      perUserRequestsPerMinute: form.get('perUserRequestsPerMinute') ?? undefined,
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -413,6 +426,14 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       requireReadOnlyConnections:
         input.requireReadOnlyConnections ?? existing.requireReadOnlyConnections,
       deviceFlowEnabled: input.deviceFlowEnabled ?? existing.deviceFlowEnabled,
+      callLogRetentionDays: input.callLogRetentionDays ?? existing.callLogRetentionDays,
+      requireDistinctReviewer: input.requireDistinctReviewer ?? existing.requireDistinctReviewer,
+      perUserRequestsPerMinute:
+        input.perUserRequestsPerMinute === undefined
+          ? existing.perUserRequestsPerMinute
+          : input.perUserRequestsPerMinute === ''
+            ? null
+            : input.perUserRequestsPerMinute,
     };
     // Widening access needs a recent sign-in; it is judged against the locked row and refused
     // before the write, so the revision does not move. Narrowing is always allowed.

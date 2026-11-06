@@ -14,6 +14,7 @@ export const MCP_SECTIONS = [
   'approvals',
   'policy',
   'capabilities',
+  'usage',
 ] as const;
 export type McpSection = (typeof MCP_SECTIONS)[number];
 
@@ -22,6 +23,7 @@ export const MCP_ADMIN_SECTIONS: ReadonlySet<McpSection> = new Set([
   'assistants',
   'policy',
   'capabilities',
+  'usage',
 ]);
 
 /**
@@ -38,6 +40,12 @@ export type ClientStatus = (typeof CLIENT_STATUSES)[number];
 
 export const CLIENT_TYPES = ['all', 'automatic', 'metadata', 'manual'] as const;
 export type ClientType = (typeof CLIENT_TYPES)[number];
+
+export const USAGE_WINDOW_KEYS = ['24h', '7d', '30d'] as const;
+export type UsageWindow = (typeof USAGE_WINDOW_KEYS)[number];
+
+export const USAGE_GROUPS = ['tool', 'client', 'user'] as const;
+export type UsageGroup = (typeof USAGE_GROUPS)[number];
 
 export const APPROVAL_KINDS = ['operations', 'runbooks'] as const;
 export type ApprovalKind = (typeof APPROVAL_KINDS)[number];
@@ -58,6 +66,9 @@ export type McpListParams = {
   /** The URL chose the queue; otherwise the page may open the one with waiting requests. */
   approvalKindExplicit: boolean;
   approvalState: ApprovalState;
+  /** Usage tab: how far back to look, and what to group by. */
+  usageWindow: UsageWindow;
+  usageBy: UsageGroup;
 };
 
 type RawParams = Record<string, string | string[] | undefined>;
@@ -106,6 +117,8 @@ export function parseMcpListParams(
       access === 'runbooks' ||
       (APPROVAL_KINDS as readonly string[]).includes(first(raw.kind) ?? ''),
     approvalState: oneOf(APPROVAL_STATES, first(raw.state), 'pending'),
+    usageWindow: oneOf(USAGE_WINDOW_KEYS, first(raw.window), '24h'),
+    usageBy: oneOf(USAGE_GROUPS, first(raw.by), 'tool'),
   };
 }
 

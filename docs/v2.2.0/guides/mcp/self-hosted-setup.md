@@ -27,7 +27,7 @@ verification:
 
 The same setup applies to Docker, Compose, Swarm, Kubernetes and virtual machines. There is no OpsKnight-hosted registration service, special test domain or separate MCP secret. Your installation publishes its own endpoint and OAuth discovery from its configured App URL.
 
-Everything below lives on one page: **Settings → Integrations & ChatOps → MCP (AI Assistants)**. Its tabs are **Overview**, **Connect**, **Connections** (people other than administrators see **Your connections**), **Assistants**, **Approvals** (runbook approvers who are not administrators see **Runbook approvals**), **Access policy** and **Exposed capabilities**. Assistants, Access policy and Exposed capabilities are for administrators only.
+Everything below lives on one page: **Settings → Integrations & ChatOps → MCP (AI Assistants)**. Its tabs are **Overview**, **Connect**, **Connections** (people other than administrators see **Your connections**), **Assistants**, **Approvals** (runbook approvers who are not administrators see **Runbook approvals**), **Access policy**, **Exposed capabilities** and **Usage**. Assistants, Access policy, Exposed capabilities and Usage are for administrators only.
 
 ## Administrator: turn it on (about two minutes)
 
@@ -157,7 +157,7 @@ Changes are off by default. Turn them on with **Allow reviewed routine mutations
 - **Configuration changes** go through `operation_prepare` and are approved by an **administrator** who holds every permission the change needs.
 - **Runbook runs** go through `runbook_prepare_execution` and are approved by **anyone with runbook approve permission** (Responders and Administrators by default) who can also read runbooks and see the target incident or service.
 
-Normally a second person with approval rights reviews the exact, frozen request on the review page. An administrator may approve their own request only after ticking an explicit confirmation; the decision is recorded as self-approved in the approval history and the audit entry. Anyone else needs a second person. The assistant can never approve: no MCP, REST or tool path approves.
+Normally a second person with approval rights reviews the exact, frozen request on the review page. An administrator may approve their own request only after ticking an explicit confirmation; the decision is recorded as self-approved in the approval history and the audit entry. Anyone else needs a second person. Regulated teams can turn on **Require a different reviewer** under Access policy → Who may approve: then nobody, administrators included, can approve a change or runbook run that they or their own assistant requested, even after confirming, and a second administrator must review it. Turning it on takes effect for requests already waiting; turning it off needs a recent sign-in. The assistant can never approve: no MCP, REST or tool path approves.
 
 **Who is told.** Reviewers get an in-app notification (the bell) when a request is prepared, linking to the review page: administrators for configuration changes; runbook approvers for runbook runs (for runbooks that target an incident or service, only approvers who can see every incident or service). At most 50 people are notified; the requester is never notified of their own request. The requester gets an in-app notification when someone else decides. There is no email. Reviewers can also watch the **Approvals** tab, and the assistant is told to share the `reviewUrl`.
 
