@@ -29,7 +29,7 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 | ----------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------- |
 | "Who am I in OpsKnight, and what can you do for me?"                          | `whoami`                                              | nothing extra                      |
 | "What can I ask you?" (a good first question)                                 | `getting_started` prompt, `whoami`                    | nothing extra                      |
-| "What did I miss overnight, and what needs me first?"                         | `catch_up` prompt, `oncall_catch_up`                  | `incidents:read`                   |
+| "What did I miss overnight, and what paged me?"                               | `catch_up` prompt, `oncall_catch_up`                  | `incidents:read`                   |
 | "What's open and assigned to me right now?"                                   | `incident_search` with `assigneeId: "me"`             | `incidents:read`                   |
 | "Investigate incident #A1B2C: what happened, what changed, anything related?" | `investigate_incident` prompt, `incident_get_context` | `incidents:read`                   |
 | "Has this happened before? What fixed it last time?"                          | `find_precedent` prompt, `incident_find_similar`      | `incidents:read`                   |
@@ -37,6 +37,9 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 | "Acknowledge it and add a note that I'm looking at the database."             | `incident_acknowledge`, `incident_add_note`           | `incidents:write`, changes allowed |
 | "Who is on call for payments, and who's next?"                                | `oncall_lookup`                                       | `schedules:read`                   |
 | "When am I on call over the next two weeks, and who takes over from me?"      | `oncall_my_shifts`                                    | `schedules:read`                   |
+| "Who is on call for my team right now? Is any schedule uncovered?"            | `oncall_now`                                          | `schedules:read`                   |
+| "Keep me posted on this incident."                                            | `incident_watch`                                      | `incidents:write`, changes allowed |
+| "What can I do with this incident right now?"                                 | `incident_available_actions`                          | `incidents:read`                   |
 | "I can't make Friday's shift. Who could cover it, and draft the ask."         | `request_shift_cover` prompt, `oncall_my_shifts`      | `schedules:read`                   |
 
 ### Incident commander

@@ -86,7 +86,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `runbooks:publish` | Publish runbooks | Runbooks | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `runbooks:read` | View runbooks | Runbooks | View | ✓ | ✓ | ✓ |  | 6 | 3 | 0 | 3 |
 | `runbooks:write` | Change runbooks (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  | 3 | 3 | 0 | 7 |
-| `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ | 12 | 0 | 0 | 4 |
+| `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ | 13 | 0 | 0 | 4 |
 | `schedules:write` | Change on-call schedules (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  | 1 | 2 | 0 | 12 |
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 7 | 0 | 0 |
@@ -125,7 +125,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | postmortems | 14 | 6 | 8 | 0 |
 | reports | 12 | 5 | 3 | 4 |
 | runbooks | 59 | 14 | 13 | 32 |
-| schedules | 24 | 12 | 12 | 0 |
+| schedules | 25 | 13 | 12 | 0 |
 | service-accounts | 6 | 0 | 0 | 6 |
 | service-objectives | 11 | 7 | 4 | 0 |
 | services | 43 | 21 | 21 | 1 |
@@ -133,7 +133,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 324 | 146 | 106 | 72 |
+| **All** | 325 | 147 | 106 | 72 |
 
 <details>
 <summary>Operations by area</summary>
@@ -203,7 +203,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `deleteIncidentTemplate` | `operation_prepare`, then approval |
 | `escalateIncident` | `incident_escalate` |
 | `getIncident` | `incident_get` |
-| `getIncidentAvailableActions` | `read_operation` |
+| `getIncidentAvailableActions` | `incident_available_actions` |
 | `getIncidentCustomField` | `read_operation` (sensitive reads on) |
 | `getIncidentResponseActivity` | `read_operation` |
 | `getIncidentRoutingDecision` | `read_operation` |
@@ -212,7 +212,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getIncidentWatcher` | `read_operation` (sensitive reads on) |
 | `listIncidentAlerts` | `read_operation` (sensitive reads on) |
 | `listIncidentCustomFields` | `read_operation` |
-| `listIncidentNotes` | `read_operation` |
+| `listIncidentNotes` | `incident_list_notes` |
 | `listIncidentNotificationAttempts` | `read_operation` (sensitive reads on) |
 | `listIncidentRunbookExecutions` | `read_operation` |
 | `listIncidentTags` | `read_operation` |
@@ -227,7 +227,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `reopenIncident` | `incident_reopen` |
 | `resolveIncident` | `incident_resolve` |
 | `setIncidentCustomField` | `operation_prepare`, then approval |
-| `setIncidentWatcher` | `call_operation` |
+| `setIncidentWatcher` | `incident_watch` |
 | `snoozeIncident` | `operation_prepare`, then approval |
 | `suppressIncident` | `operation_prepare`, then approval |
 | `unacknowledgeIncident` | `operation_prepare`, then approval |
@@ -285,12 +285,12 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `createPostmortem` | `operation_prepare`, then approval |
 | `deletePostmortem` | `operation_prepare`, then approval |
 | `deletePostmortemActionItem` | `operation_prepare`, then approval |
-| `getPostmortem` | `read_operation` |
+| `getPostmortem` | `postmortem_get` |
 | `getPostmortemActionItem` | `read_operation` |
 | `listPostmortemActionItems` | `read_operation` |
 | `listPostmortemContributors` | `read_operation` |
 | `listPostmortemVersions` | `read_operation` |
-| `listPostmortems` | `read_operation` |
+| `listPostmortems` | `postmortem_list` |
 | `publishPostmortem` | `operation_prepare`, then approval |
 | `replacePostmortemActionItems` | `operation_prepare`, then approval |
 | `replacePostmortemContributors` | `operation_prepare`, then approval |
@@ -389,6 +389,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `createScheduleOverride` | `operation_prepare`, then approval |
 | `deleteSchedule` | `operation_prepare`, then approval |
 | `deleteScheduleLayer` | `operation_prepare`, then approval |
+| `getOnCallNow` | `oncall_now` |
 | `getSchedule` | `schedule_get` |
 | `getScheduleCoverage` | `read_operation` |
 | `getScheduleDependencies` | `read_operation` (sensitive reads on) |
@@ -398,8 +399,8 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getScheduleParticipant` | `read_operation` |
 | `listScheduleChanges` | `read_operation` (sensitive reads on) |
 | `listScheduleLayers` | `read_operation` |
-| `listScheduleOverrides` | `read_operation` |
-| `listSchedules` | `read_operation` |
+| `listScheduleOverrides` | `schedule_list_overrides` |
+| `listSchedules` | `schedule_list` |
 | `moveScheduleParticipant` | `operation_prepare`, then approval |
 | `previewScheduleCoverage` | `call_operation` |
 | `removeScheduleParticipant` | `operation_prepare`, then approval |
@@ -464,7 +465,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `listRunbookRulePolicyChecks` | `read_operation` (sensitive reads on) |
 | `listServiceChangeEvents` | `read_operation` (sensitive reads on) |
 | `listServiceRunbookRules` | `read_operation` |
-| `listServices` | `read_operation` |
+| `listServices` | `service_list` |
 | `pauseServiceRunbookRule` | `operation_prepare`, then approval |
 | `publishAutomationVersion` | `operation_prepare`, then approval |
 | `replaceRunbookRuleTriggers` | `operation_prepare`, then approval |
@@ -543,7 +544,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `listTeamActivity` | `read_operation` (sensitive reads on) |
 | `listTeamMembers` | `read_operation` |
 | `listTeamServices` | `read_operation` |
-| `listTeams` | `read_operation` |
+| `listTeams` | `team_list` |
 | `removeTeamMember` | `operation_prepare`, then approval |
 | `setTeamLead` | `operation_prepare`, then approval |
 | `setTeamMember` | `operation_prepare`, then approval |

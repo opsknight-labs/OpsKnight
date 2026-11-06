@@ -70,6 +70,18 @@
     "descriptionSha256": "e4751e3d062bda9736fab7deea15eb6ff0ba0fb038cc6d095600ab8449d7f6ce"
   },
   {
+    "name": "incident_available_actions",
+    "title": "What can I do with this incident",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "e39969791185a12b0bacf30a0e4e906a98997b9cc06ae0be7b470bc5555fbc5e"
+  },
+  {
     "name": "incident_find_similar",
     "title": "Find similar past incidents",
     "annotations": {
@@ -118,6 +130,18 @@
     "descriptionSha256": "411985fffd9836c1e7b5d709c4a972baa9a10644b8742b10d108be5ca9328b71"
   },
   {
+    "name": "incident_list_notes",
+    "title": "List incident notes",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "5a3cdba3e1757b0817373a8f6e0deb431212427364c901a5a336f848fe756b53"
+  },
+  {
     "name": "incident_search",
     "title": "Search incidents",
     "annotations": {
@@ -138,7 +162,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "ed4bfea7149676d7e82eb8b48ca237ca6e0f7850989469e03bf6e6906e86238e",
+    "inputSchemaSha256": "9a2889c88beb752a4f1fc64474650627280eb2bf66b7c455ed5c64213cbbd94b",
     "descriptionSha256": "33373702a4d1d74cabe873256220f7118ff136d32a18b95126d4e2d324ac82c9"
   },
   {
@@ -178,6 +202,30 @@
     "descriptionSha256": "b572891eb41edba9c32804af07f2d489deb2995cde943ae679ee77c504b91b46"
   },
   {
+    "name": "oncall_now",
+    "title": "Who is on call now",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "b11869cc4d9bf98286b43b164d17690dccd8ae96dbe3499778a8224655692f3f",
+    "descriptionSha256": "6ac5e71aa7fb254162b5a8fd7a868cfdf4d7a5a83aeaeaf40d6c5891080e3f84"
+  },
+  {
+    "name": "postmortem_get",
+    "title": "Get a postmortem",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "185ff2ce7cbbab88ad6f8fa55ac3ef1f7b4c145be5fd734c2f03c44514b37780"
+  },
+  {
     "name": "postmortem_get_context",
     "title": "Get postmortem context",
     "annotations": {
@@ -188,6 +236,18 @@
     },
     "inputSchemaSha256": "b18f567c5c9bfca6575d899b5b208dcacd09f6dc71ebca6b5d81812b0a951342",
     "descriptionSha256": "3f712be3f6501f4f0e5595084a12ca06d3fa8abad28b303ffe7d8a6f36566dbb"
+  },
+  {
+    "name": "postmortem_list",
+    "title": "List postmortems",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "f97b8ee0da1833b625b2196da2137a616da978cdf369b9918597686b0b6440d0",
+    "descriptionSha256": "e8110c15fce6e8cd0672bc247525cf63012441fb6cabe70bd3af63f21316d58e"
   },
   {
     "name": "read_operation",
@@ -262,6 +322,30 @@
     "descriptionSha256": "8ce1143f5ce4e01199eafbd85308c60fad8d01a72131b07e649e9c25179b4a6c"
   },
   {
+    "name": "schedule_list",
+    "title": "List schedules",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "79d2d56ae83f8da5c6242c53088a40d8d4fd59de3540b38b475ae916c0999339",
+    "descriptionSha256": "bd18435c0b7b7edf3c00f87ba004e14b9ccaa3b544d05295dbfd7d9cfa27ad53"
+  },
+  {
+    "name": "schedule_list_overrides",
+    "title": "List schedule overrides",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "9d4b5c957955d157c503f0a783e1c59039aa2a9224a558b0cd15ebc93e3b1661"
+  },
+  {
     "name": "search",
     "title": "Search OpsKnight",
     "annotations": {
@@ -280,7 +364,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "5ff9819e8c4f1d231b7ee8d2424079c5c082a28cc7b9689df77519456a05672a",
+    "inputSchemaSha256": "2f83710534fd3eec06ebb18aa9a4bb1231bd53d678a7d09f6ec7bfb0b7f6c76d",
     "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
   },
   {
@@ -296,6 +380,18 @@
     "descriptionSha256": "e411ca7554dac771aa43d9afa55721212734660fb3c6dac77380abf16e1a3bae"
   },
   {
+    "name": "service_list",
+    "title": "List services",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "47bdcd5243e8a0ce84a9a190f85c5b89962d7a04b615598eb02f9f70994193cc",
+    "descriptionSha256": "2a8c979512a94a92b4546ab37aea50fd830d48fbbd885818e11f3f08779220dc"
+  },
+  {
     "name": "status_page_get",
     "title": "Get a status page",
     "annotations": {
@@ -306,6 +402,18 @@
     },
     "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
     "descriptionSha256": "7e9dbf45838dda3831c6e13e23945b889ec7aeb57a3196eb8eab5146433396af"
+  },
+  {
+    "name": "team_list",
+    "title": "List teams",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "79d2d56ae83f8da5c6242c53088a40d8d4fd59de3540b38b475ae916c0999339",
+    "descriptionSha256": "f9605fe0c21f060765f493ea575daa25369939a5e0398ec50eccc2dfb47e6be0"
   },
   {
     "name": "whoami",
