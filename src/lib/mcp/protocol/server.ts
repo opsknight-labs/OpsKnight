@@ -52,6 +52,7 @@ import {
   fetchMcpKnowledge,
   getMcpIncidentContext,
   getMcpOncallForService,
+  getMcpServiceChanges,
   searchMcpKnowledge,
   type KnowledgeKind,
 } from '../core/composites';
@@ -111,6 +112,19 @@ const SCHEMAS = {
           .optional(),
         serviceName: z.string().trim().min(2).max(100).optional(),
         at: z.string().datetime({ offset: true }).optional(),
+      })
+      .strict()
+  ),
+  serviceChanges: sdkSchema(
+    z
+      .object({
+        // Exactly one of the two; the composite enforces it with a clear correction.
+        serviceId: z
+          .string()
+          .regex(/^[A-Za-z0-9_-]{1,128}$/)
+          .optional(),
+        serviceName: z.string().trim().min(2).max(100).optional(),
+        days: z.number().int().min(1).max(30).optional(),
       })
       .strict()
   ),
@@ -946,6 +960,30 @@ export function createOpsKnightMcpServer(
           getMcpOncallForService(
             context,
             args as { serviceId?: string; serviceName?: string; at?: string }
+          )
+        )
+    );
+  }
+  if (['getService', 'listIncidents'].every(isVisible)) {
+    server.registerTool(
+      'service_get_changes',
+      {
+        title: 'What changed on a service',
+        description:
+          'Answer \'what changed on this service\' in one call, from what OpsKnight recorded: configuration edits (needs audit access and administrator-enabled sensitive reads), runbook runs on its recent incidents, and the incidents opened on it, newest first. Pass serviceName (for example "payments") or serviceId, and days (default 7, at most 30). OpsKnight has no deployment telemetry, so this does not list code deploys, and the result says so. A source this connection cannot read is marked unavailable while the others still answer. Read-only.',
+        inputSchema: SCHEMAS.serviceChanges,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async args =>
+        evidenceTool(context, 'service_get_changes', () =>
+          getMcpServiceChanges(
+            context,
+            args as { serviceId?: string; serviceName?: string; days?: number }
           )
         )
     );

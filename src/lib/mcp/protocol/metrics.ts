@@ -50,6 +50,7 @@ const STANDALONE_TOOLS = [
   'incident_get_context',
   'postmortem_get_context',
   'oncall_for_service',
+  'service_get_changes',
   'incident_acknowledge_many',
   'search',
   'fetch',

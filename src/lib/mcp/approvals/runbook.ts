@@ -38,6 +38,7 @@ import {
   resolveReviewerNotices,
 } from './notify';
 import { decisionReasonSchema, untrustedDecisionReason } from './operation';
+import { enforceDistinctReviewer } from './distinct-reviewer';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const idempotencyKey = z.string().trim().min(1).max(128);
@@ -483,6 +484,7 @@ export async function loadMcpRunbookReview(
   return runSerializableTransaction(async tx => {
     const preview = await lockPreview(tx, id);
     const { selfReview } = await assertPreviewReviewer(tx, preview, reviewer);
+    await enforceDistinctReviewer(tx, selfReview);
     requireMcp(preview.expiresAt > new Date() && !preview.consumedAt, 'MCP_APPROVAL_EXPIRED', 409);
     await requesterAuthority(tx, preview);
     return {
@@ -509,6 +511,8 @@ export async function decideMcpRunbookReview(
   return runSerializableTransaction(async tx => {
     const preview = await lockPreview(tx, input.id);
     await requesterAuthority(tx, preview);
+    // Strict four-eyes: judged before the shared reviewer check, which allows an admin's own request.
+    await enforceDistinctReviewer(tx, preview.actorId === reviewer.id);
     // Approval opens a fresh commit window, capped from the request; it replaces the review expiry.
     const deadline =
       input.decision === 'approve'

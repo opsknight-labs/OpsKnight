@@ -158,4 +158,45 @@ describe('Request log retention control', () => {
       (screen.getByLabelText('Keep the request log for (days)') as HTMLInputElement).value
     ).toBe('90');
   });
+
+  describe('Who may approve', () => {
+    const renderWith = (extra: Record<string, unknown>, activeAdminCount?: number) =>
+      render(
+        <McpPolicySection
+          policy={{ ...policy, ...extra }}
+          revision={1}
+          scopeChoices={['incidents:read']}
+          selectedScopes={['incidents:read']}
+          action={vi.fn()}
+          activeAdminCount={activeAdminCount}
+        />
+      );
+
+    it('is off by default and says it needs a second reviewer', () => {
+      renderWith({});
+      const box = screen.getByLabelText(/Require a different reviewer/) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      expect(box.name).toBe('requireDistinctReviewer');
+      // The marker lets an unticked box mean "off" instead of "not on this form".
+      expect(document.querySelector('input[name="reviewControls"]')).not.toBeNull();
+    });
+
+    it('shows the stored value', () => {
+      renderWith({ requireDistinctReviewer: true });
+      expect(
+        (screen.getByLabelText(/Require a different reviewer/) as HTMLInputElement).checked
+      ).toBe(true);
+    });
+
+    it('warns that one administrator cannot get their own changes approved', () => {
+      renderWith({ requireDistinctReviewer: true }, 1);
+      expect(screen.getByRole('note').textContent).toMatch(/one active administrator/);
+      cleanup();
+      renderWith({ requireDistinctReviewer: true }, 3);
+      expect(screen.queryByRole('note')).toBeNull();
+      cleanup();
+      renderWith({}, undefined);
+      expect(screen.queryByRole('note')).toBeNull();
+    });
+  });
 });

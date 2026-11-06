@@ -33,6 +33,10 @@ export type McpPolicyValues = {
   deviceFlowEnabled: boolean;
   /** How long the request log is kept (7 to 365). Absent means the 30-day default. */
   callLogRetentionDays?: number;
+  /** Strict four-eyes: nobody approves their own request. Absent means off. */
+  requireDistinctReviewer?: boolean;
+  /** Optional cap on one person's requests per minute across all their connections. Null is off. */
+  perUserRequestsPerMinute?: number | null;
 };
 
 /** Never offered for a personal token, whatever is ticked (effective-access.ts). */
@@ -107,6 +111,7 @@ export default function McpPolicySection({
   scopeChoices,
   selectedScopes,
   action,
+  activeAdminCount,
 }: {
   policy: McpPolicyValues;
   /** The policyRevision this page was rendered from; a stale save is refused. */
@@ -114,6 +119,8 @@ export default function McpPolicySection({
   scopeChoices: string[];
   selectedScopes: string[];
   action: McpPolicyAction;
+  /** Active administrators, to warn that strict review needs a second one. */
+  activeAdminCount?: number;
 }) {
   return (
     <McpPolicyForm action={action} revision={revision}>
@@ -202,6 +209,29 @@ export default function McpPolicySection({
       </PolicyGroup>
 
       <PolicyGroup
+        title="Per-person request limit"
+        description="Each connection already has its own requests-per-minute limit. This optional cap is shared by all of one person's connections, so several assistants cannot add up to more than it."
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="mcp-per-user-limit">
+            Requests per minute for one person (blank for no cap)
+          </Label>
+          <Input
+            id="mcp-per-user-limit"
+            name="perUserRequestsPerMinute"
+            type="number"
+            min="1"
+            max="6000"
+            defaultValue={policy.perUserRequestsPerMinute ?? ''}
+            aria-describedby="mcp-per-user-limit-help"
+          />
+          <p id="mcp-per-user-limit-help" className="text-xs text-muted-foreground">
+            1 to 6000. Leave blank to rely on the per-connection limit alone.
+          </p>
+        </div>
+      </PolicyGroup>
+
+      <PolicyGroup
         title="Request log"
         description="The Usage tab and each connection's activity come from a log of every request: the tool, the outcome, how long it took and who made it. It never records what was asked or returned."
       >
@@ -222,6 +252,32 @@ export default function McpPolicySection({
             you can no longer see.
           </p>
         </div>
+      </PolicyGroup>
+
+      <PolicyGroup
+        title="Who may approve"
+        description="By default an administrator can approve a change their own assistant prepared, after confirming it. Regulated teams usually need a second person."
+      >
+        <input type="hidden" name="reviewControls" value="1" />
+        <CheckRow
+          name="requireDistinctReviewer"
+          label="Require a different reviewer"
+          description="Nobody, administrators included, can approve a change or runbook run that they or their own assistant requested. A second administrator must review it."
+          defaultChecked={policy.requireDistinctReviewer ?? false}
+        />
+        {activeAdminCount !== undefined && activeAdminCount < 2 && (
+          <p
+            role="note"
+            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300"
+          >
+            Only{' '}
+            {activeAdminCount === 1
+              ? 'one active administrator exists'
+              : 'no active administrator exists'}
+            . With this on, that administrator could not approve their own assistant&apos;s changes,
+            so nothing they ask for could be approved until a second administrator exists.
+          </p>
+        )}
       </PolicyGroup>
 
       <PolicyGroup

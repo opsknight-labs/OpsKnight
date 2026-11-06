@@ -368,6 +368,18 @@
     "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
   },
   {
+    "name": "service_get_changes",
+    "title": "What changed on a service",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "a2d1ae0d589935514cb44ad12442db43793dfe29fb3c0df921de7484718e96ba",
+    "descriptionSha256": "81b018bf1dbb7198df97df6fe9c3a3c5a50eb2c75a53273859b408c297d5e201"
+  },
+  {
     "name": "service_get_health",
     "title": "Get service health",
     "annotations": {

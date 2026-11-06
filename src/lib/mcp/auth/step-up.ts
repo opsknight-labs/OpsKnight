@@ -17,6 +17,8 @@ const COMPOSITE_TOOLS = new Map<string, readonly string[]>([
   ['incident_get_context', ['getIncident', 'getIncidentTimeline', 'listRelatedIncidents']],
   ['postmortem_get_context', POSTMORTEM_CONTEXT_OPERATIONS],
   ['oncall_for_service', ['getService', 'getEscalationPolicy', 'getScheduleOnCall']],
+  // The configuration and runbook sources are optional and degrade in place, so they never earn a challenge.
+  ['service_get_changes', ['getService', 'listIncidents']],
   ['incident_acknowledge_many', ['acknowledgeIncident']],
   // search and fetch read whichever kinds the connection can see; a missing kind is no failure.
 ]);

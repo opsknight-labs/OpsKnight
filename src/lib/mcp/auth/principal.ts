@@ -25,6 +25,7 @@ interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   requestsPerMinute: number | null;
   disabledCapabilities: string[] | null;
   scopeStepUpEnabled: boolean | null;
+  perUserRequestsPerMinute: number | null;
 }
 
 /** OAUTH: an assistant's consent. PAT: a personal access token (one token, never refreshed). */
@@ -41,6 +42,8 @@ export interface McpRuntimePolicy {
   disabledCapabilities: string[];
   /** Answer a grantable missing permission with 403 insufficient_scope (step-up.ts). */
   scopeStepUpEnabled: boolean;
+  /** Optional cap on one person's requests per minute across all their connections; null is off. */
+  perUserRequestsPerMinute: number | null;
 }
 
 const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
@@ -56,6 +59,7 @@ const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
         requestsPerMinute: true,
         disabledCapabilities: true,
         scopeStepUpEnabled: true,
+        perUserRequestsPerMinute: true,
       },
     })
   );
@@ -81,7 +85,7 @@ const AUTHORITY_COLUMNS = Prisma.sql`
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
   p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities",
-  p."scopeStepUpEnabled"`;
+  p."scopeStepUpEnabled", p."perUserRequestsPerMinute"`;
 
 /**
  * The grant's current authority and the MCP policy as of the same statement. The policy is null
@@ -154,6 +158,7 @@ function authorityFrom(
             requestsPerMinute: grant.requestsPerMinute!,
             disabledCapabilities: grant.disabledCapabilities ?? [],
             scopeStepUpEnabled: grant.scopeStepUpEnabled ?? false,
+            perUserRequestsPerMinute: grant.perUserRequestsPerMinute ?? null,
           },
   };
 }
@@ -261,7 +266,8 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   const effectiveScopes = auth.apiKey.scopes.filter(scope => token.scopes.includes(scope));
   auth.apiKey.scopes = effectiveScopes;
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: effectiveScopes };
-  if (cost !== null) await chargeMcpRequest({ grantId: token.grantId, policy }, cost);
+  if (cost !== null)
+    await chargeMcpRequest({ grantId: token.grantId, userId: auth.actor.id, policy }, cost);
   return {
     auth,
     grantId: token.grantId,
@@ -283,15 +289,34 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   };
 }
 
-/** Charge the declared bounded plan once, after authenticating and validating its body. */
+/**
+ * Charge the declared bounded plan once, after authenticating and validating its body. The
+ * connection has its own per-minute quota; when the administrator sets a per-person cap, all of
+ * one person's connections (assistants and personal tokens) also share that one window.
+ */
 export async function chargeMcpRequest(
-  identity: { grantId: string; policy: { requestsPerMinute: number } },
+  identity: {
+    grantId: string;
+    userId?: string;
+    policy: { requestsPerMinute: number; perUserRequestsPerMinute?: number | null };
+  },
   cost: number
 ) {
-  const quota = await incrementSharedCounter(`mcp:${identity.grantId}`, 60000, 'application', cost);
-  if (quota.count > identity.policy.requestsPerMinute)
+  const refused = (resetAt: number) =>
     // The quota is a fixed one-minute window: tell the client when it actually reopens.
-    throw new McpBoundaryError('MCP_RATE_LIMITED', 429, true, undefined, {
-      retryAfterSeconds: Math.min(60, Math.max(1, Math.ceil((quota.resetAt - Date.now()) / 1000))),
+    new McpBoundaryError('MCP_RATE_LIMITED', 429, true, undefined, {
+      retryAfterSeconds: Math.min(60, Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))),
     });
+  const quota = await incrementSharedCounter(`mcp:${identity.grantId}`, 60000, 'application', cost);
+  if (quota.count > identity.policy.requestsPerMinute) throw refused(quota.resetAt);
+  const cap = identity.policy.perUserRequestsPerMinute;
+  if (cap && identity.userId) {
+    const person = await incrementSharedCounter(
+      `mcp:user:${identity.userId}`,
+      60000,
+      'application',
+      cost
+    );
+    if (person.count > cap) throw refused(person.resetAt);
+  }
 }

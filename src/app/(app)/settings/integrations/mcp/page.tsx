@@ -535,11 +535,16 @@ export default async function McpSettings({
               requireReadOnlyConnections: policy?.requireReadOnlyConnections ?? false,
               deviceFlowEnabled: policy?.deviceFlowEnabled ?? false,
               callLogRetentionDays: policy?.callLogRetentionDays ?? 30,
+              requireDistinctReviewer: policy?.requireDistinctReviewer ?? false,
+              perUserRequestsPerMinute: policy?.perUserRequestsPerMinute ?? null,
             }}
             revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}
             selectedScopes={ceiling}
             action={updateMcpPolicy}
+            activeAdminCount={await prisma.user.count({
+              where: { role: 'ADMIN', status: 'ACTIVE' },
+            })}
           />
         );
       case 'usage': {

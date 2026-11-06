@@ -29,6 +29,10 @@ export interface McpPolicyAccess {
   patAllowedScopes: readonly string[];
   requireReadOnlyConnections: boolean;
   deviceFlowEnabled: boolean;
+  /** Strict four-eyes for approvals; turning it off lets administrators approve their own requests. */
+  requireDistinctReviewer?: boolean;
+  /** Optional cap on one person's requests per minute across connections; null or unset is off. */
+  perUserRequestsPerMinute?: number | null;
 }
 
 type Access = McpPolicyAccess;
@@ -43,6 +47,8 @@ const SWITCHES: [string, (policy: Access) => boolean][] = [
   ['deviceFlowEnabled', policy => policy.deviceFlowEnabled],
   // Lifting the view-only cap lets every connection use its change scopes again.
   ['requireReadOnlyConnections', policy => !policy.requireReadOnlyConnections],
+  // Lifting strict four-eyes lets an administrator approve what their own assistant prepared.
+  ['requireDistinctReviewer', policy => !policy.requireDistinctReviewer],
 ];
 const LIMITS: [string, (policy: Access) => number][] = [
   ['requestsPerMinute', policy => policy.requestsPerMinute],
@@ -65,6 +71,10 @@ export function mcpPolicyWidening(before: McpPolicyAccess, after: McpPolicyAcces
   if (gains(before.cimdScopes, after.cimdScopes)) widened.push('cimdScopes');
   if (gains(before.allowedBrowserOrigins, after.allowedBrowserOrigins))
     widened.push('allowedBrowserOrigins');
+  // The per-person cap: removing it, or raising it, lets one person make more requests.
+  const capBefore = before.perUserRequestsPerMinute ?? Number.POSITIVE_INFINITY;
+  const capAfter = after.perUserRequestsPerMinute ?? Number.POSITIVE_INFINITY;
+  if (capAfter > capBefore) widened.push('perUserRequestsPerMinute');
   // Personal-token limits matter only while personal tokens can be created.
   if (after.patEnabled && after.patMaxDays > before.patMaxDays) widened.push('patMaxDays');
   if (after.patEnabled && gains(before.patAllowedScopes, after.patAllowedScopes))

@@ -7,12 +7,16 @@ import { effectiveMcpClientScopes } from './client-policy';
 import { redirectUriAllowed } from './redirect-uri';
 import { MCP_ABSOLUTE_SESSION_DAYS, slideMcpExpiry } from './session-lifetime';
 import { logger } from '@/lib/logger';
+import { logAudit } from '@/lib/audit';
 import { MCP_PAT_CLIENT_ID } from './effective-access';
 
 type Database = Prisma.TransactionClient;
 type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenModel;
 
 /** Tokens a refresh replaces: the presented one and, on a grace replay, its revoked successor. */
+/** A connection idle this long that refreshes again is worth a record. */
+export const RESUME_AUDIT_AFTER_MS = 24 * 3_600_000;
+
 const replacedTokenIds = (user: OAuth2Server.User) =>
   Array.isArray(user.replacedTokenIds)
     ? user.replacedTokenIds.filter((id): id is string => typeof id === 'string')
@@ -190,6 +194,27 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
         });
       // Using a connection keeps it signed in, up to the absolute cap.
       const now = new Date();
+      // Audited: the first credentials a grant is given, and a connection that was idle for a day
+      // or more coming back. Ordinary refreshes are not (one every few minutes per connection);
+      // reuse and grace replays have their own record.
+      const issued = replaced.length === 0;
+      const idleMs = grant.lastUsedAt ? now.getTime() - grant.lastUsedAt.getTime() : 0;
+      if (issued || idleMs >= RESUME_AUDIT_AFTER_MS)
+        await logAudit(
+          {
+            source: 'AUTH',
+            action: issued ? 'mcp.token.issued' : 'mcp.token.resumed',
+            entityType: 'SYSTEM_CONFIG',
+            entityId: grant.id,
+            actorId: grant.userId,
+            details: {
+              clientId: grant.clientId,
+              clientName: grant.client.name,
+              ...(issued ? {} : { idleDays: Math.floor(idleMs / 86_400_000) }),
+            },
+          },
+          db
+        );
       const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
       await db.mcpGrant.update({
         where: { id: grant.id },

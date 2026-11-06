@@ -223,7 +223,10 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
           ? (mcpCompositeCost(body.params?.name, body.params?.arguments) ?? 1)
           : 1;
     requireMcp(cost <= MCP_MAX_OPERATIONS, 'MCP_OPERATION_BUDGET_EXCEEDED');
-    await chargeMcpRequest(identity, cost);
+    await chargeMcpRequest(
+      { grantId: identity.grantId, userId: identity.auth.actor.id, policy: identity.policy },
+      cost
+    );
     // A policy saved before the cap existed may hold 9 to 16; the cap is what is enforced.
     budget = new CostBudget(
       Math.min(identity.policy.maxOperations, MCP_MAX_OPERATIONS),
