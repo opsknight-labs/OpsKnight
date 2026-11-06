@@ -125,4 +125,4 @@ This is a "Tested" entry, not "Verified": the client version, revision, full SHA
 
 Observed on 6 November 2026 against a local development server (not a production build): all six checks passed. It has **not yet been observed in the GitHub workflow against the production build**; that run is the evidence to record. It mints credentials directly in the database, so the OAuth consent and code exchange are covered only by the browser flows, not by this spec. The SDK negotiates revision 2025-11-25; revision 2026-07-28 is exercised by the raw-protocol tests and the listen-stream check, not by an SDK client.
 
-Pull requests now run this workflow whenever they change MCP-related paths (no label needed); the heavy jobs skip otherwise.
+This workflow runs on `main` and on pull requests labelled `ci:full`; add the label to a pull request that changes MCP paths to run it before merge.

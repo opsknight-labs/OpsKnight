@@ -5,23 +5,16 @@ const prWorkflow = readFileSync('.github/workflows/mcp-certification.yml', 'utf8
 const releaseWorkflow = readFileSync('.github/workflows/mcp-release-certification.yml', 'utf8');
 
 describe('MCP CI/release gate separation', () => {
-  it('runs on main and on every pull request, deciding by changed paths inside a job rather than a label or a paths filter', () => {
+  it('runs on main and on `ci:full` pull requests without path filters that leave checks pending', () => {
     expect(prWorkflow).toContain('name: Enterprise MCP PR validation');
     expect(prWorkflow).toMatch(
-      /on:\s*pull_request:\s*types: \[opened, synchronize, reopened\]\s*push:\s*branches: \[main\]\s*workflow_dispatch:/
+      /on:\s*pull_request:\s*types: \[opened, synchronize, reopened, labeled\]\s*push:\s*branches: \[main\]\s*workflow_dispatch:/
     );
     expect(prWorkflow.split('\njobs:')[0]).not.toContain('paths:');
     expect(prWorkflow).toContain('name: Detect MCP-related changes');
-    // No label gate: the detect job runs on every pull request and the heavy jobs follow its
-    // output (a job-level skip reports success, which a workflow-level paths filter does not).
-    expect(prWorkflow).not.toContain('ci:full');
-    // Adding a label must not restart the validation (and cancel the run in progress).
-    expect(prWorkflow).not.toContain('labeled');
-    const detect = prWorkflow.slice(
-      prWorkflow.indexOf('  detect-changes:'),
-      prWorkflow.indexOf('  contract-security:')
+    expect(prWorkflow).toContain(
+      "if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')"
     );
-    expect(detect).not.toMatch(/\n    if:/);
     // A push to main diffs against the previous main commit; an unusable base still validates.
     expect(prWorkflow).toContain(
       'BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}'

@@ -1,10 +1,9 @@
 -- Round 6: who made each MCP call, how long the call log is kept, and two stricter policy options.
 -- Additive only. The call log is a hot table, so the new columns are nullable (no rewrite, no
--- backfill: rows written before this migration simply have no client or user).
+-- backfill: rows written before this migration simply have no client or user). The two indexes on
+-- these columns are built concurrently in the next two migrations so writes are never blocked.
 ALTER TABLE "McpCallLog" ADD COLUMN "clientId" TEXT;
 ALTER TABLE "McpCallLog" ADD COLUMN "userId" TEXT;
-CREATE INDEX "McpCallLog_clientId_at_idx" ON "McpCallLog"("clientId", "at" DESC);
-CREATE INDEX "McpCallLog_userId_at_idx" ON "McpCallLog"("userId", "at" DESC);
 
 ALTER TABLE "McpPolicy" ADD COLUMN "callLogRetentionDays" INTEGER NOT NULL DEFAULT 30;
 ALTER TABLE "McpPolicy" ADD CONSTRAINT "McpPolicy_callLogRetentionDays_check"
