@@ -507,15 +507,26 @@ describe('A8: prompts follow their tools', () => {
   it('registers a prompt only when the tools it directs to are available', async () => {
     const all = await promptNames({});
     expect(all).toEqual([
+      'catch_up',
+      'draft_status_update',
       'explain_escalation',
+      'find_precedent',
+      'getting_started',
       'investigate_incident',
       'prepare_postmortem',
       'preview_remediation',
+      'request_shift_cover',
       'review_automation_rule',
       'summarize_shift',
     ]);
     const incidentsOnly = await promptNames({ actor: actorWith(['incidents:read']) });
-    expect(incidentsOnly).toEqual(['investigate_incident']);
+    expect(incidentsOnly).toEqual([
+      'catch_up',
+      'draft_status_update',
+      'find_precedent',
+      'getting_started',
+      'investigate_incident',
+    ]);
     const withheld = await promptNames({ disabled: ['incident_get_context'] });
     expect(withheld).not.toContain('investigate_incident');
     expect(withheld).not.toContain('prepare_postmortem');

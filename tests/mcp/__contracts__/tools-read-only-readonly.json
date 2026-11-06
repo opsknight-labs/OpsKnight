@@ -34,6 +34,18 @@
     "descriptionSha256": "e4751e3d062bda9736fab7deea15eb6ff0ba0fb038cc6d095600ab8449d7f6ce"
   },
   {
+    "name": "incident_find_similar",
+    "title": "Find similar past incidents",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "54bf9b414882e6c3bb704a6810ff8b00fee7c8a0310bad69cc7c9f0100b059b9",
+    "descriptionSha256": "6baedb759cfd37dcfce0ac818205fd9c449ed0acc6eda3b7c48d0d8105f87921"
+  },
+  {
     "name": "incident_get",
     "title": "Get an incident",
     "annotations": {
@@ -82,6 +94,18 @@
     "descriptionSha256": "ead72a2d55ef24e910eda1f8e592f12830e2670e2891ec2c415dfae947121765"
   },
   {
+    "name": "oncall_catch_up",
+    "title": "Catch up on incidents",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ed4bfea7149676d7e82eb8b48ca237ca6e0f7850989469e03bf6e6906e86238e",
+    "descriptionSha256": "33373702a4d1d74cabe873256220f7118ff136d32a18b95126d4e2d324ac82c9"
+  },
+  {
     "name": "read_operation",
     "title": "Read OpsKnight data",
     "annotations": {
@@ -112,7 +136,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "7107d3b491e8982aaa63b3398ac6b43e2e4e20531c382142978a33f601d8c11f",
+    "inputSchemaSha256": "5ff9819e8c4f1d231b7ee8d2424079c5c082a28cc7b9689df77519456a05672a",
     "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
   },
   {

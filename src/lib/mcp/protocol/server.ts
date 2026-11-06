@@ -1344,6 +1344,50 @@ export function createOpsKnightMcpServer(
       requires: ['listRunbooks', 'previewRunbookExecution'],
       args: { runbookId: requiredId('Runbook to preview', 'runbooks') },
     },
+    {
+      name: 'catch_up',
+      title: 'Catch up on what I missed',
+      instruction: `Call ${via('getMyCatchUp')} (query.hours defaults to 12; use the time the person gives you). Lead with what needs action: active incidents assigned to the person, then the most urgent unassigned ones, then one line with how many opened and resolved. Name each incident with its service, urgency and age. Say when a list is truncated. Read-only: change nothing.`,
+      requires: ['getMyCatchUp'],
+    },
+    {
+      name: 'find_precedent',
+      title: 'Has this happened before?',
+      instruction: `Call ${via('listSimilarIncidents')} for the incident, then incident_get_context for the closest one or two matches. Report how each past incident was resolved, how long it took and what its last note says, and say how the new incident differs. Similarity is a lead from title and service overlap, not proof of a shared cause: never present a past fix as the answer.`,
+      requires: ['listSimilarIncidents', 'incident_get_context'],
+      args: { incidentId: requiredId('Incident to find precedents for', 'incidents') },
+    },
+    {
+      name: 'draft_status_update',
+      title: 'Draft a status update',
+      instruction: `Call incident_get_context for the incident and draft a short customer-facing update: what is affected, current status, what is being done and when the next update is due. Use only facts in the evidence, mark anything unconfirmed as unconfirmed, and never state a root cause or ETA the evidence does not support. Do not publish it.${when(
+        'createStatusPageAnnouncement',
+        ' To publish, call describe_operation for createStatusPageAnnouncement, then operation_prepare, and wait for a person to approve it in OpsKnight (operation_get_approval) before operation_commit_approved.'
+      )}`,
+      requires: ['incident_get_context'],
+      args: { incidentId: requiredId('Incident to write the update for', 'incidents') },
+    },
+    {
+      name: 'request_shift_cover',
+      title: 'Get my shift covered',
+      instruction: `Call oncall_my_shifts to find the shift the person wants covered (ask which one if it is not clear), then ${via('listScheduleOverrides')} for that schedule to see existing overrides. Suggest a colleague from the same schedule and draft a short request to them with the exact start and end in the schedule's time zone. Do not create anything on your own.${when(
+        'createScheduleOverride',
+        ' Once the colleague agrees, call describe_operation for createScheduleOverride, then operation_prepare with that person, and wait for a person to approve it in OpsKnight (operation_get_approval) before operation_commit_approved.'
+      )}`,
+      requires: ['oncall_my_shifts', 'listScheduleOverrides'],
+    },
+    {
+      name: 'getting_started',
+      title: 'What can I ask?',
+      instruction: `Call whoami to see who this connection acts as and which scopes it has, then search_capabilities for what is available. Offer five example questions this connection can actually answer${when(
+        'getMyCatchUp',
+        ', for instance "what did I miss?"'
+      )}${when('oncall_my_shifts', ', "when am I next on call?"')}${when(
+        'listSimilarIncidents',
+        ', "has this happened before?"'
+      )}, and say which scope any unavailable one would need. Do not run anything beyond reads.`,
+      requires: ['search_capabilities'],
+    },
   ];
   /** Prompt arguments that name a resource this session can read, by resource kind. */
   const LINKABLE_ARGS = new Map<string, CompletionSource>([

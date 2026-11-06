@@ -153,6 +153,18 @@
     "descriptionSha256": "9424010e86db23591966e0857d1ad1424509dacba8c94cd9f1bce747afd95265"
   },
   {
+    "name": "incident_find_similar",
+    "title": "Find similar past incidents",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "54bf9b414882e6c3bb704a6810ff8b00fee7c8a0310bad69cc7c9f0100b059b9",
+    "descriptionSha256": "6baedb759cfd37dcfce0ac818205fd9c449ed0acc6eda3b7c48d0d8105f87921"
+  },
+  {
     "name": "incident_get",
     "title": "Get an incident",
     "annotations": {
@@ -235,6 +247,18 @@
     },
     "inputSchemaSha256": "89f2a5ad4c15f1d8f104c2bc3635e27dfbe38d25a18e4d9b862d5b19aca41940",
     "descriptionSha256": "fab24635035e25237ca23f46e1c3ecdfac03f2b259bd4c19244459597bd9f744"
+  },
+  {
+    "name": "oncall_catch_up",
+    "title": "Catch up on incidents",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ed4bfea7149676d7e82eb8b48ca237ca6e0f7850989469e03bf6e6906e86238e",
+    "descriptionSha256": "33373702a4d1d74cabe873256220f7118ff136d32a18b95126d4e2d324ac82c9"
   },
   {
     "name": "oncall_for_service",
@@ -447,7 +471,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "7107d3b491e8982aaa63b3398ac6b43e2e4e20531c382142978a33f601d8c11f",
+    "inputSchemaSha256": "5ff9819e8c4f1d231b7ee8d2424079c5c082a28cc7b9689df77519456a05672a",
     "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
   },
   {

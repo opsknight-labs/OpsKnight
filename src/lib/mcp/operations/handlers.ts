@@ -237,6 +237,13 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     'listMyOnCallShifts',
     async () => (await import('@/app/api/v2/users/me/on-call-shifts/route')).GET,
   ],
+  // What the caller missed: opened, resolved and active incidents (curated as oncall_catch_up).
+  ['getMyCatchUp', async () => (await import('@/app/api/v2/users/me/catch-up/route')).GET],
+  // Past resolved incidents that look like one incident (curated as incident_find_similar).
+  [
+    'listSimilarIncidents',
+    async () => (await import('@/app/api/v2/incidents/[id]/similar/route')).GET,
+  ],
   // Read-only directory; execution keeps only id, name, role, status and teams (projection.ts).
   ['listUsers', async () => (await import('@/app/api/v2/users/route')).GET],
   ['getUser', async () => (await import('@/app/api/v2/users/[id]/route')).GET],
