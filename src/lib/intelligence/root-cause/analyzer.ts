@@ -1,6 +1,6 @@
 import 'server-only';
 import { Prisma, type ChangeEvent } from '@prisma/client';
-import { RESPONSE_LIMITS } from '../contract';
+import { RESPONSE_LIMITS, type ResponseWeights } from '../contract';
 import { loadActiveEdges } from '../dependencies/service';
 import { upstreamDistances, type DependencyEdge } from '../dependencies/graph';
 import type { FindingRow } from '../similarity/findings';
@@ -51,7 +51,8 @@ async function recentChangeCandidates(
 export async function computeCauseFindings(
   tx: Prisma.TransactionClient,
   incident: { id: string; serviceId: string; createdAt: Date },
-  knownEdges?: readonly DependencyEdge[]
+  knownEdges?: readonly DependencyEdge[],
+  weights?: ResponseWeights
 ): Promise<CauseFindings> {
   const onset = incident.createdAt.getTime();
   const windowStart = new Date(onset - RESPONSE_LIMITS.causeLookbackMinutes * MINUTE_MS);
@@ -125,6 +126,7 @@ export async function computeCauseFindings(
         kind: change.kind as ChangeKindValue,
         chanceFactor: baseline.factor,
         componentMatch,
+        weights,
       });
       return { change, relation, depth, leadSeconds, score, baseline, componentMatch };
     })
@@ -156,7 +158,13 @@ export async function computeCauseFindings(
     .map(other => {
       const depth = upstream.get(other.serviceId) ?? 1;
       const leadSeconds = Math.round((onset - other.createdAt.getTime()) / 1000);
-      const score = scoreCause({ relation: 'UPSTREAM', depth, leadSeconds, kind: 'INCIDENT' });
+      const score = scoreCause({
+        relation: 'UPSTREAM',
+        depth,
+        leadSeconds,
+        kind: 'INCIDENT',
+        weights,
+      });
       return { other, depth, leadSeconds, score };
     })
     .filter(candidate => candidate.score.confidence > 0)

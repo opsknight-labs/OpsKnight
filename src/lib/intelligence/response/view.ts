@@ -19,6 +19,8 @@ export interface ChangeCauseView {
   leadMinutes: number;
   relation: 'SAME_SERVICE' | 'UPSTREAM' | 'GLOBAL';
   confidencePercent: number;
+  /** Change risk (0..100) computed when the change was recorded; null until the lane scored it. */
+  riskPercent: number | null;
 }
 
 export interface UpstreamIncidentView {
@@ -140,6 +142,7 @@ export async function getResponseIntelligenceForActor(
             version: true,
             url: true,
             occurredAt: true,
+            riskScore: true,
             service: { select: { name: true } },
           },
         }),
@@ -186,6 +189,7 @@ export async function getResponseIntelligenceForActor(
       leadMinutes: Math.max(0, Math.round(num(evidence.leadSeconds) / 60)),
       relation: relationOf(evidence.relation),
       confidencePercent: Math.round(finding.confidence * 100),
+      riskPercent: change.riskScore === null ? null : Math.round(change.riskScore * 100),
     });
     if (changes.length === MAX_PER_SECTION) break;
   }

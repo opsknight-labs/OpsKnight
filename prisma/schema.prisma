@@ -4925,6 +4925,10 @@ enum IntelligenceFindingKind {
   PROBABLE_CAUSE
   CHANGE_CORRELATION
   NOISE
+  TRIAGE_URGENCY
+  TRIAGE_ASSIGNMENT
+  TRIAGE_DUPLICATE
+  TRIAGE_RESOLUTION_TIME
 }
 
 enum IntelligenceFindingStatus {
@@ -4974,6 +4978,8 @@ model IntelligenceSettings {
   correlationRetentionDays    Int      @default(365)
   findingRetentionDays        Int      @default(365)
   feedbackRetentionDays       Int      @default(730)
+  /// Send incoming on-call responders a deterministic handoff summary at each shift rotation.
+  handoffSummaryEnabled       Boolean  @default(false)
   revision                    Int      @default(1)
   updatedBy                   String?
   createdAt                   DateTime @default(now())
@@ -5539,11 +5545,33 @@ model ChangeEvent {
   dedupKey   String?
   occurredAt DateTime
   createdAt  DateTime   @default(now())
+  /// 0..1 ranking signal computed in the lane from history, blast radius, timing and size; never a verdict.
+  riskScore      Float?
+  riskEvidence   Json?
+  riskComputedAt DateTime?
 
   @@unique([source, dedupKey], map: "uq_change_event_source_dedup")
   @@index([serviceId, occurredAt(sort: Desc)], map: "idx_change_event_service_recent")
   @@index([occurredAt], map: "idx_change_event_retention")
   @@index([source, occurredAt], map: "idx_change_event_source_recent")
+}
+
+// A declared-topology source (a Backstage catalog export) pulled on a schedule into DECLARED dependencies.
+model TopologySource {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  kind            String    @default("BACKSTAGE_CATALOG")
+  url             String
+  enabled         Boolean   @default(true)
+  intervalMinutes Int       @default(60)
+  lastSyncedAt    DateTime?
+  lastStatus      String?
+  lastSummary     Json?
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([enabled, lastSyncedAt])
 }
 
 // ---------------------------------------------------------------------------

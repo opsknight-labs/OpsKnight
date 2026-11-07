@@ -31,6 +31,10 @@ export const WORK_KINDS = {
   OBSERVE_DEPENDENCIES: 'OBSERVE_DEPENDENCIES',
   /** One item per late-arriving change event (subject = change id): re-analyses incidents it may explain. */
   LATE_CHANGE: 'LATE_CHANGE',
+  /** Triage suggestions for one incident, chained after its similar-incident analysis. */
+  TRIAGE_INCIDENT: 'TRIAGE_INCIDENT',
+  /** Pulls one declared-topology source (subject = source id). */
+  SYNC_TOPOLOGY: 'SYNC_TOPOLOGY',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -41,9 +45,11 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   CORRELATE_INCIDENT: 25,
   ANALYZE_RESPONSE: 30,
   LATE_CHANGE: 35,
+  TRIAGE_INCIDENT: 28,
   EMBED_PENDING: 40,
   SEND_DIGEST: 50,
   OBSERVE_DEPENDENCIES: 45,
+  SYNC_TOPOLOGY: 48,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;
@@ -157,7 +163,12 @@ export async function enqueueWorkItems(
  * `excludeKinds` leaves kinds whose handler is currently tripped (see the kind breaker) in the queue.
  */
 export async function claimWorkItems(
-  options: { limit: number; leaseMs?: number; maxAttempts?: number; excludeKinds?: readonly string[] },
+  options: {
+    limit: number;
+    leaseMs?: number;
+    maxAttempts?: number;
+    excludeKinds?: readonly string[];
+  },
   client: Client = prisma
 ): Promise<ClaimedWorkItem[]> {
   const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;

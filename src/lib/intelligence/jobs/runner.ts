@@ -30,6 +30,13 @@ import { correlateIncident } from '../correlation/handler';
 import { OBSERVE_INTERVAL_MS, observeDependencyPass } from '../dependencies/observer';
 import { analyzeResponse } from '../response/handler';
 import { reanalyzeAfterLateChange } from '../changes/service';
+import { computeChangeRisk } from '../changes/risk';
+import { predictTriage } from '../triage/predict';
+import {
+  scheduleTopologySyncsIfDue,
+  syncTopologySource,
+  TOPOLOGY_SYNC_CHECK_INTERVAL_MS,
+} from '../dependencies/topology-sources';
 import { purgeConversations } from '../conversations/store';
 import { AiGatewayError } from '../ai/gateway';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
@@ -131,7 +138,7 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
     await analyzeIncident(item, settings);
   },
   // A change that arrived after the incidents it may explain: the webhook only records it, and this
-  // bounded pass fans out the re-analysis in the lane instead of in the request.
+  // bounded pass scores its risk and fans out the re-analysis in the lane instead of in the request.
   [WORK_KINDS.LATE_CHANGE]: async (item, { settings }) => {
     await withDbBudget(settings, async tx => {
       const change = await tx.changeEvent.findUnique({
@@ -139,8 +146,15 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
         select: { serviceId: true, occurredAt: true },
       });
       if (!change) return;
+      await computeChangeRisk(tx, item.subjectKey);
       await reanalyzeAfterLateChange(change.serviceId, change.occurredAt, tx);
     });
+  },
+  [WORK_KINDS.TRIAGE_INCIDENT]: async (item, { settings }) => {
+    await predictTriage(item, settings);
+  },
+  [WORK_KINDS.SYNC_TOPOLOGY]: async (item, { settings, signal }) => {
+    await syncTopologySource(item.subjectKey, settings, signal);
   },
   // Semantic search is optional and never sits in front of analysis: incidents are analysed lexically
   // straight away, then re-analysed once their vector exists, so a slow or failing embedding provider
@@ -207,6 +221,7 @@ export interface LaneState {
   lastEmbedAt: number;
   lastDigestCheckAt: number;
   lastConversationSweepAt: number;
+  lastTopologyCheckAt: number;
   /** Handlers that exceeded their budget and are still running; they count against concurrency until they let go. */
   timedOut: Set<Promise<unknown>>;
   kinds: KindBreaker;
@@ -224,6 +239,7 @@ export function createLaneState(): LaneState {
     lastEmbedAt: 0,
     lastDigestCheckAt: 0,
     lastConversationSweepAt: 0,
+    lastTopologyCheckAt: 0,
     timedOut: new Set(),
     kinds: new KindBreaker(),
     saturatedLogged: false,
@@ -549,6 +565,21 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
         await scheduleDigestIfDue(new Date(now()));
       } catch (error) {
         logger.warn('[Intelligence] Could not schedule the weekly digest; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Declared-topology sources are pulled on their own schedule; a source that is not due costs one read.
+    if (
+      handlers[WORK_KINDS.SYNC_TOPOLOGY] &&
+      now() - state.lastTopologyCheckAt >= TOPOLOGY_SYNC_CHECK_INTERVAL_MS
+    ) {
+      state.lastTopologyCheckAt = now();
+      try {
+        await scheduleTopologySyncsIfDue(new Date(now()));
+      } catch (error) {
+        logger.warn('[Intelligence] Could not schedule topology syncs; will retry', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

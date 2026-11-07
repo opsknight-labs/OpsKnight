@@ -54,6 +54,7 @@ export async function buildIncidentIntelligence(incidentId: string, actor: Autho
       leadMinutes: item.leadMinutes,
       relation: item.relation,
       confidencePercent: item.confidencePercent,
+      riskPercent: item.riskPercent,
     })),
     upstreamIncidents: (response?.upstreamIncidents ?? []).map(item => ({
       incidentId: item.incidentId,

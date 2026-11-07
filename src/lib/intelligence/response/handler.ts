@@ -70,7 +70,7 @@ export async function analyzeResponse(
     if (Math.max(newest._max.generation ?? 0, completed._max.generation ?? 0) > item.generation)
       return 'stale' as const;
     const [causes, runbooks] = await Promise.all([
-      computeCauseFindings(tx, incident, edges),
+      computeCauseFindings(tx, incident, edges, policy.definition.response.weights),
       computeRunbookFindings(tx, incident),
     ]);
     const common = {

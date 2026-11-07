@@ -68,6 +68,8 @@ export type IntelligenceSettingsView = {
   correlationRetentionDays: number;
   findingRetentionDays: number;
   feedbackRetentionDays: number;
+  /** Deterministic shift-handoff summaries to incoming on-call responders. */
+  handoffSummaryEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -85,6 +87,7 @@ const SETTINGS_SELECT = {
   correlationRetentionDays: true,
   findingRetentionDays: true,
   feedbackRetentionDays: true,
+  handoffSummaryEnabled: true,
   revision: true,
 } as const;
 
@@ -501,6 +504,7 @@ export interface ServicePolicyOverviewRow {
   version: number;
   similarityEnabled: boolean;
   responseEnabled: boolean;
+  triageEnabled: boolean;
   ruleCount: number;
   /** Head of the service's own policy history (0 if it never had one), for optimistic locking. */
   headVersion: number;
@@ -588,6 +592,7 @@ export async function listServicePolicyOverview(
       version: chosen?.version ?? 0,
       similarityEnabled: definition.similarity.enabled,
       responseEnabled: definition.response.enabled,
+      triageEnabled: definition.triage.enabled,
       ruleCount: definition.correlation.rules.length,
       headVersion: headByService.get(service.id) ?? 0,
       definition,

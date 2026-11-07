@@ -7,7 +7,7 @@
 import { z } from 'zod/v4';
 
 /** Bumped whenever normalization, scoring or rule semantics change; stamped on every decision. */
-export const INTELLIGENCE_ENGINE_VERSION = '1.4.0';
+export const INTELLIGENCE_ENGINE_VERSION = '1.5.0';
 
 export const INTELLIGENCE_MODES = ['OFF', 'SHADOW', 'SUGGEST', 'AUTO'] as const;
 export type IntelligenceModeValue = (typeof INTELLIGENCE_MODES)[number];
@@ -49,6 +49,7 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   correlationRetentionDays: 365,
   findingRetentionDays: 365,
   feedbackRetentionDays: 730,
+  handoffSummaryEnabled: false,
 } as const;
 
 const bounded = (range: { min: number; max: number }) =>
@@ -68,6 +69,7 @@ export const intelligenceSettingsInputSchema = z
     correlationRetentionDays: bounded(INTELLIGENCE_SETTINGS_BOUNDS.retentionDays),
     findingRetentionDays: bounded(INTELLIGENCE_SETTINGS_BOUNDS.retentionDays),
     feedbackRetentionDays: bounded(INTELLIGENCE_SETTINGS_BOUNDS.retentionDays),
+    handoffSummaryEnabled: z.boolean().default(false),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()
@@ -157,6 +159,25 @@ export const scoringWeightsSchema = z
     'Weights must sum to one'
   );
 
+/** Learned multipliers for probable-cause ranking; bounded so a bad fit can only nudge, never invert, the order. */
+export const responseWeightsSchema = z
+  .object({
+    kind: z
+      .object({
+        DEPLOY: z.number().min(0.2).max(1),
+        CONFIG: z.number().min(0.2).max(1),
+        FEATURE_FLAG: z.number().min(0.2).max(1),
+        INFRA: z.number().min(0.2).max(1),
+      })
+      .strict(),
+    /** Per-hop decay for upstream causes (default 0.75). */
+    upstreamDecay: z.number().min(0.3).max(1),
+    /** Weight of changes tied to no service (default 0.4). */
+    globalWeight: z.number().min(0.1).max(1),
+  })
+  .strict();
+export type ResponseWeights = z.infer<typeof responseWeightsSchema>;
+
 export const policyDefinitionSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -184,9 +205,21 @@ export const policyDefinitionSchema = z
     response: z
       .object({
         enabled: z.boolean().default(true),
+        /** Offline-fitted cause-ranking adjustments, applied only by a person publishing a policy version. */
+        weights: responseWeightsSchema.optional(),
       })
       .strict()
       .default({ enabled: true }),
+    /**
+     * Triage suggestions (urgency, owner, duplicate, expected time to resolve) derived from similar
+     * resolved incidents. Chips a responder accepts or dismisses; nothing is applied on its own. Off by default.
+     */
+    triage: z
+      .object({
+        enabled: z.boolean().default(false),
+      })
+      .strict()
+      .default({ enabled: false }),
   })
   .strict()
   .superRefine((definition, ctx) => {
@@ -240,4 +273,8 @@ export const RESPONSE_LIMITS = {
   runbookHistoryDays: 180,
   /** Confidence never reaches certainty: a temporal correlation is a hypothesis to verify. */
   maxCauseConfidence: 0.9,
+  /** Triage: resolved precedents consulted, the minimum before a vote counts, and the duplicate window. */
+  triagePrecedents: 25,
+  triageMinPrecedents: 3,
+  duplicateWindowMinutes: 24 * 60,
 } as const;

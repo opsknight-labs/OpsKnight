@@ -6,6 +6,7 @@ import { activeIncidentStatuses } from './incident-status';
 import { getBaseUrl } from './env-validation';
 import { generateShiftReminderEmailHTML, generateShiftHandoffEmailHTML } from './email';
 import { enqueueCentralNotification } from './notification-control-plane';
+import { sendHandoffSummaries } from './intelligence/handoff/dispatch';
 
 export interface ShiftHandoffResult {
   remindersSent: number;
@@ -185,6 +186,19 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
         });
 
         const serviceIds = policies.flatMap(p => p.services.map(s => s.id));
+        // Optional Intelligence handoff summary (open and recently resolved incidents, overdue follow-ups)
+        // for everyone coming on; independent of whether anything was reassigned.
+        await sendHandoffSummaries({
+          scheduleId,
+          scheduleName: incomingShift.schedule.name,
+          serviceIds,
+          recipients: incomingShifts.map(shift => ({
+            userId: shift.userId,
+            email: shift.user.email ?? null,
+            shiftStart: shift.start,
+          })),
+          now,
+        });
         if (serviceIds.length > 0) {
           // Find active (triggered or acknowledged) incidents on these services
           const activeIncidents = await prisma.incident.findMany({

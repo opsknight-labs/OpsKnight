@@ -45,10 +45,11 @@ export async function readIncidentAnalysisState(
             WORK_KINDS.ANALYZE_INCIDENT,
             WORK_KINDS.ANALYZE_RESPONSE,
             WORK_KINDS.CORRELATE_INCIDENT,
+            WORK_KINDS.TRIAGE_INCIDENT,
           ],
         },
       },
-      take: 4,
+      take: 5,
       select: { kind: true, generation: true, attempts: true, failedAt: true, scheduledAt: true },
     }),
   ]);
@@ -73,6 +74,14 @@ export async function readIncidentAnalysisState(
           'CHANGE_CORRELATION' as const,
           'PROBABLE_CAUSE' as const,
           'RUNBOOK_RECOMMENDATION' as const,
+        ]
+      : []),
+    ...(policy.definition.triage.enabled && policy.definition.similarity.enabled
+      ? [
+          'TRIAGE_URGENCY' as const,
+          'TRIAGE_ASSIGNMENT' as const,
+          'TRIAGE_DUPLICATE' as const,
+          'TRIAGE_RESOLUTION_TIME' as const,
         ]
       : []),
   ];

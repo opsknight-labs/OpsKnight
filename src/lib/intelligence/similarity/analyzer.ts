@@ -5,6 +5,7 @@ import { observeOperationalHistogram } from '@/lib/metrics/operational/registry'
 import { withDbBudget } from '../jobs/db-budget';
 import { resolveEffectivePolicy, type IntelligenceSettingsView } from '../settings/service';
 import type { ClaimedWorkItem } from '../jobs/work-queue';
+import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
 import { replaceSimilarFindings } from './findings';
 import { findSimilarIncidents } from './retrieval';
 import { currentEmbeddingModel } from '../semantic/embedder';
@@ -69,6 +70,9 @@ export async function analyzeIncident(
       tier: similar.tier,
       results: similar.results,
     });
+    // Triage votes over the precedents just written, so it is chained here rather than at indexing.
+    if (written === 'written' && policy.definition.triage.enabled)
+      await enqueueWorkItems([{ kind: WORK_KINDS.TRIAGE_INCIDENT, subjectKey: incidentId }], tx);
     return { written, first: !previous };
   });
   if (first && written === 'written') {

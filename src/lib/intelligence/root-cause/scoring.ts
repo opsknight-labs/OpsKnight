@@ -1,17 +1,14 @@
-import { RESPONSE_LIMITS } from '../contract';
+import { RESPONSE_LIMITS, type ResponseWeights } from '../contract';
 
 export type CauseRelation = 'SAME_SERVICE' | 'UPSTREAM' | 'GLOBAL';
 export type ChangeKindValue = 'DEPLOY' | 'CONFIG' | 'FEATURE_FLAG' | 'INFRA';
 
-const KIND_WEIGHT: Record<ChangeKindValue, number> = {
-  DEPLOY: 1,
-  CONFIG: 0.9,
-  FEATURE_FLAG: 0.9,
-  INFRA: 0.8,
+/** Shipped defaults; a policy may carry offline-fitted replacements (see learning/response-weights). */
+export const DEFAULT_RESPONSE_WEIGHTS: ResponseWeights = {
+  kind: { DEPLOY: 1, CONFIG: 0.9, FEATURE_FLAG: 0.9, INFRA: 0.8 },
+  upstreamDecay: 0.75,
+  globalWeight: 0.4,
 };
-
-const GLOBAL_WEIGHT = 0.4;
-const UPSTREAM_DECAY = 0.75;
 
 export interface CauseScoreInput {
   relation: CauseRelation;
@@ -22,6 +19,7 @@ export interface CauseScoreInput {
   kind: ChangeKindValue | 'INCIDENT';
   chanceFactor?: number;
   componentMatch?: number;
+  weights?: ResponseWeights;
 }
 
 export interface CauseScore {
@@ -29,10 +27,10 @@ export interface CauseScore {
   components: { proximity: number; relation: number; kind: number };
 }
 
-function relationWeight(relation: CauseRelation, depth: number): number {
+function relationWeight(relation: CauseRelation, depth: number, weights: ResponseWeights): number {
   if (relation === 'SAME_SERVICE') return 1;
-  if (relation === 'GLOBAL') return GLOBAL_WEIGHT;
-  return Math.pow(UPSTREAM_DECAY, Math.max(1, depth));
+  if (relation === 'GLOBAL') return weights.globalWeight;
+  return Math.pow(weights.upstreamDecay, Math.max(1, depth));
 }
 
 const round = (value: number) => Math.round(value * 1000) / 1000;
@@ -51,9 +49,10 @@ export function scoreCause(input: CauseScoreInput): CauseScore {
   ) {
     return { confidence: 0, components: { proximity: 0, relation: 0, kind: 0 } };
   }
+  const weights = input.weights ?? DEFAULT_RESPONSE_WEIGHTS;
   const proximity = Math.exp(-input.leadSeconds / (RESPONSE_LIMITS.proximityTauMinutes * 60));
-  const relation = relationWeight(input.relation, input.depth);
-  const kind = input.kind === 'INCIDENT' ? 0.85 : KIND_WEIGHT[input.kind];
+  const relation = relationWeight(input.relation, input.depth, weights);
+  const kind = input.kind === 'INCIDENT' ? 0.85 : weights.kind[input.kind];
   const chance = Math.max(0.1, Math.min(1, input.chanceFactor ?? 1));
   const component =
     input.componentMatch === undefined
