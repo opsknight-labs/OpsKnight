@@ -7,6 +7,7 @@ import { getAutoGate, getLatestQualityMeasurement } from '@/lib/intelligence/eva
 import { AUTO_QUALITY_THRESHOLDS } from '@/lib/intelligence/evaluation/quality-metrics';
 import QualityEvaluationForm from '@/components/settings/QualityEvaluationForm';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import { getFeedbackSummary } from '@/lib/intelligence/squire/feedback';
 
 export const dynamic = 'force-dynamic';
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
@@ -47,6 +48,7 @@ export default async function QualityPage({
         ])
       : [null, null];
   const metrics = measurement?.metrics;
+  const feedback = await getFeedbackSummary(30).catch(() => null);
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -240,6 +242,56 @@ export default async function QualityPage({
           </SettingsSection>
         </>
       )}
+      <SettingsSection
+        title="Assistant answer feedback"
+        description="Thumbs up and down on assistant answers over the last 30 days. Only the mode, the intent and a reason are stored; never the question or the answer."
+      >
+        {feedback && feedback.total > 0 ? (
+          <div className="space-y-3 text-sm">
+            <p>
+              <strong>{feedback.total}</strong> ratings: {feedback.up} helpful, {feedback.down} not
+              helpful ({percent(feedback.up / feedback.total)} positive).
+            </p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">By mode</p>
+                <ul className="mt-1 space-y-1">
+                  {feedback.byMode.map(row => (
+                    <li key={row.mode}>
+                      {row.mode}: {row.up} / {row.down}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">By question type</p>
+                <ul className="mt-1 space-y-1">
+                  {feedback.byIntent.map(row => (
+                    <li key={row.intent}>
+                      {row.intent.toLowerCase().replace(/_/g, ' ')}: {row.up} / {row.down}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Reasons given</p>
+                <ul className="mt-1 space-y-1">
+                  {feedback.reasons.map(row => (
+                    <li key={row.reason}>
+                      {row.reason}: {row.count}
+                    </li>
+                  ))}
+                  {feedback.reasons.length === 0 && <li>None yet.</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="py-3 text-sm text-muted-foreground">
+            No ratings yet. People can rate each assistant answer from the chat.
+          </p>
+        )}
+      </SettingsSection>
     </div>
   );
 }

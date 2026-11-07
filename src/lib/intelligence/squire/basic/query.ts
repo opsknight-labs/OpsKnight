@@ -34,6 +34,10 @@ export interface BasicQuery {
   dateField: 'createdAt' | 'resolvedAt' | 'acknowledgedAt';
   unassigned: boolean;
   window?: { gte: Date; lt: Date; label: string };
+  /** Resolved from a named team ("the payments team"); ids only, already checked for visibility. */
+  teamIds?: string[];
+  /** Resolved from a named person ("assigned to Alice"); an id already checked for visibility. */
+  assigneeId?: string;
   error?: string;
 }
 export function parseBasicQuery(message: string, now = new Date(), timezone = 'UTC'): BasicQuery {
@@ -80,10 +84,15 @@ export function parseBasicQuery(message: string, now = new Date(), timezone = 'U
     unassigned: /\b(unassigned|no assignee|nobody assigned)\b/.test(text),
   };
   const rolling = text.match(/\b(?:last|past)\s+(\d{1,5})\s+(hours?|days?|weeks?|months?)\b/);
-  if (/\b(years?|since|between)\b/.test(text) && !rolling)
+  const explicit = rolling ? null : parseExplicitWindow(text, now, tz, key);
+  if (explicit && 'error' in explicit) query.error = explicit.error;
+  else if (explicit) query.window = explicit;
+  if (/\b(years?|since|between)\b/.test(text) && !rolling && !explicit)
     query.error =
-      'Use today, yesterday, this week, this month, or a rolling window such as “past 7 days” (up to 90 days).';
-  if (rolling) {
+      'Use today, yesterday, this week, this month, a date such as “since 2026-11-01” or “between Monday and Wednesday”, or a rolling window such as “past 7 days” (up to 90 days).';
+  if (query.window && !rolling) {
+    /* An explicit date window was parsed above. */
+  } else if (rolling) {
     const count = Number(rolling[1]);
     const multiplier = rolling[2].startsWith('hour')
       ? 3600000
@@ -172,6 +181,17 @@ export function incidentQueryWhere(
           ]
         : []),
       ...(query.unassigned ? [{ assigneeId: null, teamId: null }] : []),
+      ...(query.teamIds?.length
+        ? [
+            {
+              OR: [
+                { teamId: { in: [...query.teamIds] } },
+                { service: { teamId: { in: [...query.teamIds] } } },
+              ],
+            },
+          ]
+        : []),
+      ...(query.assigneeId ? [{ assigneeId: query.assigneeId }] : []),
       ...(query.window
         ? [
             query.dateField === 'resolvedAt'
@@ -185,9 +205,136 @@ export function incidentQueryWhere(
   };
 }
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const DAY_MS = 86_400_000;
+const MAX_WINDOW_DAYS = 90;
+const WEEKDAY =
+  '(?:last |this |past )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|(?<=last |this |on |since |from |to |and )(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun))';
+const DATE_EXPR = `(?:\\d{4}-\\d{2}-\\d{2}|today|yesterday|${WEEKDAY}|\\d{1,2}(?:st|nd|rd|th)? (?:of )?[a-z]{3,9}(?: \\d{4})?|[a-z]{3,9} \\d{1,2}(?:st|nd|rd|th)?(?:,? \\d{4})?)`;
+// The alternation is a fixed list of bounded shapes, so matching stays linear.
+
+const BETWEEN = new RegExp(
+  `\\b(?:between|from)\\s+(${DATE_EXPR})\\s+(?:and|to|until|till)\\s+(${DATE_EXPR})\\b`
+);
+
+const SINCE = new RegExp(`\\bsince\\s+(${DATE_EXPR})\\b`);
+
+const ON_DAY = new RegExp(`\\b(?:on\\s+)?(${DATE_EXPR})\\b`);
+
+function dayKeyOf(date: Date, tz: string): string {
+  return formatDateKeyInTimeZone(date, tz);
+}
+
+/** A calendar day for a date expression, as a YYYY-MM-DD key in `tz`, or null when it is not one. */
+export function resolveDayKey(
+  expression: string,
+  nowKey: string,
+  allowFuture = false
+): string | null {
+  const expr = expression
+    .trim()
+    .toLowerCase()
+    .replace(/(\d)(?:st|nd|rd|th)\b/g, '$1');
+  const [year, month, day] = nowKey.split('-').map(Number);
+  const todayUtc = Date.UTC(year, month - 1, day);
+  const keyOf = (utc: number) => new Date(utc).toISOString().slice(0, 10);
+  const guard = (utc: number) => (!allowFuture && utc > todayUtc ? null : keyOf(utc));
+  if (expr === 'today') return nowKey;
+  if (expr === 'yesterday') return keyOf(todayUtc - DAY_MS);
+  const iso = expr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const utc = Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+    if (Number.isNaN(utc) || keyOf(utc) !== expr) return null;
+    return guard(utc);
+  }
+  const weekday = expr.match(/^(last |this |past )?([a-z]{3,9})$/);
+  if (weekday) {
+    const index = WEEKDAYS.findIndex(name => name.startsWith(weekday[2].slice(0, 3)));
+    if (index === -1 || !['', 'last ', 'this ', 'past '].includes(weekday[1] ?? '')) return null;
+    const todayIndex = new Date(todayUtc).getUTCDay();
+    let back = (todayIndex - index + 7) % 7;
+    if (weekday[1] === 'last ' || weekday[1] === 'past ') back = back === 0 ? 7 : back;
+    if (weekday[1] === 'this ') {
+      // Within the current Monday-start week; a day still ahead is not a day with incidents yet.
+      const sinceMonday = (todayIndex + 6) % 7;
+      const offset = (index + 6) % 7;
+      if (offset > sinceMonday) return null;
+      back = sinceMonday - offset;
+    }
+    return keyOf(todayUtc - back * DAY_MS);
+  }
+  const dayFirst = expr.match(/^(\d{1,2}) (?:of )?([a-z]{3,9})(?: (\d{4}))?$/);
+  const monthFirst = expr.match(/^([a-z]{3,9}) (\d{1,2})(?:,? (\d{4}))?$/);
+  const dayText = dayFirst?.[1] ?? monthFirst?.[2];
+  const monthText = dayFirst?.[2] ?? monthFirst?.[1];
+  const yearText = dayFirst?.[3] ?? monthFirst?.[3];
+  if (dayText && monthText) {
+    const monthIndex = MONTHS.findIndex(name => monthText.startsWith(name));
+    const dayNumber = Number(dayText);
+    if (monthIndex === -1 || dayNumber < 1 || dayNumber > 31) return null;
+    let utc = Date.UTC(yearText ? Number(yearText) : year, monthIndex, dayNumber);
+    if (new Date(utc).getUTCDate() !== dayNumber) return null;
+    if (!yearText && utc > todayUtc) utc = Date.UTC(year - 1, monthIndex, dayNumber);
+    return guard(utc);
+  }
+  return null;
+}
+
+/**
+ * Explicit calendar expressions: "since 2026-11-01", "between Monday and Wednesday", "on 5 Nov", "last
+ * Friday". Days are whole local days in `tz`; the window is capped at 90 days and may not be in the future.
+ */
+export function parseExplicitWindow(
+  text: string,
+  now: Date,
+  tz: string,
+  key = dayKeyOf(now, tz)
+): { gte: Date; lt: Date; label: string } | { error: string } | null {
+  const tooLong = { error: 'Choose a time window between 1 hour and 90 days.' };
+  const future = { error: 'That date is in the future. Choose a day up to today.' };
+  const dayStart = (dayKey: string) => startOfDayFromDateKey(dayKey, tz);
+  const between = text.match(BETWEEN);
+  if (between) {
+    const start = resolveDayKey(between[1], key);
+    const end = resolveDayKey(between[2], key);
+    if (!start || !end)
+      return resolveDayKey(between[1], key, true) || resolveDayKey(between[2], key, true)
+        ? future
+        : null;
+    const [from, to] = start <= end ? [start, end] : [end, start];
+    const gte = dayStart(from);
+    const lt = new Date(Math.min(dayStart(addDaysToDateKey(to, 1)).getTime(), now.getTime()));
+    if (lt.getTime() - gte.getTime() > MAX_WINDOW_DAYS * DAY_MS) return tooLong;
+    return { gte, lt, label: `${from} to ${to} (${tz})` };
+  }
+  const since = text.match(SINCE);
+  if (since) {
+    const start = resolveDayKey(since[1], key);
+    if (!start) return resolveDayKey(since[1], key, true) ? future : null;
+    const gte = dayStart(start);
+    if (now.getTime() - gte.getTime() > MAX_WINDOW_DAYS * DAY_MS) return tooLong;
+    return { gte, lt: now, label: `since ${start} (${tz})` };
+  }
+  const on = text.match(ON_DAY);
+  if (on && !/^(today|yesterday)$/.test(on[1])) {
+    const day = resolveDayKey(on[1], key);
+    if (!day) return resolveDayKey(on[1], key, true) ? future : null;
+    const gte = dayStart(day);
+    if (now.getTime() - gte.getTime() > MAX_WINDOW_DAYS * DAY_MS) return tooLong;
+    const weekdayName = WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()];
+    return {
+      gte,
+      lt: new Date(Math.min(dayStart(addDaysToDateKey(day, 1)).getTime(), now.getTime())),
+      label: `${weekdayName[0].toUpperCase()}${weekdayName.slice(1)} ${day} (${tz})`,
+    };
+  }
+  return null;
+}
+
 /** Reuse earlier questions as query intent only; new time/status/urgency filters replace the old ones. */
 const TIME_FILTER =
-  /\b(today|yesterday|this week|this month|(?:last|past) \d{1,5} (?:hours?|days?|weeks?|months?)|(?:last|past) (?:week|month))\b/gi;
+  /\b(today|yesterday|this week|this month|(?:last|past) \d{1,5} (?:hours?|days?|weeks?|months?)|(?:last|past) (?:week|month)|since \S+|between \S+ and \S+|(?:last |this )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/gi;
 export function mergeBasicQuestion(previous: string, current: string): string {
   let base = previous.replace(/\s+/g, ' ');
   if ((/["“][^"”]+["”]/.test(current) || /\bfor\b/i.test(current)) && keywords(current).length) {

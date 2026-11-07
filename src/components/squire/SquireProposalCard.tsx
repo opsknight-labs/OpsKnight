@@ -15,6 +15,8 @@ export type SquireProposalView = {
   incidentId: string;
   expiresAt: string;
   href?: string;
+  /** The assistant read alerts, notes or other third-party text before suggesting this. */
+  untrustedContext?: boolean;
 };
 
 type State =
@@ -174,6 +176,12 @@ export default function SquireProposalCard({
       <p className="mt-1 whitespace-pre-wrap break-words text-xs text-foreground/80">
         {proposal.detail}
       </p>
+      {proposal.untrustedContext && (
+        <p className="mt-2 rounded-md border border-amber-300/60 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200">
+          Suggested after reading alerts, notes or other text written outside this conversation.
+          Check that content yourself before confirming.
+        </p>
+      )}
       <Link
         href={`/incidents/${encodeURIComponent(proposal.incidentId)}`}
         className="mt-2 inline-block text-xs font-medium text-primary underline underline-offset-2"

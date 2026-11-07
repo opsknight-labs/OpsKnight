@@ -38,6 +38,27 @@ import { readIncidentForActor } from './deterministic';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
 const MAX_ROWS = 10;
+
+/**
+ * What each tool can return. Tools that name people, or read notes and timelines people wrote, are Personal;
+ * everything else is Internal operational data. Proposal tools carry only identifiers.
+ */
+export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
+  get_timeline: 'PERSONAL',
+  list_alerts: 'INTERNAL',
+  who_is_on_call: 'PERSONAL',
+  find_people: 'PERSONAL',
+  search_postmortems: 'PERSONAL',
+  get_incident: 'INTERNAL',
+  get_intelligence: 'INTERNAL',
+  get_service: 'INTERNAL',
+  get_recent_changes: 'INTERNAL',
+  get_runbook: 'INTERNAL',
+  search_incidents: 'INTERNAL',
+  semantic_search_incidents: 'INTERNAL',
+  get_status_page: 'PUBLIC',
+  get_problem_outcomes: 'INTERNAL',
+};
 const SEMANTIC_UNAVAILABLE = { items: [], coverage: { mode: 'UNAVAILABLE', approximate: false } };
 
 const short = (text: string | null | undefined, max = 280) => {
@@ -756,9 +777,14 @@ export function buildSquireTools(
     if (!options.personal && name === 'reassign_incident') continue;
     tools.push(proposalTool(name));
   }
+  // Each tool carries the class of what it can return; the turn's class is the highest of the tools that
+  // actually ran plus the conversation baseline the caller chose.
   return tools.map(tool => ({
     ...tool,
-    dataClass: highestDataClass(['PERSONAL', options.dataClass, tool.dataClass]),
+    dataClass: highestDataClass([
+      options.dataClass ?? 'INTERNAL',
+      tool.dataClass ?? SQUIRE_TOOL_DATA_CLASS[tool.name] ?? 'INTERNAL',
+    ]),
     ...(options.observe && tool.kind === 'READ'
       ? {
           execute: async (input: unknown) =>

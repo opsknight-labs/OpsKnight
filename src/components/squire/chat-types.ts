@@ -15,6 +15,8 @@ export type Turn = {
   contextProof?: string;
   notice?: string;
   mode?: 'ai' | 'basic';
+  /** The deterministic intent a basic answer was built for; sent with feedback. */
+  intent?: string;
   /** What the assistant is looking up right now. */
   activity?: string;
   /** Shown after partial text when the answer was cut off. */

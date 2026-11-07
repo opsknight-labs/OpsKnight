@@ -48,10 +48,10 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
   if (/^(thanks|thank you|thankyou|cheers|got it|okay|ok)[\s!.,?]*$/.test(text)) return 'THANKS';
   if (/^help[\s!.,?]*$|\b(what can you do|how do you work|commands?)\b/.test(text)) return 'HELP';
   if (
-    /\b(how (do|can|to|does|should|long)|what (is|are)|explain|where (do|can)|difference between|help|guide|instructions|configure|set up|enable|disable|understand|^does)\b/.test(
+    /\b(how (do|can|to|does|should|long)|what (is|are|does)|explain|where (do|can)|difference between|help|guide|instructions|configure|set up|enable|disable|understand|^does)\b/.test(
       text
     ) &&
-    /\b(opsknight|acknowledge|ack|create|assign|escalate|snooze|resolve|runbooks?|on[- ]?call|schedule|rotation|overrides?|handoff|urgency|priority|severity|integration|dedup|webhook|notifications?|status pages?|postmortem|history|retention|privacy|permission|roles?|sso|scim|oidc|mcp|api key|basic mode|squire|ai|provider|quota|budget|timezone|time zone)\b/.test(
+    /\b(opsknight|acknowledge|ack|create|assign|escalate|escalation(?: polic(?:y|ies))?|snooze|resolve|runbooks?|on[- ]?call|schedules?|rotation|overrides?|handoff|urgency|priority|severity|integration|dedup|webhook|notifications?|status pages?|postmortem|history|retention|privacy|permission|roles?|sso|scim|oidc|mcp|api key|basic mode|squire|ai|provider|quota|budget|timezone|time zone)\b/.test(
       text
     ) &&
     !/\b(health|status|owner|owns|on[- ]?call|assigned) (of|for|to)\b/.test(text)
@@ -135,6 +135,9 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
     /\b(search|find|list|show|recent|resolved|yesterday|today|last week|past week)\b/.test(text) &&
     /\b(incidents?|outages?|alerts?)\b/.test(text)
   )
-    return 'SEARCH_INCIDENTS';
+    // A question about alerts alone is about alert records, not incidents.
+    return /\balerts?\b/.test(text) && !/\b(incidents?|outages?)\b/.test(text)
+      ? 'ALERT_STATS'
+      : 'SEARCH_INCIDENTS';
   return 'UNKNOWN';
 }

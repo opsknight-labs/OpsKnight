@@ -15,6 +15,8 @@ import AiUsageChart from '@/components/settings/AiUsageChart';
 import { getAiSettings, listAiProviders } from '@/lib/intelligence/ai/settings';
 import { BUILT_IN_PROMPTS, listGuidance, promptHash } from '@/lib/intelligence/ai/prompts';
 import { getSemanticIndexStatus } from '@/lib/intelligence/semantic/embedder';
+import { listCheckTemplates } from '@/lib/intelligence/squire/basic/checks';
+import SquireChecksForm from '@/components/squire/SquireChecksForm';
 import { backgroundEmbeddingTokenBudget } from '@/lib/intelligence/ai/contract';
 
 export const dynamic = 'force-dynamic';
@@ -40,11 +42,12 @@ export default async function IntelligenceAiPage() {
     safely('usage', () => getTodayUsage()),
     safely('usage history', () => getUsageHistory(14)),
   ]);
-  const [guidance, semantic] = await Promise.all([
+  const [guidance, semantic, checkTemplates] = await Promise.all([
     safely('prompt guidance', () => listGuidance()),
     settings.embeddingsEnabled
       ? safely('semantic index', () => getSemanticIndexStatus())
       : Promise.resolve(null),
+    safely('suggested checks', () => listCheckTemplates()),
   ]);
   const used = usage ? usage.inputTokens + usage.outputTokens : 0;
 
@@ -190,6 +193,12 @@ export default async function IntelligenceAiPage() {
             <ProviderForm canManage={canManage} />
           </details>
         )}
+      </SettingsSection>
+      <SettingsSection
+        title="Suggested checks"
+        description="Investigation prompts the assistant shows with incident answers, with or without AI, when the incident title matches a pattern. They are suggestions only; nothing is executed."
+      >
+        <SquireChecksForm templates={checkTemplates ?? []} canManage={canManage} />
       </SettingsSection>
       <SettingsSection
         title="Prompts"

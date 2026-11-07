@@ -18,8 +18,34 @@ import type { EvidenceSnapshot } from '../evidence';
 import type { ReadableIncident } from '../deterministic';
 import type { SquireIntent } from '../intents';
 import { incidentQueryWhere, parseBasicQuery, type BasicQuery } from './query';
+import { TIMEZONE_TTL_MS, TtlCache } from './cache';
 
 export type CollectBasicEvidence = (source: EvidenceSnapshot) => void;
+
+/** Rows per page in list answers; "show more" continues from `offset`. */
+export const BASIC_PAGE_SIZE = 5;
+const MAX_PAGE_SIZE = 20;
+/** Resolved incidents examined for MTTR/MTTA in one report; bounded so a report never scans a whole history. */
+const DURATION_SAMPLE = 5_000;
+
+export interface BasicReadOptions {
+  offset?: number;
+  limit?: number;
+  groupBy?: 'service' | 'team' | 'urgency' | 'status' | 'priority' | 'day' | 'hour';
+  teamIds?: string[];
+  assigneeId?: string;
+  /** The service of the page the person is on, used when the question names none. */
+  contextService?: string | null;
+  /** The schedule of the page the person is on, for on-call questions. */
+  scheduleId?: string | null;
+}
+
+export interface BasicReadResult {
+  text: string;
+  total?: number;
+  hasMore?: boolean;
+}
+
 type Context = {
   actor: AuthorizationActor;
   now: Date;
@@ -28,8 +54,12 @@ type Context = {
   message: string;
   incident: ReadableIncident | null;
   collect?: CollectBasicEvidence;
+  offset: number;
+  limit: number;
+  options: BasicReadOptions;
 };
-const LIMIT = 5;
+const LIMIT = BASIC_PAGE_SIZE;
+const timeZones = new TtlCache<string>(TIMEZONE_TTL_MS, 5_000);
 const safe = (value: string | null | undefined, limit = 240) =>
   redactSecrets(value ?? '')
     .replace(/\s+/g, ' ')
@@ -79,9 +109,11 @@ async function services(ctx: Context, useIncident = false): Promise<ServiceRow[]
           : []),
         ...(terms.length
           ? terms.map(term => ({ name: { contains: term, mode: 'insensitive' as const } }))
-          : useIncident && ctx.incident
-            ? [{ name: ctx.incident.serviceName }]
-            : []),
+          : ctx.options.contextService
+            ? [{ name: ctx.options.contextService }]
+            : useIncident && ctx.incident
+              ? [{ name: ctx.incident.serviceName }]
+              : []),
       ],
     },
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
@@ -107,7 +139,7 @@ function namedService(rows: ServiceRow[], ctx: Context): ServiceRow | undefined 
   return quoted ? rows.find(row => row.name.toLowerCase() === quoted) : undefined;
 }
 
-async function incidentList(ctx: Context): Promise<string> {
+async function incidentList(ctx: Context): Promise<BasicReadResult> {
   if (ctx.query.mine && !ctx.query.status) ctx.query.active = true;
   const where = incidentQueryWhere(
     ctx.query,
@@ -120,7 +152,8 @@ async function incidentList(ctx: Context): Promise<string> {
     prisma.incident.findMany({
       where,
       orderBy: [{ urgency: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
-      take: LIMIT,
+      skip: ctx.offset,
+      take: ctx.limit,
       select: {
         id: true,
         title: true,
@@ -135,21 +168,122 @@ async function incidentList(ctx: Context): Promise<string> {
     }),
   ]);
   rows.forEach(row => ctx.collect?.({ kind: 'incident', id: row.id, label: row.title, data: row }));
-  return [
-    `## ${ctx.query.mine ? 'Your incident work' : 'Matching incidents'}`,
-    filters(ctx),
-    `${total} match${total === 1 ? '' : 'es'}${ctx.query.window ? ` in ${ctx.query.window.label}` : ''}. Showing up to ${LIMIT}, highest urgency first.`,
-    ...rows.map(
-      row =>
-        `- **${safe(row.title)}** — ${safe(row.service.name)}, ${row.status.toLowerCase()}, ${row.urgency.toLowerCase()} urgency; ${row.assignee ? `assigned to ${safe(row.assignee.name) || 'a responder'}` : row.team ? `assigned to team ${safe(row.team.name)}` : 'unassigned'}.\n  Opened ${date(row.createdAt, ctx)}. /incidents/${row.id}`
-    ),
-    ...(total === 0
-      ? [
-          'No matching incidents in this view. Try fewer keywords or a wider time window. This does not establish that no incident exists outside your access.',
-        ]
-      : []),
-    stamp(ctx),
-  ].join('\n\n');
+  const hasMore = ctx.offset + rows.length < total;
+  const shown =
+    rows.length === 0
+      ? ''
+      : ctx.offset > 0 || hasMore
+        ? ` Showing ${ctx.offset + 1}–${ctx.offset + rows.length} of ${total}, highest urgency first${hasMore ? '; say "show more" for the next page' : ''}.`
+        : ` Showing up to ${ctx.limit}, highest urgency first.`;
+  return {
+    total,
+    hasMore,
+    text: [
+      `## ${ctx.query.mine ? 'Your incident work' : 'Matching incidents'}`,
+      filters(ctx),
+      `${total} match${total === 1 ? '' : 'es'}${ctx.query.window ? ` in ${ctx.query.window.label}` : ''}.${shown}`,
+      ...rows.map(
+        row =>
+          `- **${safe(row.title)}** — ${safe(row.service.name)}, ${row.status.toLowerCase()}, ${row.urgency.toLowerCase()} urgency; ${row.assignee ? `assigned to ${safe(row.assignee.name) || 'a responder'}` : row.team ? `assigned to team ${safe(row.team.name)}` : 'unassigned'}.\n  Opened ${date(row.createdAt, ctx)}. /incidents/${row.id}`
+      ),
+      ...(total === 0
+        ? [
+            'No matching incidents in this view. Try fewer keywords or a wider time window. This does not establish that no incident exists outside your access.',
+          ]
+        : []),
+      stamp(ctx),
+    ].join('\n\n'),
+  };
+}
+
+const GROUP_LABEL: Record<NonNullable<BasicReadOptions['groupBy']>, string> = {
+  service: 'service',
+  team: 'team',
+  urgency: 'urgency',
+  status: 'status',
+  priority: 'priority',
+  day: 'day',
+  hour: 'hour of day',
+};
+
+/** Counts matching incidents per group; teams and services are named only when the person can read them. */
+async function breakdown(
+  ctx: Context,
+  where: Prisma.IncidentWhereInput,
+  by: NonNullable<BasicReadOptions['groupBy']>
+): Promise<string> {
+  const limit = Math.max(ctx.limit, 10);
+  if (by === 'day' || by === 'hour') {
+    const rows = await prisma.incident.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: DURATION_SAMPLE,
+      select: { createdAt: true },
+    });
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: ctx.timeZone,
+      ...(by === 'day' ? { dateStyle: 'medium' } : { hour: '2-digit', hour12: false }),
+    });
+    const buckets = new Map<string, number>();
+    for (const row of rows) {
+      const bucket =
+        by === 'day' ? formatter.format(row.createdAt) : `${formatter.format(row.createdAt)}:00`;
+      buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
+    }
+    const lines = [...buckets.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, limit)
+      .map(([bucket, count]) => `- ${bucket}: ${count}`);
+    return `### By ${GROUP_LABEL[by]} (${ctx.timeZone}${rows.length === DURATION_SAMPLE ? `, most recent ${DURATION_SAMPLE} only` : ''})\n${lines.join('\n') || 'No incidents in this window.'}`;
+  }
+  if (by === 'service') {
+    const top = await prisma.incident.groupBy({
+      by: ['serviceId'],
+      where,
+      _count: { id: true },
+      orderBy: [{ _count: { id: 'desc' } }, { serviceId: 'asc' }],
+      take: limit,
+    });
+    const visible = await prisma.service.findMany({
+      where: { AND: [serviceReadWhere(ctx.actor), { id: { in: top.map(row => row.serviceId) } }] },
+      select: { id: true, name: true },
+    });
+    const lines = top.flatMap(row => {
+      const service = visible.find(item => item.id === row.serviceId);
+      return service ? [`- ${safe(service.name)}: ${row._count.id} — /services/${service.id}`] : [];
+    });
+    return `### By service\n${lines.join('\n') || 'No readable service breakdown is available.'}`;
+  }
+  if (by === 'team') {
+    const top = await prisma.incident.groupBy({
+      by: ['teamId'],
+      where,
+      _count: { id: true },
+      orderBy: [{ _count: { id: 'desc' } }, { teamId: 'asc' }],
+      take: limit,
+    });
+    const ids = top.flatMap(row => (row.teamId ? [row.teamId] : []));
+    const teams = ids.length
+      ? await prisma.team.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+      : [];
+    const lines = top.map(row => {
+      const team = row.teamId ? teams.find(item => item.id === row.teamId) : null;
+      return `- ${team ? safe(team.name) : row.teamId ? 'a team you cannot see' : 'no team (assigned to a person or unassigned)'}: ${row._count.id}`;
+    });
+    return `### By team (incident assignment, not service ownership)\n${lines.join('\n') || 'No incidents in this window.'}`;
+  }
+  const rows = await prisma.incident.groupBy({
+    by: [by],
+    where,
+    _count: { id: true },
+    orderBy: [{ _count: { id: 'desc' } }],
+    take: limit,
+  });
+  const lines = rows.map(row => {
+    const value = row[by as 'urgency' | 'status' | 'priority'];
+    return `- ${value ? safe(String(value)).toLowerCase() : 'not set'}: ${row._count.id}`;
+  });
+  return `### By ${GROUP_LABEL[by]}\n${lines.join('\n') || 'No incidents in this window.'}`;
 }
 
 async function statistics(ctx: Context): Promise<string> {
@@ -174,7 +308,8 @@ async function statistics(ctx: Context): Promise<string> {
       lt: window.gte,
     },
   };
-  const [total, statuses, prior, top, resolved] = await Promise.all([
+  const topLimit = Math.max(LIMIT, ctx.options.limit ?? 0);
+  const [total, statuses, prior, top, resolved, acknowledged, grouped] = await Promise.all([
     prisma.incident.count({ where }),
     prisma.incident.groupBy({ by: ['status'], where, _count: { id: true } }),
     prisma.incident.count({
@@ -190,14 +325,23 @@ async function statistics(ctx: Context): Promise<string> {
       where,
       _count: { id: true },
       orderBy: [{ _count: { id: 'desc' } }, { serviceId: 'asc' }],
-      take: LIMIT,
+      take: topLimit,
     }),
     prisma.incident.findMany({
       where: { AND: [where, { status: 'RESOLVED', resolvedAt: { not: null } }] },
       orderBy: [{ resolvedAt: 'desc' }, { id: 'desc' }],
-      take: 501,
+      take: DURATION_SAMPLE + 1,
       select: { id: true, title: true, createdAt: true, resolvedAt: true, updatedAt: true },
     }),
+    prisma.incident.findMany({
+      where: { AND: [where, { acknowledgedAt: { not: null } }] },
+      orderBy: [{ acknowledgedAt: 'desc' }, { id: 'desc' }],
+      take: DURATION_SAMPLE,
+      select: { createdAt: true, acknowledgedAt: true },
+    }),
+    ctx.options.groupBy && ctx.options.groupBy !== 'service'
+      ? breakdown(ctx, where, ctx.options.groupBy)
+      : Promise.resolve(null),
   ]);
   const visibleServices = await prisma.service.findMany({
     where: { AND: [serviceReadWhere(ctx.actor), { id: { in: top.map(row => row.serviceId) } }] },
@@ -210,11 +354,19 @@ async function statistics(ctx: Context): Promise<string> {
     .slice(0, LIMIT)
     .forEach(row => ctx.collect?.({ kind: 'incident', id: row.id, label: row.title, data: row }));
   const valid = resolved
-    .slice(0, 500)
+    .slice(0, DURATION_SAMPLE)
     .filter(row => row.resolvedAt && row.resolvedAt >= row.createdAt);
   const average = valid.length
     ? valid.reduce((sum, row) => sum + row.resolvedAt!.getTime() - row.createdAt.getTime(), 0) /
       valid.length /
+      60000
+    : null;
+  const acked = acknowledged.filter(
+    row => row.acknowledgedAt && row.acknowledgedAt >= row.createdAt
+  );
+  const mtta = acked.length
+    ? acked.reduce((sum, row) => sum + row.acknowledgedAt!.getTime() - row.createdAt.getTime(), 0) /
+      acked.length /
       60000
     : null;
   const topLines = top.flatMap(row => {
@@ -231,13 +383,19 @@ async function statistics(ctx: Context): Promise<string> {
     `**${total} incident${total === 1 ? '' : 's'} ${ctx.query.dateField === 'resolvedAt' ? 'resolved' : ctx.query.dateField === 'acknowledgedAt' ? 'acknowledged' : 'created'}** matching your filters; previous equal-length period: **${prior}** (${total - prior >= 0 ? '+' : ''}${total - prior}).`,
     statuses.map(row => `${row.status.toLowerCase()}: ${row._count.id}`).join(' · ') ||
       'No incidents in this reporting window.',
+    grouped ?? '',
     `### Services with the most matching incidents\n${topLines.join('\n') || 'No readable service breakdown is available.'}`,
     average === null
       ? 'Mean time to resolution: no valid resolved records in this cohort.'
-      : `Mean time to resolution: **${average.toFixed(1)} minutes** across ${valid.length} valid resolved incidents matching this reporting window.${resolved.length > 500 ? ' Bounded sample: only the 500 most recently resolved matching records were evaluated.' : ''} This is wall-clock resolution time, not SLA paused time.`,
+      : `Mean time to resolution: **${average.toFixed(1)} minutes** across ${valid.length} valid resolved incidents matching this reporting window.${resolved.length > DURATION_SAMPLE ? ` Bounded sample: only the ${DURATION_SAMPLE} most recently resolved matching records were evaluated.` : ''} This is wall-clock resolution time, not SLA paused time.`,
+    mtta === null
+      ? 'Mean time to acknowledge: no acknowledged records in this cohort.'
+      : `Mean time to acknowledge: **${mtta.toFixed(1)} minutes** across ${acked.length} acknowledged incidents${acknowledged.length >= DURATION_SAMPLE ? ` (bounded to the ${DURATION_SAMPLE} most recent)` : ''}.`,
     'Incident counts measure volume, not alert compression, page delivery, customer impact or confirmed service uptime.',
     stamp(ctx),
-  ].join('\n\n');
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 async function serviceOverview(ctx: Context): Promise<string> {
@@ -689,7 +847,11 @@ async function oncall(ctx: Context): Promise<string> {
     return `No on-call schedule target was found in the checked escalation rules for ${safe(service.name)}. Direct user or team targets may still exist. ${rules.length === 20 ? 'Only the first 20 rules were checked; inspect the policy for further steps.' : ''} I have not substituted unrelated schedules.\n/services/${service.id}`;
   const schedules = await prisma.onCallSchedule.findMany({
     where: {
-      AND: [scheduleReadWhere(ctx.actor), ...(service ? [{ id: { in: scheduleIds } }] : [])],
+      AND: [
+        scheduleReadWhere(ctx.actor),
+        ...(service ? [{ id: { in: scheduleIds } }] : []),
+        ...(!service && ctx.options.scheduleId ? [{ id: ctx.options.scheduleId }] : []),
+      ],
     },
     take: LIMIT + 1,
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
@@ -745,6 +907,32 @@ export async function answerBasicRead(
   incident: ReadableIncident | null,
   collect?: CollectBasicEvidence
 ): Promise<string | null> {
+  const result = await answerBasicReadDetailed(intent, actor, message, incident, collect, {});
+  return result ? result.text : null;
+}
+
+async function timeZoneFor(actorId: string): Promise<string> {
+  const cached = timeZones.get(actorId);
+  if (cached) return cached;
+  const user = await prisma.user.findUnique({ where: { id: actorId }, select: { timeZone: true } });
+  const timeZone = user?.timeZone && isValidTimeZone(user.timeZone) ? user.timeZone : 'UTC';
+  timeZones.set(actorId, timeZone);
+  return timeZone;
+}
+
+/** Test hook. */
+export function resetBasicReadCaches(): void {
+  timeZones.clear();
+}
+
+export async function answerBasicReadDetailed(
+  intent: SquireIntent,
+  actor: AuthorizationActor,
+  message: string,
+  incident: ReadableIncident | null,
+  collect: CollectBasicEvidence | undefined,
+  options: BasicReadOptions
+): Promise<BasicReadResult | null> {
   const supported = [
     'ALERT_STATS',
     'ACTIVE_INCIDENTS',
@@ -762,36 +950,56 @@ export async function answerBasicRead(
   if (!supported.includes(intent)) return null;
   if (
     !incident &&
+    !options.contextService &&
     /\b(this|current) service\b/i.test(message) &&
     (intent === 'SERVICE_HEALTH' || intent === 'ON_CALL')
   )
-    return 'Please include the service name, for example “Who owns Checkout API?”. I use incident context when an incident is open; I will not guess a service from another page.';
-  const user = await prisma.user.findUnique({
-    where: { id: actor.id },
-    select: { timeZone: true },
-  });
-  const timeZone = user?.timeZone && isValidTimeZone(user.timeZone) ? user.timeZone : 'UTC';
+    return {
+      text: 'Please include the service name, for example “Who owns Checkout API?”. I use the service on screen when you are on an incident or service page; I will not guess a service from another page.',
+    };
+  const timeZone = await timeZoneFor(actor.id);
   const now = new Date();
   const query = parseBasicQuery(message, now, timeZone);
-  if (query.error) return query.error;
+  if (query.error) return { text: query.error };
   if ((intent === 'WORK_QUEUE' || intent === 'ACTIVE_INCIDENTS') && !query.status)
     query.active = true;
-  const ctx: Context = { actor, message, incident, collect, now, timeZone, query };
+  if (options.teamIds?.length) query.teamIds = options.teamIds;
+  if (options.assigneeId) {
+    query.assigneeId = options.assigneeId;
+    query.mine = false;
+    query.active = query.active || !query.status;
+  }
+  const ctx: Context = {
+    actor,
+    message,
+    incident,
+    collect,
+    now,
+    timeZone,
+    query,
+    options,
+    offset: Math.max(0, Math.min(options.offset ?? 0, 10_000)),
+    limit: Math.max(1, Math.min(options.limit ?? BASIC_PAGE_SIZE, MAX_PAGE_SIZE)),
+  };
+  const text = async (value: string | BasicReadResult): Promise<BasicReadResult> =>
+    typeof value === 'string' ? { text: value } : value;
   try {
     if (intent === 'WORK_QUEUE' || intent === 'SEARCH_INCIDENTS' || intent === 'ACTIVE_INCIDENTS')
       return await incidentList(ctx);
-    if (intent === 'ALERT_STATS') return await alertStats(ctx);
-    if (intent === 'INCIDENT_STATS') return await statistics(ctx);
-    if (intent === 'SERVICE_HEALTH') return await serviceOverview(ctx);
-    if (intent === 'RUNBOOK_SEARCH') return await runbooks(ctx);
-    if (intent === 'RECENT_CHANGES') return await changes(ctx);
-    if (intent === 'FOLLOWUPS') return await followups(ctx);
-    if (intent === 'POSTMORTEMS') return await postmortems(ctx);
-    if (intent === 'RESPONDERS') return await responders(ctx);
-    return await oncall(ctx);
+    if (intent === 'ALERT_STATS') return text(await alertStats(ctx));
+    if (intent === 'INCIDENT_STATS') return text(await statistics(ctx));
+    if (intent === 'SERVICE_HEALTH') return text(await serviceOverview(ctx));
+    if (intent === 'RUNBOOK_SEARCH') return text(await runbooks(ctx));
+    if (intent === 'RECENT_CHANGES') return text(await changes(ctx));
+    if (intent === 'FOLLOWUPS') return text(await followups(ctx));
+    if (intent === 'POSTMORTEMS') return text(await postmortems(ctx));
+    if (intent === 'RESPONDERS') return text(await responders(ctx));
+    return text(await oncall(ctx));
   } catch (error) {
     if (error instanceof AuthorizationError)
-      return 'You do not have permission to read that OpsKnight data. Ask an administrator to review your access.';
+      return {
+        text: 'You do not have permission to read that OpsKnight data. Ask an administrator to review your access.',
+      };
     throw error;
   }
 }

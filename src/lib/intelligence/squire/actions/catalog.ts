@@ -127,4 +127,6 @@ export interface SquireProposal {
   detail: string;
   incidentId: string;
   expiresAt: string;
+  /** The turn read third-party text (alerts, notes, payloads) before proposing this. */
+  untrustedContext?: boolean;
 }
