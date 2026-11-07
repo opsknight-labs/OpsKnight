@@ -181,6 +181,33 @@
         "Impact estimate for dependencies, status components and SLO budget",
         "On-call handoff and shift summary using deterministic fallback or AI in the lane"
       ]
+    },
+    {
+      "id": 8,
+      "wave": 1,
+      "name": "Engine robustness and fault tolerance",
+      "status": "implemented_pending_full_ci",
+      "branch": "feat/intelligence-robustness (stacked on feat/intelligence-engine)",
+      "implemented": [
+        "Abortable handlers: ambient abort scope cancels budgeted statements and terminates stuck backends; timed-out handlers keep their concurrency slot and saturate the lane instead of exceeding maxConcurrency",
+        "Lease renewal before late batch starts",
+        "Quarantine for work that dies twice within 24h; never auto-revived or purged; operator replay clears it; badge in Failed work",
+        "Per-kind failure-rate breaker pauses one kind for five minutes; claim excludes paused kinds",
+        "Updated-incident watermark reconcile every cycle (O(changes)); recent-history sweep paced to ten minutes; database clock for discovery and the sweeps",
+        "Per-table retention transactions, bounded AlertFingerprint drain before parents, lease row instead of transaction-long lock, adaptive batch size, per-table deleted-rows metric",
+        "Resumable alert bootstrap in 5,000-payload passes with alertIndexPartial; analysis chained only on completion; no recursive force rebuild",
+        "Listener reconnect backoff with jitter; wake-leader election so one replica acts on notifications; HNSW build skips indexes another replica is building; observer no longer spins on a held lock",
+        "lane_up gauge, cycle age from start, saturation health, quarantined/kind-paused/timed-out/wake-leader metrics, LaneGone/WorkQuarantined/KindPaused alerts with rule tests",
+        "Policy publish/rollback enqueue a bounded re-index of the scope's open incidents",
+        "Late change webhook enqueues one LATE_CHANGE item; fan-out runs in the lane",
+        "Boundary test also catches relative intelligence imports in ingestion",
+        "repair-invalid-indexes script at container start and in prisma:migrate:safe",
+        "Robustness integration suite: quarantine, kind exclusion, future schedule kept on requeue, statement cancellation, saturation, kind pause, retention drain and lease, updated-incident reconcile, policy publish re-index, 12k-alert bootstrap"
+      ],
+      "remaining": [
+        "Replica-level chaos (two lane processes racing on one incident) in CI",
+        "Shared replica breaker state for AI providers (tracked in phase 5)"
+      ]
     }
   ],
   "verification": {

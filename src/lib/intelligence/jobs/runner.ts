@@ -15,15 +15,21 @@ import {
 } from '../settings/service';
 import { evaluateLanePause, getCriticalBacklogLagMs, type PauseState } from './backpressure';
 import { getPrismaPoolWaitCount } from '@/lib/prisma-pool-pressure';
-import { withDbBudget } from './db-budget';
-import { reconcileFingerprints, discoverNewIncidents } from './discovery';
+import { withAbortableDbWork, withDbBudget } from './db-budget';
+import {
+  discoverNewIncidents,
+  reconcileFingerprints,
+  reconcileUpdatedIncidents,
+} from './discovery';
 import { indexIncident } from './indexer';
+import { KindBreaker } from './kind-breaker';
 import { listenForIntelligenceWake } from './wake-listener';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
 import { correlateIncident } from '../correlation/handler';
 import { OBSERVE_INTERVAL_MS, observeDependencyPass } from '../dependencies/observer';
 import { analyzeResponse } from '../response/handler';
+import { reanalyzeAfterLateChange } from '../changes/service';
 import { purgeConversations } from '../conversations/store';
 import { AiGatewayError } from '../ai/gateway';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
@@ -48,9 +54,15 @@ import {
 
 /** Periodic repair sweeps look only at recent incidents; deep history is an explicit backfill. */
 export const RECONCILE_LOOKBACK_DAYS = 7;
-const RECONCILE_INTERVAL_MS = 60_000;
+/**
+ * The recent-history sweep repairs engine-version and placeholder drift and is paced slowly. Ordinary
+ * changes whose wake hint was lost are caught by the per-cycle updated-incident sweep, in O(changes).
+ */
+export const RECONCILE_INTERVAL_MS = 10 * 60_000;
 const DISCOVERY_BATCH_MULTIPLIER = 5;
 const DEPENDENCY_OBSERVER_SUBJECT = 'dependency-observation';
+/** Retention batches shrink while a table keeps timing out and grow back once sweeps are clean. */
+const RETENTION_MIN_BATCH = 10;
 
 export interface HandlerContext {
   settings: IntelligenceSettingsView;
@@ -60,16 +72,19 @@ export type WorkHandler = (item: ClaimedWorkItem, context: HandlerContext) => Pr
 export type WorkHandlers = Partial<Record<WorkKind, WorkHandler>>;
 
 export const DEFAULT_HANDLERS: WorkHandlers = {
+  // A pass skipped because another replica holds the observer lock is simply not this replica's work;
+  // the hourly schedule enqueues the next one, so the lock is never spun on.
   [WORK_KINDS.OBSERVE_DEPENDENCIES]: async (_item, { settings }) => {
     const pass = await observeDependencyPass(settings);
-    if (pass.more)
+    if (pass.more && !pass.skipped)
       await enqueueWorkItems([
         { kind: WORK_KINDS.OBSERVE_DEPENDENCIES, subjectKey: DEPENDENCY_OBSERVER_SUBJECT },
       ]);
   },
   // The fingerprint and the follow-up work are written in one transaction, so a crash can never leave a
   // fingerprint that is never analysed. With the effective policy OFF only an empty placeholder is stored:
-  // no text is kept and nothing follows, and reconciliation re-checks it once the policy changes.
+  // no text is kept and nothing follows, and reconciliation re-checks it once the policy changes. A very
+  // large incident is bootstrapped over several bounded passes: each pass re-signals its own item.
   [WORK_KINDS.INDEX_INCIDENT]: async (item, { settings }) => {
     await withDbBudget(settings, async tx => {
       const incident = await tx.incident.findUnique({
@@ -84,6 +99,13 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
         force: item.force,
         policy: { id: policy.policyId, version: policy.version, mode: policy.effectiveMode },
       });
+      if (outcome === 'partial') {
+        await enqueueWorkItems(
+          [{ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: item.subjectKey }],
+          tx
+        );
+        return;
+      }
       if (outcome !== 'indexed' || !active) return;
       // Correlation and response analysis are chained only when the policy uses them, so installs
       // without rules pay no extra write per incident.
@@ -107,6 +129,18 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   },
   [WORK_KINDS.ANALYZE_INCIDENT]: async (item, { settings }) => {
     await analyzeIncident(item, settings);
+  },
+  // A change that arrived after the incidents it may explain: the webhook only records it, and this
+  // bounded pass fans out the re-analysis in the lane instead of in the request.
+  [WORK_KINDS.LATE_CHANGE]: async (item, { settings }) => {
+    await withDbBudget(settings, async tx => {
+      const change = await tx.changeEvent.findUnique({
+        where: { id: item.subjectKey },
+        select: { serviceId: true, occurredAt: true },
+      });
+      if (!change) return;
+      await reanalyzeAfterLateChange(change.serviceId, change.occurredAt, tx);
+    });
   },
   // Semantic search is optional and never sits in front of analysis: incidents are analysed lexically
   // straight away, then re-analysed once their vector exists, so a slow or failing embedding provider
@@ -173,6 +207,12 @@ export interface LaneState {
   lastEmbedAt: number;
   lastDigestCheckAt: number;
   lastConversationSweepAt: number;
+  /** Handlers that exceeded their budget and are still running; they count against concurrency until they let go. */
+  timedOut: Set<Promise<unknown>>;
+  kinds: KindBreaker;
+  saturatedLogged: boolean;
+  /** Current retention batch size, adapted to how the last sweeps went; null until the first sweep. */
+  retentionBatchSize: number | null;
 }
 
 export function createLaneState(): LaneState {
@@ -184,30 +224,46 @@ export function createLaneState(): LaneState {
     lastEmbedAt: 0,
     lastDigestCheckAt: 0,
     lastConversationSweepAt: 0,
+    timedOut: new Set(),
+    kinds: new KindBreaker(),
+    saturatedLogged: false,
+    retentionBatchSize: null,
   };
 }
 
 export interface CycleResult {
   status: 'disabled' | 'paused' | 'idle' | 'worked';
   criticalLagMs: number;
+  /** New incidents found by the discovery watermark. */
   discovered: number;
+  /** Existing incidents re-signalled by the anti-entropy sweeps (lost hints, drift, placeholders). */
+  repaired: number;
   claimed: number;
   completed: number;
   requeued: number;
   failed: number;
   /** Finished, but the claim had expired and another worker owns the item now. */
   lost: number;
+  /** Timed-out handlers still holding a connection at the end of this cycle. */
+  timedOut: number;
+  /** True when every concurrency slot was held by timed-out work, so nothing new was claimed. */
+  saturated: boolean;
+  pausedKinds: string[];
 }
 
 const EMPTY_RESULT: CycleResult = {
   status: 'disabled',
   criticalLagMs: 0,
   discovered: 0,
+  repaired: 0,
   claimed: 0,
   completed: 0,
   requeued: 0,
   failed: 0,
   lost: 0,
+  timedOut: 0,
+  saturated: false,
+  pausedKinds: [],
 };
 
 export interface CycleDependencies {
@@ -224,11 +280,18 @@ class WorkTimeoutError extends Error {
   }
 }
 
+/**
+ * Races the handler against its budget. Aborting cancels every budgeted statement the handler has open;
+ * until the handler actually settles it stays in `state.timedOut`, where it keeps a concurrency slot, so
+ * a batch can never run more database work than the operator allowed.
+ */
 async function runWithTimeout(
   work: (signal: AbortSignal) => Promise<void>,
-  timeoutMs: number
+  timeoutMs: number,
+  state: LaneState
 ): Promise<void> {
   const controller = new AbortController();
+  const run = work(controller.signal);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
@@ -237,16 +300,29 @@ async function runWithTimeout(
     }, timeoutMs);
   });
   try {
-    await Promise.race([work(controller.signal), timeout]);
+    await Promise.race([run, timeout]);
+  } catch (error) {
+    if (error instanceof WorkTimeoutError) {
+      state.timedOut.add(run);
+      run.catch(() => {}).finally(() => state.timedOut.delete(run));
+    }
+    throw error;
   } finally {
     if (timer) clearTimeout(timer);
   }
 }
 
+interface BatchLease {
+  claimedAt: number;
+  leaseMs: number;
+}
+
 async function processItem(
   item: ClaimedWorkItem,
   settings: IntelligenceSettingsView,
-  handlers: WorkHandlers
+  handlers: WorkHandlers,
+  state: LaneState,
+  lease: BatchLease
 ): Promise<'completed' | 'requeued' | 'failed' | 'lost'> {
   const startedAt = performance.now();
   const metricKind = Object.values(WORK_KINDS).includes(item.kind as WorkKind)
@@ -256,12 +332,21 @@ async function processItem(
   try {
     const handler = handlers[item.kind as WorkKind];
     if (!handler) throw new Error(`No handler registered for work kind ${item.kind}`);
-    if (budgetMs > settings.maxJobMs && !(await renewWorkItemLease(item, budgetMs * 2)))
+    // Items at the tail of a batch may start after half their lease is gone. Renewing first means a slow
+    // batch never has the same item running here and on a worker that re-claimed it.
+    const renew =
+      budgetMs > settings.maxJobMs || performance.now() - lease.claimedAt > lease.leaseMs / 2;
+    if (renew && !(await renewWorkItemLease(item, Math.max(budgetMs * 2, lease.leaseMs))))
       return 'lost';
     await withSpan(
       'intelligence.work',
       { 'work.kind': item.kind, 'work.attempt': item.attempts },
-      () => runWithTimeout(signal => handler(item, { settings, signal }), budgetMs)
+      () =>
+        runWithTimeout(
+          signal => withAbortableDbWork(signal, () => handler(item, { settings, signal })),
+          budgetMs,
+          state
+        )
     );
     return completeWorkItem(item);
   } catch (error) {
@@ -285,23 +370,37 @@ async function processItem(
   }
 }
 
-/** Processes `items` with bounded concurrency; one failing item never affects the others. */
+/**
+ * Processes `items` with bounded concurrency; one failing item never affects the others. Every outcome
+ * feeds the per-kind breaker, so a handler failing for most of its items is paused on its own.
+ */
 async function processBatch(
   items: ClaimedWorkItem[],
   settings: IntelligenceSettingsView,
-  handlers: WorkHandlers
+  handlers: WorkHandlers,
+  state: LaneState,
+  capacity: number,
+  lease: BatchLease,
+  now: () => number
 ) {
   const counts = { completed: 0, requeued: 0, failed: 0, lost: 0 };
   let next = 0;
-  const workers = Array.from(
-    { length: Math.min(settings.maxConcurrency, items.length) },
-    async () => {
-      while (next < items.length) {
-        const item = items[next++];
-        counts[await processItem(item, settings, handlers)] += 1;
+  const workers = Array.from({ length: Math.min(capacity, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      const result = await processItem(item, settings, handlers, state, lease);
+      if (result === 'completed') counts.completed += 1;
+      else if (result === 'requeued') counts.requeued += 1;
+      else if (result === 'failed') counts.failed += 1;
+      else counts.lost += 1;
+      if (result === 'lost') continue;
+      if (state.kinds.record(item.kind, result !== 'failed', now()) === 'paused') {
+        logger.warn('[Intelligence] Pausing one kind of work after repeated failures', {
+          kind: item.kind,
+        });
       }
     }
-  );
+  });
   await Promise.all(workers);
   return counts;
 }
@@ -320,6 +419,11 @@ export async function runIntelligenceCycle(
 async function runCycle(state: LaneState, dependencies: CycleDependencies): Promise<CycleResult> {
   const handlers = dependencies.handlers ?? DEFAULT_HANDLERS;
   const now = dependencies.now ?? Date.now;
+  const base = (): CycleResult => ({
+    ...EMPTY_RESULT,
+    timedOut: state.timedOut.size,
+    pausedKinds: state.kinds.pausedKinds(now()),
+  });
   try {
     const settings = await getIntelligenceSettings();
 
@@ -330,7 +434,7 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
       (settings.revision > 0 && now() - state.lastRetentionAt >= RETENTION_INTERVAL_MS) ||
       (handlers === DEFAULT_HANDLERS &&
         now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS);
-    if (!settings.enabled && !sweepDue) return { ...EMPTY_RESULT, status: 'disabled' };
+    if (!settings.enabled && !sweepDue) return { ...base(), status: 'disabled' };
 
     const waitingQueries = await (dependencies.getPoolWaitingQueries ?? getPrismaPoolWaitCount)();
     state.poolWaitingQueries = waitingQueries;
@@ -356,17 +460,24 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
       );
     }
     if (pause.paused)
-      return { ...EMPTY_RESULT, status: settings.enabled ? 'paused' : 'disabled', criticalLagMs };
+      return { ...base(), status: settings.enabled ? 'paused' : 'disabled', criticalLagMs };
 
     // Retention is honoured even while intelligence is switched off; an unconfigured install
-    // (revision 0) has nothing to purge, so it pays no cost. One replica sweeps at a time.
+    // (revision 0) has nothing to purge, so it pays no cost. One replica sweeps at a time. Batches
+    // shrink while a table keeps failing and grow back once sweeps are clean.
     if (settings.revision > 0 && now() - state.lastRetentionAt >= RETENTION_INTERVAL_MS) {
       state.lastRetentionAt = now();
+      const defaultBatch = Math.max(settings.batchSize * 10, 100);
+      const batchSize = Math.min(state.retentionBatchSize ?? defaultBatch, defaultBatch);
       try {
         const purged = await purgeExpiredIntelligenceData(settings, {
-          batchSize: Math.max(settings.batchSize * 10, 100),
+          batchSize,
           now: new Date(now()),
         });
+        state.retentionBatchSize =
+          purged.failedTables.length > 0
+            ? Math.max(RETENTION_MIN_BATCH, Math.floor(batchSize / 2))
+            : Math.min(defaultBatch, batchSize * 2);
         // A large backlog is drained across sweeps; ask for the next one soon instead of waiting.
         if (purged.more) state.lastRetentionAt = now() - RETENTION_INTERVAL_MS + 60_000;
       } catch (error) {
@@ -393,7 +504,7 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
       }
     }
 
-    if (!settings.enabled) return { ...EMPTY_RESULT, status: 'disabled' };
+    if (!settings.enabled) return { ...base(), status: 'disabled' };
 
     // Discovery only schedules observation. Source catch-up runs below first-insight work and
     // coalesces another generation until its bounded cursor reaches the safety watermark.
@@ -444,25 +555,37 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
     }
 
     let discovered = 0;
+    let repaired = 0;
+    const sum = (counts: {
+      missing: number;
+      staleResolution: number;
+      suppressed: number;
+      staleSource: number;
+    }) => counts.missing + counts.staleResolution + counts.suppressed + counts.staleSource;
     try {
       const discovery = await discoverNewIncidents({
         limit: settings.batchSize * DISCOVERY_BATCH_MULTIPLIER,
         now: new Date(now()),
       });
       discovered = discovery.discovered;
-      if (now() - state.lastReconcileAt >= RECONCILE_INTERVAL_MS) {
-        state.lastReconcileAt = now();
-        const repaired = await reconcileFingerprints({
+      // Lost wake hints for existing incidents are repaired here every cycle, in O(changes).
+      repaired += sum(
+        await reconcileUpdatedIncidents({
           limit: settings.batchSize,
-          lookbackDays: Math.min(settings.lookbackDays, RECONCILE_LOOKBACK_DAYS),
           now: new Date(now()),
           maxDbMs: settings.maxDbMs,
-        });
-        discovered +=
-          repaired.missing +
-          repaired.staleResolution +
-          repaired.suppressed +
-          (repaired.staleSource ?? 0);
+        })
+      );
+      if (now() - state.lastReconcileAt >= RECONCILE_INTERVAL_MS) {
+        state.lastReconcileAt = now();
+        repaired += sum(
+          await reconcileFingerprints({
+            limit: settings.batchSize,
+            lookbackDays: Math.min(settings.lookbackDays, RECONCILE_LOOKBACK_DAYS),
+            now: new Date(now()),
+            maxDbMs: settings.maxDbMs,
+          })
+        );
       }
     } catch (error) {
       logger.warn('[Intelligence] Discovery failed; continuing with queued work', {
@@ -470,25 +593,65 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
       });
     }
 
+    // Timed-out handlers that have not let go yet still hold connections: they keep their slots.
+    const capacity = settings.maxConcurrency - state.timedOut.size;
+    if (capacity <= 0) {
+      if (!state.saturatedLogged) {
+        state.saturatedLogged = true;
+        logger.warn(
+          '[Intelligence] Deferring new work until timed-out handlers release their connections',
+          { timedOut: state.timedOut.size, maxConcurrency: settings.maxConcurrency }
+        );
+      }
+      return {
+        ...base(),
+        status: 'idle',
+        criticalLagMs,
+        discovered,
+        repaired,
+        saturated: true,
+      };
+    }
+    state.saturatedLogged = false;
+
+    const leaseMs = settings.maxJobMs * 2;
     const claimed = await claimWorkItems({
       limit: settings.batchSize,
-      leaseMs: settings.maxJobMs * 2,
+      leaseMs,
+      excludeKinds: state.kinds.pausedKinds(now()),
     });
     if (claimed.length === 0) {
       return {
-        ...EMPTY_RESULT,
-        status: discovered > 0 ? 'worked' : 'idle',
+        ...base(),
+        status: discovered + repaired > 0 ? 'worked' : 'idle',
         criticalLagMs,
         discovered,
+        repaired,
       };
     }
-    const counts = await processBatch(claimed, settings, handlers);
-    return { status: 'worked', criticalLagMs, discovered, claimed: claimed.length, ...counts };
+    const counts = await processBatch(
+      claimed,
+      settings,
+      handlers,
+      state,
+      capacity,
+      { claimedAt: performance.now(), leaseMs },
+      now
+    );
+    return {
+      ...base(),
+      status: 'worked',
+      criticalLagMs,
+      discovered,
+      repaired,
+      claimed: claimed.length,
+      ...counts,
+    };
   } catch (error) {
     logger.warn('[Intelligence] Cycle failed; will retry', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { ...EMPTY_RESULT, status: 'idle' };
+    return { ...base(), status: 'idle' };
   }
 }
 
@@ -503,11 +666,18 @@ export interface LaneTotals {
 
 export interface LaneStatus {
   running: boolean;
+  /** When this process started the lane; a lane that has never completed a cycle is judged from here. */
+  startedAt: Date | null;
   lastCycleAt: Date | null;
   lastResult: CycleResult | null;
   paused: boolean;
   poolWaitingQueries?: number | null;
   pauseReason?: 'pool' | 'paging' | null;
+  timedOutInFlight: number;
+  saturated: boolean;
+  pausedKinds: string[];
+  /** Whether this replica turns wake hints into work; null when no listener session exists. */
+  wakeLeader: boolean | null;
   /** Cumulative since process start; lets operators and benchmarks see real throughput. */
   totals: LaneTotals;
 }
@@ -516,6 +686,7 @@ const lane: {
   timer: ReturnType<typeof setTimeout> | null;
   active: Promise<void> | null;
   running: boolean;
+  startedAt: Date | null;
   state: LaneState;
   lastCycleAt: Date | null;
   lastResult: CycleResult | null;
@@ -524,6 +695,7 @@ const lane: {
   timer: null,
   active: null,
   running: false,
+  startedAt: null,
   state: createLaneState(),
   lastCycleAt: null,
   lastResult: null,
@@ -637,9 +809,14 @@ function schedule(delayMs: number) {
 export function startIntelligenceLane(options: { initialDelayMs?: number } = {}): void {
   if (lane.running) return;
   lane.running = true;
-  wakeListener = listenForIntelligenceWake(ids => {
-    void acceptWakeSignals(ids);
-  });
+  lane.startedAt = new Date();
+  wakeListener = listenForIntelligenceWake(
+    ids => {
+      void acceptWakeSignals(ids);
+    },
+    undefined,
+    { electLeader: true }
+  );
   schedule(jittered(options.initialDelayMs ?? IDLE_POLL_MS));
 }
 
@@ -657,6 +834,7 @@ export async function stopIntelligenceLane(): Promise<void> {
 export function getIntelligenceLaneStatus(): LaneStatus {
   return {
     running: lane.running,
+    startedAt: lane.startedAt,
     lastCycleAt: lane.lastCycleAt,
     lastResult: lane.lastResult,
     paused: lane.state.pause.paused,
@@ -666,6 +844,10 @@ export function getIntelligenceLaneStatus(): LaneStatus {
         ? 'pool'
         : 'paging'
       : null,
+    timedOutInFlight: lane.state.timedOut.size,
+    saturated: lane.lastResult?.saturated ?? false,
+    pausedKinds: lane.state.kinds.pausedKinds(),
+    wakeLeader: wakeListener ? wakeListener.isLeader() : null,
     totals: { ...lane.totals },
   };
 }

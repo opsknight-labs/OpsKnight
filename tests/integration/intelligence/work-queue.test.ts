@@ -215,7 +215,10 @@ describe('failure handling and dead letters', () => {
     await enqueueWorkItems([item('outage')]);
     const [claimed] = await claimWorkItems({ limit: 1 });
     expect(claimed).toMatchObject({ subjectKey: 'outage', attempts: 1 });
-    expect((await db.intelligenceWorkItem.findFirstOrThrow()).failedAt).toBeNull();
+    // The last death is remembered, so a second death soon after is recognised as poison.
+    const revived = await db.intelligenceWorkItem.findFirstOrThrow();
+    expect(revived.failedAt).not.toBeNull();
+    expect(revived.quarantinedAt).toBeNull();
   });
 
   it('does not revive a dead letter signalled again inside the cool-down', async () => {

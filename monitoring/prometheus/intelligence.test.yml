@@ -66,6 +66,58 @@ tests:
             exp_annotations:
               summary: Some intelligence work exhausted its retries
               description: Review and replay the quarantined items in Settings, Intelligence. Affected incidents only lack suggestions; paging is unaffected.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_work_quarantined
+        values: '0 1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightIntelligenceWorkQuarantined
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: OpsKnightIntelligenceWorkQuarantined
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Some intelligence work was quarantined after failing twice
+              description: These items are never retried on their own. Inspect the failure code in Settings, Intelligence, fix the cause, then replay them. Paging is unaffected.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_kind_paused{instance="worker-a",kind="INDEX_INCIDENT"}'
+        values: '1x15'
+      - series: 'opsknight_intelligence_kind_paused{instance="worker-a",kind="ANALYZE_INCIDENT"}'
+        values: '0x15'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpsKnightIntelligenceKindPaused
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: OpsKnightIntelligenceKindPaused
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: INDEX_INCIDENT
+            exp_annotations:
+              summary: One kind of intelligence work is paused after repeated failures
+              description: The lane skips the INDEX_INCIDENT handler for a few minutes at a time while most of its items fail; other work continues. Check the worker logs for that kind. Paging is unaffected.
+  # A lane that reported within the hour and then vanished (crash, scaled to zero by mistake) is noticed.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_lane_up{instance="worker-a"}'
+        values: '1x10 _x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightIntelligenceLaneGone
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: OpsKnightIntelligenceLaneGone
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Every intelligence lane process has disappeared
+              description: A lane was reporting within the last hour and none reports now. Check that the worker or intelligence-worker processes are running. Paging is unaffected.
   # A disabled install exports no lane gauges and an empty queue: nothing fires.
   - interval: 1m
     input_series:

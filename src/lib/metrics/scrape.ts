@@ -466,7 +466,8 @@ async function getMetrics(req: Request) {
   // Intelligence is optional and advisory: its probes are best effort and never fail the scrape.
   try {
     const { collectIntelligenceMetrics } = await import('@/lib/intelligence/metrics');
-    for (const sample of await collectIntelligenceMetrics()) metrics.set(sample.name, sample.value);
+    for (const sample of await collectIntelligenceMetrics())
+      metrics.set(sample.name, sample.value, sample.labels ?? {});
   } catch {
     // omitted from this scrape
   }

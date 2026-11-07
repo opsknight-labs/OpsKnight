@@ -18,6 +18,8 @@ export function templateHash(template: string): string {
  * the only writes are to IncidentFingerprint, and the handler is idempotent so replays are harmless.
  * `suppressed` (the effective policy is OFF) stores an empty placeholder instead: it records that the
  * incident was seen, keeps no text, and is never a similarity candidate or sent for embedding.
+ * `partial` means a very large incident's alert bootstrap stopped at its per-pass bound: the progress is
+ * saved with no analysis hash, and the caller re-signals the incident so the next pass continues.
  */
 export async function indexIncident(
   incidentId: string,
@@ -27,7 +29,7 @@ export async function indexIncident(
     force?: boolean;
     policy?: { id: string | null; version: number; mode: string };
   } = {}
-): Promise<'indexed' | 'unchanged' | 'missing'> {
+): Promise<'indexed' | 'unchanged' | 'missing' | 'partial'> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`intelligence-fingerprint:${incidentId}`}, 0))`;
   const previous = await tx.incidentFingerprint.findUnique({ where: { incidentId } });
   const incident = await tx.incident.findUnique({
@@ -60,6 +62,7 @@ export async function indexIncident(
       alertInputDigest: null,
       indexedAlertCount: null,
       alertNormalizationHash: null,
+      alertIndexPartial: false,
       analysisInputHash: null,
       serviceId: incident.serviceId,
       sourceUpdatedAt: incident.updatedAt,
@@ -97,6 +100,32 @@ export async function indexIncident(
       },
     });
   const alertInputs = await indexAlertInputs(tx, incident, previous, { force: options.force });
+  if (alertInputs.partial) {
+    // Save the bootstrap progress and the title-derived text, but no analysis hash: nothing is chained
+    // until every alert has been read. The outcome pattern is updated when the pass completes.
+    const titleOnly = buildIncidentFingerprint({
+      title: incident.title,
+      description: incident.description,
+    });
+    await tx.incidentFingerprint.update({
+      where: { incidentId },
+      data: {
+        ...alertInputs.state,
+        alertIndexPartial: true,
+        analysisInputHash: null,
+        serviceId: incident.serviceId,
+        sourceUpdatedAt: incident.updatedAt,
+        template: titleOnly.template,
+        templateHash: titleOnly.template ? templateHash(titleOnly.template) : null,
+        tokens: titleOnly.tokens,
+        labels: alertInputs.labels,
+        engineVersion: INTELLIGENCE_ENGINE_VERSION,
+        incidentCreatedAt: incident.createdAt,
+        resolvedAt: incident.status === 'RESOLVED' ? incident.resolvedAt : null,
+      },
+    });
+    return 'partial';
+  }
   const [postmortem, resolution] = await Promise.all([
     incident.status === 'RESOLVED'
       ? tx.postmortem.findUnique({ where: { incidentId }, select: { resolution: true } })
@@ -168,6 +197,7 @@ export async function indexIncident(
 
   const data = {
     ...alertInputs.state,
+    alertIndexPartial: false,
     analysisInputHash,
     serviceId: incident.serviceId,
     sourceUpdatedAt: incident.updatedAt,

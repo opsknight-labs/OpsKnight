@@ -19,6 +19,35 @@ import {
   type PolicyDefinition,
 } from '../contract';
 import { getAutoGate, getAutoGates } from '../evaluation/quality';
+import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
+
+/**
+ * Publishing a policy re-indexes this many of the scope's open incidents in the background, newest first.
+ * The policy's identity is part of every analysis input hash, so the pass fans out exactly the analyses
+ * the new policy changes and skips the rest; incidents beyond the cap catch up as they change.
+ */
+export const POLICY_PUBLISH_REANALYSIS_LIMIT = 500;
+
+async function scheduleReanalysisForScope(
+  tx: Prisma.TransactionClient,
+  scope: { serviceId?: string | null }
+): Promise<number> {
+  if (!(await getIntelligenceSettings(tx)).enabled) return 0;
+  const open = await tx.incident.findMany({
+    where: {
+      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+      ...(scope.serviceId ? { serviceId: scope.serviceId } : {}),
+    },
+    orderBy: { createdAt: 'desc' },
+    take: POLICY_PUBLISH_REANALYSIS_LIMIT,
+    select: { id: true },
+  });
+  if (open.length === 0) return 0;
+  return enqueueWorkItems(
+    open.map(row => ({ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: row.id })),
+    tx
+  );
+}
 
 export type IntelligenceActor = { actorId: string } & (
   { source: 'UI' } | { source: 'API'; apiClientId: string }
@@ -353,6 +382,7 @@ export async function publishPolicyVersion(
       reason: parsed.reason,
       actorId: actor.actorId,
     });
+    await scheduleReanalysisForScope(tx, scope);
     await logAudit(
       {
         action: 'intelligence.policy.published',
@@ -417,6 +447,7 @@ export async function rollbackPolicy(
       createdFromVersion: parsed.targetVersion,
       actorId: actor.actorId,
     });
+    await scheduleReanalysisForScope(tx, scope);
     await logAudit(
       {
         action: 'intelligence.policy.rolled_back',

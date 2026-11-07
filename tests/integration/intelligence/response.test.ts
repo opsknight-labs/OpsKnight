@@ -160,13 +160,29 @@ describe('recording changes', () => {
     for (const incident of [opened, unrelated, before])
       await db.$transaction(tx => indexIncident(incident.id, tx));
 
-    await recordChange({
+    const change = await recordChange({
       serviceId: service.id,
       source: 'ci',
       kind: 'DEPLOY',
       summary: 'v9',
       occurredAt: new Date(Date.now() - 20 * MIN),
     });
+    // The webhook only records the change and one coalesced work item; the fan-out happens in the lane.
+    expect(await db.intelligenceWorkItem.findMany()).toMatchObject([
+      { kind: 'LATE_CHANGE', subjectKey: change.id },
+    ]);
+    const { DEFAULT_HANDLERS } = await import('@/lib/intelligence/jobs/runner');
+    await DEFAULT_HANDLERS.LATE_CHANGE!(
+      {
+        id: 'late',
+        kind: 'LATE_CHANGE',
+        subjectKey: change.id,
+        generation: 1,
+        claimToken: 'late',
+        attempts: 1,
+      },
+      { settings: { ...settings, enabled: true }, signal: new AbortController().signal }
+    );
     const queued = await db.intelligenceWorkItem.findMany({ where: { kind: 'ANALYZE_RESPONSE' } });
     expect(queued.map(item => item.subjectKey)).toEqual([opened.id]);
   });

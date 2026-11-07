@@ -175,6 +175,15 @@ it('detects a same-numbered service policy override and keeps OFF and SHADOW dis
     },
     { actorId: actor.id, source: 'UI' }
   );
+  // Publishing queues a background re-index of the scope's open incidents; this test analyses directly,
+  // so it drains the queued item (a pending item would rightly keep the state STALE).
+  const drainPublishedReindex = async () => {
+    expect(await db.intelligenceWorkItem.findMany()).toMatchObject([
+      { kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: incident.id },
+    ]);
+    await db.intelligenceWorkItem.deleteMany();
+  };
+  await drainPublishedReindex();
   expect((await readIncidentAnalysisState(actor, incident.id))?.status).toBe('STALE');
   await analyze(incident.id, 2);
   expect((await readIncidentAnalysisState(actor, incident.id))?.status).toBe('CURRENT');
@@ -183,6 +192,7 @@ it('detects a same-numbered service policy override and keeps OFF and SHADOW dis
     { mode: 'SHADOW', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 1 },
     { actorId: actor.id, source: 'UI' }
   );
+  await drainPublishedReindex();
   expect((await readIncidentAnalysisState(actor, incident.id))?.status).toBe('SHADOW');
   await db.intelligenceSettings.update({ where: { id: 'default' }, data: { enabled: false } });
   expect((await readIncidentAnalysisState(actor, incident.id))?.status).toBe('OFF');

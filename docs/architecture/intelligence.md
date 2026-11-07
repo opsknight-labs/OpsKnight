@@ -397,6 +397,49 @@ through Prisma's local engine metrics without acquiring another SQL connection; 
 the lane and requires two measured quiet samples before recovery. Paging-lag hysteresis remains
 independent. Missing pool telemetry is unknown, not a zero measurement.
 
+## Fault tolerance
+
+Every failure is contained to the smallest unit that can fail, and every repair path is bounded:
+
+- **Handlers are abortable.** Each work item runs inside an `AsyncLocalStorage` abort scope
+  (`jobs/db-budget.ts`); when its budget expires, the statement running in any budgeted transaction it
+  opened is cancelled from another connection (`pg_cancel_backend`), and the backend is terminated a
+  second later if it has not let go. A handler that is still running after its timeout stays counted
+  against `maxConcurrency` (`LaneState.timedOut`), so the lane can never run more database work than the
+  operator allowed; while every slot is held it claims nothing and reports `saturated`.
+- **Leases are renewed before late starts.** Items at the tail of a batch renew their lease before they
+  run, so a slow batch never has the same item running on two workers.
+- **Poison is quarantined, outages are not.** A dead letter signalled again after 30 minutes gets one more
+  round of attempts; one that dies a second time within 24 hours is quarantined (`quarantinedAt`), never
+  revived or purged automatically, and waits for an operator replay. A per-kind breaker
+  (`jobs/kind-breaker.ts`) pauses a kind whose handler fails for most of its items over five minutes,
+  for five minutes, while every other kind continues; the claim query excludes paused kinds.
+- **Lost signals are repaired in O(changes).** `reconcileUpdatedIncidents` walks `Incident.updatedAt`
+  from a watermark every cycle, so any change whose wake hint was lost is re-indexed within a cycle or two
+  regardless of history size. The recent-history sweep (`reconcileFingerprints`) is paced at ten minutes
+  and covers engine-version drift and policy placeholders. Publishing a policy enqueues a bounded
+  re-index of the scope's open incidents; the policy identity is part of the analysis input hash, so only
+  analyses the policy changes fan out.
+- **Huge incidents bootstrap in passes.** A full alert (re)build reads at most 5,000 payloads per pass
+  (`MAX_BOOTSTRAP_ALERTS_PER_PASS`), stores its digest, label union and cursor with `alertIndexPartial`,
+  and the handler re-signals the same item; analysis is chained only when the last pass completes.
+- **Retention always progresses.** Each table is one short transaction under its own budget; the alert
+  fingerprints of expired incidents are drained in bounded bites before their parent rows, so a cascade
+  can never explode; a failing table is reported (`failedTables`) without stopping the others, and the
+  runner halves the batch until sweeps are clean. Replicas coordinate through a database lease row, not a
+  transaction-long lock.
+- **Replicas.** Only the holder of a session advisory lock (the wake leader) turns notifications into
+  work; discovery, the sweeps, retention and the dependency observer are single-holder, and the observer
+  does not spin when another replica holds its lock. HNSW index builds check `pg_stat_progress_create_index`
+  before touching an index another replica is building.
+- **Clocks.** Discovery bounds, the repair sweeps and the queue use the database clock (`dbNow`), so
+  application clock skew cannot make them skip or repeat work.
+- **Visibility.** `opsknight_intelligence_lane_up` exists from the first scrape and vanishes with the
+  process; the cycle age counts from lane start, so a lane wedged before its first cycle is reported.
+  Health stays `degraded`, never `unhealthy`, so a wedged lane can never pull a replica out of rotation.
+- **Indexes.** `scripts/repair-invalid-indexes.cjs` runs at container start and rebuilds any index left
+  INVALID by an interrupted concurrent build, which `IF NOT EXISTS` would otherwise skip forever.
+
 ## Observability
 
 `/api/health?mode=readiness` includes an `intelligence` check that is `healthy`, `degraded` (paused to

@@ -37,18 +37,19 @@ export async function suggestObservedDependencies(
 
 /** Consume one bounded page of new source incidents, then rank over retained bucket metadata.
  * The cursor and bucket upserts commit together. No raw source history is re-read on steady passes.
+ * `skipped` means another replica holds the observer lock; the caller retries later, not immediately.
  */
 export async function observeDependencyPass(
   settings: Pick<IntelligenceSettingsView, 'maxDbMs'>,
   now: Date = new Date()
-): Promise<{ suggestions: number; more: boolean }> {
+): Promise<{ suggestions: number; more: boolean; skipped?: boolean }> {
   const since = new Date(now.getTime() - OBSERVE_LOOKBACK_DAYS * 86_400_000);
   const upper = new Date(+now - SOURCE_SAFETY_LAG_MS);
   const bucketSeconds = OBSERVE_WINDOW_MINUTES * 60;
   return withDbBudget(settings, async tx => {
     const [{ locked }] = await tx.$queryRaw<Array<{ locked: boolean }>>`
       SELECT pg_try_advisory_xact_lock(hashtextextended('intelligence-dependency-observer', 0)) AS locked`;
-    if (!locked) return { suggestions: 0, more: true };
+    if (!locked) return { suggestions: 0, more: false, skipped: true };
     const cursor = await tx.intelligenceCursor.findUnique({ where: { name: OBSERVATION_CURSOR } });
     const after =
       cursor && cursor.watermarkAt >= since && cursor.watermarkAt <= upper

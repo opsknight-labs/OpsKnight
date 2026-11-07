@@ -38,4 +38,25 @@ describe('evaluateLaneHealth', () => {
     // Messages are fixed strings; nothing dynamic can leak.
     expect((stale as { error: string }).error).toBe('Lane has not completed a cycle recently');
   });
+
+  it('judges a lane that never completed a cycle from the moment it started', () => {
+    const justStarted = status({ lastCycleAt: null, lastResult: null, startedAt: new Date(NOW - 1000) });
+    expect(evaluateLaneHealth(justStarted, NOW)).toEqual({ status: 'healthy' });
+    const wedgedFromStart = status({
+      lastCycleAt: null,
+      lastResult: null,
+      startedAt: new Date(NOW - LANE_STALE_AFTER_MS - 1),
+    });
+    expect(evaluateLaneHealth(wedgedFromStart, NOW)).toEqual({
+      status: 'degraded',
+      error: 'Lane has not completed a cycle recently',
+    });
+  });
+
+  it('reports degraded while timed-out work holds every concurrency slot', () => {
+    expect(evaluateLaneHealth(status({ saturated: true }), NOW)).toEqual({
+      status: 'degraded',
+      error: 'Timed-out work is still holding database connections; new work is deferred',
+    });
+  });
 });

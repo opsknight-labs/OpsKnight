@@ -19,6 +19,13 @@ type State = Pick<
   | 'alertNormalizationHash'
 >;
 const PAGE_SIZE = 250;
+/**
+ * A full (re)build reads at most this many alert payloads per pass and then hands back a partial state. The
+ * next pass resumes from the saved cursor, so a 100k-alert incident is bootstrapped over several bounded
+ * transactions instead of one that can only ever exceed its budget and dead-letter.
+ */
+export const MAX_BOOTSTRAP_ALERTS_PER_PASS = 5_000;
+const MAX_PAGES_PER_PASS = MAX_BOOTSTRAP_ALERTS_PER_PASS / PAGE_SIZE;
 const EMPTY_DIGEST = createHash('sha256').update('opsknight-alert-inputs:v2').digest('hex');
 const advance = (digest: string, sourceHash: string) =>
   createHash('sha256').update(digest).update(sourceHash).digest('hex');
@@ -28,50 +35,76 @@ const labelUnion = (into: Map<string, string>, labels: CanonicalLabels) => {
   for (const [key, value] of Object.entries(labels))
     if (!into.has(key) && into.size < MAX_LABELS) into.set(key, value);
 };
+const sortedLabels = (labels: Map<string, string>) =>
+  Object.fromEntries([...labels.entries()].sort(([a], [b]) => a.localeCompare(b)));
+
+export interface AlertInputs {
+  digest: string;
+  labels: CanonicalLabels;
+  state: State;
+  stateChanged: boolean;
+  /** True when a bounded (re)build pass stopped early; the caller stores the state and re-signals itself. */
+  partial: boolean;
+}
 
 /** Append-only ingestion reads/hashes only new alerts. ORM edits use a second cursor. Exceptional
  * edits/backdated arrivals rebuild the ordered digest from cached fingerprints, not raw payloads.
  * Count drift repairs deletions, missing derived rows and out-of-band historical inserts. Force and
- * normalization changes deliberately rebuild from source. Caller holds the incident fingerprint lock.
+ * normalization changes deliberately rebuild from source, in bounded passes. Caller holds the incident
+ * fingerprint lock.
  */
 export async function indexAlertInputs(
   tx: Tx,
   incident: { id: string; serviceId: string; title: string },
   previous: IncidentFingerprint | null,
-  options: { force?: boolean } = {}
-): Promise<{ digest: string; labels: CanonicalLabels; state: State; stateChanged: boolean }> {
+  options: { force?: boolean; depth?: number } = {}
+): Promise<AlertInputs> {
   const normalizationHash = stableAnalysisHash({
     title: incident.title,
     serviceId: incident.serviceId,
     engineVersion: INTELLIGENCE_ENGINE_VERSION,
   });
-  const reset = Boolean(
-    options.force ||
-    !previous?.alertInputDigest ||
-    previous.alertNormalizationHash !== normalizationHash ||
-    previous.indexedAlertCount === null
+  // A partial bootstrap resumes where it stopped, whatever else was asked; its saved digest is only
+  // meaningful under the same normalization.
+  const resume = Boolean(
+    previous?.alertIndexPartial &&
+    previous.alertInputDigest &&
+    previous.alertNormalizationHash === normalizationHash
   );
+  const reset =
+    resume ||
+    Boolean(
+      options.force ||
+      !previous?.alertInputDigest ||
+      previous.alertNormalizationHash !== normalizationHash ||
+      previous.indexedAlertCount === null
+    );
+  const fresh = reset && !resume;
   const count = await tx.alert.count({ where: { incidentId: incident.id } });
   const tail = await tx.alert.findFirst({
     where: { incidentId: incident.id },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { id: true, createdAt: true },
   });
-  let digest = reset ? EMPTY_DIGEST : previous!.alertInputDigest!;
+  let digest = fresh ? EMPTY_DIGEST : previous!.alertInputDigest!;
   const labels = new Map<string, string>(
-    reset ? [] : Object.entries(canonicalizeLabels(previous!.labels))
+    fresh ? [] : Object.entries(canonicalizeLabels(previous!.labels))
   );
   let newest: Cursor | null =
-    reset || !previous?.lastIndexedAlertAt || !previous.lastIndexedAlertId
+    fresh || !previous?.lastIndexedAlertAt || !previous.lastIndexedAlertId
       ? null
       : { id: previous.lastIndexedAlertId, createdAt: previous.lastIndexedAlertAt };
   let modified: Cursor | null =
-    reset || !previous?.lastModifiedAlertAt || !previous.lastModifiedAlertId
+    fresh || !previous?.lastModifiedAlertAt || !previous.lastModifiedAlertId
       ? null
       : { id: previous.lastModifiedAlertId, createdAt: previous.lastModifiedAlertAt };
-  const oldNewest = newest,
-    oldModified = modified;
-  let pageCursor: Cursor | undefined;
+  const oldNewest = resume ? null : newest,
+    oldModified = resume ? null : modified;
+  // A resumed bootstrap continues after the last alert the previous pass hashed.
+  let pageCursor: Cursor | undefined = resume && newest ? newest : undefined;
+  let processed = resume ? (previous!.indexedAlertCount ?? 0) : 0;
+  let pages = 0;
+  let partial = false;
   let added = 0;
   let rebuildMetadata = false;
   for (;;) {
@@ -162,6 +195,7 @@ export async function indexAlertInputs(
       if (reset) {
         digest = advance(digest, sourceHash);
         labelUnion(labels, extracted);
+        processed += 1;
       } else if (!old.has(alert.id)) {
         added++;
         if (oldNewest && !after(alert, oldNewest)) rebuildMetadata = true;
@@ -192,6 +226,28 @@ export async function indexAlertInputs(
         OR "AlertFingerprint"."alertCreatedAt" <> EXCLUDED."alertCreatedAt"`);
     if (alerts.length < PAGE_SIZE) break;
     pageCursor = alerts[alerts.length - 1];
+    pages += 1;
+    if (reset && pages >= MAX_PAGES_PER_PASS) {
+      partial = true;
+      break;
+    }
+  }
+  if (partial) {
+    return {
+      digest,
+      labels: sortedLabels(labels),
+      state: {
+        lastIndexedAlertId: newest?.id ?? null,
+        lastIndexedAlertAt: newest?.createdAt ?? null,
+        lastModifiedAlertId: modified?.id ?? null,
+        lastModifiedAlertAt: modified?.createdAt ?? null,
+        alertInputDigest: digest,
+        indexedAlertCount: processed,
+        alertNormalizationHash: normalizationHash,
+      },
+      stateChanged: true,
+      partial: true,
+    };
   }
   if (!reset && previous!.indexedAlertCount! + added !== count) rebuildMetadata = true;
   if (reset || rebuildMetadata)
@@ -202,8 +258,9 @@ export async function indexAlertInputs(
       },
     });
   const indexedCount = await tx.alertFingerprint.count({ where: { incidentId: incident.id } });
-  if (!reset && indexedCount !== count)
-    return indexAlertInputs(tx, incident, previous, { force: true });
+  // Count drift means rows were deleted or inserted out of band: rebuild once from source, never recursively.
+  if (!reset && indexedCount !== count && (options.depth ?? 0) === 0)
+    return indexAlertInputs(tx, incident, previous, { force: true, depth: 1 });
   if (!reset && rebuildMetadata) {
     digest = EMPTY_DIGEST;
     labels.clear();
@@ -243,16 +300,13 @@ export async function indexAlertInputs(
     indexedAlertCount: indexedCount,
     alertNormalizationHash: normalizationHash,
   };
-  const stateChanged = Object.entries(state).some(([key, value]) => {
-    const oldValue: unknown = previous ? Reflect.get(previous, key) : undefined;
-    return value instanceof Date
-      ? !(oldValue instanceof Date) || +value !== +oldValue
-      : value !== oldValue;
-  });
-  return {
-    digest,
-    labels: Object.fromEntries([...labels.entries()].sort(([a], [b]) => a.localeCompare(b))),
-    state,
-    stateChanged,
-  };
+  const stateChanged =
+    Boolean(previous?.alertIndexPartial) ||
+    Object.entries(state).some(([key, value]) => {
+      const oldValue: unknown = previous ? Reflect.get(previous, key) : undefined;
+      return value instanceof Date
+        ? !(oldValue instanceof Date) || +value !== +oldValue
+        : value !== oldValue;
+    });
+  return { digest, labels: sortedLabels(labels), state, stateChanged, partial: false };
 }

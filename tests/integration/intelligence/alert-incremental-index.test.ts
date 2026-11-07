@@ -88,13 +88,23 @@ it('reads only new/edited payloads in a 5k-alert incident and repairs labels, or
       where: { incidentId: incident.id },
     });
     expect(before.labels).toEqual({ env: 'legacy', region: 'eu-west-1' });
+    // A forced rebuild reads every payload again, but in bounded passes: the first stops at its per-pass
+    // ceiling with the progress saved, the next finishes the remainder.
     payloadRowsRead = 0;
-    expect(await index(true)).toBe('indexed');
+    expect(await index(true)).toBe('partial');
+    expect(payloadRowsRead).toBe(5000);
+    expect(
+      await db.incidentFingerprint.findUniqueOrThrow({ where: { incidentId: incident.id } })
+    ).toMatchObject({ alertIndexPartial: true, analysisInputHash: null, indexedAlertCount: 5000 });
+    expect(await index()).toBe('indexed');
     expect(payloadRowsRead).toBe(5001);
     expect(
-      (await db.incidentFingerprint.findUniqueOrThrow({ where: { incidentId: incident.id } }))
-        .analysisInputHash
-    ).toBe(before.analysisInputHash);
+      await db.incidentFingerprint.findUniqueOrThrow({ where: { incidentId: incident.id } })
+    ).toMatchObject({
+      alertIndexPartial: false,
+      analysisInputHash: before.analysisInputHash,
+      indexedAlertCount: 5001,
+    });
   } finally {
     await client.$disconnect();
   }

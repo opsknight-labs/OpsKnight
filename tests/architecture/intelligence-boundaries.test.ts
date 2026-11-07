@@ -41,10 +41,15 @@ describe('intelligence architecture boundaries', () => {
 
   it('keeps the ingestion and incident-creation transactions free of intelligence imports', () => {
     // Stage 0-2 must not change the paging-critical path. A later, separately certified stage may
-    // add a single bounded hook from the dedicated ingest-hooks module only.
+    // add a single bounded hook from the dedicated ingest-hooks module only. Relative imports
+    // ('./intelligence/...') are the same boundary and are checked the same way.
     for (const file of ['src/lib/events.ts', 'src/lib/incidents/creation.ts']) {
-      const imports =
-        read(join(root, file)).match(/from\s+['"]@\/lib\/intelligence[^'"]*['"]/g) ?? [];
+      const statements = read(join(root, file)).match(/from\s+['"][^'"]+['"]/g) ?? [];
+      const imports = statements.filter(
+        statement =>
+          /['"]@\/lib\/intelligence/.test(statement) ||
+          /['"]\.{1,2}\/[^'"]*intelligence/.test(statement)
+      );
       const disallowed = imports.filter(
         statement => !statement.includes('/intelligence/ingest-hooks')
       );

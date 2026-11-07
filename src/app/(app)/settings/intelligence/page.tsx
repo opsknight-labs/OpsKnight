@@ -201,7 +201,7 @@ export default async function IntelligenceSettingsPage() {
       {deadLetters && deadLetters.length > 0 && (
         <SettingsSection
           title="Failed work"
-          description="Items that exhausted their retries. Nothing here affects incident handling."
+          description="Items that exhausted their retries. Quarantined items failed twice within a day and wait for a replay instead of retrying on their own. Nothing here affects incident handling."
         >
           <ul className="divide-y divide-border">
             {deadLetters.map(item => (
@@ -212,6 +212,11 @@ export default async function IntelligenceSettingsPage() {
                 <div className="space-y-1">
                   <p className="font-medium">
                     {item.kind} · {item.attempts} attempts
+                    {item.quarantined && (
+                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                        Quarantined
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-muted-foreground">{item.failureSummary}</p>
                 </div>

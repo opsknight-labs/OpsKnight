@@ -29,6 +29,8 @@ export const WORK_KINDS = {
   /** One item per ISO week (subject = week key), sending the digest in chunks. */
   SEND_DIGEST: 'SEND_DIGEST',
   OBSERVE_DEPENDENCIES: 'OBSERVE_DEPENDENCIES',
+  /** One item per late-arriving change event (subject = change id): re-analyses incidents it may explain. */
+  LATE_CHANGE: 'LATE_CHANGE',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -38,6 +40,7 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   ANALYZE_INCIDENT: 5,
   CORRELATE_INCIDENT: 25,
   ANALYZE_RESPONSE: 30,
+  LATE_CHANGE: 35,
   EMBED_PENDING: 40,
   SEND_DIGEST: 50,
   OBSERVE_DEPENDENCIES: 45,
@@ -49,6 +52,11 @@ const BACKOFF_BASE_MS = 5_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
 /** A dead letter signalled again after this long gets a fresh set of attempts (the outage is likely over). */
 export const DEAD_LETTER_REVIVE_MS = 30 * 60_000;
+/**
+ * Work that dies a second time within this window is poisoned, not unlucky: it is quarantined, never revived
+ * on its own, and waits for an operator replay. A transient outage can only ever cost one extra round.
+ */
+export const QUARANTINE_WINDOW_MS = 24 * 60 * 60_000;
 const ENQUEUE_CHUNK = 1_000;
 export const PRIORITY_AGE_BUCKET_MS = 30_000;
 /** Fresh ingestion must get indexed before a newly queued historical repair batch. */
@@ -83,8 +91,9 @@ export function computeRetryDelayMs(attempts: number, random: () => number = Mat
 /**
  * Upserts a batch in one statement. Re-signalling an existing item only takes a newer generation. A dead
  * letter that has been dead for longer than the revive interval is given a fresh set of attempts, so work
- * that failed during an outage resumes on its own while a genuinely poisoned item costs at most one round of
- * attempts per interval.
+ * that failed during an outage resumes on its own. `failedAt` is kept through a revival: it records when the
+ * item last died, and a second death inside the quarantine window marks the item poisoned. Quarantined items
+ * are never revived here.
  */
 export async function enqueueWorkItems(
   items: WorkItemInput[],
@@ -115,6 +124,7 @@ export async function enqueueWorkItems(
     );
   }
   const revive = Prisma.sql`"IntelligenceWorkItem"."attempts" >= ${MAX_WORK_ATTEMPTS}
+        AND "IntelligenceWorkItem"."quarantinedAt" IS NULL
         AND "IntelligenceWorkItem"."failedAt" < now() - (${DEAD_LETTER_REVIVE_MS} * interval '1 millisecond')`;
   const values = [...unique.values()];
   let written = 0;
@@ -135,7 +145,6 @@ export async function enqueueWorkItems(
         "priority" = LEAST("IntelligenceWorkItem"."priority", EXCLUDED."priority"),
         "scheduledAt" = LEAST("IntelligenceWorkItem"."scheduledAt", EXCLUDED."scheduledAt"),
         "attempts" = CASE WHEN ${revive} THEN 0 ELSE "IntelligenceWorkItem"."attempts" END,
-        "failedAt" = CASE WHEN ${revive} THEN NULL ELSE "IntelligenceWorkItem"."failedAt" END,
         "updatedAt" = now()
     `);
   }
@@ -145,17 +154,20 @@ export async function enqueueWorkItems(
 /**
  * Atomically leases up to `limit` ready items, highest priority first. Unleased work and expired leases
  * are read as two separate index-backed arms, so neither dead letters nor live leases are ever scanned.
+ * `excludeKinds` leaves kinds whose handler is currently tripped (see the kind breaker) in the queue.
  */
 export async function claimWorkItems(
-  options: { limit: number; leaseMs?: number; maxAttempts?: number },
+  options: { limit: number; leaseMs?: number; maxAttempts?: number; excludeKinds?: readonly string[] },
   client: Client = prisma
 ): Promise<ClaimedWorkItem[]> {
   const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
   const maxAttempts = options.maxAttempts ?? MAX_WORK_ATTEMPTS;
+  const excluded = [...(options.excludeKinds ?? [])];
   return client.$queryRaw<ClaimedWorkItem[]>(Prisma.sql`
     WITH unleased AS (
       SELECT "id", "priority", "scheduledAt", "createdAt" FROM "IntelligenceWorkItem"
       WHERE "claimToken" IS NULL AND "attempts" < ${maxAttempts} AND "scheduledAt" <= now()
+        AND NOT ("kind" = ANY(${excluded}::text[]))
       ORDER BY "priority" ASC, "scheduledAt" ASC, "id" ASC
       LIMIT ${options.limit}
       FOR UPDATE SKIP LOCKED
@@ -163,6 +175,7 @@ export async function claimWorkItems(
     aged AS (
       SELECT "id", "priority", "scheduledAt", "createdAt" FROM "IntelligenceWorkItem"
       WHERE "claimToken" IS NULL AND "attempts" < ${maxAttempts} AND "scheduledAt" <= now()
+        AND NOT ("kind" = ANY(${excluded}::text[]))
       ORDER BY "createdAt" ASC, "id" ASC
       LIMIT ${options.limit}
       FOR UPDATE SKIP LOCKED
@@ -170,7 +183,7 @@ export async function claimWorkItems(
     expired AS (
       SELECT "id", "priority", "scheduledAt", "createdAt" FROM "IntelligenceWorkItem"
       WHERE "claimToken" IS NOT NULL AND "leaseUntil" < now() AND "attempts" < ${maxAttempts}
-        AND "scheduledAt" <= now()
+        AND "scheduledAt" <= now() AND NOT ("kind" = ANY(${excluded}::text[]))
       ORDER BY "leaseUntil" ASC
       LIMIT ${options.limit}
       FOR UPDATE SKIP LOCKED
@@ -209,7 +222,8 @@ export async function renewWorkItemLease(
 
 /**
  * Removes the item only if no newer signal arrived while it ran. Otherwise the claim is released
- * for an immediate extra pass (attempts reset: the work itself succeeded). Returns what happened.
+ * for an extra pass (attempts reset: the work itself succeeded). A deliberately future schedule set by
+ * the signal that arrived mid-run is kept; otherwise the pass is immediate. Returns what happened.
  */
 export async function completeWorkItem(
   item: Pick<ClaimedWorkItem, 'id' | 'claimToken' | 'generation'>,
@@ -223,15 +237,17 @@ export async function completeWorkItem(
   const released = await client.$executeRaw(Prisma.sql`
     UPDATE "IntelligenceWorkItem"
     SET "claimToken" = NULL, "claimedAt" = NULL, "leaseUntil" = NULL, "attempts" = 0,
-        "scheduledAt" = now(), "lastError" = NULL, "updatedAt" = now()
+        "scheduledAt" = GREATEST("scheduledAt", now()), "lastError" = NULL, "updatedAt" = now()
     WHERE "id" = ${item.id} AND "claimToken" = ${item.claimToken}
   `);
   return released === 1 ? 'requeued' : 'lost';
 }
 
 /**
- * Releases the claim with a backoff. Items reaching the attempt ceiling become dead letters. `minDelayMs`
- * keeps an item from being re-claimed while work it abandoned may still hold a database transaction.
+ * Releases the claim with a backoff. Items reaching the attempt ceiling become dead letters, and a dead
+ * letter that dies again within the quarantine window is quarantined. `minDelayMs` keeps an item from being
+ * re-claimed while work it abandoned may still hold a database transaction. SET expressions read the row as it
+ * was before this statement, so `"failedAt"` below is the previous death.
  */
 export async function failWorkItem(
   item: Pick<ClaimedWorkItem, 'id' | 'claimToken' | 'attempts'>,
@@ -242,11 +258,17 @@ export async function failWorkItem(
 ): Promise<boolean> {
   const message = encodeWorkFailure(error);
   const delayMs = Math.max(minDelayMs, computeRetryDelayMs(item.attempts, random));
+  const dying = Prisma.sql`"attempts" >= ${MAX_WORK_ATTEMPTS}`;
   const updated = await client.$executeRaw(Prisma.sql`
     UPDATE "IntelligenceWorkItem"
     SET "claimToken" = NULL, "claimedAt" = NULL, "leaseUntil" = NULL, "lastError" = ${message},
         "scheduledAt" = now() + (${delayMs} * interval '1 millisecond'),
-        "failedAt" = CASE WHEN "attempts" >= ${MAX_WORK_ATTEMPTS} THEN now() ELSE NULL END,
+        "quarantinedAt" = CASE
+          WHEN ${dying} AND "failedAt" IS NOT NULL
+            AND "failedAt" > now() - (${QUARANTINE_WINDOW_MS} * interval '1 millisecond')
+          THEN COALESCE("quarantinedAt", now())
+          ELSE "quarantinedAt" END,
+        "failedAt" = CASE WHEN ${dying} THEN now() ELSE "failedAt" END,
         "updatedAt" = now()
     WHERE "id" = ${item.id} AND "claimToken" = ${item.claimToken}
   `);
@@ -256,7 +278,9 @@ export async function failWorkItem(
 export interface WorkBacklog {
   ready: number;
   leased: number;
+  /** Includes quarantined items. */
   deadLetters: number;
+  quarantined: number;
   oldestReadyAgeMs: number | null;
 }
 
@@ -265,13 +289,20 @@ export async function getWorkBacklog(
   client: Client = prisma
 ): Promise<WorkBacklog> {
   const [row] = await client.$queryRaw<
-    Array<{ ready: bigint; leased: bigint; dead: bigint; oldest_ms: number | null }>
+    Array<{
+      ready: bigint;
+      leased: bigint;
+      dead: bigint;
+      quarantined: bigint;
+      oldest_ms: number | null;
+    }>
   >(Prisma.sql`
     SELECT
       count(*) FILTER (WHERE "attempts" < ${maxAttempts} AND "scheduledAt" <= now()
         AND ("claimToken" IS NULL OR "leaseUntil" < now())) AS ready,
       count(*) FILTER (WHERE "claimToken" IS NOT NULL AND "leaseUntil" >= now()) AS leased,
       count(*) FILTER (WHERE "attempts" >= ${maxAttempts}) AS dead,
+      count(*) FILTER (WHERE "quarantinedAt" IS NOT NULL) AS quarantined,
       (EXTRACT(EPOCH FROM (now() - min("scheduledAt") FILTER (WHERE "attempts" < ${maxAttempts}
         AND "scheduledAt" <= now() AND ("claimToken" IS NULL OR "leaseUntil" < now())))) * 1000)::float8 AS oldest_ms
     FROM "IntelligenceWorkItem"
@@ -280,6 +311,7 @@ export async function getWorkBacklog(
     ready: Number(row?.ready ?? 0),
     leased: Number(row?.leased ?? 0),
     deadLetters: Number(row?.dead ?? 0),
+    quarantined: Number(row?.quarantined ?? 0),
     oldestReadyAgeMs: row?.oldest_ms ?? null,
   };
 }
@@ -301,12 +333,17 @@ export async function listDeadLetters(
       updatedAt: true,
       scheduledAt: true,
       failedAt: true,
+      quarantinedAt: true,
     },
   });
-  return rows.map(({ lastError, ...row }) => ({ ...row, ...describeWorkFailure(lastError) }));
+  return rows.map(({ lastError, quarantinedAt, ...row }) => ({
+    ...row,
+    quarantined: quarantinedAt !== null,
+    ...describeWorkFailure(lastError),
+  }));
 }
 
-/** Operator action: gives a dead letter a fresh set of attempts. */
+/** Operator action: gives a dead letter (quarantined or not) a fresh set of attempts. */
 export async function replayDeadLetter(
   id: string,
   options: { maxAttempts?: number } = {},
@@ -314,12 +351,16 @@ export async function replayDeadLetter(
 ): Promise<boolean> {
   const replayed = await client.$executeRaw(Prisma.sql`
     UPDATE "IntelligenceWorkItem" SET attempts = 0, "scheduledAt" = now(), "claimToken" = NULL,
-      "leaseUntil" = NULL, "lastError" = NULL, "failedAt" = NULL, "updatedAt" = now()
+      "leaseUntil" = NULL, "lastError" = NULL, "failedAt" = NULL, "quarantinedAt" = NULL, "updatedAt" = now()
     WHERE id = ${id} AND attempts >= ${options.maxAttempts ?? MAX_WORK_ATTEMPTS}`);
   return replayed === 1;
 }
 
-/** Retention: dead letters nobody replayed are dropped after `olderThanMs`; the data is all rebuildable. */
+/**
+ * Retention: dead letters nobody replayed are dropped after `olderThanMs`; the data is all rebuildable.
+ * Quarantined items stay until an operator replays them, so a poisoned subject cannot restart its cycle by
+ * being purged and signalled again.
+ */
 export async function purgeDeadLetters(
   olderThanMs: number,
   limit: number,
@@ -328,7 +369,8 @@ export async function purgeDeadLetters(
   return client.$executeRaw(Prisma.sql`
     DELETE FROM "IntelligenceWorkItem" WHERE "id" IN (
       SELECT "id" FROM "IntelligenceWorkItem"
-      WHERE "attempts" >= ${MAX_WORK_ATTEMPTS} AND "failedAt" < now() - (${olderThanMs} * interval '1 millisecond')
+      WHERE "attempts" >= ${MAX_WORK_ATTEMPTS} AND "quarantinedAt" IS NULL
+        AND "failedAt" < now() - (${olderThanMs} * interval '1 millisecond')
       LIMIT ${limit})
   `);
 }

@@ -81,7 +81,7 @@ const LATE_CHANGE_REANALYSIS_LIMIT = 50;
  * queue is touched: nothing on the paging path. A change tied to no service affects every service, so it
  * re-signals the most recent incidents overall.
  */
-async function reanalyzeAfterLateChange(
+export async function reanalyzeAfterLateChange(
   serviceId: string | null,
   occurredAt: Date,
   tx: Prisma.TransactionClient
@@ -116,7 +116,9 @@ async function reanalyzeAfterLateChange(
 
 /**
  * Records a production change. Idempotent per (source, dedupKey), so a retried webhook never
- * creates a second row. Never touches the paging path: this is an independent write.
+ * creates a second row. Never touches the paging path: this is an independent write. Re-analysis of the
+ * incidents the change may explain is one coalesced work item for the lane, so the webhook request itself
+ * does no fan-out and no dependency-graph reads.
  */
 export async function recordChange(
   input: ChangeInput,
@@ -145,7 +147,7 @@ export async function recordChange(
     const row = await prisma.$transaction(async tx => {
       const created = await tx.changeEvent.create({ data, select: { id: true } });
       if ((await getIntelligenceSettings(tx)).enabled) {
-        await reanalyzeAfterLateChange(data.serviceId, data.occurredAt, tx);
+        await enqueueWorkItems([{ kind: WORK_KINDS.LATE_CHANGE, subjectKey: created.id }], tx);
       }
       return created;
     });

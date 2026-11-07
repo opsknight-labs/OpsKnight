@@ -5117,6 +5117,8 @@ model IncidentFingerprint {
   alertInputDigest String?
   indexedAlertCount Int?
   alertNormalizationHash String?
+  /// True while a large incident's alert bootstrap is spread over several bounded passes; analysis waits.
+  alertIndexPartial Boolean @default(false)
   /// Digest of analysis inputs, excluding incidental source timestamps.
   analysisInputHash String?
   /// Incident version actually consumed by the indexer; independent of later aggregate updates.
@@ -5274,8 +5276,10 @@ model IntelligenceWorkItem {
   claimedAt   DateTime?
   leaseUntil  DateTime?
   lastError   String?
-  /// When the item exhausted its attempts (a dead letter); used to revive it after a cool-down.
+  /// When the item last exhausted its attempts (a dead letter); used to revive it after a cool-down.
   failedAt    DateTime?
+  /// Set when the same work died twice within a day. Never revived automatically; an operator replays it.
+  quarantinedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

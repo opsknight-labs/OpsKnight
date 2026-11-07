@@ -310,6 +310,30 @@ groups:
         annotations:
           summary: Some intelligence work exhausted its retries
           description: Review and replay the quarantined items in Settings, Intelligence. Affected incidents only lack suggestions; paging is unaffected.
+      - alert: OpsKnightIntelligenceWorkQuarantined
+        expr: max(opsknight_intelligence_work_quarantined) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Some intelligence work was quarantined after failing twice
+          description: These items are never retried on their own. Inspect the failure code in Settings, Intelligence, fix the cause, then replay them. Paging is unaffected.
+      - alert: OpsKnightIntelligenceKindPaused
+        expr: max by (kind) (opsknight_intelligence_kind_paused) == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: One kind of intelligence work is paused after repeated failures
+          description: The lane skips the {{ $labels.kind }} handler for a few minutes at a time while most of its items fail; other work continues. Check the worker logs for that kind. Paging is unaffected.
+      - alert: OpsKnightIntelligenceLaneGone
+        expr: absent(opsknight_intelligence_lane_up) and on() (max(max_over_time(opsknight_intelligence_lane_up[1h])) == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Every intelligence lane process has disappeared
+          description: A lane was reporting within the last hour and none reports now. Check that the worker or intelligence-worker processes are running. Paging is unaffected.
       - alert: OpsKnightIntelligenceEmbeddingBacklog
         expr: max(opsknight_intelligence_embedding_pending) > 0 and max(opsknight_intelligence_embedding_enabled) == 1 and max(opsknight_intelligence_embedding_budget_remaining_tokens) > 0
         for: 30m

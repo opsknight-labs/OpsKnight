@@ -48,7 +48,8 @@ async function annIndexReady(dims: number): Promise<boolean> {
  * is installed. The index is an expression index over the existing REAL[] column (cast to vector), partial
  * on the dimension count, so models of different sizes each get their own and no column changes. It is
  * built CONCURRENTLY in the background so writes are never blocked; a failed build leaves an invalid index
- * that is dropped and retried on a later pass. Without pgvector this does nothing.
+ * that is dropped and retried on a later pass. A build another replica is running right now is left alone
+ * rather than dropped from under it. Without pgvector this does nothing.
  */
 export async function ensureAnnIndex(dims: number): Promise<void> {
   if (!validDims(dims) || building.has(dims)) return;
@@ -58,7 +59,15 @@ export async function ensureAnnIndex(dims: number): Promise<void> {
   const name = Prisma.raw(`"${annIndexName(dims)}"`);
   const size = Prisma.raw(String(dims));
   try {
-    await prisma.$executeRaw`DROP INDEX CONCURRENTLY IF EXISTS ${name}`;
+    const [state] = await prisma.$queryRaw<Array<{ invalid: boolean; inProgress: boolean }>>`
+      SELECT EXISTS (
+          SELECT 1 FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+          WHERE c.relname = ${annIndexName(dims)} AND NOT i.indisvalid) AS invalid,
+        EXISTS (
+          SELECT 1 FROM pg_stat_progress_create_index p JOIN pg_class c ON c.oid = p.index_relid
+          WHERE c.relname = ${annIndexName(dims)}) AS "inProgress"`;
+    if (state?.inProgress) return;
+    if (state?.invalid) await prisma.$executeRaw`DROP INDEX CONCURRENTLY IF EXISTS ${name}`;
     await prisma.$executeRaw`
       CREATE INDEX CONCURRENTLY IF NOT EXISTS ${name} ON "IncidentEmbedding"
       USING hnsw ((("vector")::vector(${size})) vector_cosine_ops)

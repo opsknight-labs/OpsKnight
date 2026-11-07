@@ -249,13 +249,29 @@ describe('change quality', () => {
     });
     expect(findings.map(f => f.subjectRef)).toEqual([quiet.id, noisy.id]);
     await db.intelligenceWorkItem.deleteMany({});
-    await recordChange({
+    const late = await recordChange({
       serviceId: upstream.id,
       source: 'db-ci',
       kind: 'DEPLOY',
       summary: 'late deploy event',
       occurredAt: new Date(onset - 120_000),
     });
+    // The webhook records one coalesced LATE_CHANGE item; the lane fans the re-analysis out.
+    expect(await db.intelligenceWorkItem.findMany()).toMatchObject([
+      { kind: 'LATE_CHANGE', subjectKey: late.id },
+    ]);
+    const { DEFAULT_HANDLERS } = await import('@/lib/intelligence/jobs/runner');
+    await DEFAULT_HANDLERS.LATE_CHANGE!(
+      {
+        id: 'late',
+        kind: 'LATE_CHANGE',
+        subjectKey: late.id,
+        generation: 1,
+        claimToken: 'late',
+        attempts: 1,
+      },
+      { settings: { ...settings, enabled: true }, signal: new AbortController().signal }
+    );
     expect(
       await db.intelligenceWorkItem.findFirst({
         where: { kind: 'ANALYZE_RESPONSE', subjectKey: incident.id },
