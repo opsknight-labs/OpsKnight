@@ -106,9 +106,11 @@ describe('semantic backfill paging', () => {
     });
     expect(cursor.lastId).toBe(`paged-${(total - EMBED_SCAN_PAGE).toString().padStart(5, '0')}`);
 
+    // The last 40 rows form a short page: the walk ends, and one provider batch of them is returned.
     const second = await findIncidentsToEmbedPage('model-x');
     expect(second.more).toBe(false);
-    expect(second.ids).toHaveLength(40);
+    expect(second.ids).toHaveLength(Math.min(40, EMBED_BATCH_SIZE));
+    expect(second.ids[0]).toBe('paged-00039');
     expect(await db.intelligenceCursor.findUnique({ where: { name: 'embed:model-x' } })).toBeNull();
 
     // Exhausted: the next pass starts again from the newest incident.

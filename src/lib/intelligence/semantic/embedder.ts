@@ -227,7 +227,8 @@ export async function findIncidentsToEmbedPage(
   now: Date = new Date()
 ): Promise<EmbedPage> {
   const lowerBound = new Date(now.getTime() - EMBED_LOOKBACK_DAYS * 86_400_000);
-  const activeMode = candidatePolicyModeSql(Prisma.sql`p."serviceId"`);
+  // The page alias must not collide with the aliases inside the policy subquery (it uses `p` and `v`).
+  const activeMode = candidatePolicyModeSql(Prisma.sql`pending_page."serviceId"`);
   return withDbBudget({ maxDbMs: 750 }, async tx => {
     const name = embedCursorName(model);
     const cursor = await tx.intelligenceCursor.findUnique({ where: { name } });
@@ -255,12 +256,13 @@ export async function findIncidentsToEmbedPage(
         FROM page ORDER BY "incidentCreatedAt" ASC, "incidentId" ASC LIMIT 1
       ),
       pending AS (
-        SELECT p."incidentId", p."incidentCreatedAt" FROM page p
-        LEFT JOIN "IncidentEmbedding" e ON e."incidentId" = p."incidentId"
-        WHERE (e."incidentId" IS NULL OR e."model" <> ${model} OR e."sourceHash" <> p."templateHash"
-               OR e."serviceId" <> p."serviceId" OR p."sourceUpdatedAt" IS DISTINCT FROM p."updatedAt")
+        SELECT pending_page."incidentId", pending_page."incidentCreatedAt" FROM page pending_page
+        LEFT JOIN "IncidentEmbedding" e ON e."incidentId" = pending_page."incidentId"
+        WHERE (e."incidentId" IS NULL OR e."model" <> ${model} OR e."sourceHash" <> pending_page."templateHash"
+               OR e."serviceId" <> pending_page."serviceId"
+               OR pending_page."sourceUpdatedAt" IS DISTINCT FROM pending_page."updatedAt")
           AND ${activeMode} <> 'OFF'::"IntelligenceMode"
-        ORDER BY p."incidentCreatedAt" DESC, p."incidentId" DESC
+        ORDER BY pending_page."incidentCreatedAt" DESC, pending_page."incidentId" DESC
         LIMIT ${EMBED_BATCH_SIZE}
       )
       SELECT 'pending' AS kind, "incidentId", "incidentCreatedAt" AS at, 0::bigint AS size FROM pending
