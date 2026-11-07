@@ -142,7 +142,8 @@
     "certify:ingestion:upgrade": "node scripts/ingestion/certify-upgrade.cjs",
     "certify:ingestion:outage": "node scripts/ingestion/certify-outage.cjs",
     "certify:ingestion:http": "node scripts/ingestion/certify-http.cjs",
-    "certify:ingestion:docker": "node scripts/ingestion/certify-docker.cjs"
+    "certify:ingestion:docker": "node scripts/ingestion/certify-docker.cjs",
+    "alerts:backfill": "TS_NODE_PROJECT=tsconfig.script.json node --conditions=react-server -r dotenv/config -r ts-node/register -r tsconfig-paths/register scripts/backfill-alert-shape.ts"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.204",

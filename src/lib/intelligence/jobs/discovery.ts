@@ -1,7 +1,8 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { enqueueWorkItems, WORK_KINDS } from './work-queue';
+import { INTELLIGENCE_ENGINE_VERSION } from '../contract';
+import { enqueueWorkItems, WORK_KINDS, FIRST_INSIGHT_INDEX_PRIORITY } from './work-queue';
 
 const CURSOR_NAME = 'incident-discovery';
 
@@ -53,7 +54,11 @@ export async function discoverNewIncidents(
     if (rows.length === 0) return { ran: true, discovered: 0 };
 
     await enqueueWorkItems(
-      rows.map(row => ({ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: row.id })),
+      rows.map(row => ({
+        kind: WORK_KINDS.INDEX_INCIDENT,
+        subjectKey: row.id,
+        priority: FIRST_INSIGHT_INDEX_PRIORITY,
+      })),
       tx
     );
     const last = rows[rows.length - 1];
@@ -98,7 +103,7 @@ export async function reconcileFingerprints(
       cursor && cursor.watermarkAt >= lowerBound && cursor.watermarkAt <= upperBound
         ? cursor
         : { watermarkAt: lowerBound, lastId: '' };
-    const pageSize = Math.max(100, Math.min(5000, options.limit * 10));
+    const pageSize = Math.max(100, Math.min(500, options.limit * 10));
     const page = await tx.incident.findMany({
       where: {
         createdAt: { gt: lowerBound, lte: upperBound },
@@ -128,7 +133,8 @@ export async function reconcileFingerprints(
         WHEN f."incidentId" IS NULL THEN 'missing'
         WHEN (i."resolvedAt" IS NULL) <> (f."resolvedAt" IS NULL) THEN 'staleResolution'
         WHEN f."template" = '' AND f."updatedAt" < ${recheckBefore} THEN 'suppressed'
-        WHEN f."template" <> '' AND i."updatedAt" IS DISTINCT FROM f."sourceUpdatedAt" THEN 'staleSource'
+        WHEN f."template" <> '' AND (i."updatedAt" IS DISTINCT FROM f."sourceUpdatedAt"
+          OR f."engineVersion" <> ${INTELLIGENCE_ENGINE_VERSION} OR f."alertNormalizationHash" IS NULL) THEN 'staleSource'
         ELSE NULL END AS reason
       FROM "Incident" i LEFT JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
       WHERE i."id" IN (${ids})

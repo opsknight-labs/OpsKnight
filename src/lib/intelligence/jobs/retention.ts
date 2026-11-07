@@ -29,6 +29,7 @@ export interface RetentionResult {
   closedGroups: number;
   aiReservations: number;
   actionReceipts: number;
+  dependencyObservations?: number;
   /** True when any table hit the batch ceiling and more expired rows may remain. */
   more: boolean;
 }
@@ -148,6 +149,10 @@ export async function purgeExpiredIntelligenceData(
     const actionReceipts = await tx.$executeRaw(Prisma.sql`
       DELETE FROM "SquireActionReceipt" WHERE id IN (
         SELECT id FROM "SquireActionReceipt" WHERE "createdAt" < ${cutoff(1)} LIMIT ${limit})`);
+    const dependencyObservations = await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "DependencyObservationBucket" WHERE (bucket, "serviceId") IN (
+        SELECT bucket, "serviceId" FROM "DependencyObservationBucket"
+        WHERE bucket < ${cutoff(30)} ORDER BY bucket, "serviceId" LIMIT ${limit})`);
     const counts = {
       fingerprints,
       embeddings,
@@ -165,6 +170,7 @@ export async function purgeExpiredIntelligenceData(
       closedGroups,
       aiReservations,
       actionReceipts,
+      ...(dependencyObservations > 0 ? { dependencyObservations } : {}),
     };
     return { ...counts, more: Object.values(counts).some(count => count >= limit) };
   });

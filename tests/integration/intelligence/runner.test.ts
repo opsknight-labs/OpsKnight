@@ -198,7 +198,8 @@ describe('intelligence cycle', () => {
 
     expect(
       await runIntelligenceCycle(createLaneState(), { getCriticalLagMs: noLag })
-    ).toMatchObject({ claimed: 1, completed: 1, failed: 0 });
+      // A fresh lane also drains its coalesced, lower-priority dependency observation job.
+    ).toMatchObject({ claimed: 2, completed: 2, failed: 0 });
     const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({
       where: { incidentId: created.id },
     });

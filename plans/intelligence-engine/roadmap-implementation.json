@@ -38,17 +38,16 @@
         "Bounded change candidates and dependency observer buckets",
         "Registered per-kind duration/failure metrics and first-insight histogram",
         "Engine-local Prisma pool wait gauge with two measured quiet samples before recovery; skip the backlog SQL probe while the pool is contended",
-        "Bounded human suggestion acceptance metric, excluding AUTO/undo and reporting truncation; no fabricated ratio with zero reviews"
-      ],
-      "remaining": [
-        "Repeatable p50 latency certification under concurrency",
-        "EXPLAIN evidence on representative large history",
+        "Bounded human suggestion acceptance metric, excluding AUTO/undo and reporting truncation; no fabricated ratio with zero reviews",
         "Incremental alert cursor/digest and label union; explicit repair for edited or deleted inputs",
         "Per-incident trailing wake throttle at most once per two seconds",
         "Incremental dependency observation watermark",
         "Cap reconcile pages at 500",
-        "Nullable common Alert severity/resourceKey/labels/fingerprintHash with concurrent indexes and bounded backfill",
-        "5k-alert incremental pass under 200ms and committed ingestion A/B/EXPLAIN evidence; nightly perf workflow"
+        "Nullable common Alert severity/resourceKey/labels/fingerprintHash with concurrent indexes and bounded backfill"
+      ],
+      "remaining": [
+        "Repeatable p50 latency certification under concurrency",
+        "Full OFF/SHADOW/ON ingestion A/B release gate over 1M history; foundation indexing and EXPLAIN benchmark already measured separately"
       ],
       "wave": 1
     },
@@ -188,7 +187,7 @@
     "database": "Dedicated pgvector test container opsknight-intel-roadmap-test at loopback 55434; no test resets against demo DB.",
     "local_demo": "Preserved at localhost:3100; migrations applied without reseeding.",
     "note": "Implemented means code exists; certification remains separate. Full phase coverage is not claimed.",
-    "typecheck": "Passed on Node 20 with --noEmit --incremental false and a 6 GB heap.",
+    "typecheck": "Passed on Node20 with --noEmit --incremental false and a 12 GB heap on foundation source.",
     "lint": "All changed TypeScript files passed with --max-warnings 0.",
     "production_build": "Passed using isolated .next/roadmap output; original tsconfig restored after generated build changes.",
     "database_tests": {
@@ -218,7 +217,7 @@
     },
     "browser": "Passed Similar percentages, Related link, deployment lead, runbook, freshness, basic Squire citations, 390px layout and lane settings on updated dev server.",
     "demo_queue": "0 ready/running items, 0 dead letters after native reindex of 358 incidents.",
-    "remote_status": "Remote PR #928 remains at 22c7927f5; local branch rebased onto current main with a preserved backup, not yet pushed."
+    "remote_status": "PR #928 conflict resolution published at 414959283; GitHub CI started. Additional foundation source is local pending commit and full CI."
   },
   "squire_history_followup": {
     "status": "implemented",
@@ -326,7 +325,7 @@
   "foundation_followup": {
     "status": "in_progress",
     "base_main": "db1c13a677deebbb28b488302e3189c4d7217b56",
-    "conflicts": "Resolved in an isolated worktree; current main is an ancestor of the local branch.",
+    "conflicts": "Resolved and published at 414959283; GitHub reported mergeable against main db1c13a67.",
     "backup_ref": "refs/codex-backups/intelligence-before-roadmap-sync-20261106",
     "verification": [
       "Combined 326-operation API authorization matrix: 7 tests passed",
@@ -334,8 +333,9 @@
       "Pool, runner and metrics database checks: 24 passed",
       "Correlation and AUTO database checks: 25 passed, including 121-link two-batch re-election and AUTO re-anchor audit regression",
       "System audit/pool/feature units: 18 passed",
-      "Final nonincremental typecheck passed after regression tests; changed TypeScript lint passed with zero warnings across all applicable files (386 paths respecting repository ignores). Full repository checks remain pending."
+      "Final nonincremental typecheck passed after regression tests; changed TypeScript lint passed with zero warnings across all applicable files (386 paths respecting repository ignores). Full repository checks remain pending.",
+      "Local million-row benchmark: 1M incidents, alerts and normalized fingerprints, durable PostgreSQL; 5k-alert incremental p50 12.53ms / p99 15.21ms, all index-plan gates passed. Foundation-only nightly workflow added; not full ingestion A/B certification."
     ],
-    "scope": "Local implementation evidence only; full expanded roadmap is not complete."
+    "scope": "Expanded roadmap still in progress. Incremental indexing, bounded observer, shared alert shape/backfill and foundation benchmark now implemented and verified locally."
   }
 }

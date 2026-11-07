@@ -668,6 +668,7 @@ model TeamMember {
 }
 
 model Service {
+  intelligenceObservations DependencyObservationBucket[]
   automationConfig                ServiceAutomationConfig?
   automationDraft                 AutomationDraft?
   automationVersions              AutomationVersion[]
@@ -1352,6 +1353,13 @@ model WarRoomProviderEventStage {
 
 model Alert {
   fingerprint AlertFingerprint?
+  /// Common bounded metadata; legacy rows are populated by the cursor backfill.
+  severity   String? @db.VarChar(16)
+  resourceKey String? @db.VarChar(256)
+  labels     Json?
+  fingerprintHash String? @db.VarChar(64)
+  /// Nullable for legacy rows; ORM edits are discoverable by the incremental Intelligence lane.
+  updatedAt  DateTime? @updatedAt
   id         String    @id @default(cuid())
   dedupKey   String?
   status     String    @default("TRIGGERED")
@@ -5102,6 +5110,13 @@ model IncidentRelationshipEvent {
 // resolution. Full-text and trigram indexes are SQL expression indexes.
 model IncidentFingerprint {
   alertFingerprints AlertFingerprint[]
+  lastIndexedAlertId String?
+  lastIndexedAlertAt DateTime?
+  lastModifiedAlertId String?
+  lastModifiedAlertAt DateTime?
+  alertInputDigest String?
+  indexedAlertCount Int?
+  alertNormalizationHash String?
   /// Digest of analysis inputs, excluding incidental source timestamps.
   analysisInputHash String?
   /// Incident version actually consumed by the indexer; independent of later aggregate updates.
@@ -5149,7 +5164,20 @@ model AlertFingerprint {
   updatedAt      DateTime @updatedAt
 
   @@index([incidentId])
+  @@index([incidentId, alertCreatedAt, alertId], map: "idx_alert_fingerprint_incident_cursor")
   @@index([serviceId, templateHash, alertCreatedAt(sort: Desc)], map: "idx_alert_fingerprint_match")
+}
+
+/// Rebuildable service/time aggregates; no payloads, person identifiers or incident identifiers.
+model DependencyObservationBucket {
+  bucket DateTime
+  serviceId String
+  firstIncidentAt DateTime
+  updatedAt DateTime @default(now()) @updatedAt
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([bucket, serviceId])
+  @@index([serviceId, bucket], map: "idx_dependency_observation_service")
 }
 
 // Aggregate counters only; never raw alert payloads. scopeKey is a service id or "global".

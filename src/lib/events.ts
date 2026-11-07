@@ -38,6 +38,7 @@ import { checkAlertFlapping } from './flapping';
 import { initializeEscalationExecution } from './escalation/repository';
 import { buildResponderRoutingFromAutomation } from './escalation/routing';
 import { captureResponderSnapshot } from './escalation/automation-snapshot';
+import { normalizeAlertShape } from './alerts/normalization';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -88,10 +89,10 @@ function truncateString(str: string, maxLength: number): string {
   return chars.slice(0, maxLength - 3).join('') + '...';
 }
 
-function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJsonValue {
+function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJsonObject {
   const serialized = JSON.stringify(eventData);
   if (Buffer.byteLength(serialized, 'utf8') <= MAX_STORED_ALERT_PAYLOAD_BYTES) {
-    return eventData as Prisma.InputJsonValue;
+    return eventData as Prisma.InputJsonObject;
   }
 
   const detailsPreview = eventData.custom_details
@@ -161,6 +162,13 @@ export async function processEvent(
   const truncatedDescription = rawDescription
     ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
     : null;
+
+  const storedAlertPayload = boundedAlertPayload(eventData);
+  const alertShape = normalizeAlertShape({
+    summary: eventData.summary,
+    severity: eventData.severity,
+    custom_details: storedAlertPayload.custom_details,
+  });
 
   const transactionStarted = performance.now();
   const execute = async (tx: Prisma.TransactionClient) => {
@@ -237,9 +245,10 @@ export async function processEvent(
     // New incidents are created first so the foreign key remains immediate;
     // alert, incident, Automation and receipt still share this transaction.
     const alertData = () => ({
+      ...alertShape,
       dedupKey: dedup_key,
       status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
-      payload: boundedAlertPayload(eventData),
+      payload: storedAlertPayload,
       serviceId,
       createdAt: processingLease ? envelope.receivedAt : undefined,
     });

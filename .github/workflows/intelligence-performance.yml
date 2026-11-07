@@ -1,0 +1,79 @@
+name: Intelligence performance
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/intelligence/**'
+      - 'src/lib/alerts/**'
+      - 'src/lib/events.ts'
+      - 'prisma/**'
+      - 'tests/load/intelligence-*.ts'
+      - 'tests/load/helpers/intelligence-*.ts'
+      - '.github/workflows/intelligence-performance.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: [main]
+    paths:
+      - 'src/lib/intelligence/**'
+      - 'src/lib/alerts/**'
+      - 'src/lib/events.ts'
+      - 'prisma/**'
+      - 'tests/load/intelligence-*.ts'
+      - 'tests/load/helpers/intelligence-*.ts'
+      - '.github/workflows/intelligence-performance.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intelligence-performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: Million-row indexing and query plans
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: intel_perf
+          POSTGRES_PASSWORD: local-ci-performance
+          POSTGRES_DB: opsknight_intel_perf_test
+        ports:
+          - 5432:5432
+        options: >-
+          --cpus=2 --memory=2g --shm-size=256m
+          --health-cmd="pg_isready -U intel_perf -d opsknight_intel_perf_test"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql://intel_perf:local-ci-performance@127.0.0.1:5432/opsknight_intel_perf_test?connection_limit=8
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: '20'
+          ignore-scripts: 'true'
+          generate-prisma: 'true'
+      - uses: ./.github/actions/setup-test-db
+      - name: Measure incremental indexing over one million historical incidents
+        run: >-
+          TS_NODE_PROJECT=tsconfig.script.json node --conditions=react-server
+          -r ts-node/register -r tsconfig-paths/register
+          tests/load/intelligence-foundation.ts --history 1000000 --alerts 5000 --samples 20
+          --output reports/intelligence-foundation.json
+      - name: Upload measured results and EXPLAIN evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intelligence-foundation-performance
+          path: reports/intelligence-foundation.json
+          if-no-files-found: warn
+          retention-days: 30

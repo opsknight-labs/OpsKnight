@@ -9,10 +9,12 @@ This document is the architecture and safety contract. Implementation lives in
 
 ## Safety contract
 
-1. **Nothing is written when an incident is created.** New incidents are found by a keyset
-   watermark with a 30 second safety lag, so a late-committing transaction can never be skipped.
-   `src/lib/events.ts` and `src/lib/incidents/creation.ts` do not import intelligence; an
-   architecture test enforces this.
+1. **Analysis is outside the paging transaction.** Ingestion stores bounded common alert metadata
+   (severity, normalized resource, credential-filtered labels and template hash), then schedules a
+   non-awaited wake hint after the source and paging outbox commit. It never writes derived
+   Intelligence records inside that transaction. A keyset discovery watermark with a 30-second
+   safety lag and bounded reconciliation repair missed hints. Architecture checks restrict the
+   ingestion boundary to the dedicated post-commit facade.
 2. **Intelligence never changes routing, paging, escalation or notifications.** Today it only
    reads incidents and writes derived records and reversible relationships. Confirmed Squire actions
    call existing permission-checked application commands; only the confirmation executor may do so.
@@ -31,9 +33,10 @@ This document is the architecture and safety contract. Implementation lives in
 ## How it works
 
 ```
-Incident created ──(no write)──┐
+Incident + alert + paging outbox commit
+                 │ post-commit batched wake hint (polling fallback)
                                ▼
-        discovery sweep  ── keyset watermark + 30s lag, plus anti-entropy repair
+        discovery sweep  ── keyset watermark + 30s lag, 500-row repair pages
                                ▼
    IntelligenceWorkItem  ── coalesced: one row per (kind, incident), generation counting
                                ▼
@@ -52,8 +55,14 @@ Incident created ──(no write)──┐
   become visible dead letters that an administrator can retry from the settings page.
 - **Anti-entropy.** A periodic sweep re-signals recent incidents that were never fingerprinted or
   were resolved after indexing. All intelligence data is derived and can be rebuilt.
-- **Hosting.** The lane runs in the `integrated`, `worker` and `general-worker` process roles. A
-  disabled install reads one settings row every 30 seconds.
+- **Hosting.** Split Compose and Helm use a dedicated `intelligence-worker` and Prisma pool.
+  Integrated and general-worker roles remain supported, with a settings warning when shared with
+  paging work. A disabled install polls slowly; due privacy retention still runs.
+- **Incremental alerts.** `IncidentFingerprint` stores creation/edit cursors, an ordered alert
+  digest and a label union. Normal appends read and hash only new payloads. ORM edits to older alerts
+  use the edit cursor; exceptional ordering/deletion repairs use cached alert fingerprints. Count
+  mismatches, explicit force and normalization changes can rebuild from source. Ingestion never
+  writes `AlertFingerprint`. Common metadata on existing alerts has a bounded, resumable backfill.
 
 ### Similarity
 
@@ -166,7 +175,9 @@ read as on). Everything is recommendation only; nothing is executed, muted or pa
 
 **Dependencies.** "Service A depends on service B" edges are managed in Settings → Intelligence →
 Dependencies, changes and alert quality. Only ACTIVE edges influence analysis. An hourly, bounded
-job proposes edges when incidents on one service repeatedly open within ten minutes after another
+queue job consumes new source incidents in 2,000-row cursor pages into service/time buckets.
+It resumes incomplete bootstrap work before proposing edges and scores retained metadata rather
+than re-reading the raw history each hour. Edges are proposed when incidents on one service repeatedly open within ten minutes after another
 (at least five times in 30 days); these are created as SUGGESTED only, are ignored until a person
 approves them, and a rejection is permanent. Graph walks are breadth-first with a visited set and a
 depth cap of three, so cycles and wide graphs cannot loop or grow without bound.
@@ -380,6 +391,12 @@ can be scaled, resourced and failed independently of paging. Its connection pool
 `DATABASE_POOL_SIZE_INTELLIGENCE_WORKER`, like the other roles; that is process-level infrastructure
 configuration, while every behavioural setting remains in the UI.
 
+Split Compose and Helm default to the dedicated role. Its wake listener uses one additional
+session connection, accounted for separately from the Prisma pool. Pool contention is measured
+through Prisma's local engine metrics without acquiring another SQL connection; contention pauses
+the lane and requires two measured quiet samples before recovery. Paging-lag hysteresis remains
+independent. Missing pool telemetry is unknown, not a zero measurement.
+
 ## Observability
 
 `/api/health?mode=readiness` includes an `intelligence` check that is `healthy`, `degraded` (paused to
@@ -391,13 +408,14 @@ AI calls emit OpenTelemetry spans (`intelligence.work`, `intelligence.ai.generat
 registered. Span attributes are bounded categories and token counts; never incident ids, prompts,
 answers or error messages.
 
-## Not yet implemented
+## Expanded roadmap
 
-Automatic grouping, any delay before paging or suppression, and write actions from the assistant are
-future stages. The evidence and the open gates are tracked in
-`plans/intelligence-engine/certification/README.md`. MCP exposure is delivered by the
-native MCP work, not here. Each will be introduced behind its own certification gate and will not change
-paging behaviour until that gate has passed.
+Service-certified reversible AUTO links and confirmed Squire write actions are implemented.
+Pre-paging orchestration/suppression, parent/child paging, external observability connectors,
+expanded agent actions, triage predictions and the responder overview are still tracked as work
+in progress in `plans/intelligence-engine/roadmap-implementation.json`. Implemented code and
+local evidence are distinct from deployment certification; synthetic checks do not certify a
+production service.
 
 ## Quality and automatic grouping
 

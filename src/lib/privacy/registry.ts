@@ -9,8 +9,18 @@ import type { PersonalDataDomain } from './types';
 export const personalDataRegistry = [
   {
     domain: 'event-ingestion',
-    models: ['IngestionReceipt', 'IngestionBatch'],
-    fields: ['envelope.event.payload', 'envelope.providerPayload', 'payload.value', 'result'],
+    models: ['IngestionReceipt', 'IngestionBatch', 'Alert'],
+    fields: [
+      'envelope.event.payload',
+      'envelope.providerPayload',
+      'payload.value',
+      'result',
+      'Alert.payload',
+      'Alert.labels',
+      'Alert.resourceKey',
+      'Alert.severity',
+      'Alert.fingerprintHash',
+    ],
     purpose: ['Durable alert processing', 'Authorized replay and reconciliation'],
     classifications: ['INTERNAL', 'PERSONAL', 'SENSITIVE', 'SECRET'],
     locations: ['DATABASE'],
@@ -23,6 +33,7 @@ export const personalDataRegistry = [
     discoverable: 'NOT_COUNTED',
     notes: [
       'Provider-controlled JSON has no verified subject relation. Every subject export or erasure requires manual review of pending, completed, dead-letter and orphaned receipts. Never silently discard accepted work to satisfy a subject request.',
+      'Stored Alert payloads remain untrusted. Common metadata filters credential-shaped labels and follows alert retention; normalization does not erase the original payload.',
     ],
   },
   {
@@ -282,6 +293,8 @@ export const personalDataRegistry = [
     domain: 'intelligence',
     models: [
       'IncidentFingerprint',
+      'AlertFingerprint',
+      'DependencyObservationBucket',
       'IncidentEmbedding',
       'CorrelationGroup',
       'CorrelationMember',
@@ -307,6 +320,9 @@ export const personalDataRegistry = [
       'IncidentEmbedding.vector',
       'IntelligenceFinding.evidence',
       'IncidentFingerprint.sourceUpdatedAt',
+      'AlertFingerprint.labels',
+      'AlertFingerprint.template',
+      'DependencyObservationBucket.firstIncidentAt',
       'IntelligenceAnalysisSnapshot.incidentId',
       'IntelligenceAnalysisSnapshot.completedAt',
       'IntelligenceAnalysisSnapshot.policyHash',

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { INTELLIGENCE_ENGINE_VERSION } from '../contract';
 import { buildIncidentFingerprint } from '../normalization';
-import { canonicalizeLabels, MAX_LABELS } from '../normalization/labels';
+import { indexAlertInputs } from './alert-indexer';
 import { stableAnalysisHash } from './input-hash';
 import { redactSecrets } from '../ai/redact';
 import { updateOutcomePattern } from '../learning/patterns';
@@ -53,6 +53,13 @@ export async function indexIncident(
   if (options.suppressed) {
     await tx.alertFingerprint.deleteMany({ where: { incidentId } });
     const placeholder = {
+      lastIndexedAlertId: null,
+      lastIndexedAlertAt: null,
+      lastModifiedAlertId: null,
+      lastModifiedAlertAt: null,
+      alertInputDigest: null,
+      indexedAlertCount: null,
+      alertNormalizationHash: null,
       analysisInputHash: null,
       serviceId: incident.serviceId,
       sourceUpdatedAt: incident.updatedAt,
@@ -89,71 +96,7 @@ export async function indexIncident(
         engineVersion: INTELLIGENCE_ENGINE_VERSION,
       },
     });
-  // Read alert inputs in bounded cursor pages, not one unbounded payload query. Their digest is
-  // ordered and includes every alert; incident timestamps and acknowledgment chatter are excluded.
-  const alertHash = createHash('sha256');
-  const labels = new Map<string, string>();
-  let cursor: { id: string; createdAt: Date } | undefined;
-  for (;;) {
-    const alerts = await tx.alert.findMany({
-      where: {
-        incidentId,
-        ...(cursor
-          ? {
-              OR: [
-                { createdAt: { gt: cursor.createdAt } },
-                { createdAt: cursor.createdAt, id: { gt: cursor.id } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: 250,
-      select: { id: true, createdAt: true, payload: true, status: true },
-    });
-    const rows: Prisma.Sql[] = [];
-    for (const alert of alerts) {
-      alertHash.update(
-        stableAnalysisHash({ id: alert.id, payload: alert.payload, status: alert.status })
-      );
-      const payload = alert.payload as { custom_details?: unknown } | null;
-      const extracted = canonicalizeLabels(payload?.custom_details ?? payload);
-      const content =
-        payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
-      const alertFingerprint = buildIncidentFingerprint({
-        title: typeof content.summary === 'string' ? content.summary : incident.title,
-        description: typeof content.description === 'string' ? content.description : null,
-        labelSource: extracted,
-      });
-      const sourceHash = stableAnalysisHash({
-        payload: alert.payload,
-        template: alertFingerprint.template,
-        labels: extracted,
-        engineVersion: INTELLIGENCE_ENGINE_VERSION,
-      });
-      rows.push(Prisma.sql`(${alert.id}, ${incidentId}, ${incident.serviceId}, ${alertFingerprint.template},
-        ${alertFingerprint.template ? templateHash(alertFingerprint.template) : null},
-        ${alertFingerprint.tokens}::text[], ${JSON.stringify(extracted)}::jsonb, ${sourceHash},
-        ${INTELLIGENCE_ENGINE_VERSION}, ${alert.createdAt}, now())`);
-      // A shared key keeps its earliest value; individual alerts keep their own labels when indexed.
-      for (const [key, value] of Object.entries(extracted)) {
-        if (!labels.has(key) && labels.size < MAX_LABELS) labels.set(key, value);
-      }
-    }
-    if (rows.length)
-      await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "AlertFingerprint" ("alertId", "incidentId", "serviceId", "template", "templateHash", "tokens", "labels", "sourceHash", "engineVersion", "alertCreatedAt", "updatedAt")
-      VALUES ${Prisma.join(rows)}
-      ON CONFLICT ("alertId") DO UPDATE SET
-        "incidentId" = EXCLUDED."incidentId", "serviceId" = EXCLUDED."serviceId",
-        "template" = EXCLUDED."template", "templateHash" = EXCLUDED."templateHash", "tokens" = EXCLUDED."tokens",
-        "labels" = EXCLUDED."labels", "sourceHash" = EXCLUDED."sourceHash", "engineVersion" = EXCLUDED."engineVersion", "updatedAt" = now()
-      WHERE "AlertFingerprint"."sourceHash" IS DISTINCT FROM EXCLUDED."sourceHash"
-        OR "AlertFingerprint"."incidentId" <> EXCLUDED."incidentId"
-    `);
-    if (alerts.length < 250) break;
-    cursor = alerts[alerts.length - 1];
-  }
+  const alertInputs = await indexAlertInputs(tx, incident, previous, { force: options.force });
   const [postmortem, resolution] = await Promise.all([
     incident.status === 'RESOLVED'
       ? tx.postmortem.findUnique({ where: { incidentId }, select: { resolution: true } })
@@ -170,9 +113,7 @@ export async function indexIncident(
     title: incident.title,
     description: incident.description,
   });
-  fingerprint.labels = Object.fromEntries(
-    [...labels.entries()].sort(([a], [b]) => a.localeCompare(b))
-  );
+  fingerprint.labels = alertInputs.labels;
   const resolutionSummary =
     incident.status === 'RESOLVED'
       ? redactSecrets(postmortem?.resolution || resolution?.message || '')
@@ -193,16 +134,23 @@ export async function indexIncident(
     resolutionKind: incident.resolutionKind,
     resolutionSummary,
     labels: fingerprint.labels,
-    alerts: alertHash.digest('hex'),
+    alerts: alertInputs.digest,
     policy: options.policy ?? null,
     engineVersion: INTELLIGENCE_ENGINE_VERSION,
   });
   if (!options.force && previous?.analysisInputHash === analysisInputHash) {
     // Advance only the consumed source version so reconciliation does not rediscover unrelated edits.
-    if (previous.sourceUpdatedAt?.getTime() !== incident.updatedAt.getTime()) {
+    if (
+      previous.sourceUpdatedAt?.getTime() !== incident.updatedAt.getTime() ||
+      alertInputs.stateChanged
+    ) {
       await tx.incidentFingerprint.update({
         where: { incidentId },
-        data: { sourceUpdatedAt: incident.updatedAt, updatedAt: previous.updatedAt },
+        data: {
+          ...alertInputs.state,
+          sourceUpdatedAt: incident.updatedAt,
+          updatedAt: previous.updatedAt,
+        },
       });
       // Completed snapshots of this exact fingerprint are still valid. Carry only their consumed
       // source version forward; never make an older/different analysis appear newly completed.
@@ -219,6 +167,7 @@ export async function indexIncident(
   }
 
   const data = {
+    ...alertInputs.state,
     analysisInputHash,
     serviceId: incident.serviceId,
     sourceUpdatedAt: incident.updatedAt,

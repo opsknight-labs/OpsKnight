@@ -110,6 +110,8 @@ domains:
         masked-title-embedding-vectors,
         content-tokens,
         credential-filtered-labels,
+        per-alert-fingerprints,
+        service-time-observation-buckets,
         numeric-match-evidence,
         incident-source-version-timestamps,
         recommendation-success-markers,

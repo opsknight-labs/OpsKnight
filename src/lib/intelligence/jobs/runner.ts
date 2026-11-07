@@ -22,7 +22,7 @@ import { listenForIntelligenceWake } from './wake-listener';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
 import { correlateIncident } from '../correlation/handler';
-import { OBSERVE_INTERVAL_MS, suggestObservedDependencies } from '../dependencies/observer';
+import { OBSERVE_INTERVAL_MS, observeDependencyPass } from '../dependencies/observer';
 import { analyzeResponse } from '../response/handler';
 import { purgeConversations } from '../conversations/store';
 import { AiGatewayError } from '../ai/gateway';
@@ -41,6 +41,7 @@ import {
   failWorkItem,
   renewWorkItemLease,
   WORK_KINDS,
+  FIRST_INSIGHT_INDEX_PRIORITY,
   type ClaimedWorkItem,
   type WorkKind,
 } from './work-queue';
@@ -49,6 +50,7 @@ import {
 export const RECONCILE_LOOKBACK_DAYS = 7;
 const RECONCILE_INTERVAL_MS = 60_000;
 const DISCOVERY_BATCH_MULTIPLIER = 5;
+const DEPENDENCY_OBSERVER_SUBJECT = 'dependency-observation';
 
 export interface HandlerContext {
   settings: IntelligenceSettingsView;
@@ -58,6 +60,13 @@ export type WorkHandler = (item: ClaimedWorkItem, context: HandlerContext) => Pr
 export type WorkHandlers = Partial<Record<WorkKind, WorkHandler>>;
 
 export const DEFAULT_HANDLERS: WorkHandlers = {
+  [WORK_KINDS.OBSERVE_DEPENDENCIES]: async (_item, { settings }) => {
+    const pass = await observeDependencyPass(settings);
+    if (pass.more)
+      await enqueueWorkItems([
+        { kind: WORK_KINDS.OBSERVE_DEPENDENCIES, subjectKey: DEPENDENCY_OBSERVER_SUBJECT },
+      ]);
+  },
   // The fingerprint and the follow-up work are written in one transaction, so a crash can never leave a
   // fingerprint that is never analysed. With the effective policy OFF only an empty placeholder is stored:
   // no text is kept and nothing follows, and reconciliation re-checks it once the policy changes.
@@ -386,11 +395,17 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
 
     if (!settings.enabled) return { ...EMPTY_RESULT, status: 'disabled' };
 
-    // Hourly and bounded; a failure only skips this round.
-    if (now() - state.lastObserveAt >= OBSERVE_INTERVAL_MS) {
+    // Discovery only schedules observation. Source catch-up runs below first-insight work and
+    // coalesces another generation until its bounded cursor reaches the safety watermark.
+    if (
+      handlers[WORK_KINDS.OBSERVE_DEPENDENCIES] &&
+      now() - state.lastObserveAt >= OBSERVE_INTERVAL_MS
+    ) {
       state.lastObserveAt = now();
       try {
-        await suggestObservedDependencies(settings, new Date(now()));
+        await enqueueWorkItems([
+          { kind: WORK_KINDS.OBSERVE_DEPENDENCIES, subjectKey: DEPENDENCY_OBSERVER_SUBJECT },
+        ]);
       } catch (error) {
         logger.warn('[Intelligence] Dependency observation failed; will retry', {
           error: error instanceof Error ? error.message : String(error),
@@ -557,7 +572,11 @@ async function acceptWakeSignals(ids: string[]): Promise<void> {
         break;
       }
       await enqueueWorkItems(
-        batch.map(subjectKey => ({ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey }))
+        batch.map(subjectKey => ({
+          kind: WORK_KINDS.INDEX_INCIDENT,
+          subjectKey,
+          priority: FIRST_INSIGHT_INDEX_PRIORITY,
+        }))
       );
       wakeRequested = true;
       if (!lane.active) {

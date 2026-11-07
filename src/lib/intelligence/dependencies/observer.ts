@@ -11,6 +11,9 @@ const MAX_INCIDENTS_SCANNED = 50_000;
 const MAX_SUGGESTIONS_PER_RUN = 50;
 export const MAX_SERVICES_PER_OBSERVATION_BUCKET = 128;
 export const OBSERVE_MIN_LIFT = 1.5;
+export const OBSERVE_SOURCE_PAGE_SIZE = 2000;
+const OBSERVATION_CURSOR = 'dependency-observation';
+const SOURCE_SAFETY_LAG_MS = 30_000;
 const MAX_CONFIDENCE = 0.9;
 
 /**
@@ -29,19 +32,76 @@ export async function suggestObservedDependencies(
   settings: Pick<IntelligenceSettingsView, 'maxDbMs'>,
   now: Date = new Date()
 ): Promise<number> {
+  return (await observeDependencyPass(settings, now)).suggestions;
+}
+
+/** Consume one bounded page of new source incidents, then rank over retained bucket metadata.
+ * The cursor and bucket upserts commit together. No raw source history is re-read on steady passes.
+ */
+export async function observeDependencyPass(
+  settings: Pick<IntelligenceSettingsView, 'maxDbMs'>,
+  now: Date = new Date()
+): Promise<{ suggestions: number; more: boolean }> {
   const since = new Date(now.getTime() - OBSERVE_LOOKBACK_DAYS * 86_400_000);
+  const upper = new Date(+now - SOURCE_SAFETY_LAG_MS);
   const bucketSeconds = OBSERVE_WINDOW_MINUTES * 60;
-  return withDbBudget({ maxDbMs: Math.max(settings.maxDbMs, 10_000) }, async tx => {
+  return withDbBudget(settings, async tx => {
     const [{ locked }] = await tx.$queryRaw<Array<{ locked: boolean }>>`
       SELECT pg_try_advisory_xact_lock(hashtextextended('intelligence-dependency-observer', 0)) AS locked`;
-    if (!locked) return 0;
-    return tx.$executeRaw(Prisma.sql`
+    if (!locked) return { suggestions: 0, more: true };
+    const cursor = await tx.intelligenceCursor.findUnique({ where: { name: OBSERVATION_CURSOR } });
+    const after =
+      cursor && cursor.watermarkAt >= since && cursor.watermarkAt <= upper
+        ? cursor
+        : { watermarkAt: since, lastId: '' };
+    const source = await tx.incident.findMany({
+      where: {
+        createdAt: { gte: since, lte: upper },
+        OR: [
+          { createdAt: { gt: after.watermarkAt } },
+          { createdAt: after.watermarkAt, id: { gt: after.lastId } },
+        ],
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: OBSERVE_SOURCE_PAGE_SIZE,
+      select: { id: true, serviceId: true, createdAt: true },
+    });
+    const buckets = new Map<string, { serviceId: string; bucket: Date; first: Date }>();
+    for (const row of source) {
+      const bucket = new Date(
+        Math.floor(+row.createdAt / (bucketSeconds * 1000)) * bucketSeconds * 1000
+      );
+      const key = `${row.serviceId}:${+bucket}`;
+      const existing = buckets.get(key);
+      if (!existing || row.createdAt < existing.first)
+        buckets.set(key, { serviceId: row.serviceId, bucket, first: row.createdAt });
+    }
+    if (buckets.size)
+      await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "DependencyObservationBucket" (bucket, "serviceId", "firstIncidentAt")
+      VALUES ${Prisma.join([...buckets.values()].map(row => Prisma.sql`(${row.bucket}, ${row.serviceId}, ${row.first})`))}
+      ON CONFLICT (bucket, "serviceId") DO UPDATE SET
+        "firstIncidentAt" = LEAST("DependencyObservationBucket"."firstIncidentAt", EXCLUDED."firstIncidentAt"),
+        "updatedAt" = now()`);
+    const last = source[source.length - 1];
+    const next = last
+      ? { watermarkAt: last.createdAt, lastId: last.id }
+      : { watermarkAt: upper, lastId: '' };
+    await tx.intelligenceCursor.upsert({
+      where: { name: OBSERVATION_CURSOR },
+      create: { name: OBSERVATION_CURSOR, ...next },
+      update: next,
+    });
+    // Wait for complete source coverage before scoring; an unfinished bootstrap is not evidence.
+    if (source.length === OBSERVE_SOURCE_PAGE_SIZE) return { suggestions: 0, more: true };
+    const suggestions = await tx.$executeRaw(Prisma.sql`
       WITH raw_recent AS (
-        SELECT "id", "serviceId", "createdAt",
-               floor(extract(epoch FROM "createdAt") / ${bucketSeconds}::int)::bigint AS bucket
-        FROM "Incident"
-        WHERE "createdAt" >= ${since}
-        ORDER BY "createdAt" DESC LIMIT ${MAX_INCIDENTS_SCANNED}
+        SELECT "serviceId" || ':' || bucket::text AS id, "serviceId", "firstIncidentAt" AS "createdAt",
+               floor(extract(epoch FROM bucket) / ${bucketSeconds}::int)::bigint AS bucket
+        FROM "DependencyObservationBucket"
+        WHERE bucket >= ${new Date(Math.floor(+since / (bucketSeconds * 1000)) * bucketSeconds * 1000)}
+          AND "firstIncidentAt" >= ${since} AND "firstIncidentAt" <= ${upper}
+        ORDER BY bucket DESC, "serviceId" LIMIT ${MAX_INCIDENTS_SCANNED}
       ),
       service_buckets AS (
         SELECT DISTINCT ON ("serviceId", bucket) "id", "serviceId", "createdAt", bucket
@@ -106,5 +166,6 @@ export async function suggestObservedDependencies(
       LIMIT ${MAX_SUGGESTIONS_PER_RUN}
       ON CONFLICT ("upstreamServiceId", "downstreamServiceId") DO NOTHING
     `);
+    return { suggestions, more: false };
   });
 }

@@ -28,6 +28,7 @@ export const WORK_KINDS = {
   EMBED_PENDING: 'EMBED_PENDING',
   /** One item per ISO week (subject = week key), sending the digest in chunks. */
   SEND_DIGEST: 'SEND_DIGEST',
+  OBSERVE_DEPENDENCIES: 'OBSERVE_DEPENDENCIES',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -39,6 +40,7 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   ANALYZE_RESPONSE: 30,
   EMBED_PENDING: 40,
   SEND_DIGEST: 50,
+  OBSERVE_DEPENDENCIES: 45,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;
@@ -49,6 +51,8 @@ const BACKOFF_MAX_MS = 15 * 60_000;
 export const DEAD_LETTER_REVIVE_MS = 30 * 60_000;
 const ENQUEUE_CHUNK = 1_000;
 export const PRIORITY_AGE_BUCKET_MS = 30_000;
+/** Fresh ingestion must get indexed before a newly queued historical repair batch. */
+export const FIRST_INSIGHT_INDEX_PRIORITY = 0;
 
 export interface WorkItemInput {
   force?: boolean;

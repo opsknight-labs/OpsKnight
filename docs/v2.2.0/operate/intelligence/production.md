@@ -55,7 +55,7 @@ the same item, and a crashed replica's work is picked up when its lease expires.
 
 ## Monitor it
 
-The metrics scrape adds five gauges:
+The original lane gauges remain available:
 
 | Metric                                                  | Meaning                                                    |
 | ------------------------------------------------------- | ---------------------------------------------------------- |
@@ -66,6 +66,38 @@ The metrics scrape adds five gauges:
 | `opsknight_intelligence_lane_last_cycle_age_seconds`    | Seconds since the lane last finished a cycle, per instance |
 
 Lane gauges exist only on instances running the lane, so a disabled install exports nothing that alerts.
+
+`opsknight_intelligence_pool_waiting_queries` reports the last measured waiting-query count on a
+lane process. Missing measurements are omitted. Pool pressure pauses work until two consecutive
+quiet samples; the existing paging-lag recovery threshold still applies independently.
+
+Human suggestion reviews are exported as `opsknight_intelligence_suggestions_reviewed_last_24h`
+and `opsknight_intelligence_suggestion_acceptance_ratio_last_24h`. AUTO and undo transitions do
+not count as accept/reject reviews. The ratio is omitted with no reviews. The sample is capped at
+5,000 decisions, with `opsknight_intelligence_suggestions_sample_truncated` signalling incomplete
+coverage. These are cluster snapshots; aggregate replicas with `max`, not `sum`.
+
+### Common alert metadata and online backfill
+
+New alerts include normalized severity, resource, labels and a content fingerprint. Existing rows
+remain nullable during upgrade. Preview the backlog and apply a bounded online backfill:
+
+```bash
+npm run alerts:backfill
+npm run alerts:backfill -- --apply --max-rows=100000
+```
+
+The command uses the configured database. It processes at most 250 alerts per transaction, pauses
+for paging or pool contention, and guards each write against concurrent source edits. It preserves
+payloads and creation timestamps. Rerunning retries skipped rows and continues the remaining
+backlog. Raw SQL edits that do not update an alert's edit timestamp require an explicit Intelligence
+refresh; the regular application uses versioned ORM edits.
+
+Creation/edit cursors make normal indexing incremental. Source repair can still read all alert
+payloads after a normalization change, count mismatch or explicit operator refresh. Observation
+uses resumable source pages and retained service/time buckets; buckets expire after 30 days, even
+when analysis is disabled. Engine `1.4.0` changes normalization bounds, so earlier AUTO
+certifications must be reviewed and renewed before new automatic decisions are allowed.
 
 `monitoring/prometheus/opsknight-alerts.yaml` includes the `opsknight.intelligence` group. Every rule is a
 **warning**. Intelligence is advisory, so nothing here should wake anyone at night.

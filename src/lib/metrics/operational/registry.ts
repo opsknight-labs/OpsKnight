@@ -75,7 +75,7 @@ export const OPERATIONAL_METRICS = [
     kind: 'histogram',
     labels: ['kind'],
     scope: 'instance',
-    estimatedMaxSeries: 84,
+    estimatedMaxSeries: 96,
     buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 60, 120],
   },
   {
@@ -84,7 +84,7 @@ export const OPERATIONAL_METRICS = [
     kind: 'counter',
     labels: ['kind'],
     scope: 'counter',
-    estimatedMaxSeries: 7,
+    estimatedMaxSeries: 8,
   },
   {
     name: 'opsknight_intelligence_embedding_enabled',

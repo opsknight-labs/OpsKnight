@@ -76,6 +76,12 @@ it('indexes and analyzes a newly ingested incident before the safety-lag polling
     expect(performance.now() - started).toBeLessThan(5000);
     expect(await db.incidentFingerprint.findUnique({ where: { incidentId: id } })).not.toBeNull();
     expect(await db.alertFingerprint.count({ where: { incidentId: id } })).toBe(1);
+    expect(await db.alert.findFirstOrThrow({ where: { incidentId: id } })).toMatchObject({
+      severity: 'warning',
+      resourceKey: null,
+      labels: {},
+      fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+    });
   } finally {
     await stopIntelligenceLane();
     await listener.stop();
