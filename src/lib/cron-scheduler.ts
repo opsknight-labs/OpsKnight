@@ -515,7 +515,22 @@ async function runOnce() {
       });
     }
 
+    // Pre-paging noise controls: heartbeat misses raise incidents through normal ingestion, expired
+    // suppression rules are retired and old decisions aged out. Bounded, and never a reason to fail the tick.
+    let noiseControls: Awaited<
+      ReturnType<typeof import('./intelligence/noise-controls/heartbeats').sweepPrePagingControls>
+    > | null = null;
+    try {
+      const { sweepPrePagingControls } = await import('./intelligence/noise-controls/heartbeats');
+      noiseControls = await sweepPrePagingControls();
+    } catch (error) {
+      logger.warn('[Cron] Pre-paging noise control sweep failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     logger.info('[Cron] Critical tasks processed', {
+      noiseControls,
       escalations: { processed: escalationResult.processed, total: escalationResult.total },
       jobs: { processed: jobResult.processed, failed: jobResult.failed, total: jobResult.total },
       escalationRecovery: reconciliation,

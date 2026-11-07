@@ -668,6 +668,11 @@ model TeamMember {
 }
 
 model Service {
+  noiseControlPolicies     NoiseControlPolicy[]
+  maintenanceWindows       MaintenanceWindow[]
+  suppressionRules         SuppressionRule[]
+  heartbeatMonitors        HeartbeatMonitor[]
+  prePagingDecisions       PrePagingDecision[]
   intelligenceObservations DependencyObservationBucket[]
   automationConfig                ServiceAutomationConfig?
   automationDraft                 AutomationDraft?
@@ -1381,6 +1386,7 @@ model Alert {
 }
 
 model Incident {
+  prePagingDecisions                  PrePagingDecision[]
   automationSourceRestricted          Boolean @default(false)
   automationDecision                  IncidentAutomationDecision?
   automationTraces                    AutomationTrace[]
@@ -4902,6 +4908,8 @@ enum IncidentRelationshipType {
   RELATED
   DUPLICATE_OF
   CAUSED_BY
+  /// Storm or correlation child grouped under a parent incident; the child's paging rolls up to the parent.
+  PARENT_CHILD
 }
 
 enum IntelligenceOrigin {
@@ -5294,6 +5302,185 @@ model IntelligenceCursor {
   watermarkAt DateTime
   lastId      String
   updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// OpsKnight Intelligence: pre-paging noise controls (maintenance windows, suppression rules,
+// orchestration, content dedup, flapping, storms, heartbeats). Everything is default OFF per service,
+// SHADOW before ON, and every decision is recorded and reversible. Nothing here is read on the hot path
+// directly: the ingestion hook reads an in-process snapshot refreshed every 30 seconds.
+// ---------------------------------------------------------------------------
+
+enum NoiseControlMode {
+  OFF
+  SHADOW
+  ON
+}
+
+enum NoiseControlEffect {
+  SUPPRESS
+  DOWNGRADE
+}
+
+enum MaintenanceScope {
+  SERVICE
+  TEAM
+  LABEL
+  ALL
+}
+
+enum HeartbeatState {
+  PENDING
+  HEALTHY
+  LATE
+  MISSING
+  PAUSED
+}
+
+enum PrePagingControl {
+  MAINTENANCE
+  SUPPRESSION
+  ORCHESTRATION
+  CONTENT_DEDUP
+  FLAPPING
+  STORM
+  HEARTBEAT
+}
+
+enum PrePagingAction {
+  NONE
+  SUPPRESS
+  DOWNGRADE
+  APPEND
+  GROUP_CHILD
+  HOLD
+  DROP
+  TRANSFORM
+}
+
+/// Per-service (or global) switch and tuning for the pre-paging controls. `definition` is validated by
+/// noiseControlDefinitionSchema; `revision` is compare-and-set on every save.
+model NoiseControlPolicy {
+  id          String           @id @default(cuid())
+  scopeKey    String           @unique
+  serviceId   String?
+  service     Service?         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  mode        NoiseControlMode @default(OFF)
+  definition  Json
+  revision    Int              @default(1)
+  updatedById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([serviceId])
+  @@index([mode])
+}
+
+/// A planned period during which matching alerts are stored but never page (or page at a lower urgency).
+model MaintenanceWindow {
+  id                       String             @id @default(cuid())
+  name                     String             @db.VarChar(120)
+  description              String?            @db.VarChar(500)
+  scope                    MaintenanceScope
+  serviceId                String?
+  service                  Service?           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  teamId                   String?
+  labelKey                 String?            @db.VarChar(64)
+  labelValue               String?            @db.VarChar(128)
+  startsAt                 DateTime
+  endsAt                   DateTime
+  /// Bounded RRULE subset (FREQ, INTERVAL, BYDAY, COUNT, UNTIL); null for a one-off window.
+  recurrence               String?            @db.VarChar(512)
+  effect                   NoiseControlEffect @default(SUPPRESS)
+  downgradeUrgency         IncidentUrgency?
+  statusPageAnnouncementId String?
+  enabled                  Boolean            @default(true)
+  /// Set when an operator ends the window early; the window no longer matches from this instant.
+  endedAt                  DateTime?
+  endedById                String?
+  createdById              String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([enabled, endsAt])
+  @@index([serviceId])
+  @@index([teamId])
+}
+
+/// Label/text matchers that suppress or downgrade matching alerts until they expire. Owned and audited.
+model SuppressionRule {
+  id               String             @id @default(cuid())
+  name             String             @db.VarChar(120)
+  description      String?            @db.VarChar(500)
+  serviceId        String?
+  service          Service?           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  matchers         Json
+  effect           NoiseControlEffect @default(SUPPRESS)
+  downgradeUrgency IncidentUrgency?
+  expiresAt        DateTime?
+  ownerId          String?
+  enabled          Boolean            @default(true)
+  /// MANUAL, or SUGGESTED when created from the alert-quality leaderboard.
+  origin           String             @default("MANUAL") @db.VarChar(16)
+  suggestion       Json?
+  createdById      String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([enabled, expiresAt])
+  @@index([serviceId])
+}
+
+/// A dead-man's switch: a missing ping raises an incident through the normal ingestion path.
+model HeartbeatMonitor {
+  id              String          @id @default(cuid())
+  name            String          @db.VarChar(120)
+  description     String?         @db.VarChar(500)
+  serviceId       String
+  service         Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  /// sha256 of the ping token; the token itself is shown once at creation.
+  tokenHash       String          @unique @db.VarChar(64)
+  tokenPrefix     String          @db.VarChar(8)
+  intervalSeconds Int
+  graceSeconds    Int             @default(60)
+  urgency         IncidentUrgency @default(MEDIUM)
+  enabled         Boolean         @default(true)
+  state           HeartbeatState  @default(PENDING)
+  lastPingAt      DateTime?
+  missingSince    DateTime?
+  lastIncidentId  String?
+  createdById     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([enabled, state])
+  @@index([serviceId])
+}
+
+/// Every pre-paging decision, shadow or applied, with the evidence that produced it. Reversible.
+model PrePagingDecision {
+  id           String           @id @default(cuid())
+  serviceId    String
+  service      Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  incidentId   String?
+  incident     Incident?        @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  alertId      String?
+  control      PrePagingControl
+  action       PrePagingAction
+  mode         NoiseControlMode
+  applied      Boolean
+  sourceId     String?
+  sourceName   String?          @db.VarChar(120)
+  reason       String           @db.VarChar(500)
+  evidence     Json
+  reversedAt   DateTime?
+  reversedById String?
+  createdAt    DateTime         @default(now())
+
+  @@index([serviceId, createdAt])
+  @@index([incidentId])
+  @@index([control, mode, createdAt])
+  @@index([createdAt])
 }
 
 // ---------------------------------------------------------------------------

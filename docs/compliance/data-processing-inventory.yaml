@@ -121,6 +121,9 @@ domains:
         service-dependency-graph,
         operator-supplied-change-summaries,
         digest-recipient-ids,
+        pre-paging-decision-evidence,
+        maintenance-and-suppression-authorship,
+        heartbeat-token-hashes,
       ]
     purpose:
       [
@@ -132,6 +135,7 @@ domains:
         suggestion-feedback,
         policy-history,
         probable-cause-and-runbook-recommendations,
+        pre-paging-noise-controls-and-heartbeat-monitoring,
       ]
     storage: [postgresql]
     recipients:
