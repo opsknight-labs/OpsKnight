@@ -9,7 +9,10 @@ import {
   type IntelligenceActionState,
 } from '@/app/(app)/settings/intelligence/actions';
 import { Button } from '@/components/ui/shadcn/button';
-import { INTELLIGENCE_SETTINGS_BOUNDS, type IntelligenceModeValue } from '@/lib/intelligence/contract';
+import {
+  INTELLIGENCE_SETTINGS_BOUNDS,
+  type IntelligenceModeValue,
+} from '@/lib/intelligence/contract';
 
 const initialState: IntelligenceActionState = { message: '', ok: false };
 const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
@@ -17,7 +20,10 @@ const fieldClass = 'w-full rounded-md border border-border bg-background p-2 tex
 function Status({ state }: { state: IntelligenceActionState }) {
   if (!state.message) return null;
   return (
-    <p role={state.ok ? 'status' : 'alert'} className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}>
+    <p
+      role={state.ok ? 'status' : 'alert'}
+      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
+    >
       {state.message}
     </p>
   );
@@ -36,6 +42,7 @@ type SettingsValues = {
   correlationRetentionDays: number;
   findingRetentionDays: number;
   feedbackRetentionDays: number;
+  handoffSummaryEnabled: boolean;
   revision: number;
 };
 
@@ -62,13 +69,30 @@ function NumberField({
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
-      <input id={id} name={name} type="number" defaultValue={value} min={min} max={max} step={1} required disabled={disabled} className={fieldClass} />
+      <input
+        id={id}
+        name={name}
+        type="number"
+        defaultValue={value}
+        min={min}
+        max={max}
+        step={1}
+        required
+        disabled={disabled}
+        className={fieldClass}
+      />
       <p className="text-xs text-muted-foreground">{help}</p>
     </div>
   );
 }
 
-export function IntelligenceSettingsForm({ settings, canManage }: { settings: SettingsValues; canManage: boolean }) {
+export function IntelligenceSettingsForm({
+  settings,
+  canManage,
+}: {
+  settings: SettingsValues;
+  canManage: boolean;
+}) {
   const [state, action, pending] = useActionState(saveIntelligenceSettings, initialState);
   const enabledId = useId();
   const b = INTELLIGENCE_SETTINGS_BOUNDS;
@@ -77,7 +101,14 @@ export function IntelligenceSettingsForm({ settings, canManage }: { settings: Se
     <form action={action} className="space-y-6 py-4">
       <input type="hidden" name="expectedRevision" value={settings.revision} />
       <div className="flex items-start gap-3">
-        <input id={enabledId} name="enabled" type="checkbox" defaultChecked={settings.enabled} disabled={disabled} className="mt-1 h-4 w-4" />
+        <input
+          id={enabledId}
+          name="enabled"
+          type="checkbox"
+          defaultChecked={settings.enabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
         <div>
           <label htmlFor={enabledId} className="text-sm font-medium">
             Enable OpsKnight Intelligence
@@ -88,22 +119,130 @@ export function IntelligenceSettingsForm({ settings, canManage }: { settings: Se
           </p>
         </div>
       </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${enabledId}-handoff`}
+          name="handoffSummaryEnabled"
+          type="checkbox"
+          defaultChecked={settings.handoffSummaryEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <div>
+          <label htmlFor={`${enabledId}-handoff`} className="text-sm font-medium">
+            Send shift handoff summaries
+          </label>
+          <p className="text-xs text-muted-foreground">
+            At each on-call rotation the incoming responder gets a summary of open and recently
+            resolved incidents and overdue follow-ups for the schedule&apos;s services.
+            Deterministic; an AI narrative is added only when AI is enabled.
+          </p>
+        </div>
+      </div>
       <fieldset disabled={disabled} className="grid gap-4 md:grid-cols-2">
         <legend className="sr-only">Worker budgets</legend>
-        <NumberField name="maxConcurrency" label="Concurrent work items" help="Parallel items per worker process." value={settings.maxConcurrency} min={b.maxConcurrency.min} max={b.maxConcurrency.max} disabled={disabled} />
-        <NumberField name="batchSize" label="Batch size" help="Items claimed per cycle." value={settings.batchSize} min={b.batchSize.min} max={b.batchSize.max} disabled={disabled} />
-        <NumberField name="maxJobMs" label="Time budget per item (ms)" help="Work exceeding this is stopped and retried with backoff." value={settings.maxJobMs} min={b.maxJobMs.min} max={b.maxJobMs.max} disabled={disabled} />
-        <NumberField name="maxDbMs" label="Database time budget (ms)" help="Statement timeout for intelligence queries. Cannot exceed the item budget." value={settings.maxDbMs} min={b.maxDbMs.min} max={b.maxDbMs.max} disabled={disabled} />
-        <NumberField name="candidateCap" label="Candidates per source" help="Upper bound on historical incidents examined per search." value={settings.candidateCap} min={b.candidateCap.min} max={b.candidateCap.max} disabled={disabled} />
-        <NumberField name="lookbackDays" label="Lookback (days)" help="How far back similar incidents are searched." value={settings.lookbackDays} min={b.lookbackDays.min} max={b.lookbackDays.max} disabled={disabled} />
-        <NumberField name="backpressureEscalationLagMs" label="Yield to paging above (ms)" help="Intelligence pauses while escalations or notifications wait longer than this." value={settings.backpressureEscalationLagMs} min={b.backpressureEscalationLagMs.min} max={b.backpressureEscalationLagMs.max} disabled={disabled} />
+        <NumberField
+          name="maxConcurrency"
+          label="Concurrent work items"
+          help="Parallel items per worker process."
+          value={settings.maxConcurrency}
+          min={b.maxConcurrency.min}
+          max={b.maxConcurrency.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="batchSize"
+          label="Batch size"
+          help="Items claimed per cycle."
+          value={settings.batchSize}
+          min={b.batchSize.min}
+          max={b.batchSize.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="maxJobMs"
+          label="Time budget per item (ms)"
+          help="Work exceeding this is stopped and retried with backoff."
+          value={settings.maxJobMs}
+          min={b.maxJobMs.min}
+          max={b.maxJobMs.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="maxDbMs"
+          label="Database time budget (ms)"
+          help="Statement timeout for intelligence queries. Cannot exceed the item budget."
+          value={settings.maxDbMs}
+          min={b.maxDbMs.min}
+          max={b.maxDbMs.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="candidateCap"
+          label="Candidates per source"
+          help="Upper bound on historical incidents examined per search."
+          value={settings.candidateCap}
+          min={b.candidateCap.min}
+          max={b.candidateCap.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="lookbackDays"
+          label="Lookback (days)"
+          help="How far back similar incidents are searched."
+          value={settings.lookbackDays}
+          min={b.lookbackDays.min}
+          max={b.lookbackDays.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="backpressureEscalationLagMs"
+          label="Yield to paging above (ms)"
+          help="Intelligence pauses while escalations or notifications wait longer than this."
+          value={settings.backpressureEscalationLagMs}
+          min={b.backpressureEscalationLagMs.min}
+          max={b.backpressureEscalationLagMs.max}
+          disabled={disabled}
+        />
       </fieldset>
       <fieldset disabled={disabled} className="grid gap-4 md:grid-cols-2">
         <legend className="mb-2 text-sm font-medium">Retention (days)</legend>
-        <NumberField name="fingerprintRetentionDays" label="Fingerprints" help="Searchable incident history." value={settings.fingerprintRetentionDays} min={b.retentionDays.min} max={b.retentionDays.max} disabled={disabled} />
-        <NumberField name="correlationRetentionDays" label="Correlation records" help="Groups, members and decisions." value={settings.correlationRetentionDays} min={b.retentionDays.min} max={b.retentionDays.max} disabled={disabled} />
-        <NumberField name="findingRetentionDays" label="Findings" help="Suggestions and their evidence." value={settings.findingRetentionDays} min={b.retentionDays.min} max={b.retentionDays.max} disabled={disabled} />
-        <NumberField name="feedbackRetentionDays" label="Feedback" help="Responder feedback on suggestions." value={settings.feedbackRetentionDays} min={b.retentionDays.min} max={b.retentionDays.max} disabled={disabled} />
+        <NumberField
+          name="fingerprintRetentionDays"
+          label="Fingerprints"
+          help="Searchable incident history."
+          value={settings.fingerprintRetentionDays}
+          min={b.retentionDays.min}
+          max={b.retentionDays.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="correlationRetentionDays"
+          label="Correlation records"
+          help="Groups, members and decisions."
+          value={settings.correlationRetentionDays}
+          min={b.retentionDays.min}
+          max={b.retentionDays.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="findingRetentionDays"
+          label="Findings"
+          help="Suggestions and their evidence."
+          value={settings.findingRetentionDays}
+          min={b.retentionDays.min}
+          max={b.retentionDays.max}
+          disabled={disabled}
+        />
+        <NumberField
+          name="feedbackRetentionDays"
+          label="Feedback"
+          help="Responder feedback on suggestions."
+          value={settings.feedbackRetentionDays}
+          min={b.retentionDays.min}
+          max={b.retentionDays.max}
+          disabled={disabled}
+        />
       </fieldset>
       <div className="flex items-center gap-3">
         {canManage && (
@@ -122,6 +261,7 @@ export function IntelligencePolicyForm({
   mode,
   similarityEnabled,
   responseEnabled,
+  triageEnabled = false,
   minScore,
   canManage,
   autoAvailable,
@@ -130,6 +270,7 @@ export function IntelligencePolicyForm({
   mode: IntelligenceModeValue;
   similarityEnabled: boolean;
   responseEnabled: boolean;
+  triageEnabled?: boolean;
   minScore: number;
   canManage: boolean;
   autoAvailable: boolean;
@@ -144,7 +285,13 @@ export function IntelligencePolicyForm({
         <label htmlFor={`${id}-mode`} className="text-sm font-medium">
           Mode
         </label>
-        <select id={`${id}-mode`} name="mode" defaultValue={mode} disabled={disabled} className={fieldClass}>
+        <select
+          id={`${id}-mode`}
+          name="mode"
+          defaultValue={mode}
+          disabled={disabled}
+          className={fieldClass}
+        >
           <option value="OFF">Off — no analysis</option>
           <option value="SHADOW">Shadow — analyze and record only</option>
           <option value="SUGGEST">Suggest — show suggestions to responders</option>
@@ -157,17 +304,49 @@ export function IntelligencePolicyForm({
         </p>
       </div>
       <div className="flex items-start gap-3">
-        <input id={`${id}-sim`} name="similarityEnabled" type="checkbox" defaultChecked={similarityEnabled} disabled={disabled} className="mt-1 h-4 w-4" />
+        <input
+          id={`${id}-sim`}
+          name="similarityEnabled"
+          type="checkbox"
+          defaultChecked={similarityEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
         <label htmlFor={`${id}-sim`} className="text-sm font-medium">
           Find similar past incidents
         </label>
       </div>
       <div className="flex items-start gap-3">
-        <input id={`${id}-resp`} name="responseEnabled" type="checkbox" defaultChecked={responseEnabled} disabled={disabled} className="mt-1 h-4 w-4" />
+        <input
+          id={`${id}-resp`}
+          name="responseEnabled"
+          type="checkbox"
+          defaultChecked={responseEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
         <label htmlFor={`${id}-resp`} className="text-sm font-medium">
           Suggest probable causes and runbooks
           <span className="block text-xs font-normal text-muted-foreground">
-            Uses recent changes, service dependencies and past runbook results. Recommendations only; nothing is run.
+            Uses recent changes, service dependencies and past runbook results. Recommendations
+            only; nothing is run.
+          </span>
+        </label>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${id}-triage`}
+          name="triageEnabled"
+          type="checkbox"
+          defaultChecked={triageEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <label htmlFor={`${id}-triage`} className="text-sm font-medium">
+          Suggest triage: urgency, owner, duplicates and expected time to resolve
+          <span className="block text-xs font-normal text-muted-foreground">
+            Derived from how similar incidents were resolved. Shown as chips a responder accepts or
+            dismisses; nothing is applied on its own.
           </span>
         </label>
       </div>
@@ -175,13 +354,30 @@ export function IntelligencePolicyForm({
         <label htmlFor={`${id}-score`} className="text-sm font-medium">
           Minimum similarity (0 to 1)
         </label>
-        <input id={`${id}-score`} name="minScore" type="number" min={0} max={1} step={0.05} defaultValue={minScore} disabled={disabled} className={fieldClass} />
+        <input
+          id={`${id}-score`}
+          name="minScore"
+          type="number"
+          min={0}
+          max={1}
+          step={0.05}
+          defaultValue={minScore}
+          disabled={disabled}
+          className={fieldClass}
+        />
       </div>
       <div className="space-y-1">
         <label htmlFor={`${id}-reason`} className="text-sm font-medium">
           Reason (recorded in the audit log)
         </label>
-        <input id={`${id}-reason`} name="reason" type="text" maxLength={500} disabled={disabled} className={fieldClass} />
+        <input
+          id={`${id}-reason`}
+          name="reason"
+          type="text"
+          maxLength={500}
+          disabled={disabled}
+          className={fieldClass}
+        />
       </div>
       <div className="flex items-center gap-3">
         {canManage && (
@@ -195,7 +391,13 @@ export function IntelligencePolicyForm({
   );
 }
 
-export function RollbackForm({ targetVersion, headVersion }: { targetVersion: number; headVersion: number }) {
+export function RollbackForm({
+  targetVersion,
+  headVersion,
+}: {
+  targetVersion: number;
+  headVersion: number;
+}) {
   const [state, action, pending] = useActionState(rollbackGlobalPolicy, initialState);
   const id = useId();
   return (
@@ -205,7 +407,15 @@ export function RollbackForm({ targetVersion, headVersion }: { targetVersion: nu
       <label htmlFor={id} className="sr-only">
         Reason for restoring version {targetVersion}
       </label>
-      <input id={id} name="reason" required maxLength={500} placeholder="Reason" disabled={pending} className={`${fieldClass} max-w-xs`} />
+      <input
+        id={id}
+        name="reason"
+        required
+        maxLength={500}
+        placeholder="Reason"
+        disabled={pending}
+        className={`${fieldClass} max-w-xs`}
+      />
       <Button type="submit" variant="outline" size="sm" disabled={pending}>
         Restore as new version
       </Button>

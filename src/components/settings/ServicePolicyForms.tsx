@@ -32,6 +32,7 @@ export type ServicePolicyRow = {
   mode: IntelligenceModeValue;
   similarityEnabled: boolean;
   responseEnabled: boolean;
+  triageEnabled?: boolean;
   headVersion: number;
   autoAvailable?: boolean;
   autoReason?: string;
@@ -103,6 +104,19 @@ export function ServicePolicyForm({
         />
         <label htmlFor={`${id}-resp`} className="text-sm font-medium">
           Suggest probable causes and runbooks
+        </label>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${id}-triage`}
+          name="triageEnabled"
+          type="checkbox"
+          defaultChecked={row.triageEnabled ?? false}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <label htmlFor={`${id}-triage`} className="text-sm font-medium">
+          Suggest triage (urgency, owner, duplicates, expected time to resolve)
         </label>
       </div>
       <div className="space-y-1">

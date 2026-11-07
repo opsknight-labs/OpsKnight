@@ -10,6 +10,8 @@ export default function IncidentIntelligencePanel({
   response,
   summary,
   assistant,
+  triage,
+  timeline,
   analysisStatus,
 }: {
   similar: ReactNode;
@@ -17,12 +19,17 @@ export default function IncidentIntelligencePanel({
   response: ReactNode;
   summary: ReactNode;
   assistant: ReactNode;
+  /** Triage suggestions; rendered inside the Similar tab, under the precedents they come from. */
+  triage?: ReactNode;
+  /** Unified time axis of alerts, changes, upstream incidents and noise decisions. */
+  timeline?: ReactNode;
   analysisStatus?: ReactNode;
 }) {
   const sections = [
     ['similar', 'Similar', similar],
     ['related', 'Related', related],
     ['response', 'Causes & runbooks', response],
+    ...(timeline ? ([['timeline', 'Timeline', timeline]] as const) : []),
     ['summary', 'Summary', summary],
     ['assistant', 'Ask Squire', assistant],
   ] as const;
@@ -45,8 +52,9 @@ export default function IncidentIntelligencePanel({
           </TabsList>
         </div>
         {sections.map(([value, , content]) => (
-          <TabsContent key={value} value={value} className="min-h-36">
+          <TabsContent key={value} value={value} className="min-h-36 space-y-3">
             {(value === 'similar' || value === 'response') && analysisStatus}
+            {value === 'similar' && triage}
             {content}
           </TabsContent>
         ))}

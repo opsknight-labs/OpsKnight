@@ -81,6 +81,14 @@ export default async function IncidentResponseCard({ incidentId }: { incidentId:
                 onset · {RELATION_LABEL[change.relation]}
                 {change.serviceName ? ` (${change.serviceName})` : ''} · {change.source}
                 {change.version ? ` · ${change.version}` : ''}
+                {change.riskPercent !== null && (
+                  <span
+                    className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px]"
+                    title="Change risk: history of incidents after similar changes, blast radius, timing and size. A ranking signal, not a verdict."
+                  >
+                    risk {change.riskPercent}%
+                  </span>
+                )}
               </p>
             </li>
           ))}

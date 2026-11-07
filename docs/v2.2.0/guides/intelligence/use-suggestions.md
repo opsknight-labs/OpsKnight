@@ -34,6 +34,20 @@ You only ever see suggestions about incidents, services and runbooks you can alr
 Expand **Why this matched** to inspect match reasons. **Mark related** links a precedent through the
 normal visibility and feedback permissions. Empty tabs explain OFF, shadow mode or pending analysis.
 
+## Triage chips
+
+When an administrator has turned on **Suggest triage** for your service, the **Similar** tab also shows
+chips derived from how similar incidents were handled: a suggested urgency, a suggested owner, a probable
+duplicate, and the usual time to resolve. **Apply** runs the same action you would take by hand (the change
+appears in the timeline); **Dismiss** records that the suggestion was wrong. Nothing is applied on its own,
+and the percentage is a match strength from past incidents, not a probability.
+
+## Timeline tab
+
+**Timeline** lines up this incident's alerts, recorded changes (with their risk score), incidents on upstream
+services and any noise-control decisions relative to when the incident opened, so you can see what changed
+just before it started.
+
 ## Rate a suggestion
 
 Use the thumbs next to a similar incident. If it was not helpful, pick a reason. Your rating is yours to change

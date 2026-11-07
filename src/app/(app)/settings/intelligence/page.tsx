@@ -151,6 +151,7 @@ export default async function IntelligenceSettingsPage() {
           mode={policy?.mode ?? 'OFF'}
           similarityEnabled={policy?.definition.similarity.enabled ?? true}
           responseEnabled={policy?.definition.response.enabled ?? true}
+          triageEnabled={policy?.definition.triage.enabled ?? false}
           minScore={policy?.definition.similarity.minScore ?? 0.35}
           canManage={canManage}
           autoAvailable={AUTO_MODE_AVAILABLE}

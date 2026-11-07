@@ -72,6 +72,7 @@ export async function saveIntelligenceSettings(
         correlationRetentionDays: integer(form, 'correlationRetentionDays'),
         findingRetentionDays: integer(form, 'findingRetentionDays'),
         feedbackRetentionDays: integer(form, 'feedbackRetentionDays'),
+        handoffSummaryEnabled: form.get('handoffSummaryEnabled') === 'on',
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }
@@ -98,10 +99,13 @@ export async function publishGlobalPolicy(
     const definition: PolicyDefinition = {
       ...current.definition,
       similarity: {
+        ...current.definition.similarity,
         enabled: form.get('similarityEnabled') === 'on',
         minScore: Number(text(form, 'minScore')),
       },
-      response: { enabled: form.get('responseEnabled') === 'on' },
+      // Learned weights are carried over; the form only toggles the feature.
+      response: { ...current.definition.response, enabled: form.get('responseEnabled') === 'on' },
+      triage: { enabled: form.get('triageEnabled') === 'on' },
     };
     const result = await publishPolicyVersion(
       {},
@@ -179,7 +183,9 @@ function parseRules(form: FormData): { rules: CorrelationRule[] } | { error: str
     return { rules: parsed.data };
   }
   const issue = parsed.error.issues[0];
-  return { error: `Check the rules: ${issue.path.map(String).join('.') || 'input'} — ${issue.message}` };
+  return {
+    error: `Check the rules: ${issue.path.map(String).join('.') || 'input'} — ${issue.message}`,
+  };
 }
 
 export type RulePreviewState = {
@@ -207,9 +213,14 @@ export async function previewCorrelationRules(
     const parsed = parseRules(form);
     if ('error' in parsed) return { message: parsed.error, ok: false };
     const days = Number(text(form, 'days'));
-    if (!Number.isInteger(days) || days < 1 || days > 90) return { message: 'Choose between 1 and 90 days.', ok: false };
+    if (!Number.isInteger(days) || days < 1 || days > 90)
+      return { message: 'Choose between 1 and 90 days.', ok: false };
     const settings = await getIntelligenceSettings();
-    const result = await replayPolicyRules(settings, { rules: parsed.rules, days, createdById: actor.id });
+    const result = await replayPolicyRules(settings, {
+      rules: parsed.rules,
+      days,
+      createdById: actor.id,
+    });
     return {
       ok: true,
       message: 'Preview complete. Nothing has been changed.',

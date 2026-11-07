@@ -5,6 +5,7 @@ import {
   DigestSettingsForm,
   RuleSuggestionsPanel,
   SendTestDigestButton,
+  ResponseWeightsForm,
   ScoringWeightsForm,
 } from '@/components/settings/InsightsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -20,6 +21,7 @@ import {
 import { listPolicyVersions, resolveEffectivePolicy } from '@/lib/intelligence/settings/service';
 import { getDigestSettings, getLatestDigestRun } from '@/lib/intelligence/digest/service';
 import { suggestScoringWeights } from '@/lib/intelligence/learning/weights-service';
+import { suggestResponseWeights } from '@/lib/intelligence/learning/response-weights';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -27,15 +29,15 @@ export const revalidate = 0;
 async function load() {
   try {
     const actor = await getCurrentAuthorizationActor();
-    const [insights, versions, digest, lastRun, policy, scoring] = await Promise.all([
+    const canManage = hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE);
+    const [insights, versions, digest, lastRun, policy, scoring, causeWeights] = await Promise.all([
       getInsights(actor),
       listPolicyVersions({}, { limit: 1 }),
       getDigestSettings(),
       getLatestDigestRun(),
       resolveEffectivePolicy(null),
-      hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE)
-        ? suggestScoringWeights()
-        : Promise.resolve(null),
+      canManage ? suggestScoringWeights() : Promise.resolve(null),
+      canManage ? suggestResponseWeights().catch(() => null) : Promise.resolve(null),
     ]);
     return {
       insights,
@@ -44,6 +46,7 @@ async function load() {
       lastRun,
       mode: policy.mode,
       scoring,
+      causeWeights,
     };
   } catch (error) {
     logger.warn('[Intelligence] Insights could not load', {
@@ -105,6 +108,49 @@ export default async function IntelligenceInsightsPage() {
                   </div>
                 ))}
               </div>
+            </SettingsSection>
+          )}
+
+          {canManage && (
+            <SettingsSection
+              title="Cause-ranking weights"
+              description="Fitted from responder feedback on possible causes. Published only when you choose to, as a new policy version you can roll back."
+            >
+              {loaded?.causeWeights ? (
+                <div className="space-y-3 py-3">
+                  <p className="text-sm text-muted-foreground">
+                    {loaded.causeWeights.support} labelled causes. Held-out loss{' '}
+                    {loaded.causeWeights.heldOutLoss.toFixed(3)} versus{' '}
+                    {loaded.causeWeights.baselineLoss.toFixed(3)} with default weights.
+                  </p>
+                  <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                    {[
+                      ...Object.entries(loaded.causeWeights.weights.kind).map(
+                        ([kind, weight]) => [kind.toLowerCase().replace('_', ' '), weight] as const
+                      ),
+                      [
+                        'upstream decay per hop',
+                        loaded.causeWeights.weights.upstreamDecay,
+                      ] as const,
+                      ['global changes', loaded.causeWeights.weights.globalWeight] as const,
+                    ].map(([name, weight]) => (
+                      <div key={name}>
+                        <dt className="text-muted-foreground">{name}</dt>
+                        <dd>{weight.toFixed(2)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <ResponseWeightsForm
+                    suggestionId={loaded.causeWeights.id}
+                    expectedHeadVersion={loaded.headVersion}
+                  />
+                </div>
+              ) : (
+                <p className="py-3 text-sm text-muted-foreground">
+                  No supported improvement yet. A proposal needs at least 40 rated possible causes
+                  with both helpful and unhelpful verdicts, and better results on held-out examples.
+                </p>
+              )}
             </SettingsSection>
           )}
 

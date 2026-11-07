@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import {
+  adoptResponseWeightsAction,
   adoptRuleSuggestionAction,
   adoptScoringWeightsAction,
   applyMinScoreSuggestion,
@@ -31,6 +32,26 @@ export function ScoringWeightsForm({
       <input type="hidden" name="expectedHeadVersion" value={expectedHeadVersion} />
       <Button type="submit" size="sm" disabled={pending}>
         {pending ? 'Publishing…' : 'Publish reviewed scoring weights'}
+      </Button>
+      <Message state={state} />
+    </form>
+  );
+}
+
+export function ResponseWeightsForm({
+  suggestionId,
+  expectedHeadVersion,
+}: {
+  suggestionId: string;
+  expectedHeadVersion: number;
+}) {
+  const [state, action, pending] = useActionState(adoptResponseWeightsAction, initial);
+  return (
+    <form action={action} className="space-y-2">
+      <input type="hidden" name="suggestionId" value={suggestionId} />
+      <input type="hidden" name="expectedHeadVersion" value={expectedHeadVersion} />
+      <Button type="submit" size="sm" disabled={pending}>
+        {pending ? 'Publishing…' : 'Publish reviewed cause-ranking weights'}
       </Button>
       <Message state={state} />
     </form>

@@ -427,6 +427,38 @@ The one-line hot-path call (evaluate → record → act on `decision.apply`) is 
 `docs/v2.2.0/operate/intelligence/noise-controls.md` and lands together with the ingestion-side noise
 layer; until then the controls are exercised by the simulation and the heartbeat monitors are live.
 
+## Triage, change risk, topology and SLO burn (deterministic)
+
+- **Triage** (`triage/predict.ts`, work kind `TRIAGE_INCIDENT`, chained by the similarity analyzer when
+  the policy's `triage.enabled` is true): a weighted plurality vote over the incident's resolved
+  similar-incident precedents (weight = similarity score) for urgency and owner, a same-template open
+  incident on the same service within 24 h as a probable duplicate, and weighted quantiles of precedent
+  resolution times as the expected time to resolve. Written as `TRIAGE_*` findings with their own
+  snapshots, so freshness applies. Accepting runs `updateIncidentUrgencyDomainCommand`,
+  `assignIncidentDomainCommand` or `linkIncidents` (never an intelligence write); every decision is
+  `IntelligenceFeedback` for calibration.
+- **Change risk** (`changes/risk.ts`, computed in the `LATE_CHANGE` handler): shrunk historical
+  follow-rate of the source's changes on the service, saturating blast radius from the reversed dependency
+  graph, off-hours/weekend timing, and size labels, blended per change kind into `ChangeEvent.riskScore`.
+- **Native change sources** (`changes/mappers.ts`): pure mappers for Argo CD, LaunchDarkly, Unleash and
+  HCP Terraform behind the same `createIntegrationHandler` as the generic change endpoint.
+- **Topology** (`dependencies/import.ts`, `topology-sources.ts`, work kind `SYNC_TOPOLOGY`): Backstage
+  catalogs (JSON or multi-document YAML, 2 MB bound) resolve entities to services by annotation or name and
+  declare edges idempotently; sources are pulled through the SSRF-guarded fetch on their own interval, and
+  failures are recorded on the source rather than retried. `graph-view.ts` serves the actor-scoped graph.
+- **SLO burn** (`lib/slo/burn.ts`): merged incident downtime over 1 h / 6 h against each availability or
+  uptime objective's error budget, classified at the usual 14.4 / 6 thresholds. Triage raises (never lowers)
+  urgency on a burning service; `rankByBurn` is the hook for grouping anchors.
+- **Cause-ranking weights** (`learning/response-weights.ts`): bounded multipliers for change kinds,
+  upstream decay and global changes, fitted by coordinate descent from feedback on cause findings and
+  offered only when held-out loss improves on the shipped defaults; applied through `response.weights` in
+  a policy version.
+- **Time axis** (`timeline/service.ts`): alerts, changes, upstream incidents and noise decisions (read
+  tolerantly, since the noise layer may not be migrated) relative to onset, under the viewer's read rules.
+- **Shift handoff** (`handoff/summary.ts`, `handoff/dispatch.ts`, called from `oncall-handoff.ts` at each
+  rotation when `handoffSummaryEnabled`): deterministic summary delivered through the notification control
+  plane (de-duplicated per recipient and shift) with an optional AI narrative charged to the recipient.
+
 ## Fault tolerance
 
 Every failure is contained to the smallest unit that can fail, and every repair path is bounded:

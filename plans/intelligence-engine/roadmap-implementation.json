@@ -82,17 +82,19 @@
     {
       "id": 3,
       "name": "Triage and topology",
-      "status": "in_progress",
-      "implemented": ["Dependency observation uses lift and minimum support with bounded buckets"],
+      "status": "implemented_pending_full_ci",
+      "implemented": [
+        "Dependency observation uses lift and minimum support with bounded buckets",
+        "Backstage JSON/YAML topology import (paste and scheduled https sources, SSRF-guarded, 2 MB bound), idempotent DECLARED edges, audited; actor-scoped service graph endpoint with open-incident overlay",
+        "Native Argo CD, LaunchDarkly, Unleash and HCP Terraform change sources behind the generic integration handler (GitHub/GitLab/Vercel already existed)",
+        "Feedback-driven cause-ranking weight fitting (kind, upstream decay, global) published as a policy version",
+        "Change risk score on ChangeEvent from historical follow rate, dependency blast radius, timing and size labels, computed in the LATE_CHANGE handler",
+        "Multi-window SLO burn (lib/slo/burn.ts) and SLO-aware urgency suggestion; rankByBurn exposed for parent selection",
+        "Unified incident time axis (alerts, changes with risk, upstream incidents, noise decisions when present) with a Timeline tab"
+      ],
       "remaining": [
-        "Integration metadata and Backstage JSON/YAML topology import",
-        "Native GitHub, ArgoCD and feature-flag change sources",
-        "Feedback-driven cause and runbook weight fitting",
-        "Change risk from historical incident rate, dependency blast radius, time and supplied size",
-        "Terraform-run change source; periodic declared topology sync and live service graph",
-        "Multi-window SLO burn evidence and SLO-aware urgency/parent selection",
-        "Scheduled lane-only Prometheus/Datadog anomaly evidence using seasonal baseline/MAD",
-        "Unified incident time axis for alerts, changes, upstream incidents and anomalies"
+        "Scheduled lane-only Prometheus/Datadog anomaly evidence using seasonal baseline/MAD (needs the observability connectors from phase 4; interface note: produce IntelligenceFinding kind evidence 'metric deviated at T' for the time axis)",
+        "Runbook-ranking weight fitting (cause weights are learned; runbook ranking still uses the Wilson score only)"
       ],
       "wave": 3
     },
@@ -172,13 +174,16 @@
       "id": 7,
       "wave": 4,
       "name": "Triage, routing and responder assist",
-      "status": "pending",
+      "status": "implemented_pending_full_ci",
+      "implemented": [
+        "Urgency, team/assignee, duplicate and resolution-time suggestions voted from similar resolved outcomes (TRIAGE_* findings, policy triage.enabled default off)",
+        "Accept/dismiss chips through the incident's own domain commands (urgency command, assignment command, human link) with CORRECT/INCORRECT feedback for calibration",
+        "Noisy alert report by service and team with flapping ratio, Jira issue action and routing/integration links",
+        "Shift handoff summary (open, recently resolved, overdue follow-ups) at each rotation through the notification control plane; AI narrative only when a provider is enabled (handoffSummaryEnabled, default off)"
+      ],
       "remaining": [
-        "Urgency/priority, team/assignee, duplicate and resolution-time predictions from similar outcomes",
-        "Accept/dismiss chips through normal domain commands with calibration feedback",
-        "Noisy alert report by service/team and suppression/severity/Jira actions",
         "Impact estimate for dependencies, status components and SLO budget",
-        "On-call handoff and shift summary using deterministic fallback or AI in the lane"
+        "Create-suppression-rule action from alert quality (waits for the SuppressionRule model from phase 2)"
       ]
     },
     {

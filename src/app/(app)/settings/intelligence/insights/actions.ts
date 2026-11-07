@@ -14,10 +14,36 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { adoptRuleSuggestion, suggestCorrelationRules } from '@/lib/intelligence/learning/service';
 import { MINING_LIMITS } from '@/lib/intelligence/learning/rule-mining';
 import { adoptScoringWeights } from '@/lib/intelligence/learning/weights-service';
+import { adoptResponseWeights } from '@/lib/intelligence/learning/response-weights';
 
 export type InsightsActionState = { message: string; ok: boolean };
 
 const PATH = '/settings/intelligence/insights';
+
+/** Publishes the reviewed probable-cause ranking weights; recomputed server-side, never taken from the form. */
+export async function adoptResponseWeightsAction(
+  _state: InsightsActionState,
+  form: FormData
+): Promise<InsightsActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const result = await adoptResponseWeights(
+      {
+        suggestionId: form.get('suggestionId'),
+        expectedHeadVersion: Number(form.get('expectedHeadVersion')),
+      },
+      { actorId: actor.id, source: 'UI' }
+    );
+    revalidatePath(PATH);
+    revalidatePath('/settings/intelligence');
+    return {
+      ok: true,
+      message: `Reviewed cause-ranking weights published as policy version ${result.version}.`,
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
 
 export async function adoptScoringWeightsAction(
   _state: InsightsActionState,
