@@ -435,11 +435,35 @@ can be scaled, resourced and failed independently of paging. Its connection pool
 `DATABASE_POOL_SIZE_INTELLIGENCE_WORKER`, like the other roles; that is process-level infrastructure
 configuration, while every behavioural setting remains in the UI.
 
-Split Compose and Helm default to the dedicated role. Its wake listener uses one additional
-session connection, accounted for separately from the Prisma pool. Pool contention is measured
-through Prisma's local engine metrics without acquiring another SQL connection; contention pauses
-the lane and requires two measured quiet samples before recovery. Paging-lag hysteresis remains
-independent. Missing pool telemetry is unknown, not a zero measurement.
+Every split topology (Compose, Helm, Swarm and Kustomize) runs the dedicated role by default and sets
+`OPSKNIGHT_INTELLIGENCE_DEDICATED=true` on the shared worker roles, so the lane never shares a paging
+process. Its wake listener uses one additional session connection, accounted for separately from the
+Prisma pool. Pool contention is measured through Prisma's local engine metrics without acquiring
+another SQL connection; contention pauses the lane and requires two measured quiet samples before
+recovery. Paging-lag hysteresis remains independent. Missing pool telemetry is unknown, not a zero
+measurement. A single-node `integrated` install keeps the lane in-process; there, Settings →
+Intelligence should run with `maxConcurrency` 1 and `batchSize` 10 so analysis never competes with
+paging for more than one connection at a time.
+
+### Scale behaviour
+
+Bounded work is the rule for every background read:
+
+- The metrics scrape reuses one backlog aggregate per process for ten seconds
+  (`WORK_BACKLOG_CACHE_MS`); operator pages and tests read fresh.
+- Semantic backfill walks the lookback window newest-first in pages of 5,000 fingerprints behind a
+  per-model cursor (`findIncidentsToEmbedPage`), checking a service's policy only for rows that are
+  actually pending, and restarts from the newest incident once a walk completes.
+- The full-text source searches up to three rare words with OR (`planFullTextQuery`); a title made only
+  of common words is left to trigram matching, which would otherwise rank a large share of history.
+- Topology reads are ordered by recency with rejected edges outside the cap, and runbook outcome
+  ranking has its own `(serviceId, createdAt)` index.
+- Three benchmarks are release gates, run nightly and under the `ci:full` label
+  (`.github/workflows/intelligence-performance.yml`): the ingestion A/B (`processEvent` p99 at most
+  +10 ms and p50 at most +2 ms with the lane busy in the same pool), the storm drain (10k new incidents
+  over 1M history in under ten minutes, no dead letters, per-kind p99 under 10 s) and the query-plan
+  check (every hot query, including the production claim statement, index-backed). Measured results
+  live under `plans/intelligence-engine/certification/perf/`.
 
 ## Pre-paging noise controls
 

@@ -46,9 +46,20 @@
         "Nullable common Alert severity/resourceKey/labels/fingerprintHash with concurrent indexes and bounded backfill"
       ],
       "remaining": [
-        "Repeatable p50 latency certification under concurrency",
-        "Full OFF/SHADOW/ON ingestion A/B release gate over 1M history; foundation indexing and EXPLAIN benchmark already measured separately"
+        "Full OFF/SHADOW/ON ingestion A/B over 1M history on dedicated hardware (the CI gate runs the ON/OFF arms on the shared runner)"
       ],
+      "scale_and_gates": {
+        "status": "implemented_pending_full_ci",
+        "implemented": [
+          "Backlog aggregate cached per process for the metrics scrape (fresh for operators and tests); production claim SQL exported for EXPLAIN",
+          "Semantic backfill walks the lookback window in 5,000-row pages behind a per-model cursor; policy checked only for pending rows; runner keeps walking while pages are full",
+          "Paging-outbox lookup verified covered by idx_background_job_intelligence_paging and asserted in the plan gate",
+          "RunbookExecution(serviceId, createdAt) index; dependency reads ordered by recency; rejected edges excluded from the cap",
+          "Full-text source: up to three rare words with OR, lone rare word with its context word, common-only titles left to trigram",
+          "Dedicated intelligence worker in Swarm and Kustomize split profiles (PDB, network policy, recreate strategy) with OPSKNIGHT_INTELLIGENCE_DEDICATED on shared roles; single-node tuning documented",
+          "Ingestion A/B, storm drain and query-plan scripts assert their contracts (exit 1) with --output/--no-gate; nightly and ci:full workflow jobs; results under certification/perf"
+        ]
+      },
       "wave": 1
     },
     {

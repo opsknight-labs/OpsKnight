@@ -24,7 +24,7 @@ services:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: web
       DATABASE_POOL_SIZE_WEB: ${DATABASE_POOL_SIZE_WEB:-10}
-      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
@@ -107,7 +107,7 @@ services:
       OPSKNIGHT_PROCESS_ROLE: scheduler
       OPSKNIGHT_SCHEDULER_PROFILE: maintenance
       DATABASE_POOL_SIZE_SCHEDULER: ${DATABASE_POOL_SIZE_SCHEDULER:-3}
-      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
@@ -181,8 +181,10 @@ services:
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: general-worker
+      # The intelligence lane runs in its own service below, never beside paging work.
+      OPSKNIGHT_INTELLIGENCE_DEDICATED: 'true'
       DATABASE_POOL_SIZE_GENERAL_WORKER: ${DATABASE_POOL_SIZE_GENERAL_WORKER:-5}
-      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
@@ -251,13 +253,92 @@ services:
     networks:
       - opsknight
 
+  # Advisory analysis (similar incidents, correlation, root cause, runbook ranking) runs apart from
+  # paging. One replica is enough for most installs; add replicas for large alert volumes. Each
+  # replica uses its Prisma pool plus one direct session for wake notifications.
+  opsknight-intelligence-worker:
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: intelligence-worker
+      OPSKNIGHT_INTELLIGENCE_DEDICATED: 'true'
+      DATABASE_POOL_SIZE_INTELLIGENCE_WORKER: ${DATABASE_POOL_SIZE_INTELLIGENCE_WORKER:-3}
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
+      DATABASE_URL_FILE: /run/secrets/opsknight_database_url
+      DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
+      NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      API_KEY_SECRET_FILE: /run/secrets/opsknight_api_key_secret
+      ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+      ENCRYPTION_KEYS_FILE: /run/secrets/opsknight_encryption_keys
+    secrets:
+      - source: opsknight_database_url
+        target: /run/secrets/opsknight_database_url
+      - source: opsknight_direct_database_url
+        target: /run/secrets/opsknight_direct_database_url
+      - source: opsknight_nextauth_secret
+        target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_api_key_secret
+        target: /run/secrets/opsknight_api_key_secret
+      - source: opsknight_encryption_key
+        target: /run/secrets/opsknight_encryption_key
+      - source: opsknight_encryption_keys
+        target: /run/secrets/opsknight_encryption_keys
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: ${SWARM_REPLICAS_INTELLIGENCE_WORKER:-1}
+      placement:
+        preferences:
+          - spread: node.id
+      update_config:
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    networks:
+      - opsknight
+
   opsknight-critical-worker:
     image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: critical-worker
       DATABASE_POOL_SIZE_CRITICAL_WORKER: ${DATABASE_POOL_SIZE_CRITICAL_WORKER:-5}
-      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
@@ -332,7 +413,7 @@ services:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: bulk-worker
       DATABASE_POOL_SIZE_BULK_WORKER: ${DATABASE_POOL_SIZE_BULK_WORKER:-3}
-      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
@@ -412,7 +493,7 @@ services:
       OPSKNIGHT_WORKER_CONCURRENCY: ${OPSKNIGHT_WORKER_CONCURRENCY_RUNBOOK:-10}
       OPSKNIGHT_WORKER_IDLE_POLL_MS: ${OPSKNIGHT_WORKER_IDLE_POLL_MS_RUNBOOK:-1000}
       OPSKNIGHT_WORKER_BUSY_POLL_MS: ${OPSKNIGHT_WORKER_BUSY_POLL_MS_RUNBOOK:-100}
-      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
@@ -487,7 +568,7 @@ services:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: status-projector
       DATABASE_POOL_SIZE_STATUS_PROJECTOR: ${DATABASE_POOL_SIZE_STATUS_PROJECTOR:-3}
-      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
@@ -555,8 +636,6 @@ services:
           memory: 512M
     networks:
       - opsknight
-
-
 
 networks:
   opsknight:

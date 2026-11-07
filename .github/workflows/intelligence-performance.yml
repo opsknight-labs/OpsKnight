@@ -77,3 +77,103 @@ jobs:
           path: reports/intelligence-foundation.json
           if-no-files-found: warn
           retention-days: 30
+
+  # Release gate: with the lane busy in the same process and pool, ingestion p99 may rise by at most
+  # 10 ms and p50 by at most 2 ms (median paired difference). The script exits 1 on a breach.
+  ingestion-gate:
+    name: Ingestion A/B gate (lane ON vs OFF)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: intel_perf
+          POSTGRES_PASSWORD: local-ci-performance
+          POSTGRES_DB: opsknight_intel_perf_test
+        ports:
+          - 5432:5432
+        options: >-
+          --cpus=2 --memory=2g --shm-size=256m
+          --health-cmd="pg_isready -U intel_perf -d opsknight_intel_perf_test"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql://intel_perf:local-ci-performance@127.0.0.1:5432/opsknight_intel_perf_test?connection_limit=24
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: '20'
+          ignore-scripts: 'true'
+          generate-prisma: 'true'
+      - uses: ./.github/actions/setup-test-db
+      - name: Measure ingestion latency with the lane busy versus idle
+        run: >-
+          TS_NODE_PROJECT=tsconfig.script.json node --conditions=react-server
+          -r ts-node/register -r tsconfig-paths/register
+          tests/load/intelligence-ingestion-ab.ts --repetitions 6 --events 300 --concurrency 16 --backlog 1500
+          --output reports/intelligence-ingestion-ab.json
+      - name: Upload the A/B report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intelligence-ingestion-ab
+          path: reports/intelligence-ingestion-ab.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  # Release gate: a 10k-incident storm over 1M history drains in under 10 minutes with no dead letters,
+  # and every hot query the lane runs is index-backed on that history.
+  storm-gate:
+    name: Storm drain and query-plan gates
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: intel_perf
+          POSTGRES_PASSWORD: local-ci-performance
+          POSTGRES_DB: opsknight_intel_perf_bench
+        ports:
+          - 5432:5432
+        options: >-
+          --cpus=2 --memory=2g --shm-size=256m
+          --health-cmd="pg_isready -U intel_perf -d opsknight_intel_perf_bench"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql://intel_perf:local-ci-performance@127.0.0.1:5432/opsknight_intel_perf_bench?connection_limit=16
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: '20'
+          ignore-scripts: 'true'
+          generate-prisma: 'true'
+      - uses: ./.github/actions/setup-test-db
+      - name: Drain a 10k-incident storm over one million historical incidents
+        run: >-
+          TS_NODE_PROJECT=tsconfig.script.json node --conditions=react-server
+          -r ts-node/register -r tsconfig-paths/register
+          tests/load/intelligence-storm.ts --history 1000000 --burst 10000 --services 50
+          --output reports/intelligence-storm.json
+      - name: Assert index-backed plans for every hot query
+        if: always()
+        run: >-
+          TS_NODE_PROJECT=tsconfig.script.json node --conditions=react-server
+          -r ts-node/register -r tsconfig-paths/register
+          tests/load/intelligence-query-plans.ts --output reports/intelligence-query-plans.json
+      - name: Upload storm and plan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intelligence-storm-and-plans
+          path: |
+            reports/intelligence-storm.json
+            reports/intelligence-query-plans.json
+          if-no-files-found: warn
+          retention-days: 30

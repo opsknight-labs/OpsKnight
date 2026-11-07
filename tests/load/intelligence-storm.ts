@@ -7,12 +7,18 @@
  * cycles in this process until the queue is empty. It reports the drain time, throughput and per-kind
  * latency percentiles of the real handlers (indexing, similarity, correlation, response analysis).
  *
+ * It is also a release gate: the burst must drain within `--max-drain-seconds` (600 by default, the contract
+ * for 10k over 1M), with no dead letters or failed items and every kind's p99 under `--max-kind-p99-ms`;
+ * otherwise the process exits 1. `--no-gate` records without judging.
+ *
  * Usage (dedicated database whose name ends in _bench or _test; the script truncates incident data):
  *   DATABASE_URL=postgresql://.../opsknight_bench \
  *   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
- *     tests/load/intelligence-storm.ts --history 200000 --burst 10000 --services 50
+ *     tests/load/intelligence-storm.ts --history 200000 --burst 10000 --services 50 \
+ *     [--max-drain-seconds 600] [--max-kind-p99-ms 10000] [--output reports/storm.json] [--no-gate]
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import prisma from '../../src/lib/prisma';
 import {
@@ -36,6 +42,10 @@ interface Options {
   batchSize: number;
   concurrency: number;
   reuseHistory: boolean;
+  maxDrainSeconds: number;
+  maxKindP99Ms: number;
+  gate: boolean;
+  output: string | null;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -46,6 +56,7 @@ function parseOptions(argv: string[]): Options {
       throw new Error(`--${name} must be a positive integer`);
     return value;
   };
+  const outputAt = argv.indexOf('--output');
   return {
     history: read('history', 200_000),
     burst: read('burst', 10_000),
@@ -53,6 +64,10 @@ function parseOptions(argv: string[]): Options {
     batchSize: read('batch-size', 50),
     concurrency: read('concurrency', 8),
     reuseHistory: argv.includes('--reuse-history'),
+    maxDrainSeconds: read('max-drain-seconds', 600),
+    maxKindP99Ms: read('max-kind-p99-ms', 10_000),
+    gate: !argv.includes('--no-gate'),
+    output: outputAt >= 0 ? argv[outputAt + 1] : null,
   };
 }
 
@@ -301,6 +316,19 @@ async function main() {
     prisma.correlationGroup.count(),
     prisma.intelligenceWorkItem.count({ where: { attempts: { gte: 8 } } }),
   ]);
+  const breaches: string[] = [];
+  if (drainSeconds > options.maxDrainSeconds)
+    breaches.push(`drained in ${drainSeconds.toFixed(1)} s > ${options.maxDrainSeconds} s`);
+  if (deadLetters > 0) breaches.push(`${deadLetters} dead letters`);
+  if (failed > 0) breaches.push(`${failed} failed item attempts`);
+  for (const [kind, stats] of Object.entries(perKind))
+    if (stats.p99Ms > options.maxKindP99Ms)
+      breaches.push(`${kind} p99 ${stats.p99Ms} ms > ${options.maxKindP99Ms} ms`);
+  const gate = {
+    contract: { maxDrainSeconds: options.maxDrainSeconds, maxKindP99Ms: options.maxKindP99Ms },
+    breaches,
+    passed: breaches.length === 0,
+  };
   const report = {
     measuredAt: new Date().toISOString(),
     node: process.version,
@@ -315,15 +343,16 @@ async function main() {
     activeFindings: findings,
     correlationGroups: groups,
     perKind,
+    gate,
     note: 'Single process, local PostgreSQL. Indicative only; certification needs dedicated hardware.',
   };
-  mkdirSync('artifacts/load-certification/intelligence', { recursive: true });
-  writeFileSync(
-    `artifacts/load-certification/intelligence/storm-${Date.now()}.json`,
-    JSON.stringify(report, null, 2)
-  );
+  const path =
+    options.output ?? `artifacts/load-certification/intelligence/storm-${Date.now()}.json`;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
   await prisma.$disconnect();
+  if (options.gate && !gate.passed) process.exitCode = 1;
 }
 
 main().catch(async error => {

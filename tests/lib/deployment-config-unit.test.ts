@@ -171,7 +171,8 @@ describe('deployment configuration invariants', () => {
     );
     expect(integrated).toContain('name: OPSKNIGHT_SKIP_MIGRATIONS');
     expect(integrated).toMatch(/value:\s*['"]true['"]/);
-    expect(split.match(/name: OPSKNIGHT_SKIP_MIGRATIONS/g)).toHaveLength(7);
+    // Eight runtime lanes: web, scheduler, intelligence, general, critical, bulk, runbook, projector.
+    expect(split.match(/name: OPSKNIGHT_SKIP_MIGRATIONS/g)).toHaveLength(8);
     expect(migration).toContain('kind: Job');
     expect(migration).toContain('name: OPSKNIGHT_MIGRATION_ONLY');
     expect(migration).toContain('key: DIRECT_DATABASE_URL');
@@ -416,6 +417,7 @@ describe('deployment configuration invariants', () => {
     for (const role of [
       'web',
       'scheduler',
+      'intelligence-worker',
       'general-worker',
       'critical-worker',
       'bulk-worker',
@@ -423,6 +425,15 @@ describe('deployment configuration invariants', () => {
     ]) {
       expect(helmDeployments).toContain(`"${role}"`);
       expect(rawDeployments).toContain(`opsknight-${role}`);
+    }
+    // The lane never shares a paging process in a split topology: every shared role opts out.
+    for (const file of [
+      rawDeployments,
+      read('deploy/swarm/docker-stack.yml'),
+      read('deploy/compose/docker-compose.split.yml'),
+    ]) {
+      expect(file).toContain('OPSKNIGHT_INTELLIGENCE_DEDICATED');
+      expect(file).toContain('intelligence-worker');
     }
     expect(values).toContain('profile: maintenance');
     expect(rawDeployments).toContain('OPSKNIGHT_SCHEDULER_PROFILE, value: maintenance');

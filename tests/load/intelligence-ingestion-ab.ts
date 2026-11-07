@@ -8,12 +8,18 @@
  * cancels out. The report states a verdict per metric relative to measured run-to-run noise and
  * deliberately refuses to judge from too few repetitions.
  *
+ * It is also the ingestion release gate: the median paired difference between arms must stay within the
+ * contract (p99 at most +10 ms, p50 at most +2 ms), the lane must have been busy in every candidate run and
+ * no event may fail; otherwise the process exits 1. `--no-gate` records without judging.
+ *
  * Usage (dedicated database whose name ends in _bench or _test; the script truncates incident data):
  *   DATABASE_URL=postgresql://.../opsknight_bench \
  *   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
- *     tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 300 --concurrency 16 --backlog 400
+ *     tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 300 --concurrency 16 --backlog 400 \
+ *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate]
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import prisma from '../../src/lib/prisma';
 import { processEvent, type EventPayload } from '../../src/lib/events';
@@ -43,6 +49,25 @@ interface Options {
   concurrency: number;
   backlog: number;
   services: number;
+  /** Release contract: how much the lane may add to ingestion latency, as a median paired difference. */
+  maxP99DeltaMs: number;
+  maxP50DeltaMs: number;
+  gate: boolean;
+  output: string | null;
+}
+
+/** Median of the per-repetition differences (candidate minus baseline). */
+function medianPairedDelta(samples: Sample[], pick: (sample: Sample) => number): number {
+  const byRepetition = new Map<number, Partial<Record<Arm, number>>>();
+  for (const sample of samples) {
+    const entry = byRepetition.get(sample.repetition) ?? {};
+    entry[sample.arm] = pick(sample);
+    byRepetition.set(sample.repetition, entry);
+  }
+  const deltas = [...byRepetition.values()]
+    .filter(entry => entry.baseline !== undefined && entry.candidate !== undefined)
+    .map(entry => entry.candidate! - entry.baseline!);
+  return deltas.length ? percentile(deltas, 0.5) : Number.NaN;
 }
 
 interface Sample {
@@ -69,6 +94,7 @@ function parseOptions(argv: string[]): Options {
       throw new Error(`--${name} must be a positive integer`);
     return value;
   };
+  const outputAt = argv.indexOf('--output');
   return {
     repetitions: read('repetitions', 8),
     events: read('events', 300),
@@ -76,6 +102,10 @@ function parseOptions(argv: string[]): Options {
     // Large enough that the lane stays busy for the whole timed burst.
     backlog: read('backlog', 3000),
     services: read('services', 4),
+    maxP99DeltaMs: read('max-p99-delta-ms', 10),
+    maxP50DeltaMs: read('max-p50-delta-ms', 2),
+    gate: !argv.includes('--no-gate'),
+    output: outputAt >= 0 ? argv[outputAt + 1] : null,
   };
 }
 
@@ -352,23 +382,43 @@ async function main() {
     };
   });
   const laneBusy = candidate.every(sample => sample.laneItemsProcessed > 0);
+  const totalFailures = samples.reduce((sum, sample) => sum + sample.failures, 0);
+  const p99DeltaMs = medianPairedDelta(samples, sample => sample.p99Ms);
+  const p50DeltaMs = medianPairedDelta(samples, sample => sample.p50Ms);
+  const breaches: string[] = [];
+  if (!(p99DeltaMs <= options.maxP99DeltaMs))
+    breaches.push(`p99 +${p99DeltaMs.toFixed(2)} ms > ${options.maxP99DeltaMs} ms`);
+  if (!(p50DeltaMs <= options.maxP50DeltaMs))
+    breaches.push(`p50 +${p50DeltaMs.toFixed(2)} ms > ${options.maxP50DeltaMs} ms`);
+  if (!laneBusy) breaches.push('lane idle in a candidate run (contention not exercised)');
+  if (totalFailures > 0) breaches.push(`${totalFailures} ingestion failures`);
+  const gate = {
+    contract: { maxP99DeltaMs: options.maxP99DeltaMs, maxP50DeltaMs: options.maxP50DeltaMs },
+    medianPairedDeltaMs: { p50: p50DeltaMs, p99: p99DeltaMs },
+    breaches,
+    passed: breaches.length === 0,
+  };
   const report = {
     generatedAt: new Date().toISOString(),
     options,
     laneWasBusyInEveryCandidateRun: laneBusy,
     node: process.version,
     pagingBackpressureBypassed: true,
-    totalFailures: samples.reduce((sum, sample) => sum + sample.failures, 0),
+    totalFailures,
+    gate,
     summary,
     rawCounts,
     samples,
     interpretation:
       'Verdicts compare paired repetitions against measured baseline noise. NO_DETECTABLE_DIFFERENCE means the ' +
-      'difference is within noise, not that it is zero. Treat results from shared or loaded hosts as indicative only.',
+      'difference is within noise, not that it is zero. The gate judges the median paired difference in absolute ' +
+      'milliseconds against the ingestion contract. Treat results from shared or loaded hosts as indicative only.',
   };
-  mkdirSync('reports/intelligence-ingestion-ab', { recursive: true });
-  const path = `reports/intelligence-ingestion-ab/${report.generatedAt.replace(/[:.]/g, '-')}.json`;
-  writeFileSync(path, JSON.stringify(report, null, 2));
+  const path =
+    options.output ??
+    `reports/intelligence-ingestion-ab/${report.generatedAt.replace(/[:.]/g, '-')}.json`;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(report, null, 2) + '\n');
 
   console.log('\n| Metric | Median ratio (candidate/baseline) | 95% CI | Baseline CV | Verdict |');
   console.log('| :--- | :---: | :---: | :---: | :--- |');
@@ -385,7 +435,13 @@ async function main() {
     console.log(
       'WARNING: the lane did no work in some candidate runs; those results do not test contention.'
     );
+  console.log(
+    `Gate: p50 ${p50DeltaMs >= 0 ? '+' : ''}${p50DeltaMs.toFixed(2)} ms (limit +${options.maxP50DeltaMs}), ` +
+      `p99 ${p99DeltaMs >= 0 ? '+' : ''}${p99DeltaMs.toFixed(2)} ms (limit +${options.maxP99DeltaMs}) → ${gate.passed ? 'PASS' : 'FAIL'}`
+  );
+  for (const breach of breaches) console.log(`  breach: ${breach}`);
   await prisma.$disconnect();
+  if (options.gate && !gate.passed) process.exitCode = 1;
 }
 
 main().catch(async error => {
