@@ -397,6 +397,36 @@ through Prisma's local engine metrics without acquiring another SQL connection; 
 the lane and requires two measured quiet samples before recovery. Paging-lag hysteresis remains
 independent. Missing pool telemetry is unknown, not a zero measurement.
 
+## Pre-paging noise controls
+
+`src/lib/intelligence/noise-controls/` decides what happens to an alert before an incident exists:
+maintenance windows (one-off or RRULE subset), suppression rules (matchers on source/summary/severity/
+resource/labels), orchestration rules (ordered conditions → drop/suppress/transform actions), content
+dedup on the alert fingerprint with label subset, flapping keyed on dedup key and fingerprint, storm
+grouping under a parent incident with an optional bounded hold, and heartbeat monitors. The contract is:
+
+- **Per-service policy, default OFF, SHADOW before ON** (`NoiseControlPolicy`, revision CAS, audited; ON
+  is gated by `assessNoiseReadiness`: ≥ 50 shadow decisions in 7 days and ≤ 2% reversed, or an explicit
+  acknowledgement).
+- **The hook is bounded and fails open.** `evaluatePrePagingControls` reads only the in-process snapshot
+  (`cache.ts`, refreshed every 30 s, previous snapshot keeps serving) and at most three index-backed
+  lookups (`prismaLookups`), under one 5 ms deadline. Static controls (windows, rules, orchestration)
+  need no lookups. Any error, timeout or cold cache returns `action: 'NONE'`, so the event pages as
+  before. No model, no network.
+- **Every decision is recorded and reversible** (`PrePagingDecision`). Reversal re-ingests the alert
+  through `processEvent` under a reversal-scoped dedup key so it pages; shadow reversals are the
+  false-positive signal for readiness and the false-group KPI.
+- **HIGH urgency** is left alone by dedup/flapping/storms unless the policy opts in, and is never held.
+- **Heartbeats** raise and resolve incidents only through `processEvent`, from the cron tick
+  (`sweepPrePagingControls`), which also retires expired rules and ages out decisions.
+- **Simulation** (`simulatePrePagingControls`) replays the real evaluator over recent alerts with
+  in-memory lookups and records an evaluation run.
+- Post-paging correlation rules gained `allowHighUrgency` (suggest only) and `linkType: 'PARENT_CHILD'`.
+
+The one-line hot-path call (evaluate → record → act on `decision.apply`) is documented in
+`docs/v2.2.0/operate/intelligence/noise-controls.md` and lands together with the ingestion-side noise
+layer; until then the controls are exercised by the simulation and the heartbeat monitors are live.
+
 ## Fault tolerance
 
 Every failure is contained to the smallest unit that can fail, and every repair path is bounded:

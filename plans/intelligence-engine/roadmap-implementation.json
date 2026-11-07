@@ -58,25 +58,24 @@
       "implemented": [
         "Lane-owned AlertFingerprint per alert with safe labels and source digest",
         "Incident labels include later alerts; stable first value for conflicting shared keys",
-        "Alert fingerprint retention cascades with parent fingerprint"
+        "Alert fingerprint retention cascades with parent fingerprint",
+        "Pre-paging noise controls module (src/lib/intelligence/noise-controls): per-service/global NoiseControlPolicy with OFF/SHADOW/ON, revision CAS, audit and a SHADOW→ON readiness gate (50 shadow decisions / 7 days, ≤2% reversed, or explicit acknowledgement)",
+        "Maintenance windows with SERVICE/TEAM/LABEL/ALL scope, dependency-free RRULE subset (DAILY/WEEKLY/MONTHLY, INTERVAL, BYDAY, COUNT, UNTIL), suppress-or-downgrade, optional status-page link, end-now and enable/disable",
+        "Owned, expiring, audited suppression rules with safe matchers (equals/contains/prefix/regex/exists on source, summary, severity, resource, labels) and downgrade suggestions from the alert-quality leaderboard",
+        "Ordered orchestration rules (DROP, SUPPRESS, SET_SEVERITY, SET_URGENCY, SET_LABEL, REROUTE_SERVICE, ATTACH_RUNBOOK, ADD_NOTE) compiled once into the 30-second in-process snapshot",
+        "Content dedup on fingerprint + label subset, policy-aware flapping keyed on dedup key and fingerprint, storm grouping under the earliest open incident with topology scope and a bounded hold (never HIGH)",
+        "Deadline-bounded (5 ms) fail-open evaluator with prepaging decision/fail-open/duration metrics; recorded, reversible decisions (reverse re-ingests the alert through processEvent so it pages)",
+        "Heartbeat monitors: hashed tokens shown once, GET/POST /api/heartbeats/<token> with rate limiting, cron-tick sweep raising and resolving incidents only through processEvent",
+        "Replay simulation over recent alerts using the real evaluator with in-memory lookups, recorded as an evaluation run; KPIs (compression, pages avoided, shadow would-avoid, downgrades, holds, false-group rate, per-source, heartbeats)",
+        "Correlation rules: allowHighUrgency (SUGGEST only, never AUTO) and linkType PARENT_CHILD (IncidentRelationshipType extended)",
+        "Noise controls settings page with policy, windows, rules, suggestions, heartbeats, simulation and decision list; privacy registry and processing inventory entries; operator doc"
       ],
       "remaining": [
-        "Per-service default-OFF noise policy and OFF/SHADOW/ON UI",
-        "Content dedup with partial open-fingerprint index",
-        "Policy-aware flapping and rotating-key detection",
-        "Storm grouping and bounded hold",
-        "Maintenance windows, recurrence, suppression rules and 30-second cache",
-        "Deadline-enforced fail-open ingestion path and decision metrics",
-        "Visible reversible decision timeline and ungroup-and-page command",
-        "Shadow certification and quality gate",
-        "HIGH urgency SUGGEST grouping policy",
-        "Noise KPI dashboard",
-        "10k burst / 1M history benchmark, fault injection and paging regression certification",
-        "Extend the existing automation engine with ordered cached DROP/SUPPRESS/TRANSFORM orchestration and seven-day simulation",
-        "Maintenance service/team/label scopes, RRULE, suppress-or-downgrade and optional status-page link",
-        "Owned expiring suppression rules and suggestions from alert quality",
-        "Parent/child incidents with rolled-up paging, topology storm scope and reversible unsuppress/end-maintenance actions",
-        "Heartbeat monitor model, token ping endpoint and normal-ingestion missed-heartbeat incidents"
+        "INTEGRATION POINT (one call, blocked on the ingestion-side noise layer landing): in processEvent before incident creation, `evaluatePrePagingControls(input, getPrePagingSnapshot(), prismaLookups(tx))` → `recordPrePagingDecision` → act on decision.apply (SUPPRESS/DOWNGRADE/APPEND/GROUP_CHILD/HOLD/DROP/TRANSFORM); then the ingestion A/B gate with controls ON",
+        "Child paging roll-up through the notification noise controller once GROUP_CHILD is applied on the hot path",
+        "Browser (Playwright) journeys for the noise controls page",
+        "10k burst / 1M history benchmark with controls ON, fault injection on the wired hook and paging regression certification",
+        "Merge orchestration rules into the automation engine's versioned rule sets (today they live in the noise policy definition)"
       ],
       "wave": 2
     },

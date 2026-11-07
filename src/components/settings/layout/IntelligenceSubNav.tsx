@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, Bot, GitBranch, Layers } from 'lucide-react';
+import { Activity, BarChart3, Bot, GitBranch, Layers, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const INTELLIGENCE_SECTIONS = [
@@ -18,6 +18,12 @@ export const INTELLIGENCE_SECTIONS = [
     label: 'Dependencies & changes',
     href: '/settings/intelligence/response',
     icon: GitBranch,
+  },
+  {
+    id: 'noise',
+    label: 'Noise controls',
+    href: '/settings/intelligence/noise-controls',
+    icon: ShieldCheck,
   },
   { id: 'insights', label: 'Insights', href: '/settings/intelligence/insights', icon: BarChart3 },
   { id: 'quality', label: 'Quality', href: '/settings/intelligence/quality', icon: BarChart3 },
