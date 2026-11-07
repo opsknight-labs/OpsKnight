@@ -163,7 +163,7 @@ export async function reversePrePagingDecision(
   if (!alert) return { outcome: 'reversed', incidentId: null };
   const payload = (alert.payload ?? {}) as Record<string, unknown>;
   const severities = ['critical', 'error', 'warning', 'info'] as const;
-  const severity = severities.find(level => level === payload.severity);
+  const severity = severities.find(level => level === payload.severity) ?? 'warning';
   try {
     const { processEvent } = await import('@/lib/events');
     const result = await processEvent(
@@ -176,7 +176,7 @@ export async function reversePrePagingDecision(
               ? payload.summary
               : 'Alert released from noise control',
           source: typeof payload.source === 'string' ? payload.source : 'noise-controls',
-          ...(severity ? { severity } : {}),
+          severity,
           custom_details: {
             ...(payload.custom_details && typeof payload.custom_details === 'object'
               ? (payload.custom_details as Record<string, unknown>)
