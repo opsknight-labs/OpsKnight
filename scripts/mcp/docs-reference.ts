@@ -291,7 +291,7 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     area: 'tools',
     meaning:
       'OpsKnight refused the operation for a business reason. The error carries a domainCode from the application error registry and, for invalid input, the failing fields.',
-    fix: 'Read domainCode and fields in the structured error, correct the input and retry.',
+    fix: 'Read domainCode and fields in the error text or its `_meta` (`io.opsknight/error`), correct the input and retry.',
   },
   MCP_DUPLICATE_OPERATION: {
     area: 'server',
@@ -615,7 +615,7 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   },
   MCP_UNAVAILABLE: {
     area: 'tools',
-    meaning: 'An unexpected server error. The structured error carries a requestId.',
+    meaning: 'An unexpected server error. The error text ends with a Reference (the request id).',
     fix: 'Retry. Administrators search the log for mcp.tool.unexpected_error with that requestId.',
   },
 };

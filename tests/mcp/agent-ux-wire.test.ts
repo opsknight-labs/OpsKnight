@@ -143,12 +143,17 @@ describe('TQ-03: parameter descriptions on the wire', () => {
     }
   });
 
-  it("does not offer 'me' where execution would not resolve it", async () => {
-    const described = await rpc('tools/call', {
-      name: 'describe_operation',
-      arguments: { operationId: 'assignIncident' },
-    });
-    expect(JSON.stringify(described.result.structuredContent.inputSchema)).not.toContain("'me'");
+  it("offers 'me' exactly where execution resolves it", async () => {
+    const schemaOf = async (operationId: string) =>
+      JSON.stringify(
+        (await rpc('tools/call', { name: 'describe_operation', arguments: { operationId } })).result
+          .structuredContent.inputSchema
+      );
+    // Resolved in a direct call's body (src/lib/mcp/core/me-fields.ts): so it is offered.
+    for (const operationId of ['assignIncident', 'setIncidentWatcher', 'createIncident'])
+      expect(await schemaOf(operationId), operationId).toContain("User id, or 'me'.");
+    // Not resolved anywhere in this one, so it must not be offered.
+    expect(await schemaOf('reopenIncident')).not.toContain("'me'");
   });
 
   it('points the server instructions at the me alias and whoami', () => {

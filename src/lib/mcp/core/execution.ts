@@ -3,6 +3,7 @@ import addFormats from 'ajv-formats';
 import { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { resolveMeInBody } from '@/lib/mcp/core/me-fields';
 import { withMcpDatabase } from '@/lib/database-workload';
 import {
   AUTHORIZATION_ACTIONS,
@@ -150,7 +151,7 @@ function argumentHint(errors: ErrorObject[] | null | undefined) {
     error.keyword === 'additionalProperties'
       ? ` (${String((error.params as { additionalProperty?: unknown }).additionalProperty).slice(0, 64)})`
       : '';
-  return `${error.instancePath || '/'} ${error.message ?? 'is invalid'}${extra}. See describe_operation.`.slice(
+  return `${error.instancePath || 'arguments'} ${error.message ?? 'is invalid'}${extra}. See describe_operation.`.slice(
     0,
     240
   );
@@ -340,7 +341,18 @@ async function executeMcpOperation(
   const request = new NextRequest(url, {
     method: operation.method.toUpperCase(),
     headers,
-    body: operation.method === 'get' ? undefined : JSON.stringify(args.body ?? {}),
+    body:
+      operation.method === 'get'
+        ? undefined
+        : JSON.stringify(
+            (mode === 'generic'
+              ? resolveMeInBody(
+                  operationId,
+                  args.body as Record<string, unknown> | undefined,
+                  auth.actor.id
+                )
+              : args.body) ?? {}
+          ),
     signal: context.budget.signal,
   });
   const handler = await loadHandler();

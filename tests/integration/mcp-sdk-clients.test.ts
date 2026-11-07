@@ -6,6 +6,9 @@ import { sdkHandshake, type LegacyRevision } from '../helpers/mcp-sdk-handshake'
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
 import { APP_VERSION } from '@/lib/version';
 import { DELETE, GET, POST } from '@/app/mcp/route';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { MCP_ERROR_META_KEY } from '@/lib/mcp/protocol/server';
 
 /**
  * CERT-02: a real, published SDK client (not a hand-built envelope) completes the whole handshake
@@ -82,6 +85,42 @@ describe('published SDK client handshakes', () => {
       expect(methods.filter(method => method === 'POST').length).toBeGreaterThanOrEqual(3);
     }
   );
+
+  it('a failed tool call reaches the assistant as a readable error, not a client-side schema exception', async () => {
+    // The SDK validates structuredContent against each tool's output schema, even for isError
+    // results, once it has listed the tools. An error shaped differently from a success therefore
+    // threw "Structured content does not match the tool's output schema" in every such client.
+    const { bearer } = await principal();
+    const client = new Client({ name: 'sdk-error-path', version: '1.0.0' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(mcpResource()), {
+        requestInit: { headers: { authorization: `Bearer ${bearer}` } },
+        fetch: route,
+      })
+    );
+    try {
+      await client.listTools(); // caches the output validators
+      for (const [name, args] of [
+        ['incident_get', { path: { id: 'cl000000000000000000000000' } }],
+        ['describe_operation', { operationId: 'noSuchOperation' }],
+        ['read_operation', { operationId: 'resolveIncident', args: { path: { id: 'x' } } }],
+      ] as const) {
+        const result = (await client.callTool({ name, arguments: args })) as {
+          isError?: boolean;
+          structuredContent?: unknown;
+          content: { text: string }[];
+          _meta?: Record<string, { requestId?: string; code?: string }>;
+        };
+        expect(result.isError, name).toBe(true);
+        expect(result.structuredContent, name).toBeUndefined();
+        const meta = new Map(Object.entries(result._meta ?? {})).get(MCP_ERROR_META_KEY);
+        expect(meta?.code, name).toMatch(/^MCP_/);
+        expect(result.content[0].text, name).toContain(`(Reference: ${meta?.requestId})`);
+      }
+    } finally {
+      await client.close();
+    }
+  });
 
   it('answers a missing bearer with a resource-metadata challenge, not a protocol error', async () => {
     const response = await POST(

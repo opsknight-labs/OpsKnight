@@ -2,6 +2,7 @@ import { readFileSync as fsRead } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
 import {
+  MCP_ERROR_META_KEY,
   MCP_SERVER_INSTRUCTIONS,
   clampPageSize,
   createOpsKnightMcpServer,
@@ -107,6 +108,10 @@ const listTools = async (options: Options = {}) =>
 const callTool = async (name: string, args: Record<string, unknown>, options: Options = {}) =>
   (await rpc('tools/call', { name, arguments: args }, options)).result;
 
+const errorMeta = (result: { _meta?: object }) =>
+  new Map(Object.entries(result._meta ?? {})).get(MCP_ERROR_META_KEY) as
+    Record<string, unknown> | undefined;
+
 describe('A1: notifications parse without an id', () => {
   it('accepts a notification and still requires a method', () => {
     expect(rpcSchema.parse({ jsonrpc: '2.0', method: 'notifications/initialized' }).id).toBe(
@@ -174,7 +179,7 @@ describe('A3: read_operation', () => {
     });
     expect(write.isError).toBe(true);
     expect(write.content[0].text).toBe(
-      'MCP_NOT_A_READ: This operation changes state; use call_operation.'
+      'MCP_NOT_A_READ: This operation changes state; use call_operation. (Reference: req-1)'
     );
     const gated = MCP_CATALOG.find(operation => operation.status === 'APPROVAL_REQUIRED')!;
     const approval = await callTool('read_operation', {
@@ -331,14 +336,27 @@ describe('A4: structured errors', () => {
       );
   });
 
-  it('gives every tool error structured content with the request id', async () => {
+  it('gives every tool error machine-readable metadata and the request id in the text', async () => {
     const result = await callTool('describe_operation', { operationId: 'nope' });
     expect(result.isError).toBe(true);
-    expect(result.structuredContent.error).toMatchObject({
-      code: 'MCP_OPERATION_UNAVAILABLE',
-      requestId: 'req-1',
-    });
-    expect(result.structuredContent.error.hint).toContain('search_capabilities');
+    const meta = errorMeta(result);
+    expect(meta).toMatchObject({ code: 'MCP_OPERATION_UNAVAILABLE', requestId: 'req-1' });
+    expect(String(meta?.hint)).toContain('search_capabilities');
+    expect(result.content[0].text).toMatch(/\(Reference: req-1\)$/);
+  });
+
+  it('never puts an error in structuredContent: SDK clients validate it against the output schema', async () => {
+    // The official client SDKs validate structuredContent even when isError is true, so an error
+    // shaped differently from a success made every client throw a schema exception instead of
+    // showing the assistant the message. Regression guard for exactly that.
+    for (const [name, args] of [
+      ['describe_operation', { operationId: 'nope' }],
+      ['read_operation', { operationId: 'resolveIncident', args: { path: { id: 'x' } } }],
+    ] as const) {
+      const result = await callTool(name, args);
+      expect(result.isError, name).toBe(true);
+      expect(result.structuredContent, name).toBeUndefined();
+    }
   });
 
   it('turns an oversized result into a hinted tool error, not a transport failure', async () => {
@@ -349,7 +367,7 @@ describe('A4: structured errors', () => {
     );
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe(
-      'MCP_RESULT_BUDGET_EXCEEDED: Result too large; lower query.limit or narrow the filters. Not retryable as-is.'
+      'MCP_RESULT_BUDGET_EXCEEDED: Result too large; lower query.limit or narrow the filters. Not retryable as-is. (Reference: req-1)'
     );
     const fits = await callTool('describe_operation', { operationId: 'createIncident' });
     expect(fits.isError).not.toBe(true);
@@ -609,7 +627,10 @@ describe('E1: unexpected tool errors are logged without arguments', () => {
     const log = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
     const result = await callTool('whoami', {});
     expect(result.isError).toBe(true);
-    expect(result.structuredContent.error).toEqual({ code: 'MCP_UNAVAILABLE', requestId: 'req-1' });
+    expect(errorMeta(result)).toEqual({
+      code: 'MCP_UNAVAILABLE',
+      requestId: 'req-1',
+    });
     expect(log).toHaveBeenCalledWith('mcp.tool.unexpected_error', {
       requestId: 'req-1',
       tool: 'whoami',
@@ -624,5 +645,19 @@ describe('E1: unexpected tool errors are logged without arguments', () => {
     const log = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
     await callTool('describe_operation', { operationId: 'nope' });
     expect(log).not.toHaveBeenCalled();
+  });
+});
+
+describe('G1: guidance never tells a connection to call a tool it was not given', () => {
+  it('names the change and review tools conditionally in the instructions and in search_capabilities', async () => {
+    // With changes off or no write scope these tools are not listed (see the tools/list
+    // snapshots), so unconditional wording sent assistants to call tools that do not exist.
+    expect(MCP_SERVER_INSTRUCTIONS).toMatch(
+      /If listed: call_operation; reviews via operation_prepare/
+    );
+    const found = (await listTools()).find(tool => tool.name === 'search_capabilities') as
+      { description?: string } | undefined;
+    const description = found?.description;
+    expect(description).toContain('only when those tools are listed');
   });
 });

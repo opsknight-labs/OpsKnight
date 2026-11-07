@@ -4,8 +4,10 @@
  * catalog schema is never changed, and a description already present is kept.
  */
 
+import { MCP_ME_BODY_FIELDS, MCP_ME_DESCRIPTION } from '@/lib/mcp/core/me-fields';
+
 type Schema = Record<string, unknown>;
-type Described = { kind?: string };
+type Described = { kind?: string; operationId?: string };
 
 const ID_DESCRIPTION = 'Id from a list or search result, not a title.';
 const IDEMPOTENCY_DESCRIPTION = 'New random key; reuse only to retry the same call.';
@@ -37,7 +39,7 @@ function describeMembers(
 
 function describeEnvelope(
   properties: Schema,
-  envelope: 'path' | 'query',
+  envelope: 'path' | 'query' | 'body',
   describeOne: (name: string) => string | undefined
 ) {
   const child = new Map(Object.entries(properties)).get(envelope);
@@ -56,6 +58,16 @@ export function describeWireFields(operation: Described, schema: Schema): Schema
     properties.set('path', describeEnvelope(schema.properties, 'path', pathId));
   if (properties.has('query'))
     properties.set('query', describeEnvelope(schema.properties, 'query', query));
+  const meFields = operation.operationId
+    ? MCP_ME_BODY_FIELDS.get(operation.operationId)
+    : undefined;
+  if (meFields && properties.has('body'))
+    properties.set(
+      'body',
+      describeEnvelope(schema.properties, 'body', name =>
+        meFields.includes(name) ? MCP_ME_DESCRIPTION : undefined
+      )
+    );
   if (properties.has('idempotencyKey'))
     properties.set(
       'idempotencyKey',
