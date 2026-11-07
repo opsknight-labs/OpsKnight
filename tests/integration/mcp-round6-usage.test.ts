@@ -201,6 +201,28 @@ describe('fleet usage', () => {
     expect(JSON.stringify(byUser)).not.toMatch(/@/);
   });
 
+  it('names requests that are not a tool call, and people or assistants that were since removed', async () => {
+    const a = await connection('Still here');
+    await db.mcpCallLog.createMany({
+      data: [
+        row(a.grant.id, { clientId: a.client.id, userId: a.user.id, tool: 'none' }),
+        row(a.grant.id, { clientId: 'removed-client-abc123', userId: 'removed-user-xyz789' }),
+      ],
+    });
+    const byTool = await getMcpUsage(viewerOf('admin', true), { window: '24h', by: 'tool' });
+    const protocol = byTool.rows.find(entry => entry.key === 'none')!;
+    expect(protocol.label).toMatch(/Protocol requests/);
+    expect(byTool.rows.some(entry => entry.label === 'none')).toBe(false);
+    const byUser = await getMcpUsage(viewerOf('admin', true), { window: '24h', by: 'user' });
+    expect(byUser.rows.find(entry => entry.key === 'removed-user-xyz789')?.label).toBe(
+      'Removed person (id ending xyz789)'
+    );
+    const byClient = await getMcpUsage(viewerOf('admin', true), { window: '24h', by: 'client' });
+    expect(byClient.rows.find(entry => entry.key === 'removed-client-abc123')?.label).toBe(
+      'Removed assistant (id ending abc123)'
+    );
+  });
+
   it('respects the window, searches by tool, outcome, error code and request id, and admin-only', async () => {
     const { grant } = await connection();
     await db.mcpCallLog.createMany({

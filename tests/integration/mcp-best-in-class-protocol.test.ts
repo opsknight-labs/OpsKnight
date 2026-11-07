@@ -301,7 +301,11 @@ describe('A4: domain rejections explain themselves', () => {
       idempotencyKey: `ack-resolved-${randomBytes(6).toString('hex')}`,
     });
     expect(result.isError).toBe(true);
-    const error = result.structuredContent.error;
+    const error = new Map(Object.entries(result._meta ?? {})).get('io.opsknight/error') as Record<
+      string,
+      unknown
+    >;
+    expect(result.structuredContent).toBeUndefined();
     expect(error.code).toBe('MCP_DOMAIN_REJECTED');
     expect(error.domainCode).toMatch(/^[A-Z_]+$/);
     expect(result.content[0].text).toContain(`(${error.domainCode})`);

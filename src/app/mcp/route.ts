@@ -21,7 +21,7 @@ import { requireMcp, McpBoundaryError } from '@/lib/mcp/core/errors';
 import { readMcpBody } from '@/lib/mcp/protocol/input';
 import {
   createOpsKnightMcpServer,
-  toolErrorContent,
+  toolErrorResult,
   toolErrorText,
 } from '@/lib/mcp/protocol/server';
 import { boundMcpResponse } from '@/lib/mcp/core/response';
@@ -388,11 +388,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
           {
             jsonrpc: '2.0',
             id: rpcId,
-            result: {
-              content: [{ type: 'text', text: toolErrorText(error) }],
-              structuredContent: toolErrorContent(error, requestId),
-              isError: true,
-            },
+            result: toolErrorResult(toolErrorText(error), error, requestId),
           },
           {
             status: 200,
