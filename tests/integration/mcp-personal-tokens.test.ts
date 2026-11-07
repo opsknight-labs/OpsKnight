@@ -661,8 +661,8 @@ describe('view-only connections', () => {
       name: 'read_operation',
       arguments: { operationId: 'resolveIncident', args: { path: { id: 'inc_1' } } },
     });
-    expect(guessed.body.result.content[0].text).toBe(
-      'MCP_NOT_A_READ: This operation changes state; this connection can only view.'
+    expect(guessed.body.result.content[0].text).toMatch(
+      /^MCP_NOT_A_READ: This operation changes state; this connection can only view\. \(Reference: [0-9a-f-]{36}\)$/
     );
     await db.mcpPolicy.update({
       where: { id: 'default' },

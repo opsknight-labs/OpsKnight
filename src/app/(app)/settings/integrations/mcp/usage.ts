@@ -98,6 +98,26 @@ async function labels(by: UsageGroup, keys: string[]) {
   return names;
 }
 
+/**
+ * What a row is called. The request log records "none" for requests that are not a tool call
+ * (initialize, tools/list, ping, rate-limited requests), which reads as a bug, so it is named. A
+ * person or assistant that has since been removed shows a short id instead of nothing.
+ */
+export function usageLabel(
+  by: 'tool' | 'client' | 'user',
+  key: string | null,
+  names: ReadonlyMap<string, string>,
+  fallback: string
+) {
+  if (!key) return fallback;
+  if (by === 'tool')
+    return key === 'none' ? 'Protocol requests (initialize, tools/list, ping)' : key;
+  return (
+    names.get(key) ??
+    `Removed ${by === 'user' ? 'person' : 'assistant'} (id ending ${key.slice(-6)})`
+  );
+}
+
 export async function getMcpUsage(
   viewer: McpViewer,
   input: { window: UsageWindow; by: UsageGroup; q?: string },
@@ -150,7 +170,7 @@ export async function getMcpUsage(
       const failedCount = Number(group.failed);
       return {
         key: group.key,
-        label: group.key ? (names.get(group.key) ?? group.key) : fallback,
+        label: usageLabel(input.by, group.key, names, fallback),
         calls: callCount,
         failed: failedCount,
         errorRate: rate(failedCount, callCount),

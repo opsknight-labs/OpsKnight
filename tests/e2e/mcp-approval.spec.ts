@@ -122,7 +122,7 @@ test('remote request requires a different native reviewer and commits one recove
   const args = { previewId: proposal.previewId, idempotencyKey: 'browser-execute' };
   const blocked = await call('runbook_execute_approved', args);
   expect(blocked.isError).toBe(true);
-  expect(blocked.content[0].text).toBe('MCP_APPROVAL_REQUIRED');
+  expect(blocked.content[0].text).toMatch(/^MCP_APPROVAL_REQUIRED \(Reference: [0-9a-f-]{36}\)$/);
   const reviewer = await browser.newContext({ baseURL: origin });
   try {
     const reviewPage = await reviewer.newPage();

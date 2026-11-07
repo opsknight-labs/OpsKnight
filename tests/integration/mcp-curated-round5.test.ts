@@ -338,6 +338,38 @@ describe('incident_watch', () => {
     expect(await db.incidentWatcher.count({ where: { incidentId: hidden } })).toBe(0);
   });
 
+  it("takes 'me' for the caller, so keeping yourself posted is one call, not whoami first", async () => {
+    const id = (await createTestIncident('Watch as me', serviceId)).id;
+    const result = await call(admin.bearer, 'incident_watch', {
+      path: { id },
+      body: { userId: 'me' },
+      idempotencyKey: key(),
+    });
+    expect(result.isError).toBeFalsy();
+    expect(
+      await db.incidentWatcher.count({ where: { incidentId: id, userId: admin.user.id } })
+    ).toBe(1);
+    expect(await db.incidentWatcher.count({ where: { incidentId: id, userId: 'me' } })).toBe(0);
+  });
+
+  it("takes 'me' as the assignee, and still refuses an assignee that does not exist", async () => {
+    const id = (await createTestIncident('Assign to me', serviceId)).id;
+    const result = await call(admin.bearer, 'incident_assign', {
+      path: { id },
+      body: { assigneeId: 'me' },
+      idempotencyKey: key(),
+    });
+    expect(result.isError).toBeFalsy();
+    expect((await db.incident.findUniqueOrThrow({ where: { id } })).assigneeId).toBe(admin.user.id);
+    expect(
+      await refusedCall(admin.bearer, 'incident_assign', {
+        path: { id },
+        body: { assigneeId: 'not-a-user-id' },
+        idempotencyKey: key(),
+      })
+    ).toBe(true);
+  });
+
   it('is refused while changes are off', async () => {
     await db.mcpPolicy.update({ where: { id: 'default' }, data: { writesEnabled: false } });
     const id = (await createTestIncident('Writes off', serviceId)).id;

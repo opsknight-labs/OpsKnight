@@ -389,7 +389,7 @@ Requirements: **Changes** means the tool is offered only when the policy allows 
 
 ### `search_capabilities`
 
-**Search OpsKnight capabilities.** Keyword search over the operations this connection can use, optionally filtered by domain and read or write intent. Returns each operationId, summary, named tool (if any), risk and the workflow to use: the named tool, read_operation, call_operation, an approval, or reconnecting for missing consent. Pages with nextCursor. Use it when no named tool fits. Catalog visibility grants no resource authority.
+**Search OpsKnight capabilities.** Keyword search over the operations this connection can use, optionally filtered by domain and read or write intent. Returns each operationId, summary, named tool (if any), risk and the workflow to use: the named tool, read_operation, call_operation or an approval (only when those tools are listed), or reconnecting for missing consent. Pages with nextCursor. Use it when no named tool fits. Catalog visibility grants no resource authority.
 
 | Read only | Destructive | Idempotent | Scopes | Requires |
 | --- | --- | --- | --- | --- |
