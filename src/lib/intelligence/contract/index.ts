@@ -118,6 +118,16 @@ export const correlationRuleSchema = z
       .min(MIN_CORRELATION_WINDOW_SECONDS)
       .max(MAX_CORRELATION_WINDOW_SECONDS),
     minScore: z.number().min(0).max(1).default(0.8),
+    /**
+     * RELATED (default) proposes a reversible link between members and the anchor. PARENT_CHILD groups
+     * members under the anchor as children, so their paging rolls up to the parent.
+     */
+    linkType: z.enum(['RELATED', 'PARENT_CHILD']).optional(),
+    /**
+     * Let highest-urgency incidents join this rule's groups as suggestions. They are never grouped
+     * automatically: AUTO always leaves HIGH urgency alone.
+     */
+    allowHighUrgency: z.boolean().optional(),
   })
   .strict()
   .refine(rule => rule.maxWindowSeconds >= rule.windowSeconds, {

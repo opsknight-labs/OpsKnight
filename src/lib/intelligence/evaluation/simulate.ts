@@ -78,11 +78,14 @@ export function simulateCorrelation(
   let criticalExcluded = 0;
 
   for (const incident of ordered) {
-    if (isCriticalIncident(incident)) {
+    // Same rule as the live engine: highest urgency joins only rules that explicitly allow it.
+    const critical = isCriticalIncident(incident);
+    const applicable = critical ? active.filter(rule => rule.allowHighUrgency === true) : active;
+    if (critical && applicable.length === 0) {
       criticalExcluded += 1;
       continue;
     }
-    for (const rule of active) {
+    for (const rule of applicable) {
       const scope = rule.kind === 'TOPOLOGY' ? topologyScope(edges, incident.serviceId) : null;
       if (rule.kind === 'TOPOLOGY' && !scope) continue;
       const signature = computeSignature(rule, {

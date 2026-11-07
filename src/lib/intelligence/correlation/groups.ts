@@ -30,6 +30,8 @@ export interface JoinInput {
   incident: { id: string; createdAt: Date };
   /** SHADOW records only; SUGGESTED also proposes a reversible link to the group's anchor. */
   decision: CorrelationMode;
+  /** RELATED links members to the anchor; PARENT_CHILD groups them under it. Defaults to RELATED. */
+  linkType?: 'RELATED' | 'PARENT_CHILD';
   scopeServiceIds?: readonly string[];
   match?: { fingerprint: SimilarityFingerprint; minScore: number };
   certificationRunId?: string;
@@ -66,6 +68,7 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
   if (input.decision === 'ACCEPTED' && !input.certificationRunId)
     throw new Error('Automatic grouping requires certification evidence');
   const { rule, incident } = input;
+  const linkType = input.linkType ?? 'RELATED';
   const scope = scopeHash(input.scopeServiceIds ?? [input.serviceId]);
   const window = windowFor(incident.createdAt, rule);
 
@@ -201,7 +204,8 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
         rule.id,
         group.id,
         undefined,
-        input.match?.minScore
+        input.match?.minScore,
+        linkType
       );
     } else if (input.decision === 'ACCEPTED') {
       // Re-electing an earlier anchor appends reversals for unreviewed automatic links; human
@@ -229,7 +233,8 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
         rule.id,
         group.id,
         input.certificationRunId,
-        input.match?.minScore
+        input.match?.minScore,
+        linkType
       );
     }
     anchor = incident.id;
@@ -277,7 +282,8 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
             rule.id,
             group.id,
             input.certificationRunId,
-            input.match?.minScore
+            input.match?.minScore,
+            linkType
           )
         ).has(incident.id)
       : false;
@@ -293,7 +299,8 @@ async function proposeLinks(
   ruleId: string,
   groupId: string,
   certificationRunId?: string,
-  minimumScore?: number
+  minimumScore?: number,
+  linkType: 'RELATED' | 'PARENT_CHILD' = 'RELATED'
 ): Promise<Set<string>> {
   const pairKey = (sourceId: string) =>
     `intelligence-link:${[sourceId, targetId].sort().join(':')}`;
@@ -417,13 +424,14 @@ async function proposeLinks(
         groupId,
         anchorIncidentId: targetId,
         automatic,
+        linkType,
         ...(candidate.runId ? { certificationRunId: candidate.runId } : {}),
       })}::jsonb)`
     );
     const inserted = await tx.$queryRaw<Array<{ id: string; sourceId: string }>>(Prisma.sql`
       INSERT INTO "IncidentRelationship"
         ("id", "sourceIncidentId", "targetIncidentId", "type", "origin", "decision", "score", "evidence", "engineVersion", "updatedAt")
-      SELECT gen_random_uuid()::text, candidate.source_id, ${targetId}, 'RELATED'::"IncidentRelationshipType",
+      SELECT gen_random_uuid()::text, candidate.source_id, ${targetId}, ${linkType}::"IncidentRelationshipType",
         'RULE'::"IntelligenceOrigin", ${decision}::"CorrelationDecision", candidate.score, candidate.evidence,
         ${INTELLIGENCE_ENGINE_VERSION}, now()
       FROM (VALUES ${Prisma.join(values)}) AS candidate(source_id, score, evidence)

@@ -46,9 +46,14 @@ export async function correlateIncident(
 
   const policy = await resolveEffectivePolicy(incident.serviceId);
   if (policy.effectiveMode === 'OFF') return none('skipped_off');
-  const rules = policy.definition.correlation.rules.filter(rule => rule.enabled);
-  if (rules.length === 0 || !policy.policyId) return none('skipped_no_rules');
-  if (isCriticalIncident(incident)) return none('skipped_critical');
+  const enabledRules = policy.definition.correlation.rules.filter(rule => rule.enabled);
+  if (enabledRules.length === 0 || !policy.policyId) return none('skipped_no_rules');
+  // Highest urgency only joins rules that explicitly allow it, and then only as a suggestion.
+  const critical = isCriticalIncident(incident);
+  const rules = critical
+    ? enabledRules.filter(rule => rule.allowHighUrgency === true)
+    : enabledRules;
+  if (rules.length === 0) return none('skipped_critical');
 
   const fingerprint = await prisma.incidentFingerprint.findUnique({ where: { incidentId } });
   if (!fingerprint) throw new Error('Incident fingerprint is not ready yet');
@@ -70,6 +75,7 @@ export async function correlateIncident(
   const edges = rules.some(rule => rule.kind === 'TOPOLOGY') ? await loadActiveEdges() : [];
   return withDbBudget(settings, async tx => {
     const eligible =
+      !critical &&
       policy.effectiveMode === 'AUTO' &&
       policy.source === 'service' &&
       ['OPEN', 'ACKNOWLEDGED'].includes(incident.status) &&
@@ -115,6 +121,7 @@ export async function correlateIncident(
         signatureHash,
         incident: { id: incident.id, createdAt: incident.createdAt },
         decision,
+        linkType: rule.linkType ?? 'RELATED',
         ...(scope
           ? {
               scopeServiceIds: scope,
