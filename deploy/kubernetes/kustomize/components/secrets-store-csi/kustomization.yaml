@@ -5,7 +5,7 @@ kind: Component
 patches:
   - target:
       kind: Deployment
-      name: opsknight-(app|web|scheduler|general-worker|critical-worker|bulk-worker|runbook-worker|status-projector)
+      name: opsknight-(app|web|scheduler|intelligence-worker|general-worker|critical-worker|bulk-worker|runbook-worker|status-projector)
     patch: |-
       apiVersion: apps/v1
       kind: Deployment
