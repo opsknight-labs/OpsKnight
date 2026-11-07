@@ -216,7 +216,7 @@ export function renderHandoffSummary(
   );
   return {
     subject,
-    html: `<div style="font-family:Inter,Arial,sans-serif;font-size:14px">${html.join('')}</div>`,
+    html: `<div style="font-size:14px">${html.join('')}</div>`,
     text: lines.join('\n'),
   };
 }

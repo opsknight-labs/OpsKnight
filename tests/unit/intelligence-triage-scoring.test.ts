@@ -201,7 +201,8 @@ describe('cause-ranking weights', () => {
         depth: global ? 0 : 2,
         proximity: 0.7 + (i % 5) * 0.05,
         chance: 1,
-        helpful: global ? i % 10 !== 0 : i % 10 === 0,
+        // A 7-cycle keeps both verdicts in the every-fifth held-out split.
+        helpful: global ? i % 7 !== 0 : i % 7 === 0,
       });
     }
     const proposal = fitResponseWeights(rows);
