@@ -70,6 +70,7 @@ const CORPUS: Case[] = [
     'average resolution time last week',
     'incident statistics',
     'incident stats by team',
+    'incidents by team this week',
     'incidents by urgency this week',
     'incidents per day this month',
     'incident trend',
@@ -382,6 +383,9 @@ const CORPUS: Case[] = [
     'list incidents on friday',
     'find high urgency incidents since 2026-11-01',
     'show incidents for billing in the past 48h',
+    'incidents for the checkout team',
+    'incidents assigned to Eval Responder',
+    'incidents about kafka',
   ].map(text => ({ text, intent: 'SEARCH_INCIDENTS' as const })),
   ...[
     'how do i snooze an incident',
@@ -461,7 +465,8 @@ describe('slot extraction', () => {
   });
   it('accuracy over the slot cases is at least 90%', () => {
     const misses = cases.filter(([text, expected]) => {
-      const actual = slot(text) as Record<string, unknown>;
+      const actual = slot(text) as unknown as Record<string, unknown>;
+      // eslint-disable-next-line security/detect-object-injection -- keys come from the fixed case table
       return Object.entries(expected).some(([key, value]) => actual[key] !== value);
     });
     expect(1 - misses.length / cases.length).toBeGreaterThanOrEqual(0.9);
@@ -489,6 +494,27 @@ describe('normalisation and spelling', () => {
   it('bounds edit distance work', () => {
     expect(editDistance('incident', 'incidnet')).toBe(1);
     expect(editDistance('abc', 'xyz', 1)).toBeGreaterThan(1);
+  });
+});
+
+describe('bounded work on adversarial input', () => {
+  it('understands a maximum-length hostile message quickly', () => {
+    const hostile = [
+      'a'.repeat(2_000),
+      'past '.repeat(400),
+      `${'incident '.repeat(200)}?`,
+      'between monday and '.repeat(100),
+      '@'.repeat(2_000),
+      'resolve this: '.repeat(140),
+    ];
+    for (const message of hostile) {
+      const started = performance.now();
+      const normalized = correctSpelling(normalizeMessage(message)).text;
+      classifyIntent(normalized, true);
+      extractSlots(normalized, message);
+      parseBasicQuery(normalized, new Date('2026-11-06T12:00:00Z'), 'UTC');
+      expect(performance.now() - started).toBeLessThan(250);
+    }
   });
 });
 

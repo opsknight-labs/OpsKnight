@@ -234,6 +234,7 @@ async function breakdown(
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, limit)
       .map(([bucket, count]) => `- ${bucket}: ${count}`);
+    // eslint-disable-next-line security/detect-object-injection -- by is a member of the closed groupBy union
     return `### By ${GROUP_LABEL[by]} (${ctx.timeZone}${rows.length === DURATION_SAMPLE ? `, most recent ${DURATION_SAMPLE} only` : ''})\n${lines.join('\n') || 'No incidents in this window.'}`;
   }
   if (by === 'service') {
@@ -283,6 +284,7 @@ async function breakdown(
     const value = row[by as 'urgency' | 'status' | 'priority'];
     return `- ${value ? safe(String(value)).toLowerCase() : 'not set'}: ${row._count.id}`;
   });
+  // eslint-disable-next-line security/detect-object-injection -- by is a member of the closed groupBy union
   return `### By ${GROUP_LABEL[by]}\n${lines.join('\n') || 'No incidents in this window.'}`;
 }
 
@@ -824,7 +826,8 @@ async function responders(ctx: Context): Promise<string> {
 async function oncall(ctx: Context): Promise<string> {
   if (/\bnext (week|month|shift|on.?call)\b/i.test(ctx.message))
     return 'For future coverage, ask “Who is on call tomorrow?” or “Who is on call in 2 hours?”. Open Schedules to review a full future rotation.';
-  const named = ctx.query.terms.length > 0 || Boolean(ctx.incident);
+  const named =
+    ctx.query.terms.length > 0 || Boolean(ctx.incident) || Boolean(ctx.options.contextService);
   let service: ServiceRow | undefined;
   if (named) {
     const rows = await services(ctx, true);

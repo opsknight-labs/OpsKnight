@@ -41,11 +41,13 @@ beforeEach(async () => {
 async function world() {
   const admin = await createTestUser({ role: 'ADMIN', name: 'Ada Admin' });
   const team = await createTestTeam('Checkout');
-  const responder = await createTestUser({ role: 'RESPONDER', name: 'Eval Responder' });
+  // A team-scoped user, so visibility rules are really exercised (responders read everything).
+  const responder = await createTestUser({ role: 'USER', name: 'Eval Responder' });
   await db.teamMember.create({ data: { userId: responder.id, teamId: team.id, role: 'MEMBER' } });
-  const checkout = await createTestService('Checkout API', team.id);
-  const payments = await createTestService('Payments Worker', team.id);
-  const paymentsApi = await createTestService('Payments API', team.id);
+  // Exact names: the helper's random suffix would defeat name matching.
+  const checkout = await createTestService('Checkout API', team.id, { name: 'Checkout API' });
+  const payments = await createTestService('Payments Worker', team.id, { name: 'Payments Worker' });
+  const paymentsApi = await createTestService('Payments API', team.id, { name: 'Payments API' });
   const incidents = await Promise.all(
     Array.from({ length: 7 }, (_, i) =>
       createTestIncident(`Pool exhausted ${i + 1}`, checkout.id, { assigneeId: responder.id })
@@ -76,7 +78,7 @@ describe('fuzzy names', () => {
   it('matches a misspelt service to the closest visible one and never a hidden one', async () => {
     const w = await world();
     const outsider = await createTestTeam('Outsiders');
-    await createTestService('Hidden Payroll', outsider.id);
+    await createTestService('Hidden Payroll', outsider.id, { name: 'Hidden Payroll' });
     await db.aiSettings.create({ data: { id: 'default', enabled: false, squireEnabled: true } });
     const matches = await resolveEntities(w.actor, 'chekout api', ['service']);
     expect(confidentMatch(matches, 'service')?.name).toBe('Checkout API');
@@ -96,7 +98,7 @@ describe('fuzzy names', () => {
   it('asks which service is meant when several are plausible, then completes the question from the reply', async () => {
     const w = await world();
     const first = await planBasicTurn({ actor: w.actor, message: 'who owns pay', incident: null });
-    expect(first.text).toContain('Did you mean one of these services?');
+    expect(first.text).toContain('Several services match');
     expect(first.nextState?.pending?.kind).toBe('service');
     expect(first.suggestions).toEqual(expect.arrayContaining(['Payments Worker', 'Payments API']));
     const second = await planBasicTurn({
@@ -207,7 +209,9 @@ describe('page context', () => {
       page: context,
     });
     expect(turn.intent).toBe('ON_CALL');
-    expect(turn.text).toContain('On-call coverage for Checkout API');
+    // The page's service is used; it has no escalation policy, so nothing unrelated is substituted.
+    expect(turn.text).toContain('Checkout API');
+    expect(turn.text).toContain('not substituted unrelated schedules');
     const open = await planBasicTurn({
       actor: w.actor,
       message: 'open incidents',
@@ -281,7 +285,10 @@ describe('basic-mode proposals', () => {
 
   it('resolves a person for reassignment and refuses to guess between several', async () => {
     const w = await world();
-    await createTestUser({ role: 'RESPONDER', name: 'Eval Reviewer' });
+    const reviewer = await createTestUser({ role: 'USER', name: 'Eval Reviewer' });
+    await db.teamMember.create({
+      data: { userId: reviewer.id, teamId: w.team.id, role: 'MEMBER' },
+    });
     const exact = await planBasicTurn({
       actor: w.actor,
       message: 'assign this to Eval Responder',
@@ -384,7 +391,7 @@ describe('caching and dialogue state persistence', () => {
     const first = await collect(
       streamSquire(w.actor, { message: 'who owns pay', history: [], conversationId: id })
     );
-    expect(first.text).toContain('Did you mean one of these services?');
+    expect(first.text).toContain('Several services match');
     expect((await db.squireConversation.findUniqueOrThrow({ where: { id } })).state).toMatchObject({
       v: 1,
       pending: { kind: 'service' },

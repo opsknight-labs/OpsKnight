@@ -29,10 +29,18 @@ export function bucketVerdicts(verdicts: readonly ScoredVerdict[], width = 0.1):
   for (const verdict of verdicts) {
     if (!Number.isFinite(verdict.score)) continue;
     // The epsilon keeps 0.6 / 0.1 (5.999…) in the 0.6 bucket despite floating-point error.
-    const index = Math.min(Math.floor(Math.max(0, verdict.score) / width + 1e-9), Math.round(1 / width) - 1);
+    const index = Math.min(
+      Math.floor(Math.max(0, verdict.score) / width + 1e-9),
+      Math.round(1 / width) - 1
+    );
     let bucket = buckets.get(index);
     if (!bucket) {
-      bucket = { from: round2(index * width), to: round2((index + 1) * width), helpful: 0, notHelpful: 0 };
+      bucket = {
+        from: round2(index * width),
+        to: round2((index + 1) * width),
+        helpful: 0,
+        notHelpful: 0,
+      };
       buckets.set(index, bucket);
     }
     if (verdict.helpful) bucket.helpful += 1;
@@ -57,7 +65,10 @@ export interface MinScoreSuggestion {
  * to be meaningful and judges each candidate threshold by the Wilson lower bound, so a handful of
  * thumbs-up cannot justify a change.
  */
-export function suggestMinScore(verdicts: readonly ScoredVerdict[], currentMinScore: number): MinScoreSuggestion | null {
+export function suggestMinScore(
+  verdicts: readonly ScoredVerdict[],
+  currentMinScore: number
+): MinScoreSuggestion | null {
   const usable = verdicts.filter(verdict => Number.isFinite(verdict.score));
   if (usable.length < MIN_FEEDBACK_FOR_SUGGESTION) return null;
   const rateAt = (threshold: number) => {
@@ -67,7 +78,11 @@ export function suggestMinScore(verdicts: readonly ScoredVerdict[], currentMinSc
   };
   // Already good enough as configured: nothing to propose.
   if (rateAt(currentMinScore).lower >= TARGET_HELPFUL_LOWER_BOUND) return null;
-  for (let t = currentMinScore + THRESHOLD_STEP; t <= THRESHOLD_CEILING + 1e-9; t += THRESHOLD_STEP) {
+  for (
+    let t = currentMinScore + THRESHOLD_STEP;
+    t <= THRESHOLD_CEILING + 1e-9;
+    t += THRESHOLD_STEP
+  ) {
     const threshold = round2(t);
     if (threshold - currentMinScore < MIN_MOVE - 1e-9) continue;
     const at = rateAt(threshold);

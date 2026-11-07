@@ -157,7 +157,12 @@ export async function enqueueWorkItems(
  * `excludeKinds` leaves kinds whose handler is currently tripped (see the kind breaker) in the queue.
  */
 export async function claimWorkItems(
-  options: { limit: number; leaseMs?: number; maxAttempts?: number; excludeKinds?: readonly string[] },
+  options: {
+    limit: number;
+    leaseMs?: number;
+    maxAttempts?: number;
+    excludeKinds?: readonly string[];
+  },
   client: Client = prisma
 ): Promise<ClaimedWorkItem[]> {
   const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;

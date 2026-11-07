@@ -196,6 +196,7 @@ export async function* streamSquire(
           dataClass,
           signal,
           observe: (name, input, result) => {
+            // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
             ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
             readUntrusted = true;
             return evidence.observe(name, input, result);

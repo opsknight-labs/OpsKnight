@@ -143,7 +143,11 @@ export async function submitFeedback(
         entityId: `intelligence-feedback:${data.subjectType}:${data.subjectId}`,
         actorId: actor.id,
         source: 'UI',
-        details: { verdict: data.verdict, reasonCode: data.reasonCode ?? null, replaced: removed.count > 0 },
+        details: {
+          verdict: data.verdict,
+          reasonCode: data.reasonCode ?? null,
+          replaced: removed.count > 0,
+        },
       },
       tx
     );
@@ -152,7 +156,10 @@ export async function submitFeedback(
 }
 
 /** Withdraws the actor's own verdict. Idempotent: revoking nothing is not an error. */
-export async function revokeFeedback(actor: AuthorizationActor, input: unknown): Promise<{ revoked: number }> {
+export async function revokeFeedback(
+  actor: AuthorizationActor,
+  input: unknown
+): Promise<{ revoked: number }> {
   assertMayGiveFeedback(actor);
   const parsed = revokeFeedbackSchema.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error.issues);

@@ -13,7 +13,10 @@ export const LISTENER_RECONNECT_MAX_MS = 60_000;
 export const LEADER_RETRY_MS = 30_000;
 
 export function reconnectDelayMs(attempt: number, random: () => number = Math.random): number {
-  const base = Math.min(LISTENER_RECONNECT_MAX_MS, LISTENER_RECONNECT_MIN_MS * 2 ** Math.min(attempt, 10));
+  const base = Math.min(
+    LISTENER_RECONNECT_MAX_MS,
+    LISTENER_RECONNECT_MIN_MS * 2 ** Math.min(attempt, 10)
+  );
   return Math.floor(base / 2 + random() * (base / 2));
 }
 

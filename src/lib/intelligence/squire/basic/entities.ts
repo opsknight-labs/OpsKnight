@@ -23,6 +23,9 @@ export interface EntityMatch {
 /** Below this a fuzzy match is noise; above `CONFIDENT` it is applied without asking. */
 export const ENTITY_MIN_SIMILARITY = 0.35;
 export const ENTITY_CONFIDENT_SIMILARITY = 0.6;
+export const ENTITY_LONE_SIMILARITY = 0.45;
+/** A name that contains the typed text is at least this plausible, however short the text. */
+const SUBSTRING_SIMILARITY = 0.5;
 const CANDIDATES = 8;
 
 const cache = new TtlCache<EntityMatch[]>(ENTITY_TTL_MS, 2_000);
@@ -52,6 +55,7 @@ function fallbackSimilarity(name: string, term: string): number {
   if (a === b) return 1;
   if (a.includes(b) || b.includes(a)) return 0.7;
   let prefix = 0;
+  // eslint-disable-next-line security/detect-object-injection -- numeric index into a string
   while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix += 1;
   return prefix >= 3 ? 0.4 + prefix / (2 * Math.max(a.length, b.length)) : 0;
 }
@@ -71,9 +75,15 @@ async function candidates(
   const relation = Prisma.raw(`"${table.table}"`);
   if (await hasTrigram()) {
     return prisma.$queryRaw<Array<{ id: string; name: string; similarity: number }>>(Prisma.sql`
-      SELECT "id", "name", similarity(lower("name"), ${term.toLowerCase()})::float8 AS similarity
+      SELECT "id", "name",
+        GREATEST(
+          similarity(lower("name"), ${term.toLowerCase()}),
+          CASE WHEN strpos(lower("name"), ${term.toLowerCase()}) > 0 THEN ${SUBSTRING_SIMILARITY} ELSE 0 END
+        )::float8 AS similarity
       FROM ${relation}
-      WHERE "name" IS NOT NULL AND similarity(lower("name"), ${term.toLowerCase()}) >= ${ENTITY_MIN_SIMILARITY}
+      WHERE "name" IS NOT NULL AND (
+        similarity(lower("name"), ${term.toLowerCase()}) >= ${ENTITY_MIN_SIMILARITY}
+        OR strpos(lower("name"), ${term.toLowerCase()}) > 0)
       ORDER BY similarity DESC, "name" ASC
       LIMIT ${CANDIDATES}`);
   }
@@ -166,7 +176,10 @@ export function confidentMatch(
 ): EntityMatch | null {
   const pool = kind ? matches.filter(match => match.kind === kind) : matches;
   const [best, second] = pool;
-  if (!best || best.similarity < ENTITY_CONFIDENT_SIMILARITY) return null;
+  if (!best) return null;
+  // A lone plausible candidate is accepted at a lower bar; with rivals it must be clearly ahead.
+  if (best.similarity < (second ? ENTITY_CONFIDENT_SIMILARITY : ENTITY_LONE_SIMILARITY))
+    return null;
   if (
     second &&
     second.similarity >= best.similarity - 0.1 &&

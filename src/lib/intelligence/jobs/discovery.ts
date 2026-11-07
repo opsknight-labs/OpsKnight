@@ -108,8 +108,7 @@ async function queueFingerprintRepairs(
     FROM "Incident" i LEFT JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
     WHERE i."id" IN (${Prisma.join(ids)})
   `);
-  const pick = (reason: string) =>
-    candidates.filter(row => row.reason === reason).slice(0, limit);
+  const pick = (reason: string) => candidates.filter(row => row.reason === reason).slice(0, limit);
   const missing = pick('missing');
   const staleResolution = pick('staleResolution');
   const staleSource = pick('staleSource');

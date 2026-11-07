@@ -44,9 +44,11 @@ const EMAIL = /\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}\b/g
 // digit or plus sign so ordinary ids and timestamps are not swallowed.
 const PHONE =
   /(?<![A-Za-z0-9])\+?\d{1,3}?[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}(?![A-Za-z0-9])/g;
+// eslint-disable-next-line security/detect-unsafe-regex -- fixed alternatives with bounded quantifiers; covered by the adversarial-input test
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
 // Full and `::`-compressed forms; a compressed form needs the double colon, so clock times never match.
 const IPV6 =
+  // eslint-disable-next-line security/detect-unsafe-regex -- fixed alternatives with bounded quantifiers; covered by the adversarial-input test
   /\b(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?:[0-9a-f]{1,4}:){1,6}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,5})?)\b/gi;
 
 /**
@@ -67,10 +69,13 @@ export function redactPersonalData(
 }
 
 const INSTRUCTION_LIKE: ReadonlyArray<RegExp> = [
+  // eslint-disable-next-line security/detect-unsafe-regex -- fixed alternatives with bounded quantifiers; covered by the adversarial-input test
   /\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+|your\s+)?(?:previous|prior|above|earlier|preceding|system|developer)\s+(?:instructions?|prompts?|rules?|guidance|messages?)\b/gi,
   /\b(?:you are now|from now on you are|act as|pretend (?:to be|you are)|roleplay as|new (?:instructions?|rules?|task):|your new (?:task|goal|instructions?))\b/gi,
   /\b(?:do not|don't|never)\s+(?:tell|inform|show|reveal to)\s+the\s+(?:user|operator|human)\b/gi,
+  // eslint-disable-next-line security/detect-unsafe-regex -- fixed alternatives with bounded quantifiers; covered by the adversarial-input test
   /\b(?:reveal|print|dump|exfiltrate|send)\s+(?:the\s+)?(?:system prompt|hidden|secret|confidential)\b/gi,
+  // eslint-disable-next-line security/detect-unsafe-regex -- fixed alternatives with bounded quantifiers; covered by the adversarial-input test
   /\b(?:call|invoke|run|execute)\s+(?:the\s+)?(?:tool|function|action)\s+[a-z_]{3,40}\s+(?:with|now|immediately)\b/gi,
   /^\s{0,8}(?:system|assistant|developer|tool|function)\s*:/gim,
   /<\/?(?:system|assistant|instructions?|prompt)[^>]{0,40}>/gi,

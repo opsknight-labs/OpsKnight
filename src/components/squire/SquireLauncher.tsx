@@ -11,6 +11,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -139,7 +140,10 @@ export default function SquireLauncher({
     async () => undefined
   );
   const incidentId = incidentIdFrom(pathname);
-  const pageContext = incidentId ? undefined : pageContextFrom(pathname);
+  const pageContext = useMemo(
+    () => (incidentId ? undefined : pageContextFrom(pathname)),
+    [incidentId, pathname]
+  );
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
@@ -525,7 +529,7 @@ export default function SquireLauncher({
         if (seq === requestSeq.current) setBusy(false);
       }
     },
-    [busy, conversationId, incidentId, turns, activeScope, online]
+    [busy, conversationId, incidentId, pageContext, aiEnabled, turns, activeScope, online]
   );
 
   const retryAnswer = useCallback((index: number) => {

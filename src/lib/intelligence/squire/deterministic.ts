@@ -502,7 +502,7 @@ export async function planBasicTurn(
   const corrected = correctSpelling(normalized, known);
   corrections.push(...corrected.corrections);
   let text = corrected.text;
-  const slots = extractSlots(text, expanded.message);
+  let slots = extractSlots(text, expanded.message);
   const state = input.state ?? null;
   const onIncident = incident !== null;
 
@@ -528,16 +528,24 @@ export async function planBasicTurn(
         reply === String(index + 1) ||
         option.label.toLowerCase().includes(reply)
     );
+    // A reply to a free-text request (a resolution note, a note body) is taken as that text unless it is
+    // clearly a new question or a command; other replies are new questions when they read as one.
     const standalone =
-      classifyIntent(text, onIncident).intent !== 'UNKNOWN' && reply.split(' ').length > 3;
-    if (state.pending.kind === 'intent' && choice?.label) {
-      text = normalizeMessage(choice.label);
-    } else if (state.pending.kind === 'service' && !standalone) {
-      text = normalizeMessage(`${state.pending.question} for "${choice?.label ?? reply}"`);
-    } else if (state.pending.kind === 'person' && !standalone) {
-      text = normalizeMessage(`${state.pending.question} ${choice?.label ?? reply}`);
-    } else if (state.pending.kind === 'incident' && !standalone) {
-      text = normalizeMessage(`${state.pending.question}: ${expanded.message.trim()}`);
+      state.pending.kind === 'incident'
+        ? /\?$/.test(reply) || parseSlashCommand(expanded.message) !== null
+        : classifyIntent(text, onIncident).intent !== 'UNKNOWN' && reply.split(' ').length > 3;
+    // The completed question keeps the reply's original capitalisation, so names and notes survive.
+    let completed: string | null = null;
+    if (state.pending.kind === 'intent' && choice?.label) completed = choice.label;
+    else if (state.pending.kind === 'service' && !standalone)
+      completed = `${state.pending.question} for "${choice?.label ?? expanded.message.trim()}"`;
+    else if (state.pending.kind === 'person' && !standalone)
+      completed = `${state.pending.question} ${choice?.label ?? expanded.message.trim()}`;
+    else if (state.pending.kind === 'incident' && !standalone)
+      completed = `${state.pending.question}: ${expanded.message.trim()}`;
+    if (completed) {
+      text = normalizeMessage(completed);
+      slots = { ...extractSlots(text, completed), more: false };
     }
   }
 
@@ -940,10 +948,8 @@ async function resolveNames(
     if (person) {
       assigneeId = person.id;
       notes.push(`Incidents assigned to ${person.name}.`);
-      resolvedQuestion = resolvedQuestion.replace(
-        new RegExp(slots.person.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
-        ''
-      );
+      // The question is normalised to lower case; the name is removed so it is not also a keyword.
+      resolvedQuestion = resolvedQuestion.replace(slots.person.toLowerCase(), '');
     } else if (people.length > 1)
       return {
         question,
@@ -960,9 +966,67 @@ async function resolveNames(
   }
   if (SERVICE_INTENTS.has(intent) && !/["“]/.test(resolvedQuestion)) {
     const terms = keywords(resolvedQuestion).filter(
-      term => term.length >= 3 && !/^\d+$/.test(term)
+      term => term.length >= 2 && !/^\d+$/.test(term)
     );
-    for (const term of terms.slice(0, 2)) {
+    // A name that matches several visible services is a question to ask, not a guess to make. The
+    // choices are remembered so the next short reply ("Payments API", or "2") completes the question.
+    if ((intent === 'SERVICE_HEALTH' || intent === 'ON_CALL') && terms.length && !page) {
+      const candidates = await prisma.service.findMany({
+        where: {
+          AND: [
+            serviceReadWhere(actor),
+            ...terms.map(term => ({ name: { contains: term, mode: 'insensitive' as const } })),
+          ],
+        },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        take: 6,
+        select: { id: true, name: true },
+      });
+      const joined = terms.join(' ');
+      const exact = candidates.find(row => row.name.toLowerCase() === joined);
+      if (candidates.length > 1 && !exact && !incident)
+        return {
+          question,
+          notes,
+          clarify: {
+            kind: 'service',
+            text: `Several services match. Which one do you mean?\n${candidates
+              .slice(0, 5)
+              .map((row, i) => `${i + 1}. ${row.name}`)
+              .join('\n')}`,
+            choices: candidates.slice(0, 5).map(row => ({ label: row.name, id: row.id })),
+          },
+        };
+      if (exact) resolvedQuestion = `${resolvedQuestion} "${exact.name}"`;
+    }
+    // A misspelt multi-word name ("chekout api") is matched as a whole phrase first.
+    const words = terms.filter(term => term.length >= 2);
+    if (words.length > 1) {
+      const all = await prisma.service.count({
+        where: {
+          AND: [
+            serviceReadWhere(actor),
+            ...words.map(term => ({ name: { contains: term, mode: 'insensitive' as const } })),
+          ],
+        },
+      });
+      if (all === 0) {
+        const phrase = words.join(' ');
+        const match = confidentMatch(await resolveEntities(actor, phrase, ['service']), 'service');
+        if (match) {
+          for (const term of words) resolvedQuestion = resolvedQuestion.replace(term, '');
+          resolvedQuestion = `${resolvedQuestion} "${match.name}"`;
+          notes.push(`Showing results for ${match.name} (you typed “${short(phrase)}”).`);
+          return {
+            question: resolvedQuestion.replace(/\s+/g, ' ').trim(),
+            notes,
+            teamIds,
+            assigneeId,
+          };
+        }
+      }
+    }
+    for (const term of terms.filter(term => term.length >= 3).slice(0, 2)) {
       if (
         incident?.serviceName.toLowerCase().includes(term) ||
         page?.name.toLowerCase().includes(term)

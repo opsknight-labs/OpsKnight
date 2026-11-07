@@ -11,7 +11,11 @@ type Attributes = Record<string, string | number | boolean>;
  * Attributes must be bounded categories or numbers: never incident ids, prompts, answers or errors'
  * messages, which can contain customer data. A failure is recorded by its type only.
  */
-export async function withSpan<T>(name: string, attributes: Attributes, work: (span: Span) => Promise<T>): Promise<T> {
+export async function withSpan<T>(
+  name: string,
+  attributes: Attributes,
+  work: (span: Span) => Promise<T>
+): Promise<T> {
   return tracer().startActiveSpan(name, { attributes }, async span => {
     try {
       return await work(span);

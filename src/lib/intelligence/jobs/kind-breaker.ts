@@ -36,7 +36,10 @@ export class KindBreaker {
     this.samples.set(kind, list);
     if (ok || this.isPaused(kind, now)) return null;
     const failures = list.filter(sample => !sample.ok).length;
-    if (failures >= this.options.minFailures && failures / list.length > this.options.failureRatio) {
+    if (
+      failures >= this.options.minFailures &&
+      failures / list.length > this.options.failureRatio
+    ) {
       this.pausedUntil.set(kind, now + this.options.pauseMs);
       this.samples.delete(kind);
       return 'paused';

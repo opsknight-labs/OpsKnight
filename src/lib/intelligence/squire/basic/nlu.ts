@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-unsafe-regex, security/detect-object-injection -- every pattern here is a fixed literal with bounded quantifiers run over a message capped at 2,000 characters (see the ReDoS timing test), and indexes are numeric or come from closed tables */
 import { routeIntent, type SquireIntent } from '../intents';
 
 /**
@@ -329,7 +330,7 @@ const FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, number]>]> =
         /\b(how many|number of|count|total|volume|statistics|stats|analytics|trend|trends|report|breakdown|busiest|noisiest|noisy|most|compare|comparison|versus|vs)\b/,
         2.5,
       ],
-      [/\b(?:per|by)\s+(team|teams|service|services|urgency|day|hour|status|priority|week)\b/, 2.5],
+      [/\b(?:per|by)\s+(team|teams|service|services|urgency|day|hour|status|priority|week)\b/, 3.5],
       [/\b(mttr|mtta|mean time|average|avg|time to (resolve|acknowledge|resolution|ack))\b/, 3],
       [/\b(incidents?|outages?|services?|alerts?)\b/, 0.5],
     ],
@@ -406,6 +407,7 @@ const FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, number]>]> =
         1.5,
       ],
       [/\b(incidents?|outages?|tickets?)\b/, 1.5],
+      [/\b(?:incidents?|outages?)\b.{0,40}\b(?:for|of|on|assigned to|owned by|about)\b/, 1],
       [
         /\b(resolved|closed|last week|past week|yesterday|today|this (week|month)|past \d+ (hours|days|weeks|months)|since|between|on (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(last |this )?(monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/,
         1,

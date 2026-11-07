@@ -20,7 +20,9 @@ export interface IncidentFingerprintData {
  */
 export function buildIncidentFingerprint(input: FingerprintInput): IncidentFingerprintData {
   const template = maskVolatileText(input.title);
-  const tokenSource = input.description ? `${template} ${maskVolatileText(input.description)}` : template;
+  const tokenSource = input.description
+    ? `${template} ${maskVolatileText(input.description)}`
+    : template;
   return {
     template,
     tokens: extractTokens(tokenSource),

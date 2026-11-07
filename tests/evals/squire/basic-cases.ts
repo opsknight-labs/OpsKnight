@@ -71,9 +71,9 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
   {
     id: 'search-page',
     question: 'list open incidents',
-    expectIntent: 'SEARCH_INCIDENTS',
+    expectIntent: 'ACTIVE_INCIDENTS',
     mustContain: ['show more'],
-    then: { question: 'show more', expectIntent: 'SEARCH_INCIDENTS', mustContain: ['Showing 6'] },
+    then: { question: 'show more', expectIntent: 'ACTIVE_INCIDENTS', mustContain: ['Showing 6'] },
   },
   {
     id: 'search-team',
@@ -161,20 +161,22 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
     question: 'who is on call for this service',
     onService: true,
     expectIntent: 'ON_CALL',
-    mustContain: ['On-call coverage for Checkout API'],
+    // The seeded service has no escalation policy: the answer names it and substitutes nothing.
+    mustContain: ['Checkout API', 'not substituted unrelated schedules'],
+    mustNotContain: ['Several services match'],
   },
   {
     id: 'service-context-incidents',
     question: 'open incidents',
     onService: true,
-    expectIntent: 'SEARCH_INCIDENTS',
+    expectIntent: 'ACTIVE_INCIDENTS',
     mustContain: ['Matching incidents'],
   },
   {
     id: 'oncall',
     question: 'Who is on call for Checkout API?',
     expectIntent: 'ON_CALL',
-    mustContain: ['point-in-time lookup'],
+    mustContain: ['Checkout API', 'not substituted unrelated schedules'],
   },
   {
     id: 'changes',
@@ -183,10 +185,12 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
     mustContain: ['Recorded changes'],
   },
   {
-    id: 'runbooks',
+    // The evaluated person is a team-scoped user without runbook access: the answer says so, and lists nothing.
+    id: 'runbooks-scope',
     question: 'List database runbooks',
     expectIntent: 'RUNBOOK_SEARCH',
-    mustContain: ['Runbooks you can read'],
+    mustContain: ['do not have permission'],
+    mustNotContain: ['Database pool reset'],
   },
   {
     id: 'followups',

@@ -34,13 +34,17 @@ describe('Squire structural evaluation (no model)', () => {
     resetBasicReadCaches();
     const team = await createTestTeam('Checkout');
     const outsiders = await createTestTeam('Outsiders');
-    const responder = await createTestUser({ role: 'RESPONDER', name: 'Eval Responder' });
+    // A team-scoped user, so visibility rules are really exercised (responders read everything).
+    const responder = await createTestUser({ role: 'USER', name: 'Eval Responder' });
     await db.teamMember.create({ data: { userId: responder.id, teamId: team.id, role: 'MEMBER' } });
-    const checkout = await createTestService('Checkout API', team.id);
+    // Exact names: the helper's random suffix would defeat name matching.
+    const checkout = await createTestService('Checkout API', team.id, { name: 'Checkout API' });
     serviceId = checkout.id;
-    await createTestService('Payments Worker', team.id);
-    await createTestService('Payments API', team.id);
-    const hidden = await createTestService('Hidden Payroll', outsiders.id);
+    await createTestService('Payments Worker', team.id, { name: 'Payments Worker' });
+    await createTestService('Payments API', team.id, { name: 'Payments API' });
+    const hidden = await createTestService('Hidden Payroll', outsiders.id, {
+      name: 'Hidden Payroll',
+    });
     await createTestIncident('Hidden payroll outage', hidden.id, {
       teamId: outsiders.id,
       description: 'Payroll secret',
@@ -64,26 +68,27 @@ describe('Squire structural evaluation (no model)', () => {
         occurredAt: new Date(Date.now() - 600_000),
       },
     });
-    const runbook = await db.runbook.create({
-      data: { name: 'Database pool reset', description: 'Resets the pool', tags: ['database'] },
+    await db.runbook.create({
+      data: {
+        name: 'Database pool reset',
+        slug: 'database-pool-reset',
+        description: 'Resets the pool',
+        tags: ['database'],
+      },
     });
-    void runbook;
-    await db.postmortem
-      .create({
-        data: { incidentId: incidents[6].id, title: 'Database pool postmortem', status: 'DRAFT' },
-      })
-      .catch(() => undefined);
-    await db.actionItem
-      .create({
-        data: {
-          incidentId: incidents[6].id,
-          title: 'Increase pool visibility',
-          status: 'OPEN',
-          dueDate: new Date(Date.now() - 86_400_000),
-          ownerId: responder.id,
-        },
-      })
-      .catch(() => undefined);
+    const postmortem = await db.postmortem.create({
+      data: { incidentId: incidents[6].id, title: 'Database pool postmortem', status: 'DRAFT' },
+    });
+    await db.actionItem.create({
+      data: {
+        incidentId: incidents[6].id,
+        postmortemId: postmortem.id,
+        title: 'Increase pool visibility',
+        status: 'OPEN',
+        dueDate: new Date(Date.now() - 86_400_000),
+        ownerId: responder.id,
+      },
+    });
     await db.aiSettings.create({
       data: { id: 'default', enabled: false, squireEnabled: true, squireHistoryEnabled: false },
     });

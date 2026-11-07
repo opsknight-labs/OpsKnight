@@ -48,7 +48,8 @@ export type DraftFailure =
   | 'UNAVAILABLE';
 
 export const DRAFT_FAILURE_MESSAGES: Record<DraftFailure, string> = {
-  AI_OFF: 'AI is turned off. An administrator can enable it in Settings, Intelligence, Assistant & AI.',
+  AI_OFF:
+    'AI is turned off. An administrator can enable it in Settings, Intelligence, Assistant & AI.',
   NOT_ALLOWED: 'You do not have permission to do this.',
   NOT_FOUND: 'Incident not found.',
   NO_PROVIDER_FOR_DATA:

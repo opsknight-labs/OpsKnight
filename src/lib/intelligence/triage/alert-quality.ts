@@ -30,11 +30,16 @@ export function scoreAlertQuality(input: {
   quickResolved: number;
   neverAcknowledged: number;
 }): { quickResolvedRatio: number; neverAcknowledgedRatio: number; noiseScore: number } {
-  if (input.resolved <= 0) return { quickResolvedRatio: 0, neverAcknowledgedRatio: 0, noiseScore: 0 };
+  if (input.resolved <= 0)
+    return { quickResolvedRatio: 0, neverAcknowledgedRatio: 0, noiseScore: 0 };
   const round = (value: number) => Math.round(value * 1000) / 1000;
   const quick = input.quickResolved / input.resolved;
   const never = input.neverAcknowledged / input.resolved;
-  return { quickResolvedRatio: round(quick), neverAcknowledgedRatio: round(never), noiseScore: round((quick + never) / 2) };
+  return {
+    quickResolvedRatio: round(quick),
+    neverAcknowledgedRatio: round(never),
+    noiseScore: round((quick + never) / 2),
+  };
 }
 
 /**
@@ -53,7 +58,11 @@ export async function getAlertQualityLeaderboard(
   } catch {
     return [];
   }
-  const services = await client.service.findMany({ where: readable, take: MAX_SERVICES, select: { id: true, name: true } });
+  const services = await client.service.findMany({
+    where: readable,
+    take: MAX_SERVICES,
+    select: { id: true, name: true },
+  });
   if (services.length === 0) return [];
   const names = new Map(services.map(service => [service.id, service.name]));
   const since = new Date(now.getTime() - ALERT_QUALITY_WINDOW_DAYS * 86_400_000);
@@ -75,7 +84,11 @@ export async function getAlertQualityLeaderboard(
 
   return rows
     .map(row => {
-      const score = scoreAlertQuality({ resolved: row.resolved, quickResolved: row.quick, neverAcknowledged: row.never });
+      const score = scoreAlertQuality({
+        resolved: row.resolved,
+        quickResolved: row.quick,
+        neverAcknowledged: row.never,
+      });
       return {
         serviceId: row.serviceId,
         serviceName: names.get(row.serviceId) ?? row.serviceId,
@@ -84,6 +97,11 @@ export async function getAlertQualityLeaderboard(
         flagged: score.noiseScore >= NOISY_THRESHOLD,
       };
     })
-    .sort((a, b) => b.noiseScore - a.noiseScore || b.incidents - a.incidents || a.serviceId.localeCompare(b.serviceId))
+    .sort(
+      (a, b) =>
+        b.noiseScore - a.noiseScore ||
+        b.incidents - a.incidents ||
+        a.serviceId.localeCompare(b.serviceId)
+    )
     .slice(0, MAX_ROWS);
 }

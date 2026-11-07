@@ -4,7 +4,11 @@
  */
 import { z } from 'zod/v4';
 
-export const FEEDBACK_SUBJECT_TYPES = ['FINDING', 'CORRELATION_MEMBER', 'INCIDENT_RELATIONSHIP'] as const;
+export const FEEDBACK_SUBJECT_TYPES = [
+  'FINDING',
+  'CORRELATION_MEMBER',
+  'INCIDENT_RELATIONSHIP',
+] as const;
 export type FeedbackSubjectType = (typeof FEEDBACK_SUBJECT_TYPES)[number];
 
 export const FEEDBACK_VERDICTS = ['HELPFUL', 'NOT_HELPFUL', 'CORRECT', 'INCORRECT'] as const;
@@ -58,10 +62,13 @@ export const submitFeedbackSchema = z
     message: 'This verdict does not apply to that kind of subject',
     path: ['verdict'],
   })
-  .refine(value => value.verdict === 'NOT_HELPFUL' || value.verdict === 'INCORRECT' || !value.reasonCode, {
-    message: 'A reason applies only to negative feedback',
-    path: ['reasonCode'],
-  });
+  .refine(
+    value => value.verdict === 'NOT_HELPFUL' || value.verdict === 'INCORRECT' || !value.reasonCode,
+    {
+      message: 'A reason applies only to negative feedback',
+      path: ['reasonCode'],
+    }
+  );
 export type SubmitFeedbackInput = z.infer<typeof submitFeedbackSchema>;
 
 export const revokeFeedbackSchema = z

@@ -123,21 +123,26 @@
     {
       "id": 5,
       "name": "Squire safety and evaluation",
-      "status": "pending",
+      "status": "in_progress",
       "remaining": [
-        "Untrusted-data envelopes and instruction-like text neutralization",
-        "Assistant-authored text labels and proposal trust flags",
-        "Configurable PII redaction and tool-dependent data classes",
         "Opt-in encrypted content audit",
         "Approximately 80 structural/live-judge cases, baseline regression gate and labelled engine storm/RCA fixtures",
         "PR mocked contracts and gated nightly live judge",
-        "Answer feedback and quality metrics",
-        "Basic-mode route rate limit and shared replica circuit-breaker state",
         "Token-to-cost price table, per-team/per-capability limits, 80/100 percent alerts and usage breakdown",
-        "Answer/suggestion reason feedback into evaluation and quality pages",
-        "Refresh architecture and operator docs to match final implementation"
+        "Refresh architecture and operator docs to match final implementation",
+        "Grow live-model cases toward ~80 with an LLM judge; token-to-cost price table and per-team budgets (deferred to the F/H workstreams)"
       ],
-      "wave": 6
+      "wave": 6,
+      "implemented": [
+        "Untrusted-data envelope around every tool result with secret redaction and instruction-like text neutralisation",
+        "Proposal trust flag (untrustedContext) when a turn read tool data before proposing",
+        "Per-tool data classes; saved turn classified as the highest class of tools that ran",
+        "Personal-data redaction (email, phone, IPv4/IPv6) helper",
+        "Shared replica circuit-breaker state via AiProviderBreaker, best effort with in-process fallback",
+        "Answer feedback (thumbs + reason, no text stored) and Quality-page summary",
+        "About 45 structural no-model evaluation cases on every PR (squire-evals-contract) and nightly live-model workflow with stored baseline gate",
+        "Basic-mode 429 shows a truthful status instead of AI limit reached"
+      ]
     },
     {
       "id": 6,
@@ -335,7 +340,22 @@
       "all_intelligence_database": "435 passed across 38 suites after Docker restart"
     },
     "blocker": null,
-    "guide": "docs/v2.2.0/guides/intelligence/basic-mode.md"
+    "guide": "docs/v2.2.0/guides/intelligence/basic-mode.md",
+    "v2": {
+      "status": "implemented_verified_locally",
+      "branch": "feat/intelligence-engine",
+      "capabilities": [
+        "Deterministic NLU: normalisation, spelling correction against a closed vocabulary, scored intents with two-choice clarification, slot extraction",
+        "Fuzzy service/team/person resolution with pg_trgm limited to readable entities, cached per actor",
+        "Calendar windows: since, between, single day, weekdays, ISO and month-name dates, 24h/7d shorthand",
+        "Dialogue state on SquireConversation.state (pending clarification, page cursor) or in memory without history",
+        "Paging (show more), page size, breakdowns by team/urgency/status/priority/day/hour, SQL-bounded MTTA/MTTR",
+        "Page context for service, team, schedule, runbook and alert pages",
+        "Basic-mode proposals and slash shortcuts through the existing sealed proposal flow",
+        "Answer-aware suggestion chips; admin-editable suggested-checks library; 10 s per-actor answer cache; evidence above 32 cited partially instead of withheld",
+        "Trigram indexes for Incident.title and Service.name via an online installer"
+      ]
+    }
   },
   "local_runtime_recovery": {
     "verified_at": "2026-11-06",
@@ -348,7 +368,7 @@
     "pre_push": "11161 unit tests passed, 7 skipped; production build passed through normal pre-push hook.",
     "ci": "ci:full label applied to PR #928. No workflow runs reported for pushed head. Read-only merge preview against current main reports conflicts in 17 files; branch integration is still required before CI can certify the PR."
   },
-  "scope_revision": "2026-11-06 expanded AIOps waves 1\u20137",
+  "scope_revision": "2026-11-06 expanded AIOps waves 1–7",
   "foundation_followup": {
     "status": "in_progress",
     "base_main": "db1c13a677deebbb28b488302e3189c4d7217b56",
