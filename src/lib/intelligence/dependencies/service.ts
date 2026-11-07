@@ -43,9 +43,11 @@ export interface DependencyView {
 }
 
 export async function listDependencies(client: typeof prisma = prisma): Promise<DependencyView[]> {
+  // ACTIVE sorts before SUGGESTED; within a status the most recently touched edges come first, so the
+  // bounded page is never an arbitrary slice of a large topology.
   const rows = await client.serviceDependency.findMany({
     where: { status: { in: ['ACTIVE', 'SUGGESTED'] } },
-    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }, { createdAt: 'desc' }],
     take: MAX_DEPENDENCIES,
     select: {
       id: true,
@@ -68,11 +70,15 @@ export async function listDependencies(client: typeof prisma = prisma): Promise<
   }));
 }
 
-/** Active edges only; suggested and rejected edges never influence analysis. */
+/**
+ * Active edges only; suggested and rejected edges never influence analysis. Most recently touched first, so
+ * when a topology exceeds the cap the edges that fall off are the stalest, not a random set.
+ */
 export async function loadActiveEdges(client: Prisma.TransactionClient | typeof prisma = prisma) {
   return memoizeIntelligenceRead('dependency-edges', client, () =>
     client.serviceDependency.findMany({
       where: { status: 'ACTIVE' },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
       take: MAX_DEPENDENCIES,
       select: { upstreamServiceId: true, downstreamServiceId: true },
     })
@@ -89,7 +95,12 @@ export async function declareDependency(input: unknown, actor: IntelligenceActor
     });
     if (services !== 2) throw invalid('Unknown service');
     const existing = await tx.serviceDependency.findUnique({ where: key, select: { id: true } });
-    if (!existing && (await tx.serviceDependency.count()) >= MAX_DEPENDENCIES) {
+    // Rejected edges are a permanent human record, not topology; they never consume the cap.
+    if (
+      !existing &&
+      (await tx.serviceDependency.count({ where: { status: { not: 'REJECTED' } } })) >=
+        MAX_DEPENDENCIES
+    ) {
       throw invalid('Dependency limit reached');
     }
     const row = await tx.serviceDependency.upsert({

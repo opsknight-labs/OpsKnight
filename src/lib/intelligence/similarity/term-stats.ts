@@ -58,6 +58,53 @@ export function selectQueryTerms(
     .map(term => term.token);
 }
 
+/** Distinctive words searched together by the full-text source. */
+export const MAX_FULLTEXT_TERMS = 3;
+
+export interface FullTextQueryPlan {
+  /** Up to MAX_FULLTEXT_TERMS words, rarest first; empty when the fingerprint has no words. */
+  terms: string[];
+  /** 'any': match a candidate sharing any of several rare words; 'all': every listed word is required. */
+  mode: 'any' | 'all';
+  /** False when every word is common: a text search would rank a large share of history. */
+  distinctive: boolean;
+}
+
+/**
+ * What the full-text source should ask for. With two or more distinctive words (below the common-term
+ * floor) they are combined with OR, so a candidate that shares any rare word is found and ranked and a rare
+ * word never has to co-occur with another. With exactly one, the next-rarest word is required alongside it,
+ * as before. With none, the plan says so: the caller may skip the text search when trigram matching covers
+ * the same ground, and otherwise requires the two rarest words to keep the match set small.
+ */
+export function planFullTextQuery(
+  tokens: readonly string[],
+  frequencies: ReadonlyMap<string, number>
+): FullTextQueryPlan {
+  const unique = [...new Set(tokens)];
+  const ranked = unique
+    .map((token, order) => ({ token, order, frequency: frequencies.get(token) ?? 0 }))
+    .sort((a, b) => a.frequency - b.frequency || a.order - b.order);
+  const distinctive = ranked.filter(term => term.frequency <= COMMON_TERM_FREQUENCY);
+  if (distinctive.length >= 2) {
+    return {
+      terms: distinctive.slice(0, MAX_FULLTEXT_TERMS).map(term => term.token),
+      mode: 'any',
+      distinctive: true,
+    };
+  }
+  return {
+    terms: ranked.slice(0, Math.min(2, ranked.length)).map(term => term.token),
+    mode: 'all',
+    distinctive: distinctive.length === 1,
+  };
+}
+
+/** The websearch_to_tsquery text for a plan. */
+export function fullTextQueryText(plan: FullTextQueryPlan): string {
+  return plan.mode === 'any' ? plan.terms.join(' or ') : plan.terms.join(' ');
+}
+
 /** Inverse document frequency from the same statistics; unknown words are treated as rare. */
 export function inverseDocumentFrequency(
   token: string,

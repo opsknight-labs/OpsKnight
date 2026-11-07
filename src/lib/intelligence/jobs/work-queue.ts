@@ -162,19 +162,26 @@ export async function enqueueWorkItems(
  * are read as two separate index-backed arms, so neither dead letters nor live leases are ever scanned.
  * `excludeKinds` leaves kinds whose handler is currently tripped (see the kind breaker) in the queue.
  */
+export interface ClaimOptions {
+  limit: number;
+  leaseMs?: number;
+  maxAttempts?: number;
+  excludeKinds?: readonly string[];
+}
+
 export async function claimWorkItems(
-  options: {
-    limit: number;
-    leaseMs?: number;
-    maxAttempts?: number;
-    excludeKinds?: readonly string[];
-  },
+  options: ClaimOptions,
   client: Client = prisma
 ): Promise<ClaimedWorkItem[]> {
+  return client.$queryRaw<ClaimedWorkItem[]>(claimWorkItemsSql(options));
+}
+
+/** The production claim statement itself, so benchmarks can EXPLAIN exactly what the lane runs. */
+export function claimWorkItemsSql(options: ClaimOptions): Prisma.Sql {
   const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
   const maxAttempts = options.maxAttempts ?? MAX_WORK_ATTEMPTS;
   const excluded = [...(options.excludeKinds ?? [])];
-  return client.$queryRaw<ClaimedWorkItem[]>(Prisma.sql`
+  return Prisma.sql`
     WITH unleased AS (
       SELECT "id", "priority", "scheduledAt", "createdAt" FROM "IntelligenceWorkItem"
       WHERE "claimToken" IS NULL AND "attempts" < ${maxAttempts} AND "scheduledAt" <= now()
@@ -214,7 +221,7 @@ export async function claimWorkItems(
     FROM ready
     WHERE w."id" = ready."id"
     RETURNING w."id", w."kind", w."subjectKey", w."generation", w."claimToken", w."attempts", w."force"
-  `);
+  `;
 }
 
 /** Extends a lease for long-running handlers; false means the claim was lost and work must stop. */
@@ -295,10 +302,40 @@ export interface WorkBacklog {
   oldestReadyAgeMs: number | null;
 }
 
+/** Scrapes reuse one aggregate for this long per process; operator pages and tests read fresh. */
+export const WORK_BACKLOG_CACHE_MS = 10_000;
+let backlogCache: { at: number; value: Promise<WorkBacklog> } | null = null;
+
+/**
+ * Backlog counts for the settings page and metrics. The aggregate reads every row of the work table, which
+ * is small in steady state (finished items are deleted) but can hold many dead letters or a long backfill;
+ * `maxAgeMs` lets frequent callers such as the metrics scrape share one recent answer per process instead of
+ * running the aggregate on every scrape.
+ */
 export async function getWorkBacklog(
   maxAttempts: number = MAX_WORK_ATTEMPTS,
-  client: Client = prisma
+  client: Client = prisma,
+  options: { maxAgeMs?: number; now?: number } = {}
 ): Promise<WorkBacklog> {
+  const now = options.now ?? Date.now();
+  const maxAgeMs = options.maxAgeMs ?? 0;
+  if (maxAgeMs > 0 && client === prisma && backlogCache && now - backlogCache.at < maxAgeMs)
+    return backlogCache.value;
+  const value = readWorkBacklog(maxAttempts, client);
+  if (maxAgeMs > 0 && client === prisma) {
+    backlogCache = { at: now, value };
+    value.catch(() => {
+      backlogCache = null;
+    });
+  }
+  return value;
+}
+
+export function resetWorkBacklogCacheForTests() {
+  backlogCache = null;
+}
+
+async function readWorkBacklog(maxAttempts: number, client: Client): Promise<WorkBacklog> {
   const [row] = await client.$queryRaw<
     Array<{
       ready: bigint;

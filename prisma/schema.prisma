@@ -4069,6 +4069,7 @@ model RunbookExecution {
   @@index([incidentId])
   @@index([incidentId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_runbook_execution_incident_cursor")
   @@index([serviceId])
+  @@index([serviceId, createdAt], map: "idx_runbook_execution_service_recent")
   @@index([runbookId])
   @@index([runbookVersionId])
   @@index([triggerId])

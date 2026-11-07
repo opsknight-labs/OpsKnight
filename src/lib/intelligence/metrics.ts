@@ -2,7 +2,7 @@ import 'server-only';
 import { collectFeatureMetrics, type FeatureMetricName } from './feature-metrics';
 import { logger } from '@/lib/logger';
 import { getIntelligenceLaneStatus, type LaneStatus } from './jobs/runner';
-import { getWorkBacklog, WORK_KINDS } from './jobs/work-queue';
+import { getWorkBacklog, WORK_BACKLOG_CACHE_MS, WORK_KINDS } from './jobs/work-queue';
 
 /** A lane that has not completed a cycle for this long is wedged, not merely idle (idle polls every few seconds). */
 export const LANE_STALE_AFTER_MS = 120_000;
@@ -101,7 +101,8 @@ export async function collectIntelligenceMetrics(
     }
   }
   try {
-    const backlog = await getWorkBacklog();
+    // One aggregate per process every few seconds, however many scrapers ask.
+    const backlog = await getWorkBacklog(undefined, undefined, { maxAgeMs: WORK_BACKLOG_CACHE_MS });
     samples.push(
       { name: 'opsknight_intelligence_queue_ready', value: backlog.ready },
       {

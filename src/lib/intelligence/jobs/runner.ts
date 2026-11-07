@@ -45,7 +45,7 @@ import {
   embedIncidents,
   EMBED_BATCH_SIZE,
   EMBED_INTERVAL_MS,
-  findIncidentsToEmbed,
+  findIncidentsToEmbedPage,
 } from '../semantic/embedder';
 import {
   claimWorkItems,
@@ -162,30 +162,34 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   [WORK_KINDS.EMBED_PENDING]: async (_item, { signal }) => {
     const model = await currentEmbeddingModel();
     if (!model) return;
-    const pending = await findIncidentsToEmbed(model);
-    if (pending.length === 0) return;
-    let outcome: Awaited<ReturnType<typeof embedIncidents>>;
-    try {
-      outcome = await embedIncidents(pending, signal);
-    } catch (error) {
-      // Expected spend/rate pauses are rediscovered by the next scheduled pass. They must not
-      // exhaust retries and quarantine a healthy backfill before the next UTC allowance opens.
-      if (
-        error instanceof AiGatewayError &&
-        (error.code === 'BUDGET_EXHAUSTED' || error.code === 'RATE_LIMITED')
-      )
-        return;
-      throw error;
+    const page = await findIncidentsToEmbedPage(model);
+    const next: Array<{ kind: WorkKind; subjectKey: string }> = [];
+    let embedded = 0;
+    if (page.ids.length > 0) {
+      let outcome: Awaited<ReturnType<typeof embedIncidents>>;
+      try {
+        outcome = await embedIncidents(page.ids, signal);
+      } catch (error) {
+        // Expected spend/rate pauses are rediscovered by the next scheduled pass. They must not
+        // exhaust retries and quarantine a healthy backfill before the next UTC allowance opens.
+        if (
+          error instanceof AiGatewayError &&
+          (error.code === 'BUDGET_EXHAUSTED' || error.code === 'RATE_LIMITED')
+        )
+          return;
+        throw error;
+      }
+      if (outcome.status !== 'done') return;
+      embedded = outcome.embedded.length;
+      next.push(
+        ...outcome.embedded.map(id => ({ kind: WORK_KINDS.ANALYZE_INCIDENT, subjectKey: id }))
+      );
     }
-    if (outcome.status !== 'done') return;
-    const next: Array<{ kind: WorkKind; subjectKey: string }> = outcome.embedded.map(id => ({
-      kind: WORK_KINDS.ANALYZE_INCIDENT,
-      subjectKey: id,
-    }));
-    if (pending.length >= EMBED_BATCH_SIZE && outcome.embedded.length > 0) {
+    // Keep walking while the window has more pages, or while a full batch was just embedded.
+    if (page.more || (page.ids.length >= EMBED_BATCH_SIZE && embedded > 0)) {
       next.push({ kind: WORK_KINDS.EMBED_PENDING, subjectKey: SEMANTIC_SUBJECT });
     }
-    await enqueueWorkItems(next);
+    if (next.length) await enqueueWorkItems(next);
   },
   [WORK_KINDS.SEND_DIGEST]: async (item, { signal }) => {
     if ((await sendDigestPass(item.subjectKey, new Date(), signal)) === 'more') {

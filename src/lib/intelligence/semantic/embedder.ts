@@ -204,33 +204,93 @@ export async function embedIncidents(
   return { status: 'done', model: port.model, embedded };
 }
 
+/** Fingerprints examined per pass while looking for pending vectors; the cursor advances by at most this. */
+export const EMBED_SCAN_PAGE = 5_000;
+const embedCursorName = (model: string) => `embed:${model}`;
+
+export interface EmbedPage {
+  /** Incidents in this page whose vector is missing or out of date, newest first, at most one batch. */
+  ids: string[];
+  /** True when the page was full: more of the lookback window remains to be walked this round. */
+  more: boolean;
+}
+
 /**
  * Recent incidents whose vector is missing or out of date: new incidents, an edited title, a changed
- * model, or work that failed while a provider was down. Newest first and bounded per pass.
+ * model, or work that failed while a provider was down. The lookback window is walked newest to oldest in
+ * bounded pages behind a per-model cursor, so one pass never reads the whole window or every service's
+ * policy; the policy is checked only for the few rows that are actually pending. An exhausted walk clears
+ * the cursor, and the next pass starts again from the newest incident.
  */
+export async function findIncidentsToEmbedPage(
+  model: string,
+  now: Date = new Date()
+): Promise<EmbedPage> {
+  const lowerBound = new Date(now.getTime() - EMBED_LOOKBACK_DAYS * 86_400_000);
+  const activeMode = candidatePolicyModeSql(Prisma.sql`p."serviceId"`);
+  return withDbBudget({ maxDbMs: 750 }, async tx => {
+    const name = embedCursorName(model);
+    const cursor = await tx.intelligenceCursor.findUnique({ where: { name } });
+    const after = cursor && cursor.watermarkAt > lowerBound ? cursor : null;
+    const rows = await tx.$queryRaw<
+      Array<{ kind: 'pending' | 'tail'; incidentId: string; at: Date | null; size: bigint }>
+    >(Prisma.sql`
+      WITH page AS (
+        SELECT f."incidentId", f."incidentCreatedAt", f."templateHash", f."sourceUpdatedAt",
+               i."serviceId", i."updatedAt"
+        FROM "IncidentFingerprint" f JOIN "Incident" i ON i.id = f."incidentId"
+        WHERE f."incidentCreatedAt" > ${lowerBound} AND length(f."template") > 0
+          AND f."templateHash" IS NOT NULL
+          ${
+            after
+              ? Prisma.sql`AND (f."incidentCreatedAt" < ${after.watermarkAt}
+                   OR (f."incidentCreatedAt" = ${after.watermarkAt} AND f."incidentId" < ${after.lastId}))`
+              : Prisma.empty
+          }
+        ORDER BY f."incidentCreatedAt" DESC, f."incidentId" DESC
+        LIMIT ${EMBED_SCAN_PAGE}
+      ),
+      tail AS (
+        SELECT "incidentId", "incidentCreatedAt", (SELECT count(*) FROM page) AS size
+        FROM page ORDER BY "incidentCreatedAt" ASC, "incidentId" ASC LIMIT 1
+      ),
+      pending AS (
+        SELECT p."incidentId", p."incidentCreatedAt" FROM page p
+        LEFT JOIN "IncidentEmbedding" e ON e."incidentId" = p."incidentId"
+        WHERE (e."incidentId" IS NULL OR e."model" <> ${model} OR e."sourceHash" <> p."templateHash"
+               OR e."serviceId" <> p."serviceId" OR p."sourceUpdatedAt" IS DISTINCT FROM p."updatedAt")
+          AND ${activeMode} <> 'OFF'::"IntelligenceMode"
+        ORDER BY p."incidentCreatedAt" DESC, p."incidentId" DESC
+        LIMIT ${EMBED_BATCH_SIZE}
+      )
+      SELECT 'pending' AS kind, "incidentId", "incidentCreatedAt" AS at, 0::bigint AS size FROM pending
+      UNION ALL
+      SELECT 'tail' AS kind, "incidentId", "incidentCreatedAt" AS at, size FROM tail`);
+    const tail = rows.find(row => row.kind === 'tail');
+    const ids = rows
+      .filter(row => row.kind === 'pending')
+      .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0))
+      .map(row => row.incidentId);
+    const more = tail !== undefined && Number(tail.size) >= EMBED_SCAN_PAGE;
+    if (more && tail?.at) {
+      await tx.intelligenceCursor.upsert({
+        where: { name },
+        create: { name, watermarkAt: tail.at, lastId: tail.incidentId },
+        update: { watermarkAt: tail.at, lastId: tail.incidentId },
+      });
+    } else if (cursor) {
+      await tx.intelligenceCursor.delete({ where: { name } });
+    }
+    return { ids, more };
+  });
+}
+
+/** The pending incidents of the current page; see findIncidentsToEmbedPage. */
 export async function findIncidentsToEmbed(
   model: string,
   now: Date = new Date()
 ): Promise<string[]> {
-  const lowerBound = new Date(now.getTime() - EMBED_LOOKBACK_DAYS * 86_400_000);
-  const activeMode = candidatePolicyModeSql(Prisma.sql`s.id`);
-  const rows = await withDbBudget(
-    { maxDbMs: 750 },
-    tx => tx.$queryRaw<Array<{ incidentId: string }>>`
-    WITH active_services AS MATERIALIZED (
-      SELECT s.id FROM "Service" s WHERE ${activeMode} <> 'OFF'::"IntelligenceMode"
-    )
-    SELECT f."incidentId" FROM "IncidentFingerprint" f
-    JOIN "Incident" i ON i.id = f."incidentId"
-    JOIN active_services active ON active.id = i."serviceId"
-    LEFT JOIN "IncidentEmbedding" e ON e."incidentId" = f."incidentId"
-    WHERE f."incidentCreatedAt" > ${lowerBound} AND length(f."template") > 0
-      AND f."templateHash" IS NOT NULL
-      AND (e."incidentId" IS NULL OR e."model" <> ${model} OR e."sourceHash" <> f."templateHash" OR e."serviceId" <> i."serviceId" OR f."sourceUpdatedAt" IS DISTINCT FROM i."updatedAt")
-    ORDER BY f."incidentCreatedAt" DESC
-    LIMIT ${EMBED_BATCH_SIZE}`
-  );
-  return rows.map(row => row.incidentId);
+  return (await findIncidentsToEmbedPage(model, now)).ids;
 }
 
 export interface SemanticIndexStatus {

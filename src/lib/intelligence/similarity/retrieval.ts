@@ -10,7 +10,12 @@ import {
   type SimilarityComponents,
   type SimilarityFingerprint,
 } from './scoring';
-import { inverseDocumentFrequency, selectQueryTerms, termFrequencies } from './term-stats';
+import {
+  fullTextQueryText,
+  inverseDocumentFrequency,
+  planFullTextQuery,
+  termFrequencies,
+} from './term-stats';
 
 export interface SimilarityOptions {
   /** Candidates fetched per source; the total examined is at most 3x this. */
@@ -132,11 +137,13 @@ export async function findSimilarIncidents(
     // "service" would otherwise match a large share of history and make this the most expensive query.
     // ts_rank over the stored vector is enough to pick candidates (they are re-scored below); cover
     // density ranking cost ~30x more per matching row.
-    const terms = selectQueryTerms(source.tokens, frequencies);
-    if (terms.length > 0) {
-      // Two informative terms constrain broad history before ranking. Same-service and trigram
-      // tiers preserve recall when a candidate does not contain both words.
-      const tsQuery = terms.slice(0, 2).join(' ');
+    const plan = planFullTextQuery(source.tokens, frequencies);
+    // Up to three rare words with OR find any candidate that shares one of them, each rare enough to keep
+    // the ranked set small. A title made only of common words is left to the trigram source when there is
+    // one; a text search over such words would rank a large share of history for little signal.
+    const skipFullText = !plan.distinctive && capabilities.trigramAvailable;
+    if (plan.terms.length > 0 && !skipFullText) {
+      const tsQuery = fullTextQueryText(plan);
       collect(
         await tolerant(tx, 'fulltext', () =>
           tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
