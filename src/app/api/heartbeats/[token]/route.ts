@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { jsonError, jsonOk } from '@/lib/api-response';
 import { checkRateLimit } from '@/lib/integrations/rate-limiter';
 import { hashHeartbeatToken } from '@/lib/intelligence/noise-controls/manage';
 import { recordHeartbeat } from '@/lib/intelligence/noise-controls/heartbeats';
@@ -14,16 +15,15 @@ const TOKEN = /^[A-Za-z0-9_-]{20,128}$/;
 
 async function ping(_req: NextRequest, params: Promise<{ token: string }>) {
   const { token } = await params;
-  if (!TOKEN.test(token)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!TOKEN.test(token)) return jsonError('Not found', 404);
   const limit = await checkRateLimit(`heartbeat:${hashHeartbeatToken(token).slice(0, 16)}`, {
     maxRequests: 120,
     windowMs: 60_000,
   });
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many pings' }, { status: 429 });
+  if (!limit.allowed) return jsonError('Too many pings', 429);
   const outcome = await recordHeartbeat(token);
-  if (outcome === 'unknown' || outcome === 'paused')
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json({ status: outcome }, { status: 200 });
+  if (outcome === 'unknown' || outcome === 'paused') return jsonError('Not found', 404);
+  return jsonOk({ status: outcome });
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ token: string }> }) {

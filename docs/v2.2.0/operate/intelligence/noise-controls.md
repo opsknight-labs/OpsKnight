@@ -1,3 +1,23 @@
+---
+title: Noise controls (pre-paging)
+description: Maintenance windows, suppression and orchestration rules, content dedup, flapping, storm grouping and heartbeat monitors, shadow-first and reversible.
+type: deployment
+product_area: intelligence
+audience: [operator, administrator]
+reader:
+  status: SOURCE_VERIFIED
+  task: Configure pre-paging noise controls in shadow, check them against history, then turn them on per service.
+verification:
+  level: test
+  verified_at: 2026-11-07
+  evidence:
+    [
+      src/lib/intelligence/noise-controls,
+      tests/unit/intelligence-noise-controls.test.ts,
+      tests/integration/intelligence/noise-controls.test.ts,
+    ]
+---
+
 # Noise controls (pre-paging)
 
 Settings → Intelligence → **Noise controls** decides what happens to an alert _before_ it pages:
