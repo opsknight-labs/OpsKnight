@@ -162,7 +162,7 @@ describe('optional Secrets Store CSI integration', () => {
         'serviceAccount.name=cloud-identity',
       ]);
       const workloads = pods(docs).filter(doc => doc.kind !== 'StatefulSet');
-      expect(workloads.length).toBe(mode === 'split' ? 8 : 2);
+      expect(workloads.length).toBe(mode === 'split' ? 9 : 2);
       for (const doc of workloads) {
         expectMount(doc);
         expect(doc.spec.template.spec.serviceAccountName).toBe('cloud-identity');

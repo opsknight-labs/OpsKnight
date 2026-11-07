@@ -117,7 +117,10 @@ export default function PrioritySelector({
       }}
       disabled={isPending}
     >
-      <SelectTrigger className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
+      <SelectTrigger
+        aria-label={`Priority: ${priority ?? 'not set'}`}
+        className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group"
+      >
         <div
           className={cn(
             SELECTOR_BASE_CLASS,

@@ -1,0 +1,273 @@
+rule_files:
+  - opsknight-alerts.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_lane_last_cycle_age_seconds{instance="worker-a"}'
+        values: '10 400 460 520 580 640 700 760'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpsKnightIntelligenceLaneStalled
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: OpsKnightIntelligenceLaneStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The intelligence lane has not completed a cycle for five minutes
+              description: Suggestions are going stale. Paging is unaffected. Check the worker or intelligence-worker logs and database health, then restart the worker if it is wedged.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_lane_paused{instance="worker-a"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightIntelligencePausedForPaging
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: OpsKnightIntelligencePausedForPaging
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Intelligence has yielded to a paging backlog for fifteen minutes
+              description: The lane pauses itself while escalation or notification work is behind. Investigate the paging backlog first; intelligence resumes on its own when it clears.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_queue_oldest_ready_age_seconds
+        values: '0 1000x15'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpsKnightIntelligenceBacklogStale
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: OpsKnightIntelligenceBacklogStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Intelligence work has waited more than fifteen minutes
+              description: Raise the batch size or concurrency in Settings, Intelligence, or run a dedicated intelligence-worker. Paging is unaffected.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_dead_letters
+        values: '0 0 2x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightIntelligenceDeadLetters
+        exp_alerts: []
+      - eval_time: 18m
+        alertname: OpsKnightIntelligenceDeadLetters
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Some intelligence work exhausted its retries
+              description: Review and replay the quarantined items in Settings, Intelligence. Affected incidents only lack suggestions; paging is unaffected.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_work_quarantined
+        values: '0 1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightIntelligenceWorkQuarantined
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: OpsKnightIntelligenceWorkQuarantined
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Some intelligence work was quarantined after failing twice
+              description: These items are never retried on their own. Inspect the failure code in Settings, Intelligence, fix the cause, then replay them. Paging is unaffected.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_kind_paused{instance="worker-a",kind="INDEX_INCIDENT"}'
+        values: '1x15'
+      - series: 'opsknight_intelligence_kind_paused{instance="worker-a",kind="ANALYZE_INCIDENT"}'
+        values: '0x15'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpsKnightIntelligenceKindPaused
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: OpsKnightIntelligenceKindPaused
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: INDEX_INCIDENT
+            exp_annotations:
+              summary: One kind of intelligence work is paused after repeated failures
+              description: The lane skips the INDEX_INCIDENT handler for a few minutes at a time while most of its items fail; other work continues. Check the worker logs for that kind. Paging is unaffected.
+  # A lane that reported within the hour and then vanished (crash, scaled to zero by mistake) is noticed.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_lane_up{instance="worker-a"}'
+        values: '1x10 _x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightIntelligenceLaneGone
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: OpsKnightIntelligenceLaneGone
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Every intelligence lane process has disappeared
+              description: A lane was reporting within the last hour and none reports now. Check that the worker or intelligence-worker processes are running. Paging is unaffected.
+  # A disabled install exports no lane gauges and an empty queue: nothing fires.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_queue_oldest_ready_age_seconds
+        values: '0x30'
+      - series: opsknight_intelligence_dead_letters
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: OpsKnightIntelligenceLaneStalled
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: OpsKnightIntelligenceBacklogStale
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: OpsKnightIntelligenceDeadLetters
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_embedding_pending{instance="worker-a"}'
+        values: '10x40'
+      - series: 'opsknight_intelligence_embedding_enabled{instance="worker-a"}'
+        values: '1x40'
+      - series: 'opsknight_intelligence_embedding_budget_remaining_tokens{instance="worker-a"}'
+        values: '100x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: OpsKnightIntelligenceEmbeddingBacklog
+        exp_alerts: []
+      - eval_time: 31m
+        alertname: OpsKnightIntelligenceEmbeddingBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Semantic indexing has pending work despite available allowance
+              description: Inspect semantic indexing progress and eligible provider health in Assistant & AI. Disabled indexing and exhausted allocations are excluded. Paging is unaffected.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_digest_failed_recipients_last_7d'
+        values: '2x30'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OpsKnightIntelligenceDigestDeliveryFailures
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: OpsKnightIntelligenceDigestDeliveryFailures
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Recent weekly digest recipient sends failed
+              description: Inspect digest history and mail-provider health. Use reviewed recipient retry after repairing delivery; successful recipients must not be resent automatically.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_digest_oldest_sending_age_seconds'
+        values: '4000x30'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OpsKnightIntelligenceDigestStalled
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: OpsKnightIntelligenceDigestStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A recent weekly digest has remained sending for over an hour
+              description: Inspect digest progress and worker/provider health before retrying individual failed recipients. Tune this threshold for measured large-recipient batches.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_squire_actions_uncertain_last_24h'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OpsKnightSquireActionUncertain
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: OpsKnightSquireActionUncertain
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A confirmed assistant action has an uncertain or stale unfinished outcome
+              description: Have the confirming responder inspect their saved action receipt and the incident audit. Do not automatically retry uncertain writes.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_feature_probe_failed'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OpsKnightIntelligenceFeatureProbeFailed
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: OpsKnightIntelligenceFeatureProbeFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Intelligence feature telemetry could not be collected
+              description: Inspect database connectivity and bounded-query timeouts. Omitted feature samples mean unknown coverage. Application readiness is unaffected.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_squire_actions_sample_truncated'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OpsKnightIntelligenceTelemetrySampleTruncated
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: OpsKnightIntelligenceTelemetrySampleTruncated
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Intelligence feature telemetry exceeded its bounded sample
+              description: Treat recent outcome counts as sampled coverage and inspect the underlying authorized records. Measure database cost before increasing sample limits.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_embedding_pending
+        values: '10x40'
+      - series: opsknight_intelligence_embedding_enabled
+        values: '0x40'
+      - series: opsknight_intelligence_embedding_budget_remaining_tokens
+        values: '100x40'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: OpsKnightIntelligenceEmbeddingBacklog
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_embedding_pending
+        values: '10x40'
+      - series: opsknight_intelligence_embedding_enabled
+        values: '1x40'
+      - series: opsknight_intelligence_embedding_budget_remaining_tokens
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: OpsKnightIntelligenceEmbeddingBacklog
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_embedding_pending
+        values: '10x10 0x30'
+      - series: opsknight_intelligence_embedding_enabled
+        values: '1x40'
+      - series: opsknight_intelligence_embedding_budget_remaining_tokens
+        values: '100x40'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: OpsKnightIntelligenceEmbeddingBacklog
+        exp_alerts: []

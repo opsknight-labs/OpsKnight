@@ -1,10 +1,20 @@
+import IncidentIntelligencePanel from './IncidentIntelligencePanel';
+import IncidentAnalysisStatus from './IncidentAnalysisStatus';
+import IntelligenceSkeleton from './IntelligenceSkeleton';
 import prisma from '@/lib/prisma';
+import { Suspense } from 'react';
 import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
+import IncidentIntelligenceCard from '@/components/incident/IncidentIntelligenceCard';
+import IncidentRelatedCard from '@/components/incident/IncidentRelatedCard';
+import IncidentResponseCard from '@/components/incident/IncidentResponseCard';
+import IncidentAskSquireCard from '@/components/squire/IncidentAskSquireCard';
+import IncidentAiSummaryCard from '@/components/incident/IncidentAiSummaryCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { CAPABILITIES } from '@/lib/authorization';
+import { resolveEffectivePolicyForRequest } from '@/lib/intelligence/settings/service';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
@@ -127,6 +137,12 @@ export default async function IncidentDetailScreen({
 
   if (!storedIncident) notFound();
   const permissions = await getUserPermissions();
+  const canReadIntelligence = permissions.capabilities.includes(
+    CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ
+  );
+  const showIntelligence =
+    canReadIntelligence &&
+    (await resolveEffectivePolicyForRequest(storedIncident.serviceId)).effectiveMode !== 'OFF';
   const sensitive = permissions.capabilities.includes(CAPABILITIES.INCIDENT_SENSITIVE_READ);
   const sourceRestricted =
     (storedIncident.automationSourceRestricted ||
@@ -614,6 +630,41 @@ export default async function IncidentDetailScreen({
               resolutionNote={resolutionNote}
               postmortemStatus={postmortem?.status ?? null}
               canManage={canManageIncident}
+            />
+          )}
+
+          {showIntelligence && (
+            <IncidentIntelligencePanel
+              analysisStatus={
+                <Suspense fallback={null}>
+                  <IncidentAnalysisStatus incidentId={incident.id} />
+                </Suspense>
+              }
+              similar={
+                <Suspense fallback={<IntelligenceSkeleton />}>
+                  <IncidentIntelligenceCard incidentId={incident.id} />
+                </Suspense>
+              }
+              related={
+                <Suspense fallback={<IntelligenceSkeleton />}>
+                  <IncidentRelatedCard incidentId={incident.id} />
+                </Suspense>
+              }
+              response={
+                <Suspense fallback={<IntelligenceSkeleton />}>
+                  <IncidentResponseCard incidentId={incident.id} />
+                </Suspense>
+              }
+              summary={
+                <Suspense fallback={<IntelligenceSkeleton />}>
+                  <IncidentAiSummaryCard incidentId={incident.id} />
+                </Suspense>
+              }
+              assistant={
+                <Suspense fallback={<IntelligenceSkeleton />}>
+                  <IncidentAskSquireCard />
+                </Suspense>
+              }
             />
           )}
 

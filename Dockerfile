@@ -82,7 +82,7 @@ ENV NEXT_PUBLIC_SOURCE_CODE_URL=$SOURCE_CODE_URL
 
 # Build Next.js application with production optimizations
 # Pages that need database access are marked as dynamic, so build works without DB
-ARG BUILD_NODE_MAX_OLD_SPACE_SIZE=4096
+ARG BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
 ARG OPSKNIGHT_BUILD_LOW_MEMORY=false
 ARG BUILD_RAYON_THREADS=4
 ENV OPSKNIGHT_BUILD_LOW_MEMORY=$OPSKNIGHT_BUILD_LOW_MEMORY

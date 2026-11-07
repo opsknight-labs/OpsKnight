@@ -33,12 +33,12 @@ teams by hand.
 
 ## Roles
 
-| Role | What it allows |
-| --- | --- |
+| Role          | What it allows                                    |
+| ------------- | ------------------------------------------------- |
 | Administrator | Everything, including settings and single sign-on |
-| Responder | Handle incidents and be on call |
-| Auditor | Read-only access to everything |
-| User | Basic access |
+| Responder     | Handle incidents and be on call                   |
+| Auditor       | Read-only access to everything                    |
+| User          | Basic access                                      |
 
 ### Add a role rule
 
@@ -71,7 +71,7 @@ your provider has two groups that differ only by case.
 - **Default role** — the role for people whose groups match no rule, and the role new accounts
   start with. Most teams choose User or Responder. Administrator cannot be the default; give it
   with a rule.
-- **When no rule matches** — *Let them in with the default role*, or *Refuse sign-in*. Refusing
+- **When no rule matches** — _Let them in with the default role_, or _Refuse sign-in_. Refusing
   shows the person "Your account is not assigned to OpsKnight". People whose role an
   administrator set by hand are never refused this way.
 
@@ -94,7 +94,7 @@ people directory and the console show which.
   they are in, so it fails safe: no rule can raise their role, and a role from SSO above the
   default role is lowered to the default. Otherwise, removing someone from an admin group would
   never take effect. Roles set by an administrator or by SCIM do not change, team memberships
-  are kept, and administrators get one alert per person per day. If you refuse people no rule matches, a *new* person with an incomplete list is refused
+  are kept, and administrators get one alert per person per day. If you refuse people no rule matches, a _new_ person with an incomplete list is refused
   too ("OpsKnight could not read your groups"), because they cannot be evaluated. Switch to App
   roles to fix it.
 - **The last administrator.** If a rule would take Administrator away from the only active

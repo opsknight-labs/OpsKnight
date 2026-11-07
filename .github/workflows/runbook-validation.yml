@@ -16,6 +16,9 @@ concurrency:
   group: runbook-validation-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   changes:
     name: Detect validation changes
@@ -58,6 +61,7 @@ jobs:
           "$tool_dir/promtool" check rules monitoring/prometheus/opsknight-alerts.yaml
           "$tool_dir/promtool" test rules monitoring/prometheus/runbook-maintenance.test.yml
           "$tool_dir/promtool" test rules monitoring/prometheus/ingestion.test.yml
+          "$tool_dir/promtool" test rules monitoring/prometheus/intelligence.test.yml
           "$tool_dir/promtool" check rules monitoring/prometheus/opsknight-recording-rules.yaml
           "$tool_dir/promtool" test rules monitoring/prometheus/mcp.test.yml
 
@@ -99,7 +103,7 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Production build
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
       - name: Authoring, execution preview and responsive browser checks
         run: npx playwright test --config playwright.runbooks.config.ts
@@ -284,7 +288,7 @@ jobs:
         run: npx prisma migrate deploy
       - name: Build production candidate
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
       - name: Build local Agent candidate
         run: docker build -f agent/Dockerfile -t opsknight-agent:rbe-local .

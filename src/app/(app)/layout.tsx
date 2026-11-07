@@ -1,6 +1,8 @@
 import prisma from '@/lib/prisma';
 import OperationalStatus from '@/components/OperationalStatus';
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
+import SquireMount from '@/components/squire/SquireMount';
 import { forcedSignOutUrl } from '@/lib/app-routes';
 
 import Sidebar from '@/components/Sidebar';
@@ -176,6 +178,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                       </div>
                     </div>
                     <CreateIncidentModal />
+                    <Suspense fallback={null}>
+                      <SquireMount />
+                    </Suspense>
                   </IncidentAlertProvider>
                 </RouteAwareRealtimeProvider>
               </IncidentCreationModalProvider>

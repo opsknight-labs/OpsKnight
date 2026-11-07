@@ -18,6 +18,7 @@
   $webConnections
   (mul .Values.scheduler.replicaCount .Values.scheduler.database.poolSize)
   (mul .Values.generalWorker.replicaCount .Values.generalWorker.database.poolSize)
+  (mul .Values.intelligenceWorker.replicaCount (add .Values.intelligenceWorker.database.poolSize 1))
   (mul .Values.criticalWorker.replicaCount .Values.criticalWorker.database.poolSize)
   (mul .Values.bulkWorker.replicaCount .Values.bulkWorker.database.poolSize)
   (mul .Values.runbookWorker.replicaCount .Values.runbookWorker.database.poolSize)
@@ -29,6 +30,7 @@
 {{- $roles := list
   (dict "name" "web" "processRole" "web" "values" .Values.web "poolEnv" "DATABASE_POOL_SIZE_WEB")
   (dict "name" "scheduler" "processRole" "scheduler" "values" .Values.scheduler "poolEnv" "DATABASE_POOL_SIZE_SCHEDULER")
+  (dict "name" "intelligence-worker" "processRole" "intelligence-worker" "values" .Values.intelligenceWorker "poolEnv" "DATABASE_POOL_SIZE_INTELLIGENCE_WORKER")
   (dict "name" "general-worker" "processRole" "general-worker" "values" .Values.generalWorker "poolEnv" "DATABASE_POOL_SIZE_GENERAL_WORKER")
   (dict "name" "critical-worker" "processRole" "critical-worker" "values" .Values.criticalWorker "poolEnv" "DATABASE_POOL_SIZE_CRITICAL_WORKER")
   (dict "name" "bulk-worker" "processRole" "bulk-worker" "values" .Values.bulkWorker "poolEnv" "DATABASE_POOL_SIZE_BULK_WORKER")
@@ -102,6 +104,8 @@ spec:
                   key: {{ $root.Values.secrets.keys.setupSecret }}
                   optional: true
             - name: OPSKNIGHT_SKIP_MIGRATIONS
+              value: "true"
+            - name: OPSKNIGHT_INTELLIGENCE_DEDICATED
               value: "true"
             - name: OPSKNIGHT_PROCESS_ROLE
               value: {{ $role.processRole | quote }}

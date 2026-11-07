@@ -980,6 +980,15 @@ describe('deployment configuration invariants', () => {
     expect(defaultSplit.headroom).toBe(45);
     expect(defaultSplit.mcpConnections).toBe(2);
 
+    // A dedicated intelligence worker is off by default and, when deployed, counts against the budget.
+    const withIntelligence = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      INTELLIGENCE_WORKER_REPLICAS: '2',
+      DATABASE_POOL_SIZE_INTELLIGENCE_WORKER: '4',
+    });
+    // Each lane also reserves one direct PostgreSQL LISTEN session.
+    expect(withIntelligence.totalDemand).toBe(defaultSplit.totalDemand + 10);
+
     // Integrated mode accounts for webReplicas * webPool
     const singleIntegrated = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'integrated' });
     expect(singleIntegrated.safe).toBe(true);

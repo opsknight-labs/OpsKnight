@@ -98,7 +98,9 @@ test.describe.serial('authenticated navigation fast path', () => {
     await page.clock.install();
     try {
       await page.keyboard.press('Shift');
-      await page.clock.fastForward(2 * 60 * 1000 + 1);
+      // Advance timers sequentially so pending route chunks can finish before
+      // webpack's two-minute timeout; a clock jump expires them immediately.
+      await page.clock.runFor(2 * 60 * 1000 + 1);
       await page.clock.resume();
 
       const requests = await navigationRequests(page);

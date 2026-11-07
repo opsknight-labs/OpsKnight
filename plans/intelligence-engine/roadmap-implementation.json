@@ -1,0 +1,368 @@
+{
+  "branch": "feat/intelligence-engine",
+  "delivery": "Continue feat/intelligence-engine and PR #928 on the same branch, per the explicit delivery request; no merge.",
+  "status": "in_progress",
+  "complete": false,
+  "phases": [
+    {
+      "id": 0,
+      "name": "Correctness and performance fixes",
+      "status": "implemented_pending_full_ci",
+      "implemented": [
+        "Preserve change webhook component and labels",
+        "Gate late-change fan-out on the master switch",
+        "Independent concurrent indexes for paging lookup and side-effect backlog",
+        "Keyset-cursor reconciliation with bounded pages",
+        "Batch anchor-reversal relationship events",
+        "Separate Squire event bus from UI implementation",
+        "Hide incident Intelligence panel when policy is OFF or permission is absent",
+        "Distinguish assistant permission denial from disabled status",
+        "Confirm provider removal",
+        "Batch correlation proposals, fingerprints, decision events and versioned system audits; retain ordered pair locks, current certification and human vetoes; system re-election reversals do not become false human vetoes"
+      ],
+      "remaining": [],
+      "wave": 1
+    },
+    {
+      "id": 1,
+      "name": "Engine latency and fan-out",
+      "status": "in_progress",
+      "implemented": [
+        "Digest all alert payloads and incident analysis inputs, policy identity/version/mode and engine version",
+        "Skip unchanged inputs and preserve truthful freshness snapshots",
+        "Persist/coalesce explicit operator force requests",
+        "Post-commit batched NOTIFY with LISTEN reconnect and polling recovery",
+        "Bounded oldest-first queue aging; first insight outranks fresh backfill",
+        "Dedicated split Compose and Helm worker with listener session capacity accounting",
+        "Settings warning when sharing paging process",
+        "Bounded change candidates and dependency observer buckets",
+        "Registered per-kind duration/failure metrics and first-insight histogram",
+        "Engine-local Prisma pool wait gauge with two measured quiet samples before recovery; skip the backlog SQL probe while the pool is contended",
+        "Bounded human suggestion acceptance metric, excluding AUTO/undo and reporting truncation; no fabricated ratio with zero reviews",
+        "Incremental alert cursor/digest and label union; explicit repair for edited or deleted inputs",
+        "Per-incident trailing wake throttle at most once per two seconds",
+        "Incremental dependency observation watermark",
+        "Cap reconcile pages at 500",
+        "Nullable common Alert severity/resourceKey/labels/fingerprintHash with concurrent indexes and bounded backfill"
+      ],
+      "remaining": [
+        "Repeatable p50 latency certification under concurrency",
+        "Full OFF/SHADOW/ON ingestion A/B release gate over 1M history; foundation indexing and EXPLAIN benchmark already measured separately"
+      ],
+      "wave": 1
+    },
+    {
+      "id": 2,
+      "name": "Alert correlation and pre-paging noise controls",
+      "status": "in_progress",
+      "implemented": [
+        "Lane-owned AlertFingerprint per alert with safe labels and source digest",
+        "Incident labels include later alerts; stable first value for conflicting shared keys",
+        "Alert fingerprint retention cascades with parent fingerprint"
+      ],
+      "remaining": [
+        "Per-service default-OFF noise policy and OFF/SHADOW/ON UI",
+        "Content dedup with partial open-fingerprint index",
+        "Policy-aware flapping and rotating-key detection",
+        "Storm grouping and bounded hold",
+        "Maintenance windows, recurrence, suppression rules and 30-second cache",
+        "Deadline-enforced fail-open ingestion path and decision metrics",
+        "Visible reversible decision timeline and ungroup-and-page command",
+        "Shadow certification and quality gate",
+        "HIGH urgency SUGGEST grouping policy",
+        "Noise KPI dashboard",
+        "10k burst / 1M history benchmark, fault injection and paging regression certification",
+        "Extend the existing automation engine with ordered cached DROP/SUPPRESS/TRANSFORM orchestration and seven-day simulation",
+        "Maintenance service/team/label scopes, RRULE, suppress-or-downgrade and optional status-page link",
+        "Owned expiring suppression rules and suggestions from alert quality",
+        "Parent/child incidents with rolled-up paging, topology storm scope and reversible unsuppress/end-maintenance actions",
+        "Heartbeat monitor model, token ping endpoint and normal-ingestion missed-heartbeat incidents"
+      ],
+      "wave": 2
+    },
+    {
+      "id": 3,
+      "name": "Triage and topology",
+      "status": "in_progress",
+      "implemented": ["Dependency observation uses lift and minimum support with bounded buckets"],
+      "remaining": [
+        "Integration metadata and Backstage JSON/YAML topology import",
+        "Native GitHub, ArgoCD and feature-flag change sources",
+        "Feedback-driven cause and runbook weight fitting",
+        "Change risk from historical incident rate, dependency blast radius, time and supplied size",
+        "Terraform-run change source; periodic declared topology sync and live service graph",
+        "Multi-window SLO burn evidence and SLO-aware urgency/parent selection",
+        "Scheduled lane-only Prometheus/Datadog anomaly evidence using seasonal baseline/MAD",
+        "Unified incident time axis for alerts, changes, upstream incidents and anomalies"
+      ],
+      "wave": 3
+    },
+    {
+      "id": 4,
+      "name": "Squire AI SRE capabilities",
+      "status": "pending",
+      "remaining": [
+        "Scoped metrics/logs/Sentry/GitHub diff tools",
+        "Alert detail, on-call and analytics tools",
+        "Escalate, urgency, merge, responder, snooze, status draft and follow-up proposals",
+        "In-chat incident/postmortem/stakeholder/customer drafts and reconstructed timeline",
+        "Budgeted parallel 12-step loop, task model routing and context summary",
+        "Evidence-based partial answer on step exhaustion",
+        "Opt-in proactive briefing, stakeholder nudge and postmortem draft",
+        "Slack/Teams mentions with interactive confirmation",
+        "Extend MCP and alert/change/service/runbook page context; verify existing MCP ask tool",
+        "Encrypted, team-scoped read-only ObservabilityConnection model, admin connection testing and SSRF-safe adapters for Prometheus/Grafana-Loki-Tempo/Datadog/Elastic/CloudWatch/Sentry/GitHub/GitLab",
+        "Runbook steps, traces, raw redacted alert payload, SLO status, escalation and maintenance tools",
+        "Approved runbook execution through existing prepare/approve/execute flow; ungroup, Jira, suppression and maintenance proposals",
+        "Investigation plan, at most four parallel reads, ranked evidence-backed hypotheses and collapsible progress",
+        "Knowledge chunks from postmortems/runbooks/resolution/notes, cited retrieval and optional docs import; human-approved service facts",
+        "Mobile incident Squire surface and knowledge memory; DIAGNOSE/CLASSIFY capability routing"
+      ],
+      "wave": 5
+    },
+    {
+      "id": 5,
+      "name": "Squire safety and evaluation",
+      "status": "pending",
+      "remaining": [
+        "Untrusted-data envelopes and instruction-like text neutralization",
+        "Assistant-authored text labels and proposal trust flags",
+        "Configurable PII redaction and tool-dependent data classes",
+        "Opt-in encrypted content audit",
+        "Approximately 80 structural/live-judge cases, baseline regression gate and labelled engine storm/RCA fixtures",
+        "PR mocked contracts and gated nightly live judge",
+        "Answer feedback and quality metrics",
+        "Basic-mode route rate limit and shared replica circuit-breaker state",
+        "Token-to-cost price table, per-team/per-capability limits, 80/100 percent alerts and usage breakdown",
+        "Answer/suggestion reason feedback into evaluation and quality pages",
+        "Refresh architecture and operator docs to match final implementation"
+      ],
+      "wave": 6
+    },
+    {
+      "id": 6,
+      "name": "UI polish and new surfaces",
+      "status": "in_progress",
+      "remaining": [
+        "Finish extracting composer/history/list/panel from the launcher",
+        "Resizable docked Sheet panel",
+        "Complete shared settings form primitives, toasts and remaining dark-mode fixes",
+        "Lazy server tab content, Intelligence timeline, post-summary note and collapse preference",
+        "User-facing AIOps overview",
+        "Grouping timeline and incident-list badges",
+        "Citation layouts and breadcrumbs",
+        "Complete browser coverage and incident bundle certification",
+        "Animation-frame streaming batches, aria-modal and focus trap, collapsible investigation and feedback",
+        "Orchestration/suppression/heartbeat builders with seven-day replay and maintenance calendar",
+        "Mobile Intelligence panels and theme-token analysis notices",
+        "Noise decision list badges/filters and wallboard KPI tile",
+        "Responder overview includes MTTA, AI cost and one-click noisy-alert fixes with existing SVG chart kit"
+      ],
+      "implemented": [
+        "Memoized messages, stable ids, safe lazy markdown and code copying",
+        "Copy, regenerate, edit-and-resend, scroll stick and jump to latest",
+        "Accessible log and separate completion announcement",
+        "Expandable docked desktop panel and mobile full screen",
+        "Global shortcut, distinct availability states, retry and app-timezone history dates",
+        "Configured assistant name, shared chat buttons and 44px touch targets",
+        "Production browser journeys with mobile, dark mode and accessibility checks"
+      ],
+      "wave": 7
+    },
+    {
+      "id": 7,
+      "wave": 4,
+      "name": "Triage, routing and responder assist",
+      "status": "pending",
+      "remaining": [
+        "Urgency/priority, team/assignee, duplicate and resolution-time predictions from similar outcomes",
+        "Accept/dismiss chips through normal domain commands with calibration feedback",
+        "Noisy alert report by service/team and suppression/severity/Jira actions",
+        "Impact estimate for dependencies, status components and SLO budget",
+        "On-call handoff and shift summary using deterministic fallback or AI in the lane"
+      ]
+    },
+    {
+      "id": 8,
+      "wave": 1,
+      "name": "Engine robustness and fault tolerance",
+      "status": "implemented_pending_full_ci",
+      "branch": "feat/intelligence-robustness (stacked on feat/intelligence-engine)",
+      "implemented": [
+        "Abortable handlers: ambient abort scope cancels budgeted statements and terminates stuck backends; timed-out handlers keep their concurrency slot and saturate the lane instead of exceeding maxConcurrency",
+        "Lease renewal before late batch starts",
+        "Quarantine for work that dies twice within 24h; never auto-revived or purged; operator replay clears it; badge in Failed work",
+        "Per-kind failure-rate breaker pauses one kind for five minutes; claim excludes paused kinds",
+        "Updated-incident watermark reconcile every cycle (O(changes)); recent-history sweep paced to ten minutes; database clock for discovery and the sweeps",
+        "Per-table retention transactions, bounded AlertFingerprint drain before parents, lease row instead of transaction-long lock, adaptive batch size, per-table deleted-rows metric",
+        "Resumable alert bootstrap in 5,000-payload passes with alertIndexPartial; analysis chained only on completion; no recursive force rebuild",
+        "Listener reconnect backoff with jitter; wake-leader election so one replica acts on notifications; HNSW build skips indexes another replica is building; observer no longer spins on a held lock",
+        "lane_up gauge, cycle age from start, saturation health, quarantined/kind-paused/timed-out/wake-leader metrics, LaneGone/WorkQuarantined/KindPaused alerts with rule tests",
+        "Policy publish/rollback enqueue a bounded re-index of the scope's open incidents",
+        "Late change webhook enqueues one LATE_CHANGE item; fan-out runs in the lane",
+        "Boundary test also catches relative intelligence imports in ingestion",
+        "repair-invalid-indexes script at container start and in prisma:migrate:safe",
+        "Robustness integration suite: quarantine, kind exclusion, future schedule kept on requeue, statement cancellation, saturation, kind pause, retention drain and lease, updated-incident reconcile, policy publish re-index, 12k-alert bootstrap"
+      ],
+      "remaining": [
+        "Replica-level chaos (two lane processes racing on one incident) in CI",
+        "Shared replica breaker state for AI providers (tracked in phase 5)"
+      ]
+    }
+  ],
+  "verification": {
+    "database": "Dedicated pgvector test container opsknight-intel-roadmap-test at loopback 55434; no test resets against demo DB.",
+    "local_demo": "Preserved at localhost:3100; migrations applied without reseeding.",
+    "note": "Implemented means code exists; certification remains separate. Full phase coverage is not claimed.",
+    "typecheck": "Passed on Node20 with --noEmit --incremental false and a 12 GB heap on foundation source.",
+    "lint": "All changed TypeScript files passed with --max-warnings 0.",
+    "production_build": "Passed using isolated .next/roadmap output; original tsconfig restored after generated build changes.",
+    "database_tests": {
+      "suites": 37,
+      "passed": 419,
+      "failed": 0
+    },
+    "intelligence_ui_unit_tests": {
+      "suites": 37,
+      "passed": 350,
+      "failed": 0
+    },
+    "ingestion_unit_tests": {
+      "suites": 9,
+      "passed": 73,
+      "failed": 0
+    },
+    "deployment_contract_tests": {
+      "suites": 2,
+      "passed": 50,
+      "failed": 0
+    },
+    "metrics_tests": {
+      "suites": 2,
+      "passed": 17,
+      "failed": 0
+    },
+    "browser": "Passed Similar percentages, Related link, deployment lead, runbook, freshness, basic Squire citations, 390px layout and lane settings on updated dev server.",
+    "demo_queue": "0 ready/running items, 0 dead letters after native reindex of 358 incidents.",
+    "remote_status": "PR #928 conflict resolution published at 414959283; GitHub CI started. Additional foundation source is local pending commit and full CI."
+  },
+  "squire_history_followup": {
+    "status": "implemented",
+    "features": [
+      "Private encrypted history enabled by default for new installs, with 90-day inactivity retention; existing administrator opt-outs/custom settings preserved",
+      "AI-off history saving/reading and paginated access without 50-chat capacity eviction",
+      "Immediate expiry filtering; expired threads cannot be revived; physical cleanup also runs without configured Intelligence settings",
+      "Cross-page historical reading with original incident context preserved for continuation",
+      "Richer basic-mode briefings, scoped incident search, timelines, recorded fixes, combined questions and pattern-based investigation guidance",
+      "Freshness notices and fresh scoped facts for follow-ups rather than replayed assistant claims",
+      "Signature crimson/slate Squire mascot with retained alternative avatars, timezone-aware history dates and responsive panel"
+    ],
+    "verification": {
+      "unit_and_ui_tests": 357,
+      "focused_database_tests": 61,
+      "retention_and_runner_tests": 27,
+      "avatar_gateway_tests": 20,
+      "full_database_run": "421 of 422 passed; remaining legacy ICON-default expectation updated and the complete 20-test gateway suite passed on rerun.",
+      "production_build": "passed",
+      "non_incremental_typecheck": "passed on final source with --noEmit --incremental false",
+      "lint": "passed",
+      "production_browser": "AI-off auto-save, reload/reopen, cross-page history guard, signature mascot, 390px layout and dark mode passed"
+    },
+    "local_demo": "http://localhost:3100; history enabled for 90 days and SQUIRE mascot selected through the audited settings service; AI master switch preserved off."
+  },
+  "mascot_integration": {
+    "source": "User-supplied Downloads/OpsKnightSquire.tsx and opsknight-squire.svg (2026-11-06 11:47)",
+    "states": 9,
+    "variants": ["full", "avatar"],
+    "verified": [
+      "54 focused component tests passed",
+      "Browser: desktop, 390px mobile, dark mode, basic-mode history",
+      "All nine states rendered on light/dark at 96/32/20px",
+      "Reduced motion disables animation; optional animation runs otherwise",
+      "Production build passed (.next/squire-design-production); Next TypeScript checks passed",
+      "Focused ESLint passed with zero warnings"
+    ],
+    "scope": "Actual Squire UI; no canvas boards supplied or modified"
+  },
+  "chat_experience": {
+    "implemented": [
+      "All nine mascot expressions mapped to real chat, provider, network and confirmed-action state",
+      "Shared authorized realtime incident attention; no second event stream",
+      "Interactive appearance preview for all expressions, assistant name, avatar and optional motion",
+      "Docked expandable desktop chat and full-screen mobile layout with safe-area composer",
+      "Lazy-loaded sanitized markdown with code copy and exact server-cited links",
+      "Memoized messages, stable message ids and separate completion announcements",
+      "User-controlled stream following and jump to latest",
+      "Edit and regenerate into new versions without changing existing saved chats",
+      "Loaded-history search, keyboard shortcut, growing composer, IME support, visible copy and retry errors"
+    ],
+    "verification": {
+      "components_and_contracts": "88 passed",
+      "database_squire": "22 passed on disposable pgvector test DB",
+      "lint": "Passed with zero warnings",
+      "production_browser": "3 journeys passed, including WCAG 2.1 AA scans in light and dark, mobile, markdown, confirmed-action success, reduced motion, offline draft recovery and keyboard entry",
+      "production_build": "Passed with nonincremental standalone TypeScript also previously verified",
+      "docs_shortcut_registry": "Passed"
+    },
+    "local_demo": "http://localhost:3100; AI remains off, 90-day private history and optional mascot animation enabled"
+  },
+  "basic_mode_expansion": {
+    "status": "implemented_verified_locally",
+    "capabilities": [
+      "Personal and team incident work queues with exclusive assignment semantics",
+      "Filtered incident search by status, urgency, priority, service/title keywords and time",
+      "Incident cohorts, period comparison, top services and bounded wall-clock MTTR",
+      "Separate scoped alert-record counts and listings",
+      "Service inventory, ownership, configured health, routing targets and topology",
+      "Named-service point-in-time on-call coverage with no unrelated-schedule fallback",
+      "Permission-checked runbook catalog counts and search",
+      "Recorded change and deployment history",
+      "Postmortem and overdue follow-up task search",
+      "Current-incident responder and escalation context",
+      "Curated OpsKnight workflow guidance",
+      "Follow-up filter replacement and canonical service/schedule/postmortem citations"
+    ],
+    "verification": {
+      "unit_ui": "130 passed",
+      "new_database_capabilities": "12 passed before Docker engine became unavailable",
+      "existing_database_suites": "41 existing tests passed in prior combined run; broader rerun subsequently blocked by database connection failures",
+      "typecheck_and_lint": "Passed",
+      "production_build": "Passed (.next/squire-basic-production)",
+      "production_browser": "4 production journeys passed: keyboard launcher, AI-off reports and persisted citations without provider calls, chat accessibility and mascot states, and 390px mobile layout",
+      "unit_full_repository": "11161 passed, 7 skipped across 1073 suites on Node 20 after pre-push fixes",
+      "focused_database_squire": "53 passed across four suites after Docker restart",
+      "live_demo": "Passed AI-off answer, auto-save, reload/reopen, cross-page history guard, supplied mascot, mobile and dark mode after restart",
+      "all_intelligence_database": "435 passed across 38 suites after Docker restart"
+    },
+    "blocker": null,
+    "guide": "docs/v2.2.0/guides/intelligence/basic-mode.md"
+  },
+  "local_runtime_recovery": {
+    "verified_at": "2026-11-06",
+    "restart": "User explicitly approved Docker Desktop restart; hung Docker app processes restarted without deleting containers or volumes.",
+    "restored_containers": ["opsknight-intel-dev", "opsknight-intel-roadmap-test"],
+    "other_containers": "Other containers, including mcp939-testdb, were not individually operated and remain stopped after the engine restart.",
+    "demo_url": "http://localhost:3100",
+    "login": "HTTP 200; root redirects to the local login path with callbackUrl.",
+    "full_intelligence_database": "435 tests passed across all 38 Intelligence database suites on the disposable pgvector test database after restart.",
+    "pre_push": "11161 unit tests passed, 7 skipped; production build passed through normal pre-push hook.",
+    "ci": "ci:full label applied to PR #928. No workflow runs reported for pushed head. Read-only merge preview against current main reports conflicts in 17 files; branch integration is still required before CI can certify the PR."
+  },
+  "scope_revision": "2026-11-06 expanded AIOps waves 1\u20137",
+  "foundation_followup": {
+    "status": "in_progress",
+    "base_main": "db1c13a677deebbb28b488302e3189c4d7217b56",
+    "conflicts": "Resolved and published at 414959283; GitHub reported mergeable against main db1c13a67.",
+    "backup_ref": "refs/codex-backups/intelligence-before-roadmap-sync-20261106",
+    "verification": [
+      "Combined 326-operation API authorization matrix: 7 tests passed",
+      "Focused regenerated API/MCP/pool/feature telemetry units: 62 passed",
+      "Pool, runner and metrics database checks: 24 passed",
+      "Correlation and AUTO database checks: 25 passed, including 121-link two-batch re-election and AUTO re-anchor audit regression",
+      "System audit/pool/feature units: 18 passed",
+      "Final nonincremental typecheck passed after regression tests; changed TypeScript lint passed with zero warnings across all applicable files (386 paths respecting repository ignores). Full repository checks remain pending.",
+      "Local million-row benchmark: 1M incidents, alerts and normalized fingerprints, durable PostgreSQL; 5k-alert incremental p50 12.53ms / p99 15.21ms, all index-plan gates passed. Foundation-only nightly workflow added; not full ingestion A/B certification."
+    ],
+    "scope": "Expanded roadmap still in progress. Incremental indexing, bounded observer, shared alert shape/backfill and foundation benchmark now implemented and verified locally."
+  }
+}

@@ -6,7 +6,7 @@ export type KeyboardShortcutDefinition = {
   description: string;
   category: KeyboardShortcutCategory;
   scope: 'global' | 'incidents';
-  runtimeOwner: 'GlobalKeyboardHandler' | 'SidebarSearch' | 'IncidentsListTable';
+  runtimeOwner: 'GlobalKeyboardHandler' | 'SidebarSearch' | 'IncidentsListTable' | 'SquireLauncher';
 };
 
 export const GLOBAL_NAVIGATION_SHORTCUTS = [
@@ -21,6 +21,14 @@ export const GLOBAL_NAVIGATION_SHORTCUTS = [
 ] as const;
 
 export const KEYBOARD_SHORTCUTS: KeyboardShortcutDefinition[] = [
+  {
+    id: 'squire-toggle',
+    keys: ['⌘/Ctrl', 'J'],
+    description: 'Open or close Squire',
+    category: 'Actions',
+    scope: 'global',
+    runtimeOwner: 'SquireLauncher',
+  },
   ...GLOBAL_NAVIGATION_SHORTCUTS.map(item => ({
     id: `navigate-${item.key}`,
     keys: ['G', item.key.toUpperCase()],
@@ -29,16 +37,100 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcutDefinition[] = [
     scope: 'global' as const,
     runtimeOwner: 'GlobalKeyboardHandler' as const,
   })),
-  { id: 'global-search', keys: ['⌘/Ctrl', 'K'], description: 'Open global search', category: 'Actions', scope: 'global', runtimeOwner: 'SidebarSearch' },
-  { id: 'shortcut-help', keys: ['?'], description: 'Toggle keyboard shortcuts', category: 'Actions', scope: 'global', runtimeOwner: 'GlobalKeyboardHandler' },
-  { id: 'quick-create', keys: ['C'], description: 'Open Quick Create', category: 'Actions', scope: 'global', runtimeOwner: 'GlobalKeyboardHandler' },
-  { id: 'new-incident', keys: ['N'], description: 'Create incident from an Incidents page', category: 'Actions', scope: 'incidents', runtimeOwner: 'GlobalKeyboardHandler' },
-  { id: 'incident-next', keys: ['J', '↓'], description: 'Next incident in list', category: 'Incident Triage', scope: 'incidents', runtimeOwner: 'IncidentsListTable' },
-  { id: 'incident-previous', keys: ['K', '↑'], description: 'Previous incident in list', category: 'Incident Triage', scope: 'incidents', runtimeOwner: 'IncidentsListTable' },
-  { id: 'incident-select', keys: ['X'], description: 'Select or deselect focused incident', category: 'Incident Triage', scope: 'incidents', runtimeOwner: 'IncidentsListTable' },
-  { id: 'incident-ack', keys: ['A'], description: 'Acknowledge focused incident', category: 'Incident Triage', scope: 'incidents', runtimeOwner: 'IncidentsListTable' },
-  { id: 'incident-resolve', keys: ['R', 'E'], description: 'Resolve focused incident', category: 'Incident Triage', scope: 'incidents', runtimeOwner: 'IncidentsListTable' },
-  { id: 'incident-open', keys: ['Enter', 'O'], description: 'Open focused incident', category: 'Incident Triage', scope: 'incidents', runtimeOwner: 'IncidentsListTable' },
-  { id: 'incident-search', keys: ['/'], description: 'Focus incident-list search', category: 'Incident Triage', scope: 'incidents', runtimeOwner: 'IncidentsListTable' },
-  { id: 'incident-clear', keys: ['Esc'], description: 'Clear incident selection or focus', category: 'Incident Triage', scope: 'incidents', runtimeOwner: 'IncidentsListTable' },
+  {
+    id: 'global-search',
+    keys: ['⌘/Ctrl', 'K'],
+    description: 'Open global search',
+    category: 'Actions',
+    scope: 'global',
+    runtimeOwner: 'SidebarSearch',
+  },
+  {
+    id: 'shortcut-help',
+    keys: ['?'],
+    description: 'Toggle keyboard shortcuts',
+    category: 'Actions',
+    scope: 'global',
+    runtimeOwner: 'GlobalKeyboardHandler',
+  },
+  {
+    id: 'quick-create',
+    keys: ['C'],
+    description: 'Open Quick Create',
+    category: 'Actions',
+    scope: 'global',
+    runtimeOwner: 'GlobalKeyboardHandler',
+  },
+  {
+    id: 'new-incident',
+    keys: ['N'],
+    description: 'Create incident from an Incidents page',
+    category: 'Actions',
+    scope: 'incidents',
+    runtimeOwner: 'GlobalKeyboardHandler',
+  },
+  {
+    id: 'incident-next',
+    keys: ['J', '↓'],
+    description: 'Next incident in list',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'IncidentsListTable',
+  },
+  {
+    id: 'incident-previous',
+    keys: ['K', '↑'],
+    description: 'Previous incident in list',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'IncidentsListTable',
+  },
+  {
+    id: 'incident-select',
+    keys: ['X'],
+    description: 'Select or deselect focused incident',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'IncidentsListTable',
+  },
+  {
+    id: 'incident-ack',
+    keys: ['A'],
+    description: 'Acknowledge focused incident',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'IncidentsListTable',
+  },
+  {
+    id: 'incident-resolve',
+    keys: ['R', 'E'],
+    description: 'Resolve focused incident',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'IncidentsListTable',
+  },
+  {
+    id: 'incident-open',
+    keys: ['Enter', 'O'],
+    description: 'Open focused incident',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'IncidentsListTable',
+  },
+  {
+    id: 'incident-search',
+    keys: ['/'],
+    description: 'Focus incident-list search',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'IncidentsListTable',
+  },
+  {
+    id: 'incident-clear',
+    keys: ['Esc'],
+    description: 'Clear incident selection or focus',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'IncidentsListTable',
+  },
 ];

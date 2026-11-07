@@ -274,3 +274,111 @@ groups:
         annotations:
           summary: 'MCP listen streams on {{ $labels.instance }} are close to the 32-stream cap'
           description: At the cap new streams get MCP_SUBSCRIPTIONS_BUSY. Streams last at most ten minutes and each connection may hold two; add web replicas or find the connection holding streams in mcp.request.completed (outcome subscription_opened).
+  # Intelligence is optional and advisory: it never pages. These are warnings for the people who run it.
+  # The lane gauges exist only on instances running the lane, so a disabled install raises nothing.
+  - name: opsknight.intelligence
+    rules:
+      - alert: OpsKnightIntelligenceLaneStalled
+        expr: max(opsknight_intelligence_lane_last_cycle_age_seconds) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The intelligence lane has not completed a cycle for five minutes
+          description: Suggestions are going stale. Paging is unaffected. Check the worker or intelligence-worker logs and database health, then restart the worker if it is wedged.
+      - alert: OpsKnightIntelligencePausedForPaging
+        expr: max(opsknight_intelligence_lane_paused) == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intelligence has yielded to a paging backlog for fifteen minutes
+          description: The lane pauses itself while escalation or notification work is behind. Investigate the paging backlog first; intelligence resumes on its own when it clears.
+      - alert: OpsKnightIntelligenceBacklogStale
+        expr: max(opsknight_intelligence_queue_oldest_ready_age_seconds) > 900
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intelligence work has waited more than fifteen minutes
+          description: Raise the batch size or concurrency in Settings, Intelligence, or run a dedicated intelligence-worker. Paging is unaffected.
+      - alert: OpsKnightIntelligenceDeadLetters
+        expr: max(opsknight_intelligence_dead_letters) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Some intelligence work exhausted its retries
+          description: Review and replay the quarantined items in Settings, Intelligence. Affected incidents only lack suggestions; paging is unaffected.
+      - alert: OpsKnightIntelligenceWorkQuarantined
+        expr: max(opsknight_intelligence_work_quarantined) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Some intelligence work was quarantined after failing twice
+          description: These items are never retried on their own. Inspect the failure code in Settings, Intelligence, fix the cause, then replay them. Paging is unaffected.
+      - alert: OpsKnightIntelligenceKindPaused
+        expr: max by (kind) (opsknight_intelligence_kind_paused) == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: One kind of intelligence work is paused after repeated failures
+          description: The lane skips the {{ $labels.kind }} handler for a few minutes at a time while most of its items fail; other work continues. Check the worker logs for that kind. Paging is unaffected.
+      - alert: OpsKnightIntelligenceLaneGone
+        expr: absent(opsknight_intelligence_lane_up) and on() (max(max_over_time(opsknight_intelligence_lane_up[1h])) == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Every intelligence lane process has disappeared
+          description: A lane was reporting within the last hour and none reports now. Check that the worker or intelligence-worker processes are running. Paging is unaffected.
+      - alert: OpsKnightIntelligenceEmbeddingBacklog
+        expr: max(opsknight_intelligence_embedding_pending) > 0 and max(opsknight_intelligence_embedding_enabled) == 1 and max(opsknight_intelligence_embedding_budget_remaining_tokens) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Semantic indexing has pending work despite available allowance
+          description: Inspect semantic indexing progress and eligible provider health in Assistant & AI. Disabled indexing and exhausted allocations are excluded. Paging is unaffected.
+      - alert: OpsKnightIntelligenceDigestDeliveryFailures
+        expr: max(opsknight_intelligence_digest_failed_recipients_last_7d) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Recent weekly digest recipient sends failed
+          description: Inspect digest history and mail-provider health. Use reviewed recipient retry after repairing delivery; successful recipients must not be resent automatically.
+      - alert: OpsKnightIntelligenceDigestStalled
+        expr: max(opsknight_intelligence_digest_oldest_sending_age_seconds) > 3600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: A recent weekly digest has remained sending for over an hour
+          description: Inspect digest progress and worker/provider health before retrying individual failed recipients. Tune this threshold for measured large-recipient batches.
+      - alert: OpsKnightSquireActionUncertain
+        expr: max(opsknight_intelligence_squire_actions_uncertain_last_24h) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A confirmed assistant action has an uncertain or stale unfinished outcome
+          description: Have the confirming responder inspect their saved action receipt and the incident audit. Do not automatically retry uncertain writes.
+      - alert: OpsKnightIntelligenceFeatureProbeFailed
+        expr: max(opsknight_intelligence_feature_probe_failed) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intelligence feature telemetry could not be collected
+          description: Inspect database connectivity and bounded-query timeouts. Omitted feature samples mean unknown coverage. Application readiness is unaffected.
+      - alert: OpsKnightIntelligenceTelemetrySampleTruncated
+        expr: max(opsknight_intelligence_digest_sample_truncated) > 0 or max(opsknight_intelligence_squire_actions_sample_truncated) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intelligence feature telemetry exceeded its bounded sample
+          description: Treat recent outcome counts as sampled coverage and inspect the underlying authorized records. Measure database cost before increasing sample limits.

@@ -13,6 +13,7 @@ let stopScheduler: (() => Promise<void>) | null = null;
 let stopJobWorkerService: (() => Promise<void>) | null = null;
 let stopIntegratedRunbookWorkerService: (() => Promise<void>) | null = null;
 let stopIngestionWorkerService: (() => Promise<void>) | null = null;
+let stopIntelligenceLaneService: (() => Promise<void>) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 
 async function stopRuntimeServices(): Promise<void> {
@@ -40,6 +41,10 @@ async function stopRuntimeServices(): Promise<void> {
   if (stopIntegratedRunbookWorkerService) {
     await stopIntegratedRunbookWorkerService();
     stopIntegratedRunbookWorkerService = null;
+  }
+  if (stopIntelligenceLaneService) {
+    stops.push(stopIntelligenceLaneService());
+    stopIntelligenceLaneService = null;
   }
 
   const results = await Promise.allSettled(stops);
@@ -136,6 +141,18 @@ export async function register() {
         await import('./lib/runbooks/integrated-worker');
       startIntegratedRunbookWorker();
       stopIntegratedRunbookWorkerService = stopIntegratedRunbookWorker;
+    }
+
+    // Intelligence is optional and disabled by default; a failure to start it must never affect boot.
+    try {
+      const { shouldRunIntelligenceLane, startIntelligenceLane, stopIntelligenceLane } =
+        await import('./lib/intelligence/jobs/runner');
+      if (shouldRunIntelligenceLane(role)) {
+        startIntelligenceLane();
+        stopIntelligenceLaneService = stopIntelligenceLane;
+      }
+    } catch (error) {
+      console.error('[Runtime] Intelligence lane failed to start; continuing without it', error);
     }
 
     const { logger } = await import('./lib/logger');

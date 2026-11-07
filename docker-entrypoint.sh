@@ -170,7 +170,24 @@ install_voice_attempt_indexes() {
     return 0
 }
 
+repair_invalid_indexes() {
+    if [ -f "scripts/repair-invalid-indexes.cjs" ]; then
+        node scripts/repair-invalid-indexes.cjs
+        return $?
+    fi
+
+    echo "ℹ️  Invalid index repair script not found, skipping"
+    return 0
+}
+
 node scripts/prepare-authentication-diagnostics.cjs || exit 1
+
+# An index left INVALID by an interrupted CONCURRENTLY build is skipped by IF NOT EXISTS forever and
+# costs every write. Rebuild it online; a failed repair is logged, never a reason to refuse to start.
+echo "🔄 Repairing invalid indexes left by interrupted builds..."
+if ! repair_invalid_indexes; then
+    echo "⚠️  Invalid index repair did not complete; continuing. Run npm run prisma:indexes:repair-invalid to retry."
+fi
 
 echo "🔄 Enforcing status platform indexes..."
 if ! install_status_platform_indexes; then
