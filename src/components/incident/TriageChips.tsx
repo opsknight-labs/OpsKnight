@@ -99,7 +99,7 @@ function TriageChip({
         )}
         {decided && (
           <span className="text-xs text-muted-foreground">
-            {decided === 'CORRECT' ? 'Accepted' : 'Dismissed'}
+            {decided === 'HELPFUL' ? 'Accepted' : 'Dismissed'}
           </span>
         )}
       </div>

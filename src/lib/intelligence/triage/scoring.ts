@@ -126,7 +126,8 @@ export function estimateResolution(
 }
 
 export type UrgencyValue = 'LOW' | 'MEDIUM' | 'HIGH';
-const URGENCY_RANK: Record<UrgencyValue, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+const urgencyRank = (urgency: UrgencyValue) =>
+  urgency === 'HIGH' ? 2 : urgency === 'MEDIUM' ? 1 : 0;
 
 /**
  * The urgency a vote suggests, adjusted when the service is burning its error budget: a burning
@@ -139,5 +140,5 @@ export function adjustUrgencyForBurn(
 ): UrgencyValue {
   if (!burning) return suggested;
   const raised: UrgencyValue = suggested === 'LOW' ? 'MEDIUM' : 'HIGH';
-  return URGENCY_RANK[raised] < URGENCY_RANK[current] ? current : raised;
+  return urgencyRank(raised) < urgencyRank(current) ? current : raised;
 }

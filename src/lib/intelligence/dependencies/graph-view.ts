@@ -28,7 +28,8 @@ export interface ServiceGraphView {
 }
 
 const MAX_NODES = 2000;
-const URGENCY_RANK = { HIGH: 2, MEDIUM: 1, LOW: 0 } as const;
+const urgencyRank = (urgency: 'HIGH' | 'MEDIUM' | 'LOW') =>
+  urgency === 'HIGH' ? 2 : urgency === 'MEDIUM' ? 1 : 0;
 
 /**
  * The service graph with a live incident overlay, restricted to the services and incidents the actor
@@ -86,7 +87,7 @@ export async function getServiceGraphForActor(
     const entry = overlay.get(row.serviceId) ?? { count: 0, urgency: null };
     entry.count += row._count._all;
     const urgency = row.urgency as 'HIGH' | 'MEDIUM' | 'LOW';
-    if (!entry.urgency || URGENCY_RANK[urgency] > URGENCY_RANK[entry.urgency])
+    if (!entry.urgency || urgencyRank(urgency) > urgencyRank(entry.urgency))
       entry.urgency = urgency;
     overlay.set(row.serviceId, entry);
   }

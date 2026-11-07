@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod/v4';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
@@ -236,7 +237,11 @@ export async function syncTopologySource(
   }
   await prisma.topologySource.update({
     where: { id },
-    data: { lastSyncedAt: started, lastStatus: 'OK', lastSummary: summary },
+    data: {
+      lastSyncedAt: started,
+      lastStatus: 'OK',
+      lastSummary: { ...summary } as Prisma.InputJsonObject,
+    },
   });
   return summary;
 }

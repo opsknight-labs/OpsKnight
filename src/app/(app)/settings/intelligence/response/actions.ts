@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { assertCapability } from '@/lib/rbac';
+import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';
 import prisma from '@/lib/prisma';
 import {
@@ -19,7 +19,6 @@ import {
 } from '@/lib/intelligence/dependencies/topology-sources';
 import { createJiraIssue, getDecryptedJiraConfig } from '@/lib/jira';
 import { getAlertQualityLeaderboard } from '@/lib/intelligence/triage/alert-quality';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 
 /**

@@ -9,7 +9,7 @@ import { decideTriageSuggestion } from '@/lib/intelligence/triage/accept';
 export type TriageActionState = {
   ok: boolean;
   message: string;
-  verdict: 'CORRECT' | 'INCORRECT' | null;
+  verdict: 'HELPFUL' | 'NOT_HELPFUL' | null;
 };
 
 const APPLIED_MESSAGE = {
@@ -37,7 +37,7 @@ export async function decideTriage(
     return {
       ok: true,
       message: result.decision === 'ACCEPT' ? APPLIED_MESSAGE[result.applied] : 'Dismissed.',
-      verdict: result.decision === 'ACCEPT' ? 'CORRECT' : 'INCORRECT',
+      verdict: result.decision === 'ACCEPT' ? 'HELPFUL' : 'NOT_HELPFUL',
     };
   } catch (error) {
     if (error instanceof AppError) {

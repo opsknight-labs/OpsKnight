@@ -177,7 +177,7 @@
       "status": "implemented_pending_full_ci",
       "implemented": [
         "Urgency, team/assignee, duplicate and resolution-time suggestions voted from similar resolved outcomes (TRIAGE_* findings, policy triage.enabled default off)",
-        "Accept/dismiss chips through the incident's own domain commands (urgency command, assignment command, human link) with CORRECT/INCORRECT feedback for calibration",
+        "Accept/dismiss chips through the incident's own domain commands (urgency command, assignment command, human link) with HELPFUL/NOT_HELPFUL feedback for calibration",
         "Noisy alert report by service and team with flapping ratio, Jira issue action and routing/integration links",
         "Shift handoff summary (open, recently resolved, overdue follow-ups) at each rotation through the notification control plane; AI narrative only when a provider is enabled (handoffSummaryEnabled, default off)"
       ],

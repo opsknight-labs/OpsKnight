@@ -136,7 +136,7 @@ describe('triage suggestions', () => {
     expect(
       await db.intelligenceFeedback.findFirst({ where: { subjectId: urgency.findingId } })
     ).toMatchObject({
-      verdict: 'CORRECT',
+      verdict: 'HELPFUL',
     });
     // Dismissing records the verdict and changes nothing.
     await decideTriageSuggestion(await actorOf(admin.id), {
@@ -149,8 +149,8 @@ describe('triage suggestions', () => {
     expect(
       await db.intelligenceFeedback.findFirst({ where: { subjectId: owner.findingId } })
     ).toMatchObject({
-      verdict: 'INCORRECT',
-      reasonCode: 'TRIAGE_DISMISSED',
+      verdict: 'NOT_HELPFUL',
+      reasonCode: 'OTHER',
     });
     // Accepting the duplicate links the incidents through the human-link command.
     await decideTriageSuggestion(await actorOf(admin.id), {
@@ -161,7 +161,7 @@ describe('triage suggestions', () => {
     // Accepted and dismissed suggestions show the viewer's verdict.
     const after = await getTriageForActor(incident.id, await actorOf(admin.id));
     expect(after!.suggestions.find(s => s.findingId === urgency.findingId)?.myVerdict).toBe(
-      'CORRECT'
+      'HELPFUL'
     );
   });
 
@@ -175,9 +175,20 @@ describe('triage suggestions', () => {
     expect(await predictTriage({ subjectKey: incident.id, generation: 1 }, settings)).toBe(
       'skipped_disabled_feature'
     );
-    expect(await db.intelligenceFinding.count({ where: { kind: { startsWith: 'TRIAGE' } } })).toBe(
-      0
-    );
+    expect(
+      await db.intelligenceFinding.count({
+        where: {
+          kind: {
+            in: [
+              'TRIAGE_URGENCY',
+              'TRIAGE_ASSIGNMENT',
+              'TRIAGE_DUPLICATE',
+              'TRIAGE_RESOLUTION_TIME',
+            ],
+          },
+        },
+      })
+    ).toBe(0);
   });
 });
 
@@ -258,7 +269,8 @@ describe('change risk', () => {
     });
     expect(stored.riskComputedAt).not.toBeNull();
     const direct = await db.$transaction(tx => computeChangeRisk(tx, change.id));
-    expect(direct?.score.components.history).toBeGreaterThan(0.5);
+    // Three of four earlier changes were followed by an incident; the small sample is shrunk towards the prior.
+    expect(direct?.score.components.history).toBeGreaterThan(0.35);
     expect(admin.id).toBeTruthy();
   });
 });

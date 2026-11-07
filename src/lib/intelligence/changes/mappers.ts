@@ -22,8 +22,10 @@ const obj = (value: unknown): Json =>
 const str = (value: unknown, max = 300): string | undefined =>
   typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
 const label = (into: Record<string, string | number | boolean>, key: string, value: unknown) => {
-  if (typeof value === 'string' && value.trim()) into[key] = value.trim().slice(0, 128);
-  else if (typeof value === 'number' || typeof value === 'boolean') into[key] = value;
+  if (typeof value === 'string' && value.trim())
+    Object.assign(into, { [key]: value.trim().slice(0, 128) });
+  else if (typeof value === 'number' || typeof value === 'boolean')
+    Object.assign(into, { [key]: value });
 };
 
 /** Argo CD notification webhook (the default `app` template). Only finished syncs are recorded. */

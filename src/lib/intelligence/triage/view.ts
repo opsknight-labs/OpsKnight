@@ -25,7 +25,7 @@ export interface TriageSuggestionView {
     samples: number;
   };
   /** The viewer's own verdict, if they already accepted or dismissed it. */
-  myVerdict: 'CORRECT' | 'INCORRECT' | null;
+  myVerdict: 'HELPFUL' | 'NOT_HELPFUL' | null;
   precedents: number;
   sloBurning: boolean;
 }
@@ -122,7 +122,7 @@ export async function getTriageForActor(
       findingId: finding.id,
       kind: finding.kind as TriageSuggestionView['kind'],
       confidencePercent: Math.round(finding.confidence * 100),
-      myVerdict: verdict === 'CORRECT' || verdict === 'INCORRECT' ? verdict : null,
+      myVerdict: verdict === 'HELPFUL' || verdict === 'NOT_HELPFUL' ? verdict : null,
       precedents: Math.round(num(evidence.voters) || num(evidence.samples)),
       sloBurning: evidence.sloBurning === true,
     };

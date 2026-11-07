@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- Indexed keys come from the fixed change-kind allowlist. */
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';

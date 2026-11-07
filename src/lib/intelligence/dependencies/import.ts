@@ -59,7 +59,7 @@ function entityFrom(document: unknown): CatalogEntity | null {
   const name = typeof metadata.name === 'string' ? metadata.name.trim() : '';
   if (!name || !DEPENDENCY_KINDS.has(kind)) return null;
   const annotations = obj(metadata.annotations);
-  const annotated = annotations[SERVICE_ID_ANNOTATION];
+  const annotated = Object.entries(annotations).find(([key]) => key === SERVICE_ID_ANNOTATION)?.[1];
   const dependsOn = Array.isArray(spec.dependsOn)
     ? spec.dependsOn.filter((ref): ref is string => typeof ref === 'string' && ref.trim() !== '')
     : [];
@@ -98,9 +98,9 @@ export function parseCatalog(text: string): CatalogEntity[] {
           : [parsed];
   } else {
     try {
-      documents = parseAllDocuments(trimmed, { maxAliasCount: 100 }).map(document => {
+      documents = parseAllDocuments(trimmed).map(document => {
         if (document.errors.length > 0) throw document.errors[0];
-        return document.toJS();
+        return document.toJS({ maxAliasCount: 100 });
       });
     } catch {
       throw invalid('Catalog is not valid YAML');

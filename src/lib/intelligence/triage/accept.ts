@@ -63,7 +63,7 @@ export async function decideTriageSuggestion(
   });
   if (!incident) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
 
-  const verdict = parsed.data.decision === 'ACCEPT' ? 'CORRECT' : 'INCORRECT';
+  const verdict = parsed.data.decision === 'ACCEPT' ? 'HELPFUL' : 'NOT_HELPFUL';
   let applied: TriageDecisionResult['applied'] = 'none';
 
   if (parsed.data.decision === 'ACCEPT' && finding.status === 'ACTIVE') {
@@ -107,7 +107,7 @@ export async function decideTriageSuggestion(
     subjectType: 'FINDING',
     subjectId: finding.id,
     verdict,
-    ...(parsed.data.decision === 'DISMISS' ? { reasonCode: 'TRIAGE_DISMISSED' } : {}),
+    ...(parsed.data.decision === 'DISMISS' ? { reasonCode: 'OTHER' } : {}),
   });
   return { decision: parsed.data.decision, applied };
 }
