@@ -414,4 +414,36 @@ export const personalDataRegistry = [
       'Observability connectors are off by default. When an administrator adds and enables one, Squire may query it read-only during an AI answer for people in its allowed teams; results are summarised (metrics statistics, at most 15 log lines, trace span trees, error issue counts, truncated code diffs), secret-shaped text is redacted, and Internal-class results also lose email addresses and phone numbers. Log lines can contain personal data, so log search is classified Personal and only reaches providers cleared for it. Summaries are not stored by OpsKnight beyond the optional saved conversation. Connector credentials are encrypted at rest, never logged, audited only as "replaced", and never returned to the browser.',
     ],
   },
+  {
+    domain: 'squire-memory',
+    models: [
+      'KnowledgeChunk',
+      'SquireMemorySettings',
+      'SquireServicePolicy',
+      'SquireProactiveNote',
+    ],
+    fields: [
+      'KnowledgeChunk.title',
+      'KnowledgeChunk.text',
+      'KnowledgeChunk.embedding',
+      'KnowledgeChunk.approvedById',
+      'SquireProactiveNote.content',
+    ],
+    purpose: [
+      'Letting the assistant cite what the organisation already learned (postmortems, resolution and incident notes, runbook steps)',
+      'Service facts a person confirmed, so the assistant can reuse them',
+      'Opt-in proactive briefings, stakeholder-update nudges and postmortem drafts shown on the incident page',
+    ],
+    classifications: ['INTERNAL', 'PERSONAL'],
+    locations: ['DATABASE', 'FREE_TEXT', 'EXTERNAL_PROVIDER'],
+    retention: {
+      current:
+        'Off by default. The knowledge index is a secret-redacted, rebuildable copy of text from postmortems, resolution and incident notes (incident-linked chunks follow the fingerprint retention and cascade with their source) and published runbook steps (removed when the runbook is archived or unpublished); turning the index off removes every derived chunk in bounded sweeps. Confirmed service facts stay until a person removes them or the service is deleted; the approver is a foreign key cleared on user erasure. Proactive notes cascade with their incident and follow finding retention.',
+      target: 'Free-text minimization of notes copied into the index.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'Search never decides visibility from the index: every passage is re-checked against its source (incident, postmortem, runbook or service) through the reader’s own permissions before it is shown or sent to a model. With an embedding provider configured (one allowed to receive Personal data), chunk text is sent to it and the vectors are stored with the chunk. Proactive AI text is generated under a background identity from the incident’s own facts and same-service references, and is shown only to viewers who may read every record the model saw.',
+    ],
+  },
 ] as const satisfies readonly PersonalDataDomain[];
