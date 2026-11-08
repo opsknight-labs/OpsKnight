@@ -6,9 +6,11 @@ import { decrypt, encrypt } from '@/lib/encryption';
 import { incidentReadWhere, runbookReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { readIncidentForActor } from '../deterministic';
+import { describeServiceFact } from '../tools-knowledge';
 import {
   SQUIRE_ACTION_INPUTS,
   SQUIRE_ACTION_KIND,
+  SNAPSHOT_FREE_ACTIONS,
   isSquireActionName,
   type SquireActionName,
   type SquireProposal,
@@ -90,7 +92,7 @@ export async function buildProposal(
 
   let preconditions: SquireProposalPreconditions | undefined;
   // eslint-disable-next-line security/detect-object-injection -- name was checked against the closed action union
-  if (SQUIRE_ACTION_KIND[name] === 'WRITE' && name !== 'add_incident_note') {
+  if (SQUIRE_ACTION_KIND[name] === 'WRITE' && !SNAPSHOT_FREE_ACTIONS.has(name)) {
     const snapshot = await prisma.incident.findFirst({
       where: { AND: [{ id: incident.id }, incidentReadWhere(actor)] },
       select: {
@@ -228,6 +230,8 @@ async function describe(
         detail: `Open the postmortem for ${subject}, where “Draft with AI” fills in what is still empty.`,
         href: `/postmortems/${encodeURIComponent(incident.id)}`,
       };
+    case 'learn_service_fact':
+      return describeServiceFact(actor, incident.id, String(input.fact));
     default:
       return describeExtended(actor, name, input, incident, now);
   }

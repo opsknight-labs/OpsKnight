@@ -26,6 +26,8 @@ export const SQUIRE_ACTION_NAMES = [
   'draft_postmortem',
   // Extended actions (opt-in, catalog-extended.ts).
   ...EXTENDED_SQUIRE_ACTION_NAMES,
+  // Knowledge memory (F4): a durable fact about the incident's service, saved only after confirmation.
+  'learn_service_fact',
 ] as const;
 export type SquireActionName = (typeof SQUIRE_ACTION_NAMES)[number];
 
@@ -51,6 +53,7 @@ export const SQUIRE_ACTION_INPUTS = {
   open_runbook: z.object({ incidentId, runbookId: z.string().trim().min(1).max(64) }).strict(),
   draft_postmortem: z.object({ incidentId }).strict(),
   ...EXTENDED_SQUIRE_ACTION_INPUTS,
+  learn_service_fact: z.object({ incidentId, fact: z.string().trim().min(10).max(500) }).strict(),
 } satisfies Record<SquireActionName, z.ZodType>;
 
 export type SquireActionInput<N extends SquireActionName> = z.infer<
@@ -66,7 +69,17 @@ export const SQUIRE_ACTION_KIND: Record<SquireActionName, 'WRITE' | 'NAVIGATE'> 
   open_runbook: 'NAVIGATE',
   draft_postmortem: 'NAVIGATE',
   ...EXTENDED_SQUIRE_ACTION_KIND,
+  learn_service_fact: 'WRITE',
 };
+
+/**
+ * WRITE actions whose confirmation re-checks everything inside their own domain command instead of comparing an
+ * incident snapshot: adding a note or a fact does not depend on the incident's status or assignment.
+ */
+export const SNAPSHOT_FREE_ACTIONS: ReadonlySet<SquireActionName> = new Set([
+  'add_incident_note',
+  'learn_service_fact',
+]);
 
 /** What the model is told about each action. Every description says the person must confirm it. */
 export const SQUIRE_ACTION_DESCRIPTIONS: Record<SquireActionName, string> = {
@@ -83,6 +96,8 @@ export const SQUIRE_ACTION_DESCRIPTIONS: Record<SquireActionName, string> = {
     'Offer to open a runbook against this incident. The application then runs its normal run and approval flow.',
   draft_postmortem: 'Offer to open a postmortem draft for this incident.',
   ...EXTENDED_SQUIRE_ACTION_DESCRIPTIONS,
+  learn_service_fact:
+    'Propose remembering one durable, non-secret fact about the service of this incident (for example how it fails over or what usually fixes it), learned from this investigation. It is saved to Squire’s knowledge only if the user confirms, and only people who manage the service can confirm.',
 };
 
 /** JSON-schema shapes for the model, kept in step with SQUIRE_ACTION_INPUTS by a unit test. */
@@ -114,6 +129,10 @@ export const SQUIRE_ACTION_JSON_SCHEMAS: Record<SquireActionName, Record<string,
   ]),
   draft_postmortem: objectSchema({ incidentId: idSchema() }, ['incidentId']),
   ...EXTENDED_SQUIRE_ACTION_JSON_SCHEMAS,
+  learn_service_fact: objectSchema(
+    { incidentId: idSchema(), fact: { type: 'string', minLength: 10, maxLength: 500 } },
+    ['incidentId', 'fact']
+  ),
 };
 
 function idSchema() {

@@ -270,6 +270,23 @@ export const OPERATIONAL_METRICS = [
     scope: 'counter',
     estimatedMaxSeries: 24,
   },
+  // Squire knowledge memory and proactive notes (F4).
+  {
+    name: 'opsknight_squire_knowledge_chunks_written_total',
+    help: 'Knowledge chunks Squire wrote or rewrote while syncing its index, by bounded source kind',
+    kind: 'counter',
+    labels: ['kind'],
+    scope: 'counter',
+    estimatedMaxSeries: 4,
+  },
+  {
+    name: 'opsknight_squire_proactive_notes_total',
+    help: 'Proactive Squire notes written by bounded kind and mode (basic or AI)',
+    kind: 'counter',
+    labels: ['kind', 'mode'],
+    scope: 'counter',
+    estimatedMaxSeries: 6,
+  },
   {
     name: 'opsknight_mcp_requests_total',
     help: 'MCP requests by bounded outcome and tool (named tools, other or none), without actor or client identifiers',

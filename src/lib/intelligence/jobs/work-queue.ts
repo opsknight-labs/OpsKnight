@@ -31,6 +31,13 @@ export const WORK_KINDS = {
   OBSERVE_DEPENDENCIES: 'OBSERVE_DEPENDENCIES',
   /** One item per late-arriving change event (subject = change id): re-analyses incidents it may explain. */
   LATE_CHANGE: 'LATE_CHANGE',
+  // Squire knowledge memory and proactive notes (F4); see memory/handlers.ts. All opt-in.
+  /** One coalesced item: a bounded keyset pass that keeps the knowledge index in sync with its sources. */
+  SYNC_KNOWLEDGE: 'SYNC_KNOWLEDGE',
+  /** One coalesced item: finds incidents on opted-in services that need a briefing, nudge or draft. */
+  SQUIRE_PROACTIVE_SCAN: 'SQUIRE_PROACTIVE_SCAN',
+  /** One item per (kind, incident), subject `KIND:incidentId`: writes one proactive note. */
+  SQUIRE_PROACTIVE: 'SQUIRE_PROACTIVE',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -44,6 +51,10 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   EMBED_PENDING: 40,
   SEND_DIGEST: 50,
   OBSERVE_DEPENDENCIES: 45,
+  // Squire memory (F4): proactive notes follow first analysis; the index is background maintenance.
+  SQUIRE_PROACTIVE: 32,
+  SQUIRE_PROACTIVE_SCAN: 33,
+  SYNC_KNOWLEDGE: 55,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

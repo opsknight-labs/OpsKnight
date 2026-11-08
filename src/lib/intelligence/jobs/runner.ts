@@ -33,6 +33,7 @@ import { reanalyzeAfterLateChange } from '../changes/service';
 import { purgeConversations } from '../conversations/store';
 import { AiGatewayError } from '../ai/gateway';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
+import { scheduleSquireMemoryWork, SQUIRE_MEMORY_HANDLERS } from '../memory/handlers';
 import {
   currentEmbeddingModel,
   embedIncidents,
@@ -178,6 +179,8 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
       await enqueueWorkItems([{ kind: WORK_KINDS.SEND_DIGEST, subjectKey: item.subjectKey }]);
     }
   },
+  // Squire knowledge memory and proactive notes (F4): opt-in, see memory/handlers.ts.
+  ...SQUIRE_MEMORY_HANDLERS,
 };
 
 const SEMANTIC_SUBJECT = 'pending';
@@ -189,6 +192,9 @@ const SEMANTIC_SUBJECT = 'pending';
 const KIND_MIN_BUDGET_MS: Partial<Record<WorkKind, number>> = {
   [WORK_KINDS.EMBED_PENDING]: 120_000,
   [WORK_KINDS.SEND_DIGEST]: 120_000,
+  // Squire memory (F4): optional provider calls (embedding, proactive AI text).
+  [WORK_KINDS.SYNC_KNOWLEDGE]: 120_000,
+  [WORK_KINDS.SQUIRE_PROACTIVE]: 120_000,
 };
 
 export function workBudgetMs(
@@ -552,6 +558,15 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+
+    // Squire knowledge sync and proactive scan (F4): one small read per interval; nothing while switched off.
+    try {
+      await scheduleSquireMemoryWork(now(), handlers);
+    } catch (error) {
+      logger.warn('[Intelligence] Could not schedule Squire memory work; will retry', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     let discovered = 0;

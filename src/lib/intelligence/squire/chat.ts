@@ -48,6 +48,7 @@ import { INCIDENT_TOOL_LABELS } from './tools-incident';
 import { summarizeOlderTurns } from './context-summary';
 import { wantsInvestigation } from './investigation/classify';
 import { portFor, streamInvestigation } from './investigation/turn';
+import { squireKnowledgeEnabled } from '../memory/settings';
 
 /** Evidence handles a basic answer may carry; beyond this the answer is paged rather than refused. */
 const MAX_BASIC_SOURCES = 32;
@@ -257,6 +258,8 @@ export async function* streamSquire(
         tools: buildSquireTools(actor, {
           personal: true,
           extendedActions: settings.squireExtendedActions,
+          // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
+          knowledge: await squireKnowledgeEnabled(),
           dataClass,
           signal,
           observability,
