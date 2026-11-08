@@ -118,14 +118,15 @@ export interface DecisionResult {
  */
 export async function decideRelationship(
   actor: AuthorizationActor,
-  input: unknown
+  input: unknown,
+  externalTx?: Prisma.TransactionClient
 ): Promise<DecisionResult> {
   assertMayDecide(actor);
   const parsed = decideRelationshipSchema.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error.issues);
   const { relationshipId, decision, note: text } = parsed.data;
 
-  return prisma.$transaction(async tx => {
+  const runner = async (tx: Prisma.TransactionClient): Promise<DecisionResult> => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`intelligence-relationship:${relationshipId}`}, 0))`;
     const relationship = await tx.incidentRelationship.findUnique({
       where: { id: relationshipId },
@@ -153,7 +154,9 @@ export async function decideRelationship(
       );
     }
     return { relationshipId, decision, changed };
-  });
+  };
+  // A confirmed assistant action joins its receipt to this decision in one transaction.
+  return externalTx ? runner(externalTx) : prisma.$transaction(runner);
 }
 
 /**
