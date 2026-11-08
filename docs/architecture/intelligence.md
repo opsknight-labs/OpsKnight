@@ -267,6 +267,55 @@ fails the run below the stored baseline or when a must-pass safety case fails. T
 reason are stored in `SquireFeedback` (mode, intent, reason and a question digest only) and summarised on
 the Quality page.
 
+**Incident-response tools.** `squire/tools-incident.ts` adds five read tools, registered from
+`tools.ts`: `get_alert_payload` (one alert of a readable incident; the payload is pruned to bounded depth,
+width, array length and string length, credential-named keys lose their values and every string is
+secret-redacted and instruction-neutralised; Personal), `get_runbook_steps` (the published steps of a
+readable runbook: name, type, risk class, approval flag and description, never step configuration;
+Internal), `get_slo_status` (active objectives of a readable service with attainment from
+`evaluateServiceObjective`, so it is computed under the reader; Internal), `incident_analytics` (counts by
+status and urgency, mean time to acknowledge and resolve from the SLA elapsed columns, and the five
+noisiest services, all as database aggregates over `incidentReadWhere`, bounded to 720 hours; Internal) and
+`get_escalation_policy` (steps of a readable service's policy; schedules the reader cannot open stay
+anonymous; Personal). Each declares its class in `INCIDENT_TOOL_DATA_CLASS`, merged into
+`SQUIRE_TOOL_DATA_CLASS`, and the evidence registry maps each result to alert, incident, runbook, service
+or schedule sources so citations work.
+
+**Model routing.** `AiSettings.capabilityRouting` (nullable JSON, validated on save and on every read by
+`ai/routing.ts`) may name a preferred provider, and optionally a model on it, per capability
+(`SQUIRE_CHAT`, `SUMMARIZE`, `DIAGNOSE`, `POSTMORTEM`, `CLASSIFY`; embeddings are pinned separately). The
+language-model resolver now honours the capability: it first selects the chain the data policy allows
+(data class, region, external fallback) and only then moves the routed provider to the front, so a route
+can never send data to a provider that would not otherwise receive it. The rest of the chain stays as
+fallback, and an unset route means the priority chain unchanged. `updateAiRouting`
+(`ai/routing-settings.ts`) shares the settings revision lock and compare-and-set, checks that every routed
+provider exists and audits `intelligence.ai.routing.updated`; the general settings form leaves both
+columns untouched.
+
+**Investigation mode (off by default).** With `squireInvestigationEnabled`, a diagnostic question
+("why…", "what caused…", "investigate…", "root cause"; an ambiguous symptom question on an incident is
+classified by the `CLASSIFY` route) runs `squire/investigation/engine.ts` instead of the single streamed
+answer: a planner on the `CLASSIFY` route picks up to four read tools per step (deduplicated, unknown
+tools and malformed input dropped), they run in parallel under the person's permissions, and after at most
+12 steps a diagnosis on the `DIAGNOSE` route returns ranked hypotheses with a confidence and the evidence
+handles that support them, plus next checks. A per-question token ceiling (60,000 or a tenth of the daily
+budget, whichever is smaller, with a reserve for the conclusion) stops planning early. On the step limit,
+the ceiling, cancellation or a failed diagnosis the answer is a partial one listing what was checked and
+the evidence read; only when planning fails before any read does the turn fall back to basic mode.
+Citations come only from evidence read in the turn: cited handles that were not read are removed and a
+hypothesis left with none is not shown. Each step is streamed as an `investigation` NDJSON event (sent
+when the step starts and again when it finishes, with the same index) and rendered as collapsible steps
+above the answer. The engine has no data access of its own and never proposes writes; the architecture
+test checks both. Each planning call is a separate gateway request, so per-minute request limits and the
+daily budget apply to it.
+
+**Earlier turns.** Saved conversations replay the last ten turns verbatim, as before. Turns before that
+window (user questions and verified, completed answers only) are summarised into one system message placed
+straight after the system prompt, so the incident briefing stays pinned first: with AI on, by the
+`SUMMARIZE` route (bounded input and output, classified at the highest class of the turns); otherwise, or
+when that call fails, by a deterministic digest of the questions and answer leads. Browser-held history is
+unchanged (the request schema still keeps the latest ten turns).
+
 **Saved conversations (opt-in).** An administrator can let people save conversations. The chat route then
 stores each completed answer (never a failed or cancelled one) in `SquireConversation`/`SquireMessage`,
 encrypted at rest and registered in the encryption registry. Every read and write is keyed by the owner,
