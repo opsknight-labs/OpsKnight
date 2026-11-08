@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import {
   AiSettingsForm,
@@ -258,6 +259,15 @@ export default async function IntelligenceAiPage() {
             );
           })}
         </ul>
+      </SettingsSection>
+      {/* Squire knowledge memory (F4). */}
+      <SettingsSection
+        title="Knowledge memory"
+        description="Let Squire search what your organisation already learned: postmortems, resolution and incident notes, runbook steps and confirmed service facts. Off by default."
+      >
+        <Link href="/settings/intelligence/ai/memory" className="text-sm underline">
+          Manage Squire’s knowledge index
+        </Link>
       </SettingsSection>
     </div>
   );

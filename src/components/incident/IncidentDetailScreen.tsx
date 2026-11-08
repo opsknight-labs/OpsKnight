@@ -13,6 +13,7 @@ import IncidentRelatedCard from '@/components/incident/IncidentRelatedCard';
 import IncidentResponseCard from '@/components/incident/IncidentResponseCard';
 import IncidentAskSquireCard from '@/components/squire/IncidentAskSquireCard';
 import IncidentAiSummaryCard from '@/components/incident/IncidentAiSummaryCard';
+import IncidentSquireProactiveCard from '@/components/incident/IncidentSquireProactiveCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
@@ -634,6 +635,13 @@ export default async function IncidentDetailScreen({
               postmortemStatus={postmortem?.status ?? null}
               canManage={canManageIncident}
             />
+          )}
+
+          {/* Proactive Squire (F4): renders only for services that opted in. */}
+          {showIntelligence && (
+            <Suspense fallback={null}>
+              <IncidentSquireProactiveCard incidentId={incident.id} />
+            </Suspense>
           )}
 
           {showIntelligence && (
