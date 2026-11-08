@@ -385,6 +385,8 @@ export const personalDataRegistry = [
       'SquireConversation',
       'SquireMessage',
       'SquireActionReceipt',
+      'SquireCheckTemplate',
+      'SquireFeedback',
     ],
     fields: [
       'AiProvider.apiKeyEncrypted',
@@ -395,6 +397,10 @@ export const personalDataRegistry = [
       'SquireMessage.dataClass',
       'SquireActionReceipt.intentEncrypted',
       'SquireActionReceipt.resultEncrypted',
+      'SquireConversation.state',
+      'SquireFeedback.userId',
+      'SquireFeedback.reason',
+      'SquireFeedback.questionHash',
     ],
     purpose: [
       "Answering responders' questions about incidents they can already read",

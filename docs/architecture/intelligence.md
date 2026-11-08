@@ -223,6 +223,50 @@ one day, and cards recover outcomes when reopened. Legacy consumed receipts rema
 live in the browser only and audit entries hold metadata (user, provider, model, token counts, prompt id,
 version and hash), never prompts or answers.
 
+**Basic mode pipeline.** Without a model, a turn runs `planBasicTurn` (`squire/deterministic.ts`):
+normalise (contractions, `24h`/`7d` shorthand) → correct spelling against a closed domain vocabulary
+(edit distance ≤ 2, first letter fixed, protected ordinary words, names never touched) → classify (the
+first-match rules in `intents.ts` decide; when they abstain, weighted keyword features score each
+intent and an ambiguous score becomes a two-choice clarification) → extract slots (limit, group-by,
+team, person, incident reference, action verb) → resolve names with `pg_trgm` similarity limited to
+what the person may read (`basic/entities.ts`, cached 60 s per actor scope) → read (`basic/reads.ts`,
+paged, grouped, bounded) → propose → choose answer-aware chips. Dialogue state (pending clarification,
+page cursor) is stored on `SquireConversation.state` when history is on and otherwise in memory for ten
+minutes per person; it never holds message text. The only writers outside the action executor live in
+`intelligence/assistant/` (dialogue state, the suggested-checks library and feedback), kept out of
+`squire/` so the architecture test can keep `squire/` read-only and limit `assistant/` to those three
+tables. Identical questions are served from a 10-second
+per-actor cache with their evidence. A `pageContext` (service, team, schedule, runbook, alert) from the
+launcher is read under the person's own visibility or ignored. All patterns are bounded literals over a
+message capped at 2,000 characters; a unit test times adversarial input. A 300-utterance paraphrase
+corpus (`tests/unit/intelligence-squire-nlu.test.ts`) must classify at ≥95% and slots at ≥90%.
+
+**Basic-mode proposals.** An explicit action ("acknowledge this", `/resolve …`, "assign to Alice") on an
+incident page becomes a request that `chat.ts` passes to the same `buildProposal` the model's proposal
+tools use, so the card is sealed, user-bound and expiring, and execution goes through the existing
+confirm route and domain commands. Basic mode never writes; the architecture test's single-writer
+invariant still holds.
+
+**Data classes, untrusted data and redaction.** Each tool declares the class of what it returns
+(`SQUIRE_TOOL_DATA_CLASS`); the saved turn is classified as the highest of the conversation baseline and
+the tools that actually ran. Every tool result reaches the model inside an untrusted-data envelope:
+secrets redacted, instruction-shaped text ("ignore previous instructions", role prefixes, fake system
+tags) defanged, bounded, and prefixed with a fixed preamble. A proposal made after the turn read tool
+data carries `untrustedContext`, and the card asks the person to check that content first.
+`redactPersonalData` removes emails, phone numbers and IP addresses where a lower class is required.
+
+**Shared breaker state.** Provider breakers stay in-process, but read a shared row
+(`AiProviderBreaker`) at most every five seconds per provider and publish each outcome best-effort, so
+one replica's discovery that a provider is down reaches the others. A failing table leaves each replica
+on its own judgement.
+
+**Evaluation and feedback.** Structural cases (`tests/evals/squire/basic-cases.ts`, about 45, with
+follow-ups) run against a seeded database with no model on every pull request; the live-model cases run
+nightly in `squire-evals.yml` when `SQUIRE_EVAL_API_KEY` is set, and `scripts/check-squire-eval-baseline.cjs`
+fails the run below the stored baseline or when a must-pass safety case fails. Thumbs up/down with a
+reason are stored in `SquireFeedback` (mode, intent, reason and a question digest only) and summarised on
+the Quality page.
+
 **Saved conversations (opt-in).** An administrator can let people save conversations. The chat route then
 stores each completed answer (never a failed or cancelled one) in `SquireConversation`/`SquireMessage`,
 encrypted at rest and registered in the encryption registry. Every read and write is keyed by the owner,

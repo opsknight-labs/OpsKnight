@@ -189,6 +189,13 @@ if ! repair_invalid_indexes; then
     echo "⚠️  Invalid index repair did not complete; continuing. Run npm run prisma:indexes:repair-invalid to retry."
 fi
 
+# Assistant name/title matching uses trigram indexes when pg_trgm exists; an install without the
+# extension or a failed build keeps working with substring matching, so this is never fatal.
+echo "🔄 Installing assistant search indexes..."
+if [ -f "scripts/create-squire-search-indexes.cjs" ]; then
+    node scripts/create-squire-search-indexes.cjs || echo "⚠️  Assistant search indexes were not installed; continuing. Run npm run prisma:indexes:squire-search to retry."
+fi
+
 echo "🔄 Enforcing status platform indexes..."
 if ! install_status_platform_indexes; then
     echo "❌ Status platform index enforcement failed. Refusing to start without required indexes."

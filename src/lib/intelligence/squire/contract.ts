@@ -35,6 +35,17 @@ export const squireRequestSchema = z
       .default([])
       .transform(turns => turns.slice(-SQUIRE_LIMITS.historyMax)),
     incidentId: z.string().trim().min(1).max(64).optional(),
+    /**
+     * The page the person is on, so "this service" or "who is on call for this team" resolve. Only an
+     * identifier: the server reads the entity under the person's own permissions or ignores it.
+     */
+    pageContext: z
+      .object({
+        kind: z.enum(['service', 'team', 'schedule', 'runbook', 'alert']),
+        id: z.string().trim().min(1).max(64),
+      })
+      .strict()
+      .optional(),
     /** Saved conversation to continue; ignored unless history is on and the caller owns it. */
     conversationId: z
       .string()
@@ -66,12 +77,17 @@ export type SquireEvent =
       name: string;
       availability?: 'ready' | 'disabled' | 'quota' | 'unavailable';
       attention?: boolean;
+      /** The deterministic intent the basic answer was built for; used for feedback and tests. */
+      intent?: string;
     }
   | { type: 'delta'; text: string }
   /** The assistant is looking something up; `label` is a short present-tense description. */
   | { type: 'tool'; label: string }
-  /** An action the person may confirm. Nothing has happened yet. */
-  | { type: 'proposal'; proposal: SquireProposal & { href?: string } }
+  /**
+   * An action the person may confirm. Nothing has happened yet. `untrustedContext` is set when the turn read
+   * alerts, notes or other third-party text before proposing, so the person checks that content first.
+   */
+  | { type: 'proposal'; proposal: SquireProposal & { href?: string; untrustedContext?: boolean } }
   | { type: 'citations'; items: SquireCitation[] }
   | { type: 'suggestions'; items: string[] }
   | { type: 'notice'; text: string }

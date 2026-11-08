@@ -11,6 +11,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -103,6 +104,18 @@ function incidentIdFrom(pathname: string | null): string | undefined {
   return match && match[1] !== 'new' ? match[1] : undefined;
 }
 
+type PageContext = { kind: 'service' | 'team' | 'schedule' | 'runbook' | 'alert'; id: string };
+
+/** The entity page the person is on, so "this service" or "this team" mean something to the assistant. */
+function pageContextFrom(pathname: string | null): PageContext | undefined {
+  const match = pathname?.match(
+    /^\/(services|teams|schedules|runbooks|alerts)\/([A-Za-z0-9_-]{1,64})(?:\/|$)/
+  );
+  if (!match || match[2] === 'new') return undefined;
+  const kind = match[1].slice(0, -1) as PageContext['kind'];
+  return { kind, id: match[2] };
+}
+
 export default function SquireLauncher({
   name,
   avatar = 'SQUIRE',
@@ -127,6 +140,10 @@ export default function SquireLauncher({
     async () => undefined
   );
   const incidentId = incidentIdFrom(pathname);
+  const pageContext = useMemo(
+    () => (incidentId ? undefined : pageContextFrom(pathname)),
+    [incidentId, pathname]
+  );
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
@@ -332,6 +349,7 @@ export default function SquireLauncher({
           message,
           history,
           ...(incidentId ? { incidentId } : {}),
+          ...(pageContext ? { pageContext } : {}),
           ...(conversationId && replayFrom === undefined ? { conversationId } : {}),
         };
         // Bound the serialized UTF-8 request, including integrity proofs and multibyte text.
@@ -359,7 +377,8 @@ export default function SquireLauncher({
                     ? 'You do not have permission to use this assistant.'
                     : 'I could not answer that. Please try again.',
           }));
-          if (response.status === 429) setAvailability('quota');
+          // A request limit is only an AI limit when AI is on; in basic mode the status stays truthful.
+          if (response.status === 429 && aiEnabled) setAvailability('quota');
           return;
         }
         const reader = response.body.getReader();
@@ -376,6 +395,7 @@ export default function SquireLauncher({
             message?: string;
             label?: string;
             mode?: 'ai' | 'basic';
+            intent?: string;
             availability?: AiAvailability;
             attention?: boolean;
             id?: string;
@@ -417,7 +437,11 @@ export default function SquireLauncher({
           if (event.type === 'delta' && event.text)
             patch(turn => ({ ...turn, content: turn.content + event.text, activity: undefined }));
           else if (event.type === 'meta' && event.mode)
-            patch(turn => ({ ...turn, mode: event.mode }));
+            patch(turn => ({
+              ...turn,
+              mode: event.mode,
+              ...(typeof event.intent === 'string' ? { intent: event.intent } : {}),
+            }));
           else if (event.type === 'tool' && event.label)
             patch(turn => ({ ...turn, activity: event.label }));
           else if (event.type === 'proposal' && event.proposal)
@@ -505,7 +529,7 @@ export default function SquireLauncher({
         if (seq === requestSeq.current) setBusy(false);
       }
     },
-    [busy, conversationId, incidentId, turns, activeScope, online]
+    [busy, conversationId, incidentId, pageContext, aiEnabled, turns, activeScope, online]
   );
 
   const retryAnswer = useCallback((index: number) => {
@@ -1070,6 +1094,8 @@ export default function SquireLauncher({
                   onOutcome={setActionOutcome}
                   onRetry={retryAnswer}
                   onEdit={editQuestion}
+                  question={index > 0 ? turns[index - 1]?.content : undefined}
+                  conversationId={conversationId}
                 />
               ))}
               {!busy && (turns.at(-1)?.suggestions?.length ?? 0) > 0 && (

@@ -108,6 +108,29 @@ describe('intelligence architecture boundaries', () => {
     expect(proposalTool).not.toMatch(/execute/);
   });
 
+  it('lets assistant support modules write only dialogue state, check templates and feedback', () => {
+    const dir = join(intelligenceDir, 'assistant');
+    const delegates = sourceFiles(dir).flatMap(file =>
+      [
+        // Formatting may break a call across lines, so whitespace before the method is allowed.
+        ...read(file).matchAll(
+          /\b(?:tx|prisma|client|this\.client)\.(\w+)\s*\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+        ),
+      ].map(match => match[1])
+    );
+    expect([...new Set(delegates)].sort()).toEqual([
+      'squireCheckTemplate',
+      'squireConversation',
+      'squireFeedback',
+    ]);
+    // Dialogue state may only touch the state column of the person's own conversation.
+    const state = read(join(dir, 'dialogue-state.ts'));
+    expect(state).toMatch(
+      /squireConversation\s*\.updateMany\(\{\s*where: \{ id: input\.conversationId, userId: input\.userId \}/
+    );
+    for (const file of sourceFiles(dir)) expect(read(file)).not.toMatch(/\$executeRaw/);
+  });
+
   it('lets saved assistant conversations write only their own tables', () => {
     const dir = join(intelligenceDir, 'conversations');
     const delegates = sourceFiles(dir).flatMap(file =>

@@ -551,6 +551,7 @@ model User {
   squireConversations         SquireConversation[]
   aiUsageDays                 AiUsageUserDay[]
   squireActionReceipts        SquireActionReceipt[]
+  squireFeedback              SquireFeedback[]
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
   runbookAgentsCreated        RunbookAgent[]               @relation("RunbookAgentCreatedBy")
   runbookAgentsRevoked        RunbookAgent[]               @relation("RunbookAgentRevokedBy")
@@ -5683,6 +5684,49 @@ model AiTokenReservation {
 
 // One confirmed assistant action. Proposals are sealed and expire after minutes; inserting this row first
 // prevents automatic replay. Versioned states and encrypted outcomes support read-only recovery for a day.
+// Administrator-editable "suggested checks" for basic mode: a bounded title/label pattern and the checks
+// shown when it matches. Investigation prompts only; nothing here is executed.
+model SquireCheckTemplate {
+  id          String   @id @default(cuid())
+  title       String
+  pattern     String
+  checks      String[]
+  enabled     Boolean  @default(true)
+  position    Int      @default(100)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([enabled, position], map: "idx_squire_check_template_enabled")
+}
+
+// A person's rating of one assistant answer or suggestion chip. Stores the intent and mode, never the
+// question or answer text (a digest only), so quality can be measured without keeping more content.
+model SquireFeedback {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?
+  mode           String
+  intent         String?
+  rating         String
+  reason         String?
+  questionHash   String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt], map: "idx_squire_feedback_recent")
+  @@index([userId, createdAt], map: "idx_squire_feedback_owner")
+}
+
+// Shared circuit-breaker reading per AI provider, so one replica's discovery that a provider is down is
+// seen by the others. Advisory: every replica keeps working from its own in-process state if this is stale.
+model AiProviderBreaker {
+  providerId String    @id
+  failures   Int       @default(0)
+  openUntil  DateTime?
+  updatedAt  DateTime  @updatedAt
+}
+
 model SquireActionReceipt {
   id              String   @id
   userId          String
@@ -5780,6 +5824,8 @@ model SquireConversation {
   // must not take the person's conversation with it.
   incidentId     String?
   messageCount   Int             @default(0)
+  /// Basic-mode dialogue state (pending clarification, page cursor); no message text is stored here.
+  state          Json?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   messages       SquireMessage[]

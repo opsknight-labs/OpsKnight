@@ -18,7 +18,6 @@ import {
   type AiDataClass,
 } from '../ai/port';
 import { redactSecrets } from '../ai/redact';
-import { routeIntent } from './intents';
 import { getAiSettings } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
 import { getHistoryStatus, type ConversationDetail } from '../conversations/store';
@@ -33,12 +32,19 @@ import {
   type SquireRequest,
 } from './contract';
 import {
-  answerDeterministically,
+  planBasicTurn,
   readIncidentForActor,
+  resolvePageContext,
   type ReadableIncident,
+  type ResolvedPageContext,
 } from './deterministic';
+import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
+import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
-import { actionForTool, buildSquireTools } from './tools';
+import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';
+
+/** Evidence handles a basic answer may carry; beyond this the answer is paged rather than refused. */
+const MAX_BASIC_SOURCES = 32;
 
 const CHUNK = 48;
 const MAX_PROPOSALS = 2;
@@ -78,10 +84,15 @@ export async function* streamSquire(
   signal?: AbortSignal
 ): AsyncGenerator<SquireEvent> {
   try {
-    const [settings, incident] = await Promise.all([
+    const [settings, requestedIncident, page] = await Promise.all([
       getAiSettings(),
       request.incidentId ? readIncidentForActor(actor, request.incidentId) : Promise.resolve(null),
+      resolvePageContext(actor, request.pageContext),
     ]);
+    // An alert page is its incident's page, when the person may read that incident.
+    const incident =
+      requestedIncident ??
+      (page?.incidentId ? await readIncidentForActor(actor, page.incidentId) : null);
     if (!settings.squireEnabled) {
       yield { type: 'error', message: 'The assistant is turned off.' };
       return;
@@ -165,6 +176,10 @@ export async function* streamSquire(
       let answer = '';
       let proposals = 0;
       let failed = false;
+      // The classes of the tools that actually ran decide what the saved turn is classified as, and
+      // whether a proposal was made after reading third-party text (alerts, notes, payloads).
+      const ranClasses: AiDataClass[] = [];
+      let readUntrusted = false;
       const emittedCoverage = new Set<string>();
       for await (const event of port.stream({
         context: {
@@ -180,7 +195,12 @@ export async function* streamSquire(
           personal: true,
           dataClass,
           signal,
-          observe: (name, input, result) => evidence.observe(name, input, result),
+          observe: (name, input, result) => {
+            // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
+            ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
+            readUntrusted = true;
+            return evidence.observe(name, input, result);
+          },
         }),
         maxSteps: SQUIRE_LIMITS.maxSteps,
       })) {
@@ -202,7 +222,10 @@ export async function* streamSquire(
           const proposal = await buildProposal(actor, action, event.call.input).catch(() => null);
           if (proposal) {
             proposals += 1;
-            yield { type: 'proposal', proposal };
+            yield {
+              type: 'proposal',
+              proposal: { ...proposal, ...(readUntrusted ? { untrustedContext: true } : {}) },
+            };
           }
         } else if (event.type === 'error') {
           if (answer || proposals > 0) {
@@ -229,7 +252,8 @@ export async function* streamSquire(
             settings.squireName,
             dataClass,
             savedConversation,
-            /budget|quota|too many/i.test(event.message) ? 'quota' : 'unavailable'
+            /budget|quota|too many/i.test(event.message) ? 'quota' : 'unavailable',
+            page
           );
           return;
         }
@@ -245,7 +269,8 @@ export async function* streamSquire(
           settings.squireName,
           dataClass,
           savedConversation,
-          'ready'
+          'ready',
+          page
         );
         return;
       }
@@ -256,7 +281,7 @@ export async function* streamSquire(
         type: 'memory',
         turn: {
           mode: 'ai',
-          dataClass,
+          dataClass: highestDataClass([dataClass, ...ranClasses]),
           completion: 'COMPLETED',
           sources: evidence.sources(),
           verified: evidence.verified,
@@ -288,7 +313,8 @@ export async function* streamSquire(
       settings.squireName,
       dataClass,
       savedConversation,
-      settings.enabled ? 'unavailable' : 'disabled'
+      settings.enabled ? 'unavailable' : 'disabled',
+      page
     );
   } catch (error) {
     if (signal?.aborted) return;
@@ -306,45 +332,79 @@ async function* basicAnswer(
   name: string,
   dataClass: AiDataClass = 'PERSONAL',
   savedConversation: ConversationDetail | null = null,
-  availability: 'ready' | 'disabled' | 'quota' | 'unavailable' = 'disabled'
+  availability: 'ready' | 'disabled' | 'quota' | 'unavailable' = 'disabled',
+  page: ResolvedPageContext | null = null
 ): AsyncGenerator<SquireEvent> {
-  yield {
-    type: 'meta',
-    mode: 'basic',
-    name,
-    availability,
-    ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
+  const scope = {
+    userId: actor.id,
+    conversationId: savedConversation?.id,
+    incidentId: incident?.id ?? null,
   };
+  const state = await readDialogueState(scope).catch(() => null);
   const evidence = new SquireEvidenceRegistry(actor, dataClass);
   const snapshots: EvidenceSnapshot[] = [];
-  const answer = await answerDeterministically(
-    actor,
-    request.message,
-    incident,
-    source => snapshots.push(source),
+  const plan = await planBasicTurn(
     {
+      actor,
+      message: request.message,
+      incident,
+      page,
+      state,
       name,
       // Earlier user questions supply intent only. Every answer is rebuilt from fresh scoped data.
       previousQuestions: (savedConversation?.messages ?? request.history)
         .filter(turn => turn.role === 'user')
         .slice(-3)
         .map(turn => turn.content),
-    }
+    },
+    source => snapshots.push(source)
   );
-  const readable = await evidence.capture(snapshots);
+  yield {
+    type: 'meta',
+    mode: 'basic',
+    name,
+    availability,
+    intent: plan.intent,
+    ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
+  };
+  // A wide answer cites its first sources rather than being withheld; the rest is reachable by narrowing.
+  const paged = snapshots.length > MAX_BASIC_SOURCES;
+  const readable = await evidence.capture(
+    paged ? snapshots.slice(0, MAX_BASIC_SOURCES) : snapshots
+  );
   const templateOnly =
     snapshots.length === 0 &&
-    ['HELP', 'GREETING', 'THANKS', 'GUIDANCE', 'UNKNOWN'].includes(
-      routeIntent(request.message, incident !== null)
-    );
+    ['HELP', 'GREETING', 'THANKS', 'GUIDANCE', 'UNKNOWN', 'RESPONDERS'].includes(plan.intent);
   const verified = Boolean(readable) && (evidence.verified || templateOnly);
   const text = readable
-    ? redactSecrets(answer)
+    ? redactSecrets(
+        paged
+          ? `${plan.text}\n\nThis answer touched more than ${MAX_BASIC_SOURCES} records; only the first ${MAX_BASIC_SOURCES} are cited. Narrow the question (a service, a status or a shorter window) for complete citations.`
+          : plan.text
+      )
     : 'The source changed or became unavailable. Please ask for a fresh answer.';
   yield* typed(text);
   const citations = evidence.citations(text);
   if (citations.length > 0) yield { type: 'citations', items: citations };
-  yield { type: 'suggestions', items: followUps(incident, false) };
+  let proposed = 0;
+  for (const requestProposal of plan.proposals.slice(0, MAX_PROPOSALS)) {
+    const proposal = await buildProposal(
+      actor,
+      requestProposal.action,
+      requestProposal.input
+    ).catch(() => null);
+    if (proposal) {
+      proposed += 1;
+      yield { type: 'proposal', proposal };
+    }
+  }
+  if (plan.proposals.length > 0 && proposed === 0)
+    yield {
+      type: 'notice',
+      text: 'That action is not available for this incident right now (it may have changed, or you may not have permission).',
+    };
+  yield { type: 'suggestions', items: plan.suggestions };
+  await writeDialogueState({ ...scope, state: plan.nextState }).catch(() => undefined);
   yield {
     type: 'memory',
     turn: {
@@ -557,24 +617,5 @@ export async function citationsFor(
 
 /** Next questions worth asking, from the page context. Deterministic, so they cost nothing. */
 export function followUps(incident: ReadableIncident | null, ai: boolean): string[] {
-  if (!incident)
-    return [
-      'What is on fire right now?',
-      'Who is on call?',
-      ...(!ai
-        ? ['My open incidents', 'How many incidents this week?', 'Show overdue action items']
-        : []),
-      ...(ai ? ['Any incidents like this in the last week?'] : []),
-    ];
-  if (incident.status === 'RESOLVED') {
-    return [
-      'Have we seen this before?',
-      ...(ai ? ['Summarise what happened', 'Draft the postmortem'] : ['Which runbook fits?']),
-    ];
-  }
-  return [
-    'What changed before this started?',
-    'Have we seen this before?',
-    ...(ai ? ['Who is on call for this?', 'Draft a status update note'] : ['Which runbook fits?']),
-  ];
+  return suggestFollowUps({ intent: 'UNKNOWN', incident, mode: ai ? 'ai' : 'basic' });
 }

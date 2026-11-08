@@ -143,6 +143,7 @@ describe('basic mode (no AI)', () => {
       mode: 'basic',
       name: 'Pip',
       availability: 'disabled',
+      intent: 'HELP',
     });
     expect(textOf(events)).toContain('I never change anything');
     expect(events.at(-1)).toEqual({ type: 'done' });
