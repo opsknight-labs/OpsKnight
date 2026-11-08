@@ -2,7 +2,7 @@ import 'server-only';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
-import type { SquireIntent } from '../intents';
+import type { SquireIntent } from '../squire/intents';
 import { TtlCache } from './cache';
 
 /**

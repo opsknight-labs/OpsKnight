@@ -3,7 +3,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { readJsonBodyWithLimit, RequestBodyTooLargeError } from '@/lib/request-body';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { feedbackInputSchema, recordFeedback } from '@/lib/intelligence/squire/feedback';
+import { feedbackInputSchema, recordFeedback } from '@/lib/intelligence/assistant/feedback';
 
 export const dynamic = 'force-dynamic';
 

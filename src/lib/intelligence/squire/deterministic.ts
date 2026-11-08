@@ -28,10 +28,10 @@ import {
   type SpellingCorrection,
 } from './basic/nlu';
 import { confidentMatch, resolveEntities, type EntityMatch } from './basic/entities';
-import { checksFor, BUILT_IN_CHECKS, safePattern } from './basic/checks';
-import { pageState, pendingState, type DialogueState } from './basic/state';
+import { checksFor, BUILT_IN_CHECKS, safePattern } from '../assistant/check-templates';
+import { pageState, pendingState, type DialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
-import { BASIC_ANSWER_TTL_MS, TtlCache } from './basic/cache';
+import { BASIC_ANSWER_TTL_MS, TtlCache } from '../assistant/cache';
 import type { SquireActionName } from './actions/catalog';
 import type { SquireRequest } from './contract';
 

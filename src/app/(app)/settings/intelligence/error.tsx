@@ -9,9 +9,18 @@ import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
  * Shared by every Intelligence settings page. Intelligence is optional, so a failure here is reported
  * plainly and never takes the rest of Settings with it.
  */
-export default function IntelligenceError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function IntelligenceError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
   useEffect(() => {
-    logger.error('[Intelligence] Settings page failed to render', { name: error.name, digest: error.digest });
+    logger.error('[Intelligence] Settings page failed to render', {
+      name: error.name,
+      digest: error.digest,
+    });
   }, [error]);
 
   return (
@@ -23,7 +32,9 @@ export default function IntelligenceError({ error, reset }: { error: Error & { d
         <div>
           <h2 className="text-lg font-semibold">This Intelligence page couldn&apos;t load</h2>
           <p className="mt-1 text-sm text-muted-foreground">{getUserFacingErrorMessage(error)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Paging and escalation are not affected.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Paging and escalation are not affected.
+          </p>
         </div>
         <button
           type="button"

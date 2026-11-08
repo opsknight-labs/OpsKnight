@@ -38,7 +38,7 @@ import {
   type ReadableIncident,
   type ResolvedPageContext,
 } from './deterministic';
-import { readDialogueState, writeDialogueState } from './basic/state';
+import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
 import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';

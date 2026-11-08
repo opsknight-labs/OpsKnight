@@ -5,8 +5,16 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';
-import { INTELLIGENCE_MODES, type IntelligenceModeValue, type PolicyDefinition } from '@/lib/intelligence/contract';
-import { clearServiceOverride, publishPolicyVersion, resolveEffectivePolicy } from '@/lib/intelligence/settings/service';
+import {
+  INTELLIGENCE_MODES,
+  type IntelligenceModeValue,
+  type PolicyDefinition,
+} from '@/lib/intelligence/contract';
+import {
+  clearServiceOverride,
+  publishPolicyVersion,
+  resolveEffectivePolicy,
+} from '@/lib/intelligence/settings/service';
 
 export type ServicePolicyActionState = { message: string; ok: boolean };
 
@@ -23,7 +31,9 @@ function failure(error: unknown): ServicePolicyActionState {
           : error.userMessage;
     return { message, ok: false };
   }
-  logger.error('[Intelligence] Service policy action failed', { error: error instanceof Error ? error.message : String(error) });
+  logger.error('[Intelligence] Service policy action failed', {
+    error: error instanceof Error ? error.message : String(error),
+  });
   return { message: 'Unable to save. Refresh and try again.', ok: false };
 }
 
@@ -46,7 +56,10 @@ export async function saveServicePolicyAction(
     const current = await resolveEffectivePolicy(serviceId);
     const definition: PolicyDefinition = {
       ...current.definition,
-      similarity: { enabled: form.get('similarityEnabled') === 'on', minScore: current.definition.similarity.minScore },
+      similarity: {
+        enabled: form.get('similarityEnabled') === 'on',
+        minScore: current.definition.similarity.minScore,
+      },
       response: { enabled: form.get('responseEnabled') === 'on' },
     };
     const result = await publishPolicyVersion(
@@ -72,7 +85,10 @@ export async function clearServiceOverrideAction(
 ): Promise<ServicePolicyActionState> {
   try {
     const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
-    const result = await clearServiceOverride(text(form, 'serviceId'), { actorId: actor.id, source: 'UI' });
+    const result = await clearServiceOverride(text(form, 'serviceId'), {
+      actorId: actor.id,
+      source: 'UI',
+    });
     revalidatePath(PATH);
     return result === 'cleared'
       ? { message: 'This service now follows the global policy.', ok: true }

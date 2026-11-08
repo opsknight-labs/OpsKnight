@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
-import { resetDialogueMemory } from '@/lib/intelligence/squire/basic/state';
+import { resetDialogueMemory } from '@/lib/intelligence/assistant/dialogue-state';
 import { resetEntityCache } from '@/lib/intelligence/squire/basic/entities';
 import { resetBasicReadCaches } from '@/lib/intelligence/squire/basic/reads';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';

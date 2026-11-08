@@ -8,7 +8,7 @@ import {
   teamReadWhere,
 } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { ENTITY_TTL_MS, TtlCache } from './cache';
+import { ENTITY_TTL_MS, TtlCache } from '../../assistant/cache';
 
 export type EntityKind = 'service' | 'team' | 'person' | 'schedule';
 

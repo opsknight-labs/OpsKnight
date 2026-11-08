@@ -6,7 +6,7 @@ import {
   resetEntityCache,
   resolveEntities,
 } from '@/lib/intelligence/squire/basic/entities';
-import { resetDialogueMemory } from '@/lib/intelligence/squire/basic/state';
+import { resetDialogueMemory } from '@/lib/intelligence/assistant/dialogue-state';
 import { resetBasicReadCaches } from '@/lib/intelligence/squire/basic/reads';
 import {
   checksFor,
@@ -14,8 +14,8 @@ import {
   listCheckTemplates,
   resetCheckTemplateCache,
   saveCheckTemplate,
-} from '@/lib/intelligence/squire/basic/checks';
-import { getFeedbackSummary, recordFeedback } from '@/lib/intelligence/squire/feedback';
+} from '@/lib/intelligence/assistant/check-templates';
+import { getFeedbackSummary, recordFeedback } from '@/lib/intelligence/assistant/feedback';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
 import { recordExchange } from '@/lib/intelligence/conversations/store';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';

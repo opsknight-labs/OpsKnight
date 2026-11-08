@@ -10,14 +10,20 @@ import { listServicePolicyOverview } from '@/lib/intelligence/settings/service';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const SOURCE_LABEL = { service: 'Own policy', global: 'Follows global', default: 'Not configured' } as const;
+const SOURCE_LABEL = {
+  service: 'Own policy',
+  global: 'Follows global',
+  default: 'Not configured',
+} as const;
 
 async function loadRows(search: string) {
   try {
     const actor = await getCurrentAuthorizationActor();
     return await listServicePolicyOverview({ search, serviceWhere: serviceReadWhere(actor) });
   } catch (error) {
-    logger.warn('[Intelligence] Service policies could not load', { error: error instanceof Error ? error.message : String(error) });
+    logger.warn('[Intelligence] Service policies could not load', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }
@@ -37,8 +43,9 @@ export default async function IntelligenceServicesPage({
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Per-service policies</h1>
         <p className="text-sm text-muted-foreground">
-          Services follow the global policy unless you give them their own. An override starts from what currently applies to
-          the service and, like every policy, is versioned and audited. Turning an override off never deletes its history.
+          Services follow the global policy unless you give them their own. An override starts from
+          what currently applies to the service and, like every policy, is versioned and audited.
+          Turning an override off never deletes its history.
         </p>
       </header>
 
@@ -47,8 +54,18 @@ export default async function IntelligenceServicesPage({
           <label htmlFor="service-search" className="sr-only">
             Search services
           </label>
-          <input id="service-search" name="q" defaultValue={q} maxLength={100} placeholder="Search services" className="w-full max-w-sm rounded-md border border-border bg-background p-2 text-sm" />
-          <button type="submit" className="rounded-md border border-border px-3 text-sm hover:bg-accent">
+          <input
+            id="service-search"
+            name="q"
+            defaultValue={q}
+            maxLength={100}
+            placeholder="Search services"
+            className="w-full max-w-sm rounded-md border border-border bg-background p-2 text-sm"
+          />
+          <button
+            type="submit"
+            className="rounded-md border border-border px-3 text-sm hover:bg-accent"
+          >
             Search
           </button>
         </form>
@@ -64,12 +81,16 @@ export default async function IntelligenceServicesPage({
                   <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-medium">{row.serviceName}</span>
                     <span className="flex gap-2">
-                      <Badge variant={row.effectiveMode === 'OFF' ? 'secondary' : 'default'}>{row.effectiveMode.toLowerCase()}</Badge>
+                      <Badge variant={row.effectiveMode === 'OFF' ? 'secondary' : 'default'}>
+                        {row.effectiveMode.toLowerCase()}
+                      </Badge>
                       <Badge variant="outline">{SOURCE_LABEL[row.source]}</Badge>
                     </span>
                   </summary>
                   <ServicePolicyForm row={row} canManage={canManage} />
-                  {canManage && row.source === 'service' && <ClearOverrideButton serviceId={row.serviceId} serviceName={row.serviceName} />}
+                  {canManage && row.source === 'service' && (
+                    <ClearOverrideButton serviceId={row.serviceId} serviceName={row.serviceName} />
+                  )}
                 </details>
               </li>
             ))}

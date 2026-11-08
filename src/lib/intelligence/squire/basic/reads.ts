@@ -18,7 +18,7 @@ import type { EvidenceSnapshot } from '../evidence';
 import type { ReadableIncident } from '../deterministic';
 import type { SquireIntent } from '../intents';
 import { incidentQueryWhere, parseBasicQuery, type BasicQuery } from './query';
-import { TIMEZONE_TTL_MS, TtlCache } from './cache';
+import { TIMEZONE_TTL_MS, TtlCache } from '../../assistant/cache';
 
 export type CollectBasicEvidence = (source: EvidenceSnapshot) => void;
 

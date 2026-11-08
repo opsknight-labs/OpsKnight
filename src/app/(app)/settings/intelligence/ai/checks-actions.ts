@@ -5,7 +5,10 @@ import { z } from 'zod/v4';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';
 import { logger } from '@/lib/logger';
-import { deleteCheckTemplate, saveCheckTemplate } from '@/lib/intelligence/squire/basic/checks';
+import {
+  deleteCheckTemplate,
+  saveCheckTemplate,
+} from '@/lib/intelligence/assistant/check-templates';
 
 export type CheckTemplateActionState = { message: string; ok: boolean };
 

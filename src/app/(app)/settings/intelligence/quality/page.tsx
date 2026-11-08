@@ -7,7 +7,7 @@ import { getAutoGate, getLatestQualityMeasurement } from '@/lib/intelligence/eva
 import { AUTO_QUALITY_THRESHOLDS } from '@/lib/intelligence/evaluation/quality-metrics';
 import QualityEvaluationForm from '@/components/settings/QualityEvaluationForm';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { getFeedbackSummary } from '@/lib/intelligence/squire/feedback';
+import { getFeedbackSummary } from '@/lib/intelligence/assistant/feedback';
 
 export const dynamic = 'force-dynamic';
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;

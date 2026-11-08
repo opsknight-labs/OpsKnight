@@ -7,7 +7,7 @@ import {
   saveCheckTemplateAction,
   type CheckTemplateActionState,
 } from '@/app/(app)/settings/intelligence/ai/checks-actions';
-import type { CheckTemplate } from '@/lib/intelligence/squire/basic/checks';
+import type { CheckTemplate } from '@/lib/intelligence/assistant/check-templates';
 
 const idle: CheckTemplateActionState = { message: '', ok: true };
 

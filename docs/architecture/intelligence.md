@@ -232,7 +232,10 @@ team, person, incident reference, action verb) → resolve names with `pg_trgm` 
 what the person may read (`basic/entities.ts`, cached 60 s per actor scope) → read (`basic/reads.ts`,
 paged, grouped, bounded) → propose → choose answer-aware chips. Dialogue state (pending clarification,
 page cursor) is stored on `SquireConversation.state` when history is on and otherwise in memory for ten
-minutes per person; it never holds message text. Identical questions are served from a 10-second
+minutes per person; it never holds message text. The only writers outside the action executor live in
+`intelligence/assistant/` (dialogue state, the suggested-checks library and feedback), kept out of
+`squire/` so the architecture test can keep `squire/` read-only and limit `assistant/` to those three
+tables. Identical questions are served from a 10-second
 per-actor cache with their evidence. A `pageContext` (service, team, schedule, runbook, alert) from the
 launcher is read under the person's own visibility or ignored. All patterns are bounded literals over a
 message capped at 2,000 characters; a unit test times adversarial input. A 300-utterance paraphrase

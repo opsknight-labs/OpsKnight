@@ -15,7 +15,7 @@ import AiUsageChart from '@/components/settings/AiUsageChart';
 import { getAiSettings, listAiProviders } from '@/lib/intelligence/ai/settings';
 import { BUILT_IN_PROMPTS, listGuidance, promptHash } from '@/lib/intelligence/ai/prompts';
 import { getSemanticIndexStatus } from '@/lib/intelligence/semantic/embedder';
-import { listCheckTemplates } from '@/lib/intelligence/squire/basic/checks';
+import { listCheckTemplates } from '@/lib/intelligence/assistant/check-templates';
 import SquireChecksForm from '@/components/squire/SquireChecksForm';
 import { backgroundEmbeddingTokenBudget } from '@/lib/intelligence/ai/contract';
 
