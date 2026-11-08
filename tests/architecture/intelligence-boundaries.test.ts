@@ -190,6 +190,56 @@ describe('intelligence architecture boundaries', () => {
     for (const file of sourceFiles(dir)) expect(read(file)).not.toMatch(/\$executeRaw/);
   });
 
+  it('lets Squire memory write only its own tables, and never the incident timeline', () => {
+    const dir = join(intelligenceDir, 'memory');
+    const files = sourceFiles(dir);
+    expect(files.length).toBeGreaterThan(0);
+    const delegates = files.flatMap(file =>
+      [
+        ...read(file).matchAll(
+          /\b(?:tx|prisma|client)\.(\w+)\s*\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+        ),
+      ].map(match => match[1])
+    );
+    expect([...new Set(delegates)].sort()).toEqual([
+      'intelligenceCursor',
+      'knowledgeChunk',
+      'squireMemorySettings',
+      'squireProactiveNote',
+      'squireServicePolicy',
+    ]);
+    for (const file of files) {
+      const source = read(file);
+      expect(source, relative(root, file)).not.toMatch(/\$executeRaw/);
+      // Proactive notes are rendered on the incident page; they never post notes or timeline events.
+      expect(source, relative(root, file)).not.toMatch(
+        /addIncidentNoteDomainCommand|@\/lib\/incidents\/(?:notes|operator-lifecycle|assignment)/
+      );
+    }
+    // A learned fact exists only through the fact command, which only the confirmed-action executor calls.
+    const factWriters = files.filter(file => /knowledgeChunk\s*\.create\(/.test(read(file)));
+    expect(factWriters.map(file => relative(root, file))).toEqual([
+      'src/lib/intelligence/memory/facts.ts',
+    ]);
+    const callers = sourceFiles(join(root, 'src')).filter(file =>
+      /recordServiceFactCommand\(/.test(read(file))
+    );
+    expect(callers.map(file => relative(root, file)).sort()).toEqual([
+      'src/lib/intelligence/memory/facts.ts',
+      'src/lib/intelligence/squire/actions/execute.ts',
+    ]);
+  });
+
+  it('keeps Squire knowledge tools read-only and every outbound call on the gateway', () => {
+    const tools = read(join(intelligenceDir, 'squire/tools-knowledge.ts'));
+    expect(tools).not.toMatch(/PROPOSE_WRITE|fetch\(/);
+    expect(read(join(intelligenceDir, 'squire/tools.ts'))).toMatch(
+      /if \(options\.knowledge\) tools\.push\(\.\.\.buildKnowledgeTools\(actor, options\)\)/
+    );
+    for (const file of sourceFiles(join(intelligenceDir, 'memory')))
+      expect(read(file), relative(root, file)).not.toMatch(/\bfetch\(/);
+  });
+
   it('lets saved assistant conversations write only their own tables', () => {
     const dir = join(intelligenceDir, 'conversations');
     const delegates = sourceFiles(dir).flatMap(file =>
@@ -443,7 +493,7 @@ describe('intelligence data model contracts', () => {
     const schema = read(join(root, 'prisma/schema.prisma'));
     const tables = [
       ...schema.matchAll(
-        /^model ((?:Intelligence|Correlation|IncidentFingerprint|AlertFingerprint|DependencyObservation|IncidentEmbedding|IncidentRelationship|ServiceDependency|ChangeEvent|Squire)\w*) \{/gm
+        /^model ((?:Intelligence|Correlation|IncidentFingerprint|AlertFingerprint|DependencyObservation|IncidentEmbedding|IncidentRelationship|ServiceDependency|ChangeEvent|Squire|Knowledge)\w*) \{/gm
       ),
     ].map(match => match[1]);
     expect(tables.length).toBeGreaterThan(10);

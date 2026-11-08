@@ -20,7 +20,13 @@ import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { resolveIncidentWithNote, updateIncidentStatus } from '@/lib/incidents/operator-lifecycle';
 import { decideRelationship, linkIncidents } from '../../correlation/commands';
 import { readIncidentForActor } from '../deterministic';
-import { SQUIRE_ACTION_INPUTS, SQUIRE_ACTION_KIND, type SquireActionInput } from './catalog';
+import { recordServiceFactCommand } from '../../memory/facts';
+import {
+  SNAPSHOT_FREE_ACTIONS,
+  SQUIRE_ACTION_INPUTS,
+  SQUIRE_ACTION_KIND,
+  type SquireActionInput,
+} from './catalog';
 import { buildProposal, openProposal, type OpenedProposal } from './proposals';
 import { isExtendedSquireAction, type ExtendedSquireActionName } from './catalog-extended';
 import { checkExtendedPreconditions, extendedActionsAvailable } from './extended';
@@ -51,7 +57,7 @@ export async function executeSquireAction(
     return failed('Nothing to confirm for this suggestion.');
   const parsed = SQUIRE_ACTION_INPUTS[proposal.action].safeParse(proposal.input);
   if (!parsed.success) return failed('This suggestion is no longer valid.');
-  if (proposal.action !== 'add_incident_note' && !proposal.preconditions)
+  if (!SNAPSHOT_FREE_ACTIONS.has(proposal.action) && !proposal.preconditions)
     return failed('This suggestion needs a fresh review. Ask again for a new suggestion.');
   // Extended actions stay opt-in at confirmation time too: switching them off withdraws open cards.
   if (
@@ -285,6 +291,18 @@ async function run<N extends WriteAction>(
         { isolationLevel: 'Serializable' }
       );
       return 'Incidents marked as related.';
+    }
+    case 'learn_service_fact': {
+      // The knowledge command re-checks the switch, the incident, the curator's rights and the fact itself.
+      const { incidentId, fact } = input as SquireActionInput<'learn_service_fact'>;
+      await prisma.$transaction(
+        async tx => {
+          await recordServiceFactCommand(actor, { incidentId, fact, proposalId }, tx);
+          await complete(tx, 'Saved to Squire’s knowledge for this service.');
+        },
+        { isolationLevel: 'Serializable' }
+      );
+      return 'Saved to Squire’s knowledge for this service.';
     }
   }
   throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'Unknown action.' });

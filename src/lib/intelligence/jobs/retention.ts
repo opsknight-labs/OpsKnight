@@ -8,6 +8,7 @@ import { withDbBudget } from './db-budget';
 import { encodeWorkFailure } from './failures';
 import { closeExpiredGroups } from '../correlation/groups';
 import { purgeDeadLetters } from './work-queue';
+import { purgeExpiredKnowledge, purgeExpiredProactiveNotes } from '../memory/sync';
 import type { IntelligenceSettingsView } from '../settings/service';
 
 export const RETENTION_INTERVAL_MS = 15 * 60_000;
@@ -42,6 +43,8 @@ export interface RetentionResult {
   actionReceipts: number;
   dependencyObservations?: number;
   noiseDecisions?: number;
+  knowledgeChunks?: number;
+  proactiveNotes?: number;
   /** Tables whose step failed this sweep (timeout, contention); every other table still progressed. */
   failedTables: string[];
   /** True when any table hit the batch ceiling or failed, so more expired rows may remain. */
@@ -279,6 +282,14 @@ export async function purgeExpiredIntelligenceData(
           SELECT id FROM "NoiseDecision" WHERE "createdAt" < ${cutoff(settings.correlationRetentionDays)}
           ORDER BY "createdAt", id LIMIT ${limit})`)
     );
+    // Squire memory (F4): incident-linked knowledge follows the fingerprint retention (and all derived
+    // knowledge goes while the index is off); proactive notes are findings and follow finding retention.
+    const knowledgeChunks = await step('KnowledgeChunk', tx =>
+      purgeExpiredKnowledge(tx, { cutoff: fingerprintCutoff, limit })
+    );
+    const proactiveNotes = await step('SquireProactiveNote', tx =>
+      purgeExpiredProactiveNotes(tx, { cutoff: cutoff(settings.findingRetentionDays), limit })
+    );
     const counts = {
       fingerprints,
       alertFingerprints,
@@ -299,6 +310,8 @@ export async function purgeExpiredIntelligenceData(
       actionReceipts,
       ...(noiseDecisions > 0 ? { noiseDecisions } : {}),
       ...(dependencyObservations > 0 ? { dependencyObservations } : {}),
+      ...(knowledgeChunks > 0 ? { knowledgeChunks } : {}),
+      ...(proactiveNotes > 0 ? { proactiveNotes } : {}),
     };
     const ceilings =
       Object.values(counts).some(count => count >= limit) ||

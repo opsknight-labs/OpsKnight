@@ -258,6 +258,21 @@ export class SquireEvidenceRegistry {
       case 'incident_analytics':
         rows(object.noisiestServices).forEach(data => add('service', data));
         break;
+      // Knowledge memory (F4): each passage is cited as the record it came from.
+      case 'search_knowledge':
+        rows(object.items).forEach(data => {
+          const source = row(data.source);
+          const kind = source.kind;
+          if (
+            kind === 'incident' ||
+            kind === 'postmortem' ||
+            kind === 'runbook' ||
+            kind === 'service'
+          )
+            add(kind, { ...data, id: source.id });
+          else this.complete = false;
+        });
+        break;
       default:
         this.complete = false;
         return unavailable;

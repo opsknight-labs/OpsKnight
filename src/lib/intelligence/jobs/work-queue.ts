@@ -35,6 +35,13 @@ export const WORK_KINDS = {
   TRIAGE_INCIDENT: 'TRIAGE_INCIDENT',
   /** Pulls one declared-topology source (subject = source id). */
   SYNC_TOPOLOGY: 'SYNC_TOPOLOGY',
+  // Squire knowledge memory and proactive notes (F4); see memory/handlers.ts. All opt-in.
+  /** One coalesced item: a bounded keyset pass that keeps the knowledge index in sync with its sources. */
+  SYNC_KNOWLEDGE: 'SYNC_KNOWLEDGE',
+  /** One coalesced item: finds incidents on opted-in services that need a briefing, nudge or draft. */
+  SQUIRE_PROACTIVE_SCAN: 'SQUIRE_PROACTIVE_SCAN',
+  /** One item per (kind, incident), subject `KIND:incidentId`: writes one proactive note. */
+  SQUIRE_PROACTIVE: 'SQUIRE_PROACTIVE',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -50,6 +57,10 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   SEND_DIGEST: 50,
   OBSERVE_DEPENDENCIES: 45,
   SYNC_TOPOLOGY: 48,
+  // Squire memory (F4): proactive notes follow first analysis; the index is background maintenance.
+  SQUIRE_PROACTIVE: 32,
+  SQUIRE_PROACTIVE_SCAN: 33,
+  SYNC_KNOWLEDGE: 55,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

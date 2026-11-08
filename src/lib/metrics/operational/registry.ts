@@ -270,6 +270,23 @@ export const OPERATIONAL_METRICS = [
     scope: 'counter',
     estimatedMaxSeries: 24,
   },
+  // Squire knowledge memory and proactive notes (F4).
+  {
+    name: 'opsknight_squire_knowledge_chunks_written_total',
+    help: 'Knowledge chunks Squire wrote or rewrote while syncing its index, by bounded source kind',
+    kind: 'counter',
+    labels: ['kind'],
+    scope: 'counter',
+    estimatedMaxSeries: 4,
+  },
+  {
+    name: 'opsknight_squire_proactive_notes_total',
+    help: 'Proactive Squire notes written by bounded kind and mode (basic or AI)',
+    kind: 'counter',
+    labels: ['kind', 'mode'],
+    scope: 'counter',
+    estimatedMaxSeries: 6,
+  },
   {
     name: 'opsknight_prepaging_decisions_total',
     help: 'Pre-paging noise control decisions by control, action and mode; SHADOW decisions were not applied',
