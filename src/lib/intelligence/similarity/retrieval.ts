@@ -138,9 +138,9 @@ export async function findSimilarIncidents(
     // ts_rank over the stored vector is enough to pick candidates (they are re-scored below); cover
     // density ranking cost ~30x more per matching row.
     const plan = planFullTextQuery(source.tokens, frequencies);
-    // Up to three rare words with OR find any candidate that shares one of them, each rare enough to keep
-    // the ranked set small. A title made only of common words is left to the trigram source when there is
-    // one; a text search over such words would rank a large share of history for little signal.
+    // The two rarest words, both required, keep the ranked set small; same-service and trigram sources
+    // preserve recall when a candidate lacks one of them. A title made only of common words is left to the
+    // trigram source when there is one: a text search over such words ranks a large share of history.
     const skipFullText = !plan.distinctive && capabilities.trigramAvailable;
     if (plan.terms.length > 0 && !skipFullText) {
       const tsQuery = fullTextQueryText(plan);

@@ -43,34 +43,26 @@ describe('query term selection', () => {
     expect(selectQueryTerms([...tokens, ...tokens], new Map())).toHaveLength(MAX_QUERY_TERMS);
   });
 
-  it('searches up to three rare words with OR, so a candidate sharing any of them is found', () => {
+  it('requires the two rarest words together, which keeps the ranked set small at scale', () => {
     const plan = planFullTextQuery(
       ['error', 'checkout', 'service', 'postgres', 'replica', 'kafka'],
       frequencies
     );
-    expect(plan).toEqual({
-      terms: ['replica', 'kafka', 'postgres'],
-      mode: 'any',
-      distinctive: true,
-    });
+    expect(plan).toEqual({ terms: ['replica', 'kafka'], distinctive: true });
     expect(plan.terms).toHaveLength(MAX_FULLTEXT_TERMS);
-    expect(fullTextQueryText(plan)).toBe('replica or kafka or postgres');
+    expect(fullTextQueryText(plan)).toBe('replica kafka');
   });
 
   it('requires a lone rare word together with its next-rarest context word', () => {
     const plan = planFullTextQuery(['error', 'checkout', 'service'], frequencies);
-    expect(plan).toEqual({ terms: ['checkout', 'service'], mode: 'all', distinctive: true });
+    expect(plan).toEqual({ terms: ['checkout', 'service'], distinctive: true });
     expect(fullTextQueryText(plan)).toBe('checkout service');
   });
 
   it('flags a title made only of common words so the text search can yield to trigram matching', () => {
     const plan = planFullTextQuery(['error', 'service'], frequencies);
-    expect(plan).toEqual({ terms: ['service', 'error'], mode: 'all', distinctive: false });
-    expect(planFullTextQuery([], frequencies)).toEqual({
-      terms: [],
-      mode: 'all',
-      distinctive: false,
-    });
+    expect(plan).toEqual({ terms: ['service', 'error'], distinctive: false });
+    expect(planFullTextQuery([], frequencies)).toEqual({ terms: [], distinctive: false });
   });
 
   it('weights rare words above common ones', () => {

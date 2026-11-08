@@ -258,6 +258,7 @@ function busyCandidate() {
     while (!tracker.stop) {
       Object.assign(state, {
         lastReconcileAt: Date.now(),
+        lastUpdatedRepairAt: Date.now(),
         lastRetentionAt: Date.now(),
         lastObserveAt: Date.now(),
         lastEmbedAt: Date.now(),

@@ -270,6 +270,7 @@ async function main() {
   // Skip the periodic sweeps; this measures the work queue itself.
   Object.assign(state, {
     lastReconcileAt: Date.now(),
+    lastUpdatedRepairAt: Date.now(),
     lastRetentionAt: Date.now(),
     lastObserveAt: Date.now(),
     lastEmbedAt: Date.now(),
@@ -284,6 +285,7 @@ async function main() {
     // this benchmark continues to measure the queued burst rather than a history backfill.
     Object.assign(state, {
       lastReconcileAt: Date.now(),
+      lastUpdatedRepairAt: Date.now(),
       lastRetentionAt: Date.now(),
       lastObserveAt: Date.now(),
       lastEmbedAt: Date.now(),

@@ -66,6 +66,8 @@ export const RECONCILE_LOOKBACK_DAYS = 7;
  * changes whose wake hint was lost are caught by the per-cycle updated-incident sweep, in O(changes).
  */
 export const RECONCILE_INTERVAL_MS = 10 * 60_000;
+/** The updated-incident repair is cheap and index-backed; this paces it without delaying repair noticeably. */
+export const UPDATED_REPAIR_INTERVAL_MS = 5_000;
 const DISCOVERY_BATCH_MULTIPLIER = 5;
 const DEPENDENCY_OBSERVER_SUBJECT = 'dependency-observation';
 /** Retention batches shrink while a table keeps timing out and grow back once sweeps are clean. */
@@ -220,6 +222,7 @@ export interface LaneState {
   pause: PauseState;
   poolWaitingQueries?: number | null;
   lastReconcileAt: number;
+  lastUpdatedRepairAt: number;
   lastRetentionAt: number;
   lastObserveAt: number;
   lastEmbedAt: number;
@@ -238,6 +241,7 @@ export function createLaneState(): LaneState {
   return {
     pause: { paused: false },
     lastReconcileAt: 0,
+    lastUpdatedRepairAt: 0,
     lastRetentionAt: 0,
     lastObserveAt: 0,
     lastEmbedAt: 0,
@@ -603,14 +607,18 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
         now: new Date(now()),
       });
       discovered = discovery.discovered;
-      // Lost wake hints for existing incidents are repaired here every cycle, in O(changes).
-      repaired += sum(
-        await reconcileUpdatedIncidents({
-          limit: settings.batchSize,
-          now: new Date(now()),
-          maxDbMs: settings.maxDbMs,
-        })
-      );
+      // Lost wake hints for existing incidents are repaired within seconds, in O(changes). Paced rather
+      // than per cycle, so a busy lane polling every 250 ms does not repeat the read four times a second.
+      if (now() - state.lastUpdatedRepairAt >= UPDATED_REPAIR_INTERVAL_MS) {
+        state.lastUpdatedRepairAt = now();
+        repaired += sum(
+          await reconcileUpdatedIncidents({
+            limit: settings.batchSize,
+            now: new Date(now()),
+            maxDbMs: settings.maxDbMs,
+          })
+        );
+      }
       if (now() - state.lastReconcileAt >= RECONCILE_INTERVAL_MS) {
         state.lastReconcileAt = now();
         repaired += sum(

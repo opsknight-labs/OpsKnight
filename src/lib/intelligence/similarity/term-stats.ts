@@ -58,51 +58,38 @@ export function selectQueryTerms(
     .map(term => term.token);
 }
 
-/** Distinctive words searched together by the full-text source. */
-export const MAX_FULLTEXT_TERMS = 3;
+/**
+ * Words required together by the full-text source. Two rare words in conjunction keep the matched set small
+ * enough to rank cheaply; OR-ing several "rare" words was measured at 100k history to match 50x more rows
+ * and take 4x longer (902 ms vs 218 ms), so recall beyond the conjunction is left to the same-service and
+ * trigram sources.
+ */
+export const MAX_FULLTEXT_TERMS = 2;
 
 export interface FullTextQueryPlan {
-  /** Up to MAX_FULLTEXT_TERMS words, rarest first; empty when the fingerprint has no words. */
+  /** The rarest words (at most MAX_FULLTEXT_TERMS), all required; empty when there are no words. */
   terms: string[];
-  /** 'any': match a candidate sharing any of several rare words; 'all': every listed word is required. */
-  mode: 'any' | 'all';
   /** False when every word is common: a text search would rank a large share of history. */
   distinctive: boolean;
 }
 
 /**
- * What the full-text source should ask for. With two or more distinctive words (below the common-term
- * floor) they are combined with OR, so a candidate that shares any rare word is found and ranked and a rare
- * word never has to co-occur with another. With exactly one, the next-rarest word is required alongside it,
- * as before. With none, the plan says so: the caller may skip the text search when trigram matching covers
- * the same ground, and otherwise requires the two rarest words to keep the match set small.
+ * What the full-text source should ask for: the two rarest words, both required. When no word is below the
+ * common-term floor the plan says so, and the caller skips the text search where trigram matching covers the
+ * same ground.
  */
 export function planFullTextQuery(
   tokens: readonly string[],
   frequencies: ReadonlyMap<string, number>
 ): FullTextQueryPlan {
-  const unique = [...new Set(tokens)];
-  const ranked = unique
-    .map((token, order) => ({ token, order, frequency: frequencies.get(token) ?? 0 }))
-    .sort((a, b) => a.frequency - b.frequency || a.order - b.order);
-  const distinctive = ranked.filter(term => term.frequency <= COMMON_TERM_FREQUENCY);
-  if (distinctive.length >= 2) {
-    return {
-      terms: distinctive.slice(0, MAX_FULLTEXT_TERMS).map(term => term.token),
-      mode: 'any',
-      distinctive: true,
-    };
-  }
-  return {
-    terms: ranked.slice(0, Math.min(2, ranked.length)).map(term => term.token),
-    mode: 'all',
-    distinctive: distinctive.length === 1,
-  };
+  const ranked = selectQueryTerms(tokens, frequencies);
+  const distinctive = ranked.some(token => (frequencies.get(token) ?? 0) <= COMMON_TERM_FREQUENCY);
+  return { terms: ranked.slice(0, MAX_FULLTEXT_TERMS), distinctive };
 }
 
-/** The websearch_to_tsquery text for a plan. */
+/** The websearch_to_tsquery text for a plan: every word required. */
 export function fullTextQueryText(plan: FullTextQueryPlan): string {
-  return plan.mode === 'any' ? plan.terms.join(' or ') : plan.terms.join(' ');
+  return plan.terms.join(' ');
 }
 
 /** Inverse document frequency from the same statistics; unknown words are treated as rare. */

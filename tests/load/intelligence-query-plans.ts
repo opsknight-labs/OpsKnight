@@ -46,10 +46,12 @@ const EXPECTED_INDEXES: Record<string, string[]> = {
  */
 const MIN_ROWS_TO_JUDGE: Record<
   string,
-  { table: 'Incident' | 'IncidentFingerprint'; rows: number }
+  { table: 'Incident' | 'IncidentFingerprint' | 'IntelligenceWorkItem'; rows: number }
 > = {
   reconcileWatermark: { table: 'Incident', rows: 200_000 },
   embedPage: { table: 'IncidentFingerprint', rows: 200_000 },
+  // A drained queue is tiny and rightly scanned; the claim plan matters while a backlog exists.
+  claim: { table: 'IntelligenceWorkItem', rows: 10_000 },
 };
 
 function indexNames(plan: unknown): string[] {
@@ -166,11 +168,16 @@ async function main() {
     },
   };
 
-  const [{ incidents, fingerprints }] = await prisma.$queryRaw<
-    Array<{ incidents: bigint; fingerprints: bigint }>
+  const [{ incidents, fingerprints, workItems }] = await prisma.$queryRaw<
+    Array<{ incidents: bigint; fingerprints: bigint; workItems: bigint }>
   >`SELECT (SELECT count(*) FROM "Incident") AS incidents,
-           (SELECT count(*) FROM "IncidentFingerprint") AS fingerprints`;
-  const tableRows = { Incident: Number(incidents), IncidentFingerprint: Number(fingerprints) };
+           (SELECT count(*) FROM "IncidentFingerprint") AS fingerprints,
+           (SELECT count(*) FROM "IntelligenceWorkItem") AS "workItems"`;
+  const tableRows = {
+    Incident: Number(incidents),
+    IncidentFingerprint: Number(fingerprints),
+    IntelligenceWorkItem: Number(workItems),
+  };
   const plans: Record<string, unknown> = {};
   const indexesUsed: Record<string, string[]> = {};
   const missing: string[] = [];
@@ -200,7 +207,7 @@ async function main() {
     engineVersion: INTELLIGENCE_ENGINE_VERSION,
     node: process.version,
     tableRows,
-    workItems: await prisma.intelligenceWorkItem.count(),
+
     expectedIndexes: EXPECTED_INDEXES,
     minRowsToJudge: MIN_ROWS_TO_JUDGE,
     indexesUsed,
