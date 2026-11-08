@@ -448,6 +448,75 @@ evidence source (and the change, for diffs), which replay re-authorizes against 
 enabled state and team list. An architecture test pins the connectors to the guarded fetch and to writing
 only their own table.
 
+### Knowledge memory and proactive Squire (opt-in)
+
+Everything below is off by default and lives in `src/lib/intelligence/memory/`. Operator guide:
+`docs/v2.2.0/operate/intelligence/squire-memory.md`.
+
+**Knowledge index.** `KnowledgeChunk` holds bounded (800 characters, at most 6 per source), secret-redacted
+passages from postmortems, resolution notes (the resolve message), incident notes (20+ characters), the
+step names and descriptions of published runbook versions (never step configuration), and person-confirmed
+service facts. `searchVector` is a database-generated `tsvector` (like `IncidentFingerprint.searchVector`);
+a trigram index is added when `pg_trgm` is installed; `embedding` is optional. `contentHash` (sha256 of title
+and text) makes the sync idempotent: unchanged sources are never rewritten or re-embedded.
+
+- **Sync.** A global switch (`SquireMemorySettings.knowledgeEnabled`, revision compare-and-set, audited)
+  lets the lane schedule one coalesced `SYNC_KNOWLEDGE` work item every 5 minutes. Each pass walks each
+  source kind on its own keyset cursor (`IntelligenceCursor` rows `squire-knowledge:<kind>`, over
+  `(updatedAt|createdAt|resolvedAt, id)`, settled 30 s behind `now()`), 100 sources per kind per pass, each
+  kind in its own `withDbBudget` transaction so one slow kind never blocks the others. Sources on services
+  whose intelligence policy is OFF are not kept, and a rolling prune removes what was indexed before a
+  policy changed. When a pass is full it re-enqueues itself. Optional vectors use the background embedding
+  identity and budget share (Personal data ceiling), and only when an embedding provider is configured.
+- **Retention.** The intelligence retention sweep removes incident-linked chunks older than the fingerprint
+  retention, and every derived chunk while the switch is off (bounded batches). Chunks cascade with their
+  incident, note, postmortem, runbook or service. Confirmed facts stay until a person removes them.
+- **Search.** `searchKnowledgeForActor` pre-filters by the reader's teams (index-backed), ranks by
+  `ts_rank` with an OR query of distinct words, falls back to trigram similarity for typos, and re-ranks
+  semantically only when chunks carry vectors of the configured model. Visibility is never decided by the
+  index: each candidate is re-checked against its source through `incidentReadWhere`, `runbookReadWhere`
+  or `serviceReadWhere` before it is returned.
+- **`search_knowledge` tool** (`squire/tools-knowledge.ts`, registered from `tools.ts` only while the
+  switch is on): at most 8 passages, each with a citable source (incident, postmortem, runbook or service)
+  that the evidence registry records; INTERNAL data class, PERSONAL when personal tools are on; output is
+  capped by the gateway's `capOutput` and wrapped in the untrusted-data envelope like every tool result.
+
+**Learned service facts.** In AI mode Squire may call the `learn_service_fact` proposal (only offered while
+the index is on). It is a normal sealed, user-bound proposal; the card is shown only to people who may
+curate the service's knowledge (intelligence managers, people who may update the service, or members of
+the owning team with intelligence feedback rights; never API keys), and facts that look like credentials are refused rather than stored redacted.
+Confirmation runs in `squire/actions/execute.ts`, which calls `recordServiceFactCommand` in a serializable
+transaction; it re-checks the switch, incident access, curation rights, the fact and the per-service cap
+(50), and uses the proposal id as the fact's identity so a replay never stores it twice. Facts are listed
+and removable (audited) on `/settings/intelligence/services/<id>/squire`. An architecture test pins
+`recordServiceFactCommand` callers to the executor.
+
+**Proactive Squire.** `SquireServicePolicy` (per service, every switch off by default, revision
+compare-and-set, audited) opts a service into three lane jobs. A `SQUIRE_PROACTIVE_SCAN` item runs every
+minute only while some service opted in; it enqueues one `SQUIRE_PROACTIVE` item per `(kind, incident)`
+(subject `KIND:incidentId`), and each item is generation-fenced on the stored note. Nothing runs on the
+paging path.
+
+- **Briefing** for incidents opened in the last 6 hours, after the first analysis snapshot (or after a
+  5-minute grace without it, flagged as such): summary facts, similar incidents (same service, public
+  visibility only, since the job has no person's permissions), a likely change (correlation, labelled
+  unconfirmed) and a suggested runbook.
+- **Stakeholder-update nudge** when an open incident had no note or status-page update for N minutes
+  (5 to 1440); one nudge per silence, hidden as soon as someone posts an update. Carries a draft update.
+- **Postmortem draft** on resolve, only when no postmortem exists. Draft only: it is shown on the incident
+  page and never creates, saves or publishes a postmortem.
+
+Content is deterministic with AI off. With AI on, the job asks the gateway under a background identity
+(`squire:proactive`) through the `incident.summary` (SUMMARIZE) or `postmortem.draft` (POSTMORTEM) prompts,
+with a redacted brief marked as data; any AI failure keeps the deterministic note.
+
+_Why not a timeline note._ Intelligence code may not write incident tables, and Squire writes only through
+`execute.ts` on behalf of the person who confirmed; there is no system-actor note command. Proactive output
+is therefore stored as an intelligence finding (`SquireProactiveNote`, one per incident and kind, follows
+finding retention) and rendered on the incident page by `IncidentSquireProactiveCard`. Rendering re-checks
+every reference through the viewer's rules and shows AI text only when the viewer may read every record
+the model saw; otherwise the deterministic version is shown.
+
 ## Semantic search (optional)
 
 Background incident embedding additionally reserves against a configurable sub-limit (default 20%,
