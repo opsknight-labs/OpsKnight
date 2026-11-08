@@ -101,6 +101,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      // @squire mention: queued durably and answered in the thread by the worker (Slack wants a reply
+      // to the event within three seconds; an answer can take longer).
+      if (event.type === 'app_mention') {
+        const { enqueueSlackSquireMention } = await import('@/lib/chatops/squire/slack-events');
+        await enqueueSlackSquireMention(payload);
+        return NextResponse.json({ ok: true });
+      }
+
       const rawEmoji = (event.reaction || '').split('::')[0];
 
       // Reaction Added (📌 Emoji Reaction Sync)
