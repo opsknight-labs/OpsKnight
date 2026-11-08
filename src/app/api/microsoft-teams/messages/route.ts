@@ -110,6 +110,15 @@ export async function POST(request: NextRequest) {
           { error: allowlist.reason, code: allowlist.code },
           { status: 403 }
         );
+      // Squire suggestion cards: confirmed inline through the sealed proposal executor.
+      const { isTeamsSquireInvoke } = await import('@/lib/chatops/squire/render');
+      if (isTeamsSquireInvoke(activity.value)) {
+        const { handleTeamsSquireConfirm } = await import('@/lib/chatops/squire/teams');
+        return NextResponse.json(
+          await handleTeamsSquireConfirm({ activity, verifiedTenantId: tenantId }),
+          { status: 200 }
+        );
+      }
       const { handleMicrosoftTeamsAdaptiveCardAction } =
         await import('@/lib/microsoft-teams/invoke');
       const response = await handleMicrosoftTeamsAdaptiveCardAction({
@@ -293,6 +302,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (activityType === 'message') {
+      // In a channel the bot only receives messages that @mention it: queue those for Squire.
+      // The tenant must pass the same allowlist as card actions; anything else stays a no-op.
+      const tenantId = bodyTenantId;
+      const configured = tenantId ? await getMicrosoftTeamsConfig() : null;
+      if (
+        configured &&
+        (await enforceMicrosoftTeamsTenantAllowlist(tenantId, configured.config)).allowed
+      ) {
+        const { enqueueTeamsSquireMention } = await import('@/lib/chatops/squire/teams');
+        await enqueueTeamsSquireMention(activity, tenantId);
+      }
       return jsonOk({ ok: true });
     }
 
