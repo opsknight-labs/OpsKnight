@@ -38,6 +38,7 @@ import { readIncidentForActor } from './deterministic';
 // --- Observability connectors (slice F1): tools live in their own module and are appended below.
 import type { EligibleConnection } from '../connectors/service';
 import { buildObservabilityTools, OBSERVABILITY_TOOL_DATA_CLASS } from './tools-observability';
+import { buildIncidentTools, INCIDENT_TOOL_DATA_CLASS } from './tools-incident';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
 const MAX_ROWS = 10;
@@ -63,6 +64,8 @@ export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
   get_problem_outcomes: 'INTERNAL',
   // Observability connector tools (logs are Personal; the rest Internal).
   ...OBSERVABILITY_TOOL_DATA_CLASS,
+  // Incident-response tools (tools-incident.ts) declare their own classes.
+  ...INCIDENT_TOOL_DATA_CLASS,
 };
 const SEMANTIC_UNAVAILABLE = { items: [], coverage: { mode: 'UNAVAILABLE', approximate: false } };
 
@@ -788,6 +791,8 @@ export function buildSquireTools(
       )
     );
   }
+  // Incident-response read tools (alert payload, runbook steps, SLOs, analytics, escalation policy).
+  tools.push(...buildIncidentTools(actor, { personal: options.personal }));
 
   for (const name of SQUIRE_ACTION_NAMES) {
     if (!options.personal && name === 'reassign_incident') continue;
