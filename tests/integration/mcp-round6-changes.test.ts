@@ -36,6 +36,38 @@ const run = async (
 ) => (await getMcpServiceChanges(who.ctx(), input)) as unknown as Changes;
 
 describe('service_get_changes', () => {
+  it('leaves message delivery receipts out of the configuration changes and says how many', async () => {
+    // On a busy service every Teams or Slack message sent is audited against it; fifty of those
+    // filled the whole page and hid the one real edit.
+    const admin = await principal('ADMIN', scopes);
+    const service = await createTestService(`Receipts ${Math.random().toString(36).slice(2, 8)}`);
+    const now = Date.now();
+    await db.auditLog.createMany({
+      data: [
+        {
+          action: 'service.updated',
+          entityType: 'SERVICE',
+          entityId: service.id,
+          createdAt: new Date(now - 3 * HOUR),
+        },
+        ...['microsoftTeams.delivery.completed', 'slack.delivery.completed'].flatMap(action =>
+          [1, 2].map(minutes => ({
+            action,
+            entityType: 'SERVICE' as const,
+            entityId: service.id,
+            createdAt: new Date(now - minutes * 60_000),
+          }))
+        ),
+      ],
+    });
+    const result = await run(admin, { serviceId: service.id });
+    const summaries = result.changes.map(change => change.summary);
+    expect(summaries).toEqual(['The service configuration was edited']);
+    expect(JSON.stringify(result.changes)).not.toContain('delivery');
+    expect(result.sources.configuration).toEqual({ status: 'ok', count: 1, receiptsLeftOut: 4 });
+    expect(result.note).toMatch(/delivery receipts/i);
+  });
+
   it('lists configuration edits, incidents and runbook runs newest first, each with its source', async () => {
     const admin = await principal('ADMIN', scopes);
     const service = await createTestService(`Changes ${Math.random().toString(36).slice(2, 8)}`);
