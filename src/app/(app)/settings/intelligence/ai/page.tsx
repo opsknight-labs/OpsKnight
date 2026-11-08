@@ -18,6 +18,7 @@ import { getSemanticIndexStatus } from '@/lib/intelligence/semantic/embedder';
 import { listCheckTemplates } from '@/lib/intelligence/assistant/check-templates';
 import SquireChecksForm from '@/components/squire/SquireChecksForm';
 import { backgroundEmbeddingTokenBudget } from '@/lib/intelligence/ai/contract';
+import AiRoutingForm from '@/components/settings/AiRoutingForm';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -73,6 +74,24 @@ export default async function IntelligenceAiPage() {
         }
       >
         <AiSettingsForm settings={settings} canManage={canManage} />
+      </SettingsSection>
+
+      <SettingsSection
+        title="Investigation and model routing"
+        description="Investigation mode is off by default. Routing is optional: unset capabilities use the provider priority order."
+      >
+        <AiRoutingForm
+          investigationEnabled={settings.squireInvestigationEnabled ?? false}
+          routing={settings.capabilityRouting ?? {}}
+          providers={(providers ?? []).map(provider => ({
+            id: provider.id,
+            name: provider.name,
+            model: provider.model,
+            enabled: provider.enabled,
+          }))}
+          revision={settings.revision}
+          canManage={canManage}
+        />
       </SettingsSection>
 
       <SettingsSection

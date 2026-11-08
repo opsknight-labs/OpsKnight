@@ -30,11 +30,13 @@ import { PostgresBreakerStore } from './breaker-store';
 import { embeddingSpaceIdentity } from '../semantic/identity';
 import { AI_SETTINGS_BOUNDS } from './contract';
 import { selectProviderChain } from './policy';
+import { applyCapabilityRoute } from './routing';
 import { redactSecrets, sanitizeUntrusted, UNTRUSTED_DATA_PREAMBLE } from './redact';
 import {
   highestDataClass,
   registerEmbeddingResolver,
   registerLanguageModelResolver,
+  type AiCapability,
   type AiDataClass,
   type AiStructuredRequest,
   type AiStructuredResult,
@@ -388,10 +390,12 @@ class GatewayPort implements LanguageModelPort {
         'NO_PROVIDER',
         'Request classification does not cover its conversation context'
       );
+    // Re-checking the policy must not undo a capability route: keep the resolved chain's order.
+    const order = new Map(this.data.chain.map((provider, index) => [provider, index]));
     const allowed = selectProviderChain(this.data.chain, required, {
       allowExternalFallback: this.data.settings.allowExternalFallback,
       allowedRegions: this.data.settings.allowedDataRegions,
-    });
+    }).sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
     const open = allowed.filter(provider => breakers.available(provider.id));
     if (open.length === 0)
       throw new AiGatewayError('NO_PROVIDER', 'No AI provider is currently available');
@@ -863,16 +867,24 @@ async function loadGatewayData(): Promise<GatewayData> {
   }
 }
 
-/** Null whenever AI is off, unconfigured, or no provider may receive this data class. */
+/**
+ * Null whenever AI is off, unconfigured, or no provider may receive this data class. With a capability, an
+ * administrator's per-capability route (if any) puts its provider and model first; routing only reorders the
+ * chain the data policy already allowed, and the rest of that chain remains the fallback.
+ */
 export async function resolveGatewayPort(
-  dataClass: AiDataClass
+  dataClass: AiDataClass,
+  capability?: AiCapability
 ): Promise<LanguageModelPort | null> {
   const { settings, providers } = await loadGatewayData();
   if (!settings.enabled) return null;
-  const chain = selectProviderChain(providers, dataClass, {
+  const eligible = selectProviderChain(providers, dataClass, {
     allowExternalFallback: settings.allowExternalFallback,
     allowedRegions: settings.allowedDataRegions,
   });
+  const chain = capability
+    ? applyCapabilityRoute(eligible, settings.capabilityRouting, capability)
+    : eligible;
   return chain.length === 0 ? null : new GatewayPort({ settings, chain });
 }
 
@@ -886,7 +898,9 @@ export function registerAiGateway(): void {
   const store = new PostgresBreakerStore();
   breakers.useStore(store);
   embeddingBreakers.useStore(store);
-  registerLanguageModelResolver((_capability, dataClass) => resolveGatewayPort(dataClass));
+  registerLanguageModelResolver((capability, dataClass) =>
+    resolveGatewayPort(dataClass, capability)
+  );
   registerEmbeddingResolver(dataClass => resolveGatewayEmbedding(dataClass));
 }
 
