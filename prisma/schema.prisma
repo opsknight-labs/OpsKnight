@@ -5512,6 +5512,47 @@ model AiProviderBreaker {
   updatedAt  DateTime  @updatedAt
 }
 
+// ---------------------------------------------------------------------------
+// Squire observability connectors (read-only, outbound, UI-configured, default off)
+// ---------------------------------------------------------------------------
+
+enum ObservabilityConnectionKind {
+  PROMETHEUS
+  LOKI
+  TEMPO
+  GRAFANA
+  DATADOG
+  ELASTIC
+  CLOUDWATCH
+  SENTRY
+  GITHUB
+  GITLAB
+}
+
+// A read-only connection Squire may query during an AI turn. Credentials are encrypted at rest and never
+// leave the server; every request goes through the SSRF-safe guarded fetch with a timeout and a size cap.
+model ObservabilityConnection {
+  id                  String                      @id @default(cuid())
+  name                String                      @unique
+  kind                ObservabilityConnectionKind
+  baseUrl             String
+  credentialEncrypted String?
+  // Kind-specific, non-secret scoping: AWS region, Sentry/Grafana org, Sentry project, Elastic index, Grafana datasource.
+  region              String?
+  org                 String?
+  project             String?
+  // Empty means every team; otherwise only members of these teams (and global readers) can use it.
+  allowedTeamIds      String[]                    @default([])
+  // Explicit administrator consent to reach a private-network address, pinned to the saved origin.
+  allowPrivateNetwork Boolean                     @default(false)
+  enabled             Boolean                     @default(false)
+  timeoutMs           Int                         @default(10000)
+  createdById         String?
+  updatedById         String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+}
+
 model SquireActionReceipt {
   id              String   @id
   userId          String

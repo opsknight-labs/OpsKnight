@@ -163,10 +163,13 @@ domains:
         token-usage-counters,
         short-lived-actor-token-reservations,
         single-use-confirmed-action-receipts,
+        observability-connector-credentials,
+        summarised-metrics-logs-traces-errors-and-diffs-from-opt-in-connectors,
       ]
     purpose:
       [
         answering-questions-about-incidents-the-user-can-read,
+        optional-read-only-observability-lookups-during-ai-answers,
         incident-summaries-and-postmortem-drafts-for-review,
         token-budget-accounting,
       ]
