@@ -5411,6 +5411,10 @@ model AiSettings {
   squireHistoryRetentionDays Int   @default(90)
   // Extended assistant actions (escalate, urgency, snooze, Jira, status drafts, runbooks): opt-in.
   squireExtendedActions   Boolean  @default(false)
+  // Squire outside the web app, each opt-in: Slack/Teams (@squire), MCP (ask_squire), mobile pages.
+  squireChatOpsEnabled    Boolean  @default(false)
+  squireMcpEnabled        Boolean  @default(false)
+  squireMobileEnabled     Boolean  @default(false)
   allowExternalFallback   Boolean  @default(false)
   requestsPerMinutePerUser Int     @default(20)
   dailyTokenBudget        Int      @default(500000)

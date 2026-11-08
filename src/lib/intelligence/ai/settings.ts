@@ -36,6 +36,12 @@ export interface AiSettingsView {
   squireHistoryRetentionDays: number;
   /** Extended assistant actions (escalate, urgency, snooze, Jira, status drafts, runbooks). Off by default. */
   squireExtendedActions: boolean;
+  /** Squire in Slack and Microsoft Teams (@squire, /incident ask). Off by default. */
+  squireChatOpsEnabled: boolean;
+  /** The read-only ask_squire MCP tool. Off by default. */
+  squireMcpEnabled: boolean;
+  /** Squire on the mobile incident pages. Off by default. */
+  squireMobileEnabled: boolean;
   allowExternalFallback: boolean;
   requestsPerMinutePerUser: number;
   dailyTokenBudget: number;
@@ -63,6 +69,9 @@ const SETTINGS_SELECT = {
   squireHistoryEnabled: true,
   squireHistoryRetentionDays: true,
   squireExtendedActions: true,
+  squireChatOpsEnabled: true,
+  squireMcpEnabled: true,
+  squireMobileEnabled: true,
   allowExternalFallback: true,
   requestsPerMinutePerUser: true,
   dailyTokenBudget: true,
@@ -129,6 +138,10 @@ export async function updateAiSettings(
       backgroundEmbeddingBudgetPercent: allocation,
       // Same for the extended-actions switch: omitted means "keep what is saved".
       squireExtendedActions: values.squireExtendedActions ?? previous.squireExtendedActions,
+      // Clients that predate the surface switches do not send them; keep what was saved.
+      squireChatOpsEnabled: values.squireChatOpsEnabled ?? previous.squireChatOpsEnabled,
+      squireMcpEnabled: values.squireMcpEnabled ?? previous.squireMcpEnabled,
+      squireMobileEnabled: values.squireMobileEnabled ?? previous.squireMobileEnabled,
     };
     const next = toSettingsView(
       await tx.aiSettings.upsert({
@@ -547,5 +560,6 @@ export async function getAiPublicStatus(client: Client = prisma) {
     aiEnabled: settings.enabled,
     historyEnabled: settings.squireHistoryEnabled,
     historyRetentionDays: settings.squireHistoryRetentionDays,
+    mobileEnabled: settings.squireMobileEnabled,
   };
 }
