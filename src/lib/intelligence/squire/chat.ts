@@ -45,6 +45,8 @@ import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools
 import { OBSERVABILITY_TOOL_LABELS } from './tools-observability';
 import { listEligibleConnections } from '../connectors/service';
 import { INCIDENT_TOOL_LABELS } from './tools-incident';
+import { wantsInvestigation } from './investigation/classify';
+import { portFor, streamInvestigation } from './investigation/turn';
 
 /** Evidence handles a basic answer may carry; beyond this the answer is paged rather than refused. */
 const MAX_BASIC_SOURCES = 32;
@@ -179,6 +181,59 @@ export async function* streamSquire(
         ...history,
         { role: 'user', content: request.message, dataClass: 'PERSONAL' },
       ];
+
+      // ---- Investigation mode (off unless an administrator enables it) ----
+      const investigationContext = {
+        actorId: actor.id,
+        dataClass,
+        incidentId: incident?.id,
+        signal,
+        prompt: prompt.meta,
+      };
+      if (
+        settings.squireInvestigationEnabled &&
+        (await wantsInvestigation(request.message, {
+          onIncident: Boolean(incident),
+          classifier: () => portFor('CLASSIFY', dataClass, port!),
+          context: investigationContext,
+          dataClass,
+        }))
+      ) {
+        yield* streamInvestigation({
+          actor,
+          question: request.message,
+          preamble: messages.slice(0, -1),
+          context: investigationContext,
+          dataClass,
+          chatPort: port,
+          settings,
+          evidence,
+          labels: TOOL_LABELS,
+          suggestions: followUps(incident, true),
+          verifiedHash: authorizationContextHash(actor),
+          finish: answer =>
+            contextProofs(
+              actor,
+              { ...request, incidentId: incident?.id },
+              answer,
+              dataClass,
+              evidence.sources(),
+              evidence.verified
+            ),
+          fallback: () =>
+            basicAnswer(
+              actor,
+              request,
+              incident,
+              settings.squireName,
+              dataClass,
+              savedConversation,
+              'unavailable',
+              page
+            ),
+        });
+        return;
+      }
 
       let answer = '';
       let proposals = 0;

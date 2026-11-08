@@ -268,6 +268,53 @@ describe('intelligence architecture boundaries', () => {
   });
 });
 
+describe('Squire investigation and model routing boundaries', () => {
+  it('keeps the investigation loop free of data access: it reads only through the tools it is given', () => {
+    const dir = join(intelligenceDir, 'squire/investigation');
+    const engine = read(join(dir, 'engine.ts'));
+    expect(engine).not.toMatch(/from\s+['"](?:@\/lib\/prisma|@prisma\/client|server-only)['"]/);
+    expect(engine).not.toMatch(/\bprisma\b/);
+    // Only READ tools with an executor are ever run, and never more than four at a time.
+    expect(engine).toMatch(/tool\.kind === 'READ' && tool\.execute/);
+    expect(engine).toMatch(/maxParallel: 4/);
+    for (const file of sourceFiles(dir)) expect(read(file)).not.toMatch(/PROPOSE_WRITE/);
+  });
+
+  it('lets incident-response tools only read, through the shared visibility helpers', () => {
+    const tools = read(join(intelligenceDir, 'squire/tools-incident.ts'));
+    expect(tools).not.toMatch(
+      /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$queryRaw|\$transaction/
+    );
+    expect(tools).toMatch(/readIncidentForActor\(actor/);
+    for (const helper of [
+      'serviceReadWhere',
+      'runbookReadWhere',
+      'scheduleReadWhere',
+      'incidentReadWhere',
+    ])
+      expect(tools).toContain(`${helper}(actor)`);
+  });
+
+  it('routes capabilities only by reordering the chain the data policy already allowed', () => {
+    const gateway = read(join(intelligenceDir, 'ai/gateway.ts'));
+    expect(gateway).toMatch(
+      /const eligible = selectProviderChain\([\s\S]*?applyCapabilityRoute\(eligible, settings\.capabilityRouting, capability\)/
+    );
+    const routing = read(join(intelligenceDir, 'ai/routing.ts'));
+    expect(routing).toMatch(/const preferred = chain\.find\(/);
+    expect(routing).toMatch(/if \(!preferred\) return \[\.\.\.chain\]/);
+    // The routing settings writer touches only the AI settings row, under the shared revision lock.
+    const writer = read(join(intelligenceDir, 'ai/routing-settings.ts'));
+    const delegates = [
+      ...writer.matchAll(
+        /\btx\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+      ),
+    ].map(match => match[1]);
+    expect([...new Set(delegates)]).toEqual(['aiSettings']);
+    expect(writer).toContain("hashtextextended('ai-settings', 0)");
+  });
+});
+
 describe('runtime compatibility', () => {
   it('only depends on packages that run on the repository Node range', () => {
     // AI SDK 7 requires Node >=22 while the product is pinned to Node 20; this guard keeps any
