@@ -3,6 +3,8 @@ import { collectFeatureMetrics, type FeatureMetricName } from './feature-metrics
 import { logger } from '@/lib/logger';
 import { getIntelligenceLaneStatus, type LaneStatus } from './jobs/runner';
 import { getWorkBacklog, WORK_KINDS } from './jobs/work-queue';
+import { collectCostMetrics } from './ai/cost-metrics';
+import type { BudgetMetricSample } from './ai/cost';
 
 /** A lane that has not completed a cycle for this long is wedged, not merely idle (idle polls every few seconds). */
 export const LANE_STALE_AFTER_MS = 120_000;
@@ -59,7 +61,8 @@ export interface IntelligenceMetricSample {
     | 'opsknight_intelligence_timed_out_in_flight'
     | 'opsknight_intelligence_wake_leader'
     | 'opsknight_intelligence_pool_waiting_queries'
-    | 'opsknight_intelligence_lane_last_cycle_age_seconds';
+    | 'opsknight_intelligence_lane_last_cycle_age_seconds'
+    | BudgetMetricSample['name'];
   value: number;
   labels?: Record<string, string>;
 }
@@ -117,5 +120,6 @@ export async function collectIntelligenceMetrics(
     });
   }
   samples.push(...(await collectFeatureMetrics(new Date(now))));
+  samples.push(...(await collectCostMetrics(new Date(now))));
   return samples;
 }

@@ -271,3 +271,54 @@ tests:
       - eval_time: 40m
         alertname: OpsKnightIntelligenceEmbeddingBacklog
         exp_alerts: []
+  # AI cost governance: 80% warns after 10 minutes, 100% after 5; scopes alert separately.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_ai_budgets_over_threshold{instance="web-a",scope="team",threshold="0.8"}'
+        values: '0x5 1x20'
+      - series: 'opsknight_intelligence_ai_budgets_over_threshold{instance="web-b",scope="team",threshold="0.8"}'
+        values: '0x5 1x20'
+      - series: 'opsknight_intelligence_ai_budgets_over_threshold{instance="web-a",scope="team",threshold="1"}'
+        values: '0x12 1x12'
+      - series: 'opsknight_intelligence_ai_budgets_over_threshold{instance="web-a",scope="capability",threshold="0.8"}'
+        values: '0x25'
+      - series: 'opsknight_intelligence_ai_budgets_over_threshold{instance="web-a",scope="capability",threshold="1"}'
+        values: '0x25'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightAiBudgetNearLimit
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: OpsKnightAiBudgetNearLimit
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              scope: team
+            exp_annotations:
+              summary: An AI budget has used 80% of its daily allowance
+              description: 'Scope team. Open Assistant and AI, Spend and budgets, to see which team or capability is close to its limit. At 100% new AI requests in that scope are refused until 00:00 UTC; deterministic answers and paging are unaffected.'
+      - eval_time: 16m
+        alertname: OpsKnightAiBudgetExhausted
+        exp_alerts: []
+      - eval_time: 18m
+        alertname: OpsKnightAiBudgetExhausted
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              scope: team
+            exp_annotations:
+              summary: An AI budget has reached its daily allowance
+              description: 'Scope team. AI requests charged to that scope are refused until 00:00 UTC and fall back to deterministic answers. Raise or remove the budget in Assistant and AI if the spend is expected. Paging is unaffected.'
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_ai_budgets_over_threshold{scope="global",threshold="0.8"}'
+        values: '1x3 0x20'
+      - series: 'opsknight_intelligence_ai_budgets_over_threshold{scope="global",threshold="1"}'
+        values: '1x3 0x20'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: OpsKnightAiBudgetNearLimit
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: OpsKnightAiBudgetExhausted
+        exp_alerts: []

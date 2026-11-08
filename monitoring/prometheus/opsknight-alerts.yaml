@@ -382,3 +382,20 @@ groups:
         annotations:
           summary: Intelligence feature telemetry exceeded its bounded sample
           description: Treat recent outcome counts as sampled coverage and inspect the underlying authorized records. Measure database cost before increasing sample limits.
+      # AI cost governance: optional team and capability budgets plus the global token budget.
+      - alert: OpsKnightAiBudgetNearLimit
+        expr: max by (scope) (opsknight_intelligence_ai_budgets_over_threshold{threshold="0.8"}) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: An AI budget has used 80% of its daily allowance
+          description: 'Scope {{ $labels.scope }}. Open Assistant and AI, Spend and budgets, to see which team or capability is close to its limit. At 100% new AI requests in that scope are refused until 00:00 UTC; deterministic answers and paging are unaffected.'
+      - alert: OpsKnightAiBudgetExhausted
+        expr: max by (scope) (opsknight_intelligence_ai_budgets_over_threshold{threshold="1"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: An AI budget has reached its daily allowance
+          description: 'Scope {{ $labels.scope }}. AI requests charged to that scope are refused until 00:00 UTC and fall back to deterministic answers. Raise or remove the budget in Assistant and AI if the spend is expected. Paging is unaffected.'

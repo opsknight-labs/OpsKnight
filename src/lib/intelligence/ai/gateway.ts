@@ -26,6 +26,8 @@ import {
   type AiReservation,
 } from './budget';
 import { ProviderBreakers } from './breaker';
+import { attributeTeam, priceForModel } from './cost';
+import { costMicrosFor } from './pricing';
 import { PostgresBreakerStore } from './breaker-store';
 import { embeddingSpaceIdentity } from '../semantic/identity';
 import { AI_SETTINGS_BOUNDS } from './contract';
@@ -329,6 +331,18 @@ function estimatedInput(request: AiGenerateRequest): number {
 class GatewayPort implements LanguageModelPort {
   constructor(private readonly data: GatewayContextData) {}
 
+  /** One team attribution per request, shared by every provider attempt and its settlement. */
+  private readonly teams = new WeakMap<AiGenerateRequest, Promise<string | null>>();
+
+  private teamFor(request: AiGenerateRequest): Promise<string | null> {
+    let team = this.teams.get(request);
+    if (!team) {
+      team = attributeTeam(request.context.actorId, request.context.incidentId);
+      this.teams.set(request, team);
+    }
+    return team;
+  }
+
   private async admit(request: AiGenerateRequest) {
     const decision = await admitAiRequest(request.context.actorId, this.data.settings);
     if (!decision.allowed) {
@@ -360,11 +374,26 @@ class GatewayPort implements LanguageModelPort {
         output) *
       steps;
     try {
+      // Cost governance: charge the hold to a team and capability, with a dollar estimate when priced.
+      const [teamId, price] = await Promise.all([
+        this.teamFor(request),
+        priceForModel(provider.kind, provider.model),
+      ]);
+      const inputEstimate = estimate - output * steps;
       const reservation = await reserveAiTokens(
         request.context.actorId,
         this.data.settings,
         estimate,
-        this.data.settings.requestTimeoutMs * (this.data.chain.length + 1) + 60_000
+        this.data.settings.requestTimeoutMs * (this.data.chain.length + 1) + 60_000,
+        new Date(),
+        {
+          teamId,
+          capability: request.context.capability,
+          costMicros: costMicrosFor(
+            { inputTokens: inputEstimate, outputTokens: output * steps },
+            price
+          ),
+        }
       );
       if (!reservation) throw new AiGatewayError('BUDGET_EXHAUSTED', 'Daily AI budget reached');
       return reservation;
@@ -408,12 +437,15 @@ class GatewayPort implements LanguageModelPort {
     extra: Record<string, string | number | boolean> = {},
     reservation?: AiReservation
   ): Promise<void> {
-    await recordAiUsage(result.usage, new Date(), request.context.actorId, reservation).catch(
-      error =>
+    await this.attribution(request, result)
+      .then(attribution =>
+        recordAiUsage(result.usage, new Date(), request.context.actorId, reservation, attribution)
+      )
+      .catch(error =>
         logger.warn('[AI] Could not record usage', {
           error: error instanceof Error ? error.message : String(error),
         })
-    );
+      );
     await logAudit({
       action: 'intelligence.ai.interaction',
       entityType: 'SYSTEM_CONFIG',
@@ -439,6 +471,25 @@ class GatewayPort implements LanguageModelPort {
         ...extra,
       },
     }).catch(() => undefined);
+  }
+
+  private async attribution(
+    request: AiGenerateRequest,
+    result: Pick<AiGenerateResult, 'usage' | 'served'>
+  ) {
+    const provider = this.data.chain.find(candidate => candidate.id === result.served.providerId);
+    if (!provider) return undefined;
+    const [teamId, price] = await Promise.all([
+      this.teamFor(request).catch(() => null),
+      priceForModel(provider.kind, result.served.model),
+    ]);
+    return {
+      providerKind: provider.kind,
+      model: result.served.model,
+      capability: request.context.capability,
+      teamId,
+      costMicros: costMicrosFor(result.usage, price),
+    };
   }
 
   async generateStructured<T>(request: AiStructuredRequest<T>): Promise<AiStructuredResult<T>> {
@@ -772,11 +823,25 @@ class GatewayEmbeddingPort implements EmbeddingPort {
       throw new AiGatewayError('NO_PROVIDER', 'Embedding provider unavailable');
     }
     const estimate = estimateTokens(values.join('\n'));
+    const price = await priceForModel(this.provider.kind, this.provider.embeddingModel);
+    const attribution = (tokens: number) => ({
+      providerKind: this.provider.kind,
+      model: this.provider.embeddingModel ?? this.provider.model,
+      capability: 'EMBED',
+      teamId: null,
+      costMicros: costMicrosFor({ inputTokens: tokens, outputTokens: 0 }, price),
+    });
     const reservation = await reserveAiTokens(
       context.actorId,
       this.settings,
       estimate,
-      this.settings.requestTimeoutMs * 2 + 60_000
+      this.settings.requestTimeoutMs * 2 + 60_000,
+      new Date(),
+      {
+        capability: 'EMBED',
+        teamId: null,
+        costMicros: costMicrosFor({ inputTokens: estimate, outputTokens: 0 }, price),
+      }
     );
     if (!reservation) {
       embeddingBreakers.release(this.provider.id);
@@ -803,7 +868,8 @@ class GatewayEmbeddingPort implements EmbeddingPort {
         { inputTokens: tokens, outputTokens: 0 },
         new Date(),
         context.actorId,
-        reservation
+        reservation,
+        attribution(tokens)
       ).catch(() => undefined);
       return { vectors: result.embeddings, tokens };
     } catch (error) {
@@ -816,7 +882,8 @@ class GatewayEmbeddingPort implements EmbeddingPort {
           { inputTokens: estimate, outputTokens: 0 },
           new Date(),
           context.actorId,
-          reservation
+          reservation,
+          attribution(estimate)
         ).catch(() => undefined);
     }
   }
@@ -939,6 +1006,14 @@ export async function testProviderConnection(
   const settings = await getAiSettings();
   const decision = await admitAiRequest(actorId, settings);
   if (!decision.allowed) return { ok: false, reason: decision.reason };
+  const price = await priceForModel(provider.kind, provider.model);
+  const attribution = (usage: { inputTokens: number; outputTokens: number }) => ({
+    providerKind: provider.kind,
+    model: provider.model,
+    capability: 'PROVIDER_TEST',
+    teamId: null,
+    costMicros: costMicrosFor(usage, price),
+  });
   const reservation = await reserveAiTokens(actorId, settings, 24, 90_000);
   if (!reservation) return { ok: false, reason: 'BUDGET_EXHAUSTED' };
   let accounted = false;
@@ -952,15 +1027,13 @@ export async function testProviderConnection(
       maxRetries: 0,
     });
     accounted = true;
-    await recordAiUsage(
-      {
-        inputTokens: result.totalUsage.inputTokens ?? 0,
-        outputTokens: result.totalUsage.outputTokens ?? 0,
-      },
-      new Date(),
-      actorId,
-      reservation
-    ).catch(() => undefined);
+    const usage = {
+      inputTokens: result.totalUsage.inputTokens ?? 0,
+      outputTokens: result.totalUsage.outputTokens ?? 0,
+    };
+    await recordAiUsage(usage, new Date(), actorId, reservation, attribution(usage)).catch(
+      () => undefined
+    );
     return { ok: true, latencyMs: Date.now() - started };
   } catch (error) {
     const status = (error as { statusCode?: number }).statusCode;
@@ -976,7 +1049,8 @@ export async function testProviderConnection(
         { inputTokens: 8, outputTokens: 0 },
         new Date(),
         actorId,
-        reservation
+        reservation,
+        attribution({ inputTokens: 8, outputTokens: 0 })
       ).catch(() => undefined);
   }
 }
