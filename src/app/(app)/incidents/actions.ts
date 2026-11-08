@@ -18,7 +18,7 @@ import {
 } from '@/lib/incidents/operator-lifecycle';
 import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
-import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
+import { applyIncidentUrgencyChange } from '@/lib/incidents/urgency-command';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { setIncidentWatcher, deleteIncidentWatcher } from '@/lib/incidents/watchers';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
@@ -52,32 +52,9 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
 export async function updateIncidentUrgency(id: string, urgency: string) {
   await assertResponderOrAbove();
   const parsedUrgency = parseIncidentUrgency(urgency);
-  await prisma.$transaction(async tx => {
-    const current = await tx.incident.findUniqueOrThrow({
-      where: { id },
-      select: { urgency: true },
-    });
-    await tx.incident.update({
-      where: { id },
-      data: {
-        urgency: parsedUrgency,
-        events: {
-          create: {
-            type: 'STATUS_CHANGE',
-            message: `Urgency updated to ${parsedUrgency}`,
-          },
-        },
-      },
-    });
-    await reconcileIncidentEngagementAfterUrgencyChange(tx, {
-      incidentId: id,
-      previousUrgency: current.urgency,
-      urgency: parsedUrgency,
-    });
-    await enqueueWarRoomSideEffects(tx, id, [
-      { effect: 'WAR_ROOM_MESSAGE', message: `🔔 *Urgency updated to ${parsedUrgency}*` },
-    ]);
-  });
+  await prisma.$transaction(tx =>
+    applyIncidentUrgencyChange(tx, { incidentId: id, urgency: parsedUrgency })
+  );
 
   revalidatePath(`/incidents/${id}`);
   revalidatePath('/incidents');
