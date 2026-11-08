@@ -5399,6 +5399,8 @@ model AiSettings {
   // Saved assistant conversations are opt-in, encrypted and visible only to their owner.
   squireHistoryEnabled    Boolean  @default(true)
   squireHistoryRetentionDays Int   @default(90)
+  // Extended assistant actions (escalate, urgency, snooze, Jira, status drafts, runbooks): opt-in.
+  squireExtendedActions   Boolean  @default(false)
   allowExternalFallback   Boolean  @default(false)
   requestsPerMinutePerUser Int     @default(20)
   dailyTokenBudget        Int      @default(500000)

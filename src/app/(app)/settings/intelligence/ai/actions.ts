@@ -67,6 +67,9 @@ export async function saveAiSettingsAction(
         embeddingsEnabled: checked(form, 'embeddingsEnabled'),
         squireHistoryEnabled: checked(form, 'squireHistoryEnabled'),
         squireHistoryRetentionDays: integer(form, 'squireHistoryRetentionDays') || 90,
+        squireExtendedActions: form.has('squireExtendedActionsPresent')
+          ? checked(form, 'squireExtendedActions')
+          : undefined,
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }
