@@ -33,11 +33,23 @@ const EXPECTED_INDEXES: Record<string, string[]> = {
     'idx_intelligence_work_item_ready',
     'IntelligenceWorkItem_leaseUntil_idx',
   ],
-  changeWindow: ['ChangeEvent_serviceId_occurredAt_idx', 'idx_change_event_service_window'],
+  changeWindow: ['idx_change_event_service_recent', 'idx_change_event_retention'],
   pagingCheck: ['idx_background_job_intelligence_paging'],
   reconcileWatermark: ['idx_incident_updated_at'],
   embedPage: ['idx_incident_fingerprint_retention', 'idx_incident_fingerprint_service_recent'],
   runbookHistory: ['idx_runbook_execution_service_recent'],
+};
+
+/**
+ * Range queries whose selectivity depends on history size: on a small table the planner rightly prefers a
+ * sequential scan, so these are judged only once their table holds at least this many rows.
+ */
+const MIN_ROWS_TO_JUDGE: Record<
+  string,
+  { table: 'Incident' | 'IncidentFingerprint'; rows: number }
+> = {
+  reconcileWatermark: { table: 'Incident', rows: 200_000 },
+  embedPage: { table: 'IncidentFingerprint', rows: 200_000 },
 };
 
 function indexNames(plan: unknown): string[] {
@@ -87,7 +99,10 @@ async function main() {
     }));
   const lowerBound = new Date(Date.now() - 180 * 86400000);
   const ftsQuery = fullTextQueryText(planFullTextQuery(source.tokens, await termFrequencies()));
-  const cursorAt = new Date(Date.now() - 86400000);
+  // A steady-state repair cursor sits just behind the newest change, not at the start of history.
+  const [{ latest }] = await prisma.$queryRaw<Array<{ latest: Date | null }>>`
+    SELECT max("updatedAt") AS latest FROM "Incident"`;
+  const cursorAt = new Date((latest ?? new Date()).getTime() - 60_000);
 
   const queries: Record<string, { sql: Prisma.Sql; analyze: boolean }> = {
     sameService: {
@@ -130,8 +145,8 @@ async function main() {
     reconcileWatermark: {
       analyze: true,
       sql: Prisma.sql`SELECT "id", "updatedAt" FROM "Incident"
-      WHERE ("updatedAt" > ${cursorAt} OR ("updatedAt" = ${cursorAt} AND "id" > ''))
-        AND "updatedAt" <= now() - interval '30 seconds'
+      WHERE "updatedAt" >= ${cursorAt} AND "updatedAt" <= now()
+        AND ("updatedAt" > ${cursorAt} OR "id" > '')
       ORDER BY "updatedAt" ASC, "id" ASC LIMIT 500`,
     },
     // Semantic backfill walks the lookback window newest first in bounded pages.
@@ -151,9 +166,15 @@ async function main() {
     },
   };
 
+  const [{ incidents, fingerprints }] = await prisma.$queryRaw<
+    Array<{ incidents: bigint; fingerprints: bigint }>
+  >`SELECT (SELECT count(*) FROM "Incident") AS incidents,
+           (SELECT count(*) FROM "IncidentFingerprint") AS fingerprints`;
+  const tableRows = { Incident: Number(incidents), IncidentFingerprint: Number(fingerprints) };
   const plans: Record<string, unknown> = {};
   const indexesUsed: Record<string, string[]> = {};
   const missing: string[] = [];
+  const notJudged: string[] = [];
   for (const [name, { sql, analyze }] of Object.entries(queries)) {
     try {
       plans[name] = await explain(sql, analyze);
@@ -164,6 +185,11 @@ async function main() {
       continue;
     }
     indexesUsed[name] = indexNames(plans[name]);
+    const threshold = MIN_ROWS_TO_JUDGE[name];
+    if (threshold && tableRows[threshold.table] < threshold.rows) {
+      notJudged.push(`${name} (${threshold.table} has ${tableRows[threshold.table]} rows)`);
+      continue;
+    }
     const expected = EXPECTED_INDEXES[name] ?? [];
     if (expected.length && !expected.some(index => indexesUsed[name].includes(index)))
       missing.push(`${name} (used ${indexesUsed[name].join(', ') || 'no index'})`);
@@ -173,18 +199,22 @@ async function main() {
     measuredAt: new Date().toISOString(),
     engineVersion: INTELLIGENCE_ENGINE_VERSION,
     node: process.version,
-    fingerprints: await prisma.incidentFingerprint.count(),
+    tableRows,
     workItems: await prisma.intelligenceWorkItem.count(),
     expectedIndexes: EXPECTED_INDEXES,
+    minRowsToJudge: MIN_ROWS_TO_JUDGE,
     indexesUsed,
     missing,
+    notJudged,
     passed: missing.length === 0,
     plans,
     note: 'Read queries use EXPLAIN ANALYZE on synthetic history; the claim UPDATE is explained without execution. Plans depend on data and host load.',
   };
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
-  console.log(JSON.stringify({ passed: report.passed, missing, indexesUsed, report: output }));
+  console.log(
+    JSON.stringify({ passed: report.passed, missing, notJudged, indexesUsed, report: output })
+  );
   if (gate && !report.passed) process.exitCode = 1;
 }
 main()

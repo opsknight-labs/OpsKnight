@@ -108,8 +108,7 @@ async function queueFingerprintRepairs(
     FROM "Incident" i LEFT JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
     WHERE i."id" IN (${Prisma.join(ids)})
   `);
-  const pick = (reason: string) =>
-    candidates.filter(row => row.reason === reason).slice(0, limit);
+  const pick = (reason: string) => candidates.filter(row => row.reason === reason).slice(0, limit);
   const missing = pick('missing');
   const staleResolution = pick('staleResolution');
   const staleSource = pick('staleSource');
@@ -218,9 +217,8 @@ export async function reconcileUpdatedIncidents(
     const pageSize = Math.max(100, Math.min(500, options.limit * 10));
     const page = await tx.$queryRaw<Array<{ id: string; updatedAt: Date }>>(Prisma.sql`
       SELECT "id", "updatedAt" FROM "Incident"
-      WHERE ("updatedAt" > ${cursor.watermarkAt}
-             OR ("updatedAt" = ${cursor.watermarkAt} AND "id" > ${cursor.lastId}))
-        AND "updatedAt" <= ${upperBound}
+      WHERE "updatedAt" >= ${cursor.watermarkAt} AND "updatedAt" <= ${upperBound}
+        AND ("updatedAt" > ${cursor.watermarkAt} OR "id" > ${cursor.lastId})
       ORDER BY "updatedAt" ASC, "id" ASC
       LIMIT ${pageSize}
     `);

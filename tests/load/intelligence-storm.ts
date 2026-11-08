@@ -316,6 +316,11 @@ async function main() {
     prisma.correlationGroup.count(),
     prisma.intelligenceWorkItem.count({ where: { attempts: { gte: 8 } } }),
   ]);
+  // Share of wall time spent inside handlers at the configured concurrency: low values point at
+  // per-cycle overhead or host contention rather than at the analysis itself.
+  const handlerMs = [...samples.values()].flat().reduce((sum, value) => sum + value, 0);
+  const handlerBusyFraction =
+    Math.round((handlerMs / (drainSeconds * 1000 * options.concurrency)) * 1000) / 1000;
   const breaches: string[] = [];
   if (drainSeconds > options.maxDrainSeconds)
     breaches.push(`drained in ${drainSeconds.toFixed(1)} s > ${options.maxDrainSeconds} s`);
@@ -338,6 +343,8 @@ async function main() {
     drainSeconds: Math.round(drainSeconds * 10) / 10,
     incidentsPerSecond: Math.round((options.burst / drainSeconds) * 10) / 10,
     cycles,
+    averageCycleMs: Math.round((drainSeconds * 1000) / Math.max(1, cycles)),
+    handlerBusyFraction,
     failedItems: failed,
     deadLetters,
     activeFindings: findings,
