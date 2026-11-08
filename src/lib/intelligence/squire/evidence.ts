@@ -224,6 +224,20 @@ export class SquireEvidenceRegistry {
         subject('incident');
         if (object.bestRunbook) add('runbook', row(object.bestRunbook));
         break;
+      // Observability connectors (slice F1): the source is the connection that was queried, re-checked for
+      // this person on replay; a diff also cites the recorded change it was read for.
+      case 'query_metrics':
+      case 'search_logs':
+      case 'get_traces':
+      case 'get_error_events':
+      case 'get_change_diff':
+        add('observability', {
+          id: object.connectionId,
+          name: object.connectionName,
+          snapshot: result,
+        });
+        if (name === 'get_change_diff') add('change', { id: object.changeId, title: object.title });
+        break;
       default:
         this.complete = false;
         return unavailable;

@@ -35,6 +35,9 @@ import {
   type SquireActionName,
 } from './actions/catalog';
 import { readIncidentForActor } from './deterministic';
+// --- Observability connectors (slice F1): tools live in their own module and are appended below.
+import type { EligibleConnection } from '../connectors/service';
+import { buildObservabilityTools, OBSERVABILITY_TOOL_DATA_CLASS } from './tools-observability';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
 const MAX_ROWS = 10;
@@ -58,6 +61,8 @@ export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
   semantic_search_incidents: 'INTERNAL',
   get_status_page: 'PUBLIC',
   get_problem_outcomes: 'INTERNAL',
+  // Observability connector tools (logs are Personal; the rest Internal).
+  ...OBSERVABILITY_TOOL_DATA_CLASS,
 };
 const SEMANTIC_UNAVAILABLE = { items: [], coverage: { mode: 'UNAVAILABLE', approximate: false } };
 
@@ -117,6 +122,8 @@ export function buildSquireTools(
     dataClass?: AiDataClass;
     signal?: AbortSignal;
     observe?: (name: string, input: unknown, result: unknown) => Promise<unknown>;
+    /** Enabled observability connections this person may use; their tools are offered only if any exist. */
+    observability?: readonly EligibleConnection[];
   }
 ): AiToolDefinition[] {
   const tools: AiToolDefinition[] = [
@@ -769,6 +776,15 @@ export function buildSquireTools(
             updatedAt: user.updatedAt.toISOString(),
           }));
         }
+      )
+    );
+  }
+
+  // --- Observability connectors (slice F1). Logs may carry Personal data, so they follow `personal`.
+  if (options.observability?.length) {
+    tools.push(
+      ...buildObservabilityTools(actor, options.observability, { signal: options.signal }).filter(
+        tool => options.personal || tool.dataClass !== 'PERSONAL'
       )
     );
   }
