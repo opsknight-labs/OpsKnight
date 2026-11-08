@@ -45,6 +45,7 @@ import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools
 import { OBSERVABILITY_TOOL_LABELS } from './tools-observability';
 import { listEligibleConnections } from '../connectors/service';
 import { INCIDENT_TOOL_LABELS } from './tools-incident';
+import { summarizeOlderTurns } from './context-summary';
 import { wantsInvestigation } from './investigation/classify';
 import { portFor, streamInvestigation } from './investigation/turn';
 
@@ -555,22 +556,33 @@ async function priorTurns(
 ): Promise<{ messages: AiMessage[]; omitted: boolean }> {
   if (saved) {
     const turns = saved.messages.slice(-SQUIRE_LIMITS.historyMax);
-    const replayable = turns.filter(
-      message =>
-        message.role === 'user' ||
-        (message.replayable !== false &&
-          message.envelope?.verified &&
-          message.envelope.completion === 'COMPLETED')
-    );
+    const isReplayable = (message: ConversationDetail['messages'][number]) =>
+      message.role === 'user' ||
+      (message.replayable !== false &&
+        message.envelope?.verified &&
+        message.envelope.completion === 'COMPLETED');
+    const replayable = turns.filter(isReplayable);
+    // Turns before the replay window are summarised (pinned after the system prompt), not dropped.
+    const summary = await summarizeOlderTurns(
+      saved.messages.slice(0, -SQUIRE_LIMITS.historyMax).filter(isReplayable),
+      {
+        actorId: actor.id,
+        incidentId: incidentId ?? undefined,
+        resolve: dataClass => resolveLanguageModel('SUMMARIZE', dataClass),
+      }
+    ).catch(() => null);
     return {
-      messages: replayable.map(message => ({
-        role: message.role,
-        content:
-          message.role === 'assistant'
-            ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]\n${message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)}`
-            : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
-        dataClass: message.dataClass,
-      })),
+      messages: [
+        ...(summary ? [summary] : []),
+        ...replayable.map(message => ({
+          role: message.role,
+          content:
+            message.role === 'assistant'
+              ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]\n${message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)}`
+              : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
+          dataClass: message.dataClass,
+        })),
+      ],
       omitted: replayable.length !== turns.length,
     };
   }
