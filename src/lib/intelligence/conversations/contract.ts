@@ -19,6 +19,7 @@ export const sourceReferenceSchema = z
       'person',
       'status_page',
       'postmortem',
+      'observability',
     ]),
     id: z.string().min(1).max(64),
     handle: z.string().uuid(),

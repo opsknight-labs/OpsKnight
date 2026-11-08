@@ -36,6 +36,7 @@ const proofSchema = z
               'person',
               'status_page',
               'postmortem',
+              'observability',
             ]),
             id: z.string().min(1).max(64),
             sourceUpdatedAt: z.string().datetime().optional(),

@@ -14,6 +14,7 @@ import {
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
 import type { SourceReference } from '../conversations/contract';
+import { connectionReadWhere } from '../connectors/service';
 
 export type SourceIdentity = Pick<SourceReference, 'kind' | 'id'>;
 export interface SourceState {
@@ -120,6 +121,16 @@ export async function readSourceStates(
     run('status_page', () =>
       prisma.statusPage.findMany({
         where: { id: { in: ids('status_page') } },
+        select: { id: true, updatedAt: true },
+      })
+    );
+  }
+  // Observability connections (slice F1): still enabled and still allowed for this person's teams.
+  const connections = connectionReadWhere(actor);
+  if (connections) {
+    run('observability', () =>
+      prisma.observabilityConnection.findMany({
+        where: { AND: [{ id: { in: ids('observability') } }, connections] },
         select: { id: true, updatedAt: true },
       })
     );

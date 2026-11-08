@@ -42,6 +42,8 @@ import { readDialogueState, writeDialogueState } from '../assistant/dialogue-sta
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
 import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';
+import { OBSERVABILITY_TOOL_LABELS } from './tools-observability';
+import { listEligibleConnections } from '../connectors/service';
 
 /** Evidence handles a basic answer may carry; beyond this the answer is paged rather than refused. */
 const MAX_BASIC_SOURCES = 32;
@@ -71,6 +73,7 @@ const TOOL_LABELS: Record<string, string> = {
   semantic_search_incidents: 'Searching incidents by meaning',
   get_status_page: 'Reading the status page',
   get_problem_outcomes: 'Checking past outcomes for this problem',
+  ...OBSERVABILITY_TOOL_LABELS,
 };
 
 /**
@@ -166,6 +169,8 @@ export async function* streamSquire(
       };
       const evidence = new SquireEvidenceRegistry(actor, dataClass);
       const prepared = briefing ? await evidence.briefing(briefing) : null;
+      // Observability connectors are optional: a lookup failure only means their tools are not offered.
+      const observability = await listEligibleConnections(actor).catch(() => []);
       const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
       const messages: AiMessage[] = [
         { role: 'system', content: prompt.system, dataClass: 'PERSONAL' },
@@ -195,6 +200,7 @@ export async function* streamSquire(
           personal: true,
           dataClass,
           signal,
+          observability,
           observe: (name, input, result) => {
             // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
             ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
