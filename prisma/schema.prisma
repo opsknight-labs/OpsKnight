@@ -5721,6 +5721,8 @@ model AiUsageDay {
   inputTokens  Int      @default(0)
   outputTokens Int      @default(0)
   backgroundEmbeddingTokens Int @default(0)
+  // Dollar cost in millionths of a US dollar for calls whose model has a price; null before cost tracking.
+  costMicros   BigInt?
   updatedAt    DateTime @updatedAt
 }
 
@@ -5732,6 +5734,11 @@ model AiTokenReservation {
   tokens    Int
   expiresAt DateTime
   settledAt DateTime?
+  // Attribution for team and capability budgets; null on holds made before cost governance.
+  teamId     String?
+  capability String?
+  // Estimated dollar cost of the hold in millionths of a dollar; null when the model has no price.
+  costMicros BigInt?
   createdAt DateTime @default(now())
 
   @@index([day, expiresAt], map: "idx_ai_token_reservation_day")
@@ -5850,11 +5857,65 @@ model AiUsageUserDay {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokens    Int      @default(0)
+  costMicros BigInt?
   updatedAt DateTime @updatedAt
 
   @@id([day, userId])
   @@index([day], map: "idx_ai_usage_user_day_retention")
 }
+
+// --- AI cost governance (Workstream F6) ---
+// Administrator price for one model of one provider kind, in US dollars per million tokens. Overrides the
+// built-in list price table. Configuration only: no personal data.
+model AiModelPrice {
+  id               String         @id @default(cuid())
+  providerKind     AiProviderKind
+  model            String
+  inputUsdPerMTok  Float
+  outputUsdPerMTok Float          @default(0)
+  updatedBy        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([providerKind, model])
+}
+
+// Optional daily limit for one team or one capability, in tokens and/or dollars. Absent rows mean no limit.
+// key is "team:<teamId>" or "capability:<CAPABILITY>". Enforced in the same reservation as the global budget.
+model AiBudget {
+  id                   String   @id @default(cuid())
+  key                  String   @unique
+  scope                String
+  teamId               String?
+  capability           String?
+  dailyTokenLimit      Int?
+  dailyCostLimitMicros BigInt?
+  enabled              Boolean  @default(true)
+  revision             Int      @default(1)
+  updatedBy            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// Aggregate spend per UTC day by attributed team ("" when none), capability and model. Counts only: no
+// prompts, answers or people. Feeds team and capability budgets and the usage page.
+model AiUsageBreakdownDay {
+  day              String
+  teamId           String   @default("")
+  capability       String
+  providerKind     String
+  model            String
+  requests         Int      @default(0)
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  costMicros       BigInt   @default(0)
+  // Calls whose model had no price; their tokens count, their dollars are unknown.
+  unpricedRequests Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  @@id([day, teamId, capability, providerKind, model])
+}
+// --- end AI cost governance ---
 
 // Optional organisation guidance an administrator appends to a built-in prompt. It is added after the fixed
 // safety rules and cannot replace them. Every change is audited with the previous text.

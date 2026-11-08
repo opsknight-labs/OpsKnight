@@ -2001,6 +2001,40 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
     buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
   },
+  // --- AI cost governance (Workstream F6) ---
+  {
+    name: 'opsknight_intelligence_ai_budget_rejections_total',
+    help: 'AI requests refused because a daily budget would be exceeded, by bounded budget scope (global, user, background, team, capability)',
+    kind: 'counter',
+    labels: ['scope'],
+    scope: 'counter',
+    estimatedMaxSeries: 5,
+  },
+  {
+    name: 'opsknight_intelligence_ai_spend_today_usd',
+    help: 'Settled AI spend for the current UTC day in US dollars, for calls whose model has a price',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_ai_budget_utilization_max_ratio',
+    help: 'Highest utilisation (settled plus live reservations over limit) among enabled AI budgets of a bounded scope (global, team, capability) for the current UTC day',
+    kind: 'gauge',
+    labels: ['scope'],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 3,
+  },
+  {
+    name: 'opsknight_intelligence_ai_budgets_over_threshold',
+    help: 'Enabled AI budgets of a bounded scope at or above a fixed utilisation threshold (0.8 or 1) for the current UTC day',
+    kind: 'gauge',
+    labels: ['scope', 'threshold'],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 6,
+  },
+  // --- end AI cost governance ---
 ] as const satisfies readonly MetricDefinition[];
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];

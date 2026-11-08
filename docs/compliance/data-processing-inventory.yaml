@@ -170,6 +170,8 @@ domains:
         single-use-confirmed-action-receipts,
         observability-connector-credentials,
         summarised-metrics-logs-traces-errors-and-diffs-from-opt-in-connectors,
+        aggregate-spend-by-day-team-capability-and-model,
+        model-price-overrides-and-team-or-capability-budgets,
       ]
     purpose:
       [
@@ -177,6 +179,7 @@ domains:
         optional-read-only-observability-lookups-during-ai-answers,
         incident-summaries-and-postmortem-drafts-for-review,
         token-budget-accounting,
+        ai-cost-accounting-and-optional-team-and-capability-budgets,
       ]
     storage: [postgresql, administrator-configured-language-model-provider]
     recipients: [administrator-configured-language-model-provider]

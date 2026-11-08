@@ -535,4 +535,30 @@ describe('intelligence data model contracts', () => {
     );
     expect(unregistered).toEqual([]);
   });
+
+  it('keeps AI spend accounting and budget configuration behind their owning modules', () => {
+    // Spend rows are written only by settlement (budget.ts through scoped-budget.ts); budgets and price
+    // overrides only by the audited, revision-checked services in ai/cost.ts. Anything else writing them
+    // could bypass the day lock that makes budgets exact, or skip the audit trail.
+    const owners: Array<[RegExp, string[]]> = [
+      [
+        /(?:INSERT INTO|UPDATE|DELETE FROM) "AiUsageBreakdownDay"|aiUsageBreakdownDay\.(?:create|upsert|update|delete)/,
+        ['ai/scoped-budget.ts'],
+      ],
+      [
+        /(?:INSERT INTO|UPDATE|DELETE FROM) "AiBudget"|aiBudget\.(?:create|upsert|update|delete)/,
+        ['ai/cost.ts'],
+      ],
+      [
+        /(?:INSERT INTO|UPDATE|DELETE FROM) "AiModelPrice"|aiModelPrice\.(?:create|upsert|update|delete)/,
+        ['ai/cost.ts'],
+      ],
+    ];
+    for (const [pattern, allowed] of owners) {
+      const writers = sourceFiles(join(root, 'src'))
+        .filter(file => pattern.test(read(file)))
+        .map(file => relative(intelligenceDir, file));
+      expect(writers, String(pattern)).toEqual(allowed);
+    }
+  });
 });

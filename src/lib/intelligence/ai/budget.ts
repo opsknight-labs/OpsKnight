@@ -4,6 +4,19 @@ import { Prisma } from '@prisma/client';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { AiUsage } from './port';
 import { BACKGROUND_EMBEDDING_ACTOR, backgroundEmbeddingTokenBudget } from './contract';
+import { addOperationalMetric } from '@/lib/metrics/operational/registry';
+import {
+  exceededScopedBudget,
+  recordUsageBreakdown,
+  type ReservationScope,
+  type UsageAttribution,
+} from './scoped-budget';
+
+export type { ReservationScope, UsageAttribution } from './scoped-budget';
+
+type RejectionScope = 'global' | 'user' | 'background' | 'team' | 'capability';
+const countRejection = (scope: RejectionScope) =>
+  addOperationalMetric('opsknight_intelligence_ai_budget_rejections_total', 1, { scope });
 
 type TokenLimits = {
   dailyTokenBudget: number;
@@ -74,7 +87,8 @@ export async function reserveAiTokens(
   limits: TokenLimits,
   estimate: number,
   ttlMs = 120_000,
-  now = new Date()
+  now = new Date(),
+  scope?: ReservationScope
 ): Promise<AiReservation | null> {
   const day = utcDay(now);
   const tokens = Math.max(1, clampTokens(estimate));
@@ -93,24 +107,43 @@ export async function reserveAiTokens(
           coalesce(sum(tokens) FILTER (WHERE "actorId" = ${BACKGROUND_EMBEDDING_ACTOR}),0)::bigint AS background
         FROM "AiTokenReservation" WHERE day = ${day} AND "settledAt" IS NULL AND "expiresAt" > ${now}`),
     ]);
-    if (
+    const rejected: RejectionScope | null =
       (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0) + Number(reserved[0].total) + tokens >
-        limits.dailyTokenBudget ||
-      (actorId === BACKGROUND_EMBEDDING_ACTOR &&
-        (usage?.backgroundEmbeddingTokens ?? 0) + Number(reserved[0].background) + tokens >
-          backgroundEmbeddingTokenBudget(limits)) ||
-      (isPerson(actorId) &&
-        limits.userDailyTokenBudget &&
-        (personal?.tokens ?? 0) + Number(reserved[0].personal) + tokens >
-          limits.userDailyTokenBudget)
-    )
+      limits.dailyTokenBudget
+        ? 'global'
+        : actorId === BACKGROUND_EMBEDDING_ACTOR &&
+            (usage?.backgroundEmbeddingTokens ?? 0) + Number(reserved[0].background) + tokens >
+              backgroundEmbeddingTokenBudget(limits)
+          ? 'background'
+          : isPerson(actorId) &&
+              limits.userDailyTokenBudget &&
+              (personal?.tokens ?? 0) + Number(reserved[0].personal) + tokens >
+                limits.userDailyTokenBudget
+            ? 'user'
+            : null;
+    if (rejected) {
+      countRejection(rejected);
       return null;
+    }
+    // Optional team and capability budgets, under the same day lock as the global budget.
+    const scoped = await exceededScopedBudget(tx, day, now, tokens, scope);
+    if (scoped) {
+      countRejection(scoped === 'TEAM' ? 'team' : 'capability');
+      return null;
+    }
+    const estimatedCost =
+      scope?.costMicros === null || scope?.costMicros === undefined
+        ? null
+        : BigInt(Math.max(0, Math.round(scope.costMicros)));
     const row = await tx.aiTokenReservation.create({
       data: {
         day,
         actorId,
         tokens,
         expiresAt: new Date(+now + Math.max(60_000, Math.min(ttlMs, 3_600_000))),
+        teamId: scope?.teamId ?? null,
+        capability: scope?.capability ?? null,
+        costMicros: estimatedCost,
       },
       select: { id: true, day: true },
     });
@@ -125,7 +158,8 @@ export async function recordAiUsage(
   usage: AiUsage,
   now: Date = new Date(),
   actorId?: string,
-  reservation?: AiReservation
+  reservation?: AiReservation,
+  attribution?: UsageAttribution
 ): Promise<void> {
   const inputTokens = clampTokens(usage.inputTokens);
   const outputTokens = clampTokens(usage.outputTokens);
@@ -151,6 +185,23 @@ export async function recordAiUsage(
         backgroundEmbeddingTokens: { increment: backgroundEmbeddingTokens },
       },
     });
+    const cost = attribution?.costMicros ?? null;
+    const costMicros = cost === null ? null : BigInt(Math.max(0, Math.round(cost)));
+    if (costMicros !== null)
+      await tx.$executeRaw(Prisma.sql`UPDATE "AiUsageDay"
+        SET "costMicros" = coalesce("costMicros", 0) + ${costMicros} WHERE day = ${day}`);
+    if (attribution)
+      await recordUsageBreakdown(
+        tx,
+        day,
+        { inputTokens, outputTokens },
+        {
+          ...attribution,
+          // The hold's attribution wins: it is what the budget was checked against.
+          teamId: held?.teamId ?? attribution.teamId ?? null,
+          capability: held?.capability ?? attribution.capability ?? null,
+        }
+      );
     if (person && isPerson(person)) {
       const users = await tx.$queryRaw<Array<{ id: string }>>(
         Prisma.sql`SELECT id FROM "User" WHERE id = ${person} FOR KEY SHARE`
@@ -161,6 +212,10 @@ export async function recordAiUsage(
           create: { day, userId: person, tokens: inputTokens + outputTokens },
           update: { tokens: { increment: inputTokens + outputTokens } },
         });
+      if (users.length && costMicros !== null)
+        await tx.$executeRaw(Prisma.sql`UPDATE "AiUsageUserDay"
+          SET "costMicros" = coalesce("costMicros", 0) + ${costMicros}
+          WHERE day = ${day} AND "userId" = ${person}`);
     }
     if (held)
       await tx.aiTokenReservation.update({ where: { id: held.id }, data: { settledAt: now } });
