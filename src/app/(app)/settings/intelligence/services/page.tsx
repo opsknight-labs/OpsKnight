@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { ClearOverrideButton, ServicePolicyForm } from '@/components/settings/ServicePolicyForms';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -91,6 +92,12 @@ export default async function IntelligenceServicesPage({
                   {canManage && row.source === 'service' && (
                     <ClearOverrideButton serviceId={row.serviceId} serviceName={row.serviceName} />
                   )}
+                  <Link
+                    href={`/settings/intelligence/services/${encodeURIComponent(row.serviceId)}/squire`}
+                    className="text-sm underline"
+                  >
+                    Squire: proactive help and learned facts
+                  </Link>
                 </details>
               </li>
             ))}
