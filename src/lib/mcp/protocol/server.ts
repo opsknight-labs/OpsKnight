@@ -552,7 +552,7 @@ async function safeTool(
 ) {
   try {
     const value = await callback();
-    const result = toolResult(value, links(value));
+    const result = toolResult(value, context.omitResourceLinks ? [] : links(value));
     // The text fallback repeats structuredContent, so the real wire size is about twice the data.
     // Refuse here with a hint rather than let the transport fail the whole response.
     if (
@@ -1476,22 +1476,24 @@ export function createOpsKnightMcpServer(
           .filter(([, value]) => typeof value === 'string')
           .map(([key, value]) => `${key}=${value}`);
         // Links, never fetched text: the read goes through resources/read and its authorization.
-        const links = Object.entries(args).flatMap(([key, value]) => {
-          const source = LINKABLE_ARGS.get(key);
-          return source && readableSources.has(source) && typeof value === 'string'
-            ? [
-                {
-                  role: 'user' as const,
-                  content: {
-                    type: 'resource_link' as const,
-                    uri: `opsknight://${source}/${value}`,
-                    name: `${source}/${value}`,
-                    mimeType: 'application/json',
+        const links = (context.omitResourceLinks ? [] : Object.entries(args)).flatMap(
+          ([key, value]) => {
+            const source = LINKABLE_ARGS.get(key);
+            return source && readableSources.has(source) && typeof value === 'string'
+              ? [
+                  {
+                    role: 'user' as const,
+                    content: {
+                      type: 'resource_link' as const,
+                      uri: `opsknight://${source}/${value}`,
+                      name: `${source}/${value}`,
+                      mimeType: 'application/json',
+                    },
                   },
-                },
-              ]
-            : [];
-        });
+                ]
+              : [];
+          }
+        );
         return {
           messages: [
             {

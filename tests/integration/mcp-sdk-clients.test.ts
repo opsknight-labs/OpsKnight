@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { randomBytes } from 'node:crypto';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
+import {
+  createTestIncident,
+  createTestService,
+  createTestUser,
+  resetDatabase,
+  testPrisma as db,
+} from '../helpers/test-db';
 import { sdkHandshake, type LegacyRevision } from '../helpers/mcp-sdk-handshake';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
 import { APP_VERSION } from '@/lib/version';
@@ -120,6 +126,47 @@ describe('published SDK client handshakes', () => {
     } finally {
       await client.close();
     }
+  });
+
+  it('leaves resource_link blocks out for a 2025-03-26 client and keeps them from 2025-06-18', async () => {
+    // 2025-03-26 has no resource_link content block, and its SDK (1.10) rejects the whole result
+    // when one appears, so a search or lookup threw in the client. Such a client sends no
+    // MCP-Protocol-Version header (the server treats that as 2025-03-26).
+    const { bearer } = await principal();
+    const service = await createTestService('Legacy links service');
+    const incident = await createTestIncident('Legacy links incident', service.id);
+    const contentTypes = async (revision?: string) => {
+      const response = await POST(
+        new Request(mcpResource(), {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${bearer}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+            ...(revision ? { 'mcp-protocol-version': revision } : {}),
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'incident_get', arguments: { path: { id: incident.id } } },
+          }),
+        })
+      );
+      const text = await response.text();
+      const json = text.includes('data:')
+        ? text
+            .split('\n')
+            .filter(line => line.startsWith('data:'))
+            .map(line => line.slice(5))
+            .join('')
+        : text;
+      const result = JSON.parse(json).result as { isError?: boolean; content: { type: string }[] };
+      expect(result.isError ?? false).toBe(false);
+      return result.content.map(block => block.type);
+    };
+    expect(await contentTypes()).toEqual(['text']);
+    expect(await contentTypes('2025-06-18')).toContain('resource_link');
   });
 
   it('answers a missing bearer with a resource-metadata challenge, not a protocol error', async () => {
