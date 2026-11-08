@@ -34,6 +34,8 @@ export interface AiSettingsView {
   embeddingsEnabled: boolean;
   squireHistoryEnabled: boolean;
   squireHistoryRetentionDays: number;
+  /** Extended assistant actions (escalate, urgency, snooze, Jira, status drafts, runbooks). Off by default. */
+  squireExtendedActions: boolean;
   allowExternalFallback: boolean;
   requestsPerMinutePerUser: number;
   dailyTokenBudget: number;
@@ -60,6 +62,7 @@ const SETTINGS_SELECT = {
   embeddingsEnabled: true,
   squireHistoryEnabled: true,
   squireHistoryRetentionDays: true,
+  squireExtendedActions: true,
   allowExternalFallback: true,
   requestsPerMinutePerUser: true,
   dailyTokenBudget: true,
@@ -121,7 +124,12 @@ export async function updateAiSettings(
       input.backgroundEmbeddingBudgetPercent !== undefined
         ? values.backgroundEmbeddingBudgetPercent
         : previous.backgroundEmbeddingBudgetPercent;
-    const savedValues = { ...values, backgroundEmbeddingBudgetPercent: allocation };
+    const savedValues = {
+      ...values,
+      backgroundEmbeddingBudgetPercent: allocation,
+      // Same for the extended-actions switch: omitted means "keep what is saved".
+      squireExtendedActions: values.squireExtendedActions ?? previous.squireExtendedActions,
+    };
     const next = toSettingsView(
       await tx.aiSettings.upsert({
         where: { id: 'default' },

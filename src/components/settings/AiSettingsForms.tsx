@@ -177,6 +177,8 @@ type SettingsValues = {
   embeddingsEnabled: boolean;
   squireHistoryEnabled: boolean;
   squireHistoryRetentionDays: number;
+  /** Optional so callers that predate the switch still render (as off). */
+  squireExtendedActions?: boolean;
   revision: number;
 };
 
@@ -379,6 +381,15 @@ export function AiSettingsForm({
         defaultValue={settings.squireHistoryRetentionDays}
         disabled={disabled}
         required
+      />
+      {/* Marks that this form carries the switch, so an unchecked box means "off" rather than "keep". */}
+      <input type="hidden" name="squireExtendedActionsPresent" value="1" />
+      <Check
+        name="squireExtendedActions"
+        label="Extended assistant actions"
+        help="Lets the assistant propose escalating, changing urgency, snoozing, removing related links, adding watchers, creating a Jira issue, drafting and publishing a status update, and running a bound runbook. Every action is a card the person must confirm, runs under their own permissions, and is audited. Runbook approval steps still apply."
+        defaultChecked={settings.squireExtendedActions ?? false}
+        disabled={disabled}
       />
       <div className="flex items-center gap-3">
         {canManage && (

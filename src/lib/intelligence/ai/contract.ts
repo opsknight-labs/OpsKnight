@@ -57,6 +57,7 @@ export const AI_SETTINGS_DEFAULTS = {
   embeddingsEnabled: false,
   squireHistoryEnabled: true,
   squireHistoryRetentionDays: 90,
+  squireExtendedActions: false,
 } as const;
 
 /** Shared internal identity; interactive semantic queries continue to use the person's identity. */
@@ -124,6 +125,8 @@ export const aiSettingsInputSchema = z
     embeddingsEnabled: z.boolean().default(false),
     squireHistoryEnabled: z.boolean().default(true),
     squireHistoryRetentionDays: z.number().int().min(1).max(365).default(90),
+    // Optional: older clients that do not send it keep the saved value (see updateAiSettings).
+    squireExtendedActions: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();
