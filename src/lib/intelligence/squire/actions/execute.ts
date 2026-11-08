@@ -19,6 +19,11 @@ import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { resolveIncidentWithNote, updateIncidentStatus } from '@/lib/incidents/operator-lifecycle';
 import { decideRelationship, linkIncidents } from '../../correlation/commands';
+import { authorizeChatOpsIncidentInTransaction } from '@/lib/incidents/chatops-lifecycle';
+import {
+  executeIdempotentIncidentLifecycleCommand,
+  transitionIncidentToStatusIdempotent,
+} from '@/lib/incidents/idempotent-commands';
 import { readIncidentForActor } from '../deterministic';
 import { recordServiceFactCommand } from '../../memory/facts';
 import {
@@ -48,7 +53,9 @@ const failed = (message: string): SquireActionResult => ({ ok: false, message })
  */
 export async function executeSquireAction(
   actor: AuthorizationActor,
-  token: string
+  token: string,
+  /** Set when the confirmation came from a linked chat account rather than the signed-in browser. */
+  channel?: SquireConfirmChannel
 ): Promise<SquireActionResult> {
   if (actor.apiKey || actor.status !== 'ACTIVE') return failed('Sign in to confirm this action.');
   const proposal = await openProposal(token, actor.id);
@@ -103,8 +110,13 @@ export async function executeSquireAction(
         entityType: 'INCIDENT',
         entityId: incidentId,
         actorId: actor.id,
-        source: 'UI',
-        details: { squireAction: proposal.action, proposalId: proposal.id, outcome },
+        source: channel ? 'INTEGRATION' : 'UI',
+        details: {
+          squireAction: proposal.action,
+          proposalId: proposal.id,
+          outcome,
+          ...(channel ? { channel: channel.provider } : {}),
+        },
       },
       tx
     );
@@ -134,17 +146,13 @@ export async function executeSquireAction(
       });
       await audit('SUCCEEDED', tx);
     };
-    const { message, followUp } = isExtendedSquireAction(proposal.action)
-      ? await runExtended(
-          actor,
-          proposal,
-          parsed.data as Record<string, unknown>,
-          incidentId,
-          complete
-        )
-      : {
-          message: await run(
+    // A chat confirmation runs only the core actions that have a chat path (runFromChat refuses the rest
+    // and asks the person to confirm in the application); extended actions need the web session.
+    const { message, followUp } = channel
+      ? {
+          message: await runFromChat(
             actor,
+            channel,
             proposal.action as WriteAction,
             parsed.data as never,
             proposal.id,
@@ -152,7 +160,26 @@ export async function executeSquireAction(
             tx => checkPreconditions(tx, proposal, incidentId)
           ),
           followUp: undefined,
-        };
+        }
+      : isExtendedSquireAction(proposal.action)
+        ? await runExtended(
+            actor,
+            proposal,
+            parsed.data as Record<string, unknown>,
+            incidentId,
+            complete
+          )
+        : {
+            message: await run(
+              actor,
+              proposal.action as WriteAction,
+              parsed.data as never,
+              proposal.id,
+              complete,
+              tx => checkPreconditions(tx, proposal, incidentId)
+            ),
+            followUp: undefined,
+          };
     try {
       revalidatePath(`/incidents/${incidentId}`);
     } catch {
@@ -640,4 +667,125 @@ async function checkPreconditions(
     )
       throw conflict();
   }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Chat confirmations (Slack and Microsoft Teams buttons).
+//
+// A button click carries no browser session, so the session-bound checks used by `run` cannot apply.
+// The caller resolves the linked chat account to its OpsKnight user (`actor`), who must own the sealed
+// proposal. That user is then authorized inside the same serializable transaction as the change, through
+// the same incident authorization the ChatOps commands use. Domain commands, preconditions and the
+// receipt are exactly those of `run`.
+// ---------------------------------------------------------------------------------------------------
+
+/** A confirmation that arrived from a linked chat account. */
+export interface SquireConfirmChannel {
+  provider: 'SLACK' | 'MICROSOFT_TEAMS';
+  /** The person's OpsKnight display name, for the incident timeline. */
+  actorName: string;
+}
+
+async function runFromChat<N extends WriteAction>(
+  actor: AuthorizationActor,
+  channel: SquireConfirmChannel,
+  action: N,
+  input: SquireActionInput<N>,
+  proposalId: string,
+  complete: (tx: Prisma.TransactionClient, message: string) => Promise<void>,
+  preconditions: (tx: Prisma.TransactionClient) => Promise<void>
+): Promise<string> {
+  const incidentId = (input as { incidentId: string }).incidentId;
+  const lifecycleActor = { id: actor.id, name: channel.actorName };
+  const idempotency = { key: `squire:${proposalId}`, principalId: actor.id };
+  // Resolving and reassigning keep the same role floor as the application's own buttons.
+  const requireOperator = () => {
+    if (!hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE))
+      throw new AppError({ code: 'AUTHORIZATION_DENIED' });
+  };
+  const authorized =
+    (requested: 'NOTE' | 'ACKNOWLEDGE' | 'MANAGE') => async (tx: Prisma.TransactionClient) => {
+      await authorizeChatOpsIncidentInTransaction(tx, incidentId, actor.id, requested);
+      await preconditions(tx);
+    };
+  switch (action) {
+    case 'acknowledge_incident': {
+      await transitionIncidentToStatusIdempotent(
+        {
+          incidentId,
+          status: 'ACKNOWLEDGED',
+          expectedStatus: 'OPEN',
+          source: 'CHATOPS',
+          actor: lifecycleActor,
+        },
+        idempotency,
+        tx => complete(tx, 'Incident acknowledged.'),
+        authorized('ACKNOWLEDGE')
+      );
+      return 'Incident acknowledged.';
+    }
+    case 'resolve_incident': {
+      requireOperator();
+      const { resolution } = input as SquireActionInput<'resolve_incident'>;
+      await executeIdempotentIncidentLifecycleCommand(
+        {
+          incidentId,
+          command: 'RESOLVE',
+          source: 'CHATOPS',
+          actor: lifecycleActor,
+          resolutionNote: resolution.trim(),
+        },
+        idempotency,
+        tx => complete(tx, 'Incident resolved.'),
+        authorized('MANAGE')
+      );
+      return 'Incident resolved.';
+    }
+    case 'add_incident_note': {
+      const { content } = input as SquireActionInput<'add_incident_note'>;
+      await prisma.$transaction(
+        async tx => {
+          await authorized('NOTE')(tx);
+          await addIncidentNoteDomainCommand({ incidentId, content, actor: lifecycleActor }, tx);
+          await complete(tx, 'Note added.');
+        },
+        { isolationLevel: 'Serializable' }
+      );
+      return 'Note added.';
+    }
+    case 'reassign_incident': {
+      requireOperator();
+      const { assigneeId } = input as SquireActionInput<'reassign_incident'>;
+      await prisma.$transaction(
+        async tx => {
+          await authorized('MANAGE')(tx);
+          await assignIncidentDomainCommand({ incidentId, assigneeId, actor: lifecycleActor }, tx);
+          await complete(tx, 'Incident reassigned.');
+        },
+        { isolationLevel: 'Serializable' }
+      );
+      return 'Incident reassigned.';
+    }
+    case 'link_related_incident': {
+      const { otherIncidentId, note } = input as SquireActionInput<'link_related_incident'>;
+      await prisma.$transaction(
+        async tx => {
+          await preconditions(tx);
+          await linkIncidents(
+            actor,
+            { incidentId, otherIncidentId, ...(note ? { note } : {}) },
+            tx
+          );
+          await complete(tx, 'Incidents marked as related.');
+        },
+        { isolationLevel: 'Serializable' }
+      );
+      return 'Incidents marked as related.';
+    }
+  }
+  // An action added later without a chat path is confirmed in the application instead.
+  throw new AppError({
+    code: 'VALIDATION_FAILED',
+    userMessage: 'Open OpsKnight to confirm this suggestion.',
+  });
 }

@@ -7,10 +7,12 @@ import { redactSecrets } from '../ai/redact';
 import { getAiSettings } from '../ai/settings';
 import {
   incidentReadWhere,
+  runbookReadWhere,
   scheduleReadWhere,
   serviceReadWhere,
   teamReadWhere,
 } from '@/lib/authorization-filters';
+import { readChangeReference } from './references';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getRelatedIncidentsForActor } from '../correlation/view';
 import { getResponseIntelligenceForActor } from '../response/view';
@@ -294,6 +296,8 @@ export interface ResolvedPageContext {
   /** For an alert page: the incident it belongs to, when readable, so the alert's incident is the context. */
   incidentId?: string;
   teamIds?: string[];
+  /** For a change page: the service the change was recorded on, when readable. */
+  serviceName?: string;
 }
 
 /** The page's entity, read under the person's own visibility; an unreadable or unknown id is ignored. */
@@ -328,11 +332,23 @@ export async function resolvePageContext(
         return row ? { kind: 'schedule', id: row.id, name: row.name } : null;
       }
       case 'runbook': {
+        // Runbooks are team-scoped like every other entity: an unreadable one is ignored.
         const row = await prisma.runbook.findFirst({
-          where: { id: context.id, archivedAt: null },
+          where: { AND: [{ id: context.id, archivedAt: null }, runbookReadWhere(actor)] },
           select: { id: true, name: true },
         });
         return row ? { kind: 'runbook', id: row.id, name: row.name } : null;
+      }
+      case 'change': {
+        const row = await readChangeReference(actor, context.id);
+        return row
+          ? {
+              kind: 'change',
+              id: row.id,
+              name: redactSecrets(row.summary).slice(0, 120),
+              ...(row.service ? { serviceName: row.service.name } : {}),
+            }
+          : null;
       }
       case 'alert': {
         const row = await prisma.alert.findFirst({
@@ -641,6 +657,14 @@ export async function planBasicTurn(
     if (input.page?.kind === 'schedule' && intent === 'ON_CALL') options.scheduleId = input.page.id;
     if (input.page?.kind === 'service' && SERVICE_INTENTS.has(intent) && !keywords(question).length)
       options.contextService = input.page.name;
+    // On a change page, "this service" is the service the change was recorded on.
+    if (
+      input.page?.kind === 'change' &&
+      input.page.serviceName &&
+      SERVICE_INTENTS.has(intent) &&
+      !keywords(question).length
+    )
+      options.contextService = input.page.serviceName;
     if (input.page?.kind === 'team' && !options.teamIds && !/\bmy team/.test(question))
       options.teamIds = input.page.teamIds;
   }

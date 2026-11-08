@@ -42,6 +42,7 @@ import type { StoredTurnEnvelope } from '@/lib/intelligence/conversations/contra
 import type { SquireProposalView } from './SquireProposalCard';
 
 import { mergeInvestigationStep, type Turn, type Citation } from './chat-types';
+import { incidentIdFromPath, pageContextFromPath } from './page-context';
 type SavedConversation = {
   id: string;
   title: string;
@@ -99,22 +100,10 @@ const subscribeOnline = (change: () => void) => {
   };
 };
 
-function incidentIdFrom(pathname: string | null): string | undefined {
-  const match = pathname?.match(/^\/incidents\/([A-Za-z0-9_-]{1,64})(?:\/|$)/);
-  return match && match[1] !== 'new' ? match[1] : undefined;
-}
-
-type PageContext = { kind: 'service' | 'team' | 'schedule' | 'runbook' | 'alert'; id: string };
-
-/** The entity page the person is on, so "this service" or "this team" mean something to the assistant. */
-function pageContextFrom(pathname: string | null): PageContext | undefined {
-  const match = pathname?.match(
-    /^\/(services|teams|schedules|runbooks|alerts)\/([A-Za-z0-9_-]{1,64})(?:\/|$)/
-  );
-  if (!match || match[2] === 'new') return undefined;
-  const kind = match[1].slice(0, -1) as PageContext['kind'];
-  return { kind, id: match[2] };
-}
+// The incident or entity page the person is on (desktop and mobile routes), so "this incident",
+// "this service" or "this team" mean something to the assistant.
+const incidentIdFrom = incidentIdFromPath;
+const pageContextFrom = pageContextFromPath;
 
 export default function SquireLauncher({
   name,
@@ -123,6 +112,7 @@ export default function SquireLauncher({
   animated = false,
   aiEnabled = false,
   history = null,
+  fullscreen = false,
 }: {
   name: string;
   avatar?: SquireAvatarKind;
@@ -131,6 +121,8 @@ export default function SquireLauncher({
   aiEnabled?: boolean;
   /** Set when an administrator has turned on saved conversations. */
   history?: { retentionDays: number } | null;
+  /** Mobile pages: the open chat fills the screen at every width; the button clears the bottom bar. */
+  fullscreen?: boolean;
 }) {
   const pathname = usePathname();
   const realtime = useOptionalRealtime();
@@ -747,8 +739,13 @@ export default function SquireLauncher({
 
   return (
     <div
-      className={`fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-4' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`}
+      className={
+        fullscreen
+          ? `fixed z-50 print:hidden ${open ? 'inset-0' : 'bottom-24 right-4'}`
+          : `fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-4' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`
+      }
       data-side={side}
+      data-presentation={fullscreen ? 'fullscreen' : 'panel'}
     >
       {!open && launcher === 'FLOATING' && (
         <button
@@ -773,7 +770,12 @@ export default function SquireLauncher({
           role="dialog"
           aria-label={`${name}, your incident assistant`}
           onKeyDown={event => event.key === 'Escape' && close()}
-          className={`relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card shadow-2xl sm:h-[min(52rem,calc(100dvh-2rem))] sm:rounded-2xl sm:border sm:border-border ${expanded ? 'sm:w-[min(52rem,calc(100vw-2rem))]' : 'sm:w-[min(34rem,calc(100vw-2rem))]'}`}
+          aria-modal={fullscreen ? true : undefined}
+          className={
+            fullscreen
+              ? 'relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]'
+              : `relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card shadow-2xl sm:h-[min(52rem,calc(100dvh-2rem))] sm:rounded-2xl sm:border sm:border-border ${expanded ? 'sm:w-[min(52rem,calc(100vw-2rem))]' : 'sm:w-[min(34rem,calc(100vw-2rem))]'}`
+          }
         >
           <header className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
@@ -789,15 +791,17 @@ export default function SquireLauncher({
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden min-h-11 min-w-11 sm:inline-flex"
-                onClick={() => setExpanded(value => !value)}
-                aria-label={expanded ? 'Narrow chat' : 'Expand chat'}
-              >
-                {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-              </Button>
+              {!fullscreen && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden min-h-11 min-w-11 sm:inline-flex"
+                  onClick={() => setExpanded(value => !value)}
+                  aria-label={expanded ? 'Narrow chat' : 'Expand chat'}
+                >
+                  {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+                </Button>
+              )}
               {(turns.length > 0 || showHistory) && (
                 <button
                   type="button"
