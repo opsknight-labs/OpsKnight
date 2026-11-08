@@ -34,8 +34,9 @@ import { parse as parseDomain } from 'tldts';
 const PUBLIC_PATH_PREFIXES = [
   '/mcp',
   '/oauth/mcp',
-  '/.well-known/oauth-protected-resource',
-  '/.well-known/oauth-authorization-server',
+  // Discovery lives here. An unknown /.well-known path must answer 404 itself: sent to the sign-in
+  // page it returns 200 HTML, which a client probing for OIDC metadata cannot tell from a document.
+  '/.well-known',
   '/login',
   '/recovery',
   '/auth/oidc-test-result',

@@ -230,6 +230,12 @@ export interface ExecutionContext {
   tokenScopes: readonly string[];
   requestId: string;
   budget: CostBudget;
+  /**
+   * The client is on the 2025-03-26 revision (it sent no MCP-Protocol-Version header). That
+   * revision has no `resource_link` content block, and its SDK rejects the whole result when one
+   * appears, so links are left out for it. Later revisions get them.
+   */
+  omitResourceLinks?: boolean;
 }
 
 export function callMcpOperation(context: ExecutionContext, operationId: string, rawArgs: unknown) {

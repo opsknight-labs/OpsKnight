@@ -242,6 +242,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       tokenScopes: identity.tokenScopes,
       requestId,
       budget,
+      omitResourceLinks: !request.headers.has('mcp-protocol-version'),
     };
     if (taskMethod) {
       // The SDK has no handlers for the 2026-07-28 Tasks extension; the route serves it directly
