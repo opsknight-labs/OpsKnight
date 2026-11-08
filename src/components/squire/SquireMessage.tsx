@@ -3,7 +3,7 @@
 import { memo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Copy, Pencil, RefreshCw, ArrowUpRight } from 'lucide-react';
+import { Copy, Pencil, RefreshCw, ArrowUpRight, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import SquireProposalCard from './SquireProposalCard';
 import SquireSavedAction from './SquireSavedAction';
@@ -25,6 +25,8 @@ export default memo(function SquireMessage({
   onOutcome,
   onRetry,
   onEdit,
+  question,
+  conversationId,
 }: {
   turn: Turn;
   index: number;
@@ -36,10 +38,34 @@ export default memo(function SquireMessage({
   onOutcome: (outcome: 'success' | 'error') => void;
   onRetry: (index: number) => void;
   onEdit: (index: number) => void;
+  /** The question this answer replied to; sent as a digest with feedback, never stored as text. */
+  question?: string;
+  conversationId?: string;
 }) {
   const [copyNotice, setCopyNotice] = useState('');
+  const [feedback, setFeedback] = useState<'UP' | 'DOWN' | 'sent' | 'failed' | null>(null);
+  const [reason, setReason] = useState('');
   const assistant = turn.role === 'assistant';
   const streaming = busy && last;
+  const sendFeedback = async (rating: 'UP' | 'DOWN', chosenReason?: string) => {
+    try {
+      const response = await fetch('/api/intelligence/squire/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating,
+          mode: turn.mode ?? 'basic',
+          ...(turn.intent ? { intent: turn.intent } : {}),
+          ...(chosenReason ? { reason: chosenReason } : {}),
+          ...(question ? { question } : {}),
+          ...(conversationId ? { conversationId } : {}),
+        }),
+      });
+      setFeedback(response.ok ? 'sent' : 'failed');
+    } catch {
+      setFeedback('failed');
+    }
+  };
   return (
     <article
       aria-label={assistant ? `${name} response` : 'Your question'}
@@ -153,6 +179,77 @@ export default memo(function SquireMessage({
               {turn.mode === 'basic' && (
                 <span className="text-[11px] text-muted-foreground">
                   Basic answer from your incident data
+                </span>
+              )}
+              {!turn.failed && feedback !== 'sent' && (
+                <span className="ml-auto flex items-center gap-0.5" aria-label="Rate this answer">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="min-h-11 px-2 text-muted-foreground"
+                    aria-label="Helpful answer"
+                    aria-pressed={feedback === 'UP'}
+                    disabled={feedback === 'UP'}
+                    onClick={() => {
+                      setFeedback('UP');
+                      void sendFeedback('UP');
+                    }}
+                  >
+                    <ThumbsUp aria-hidden="true" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="min-h-11 px-2 text-muted-foreground"
+                    aria-label="Unhelpful answer"
+                    aria-pressed={feedback === 'DOWN'}
+                    onClick={() => setFeedback(feedback === 'DOWN' ? null : 'DOWN')}
+                  >
+                    <ThumbsDown aria-hidden="true" />
+                  </Button>
+                </span>
+              )}
+              {feedback === 'DOWN' && (
+                <form
+                  className="flex w-full flex-wrap items-center gap-2 pt-1"
+                  onSubmit={event => {
+                    event.preventDefault();
+                    void sendFeedback('DOWN', reason || 'other');
+                  }}
+                >
+                  <label
+                    className="text-xs text-muted-foreground"
+                    htmlFor={`feedback-reason-${index}`}
+                  >
+                    What was wrong?
+                  </label>
+                  <select
+                    id={`feedback-reason-${index}`}
+                    className="min-h-11 rounded-md border border-border bg-background px-2 text-xs"
+                    value={reason}
+                    onChange={event => setReason(event.target.value)}
+                  >
+                    <option value="">Choose a reason</option>
+                    <option value="wrong">Wrong</option>
+                    <option value="incomplete">Incomplete</option>
+                    <option value="outdated">Out of date</option>
+                    <option value="unclear">Unclear</option>
+                    <option value="unsafe">Unsafe or risky</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <Button size="sm" variant="outline" type="submit" className="min-h-11 text-xs">
+                    Send
+                  </Button>
+                </form>
+              )}
+              {feedback === 'sent' && (
+                <span role="status" className="text-[11px] text-muted-foreground">
+                  Thanks for the feedback.
+                </span>
+              )}
+              {feedback === 'failed' && (
+                <span role="status" className="text-[11px] text-muted-foreground">
+                  Could not send feedback.
                 </span>
               )}
             </>

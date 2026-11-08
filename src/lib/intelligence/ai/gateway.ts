@@ -26,10 +26,11 @@ import {
   type AiReservation,
 } from './budget';
 import { ProviderBreakers } from './breaker';
+import { PostgresBreakerStore } from './breaker-store';
 import { embeddingSpaceIdentity } from '../semantic/identity';
 import { AI_SETTINGS_BOUNDS } from './contract';
 import { selectProviderChain } from './policy';
-import { redactSecrets } from './redact';
+import { redactSecrets, sanitizeUntrusted, UNTRUSTED_DATA_PREAMBLE } from './redact';
 import {
   highestDataClass,
   registerEmbeddingResolver,
@@ -224,12 +225,18 @@ async function buildProviderModel(
 
 const buildModel = (provider: GatewayProvider) => buildProviderModel(provider, 'chat');
 
-function capOutput(value: unknown): unknown {
-  const text = typeof value === 'string' ? value : JSON.stringify(value ?? null);
+/**
+ * Every tool result reaches the model inside an untrusted-data envelope: secrets are redacted, text shaped
+ * like an instruction to the model is defanged, the whole thing is bounded, and a fixed preamble says what it
+ * is. Alerts, notes and payloads are written by systems and people the operator does not control.
+ */
+export function capOutput(value: unknown): unknown {
+  const sanitized = sanitizeUntrusted(value);
+  const text = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized ?? null);
   const safe = redactSecrets(text);
-  return safe.length > TOOL_OUTPUT_LIMIT
-    ? `${safe.slice(0, TOOL_OUTPUT_LIMIT)}… [truncated]`
-    : safe;
+  const bounded =
+    safe.length > TOOL_OUTPUT_LIMIT ? `${safe.slice(0, TOOL_OUTPUT_LIMIT)}… [truncated]` : safe;
+  return `${UNTRUSTED_DATA_PREAMBLE}\n${bounded}`;
 }
 
 function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undefined {
@@ -434,6 +441,7 @@ class GatewayPort implements LanguageModelPort {
     await this.admit(request);
     let attempts = 0;
     let invalidOutputs = 0;
+    await breakers.sync(this.data.chain.map(candidate => candidate.id));
     for (const [depth, provider] of this.candidates(request).entries()) {
       if (!breakers.canAttempt(provider.id)) continue;
       const reservation = await this.reserve(request, provider, true);
@@ -535,6 +543,7 @@ class GatewayPort implements LanguageModelPort {
   async generate(request: AiGenerateRequest): Promise<AiGenerateResult> {
     await this.admit(request);
     let attempts = 0;
+    await breakers.sync(this.data.chain.map(candidate => candidate.id));
     for (const [depth, provider] of this.candidates(request).entries()) {
       if (!breakers.canAttempt(provider.id)) continue;
       const reservation = await this.reserve(request, provider);
@@ -617,6 +626,7 @@ class GatewayPort implements LanguageModelPort {
     }
     let candidates: GatewayProvider[];
     try {
+      await breakers.sync(this.data.chain.map(candidate => candidate.id));
       candidates = this.candidates(request);
     } catch (error) {
       yield {
@@ -872,6 +882,10 @@ let registered = false;
 export function registerAiGateway(): void {
   if (registered) return;
   registered = true;
+  // Replicas share breaker readings best-effort; each still decides from its own state if the table is slow.
+  const store = new PostgresBreakerStore();
+  breakers.useStore(store);
+  embeddingBreakers.useStore(store);
   registerLanguageModelResolver((_capability, dataClass) => resolveGatewayPort(dataClass));
   registerEmbeddingResolver(dataClass => resolveGatewayEmbedding(dataClass));
 }

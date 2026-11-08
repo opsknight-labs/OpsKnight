@@ -70,6 +70,7 @@ export const USER_REFERENCE_POLICY = {
   squireConversations: { deactivate: 'KEEP', delete: 'CASCADE' },
   aiUsageDays: { deactivate: 'KEEP', delete: 'CASCADE' },
   squireActionReceipts: { deactivate: 'KEEP', delete: 'CASCADE' },
+  squireFeedback: { deactivate: 'KEEP', delete: 'CASCADE' },
 } as const;
 
 export type UserReferenceName = keyof typeof USER_REFERENCE_POLICY;

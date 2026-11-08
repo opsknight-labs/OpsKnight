@@ -1,0 +1,60 @@
+name: Squire live-model evaluation
+
+# Nightly, and on demand. Runs the assistant's live evaluation cases against a real model with the
+# SQUIRE_EVAL_API_KEY secret; the structural (mocked, deterministic) tier runs on every pull request inside
+# the database integration suite in tests.yml. Without the secret this workflow records a skipped run.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: squire-evals
+  cancel-in-progress: true
+
+jobs:
+  live-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opsknight_test
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opsknight_test
+      SQUIRE_EVAL_API_KEY: ${{ secrets.SQUIRE_EVAL_API_KEY }}
+      SQUIRE_EVAL_MODEL: ${{ vars.SQUIRE_EVAL_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - name: Live evaluation (skipped without SQUIRE_EVAL_API_KEY)
+        run: npm run test:squire:eval
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: squire-eval-report
+          path: reports/squire-eval.json
+          if-no-files-found: ignore
+      - name: Compare with the stored baseline
+        if: env.SQUIRE_EVAL_API_KEY != ''
+        run: node scripts/check-squire-eval-baseline.cjs
