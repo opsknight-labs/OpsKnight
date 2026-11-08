@@ -145,6 +145,47 @@ describe('intelligence architecture boundaries', () => {
     for (const file of sourceFiles(dir)) expect(read(file)).not.toMatch(/\$executeRaw/);
   });
 
+  it('lets observability connectors reach the network only through the guarded fetch', () => {
+    const dir = join(intelligenceDir, 'connectors');
+    const files = sourceFiles(dir);
+    expect(files.length).toBeGreaterThan(0);
+    const http = join(dir, 'http.ts');
+    // Exactly one module builds the fetch, and it delegates to the AI gateway's guarded fetch (SSRF-safe
+    // public fetch, or the consented private origin), never to a bare fetch or another HTTP client.
+    const httpSource = read(http);
+    expect(httpSource).toMatch(/import \{ guardedFetchFor \} from '\.\.\/ai\/gateway'/);
+    expect(httpSource).toMatch(/const guarded = guardedFetchFor\(/);
+    expect(httpSource).toContain("redirect: 'error'");
+    const networkClients =
+      /\bfetch\(|globalThis\.fetch|from\s+['"](?:node:)?(?:http|https|net|tls|dgram|undici|axios|node-fetch|got)['"]|\bXMLHttpRequest\b|new\s+WebSocket\b/;
+    const offenders = files.filter(file => {
+      const source = read(file);
+      // http.ts calls only the injected or guarded fetch (`options.fetch(` and `guarded(`).
+      const stripped =
+        file === http ? source.replace(/options\.fetch\(/g, '').replace(/guarded\(/g, '') : source;
+      return networkClients.test(stripped);
+    });
+    expect(offenders.map(file => relative(root, file))).toEqual([]);
+    // The only production fetch an adapter context gets is the guarded one.
+    expect(read(join(dir, 'service.ts'))).toMatch(
+      /fetch: options\.fetch \?\? connectorFetchFor\(connection\)/
+    );
+    // Connectors write only their own configuration table, never raw SQL.
+    const delegates = files.flatMap(file =>
+      [
+        ...read(file).matchAll(
+          /\b(?:tx|prisma|client)\.(\w+)\s*\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+        ),
+      ].map(match => match[1])
+    );
+    expect([...new Set(delegates)]).toEqual(['observabilityConnection']);
+    for (const file of files) expect(read(file)).not.toMatch(/\$executeRawUnsafe|\$queryRawUnsafe/);
+    // Squire's observability tools hold no network client of their own: they go through the connectors.
+    const tools = read(join(intelligenceDir, 'squire/tools-observability.ts'));
+    expect(tools).not.toMatch(networkClients);
+    expect(tools).not.toMatch(/connectorFetchFor|guardedFetchFor|safeOutboundFetch/);
+  });
+
   it('routes every AI provider through the guarded fetch', () => {
     const gateway = read(join(intelligenceDir, 'ai/gateway.ts'));
     expect(gateway).toMatch(/const common = \{[^}]*fetch: fetchImpl[^}]*\}/);
