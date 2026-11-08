@@ -179,6 +179,9 @@ type SettingsValues = {
   squireHistoryRetentionDays: number;
   /** Optional so callers that predate the switch still render (as off). */
   squireExtendedActions?: boolean;
+  squireChatOpsEnabled?: boolean;
+  squireMcpEnabled?: boolean;
+  squireMobileEnabled?: boolean;
   revision: number;
 };
 
@@ -391,6 +394,31 @@ export function AiSettingsForm({
         defaultChecked={settings.squireExtendedActions ?? false}
         disabled={disabled}
       />
+      <fieldset className="space-y-3 rounded-md border border-border p-3">
+        <legend className="px-1 text-sm font-medium">Assistant outside the web app</legend>
+        <input type="hidden" name="squireSurfaces" value="1" />
+        <Check
+          name="squireChatOpsEnabled"
+          label="Slack and Microsoft Teams"
+          help="People ask with @squire or /incident ask in incident channels and war rooms. Answers use the asker's own permissions; suggested changes need a button press by the person who asked."
+          defaultChecked={settings.squireChatOpsEnabled ?? false}
+          disabled={disabled}
+        />
+        <Check
+          name="squireMcpEnabled"
+          label="AI assistants over MCP (ask_squire)"
+          help="Connected assistants can ask questions with the connection's user and permissions. Read-only: suggested changes are returned as descriptions and never run."
+          defaultChecked={settings.squireMcpEnabled ?? false}
+          disabled={disabled}
+        />
+        <Check
+          name="squireMobileEnabled"
+          label="Mobile incident pages"
+          help="Shows the assistant full screen on incident pages in the mobile view."
+          defaultChecked={settings.squireMobileEnabled ?? false}
+          disabled={disabled}
+        />
+      </fieldset>
       <div className="flex items-center gap-3">
         {canManage && (
           <Button type="submit" disabled={pending}>

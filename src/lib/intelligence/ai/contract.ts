@@ -58,6 +58,9 @@ export const AI_SETTINGS_DEFAULTS = {
   squireHistoryEnabled: true,
   squireHistoryRetentionDays: 90,
   squireExtendedActions: false,
+  squireChatOpsEnabled: false,
+  squireMcpEnabled: false,
+  squireMobileEnabled: false,
 } as const;
 
 /** Shared internal identity; interactive semantic queries continue to use the person's identity. */
@@ -127,6 +130,10 @@ export const aiSettingsInputSchema = z
     squireHistoryRetentionDays: z.number().int().min(1).max(365).default(90),
     // Optional: older clients that do not send it keep the saved value (see updateAiSettings).
     squireExtendedActions: z.boolean().optional(),
+    // Squire surfaces. Optional: a client that does not send them keeps the saved values.
+    squireChatOpsEnabled: z.boolean().optional(),
+    squireMcpEnabled: z.boolean().optional(),
+    squireMobileEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();

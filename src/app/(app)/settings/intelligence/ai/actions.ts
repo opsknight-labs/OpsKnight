@@ -70,6 +70,14 @@ export async function saveAiSettingsAction(
         squireExtendedActions: form.has('squireExtendedActionsPresent')
           ? checked(form, 'squireExtendedActions')
           : undefined,
+        // Only a form that rendered the surface switches may change them (unchecked boxes are absent).
+        ...(form.has('squireSurfaces')
+          ? {
+              squireChatOpsEnabled: checked(form, 'squireChatOpsEnabled'),
+              squireMcpEnabled: checked(form, 'squireMcpEnabled'),
+              squireMobileEnabled: checked(form, 'squireMobileEnabled'),
+            }
+          : {}),
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }
