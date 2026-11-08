@@ -389,9 +389,13 @@ export const personalDataRegistry = [
       'SquireActionReceipt',
       'SquireCheckTemplate',
       'SquireFeedback',
+      'ObservabilityConnection',
     ],
     fields: [
       'AiProvider.apiKeyEncrypted',
+      'ObservabilityConnection.credentialEncrypted',
+      'ObservabilityConnection.createdById',
+      'ObservabilityConnection.updatedById',
       'SquireConversation.titleEncrypted',
       'SquireConversation.incidentId',
       'SquireMessage.contentEncrypted',
@@ -411,6 +415,7 @@ export const personalDataRegistry = [
       'Optional saved assistant conversations, visible only to the person who had them',
       'Per-person daily token share, so one person cannot use up the shared AI budget',
       'Making each assistant action a person confirmed run at most once',
+      'Optional read-only observability connectors (metrics, logs, traces, errors, code diffs) the assistant queries during an AI answer',
     ],
     classifications: ['INTERNAL', 'PERSONAL', 'SECRET'],
     locations: ['DATABASE', 'EXTERNAL_PROVIDER'],
@@ -422,6 +427,7 @@ export const personalDataRegistry = [
     discoverable: 'PARTIAL',
     notes: [
       "When an administrator enables AI, the user's question, recent conversation turns and the results of read-only lookups (incident titles, change summaries, runbook names) are sent to the configured provider after credential-shaped text is redacted. Incident summaries and postmortem drafts additionally send the incident timeline and responder notes with author names, so they run only on providers whose data ceiling is Personal; the output is shown to the requester or placed in the editor and is never saved automatically. Each provider has a data-class ceiling and an optional residency tag that an allowed-regions setting can enforce, external providers are only used where the administrator allowed them, and a self-hosted provider never falls back to an external one unless explicitly permitted. Whether the provider retains data is governed by the administrator's agreement with it. Provider API keys are encrypted at rest and never returned to the browser.",
+      'Observability connectors are off by default. When an administrator adds and enables one, Squire may query it read-only during an AI answer for people in its allowed teams; results are summarised (metrics statistics, at most 15 log lines, trace span trees, error issue counts, truncated code diffs), secret-shaped text is redacted, and Internal-class results also lose email addresses and phone numbers. Log lines can contain personal data, so log search is classified Personal and only reaches providers cleared for it. Summaries are not stored by OpsKnight beyond the optional saved conversation. Connector credentials are encrypted at rest, never logged, audited only as "replaced", and never returned to the browser.',
     ],
   },
 ] as const satisfies readonly PersonalDataDomain[];
