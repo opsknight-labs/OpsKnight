@@ -17,6 +17,7 @@ import {
 } from './contract';
 import type { AiDataClass } from './port';
 import { assertNotMetadataEndpoint } from './egress';
+import { readCapabilityRouting, type CapabilityRouting } from './routing';
 
 type Client = Prisma.TransactionClient | typeof prisma;
 
@@ -40,6 +41,10 @@ export interface AiSettingsView {
   userDailyTokenBudget: number;
   maxOutputTokens: number;
   requestTimeoutMs: number;
+  /** Per-capability provider/model preference; empty or absent means the priority chain. */
+  capabilityRouting?: CapabilityRouting;
+  /** Multi-step investigation mode for diagnostic questions; off unless an administrator enables it. */
+  squireInvestigationEnabled?: boolean;
   /** 0 means no row has been saved yet and defaults apply. */
   revision: number;
 }
@@ -62,6 +67,8 @@ const SETTINGS_SELECT = {
   userDailyTokenBudget: true,
   maxOutputTokens: true,
   requestTimeoutMs: true,
+  capabilityRouting: true,
+  squireInvestigationEnabled: true,
   revision: true,
 } as const;
 
@@ -75,6 +82,7 @@ function toSettingsView(row: SettingsRow): AiSettingsView {
       ? (row.squireAvatar as SquireAvatar)
       : 'SQUIRE',
     squireLauncher: row.squireLauncher === 'SEARCH_ONLY' ? 'SEARCH_ONLY' : 'FLOATING',
+    capabilityRouting: readCapabilityRouting(row.capabilityRouting),
   };
 }
 

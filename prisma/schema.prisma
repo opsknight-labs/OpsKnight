@@ -5408,6 +5408,11 @@ model AiSettings {
   userDailyTokenBudget    Int      @default(100000)
   maxOutputTokens         Int      @default(1024)
   requestTimeoutMs        Int      @default(30000)
+  // Optional per-capability routing: {"DIAGNOSE": {"providerId": "...", "model": "..."}}. Null uses the
+  // provider priority chain for every capability. Routing only reorders providers the data policy allows.
+  capabilityRouting       Json?
+  // Multi-step investigation mode for diagnostic questions (plan, parallel reads, ranked hypotheses).
+  squireInvestigationEnabled Boolean @default(false)
   revision                Int      @default(1)
   updatedBy               String?
   updatedAt               DateTime @updatedAt
