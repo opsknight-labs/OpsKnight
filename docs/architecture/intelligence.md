@@ -454,7 +454,9 @@ Bounded work is the rule for every background read:
 - Semantic backfill walks the lookback window newest-first in pages of 5,000 fingerprints behind a
   per-model cursor (`findIncidentsToEmbedPage`), checking a service's policy only for rows that are
   actually pending, and restarts from the newest incident once a walk completes.
-- The full-text source searches up to three rare words with OR (`planFullTextQuery`); a title made only
+- The full-text source requires the two rarest words together (`planFullTextQuery`); OR-ing several
+  words matched 50x more rows at 100k history and took 4x longer, so recall beyond the conjunction is
+  left to the same-service and trigram sources. A title made only
   of common words is left to trigram matching, which would otherwise rank a large share of history.
 - Topology reads are ordered by recency with rejected edges outside the cap, and runbook outcome
   ranking has its own `(serviceId, createdAt)` index.

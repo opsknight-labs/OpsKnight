@@ -55,9 +55,15 @@
           "Semantic backfill walks the lookback window in 5,000-row pages behind a per-model cursor; policy checked only for pending rows; runner keeps walking while pages are full",
           "Paging-outbox lookup verified covered by idx_background_job_intelligence_paging and asserted in the plan gate",
           "RunbookExecution(serviceId, createdAt) index; dependency reads ordered by recency; rejected edges excluded from the cap",
-          "Full-text source: up to three rare words with OR, lone rare word with its context word, common-only titles left to trigram",
+          "Full-text source keeps the two-rarest-words conjunction (OR of three measured 902 ms vs 218 ms at 100k and was reverted); common-only titles left to trigram",
+          "Updated-incident repair paced to 5 s (LaneState.lastUpdatedRepairAt) so busy lanes do not repeat it per 250 ms poll and benchmarks can disable it like every other sweep",
           "Dedicated intelligence worker in Swarm and Kustomize split profiles (PDB, network policy, recreate strategy) with OPSKNIGHT_INTELLIGENCE_DEDICATED on shared roles; single-node tuning documented",
           "Ingestion A/B, storm drain and query-plan scripts assert their contracts (exit 1) with --output/--no-gate; nightly and ci:full workflow jobs; results under certification/perf"
+        ],
+        "open": [
+          "OPEN: storm gate fails at 100k history under load 22; re-run on an idle host and diagnose. First run 7,684 s (seeded history lacked alertNormalizationHash, so the per-cycle repair re-indexed it: 1.2-17 executions per incident); after pacing the repair, 703.2 s, one execution per incident, handlers 80% busy, host load 20-37. Threshold stays 600 s. See certification/perf/README.md.",
+          "OPEN: ingestion A/B gate fails locally: p50 +7.61 ms (limit +2), p99 +4.04 ms (limit +10), lane in the same process and pool (integrated worst case), host load 10-20. Re-run on an idle host; if it holds, the integrated role needs CPU isolation for lane work (worker thread) or the dedicated worker must be required above a size threshold.",
+          "Query-plan gate passes on 21k history (7 judged index-backed, 2 size-dependent queries not judged below 200k rows); needs the 1M CI run for the size-dependent checks"
         ]
       },
       "wave": 1
