@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import SquireProposalCard from './SquireProposalCard';
 import SquireSavedAction from './SquireSavedAction';
 import OpsKnightSquire from './OpsKnightSquire';
+import SquireInvestigationSteps from './SquireInvestigationSteps';
 import type { Turn } from './chat-types';
 
 const Markdown = dynamic(() => import('./SquireMarkdown'), {
@@ -85,6 +86,9 @@ export default memo(function SquireMessage({
           <p className="mb-2 rounded-lg border border-border bg-muted/40 p-2.5 text-xs leading-5 text-muted-foreground">
             {turn.notice}
           </p>
+        )}
+        {assistant && turn.investigation && turn.investigation.length > 0 && (
+          <SquireInvestigationSteps steps={turn.investigation} streaming={streaming} />
         )}
         {turn.content ? (
           assistant ? (

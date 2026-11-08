@@ -98,4 +98,17 @@ export type SquireEvent =
   | { type: 'done' }
   /** Sent after `done` when the exchange was saved, so the next question continues the same conversation. */
   | { type: 'conversation'; id: string }
-  | { type: 'error'; message: string; availability?: 'quota' | 'unavailable' };
+  | { type: 'error'; message: string; availability?: 'quota' | 'unavailable' }
+  /**
+   * One step of an investigation (AI mode only, when an administrator enabled it). Sent when a step starts
+   * and again when it finishes, with the same `index`; the client replaces the step it already shows.
+   */
+  | { type: 'investigation'; step: SquireInvestigationStep };
+
+/** A visible investigation step: what the assistant decided to check and which reads it ran. */
+export interface SquireInvestigationStep {
+  index: number;
+  title: string;
+  status: 'running' | 'done' | 'failed';
+  calls: Array<{ tool: string; label: string; ok?: boolean }>;
+}

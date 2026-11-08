@@ -41,7 +41,7 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import type { StoredTurnEnvelope } from '@/lib/intelligence/conversations/contract';
 import type { SquireProposalView } from './SquireProposalCard';
 
-import type { Turn, Citation } from './chat-types';
+import { mergeInvestigationStep, type Turn, type Citation } from './chat-types';
 type SavedConversation = {
   id: string;
   title: string;
@@ -403,6 +403,7 @@ export default function SquireLauncher({
             assistantProof?: string;
             proposal?: SquireProposalView;
             items?: unknown[];
+            step?: unknown;
           };
           try {
             event = JSON.parse(line);
@@ -444,6 +445,11 @@ export default function SquireLauncher({
             }));
           else if (event.type === 'tool' && event.label)
             patch(turn => ({ ...turn, activity: event.label }));
+          else if (event.type === 'investigation')
+            patch(turn => ({
+              ...turn,
+              investigation: mergeInvestigationStep(turn.investigation, event.step),
+            }));
           else if (event.type === 'proposal' && event.proposal)
             patch(turn => ({
               ...turn,
