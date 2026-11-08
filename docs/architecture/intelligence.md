@@ -332,6 +332,41 @@ port, so moving to a newer SDK later is a one-adapter change.
   to a model, including tool results. Admission atomically reserves estimates across concurrent requests
   and settles once per attempt, including estimated usage on cancellation/failure and provider tests.
 
+**Observability connectors (opt-in).** Settings → Intelligence → Connections stores read-only
+`ObservabilityConnection` rows: Prometheus, Loki, Tempo, Grafana (through its data-source proxy),
+Datadog, Elasticsearch, CloudWatch, Sentry, GitHub and GitLab. Each has a base URL validated exactly like
+an AI provider's (HTTPS and public addresses unless the administrator gives private-network consent;
+metadata and link-local addresses never), a credential encrypted with the application key (never logged,
+returned or audited; only "replaced"), optional region/org/project scoping, a team allow-list (empty means
+every team; global service readers can use every enabled connection), a 1–30 s timeout, and `enabled`
+false by default. Every change is audited in the same transaction. A stored credential cannot be
+re-pointed to another origin or kind without being entered again.
+
+`src/lib/intelligence/connectors/` holds one small adapter per kind (`adapters/*.ts`) that turns a typed
+query into a GET (or a read-only search POST; CloudWatch's JSON protocol is POST and is SigV4-signed)
+through `connectors/http.ts`. That module is the only network path: it wraps the gateway's
+`guardedFetchFor` (SSRF-safe public fetch, or the consented origin pinned exactly), adds the
+connection's timeout, disables redirects, refuses bodies over 2 MB (declared or streamed) and maps
+failures to fixed codes without vendor text. Adapters take an injected fetch, so every kind is unit-tested
+with a fake (success, timeout, oversized, non-2xx) and with the real guarded fetch (metadata and private
+targets refused). `normalize.ts` reduces results to compact summaries sized to fit the tool-output cap:
+per-series min/max/mean/last, the biggest jump and five samples (at most 8 series); the newest 15 log
+lines; up to 3 span trees of 20 spans with errors marked; 10 error issues; and for diffs the files,
+additions/deletions and a 3,000-character patch.
+
+Squire's tools for them live in `squire/tools-observability.ts`: `query_metrics`, `search_logs`,
+`get_traces`, `get_error_events` and `get_change_diff` (which resolves a `ChangeEvent.url` for a GitHub or
+GitLab commit, pull/merge request or compare view to a connection whose web host matches). The chat route
+lists the person's eligible connections once per AI turn, and a tool is offered only if at least one
+enabled connection of a capable kind is allowed for them; the connection is checked again when the tool
+runs. Windows default to one hour around the incident's start (or the last hour) and never exceed 24
+hours or the present. Results have secrets redacted; Internal-class results also lose emails and phone
+numbers. `search_logs` is Personal (log lines can carry customer data) and is not offered when the turn
+is not cleared for Personal data; the others are Internal. Each result is recorded as an `observability`
+evidence source (and the change, for diffs), which replay re-authorizes against the connection's current
+enabled state and team list. An architecture test pins the connectors to the guarded fetch and to writing
+only their own table.
+
 ## Semantic search (optional)
 
 Background incident embedding additionally reserves against a configurable sub-limit (default 20%,
