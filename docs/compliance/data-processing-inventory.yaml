@@ -191,3 +191,38 @@ domains:
         current: saved-conversations-deleted-by-owner-retention-or-user-erasure-audit-entries-follow-audit-retention,
         target: audit-retention-policy,
       }
+
+  - domain: squire-memory
+    data:
+      [
+        redacted-postmortem-and-note-passages,
+        published-runbook-step-names-and-descriptions,
+        person-confirmed-service-facts,
+        fact-approver-ids,
+        optional-passage-embedding-vectors,
+        proactive-briefings-nudges-and-postmortem-drafts,
+      ]
+    purpose:
+      [
+        assistant-knowledge-search-limited-to-what-the-reader-can-read,
+        reuse-of-person-confirmed-service-facts,
+        opt-in-proactive-incident-briefings-nudges-and-drafts,
+      ]
+    storage: [postgresql]
+    recipients:
+      [
+        authorized-workspace-users-limited-to-sources-they-can-read,
+        administrator-configured-embedding-provider-when-semantic-search-is-on,
+        administrator-configured-language-model-provider-when-ai-is-on,
+      ]
+    retention:
+      {
+        current: off-by-default-incident-linked-passages-follow-fingerprint-retention-derived-index-removed-when-disabled-facts-until-removed-notes-follow-finding-retention,
+        target: free-text-minimization,
+      }
+    exportable: partial
+    deletion:
+      {
+        current: cascades-with-source-incident-note-postmortem-runbook-or-service-approver-cleared-on-user-erasure,
+        target: free-text-minimization,
+      }
