@@ -44,6 +44,7 @@ import { buildSystemPrompt, type IncidentBriefing } from './prompt';
 import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';
 import { OBSERVABILITY_TOOL_LABELS } from './tools-observability';
 import { listEligibleConnections } from '../connectors/service';
+import { INCIDENT_TOOL_LABELS } from './tools-incident';
 
 /** Evidence handles a basic answer may carry; beyond this the answer is paged rather than refused. */
 const MAX_BASIC_SOURCES = 32;
@@ -74,6 +75,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_status_page: 'Reading the status page',
   get_problem_outcomes: 'Checking past outcomes for this problem',
   ...OBSERVABILITY_TOOL_LABELS,
+  ...INCIDENT_TOOL_LABELS,
 };
 
 /**

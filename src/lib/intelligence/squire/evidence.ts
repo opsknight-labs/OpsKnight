@@ -238,12 +238,55 @@ export class SquireEvidenceRegistry {
         });
         if (name === 'get_change_diff') add('change', { id: object.changeId, title: object.title });
         break;
+      // ---- Incident-response tools (tools-incident.ts) ----
+      case 'get_alert_payload':
+        add('alert', object);
+        add('incident', { id: object.incidentId });
+        break;
+      case 'get_runbook_steps':
+        add('runbook', object);
+        break;
+      case 'get_slo_status':
+        add('service', object);
+        break;
+      case 'get_escalation_policy':
+        add('service', object);
+        rows(row(object.policy).steps)
+          .filter(step => typeof step.scheduleId === 'string')
+          .forEach(step => add('schedule', step, 'scheduleId'));
+        break;
+      case 'incident_analytics':
+        rows(object.noisiestServices).forEach(data => add('service', data));
+        break;
       default:
         this.complete = false;
         return unavailable;
     }
     const evidence = await this.capture(snapshots);
     return evidence ? { data: result, evidence } : unavailable;
+  }
+
+  /**
+   * Every source read so far this turn with its handle, label and in-app link, for answers that are
+   * assembled from evidence (investigation hypotheses, partial answers) rather than written by the model.
+   */
+  entries(): Array<{
+    handle: string;
+    kind: SourceReference['kind'];
+    id: string;
+    label: string;
+    href: string | null;
+  }> {
+    return [...this.captured.values()].map(({ source, label }) => {
+      const prefix = prefixes.get(source.kind);
+      return {
+        handle: source.handle,
+        kind: source.kind,
+        id: source.id,
+        label,
+        href: prefix ? `${prefix}${encodeURIComponent(source.id)}` : null,
+      };
+    });
   }
 
   /** A readable but unretrieved URL never becomes a citation. */
