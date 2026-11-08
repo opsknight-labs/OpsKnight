@@ -178,13 +178,10 @@
       "implemented": [
         "Urgency, team/assignee, duplicate and resolution-time suggestions voted from similar resolved outcomes (TRIAGE_* findings, policy triage.enabled default off)",
         "Accept/dismiss chips through the incident's own domain commands (urgency command, assignment command, human link) with HELPFUL/NOT_HELPFUL feedback for calibration",
-        "Noisy alert report by service and team with flapping ratio, Jira issue action and routing/integration links",
+        "Noisy alert report by service and team with flapping ratio, Jira issue action, routing/integration links and a link to suppression rules (suggested from alert quality by the noise-controls layer)",
         "Shift handoff summary (open, recently resolved, overdue follow-ups) at each rotation through the notification control plane; AI narrative only when a provider is enabled (handoffSummaryEnabled, default off)"
       ],
-      "remaining": [
-        "Impact estimate for dependencies, status components and SLO budget",
-        "Create-suppression-rule action from alert quality (waits for the SuppressionRule model from phase 2)"
-      ]
+      "remaining": ["Impact estimate for dependencies, status components and SLO budget"]
     },
     {
       "id": 8,

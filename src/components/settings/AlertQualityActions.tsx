@@ -27,6 +27,9 @@ export default function AlertQualityActions({
       <Link href={`/services/${serviceId}/integrations`} className="text-xs underline">
         Integrations
       </Link>
+      <Link href="/settings/intelligence/noise-controls" className="text-xs underline">
+        Suppression rules
+      </Link>
       {jiraConfigured && (
         <form action={action}>
           <input type="hidden" name="serviceId" value={serviceId} />
