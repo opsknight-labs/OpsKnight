@@ -450,6 +450,24 @@ port, so moving to a newer SDK later is a one-adapter change.
   answer length and on model/tool round trips. Credential-shaped text is redacted from everything sent
   to a model, including tool results. Admission atomically reserves estimates across concurrent requests
   and settles once per attempt, including estimated usage on cancellation/failure and provider tests.
+- **Cost governance** (`ai/pricing.ts`, `ai/cost.ts`, `ai/scoped-budget.ts`). A pure price table (USD per
+  million input/output tokens; built-in list prices for the hosted provider kinds, longest family-prefix match
+  after stripping host decorations such as Bedrock region/vendor prefixes, plus administrator overrides per
+  provider kind and exact model in `AiModelPrice`, cached 30 s) turns usage into integer micro-dollars.
+  Settlement adds the cost to `AiUsageDay.costMicros` and `AiUsageUserDay.costMicros` (nullable; older rows
+  stay null) and to `AiUsageBreakdownDay` (day × attributed team × capability × provider kind × model, with an
+  unpriced-request count). Each call is attributed to one team (the incident's team, else the person's earliest
+  membership, else none) once per request and the attribution is stored on the reservation, so settlement and
+  enforcement agree. Optional `AiBudget` rows (key `team:<id>` or `capability:<CAP>`, daily token and/or
+  dollar limit, revision compare-and-set, audited) are checked inside the same day-advisory-locked
+  reservation transaction as the global, background and personal budgets, counting settled breakdown rows
+  plus live holds (`AiTokenReservation.teamId/capability/costMicros`); a read failure throws, so admission
+  fails closed. Unpriced calls count toward token limits only. Refusals increment
+  `opsknight_intelligence_ai_budget_rejections_total{scope}`; the scrape exports per-scope maximum
+  utilisation and counts of budgets at 80% and 100% (no identifiers), alerted by `OpsKnightAiBudgetNearLimit`
+  and `OpsKnightAiBudgetExhausted`. Only `scoped-budget.ts` writes the breakdown and only `cost.ts` writes
+  prices and budgets (architecture test). The settings page shows 7/30-day spend by team, capability and model
+  with dependency-free bars backed by tables. Operator guide: `docs/v2.2.0/operate/intelligence/ai-cost.md`.
 
 **Observability connectors (opt-in).** Settings → Intelligence → Connections stores read-only
 `ObservabilityConnection` rows: Prometheus, Loki, Tempo, Grafana (through its data-source proxy),
