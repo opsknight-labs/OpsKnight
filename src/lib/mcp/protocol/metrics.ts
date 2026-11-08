@@ -60,6 +60,7 @@ const STANDALONE_TOOLS = [
   'runbook_prepare_execution',
   'runbook_execute_approved',
   'runbook_get_approval',
+  'ask_squire',
 ];
 
 /** The bounded tool label values: named tools, `other` for anything else and `none` off tools/call. */

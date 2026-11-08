@@ -41,7 +41,8 @@ async function listTools(
   role: AuthorizationActor['role'],
   scopes: readonly string[],
   writesEnabled: boolean,
-  version: '2026-07-28' | '2025-11-25'
+  version: '2026-07-28' | '2025-11-25',
+  options: { squire?: boolean } = {}
 ) {
   const actor: AuthorizationActor = {
     id: 'user_1',
@@ -57,7 +58,8 @@ async function listTools(
         actor,
         writesEnabled,
         false,
-        []
+        [],
+        options
       ),
     { legacy: 'stateless', responseMode: 'json', maxSubscriptions: 0 }
   );
@@ -148,5 +150,32 @@ describe('tools/list contract snapshots', () => {
         'runbook_prepare_execution',
         'runbook_execute_approved',
       ]).toContain(tool.name);
+  });
+
+  describe('ask_squire (opt-in)', () => {
+    const responder = [...mcpScopesUsableByRole('RESPONDER')].sort();
+    it('is listed, read-only, only when Squire for MCP is on', async () => {
+      const off = await listTools('RESPONDER', responder, false, '2026-07-28');
+      expect(off.map(tool => tool.name)).not.toContain('ask_squire');
+      const on = await listTools('RESPONDER', responder, false, '2026-07-28', { squire: true });
+      // Everything else is unchanged by the switch.
+      expect(on.filter(tool => tool.name !== 'ask_squire')).toEqual(off);
+      const askSquire = on.find(tool => tool.name === 'ask_squire');
+      await expect(`${JSON.stringify(askSquire, null, 2)}\n`).toMatchFileSnapshot(
+        '__contracts__/tools-ask-squire.json'
+      );
+      expect((askSquire!.annotations as { readOnlyHint?: boolean }).readOnlyHint).toBe(true);
+    });
+
+    it('is withheld from a connection without every read scope Squire uses', async () => {
+      const narrow = await listTools(
+        'RESPONDER',
+        ['incidents:read', 'services:read'],
+        false,
+        '2026-07-28',
+        { squire: true }
+      );
+      expect(narrow.map(tool => tool.name)).not.toContain('ask_squire');
+    });
   });
 });

@@ -171,6 +171,14 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     approval: false,
     summary: 'Read a postmortem with action items, contributors and history.',
   },
+  {
+    id: 'ask_squire',
+    domain: 'intelligence',
+    risk: 'R0',
+    approval: false,
+    summary:
+      'Ask the Squire assistant a question; read-only, suggested actions are described and never run.',
+  },
 ];
 
 /** Prompts registered by the MCP server; a test pins this list to the server's registrations. */
