@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, Bot, GitBranch, Layers } from 'lucide-react';
+import { Activity, BarChart3, Bot, GitBranch, Layers, Plug } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const INTELLIGENCE_SECTIONS = [
@@ -22,6 +22,12 @@ export const INTELLIGENCE_SECTIONS = [
   { id: 'insights', label: 'Insights', href: '/settings/intelligence/insights', icon: BarChart3 },
   { id: 'quality', label: 'Quality', href: '/settings/intelligence/quality', icon: BarChart3 },
   { id: 'ai', label: 'Assistant & AI', href: '/settings/intelligence/ai', icon: Bot },
+  {
+    id: 'connections',
+    label: 'Connections',
+    href: '/settings/intelligence/connections',
+    icon: Plug,
+  },
 ] as const;
 
 /** Overview matches only itself; every other section also owns its nested paths. */
