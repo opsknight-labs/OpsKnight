@@ -42,6 +42,7 @@ import { resolveIncidentEngagement } from './incidents/engagement';
 import { reconcileIncidentEngagementAfterUrgencyChange } from './incidents/engagement-reconciliation';
 import { addOperationalMetric, observeOperationalHistogram } from './metrics/operational/registry';
 import { checkAlertFlapping } from './flapping';
+import { beginIngestionActivity } from './ingestion/activity';
 import { initializeEscalationExecution } from './escalation/repository';
 import { buildResponderRoutingFromAutomation } from './escalation/routing';
 import { captureResponderSnapshot } from './escalation/automation-snapshot';
@@ -167,7 +168,26 @@ async function reloadIncident(tx: Prisma.TransactionClient, incidentId: string) 
   return incident;
 }
 
+/**
+ * Applies one event. The in-process activity count lets background work sharing this process (the
+ * intelligence lane in `integrated`) back off during bursts; it costs two clock reads and never throws.
+ */
 export async function processEvent(
+  payload: EventPayload,
+  serviceId: string,
+  integrationId: string,
+  envelopeInput?: IntegrationEventEnvelope,
+  processingLease?: ProcessingLease
+) {
+  const endActivity = beginIngestionActivity();
+  try {
+    return await applyEvent(payload, serviceId, integrationId, envelopeInput, processingLease);
+  } finally {
+    endActivity();
+  }
+}
+
+async function applyEvent(
   payload: EventPayload,
   serviceId: string,
   integrationId: string,

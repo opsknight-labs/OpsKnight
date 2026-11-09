@@ -93,6 +93,18 @@ describe('intelligence architecture boundaries', () => {
     expect(ingest).toMatch(/NOISE_CONTROL_REVERSAL_INTEGRATION_ID\) return null/);
   });
 
+  it('keeps the in-process ingestion activity signal free of I/O and intelligence code', () => {
+    // processEvent counts itself in and out so the lane can yield; that hook must stay a pure
+    // in-memory counter: no imports at all, no database, network, timers or awaits.
+    const source = read(join(root, 'src/lib/ingestion/activity.ts'));
+    expect(source).not.toMatch(/\bimport\b|\brequire\(/);
+    expect(source).not.toMatch(/prisma|fetch\(|setTimeout|setInterval|\bawait\b|\basync\b/);
+    // The lane reads the signal; ingestion never imports the lane's pacing or pool code.
+    const events = read(join(root, 'src/lib/events.ts'));
+    expect(events).toMatch(/from '\.\/ingestion\/activity'/);
+    expect(events).not.toMatch(/ingestion-yield|lane-pool|database-workload/);
+  });
+
   it('keeps similarity, correlation and AI work out of the event outbox and job queue core', () => {
     for (const file of ['src/lib/event-outbox.ts', 'src/lib/jobs/queue.ts']) {
       expect(read(join(root, file))).not.toMatch(/@\/lib\/intelligence/);

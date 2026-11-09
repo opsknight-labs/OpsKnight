@@ -108,3 +108,51 @@ export function selectPrePagingLookupDatasourceUrl(
 ): string | undefined {
   return env.DIRECT_DATABASE_URL ?? env.DATABASE_URL;
 }
+
+/** Connections the intelligence lane uses on its own when it shares a process with ingestion. */
+export const DEFAULT_INTELLIGENCE_LANE_POOL_SIZE = 10;
+/** A lane pool always keeps one connection beside a running handler (claims, lease renewal, cancel). */
+const MIN_INTELLIGENCE_LANE_POOL_SIZE = 2;
+const MAX_INTELLIGENCE_LANE_POOL_SIZE = 16;
+
+/**
+ * Size of the intelligence lane's own pool in a shared process (`integrated`, `worker`,
+ * `general-worker`). `0` keeps the lane on the process pool, the behaviour before the pool existed.
+ * The dedicated `intelligence-worker` role never uses it: the whole process is the lane there.
+ * Values that are not an integer between 0 and 16 fall back to the default; 1 is raised to 2.
+ */
+export function intelligenceLanePoolSize(
+  value: string | undefined = process.env.INTELLIGENCE_LANE_DATABASE_POOL_SIZE
+): number {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return DEFAULT_INTELLIGENCE_LANE_POOL_SIZE;
+  const parsed = Number(trimmed);
+  if (parsed === 0) return 0;
+  return parsed <= MAX_INTELLIGENCE_LANE_POOL_SIZE
+    ? Math.max(MIN_INTELLIGENCE_LANE_POOL_SIZE, parsed)
+    : DEFAULT_INTELLIGENCE_LANE_POOL_SIZE;
+}
+
+/** The lane pool reads the same datasource as the process, with its own connection limit. */
+export function configureIntelligenceLanePrismaDatasource(
+  rawUrl: string | undefined,
+  size: number,
+  transactionPooler = false
+): string | undefined {
+  const configured = configurePrismaDatasource(
+    rawUrl,
+    String(Math.max(MIN_INTELLIGENCE_LANE_POOL_SIZE, size)),
+    transactionPooler
+  );
+  if (!configured) return configured;
+  try {
+    // Named so operators can tell the lane's connections apart in pg_stat_activity.
+    const url = new URL(configured);
+    if (!url.searchParams.has('application_name')) {
+      url.searchParams.set('application_name', 'opsknight-intelligence-lane');
+    }
+    return url.toString();
+  } catch {
+    return configured;
+  }
+}
