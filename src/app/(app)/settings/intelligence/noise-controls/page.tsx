@@ -1,17 +1,17 @@
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import {
   DecisionList,
-  HeartbeatForm,
-  HeartbeatList,
   KpiTiles,
-  MaintenanceWindowForm,
-  MaintenanceWindowList,
   NoisePolicyForm,
   SimulationForm,
   SuggestionList,
-  SuppressionRuleForm,
   SuppressionRuleList,
 } from '@/components/settings/NoiseControlsForms';
+import HeartbeatPanel from '@/components/settings/noise-controls/HeartbeatPanel';
+import MaintenanceWindowsPanel from '@/components/settings/noise-controls/MaintenanceWindowsPanel';
+import SuppressionRuleBuilder from '@/components/settings/noise-controls/SuppressionRuleBuilder';
+import EmptyState from '@/components/ui/EmptyState';
+import { getAppUrl } from '@/lib/app-url';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
@@ -66,6 +66,9 @@ export default async function NoiseControlsPage({
     heartbeats,
     decisions,
     kpis,
+    owners,
+    runbooks,
+    appUrl,
   ] = await Promise.all([
     safely('services', () =>
       prisma.service.findMany({
@@ -90,7 +93,34 @@ export default async function NoiseControlsPage({
     safely('heartbeats', () => listHeartbeatMonitors()),
     safely('decisions', () => listPrePagingDecisions({ limit: 50 })),
     safely('kpis', () => getNoiseControlKpis({ days: 7 })),
+    canManage
+      ? safely('owners', () =>
+          prisma.user.findMany({
+            where: { status: 'ACTIVE' },
+            orderBy: { name: 'asc' },
+            take: 500,
+            select: { id: true, name: true },
+          })
+        )
+      : Promise.resolve([]),
+    canManage
+      ? safely('runbooks', () =>
+          prisma.runbook.findMany({
+            where: { archivedAt: null },
+            orderBy: { name: 'asc' },
+            take: 500,
+            select: { id: true, name: true },
+          })
+        )
+      : Promise.resolve([]),
+    canManage ? safely('app url', () => getAppUrl()) : Promise.resolve(null),
   ]);
+  const now = new Date();
+  // The owner list always contains the viewer, so the default owner is selectable.
+  const ownerOptions =
+    owners && !owners.some(owner => owner.id === user.id)
+      ? [{ id: user.id, name: user.name ?? user.email ?? 'You' }, ...owners]
+      : (owners ?? []);
 
   return (
     <div className="space-y-6">
@@ -118,25 +148,44 @@ export default async function NoiseControlsPage({
             policies={policies ?? []}
             selectedServiceId={serviceId}
             canManage={canManage}
+            runbooks={runbooks ?? []}
           />
         ) : (
-          <p className="py-4 text-sm text-muted-foreground">Unavailable.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="Policy unavailable"
+            description="The noise-control policy could not be loaded. Refresh to try again."
+          />
         )}
       </SettingsSection>
 
       <SettingsSection
         title="Maintenance windows"
-        description="Alerts in a window are stored and visible but never page (or page at a lower urgency). Windows can repeat (FREQ=WEEKLY;BYDAY=SA,SU) and can be ended early."
+        description="Alerts in a window are stored and visible but never page (or page at a lower urgency). Windows can repeat (weekly, weekdays, weekends, monthly or a custom RRULE) and can be ended early. Test a window against the last 7 days before saving it."
       >
-        {canManage && <MaintenanceWindowForm services={services ?? []} teams={teams ?? []} />}
-        <MaintenanceWindowList windows={windows ?? []} canManage={canManage} />
+        <MaintenanceWindowsPanel
+          windows={windows ?? []}
+          services={services ?? []}
+          teams={teams ?? []}
+          canManage={canManage}
+          now={now}
+        />
       </SettingsSection>
 
       <SettingsSection
         title="Suppression rules"
         description="Match on source, summary, severity, resource or labels. Rules expire, have an owner, and are audited. Suggestions come from services whose incidents mostly clear within minutes."
       >
-        {canManage && <SuppressionRuleForm services={services ?? []} />}
+        {canManage && (
+          <div className="py-4">
+            <SuppressionRuleBuilder
+              services={services ?? []}
+              owners={ownerOptions}
+              currentUserId={user.id}
+            />
+          </div>
+        )}
         <SuggestionList suggestions={suggestions ?? []} canManage={canManage} />
         <SuppressionRuleList rules={rules ?? []} canManage={canManage} />
       </SettingsSection>
@@ -145,8 +194,12 @@ export default async function NoiseControlsPage({
         title="Heartbeat monitors"
         description="A job that stops pinging raises an incident on its service through the normal ingestion path, and resolves it when the pings return."
       >
-        {canManage && <HeartbeatForm services={services ?? []} />}
-        <HeartbeatList monitors={heartbeats ?? []} canManage={canManage} />
+        <HeartbeatPanel
+          monitors={heartbeats ?? []}
+          services={services ?? []}
+          canManage={canManage}
+          appUrl={appUrl ?? ''}
+        />
       </SettingsSection>
 
       <SettingsSection
@@ -156,7 +209,12 @@ export default async function NoiseControlsPage({
         {canManage ? (
           <SimulationForm services={services ?? []} />
         ) : (
-          <p className="py-4 text-sm text-muted-foreground">Managers can run simulations.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="Simulations are for managers"
+            description="Ask someone with intelligence management access to replay these controls."
+          />
         )}
       </SettingsSection>
 

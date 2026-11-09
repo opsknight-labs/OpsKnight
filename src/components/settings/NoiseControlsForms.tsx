@@ -18,6 +18,7 @@ import {
 } from '@/app/(app)/settings/intelligence/noise-controls/actions';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import OrchestrationRulesBuilder from '@/components/settings/noise-controls/OrchestrationRulesBuilder';
 import type { NoiseControlKpis } from '@/lib/intelligence/noise-controls/kpis';
 import type {
   MaintenanceWindowView,
@@ -38,7 +39,11 @@ function Status({ state }: { state: NoiseActionState }) {
   return (
     <p
       role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
+      className={
+        state.ok
+          ? 'text-sm text-status-ok-deep dark:text-status-ok-soft'
+          : 'text-sm text-destructive'
+      }
     >
       {state.message}
     </p>
@@ -151,6 +156,7 @@ export function NoisePolicyForm({
   policies,
   selectedServiceId,
   canManage,
+  runbooks = [],
 }: {
   policy: NoiseControlPolicyView;
   readiness: NoiseReadiness;
@@ -164,6 +170,8 @@ export function NoisePolicyForm({
   }>;
   selectedServiceId: string | null;
   canManage: boolean;
+  /** Options for the orchestration "attach a runbook" action. */
+  runbooks?: Option[];
 }) {
   const [state, action, pending] = useActionState(savePolicyAction, initial);
   const id = useId();
@@ -338,24 +346,15 @@ export function NoisePolicyForm({
             dependencies
           </label>
         </fieldset>
-        <div className="space-y-1">
-          <label htmlFor={`${id}-orch`} className={labelClass}>
-            Orchestration rules (JSON array; evaluated in order)
-          </label>
-          <textarea
-            id={`${id}-orch`}
-            name="orchestration"
-            rows={6}
-            className={`${fieldClass} font-mono text-xs`}
-            defaultValue={JSON.stringify(d.orchestration.rules, null, 2)}
-            aria-describedby={`${id}-orch-help`}
-          />
-          <p id={`${id}-orch-help`} className="text-xs text-muted-foreground">
-            {
-              'Example: [{"id":"drop-test","name":"Drop test alerts","enabled":true,"conditions":[{"field":"label","key":"env","op":"equals","value":"test"}],"actions":[{"type":"DROP"}]}]. Actions: DROP, SUPPRESS, SET_SEVERITY, SET_URGENCY, SET_LABEL, REROUTE_SERVICE, ATTACH_RUNBOOK, ADD_NOTE.'
-            }
-          </p>
-        </div>
+        <OrchestrationRulesBuilder
+          key={`${policy.scopeKey}:${policy.revision}`}
+          name="orchestration"
+          initialRules={d.orchestration.rules}
+          services={services}
+          runbooks={runbooks}
+          serviceId={selectedServiceId}
+          canManage={canManage}
+        />
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="acknowledgeReadiness" /> I understand: turn ON without the
           shadow evidence above
