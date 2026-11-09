@@ -498,6 +498,25 @@ export function toolErrorContent(error: unknown, requestId: string) {
   };
 }
 
+/** The `_meta` key that carries the machine-readable error (see toolErrorResult). */
+export const MCP_ERROR_META_KEY = 'io.opsknight/error';
+
+/**
+ * A failed tool call. The readable text ends with the request id support can look up. The
+ * machine-readable twin (code, domainCode, fields, retryable, hint, requestId) rides in `_meta`,
+ * NOT in `structuredContent`: the official client SDKs validate any structuredContent against the
+ * tool's output schema even when `isError` is true, so an error shaped differently from a success
+ * made every client throw "Structured content does not match the tool's output schema" instead of
+ * showing the assistant the message below.
+ */
+export function toolErrorResult(text: string, error: unknown, requestId: string) {
+  return {
+    content: [{ type: 'text' as const, text: `${text} (Reference: ${requestId})` }],
+    _meta: { [MCP_ERROR_META_KEY]: toolErrorContent(error, requestId).error },
+    isError: true,
+  };
+}
+
 /** Room for the JSON-RPC envelope around a tool result within the response budget. */
 const RESULT_ENVELOPE_RESERVE = 1024;
 
@@ -522,11 +541,7 @@ function toolError(context: ExecutionContext, tool: string, error: unknown) {
     code === 'MCP_CAPABILITY_DISABLED'
       ? `${code}: ${friendlyMcpError(code).body}`
       : toolErrorText(error);
-  return {
-    content: [{ type: 'text' as const, text }],
-    structuredContent: toolErrorContent(error, context.requestId),
-    isError: true,
-  };
+  return toolErrorResult(text, error, context.requestId);
 }
 
 async function safeTool(
@@ -537,7 +552,7 @@ async function safeTool(
 ) {
   try {
     const value = await callback();
-    const result = toolResult(value, links(value));
+    const result = toolResult(value, context.omitResourceLinks ? [] : links(value));
     // The text fallback repeats structuredContent, so the real wire size is about twice the data.
     // Refuse here with a hint rather than let the transport fail the whole response.
     if (
@@ -561,7 +576,7 @@ const evidenceTool = (
 
 /** Returned by server/discover (2026-07-28) and initialize; kept to 300 bytes or less. */
 export const MCP_SERVER_INSTRUCTIONS =
-  "assigneeId 'me' works on lists; whoami: id, teams, timeZone. Prefer named tools, else search_capabilities, describe_operation, read_operation or call_operation. Pages: query.limit 1-50, nextCursor. Approval: operation_prepare, share reviewUrl, poll operation_get_approval, operation_commit_approved.";
+  "assigneeId 'me' works on lists; whoami: id, teams, timeZone. Prefer named tools, else search_capabilities, describe_operation, read_operation. If listed: call_operation; reviews via operation_prepare, reviewUrl, operation_get_approval, operation_commit_approved. Pages: query.limit 1-50, nextCursor.";
 
 /** Single-entity results that can link to their resource: where the id is found in the result. */
 const LINKED_RESULTS = new Map<string, { source: CompletionSource; from: 'path' | 'data' }>([
@@ -1070,7 +1085,7 @@ export function createOpsKnightMcpServer(
     {
       title: 'Search OpsKnight capabilities',
       description:
-        'Keyword search over the operations this connection can use, optionally filtered by domain and read or write intent. Returns each operationId, summary, named tool (if any), risk and the workflow to use: the named tool, read_operation, call_operation, an approval, or reconnecting for missing consent. Pages with nextCursor. Use it when no named tool fits. Catalog visibility grants no resource authority.',
+        'Keyword search over the operations this connection can use, optionally filtered by domain and read or write intent. Returns each operationId, summary, named tool (if any), risk and the workflow to use: the named tool, read_operation, call_operation or an approval (only when those tools are listed), or reconnecting for missing consent. Pages with nextCursor. Use it when no named tool fits. Catalog visibility grants no resource authority.',
       inputSchema: SCHEMAS.searchCapabilities,
       annotations: {
         readOnlyHint: true,
@@ -1461,22 +1476,24 @@ export function createOpsKnightMcpServer(
           .filter(([, value]) => typeof value === 'string')
           .map(([key, value]) => `${key}=${value}`);
         // Links, never fetched text: the read goes through resources/read and its authorization.
-        const links = Object.entries(args).flatMap(([key, value]) => {
-          const source = LINKABLE_ARGS.get(key);
-          return source && readableSources.has(source) && typeof value === 'string'
-            ? [
-                {
-                  role: 'user' as const,
-                  content: {
-                    type: 'resource_link' as const,
-                    uri: `opsknight://${source}/${value}`,
-                    name: `${source}/${value}`,
-                    mimeType: 'application/json',
+        const links = (context.omitResourceLinks ? [] : Object.entries(args)).flatMap(
+          ([key, value]) => {
+            const source = LINKABLE_ARGS.get(key);
+            return source && readableSources.has(source) && typeof value === 'string'
+              ? [
+                  {
+                    role: 'user' as const,
+                    content: {
+                      type: 'resource_link' as const,
+                      uri: `opsknight://${source}/${value}`,
+                      name: `${source}/${value}`,
+                      mimeType: 'application/json',
+                    },
                   },
-                },
-              ]
-            : [];
-        });
+                ]
+              : [];
+          }
+        );
         return {
           messages: [
             {

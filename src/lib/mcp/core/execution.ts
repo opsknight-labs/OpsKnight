@@ -3,6 +3,7 @@ import addFormats from 'ajv-formats';
 import { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { resolveMeInBody } from '@/lib/mcp/core/me-fields';
 import { withMcpDatabase } from '@/lib/database-workload';
 import {
   AUTHORIZATION_ACTIONS,
@@ -150,7 +151,7 @@ function argumentHint(errors: ErrorObject[] | null | undefined) {
     error.keyword === 'additionalProperties'
       ? ` (${String((error.params as { additionalProperty?: unknown }).additionalProperty).slice(0, 64)})`
       : '';
-  return `${error.instancePath || '/'} ${error.message ?? 'is invalid'}${extra}. See describe_operation.`.slice(
+  return `${error.instancePath || 'arguments'} ${error.message ?? 'is invalid'}${extra}. See describe_operation.`.slice(
     0,
     240
   );
@@ -229,6 +230,12 @@ export interface ExecutionContext {
   tokenScopes: readonly string[];
   requestId: string;
   budget: CostBudget;
+  /**
+   * The client is on the 2025-03-26 revision (it sent no MCP-Protocol-Version header). That
+   * revision has no `resource_link` content block, and its SDK rejects the whole result when one
+   * appears, so links are left out for it. Later revisions get them.
+   */
+  omitResourceLinks?: boolean;
 }
 
 export function callMcpOperation(context: ExecutionContext, operationId: string, rawArgs: unknown) {
@@ -340,7 +347,18 @@ async function executeMcpOperation(
   const request = new NextRequest(url, {
     method: operation.method.toUpperCase(),
     headers,
-    body: operation.method === 'get' ? undefined : JSON.stringify(args.body ?? {}),
+    body:
+      operation.method === 'get'
+        ? undefined
+        : JSON.stringify(
+            (mode === 'generic'
+              ? resolveMeInBody(
+                  operationId,
+                  args.body as Record<string, unknown> | undefined,
+                  auth.actor.id
+                )
+              : args.body) ?? {}
+          ),
     signal: context.budget.signal,
   });
   const handler = await loadHandler();

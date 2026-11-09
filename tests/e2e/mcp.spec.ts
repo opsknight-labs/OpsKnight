@@ -50,8 +50,15 @@ async function connectClient(
       body: 'Local OAuth callback received.',
     })
   );
-  await page.goto(authorize.href);
-  await expect(page.getByRole('heading', { name: `Connect ${name}?` })).toBeVisible();
+  // The registration form's own follow-up navigation (to the assistants tab) can still be in
+  // flight here, and one navigation interrupts the other (Firefox: NS_BINDING_ABORTED, WebKit:
+  // "interrupted by another navigation"). A goto that loses that race is simply retried.
+  await expect(async () => {
+    await page.goto(authorize.href);
+    await expect(page.getByRole('heading', { name: `Connect ${name}?` })).toBeVisible({
+      timeout: 10_000,
+    });
+  }).toPass({ timeout: 45_000 });
   await page.getByRole('button', { name: 'Allow', exact: true }).click();
   await page.waitForURL(url => url.origin === new URL(redirectUri).origin);
   const callback = new URL(page.url());

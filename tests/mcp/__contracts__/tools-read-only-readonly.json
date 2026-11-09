@@ -161,7 +161,7 @@
       "openWorldHint": false
     },
     "inputSchemaSha256": "be102187ca315ee3cb4c4ab20a9b851acb00b41c1d69b5c54d7632e41602f16c",
-    "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
+    "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {
     "name": "service_get_changes",

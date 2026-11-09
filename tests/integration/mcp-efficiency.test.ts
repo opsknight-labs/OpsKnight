@@ -214,8 +214,8 @@ describe('actionable tool errors', () => {
       args: { query: { limit: 200 } },
     });
     expect(generic.isError).toBe(true);
-    expect(generic.content[0].text).toBe(
-      'MCP_INVALID_PAGE_SIZE: query.limit must be an integer from 1 to 50.'
+    expect(generic.content[0].text).toMatch(
+      /^MCP_INVALID_PAGE_SIZE: query\.limit must be an integer from 1 to 50\. \(Reference: [0-9a-f-]{36}\)$/
     );
     // A read-only session is not offered call_operation; read_operation guides the same way.
     const unknown = await call('read_operation', { operationId: 'listServicez', args: {} });

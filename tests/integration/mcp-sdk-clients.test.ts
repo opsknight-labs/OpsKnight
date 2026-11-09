@@ -1,11 +1,20 @@
 // @vitest-environment node
 import { randomBytes } from 'node:crypto';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
+import {
+  createTestIncident,
+  createTestService,
+  createTestUser,
+  resetDatabase,
+  testPrisma as db,
+} from '../helpers/test-db';
 import { sdkHandshake, type LegacyRevision } from '../helpers/mcp-sdk-handshake';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
 import { APP_VERSION } from '@/lib/version';
 import { DELETE, GET, POST } from '@/app/mcp/route';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { MCP_ERROR_META_KEY } from '@/lib/mcp/protocol/server';
 
 /**
  * CERT-02: a real, published SDK client (not a hand-built envelope) completes the whole handshake
@@ -82,6 +91,83 @@ describe('published SDK client handshakes', () => {
       expect(methods.filter(method => method === 'POST').length).toBeGreaterThanOrEqual(3);
     }
   );
+
+  it('a failed tool call reaches the assistant as a readable error, not a client-side schema exception', async () => {
+    // The SDK validates structuredContent against each tool's output schema, even for isError
+    // results, once it has listed the tools. An error shaped differently from a success therefore
+    // threw "Structured content does not match the tool's output schema" in every such client.
+    const { bearer } = await principal();
+    const client = new Client({ name: 'sdk-error-path', version: '1.0.0' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(mcpResource()), {
+        requestInit: { headers: { authorization: `Bearer ${bearer}` } },
+        fetch: route,
+      })
+    );
+    try {
+      await client.listTools(); // caches the output validators
+      for (const [name, args] of [
+        ['incident_get', { path: { id: 'cl000000000000000000000000' } }],
+        ['describe_operation', { operationId: 'noSuchOperation' }],
+        ['read_operation', { operationId: 'resolveIncident', args: { path: { id: 'x' } } }],
+      ] as const) {
+        const result = (await client.callTool({ name, arguments: args })) as {
+          isError?: boolean;
+          structuredContent?: unknown;
+          content: { text: string }[];
+          _meta?: Record<string, { requestId?: string; code?: string }>;
+        };
+        expect(result.isError, name).toBe(true);
+        expect(result.structuredContent, name).toBeUndefined();
+        const meta = new Map(Object.entries(result._meta ?? {})).get(MCP_ERROR_META_KEY);
+        expect(meta?.code, name).toMatch(/^MCP_/);
+        expect(result.content[0].text, name).toContain(`(Reference: ${meta?.requestId})`);
+      }
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('leaves resource_link blocks out for a 2025-03-26 client and keeps them from 2025-06-18', async () => {
+    // 2025-03-26 has no resource_link content block, and its SDK (1.10) rejects the whole result
+    // when one appears, so a search or lookup threw in the client. Such a client sends no
+    // MCP-Protocol-Version header (the server treats that as 2025-03-26).
+    const { bearer } = await principal();
+    const service = await createTestService('Legacy links service');
+    const incident = await createTestIncident('Legacy links incident', service.id);
+    const contentTypes = async (revision?: string) => {
+      const response = await POST(
+        new Request(mcpResource(), {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${bearer}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+            ...(revision ? { 'mcp-protocol-version': revision } : {}),
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'incident_get', arguments: { path: { id: incident.id } } },
+          }),
+        })
+      );
+      const text = await response.text();
+      const json = text.includes('data:')
+        ? text
+            .split('\n')
+            .filter(line => line.startsWith('data:'))
+            .map(line => line.slice(5))
+            .join('')
+        : text;
+      const result = JSON.parse(json).result as { isError?: boolean; content: { type: string }[] };
+      expect(result.isError ?? false).toBe(false);
+      return result.content.map(block => block.type);
+    };
+    expect(await contentTypes()).toEqual(['text']);
+    expect(await contentTypes('2025-06-18')).toContain('resource_link');
+  });
 
   it('answers a missing bearer with a resource-metadata challenge, not a protocol error', async () => {
     const response = await POST(

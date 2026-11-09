@@ -53,6 +53,7 @@ function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?: number }) {
           <Select value={selected} onValueChange={handleSelectChange}>
             <SelectTrigger
               id="mcp-session-idle-select"
+              aria-label="Session lifetime"
               className="h-9 w-full rounded-lg border-border/80 bg-background text-xs font-medium focus:ring-1 focus:ring-primary"
             >
               <div className="flex items-center gap-2">

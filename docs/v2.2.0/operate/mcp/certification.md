@@ -47,6 +47,16 @@ Before review-ready status, rerun `npm run test:unit`, `npm run test:int`, `npm 
 
 MCP-only emergency rollback: disable MCP in Settings, revoke clients/grants, and retain additive database tables while reverting application code. Do not drop authentication or task evidence during incident response. A database backup must preserve grant/client/code/token tables and the active application encryption key must be restored with it, because MCP token digests are derived from that key. Full disaster-recovery validation remains pending.
 
+## Client matrix run, 8 November 2026
+
+Source: `main` at `f934c9907` plus the follow-up fixes branch. Evidence (JSON reports, screenshots, exports) is stored outside git, as above. This is test evidence, not a signed release manifest.
+
+- **Client profiles:** ten profiles (Claude web, ChatGPT including the `search` and `fetch` shape deep research needs, Claude Code, Cursor's app-scheme redirect, VS Code desktop and web, Codex CLI, Gemini CLI with an empty scope, MCP Inspector, and the 2026-07-28 stateless revision) each registered, signed in through the consent screen, exchanged the code with PKCE, ran a protocol session at that client's revision, refreshed and revoked. 189 of 189 checks passed on a local production build and 179 of 179 on the hosted site (before the older-revision check was added). **These profiles are modelled from each client's documented behaviour. They are not the applications.**
+- **Real clients:** the official TypeScript SDK at 1.10.2, 1.13.3 and 1.32.2, the official Python SDK 2.3.0 and the **real Claude Code CLI 2.1.316** (five prompts: identity, drill-down, an honest "what changed", a refused change on a read-only connection, recovery from a not-found) passed, locally and on the hosted site. SDK 1.10.2 failed one step before the fix below. No other vendor application was run.
+- **Found and fixed:** clients on the 2025-03-26 revision no longer receive `resource_link` blocks (their SDK rejected the result); an unknown `/.well-known/*` path answers 404 instead of the sign-in page; the Policy tab session-lifetime select has an accessible name (all eight MCP tabs now have zero axe violations at WCAG 2.2 AA).
+- **Performance (local production build, one process, default 4 slots):** a single call takes 11 to 22 ms (p50); throughput saturates near 138 requests per second; above the concurrency cap the server answers 503 with `Retry-After`; memory stayed at 300 to 400 MB. Hosted calls from a remote machine take about 400 ms (network included).
+- **Not tested:** writes and approvals on the hosted site (it has live Slack and Microsoft Teams integrations), the real Cursor, ChatGPT, VS Code, Codex and Gemini applications, client metadata documents other than Claude's, long soak and multi-replica failover.
+
 ## Running the release-only gate
 
 1. In repository branch protection/rulesets, require the **`MCP PR validation`** check for merging. Configure a GitHub environment named `mcp-release-certification` with required human reviewers and restrict deployments to the protected `main` branch. The PR workflow runs on every PR; it skips the expensive MCP suite successfully when no MCP-related files changed. Repository branch-protection/environment settings are not managed by these workflow files.

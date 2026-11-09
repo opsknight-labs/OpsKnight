@@ -398,7 +398,7 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
     const { result } = JSON.parse(text);
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toMatch(/^MCP_RESULT_BUDGET_EXCEEDED: .*lower query\.limit/);
-    expect(result.structuredContent.error.code).toBe('MCP_RESULT_BUDGET_EXCEEDED');
+    expect(result._meta['io.opsknight/error'].code).toBe('MCP_RESULT_BUDGET_EXCEEDED');
     expect(text).not.toContain('x'.repeat(100));
   });
   it('returns incident context through the actual MCP transport with canonical child arguments', async () => {
