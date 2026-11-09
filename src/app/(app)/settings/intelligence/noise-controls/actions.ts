@@ -224,6 +224,7 @@ export async function createRuleAction(
         expiresAt: optional(form, 'expiresAt')
           ? new Date(text(form, 'expiresAt')).toISOString()
           : null,
+        ownerId: optional(form, 'ownerId') ?? null,
         origin: text(form, 'origin') === 'SUGGESTED' ? 'SUGGESTED' : 'MANUAL',
         suggestion:
           (parseJson(form, 'suggestion') as Record<string, unknown> | undefined) ?? undefined,
