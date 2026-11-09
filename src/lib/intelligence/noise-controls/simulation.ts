@@ -6,14 +6,20 @@ import { withDbBudget } from '../jobs/db-budget';
 import type { IntelligenceSettingsView } from '../settings/service';
 import { compilePolicy, loadPrePagingSnapshot } from './cache';
 import {
+  DEFAULT_NOISE_CONTROL_DEFINITION,
   noiseScopeKey,
   type NoiseControlDefinition,
   type PrePagingActionName,
   type PrePagingControlName,
   type PrePagingInput,
 } from './contract';
+import { matchesAll } from './matchers';
 import {
   evaluatePrePagingControls,
+  resolvePolicy,
+  type CompiledPolicy,
+  type CompiledSuppressionRule,
+  type CompiledWindow,
   type PrePagingLookups,
   type PrePagingSnapshot,
 } from './evaluate';
@@ -25,7 +31,19 @@ export interface SimulationRequest {
   serviceId?: string | null;
   days: number;
   /** Try a definition that is not saved yet; the saved one is used when absent. */
-  candidate?: { definition: NoiseControlDefinition };
+  candidate?: {
+    definition?: NoiseControlDefinition;
+    /** Unsaved maintenance windows or suppression rules to replay (the builders' preview). */
+    windows?: CompiledWindow[];
+    rules?: CompiledSuppressionRule[];
+    /** serviceId → teamId for TEAM-scoped candidate windows. */
+    serviceTeams?: ReadonlyMap<string, string | null>;
+    /**
+     * Replay only the candidate: no saved policies, windows or rules, so the counts say what this one
+     * control would have done on its own.
+     */
+    isolate?: boolean;
+  };
   createdById: string | null;
   now?: Date;
 }
@@ -54,6 +72,10 @@ export interface SimulationOutcome {
   failOpen: number;
   byControl: Record<string, number>;
   byAction: Record<string, number>;
+  /** Decisive hits per rule or window id (`sourceId`). */
+  bySource: Record<string, number>;
+  /** Incidents each orchestration rule matched, decisive or not, by rule id. */
+  matchedRules: Record<string, number>;
   examples: SimulationExample[];
 }
 
@@ -115,21 +137,43 @@ export async function simulatePrePagingControls(
     const truncated = rows.length > SIMULATION_MAX_ALERTS;
     const alerts = rows.slice(0, SIMULATION_MAX_ALERTS);
 
-    let snapshot: PrePagingSnapshot = await loadPrePagingSnapshot(prisma, now);
-    if (request.candidate) {
+    const candidate = request.candidate;
+    let snapshot: PrePagingSnapshot = candidate?.isolate
+      ? {
+          loadedAt: now.getTime(),
+          policies: new Map(),
+          windows: [],
+          rules: [],
+          serviceTeams: new Map(),
+          topology: new Map(),
+        }
+      : await loadPrePagingSnapshot(prisma, now);
+    if (candidate) {
       const scopeKey = noiseScopeKey(request.serviceId ?? null);
-      const policies = new Map(snapshot.policies);
-      policies.set(
-        scopeKey,
-        compilePolicy({
-          scopeKey,
-          serviceId: request.serviceId ?? null,
-          mode: 'SHADOW',
-          revision: 0,
-          definition: request.candidate.definition,
-        })
+      const policies = new Map<string, CompiledPolicy>(
+        [...snapshot.policies].map(([key, policy]) => [key, { ...policy, mode: 'SHADOW' as const }])
       );
-      snapshot = { ...snapshot, policies };
+      if (candidate.definition || !policies.has(scopeKey))
+        policies.set(
+          scopeKey,
+          compilePolicy({
+            scopeKey,
+            serviceId: request.serviceId ?? null,
+            mode: 'SHADOW',
+            revision: 0,
+            definition: candidate.definition ?? DEFAULT_NOISE_CONTROL_DEFINITION,
+          })
+        );
+      const serviceTeams = new Map(snapshot.serviceTeams);
+      for (const [serviceId, teamId] of candidate.serviceTeams ?? [])
+        serviceTeams.set(serviceId, teamId);
+      snapshot = {
+        ...snapshot,
+        policies,
+        windows: [...(candidate.windows ?? []), ...snapshot.windows],
+        rules: [...(candidate.rules ?? []), ...snapshot.rules],
+        serviceTeams,
+      };
     } else {
       // Preview what the saved controls would do, whatever mode they are in.
       const policies = new Map(
@@ -212,6 +256,8 @@ export async function simulatePrePagingControls(
       failOpen: 0,
       byControl: {},
       byAction: {},
+      bySource: {},
+      matchedRules: {},
       examples: [],
     };
     for (const row of alerts) {
@@ -236,10 +282,19 @@ export async function simulatePrePagingControls(
         });
         outcome.incidentsEvaluated += 1;
         if (decision.failOpen && decision.failOpen.reason !== 'off') outcome.failOpen += 1;
+        // Orchestration rules run in order and stop at the first DROP or SUPPRESS, as in the hook.
+        for (const rule of resolvePolicy(snapshot, input.serviceId)?.orchestration ?? []) {
+          if (!matchesAll(rule.conditions, input)) continue;
+          outcome.matchedRules[rule.id] = (outcome.matchedRules[rule.id] ?? 0) + 1;
+          if (rule.actions.some(action => action.type === 'DROP' || action.type === 'SUPPRESS'))
+            break;
+        }
         if (decision.action !== 'NONE') {
           outcome.byAction[decision.action] = (outcome.byAction[decision.action] ?? 0) + 1;
           if (decision.control)
             outcome.byControl[decision.control] = (outcome.byControl[decision.control] ?? 0) + 1;
+          if (decision.sourceId)
+            outcome.bySource[decision.sourceId] = (outcome.bySource[decision.sourceId] ?? 0) + 1;
           if (['SUPPRESS', 'DROP', 'APPEND', 'GROUP_CHILD'].includes(decision.action))
             outcome.pagesAvoided += 1;
           if (decision.action === 'DOWNGRADE') outcome.downgraded += 1;
