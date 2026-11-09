@@ -7,6 +7,8 @@ import { liveQueryFromParams } from '@/lib/dashboard/live-incidents-shared';
 import { logger } from '@/lib/logger';
 import { LiveDashboardProvider } from '@/components/dashboard/live/LiveDashboardProvider';
 import LiveWallboard from '@/components/dashboard/live/LiveWallboard';
+import WallboardNoiseTile from '@/components/dashboard/live/WallboardNoiseTile';
+import { getWallboardNoiseTile } from '@/lib/intelligence/incident-ux/wallboard-noise';
 
 export const revalidate = 0;
 
@@ -35,6 +37,7 @@ export default async function WallboardPage({
     if (typeof value === 'string' && value.length > 0) urlParams.set(key, value);
   }
   const generation = await getRealtimeChangeGeneration().catch(() => null);
+  const noiseTilePromise = getWallboardNoiseTile(actor).catch(() => null);
   const snapshot = await getLiveDashboardSnapshot(actor, liveQueryFromParams(urlParams), {
     generation,
   }).catch(error => {
@@ -44,9 +47,14 @@ export default async function WallboardPage({
     return null;
   });
 
+  const noiseTile = await noiseTilePromise;
+
   return (
     <LiveDashboardProvider initialSnapshot={snapshot} currentUserId={user.id} persistQuery={false}>
-      <LiveWallboard timeZone={user.timeZone || 'UTC'} />
+      <LiveWallboard
+        timeZone={user.timeZone || 'UTC'}
+        noiseTile={noiseTile ? <WallboardNoiseTile tile={noiseTile} /> : undefined}
+      />
     </LiveDashboardProvider>
   );
 }
