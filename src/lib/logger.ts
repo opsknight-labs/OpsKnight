@@ -126,7 +126,7 @@ const SENSITIVE_KEYS = [
   /signature/i,
   /private_?key/i,
   /email/i,
-  /phone(_?number)?/i,
+  /phone/i, // also matches phone_number and phoneNumber
   /mobile/i,
   /tel/i,
   /\bto\b/i,
@@ -143,6 +143,8 @@ const SENSITIVE_KEYS = [
 ];
 
 const SECRET_PATTERNS = [
+  // Labels are separated by a literal dot the label class excludes, so the repetition is linear.
+  // eslint-disable-next-line security/detect-unsafe-regex
   /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g, // Email (strictly disjoint domain labels)
   /Bearer\s+[A-Za-z0-9\-_.]+/gi, // Bearer tokens
   /Basic\s+[A-Za-z0-9+/=]{16,}/gi, // Basic Auth tokens
