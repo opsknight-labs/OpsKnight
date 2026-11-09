@@ -4,6 +4,7 @@ import IncidentTimeAxisCard from './IncidentTimeAxisCard';
 import IncidentImpactCard from './IncidentImpactCard';
 import IncidentAnalysisStatus from './IncidentAnalysisStatus';
 import IntelligenceSkeleton from './IntelligenceSkeleton';
+import IncidentGroupCard from './intelligence/IncidentGroupCard';
 import prisma from '@/lib/prisma';
 import { Suspense } from 'react';
 import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
@@ -641,6 +642,12 @@ export default async function IncidentDetailScreen({
           {showIntelligence && (
             <Suspense fallback={null}>
               <IncidentSquireProactiveCard incidentId={incident.id} />
+            </Suspense>
+          )}
+
+          {canReadIntelligence && (
+            <Suspense fallback={null}>
+              <IncidentGroupCard incidentId={incident.id} />
             </Suspense>
           )}
 

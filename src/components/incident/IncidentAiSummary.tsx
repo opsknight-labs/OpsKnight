@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
-import { summarizeIncidentAction, type IncidentSummaryState } from '@/app/(app)/incidents/[id]/intelligence-actions';
+import {
+  summarizeIncidentAction,
+  type IncidentSummaryState,
+} from '@/app/(app)/incidents/[id]/intelligence-actions';
+import PostSummaryAsNoteButton from '@/components/incident/intelligence/PostSummaryAsNoteButton';
 
 function List({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
@@ -19,7 +23,14 @@ function List({ title, items }: { title: string; items: string[] }) {
 }
 
 /** Generated on request and shown only to the person who asked; it is plain text and never saved. */
-export default function IncidentAiSummary({ incidentId }: { incidentId: string }) {
+export default function IncidentAiSummary({
+  incidentId,
+  canPostNote = false,
+}: {
+  incidentId: string;
+  /** Viewer may add incident notes (same check as the note composer); the server re-checks. */
+  canPostNote?: boolean;
+}) {
   const [state, setState] = useState<IncidentSummaryState>({ status: 'idle' });
   const [pending, startTransition] = useTransition();
 
@@ -29,7 +40,10 @@ export default function IncidentAiSummary({ incidentId }: { incidentId: string }
     });
 
   return (
-    <section aria-labelledby="ai-summary-heading" className="space-y-3 rounded-lg border border-border bg-card p-4">
+    <section
+      aria-labelledby="ai-summary-heading"
+      className="space-y-3 rounded-lg border border-border bg-card p-4"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -57,15 +71,29 @@ export default function IncidentAiSummary({ incidentId }: { incidentId: string }
           <div className="space-y-3">
             <p className="text-sm font-medium">{state.summary.headline}</p>
             <p className="text-sm">{state.summary.currentState}</p>
-            {state.summary.impact && <p className="text-sm text-foreground/80">Impact: {state.summary.impact}</p>}
+            {state.summary.impact && (
+              <p className="text-sm text-foreground/80">Impact: {state.summary.impact}</p>
+            )}
             <List title="Key events" items={state.summary.keyEvents} />
             <List title="Possible causes (to verify)" items={state.summary.possibleCauses} />
             <List title="Suggested next steps" items={state.summary.nextSteps} />
-            <p className="text-xs text-foreground/70">AI-generated from the incident record. Check it before relying on it. Nothing was changed.</p>
+            <p className="text-xs text-foreground/70">
+              AI-generated from the incident record. Check it before relying on it. Nothing was
+              changed.
+            </p>
+            {canPostNote && (
+              <PostSummaryAsNoteButton
+                incidentId={incidentId}
+                summary={state.summary}
+                model={state.model}
+              />
+            )}
           </div>
         )}
         {state.status === 'idle' && !pending && (
-          <p className="text-xs text-foreground/70">Get a short catch-up written from the timeline, notes and suggestions you can see.</p>
+          <p className="text-xs text-foreground/70">
+            Get a short catch-up written from the timeline, notes and suggestions you can see.
+          </p>
         )}
       </div>
     </section>
