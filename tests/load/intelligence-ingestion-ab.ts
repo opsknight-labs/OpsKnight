@@ -12,10 +12,18 @@
  * contract (p99 at most +10 ms, p50 at most +2 ms), the lane must have been busy in every candidate run and
  * no event may fail; otherwise the process exits 1. `--no-gate` records without judging.
  *
+ * With `--noise-controls on` the candidate arm also has every pre-paging noise control ON for the bench
+ * services (maintenance window, suppression and orchestration rules that never match, and content dedup,
+ * flapping and storm grouping with thresholds that run every lookup on every event but never change the
+ * outcome), so the gate measures the hook's full cost: "all features ON vs everything OFF". `--no-lane`
+ * keeps the lane idle in both arms to isolate the hook. `--history N` seeds N resolved incidents (one
+ * alert each, spread over 90 days) per arm, so lookups run against a large table.
+ *
  * Usage (dedicated database whose name ends in _bench or _test; the script truncates incident data):
  *   DATABASE_URL=postgresql://.../opsknight_bench \
  *   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
  *     tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 300 --concurrency 16 --backlog 400 \
+ *     [--noise-controls on] [--no-lane] [--history 1000000] \
  *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate]
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -35,6 +43,11 @@ import {
 } from '../../src/lib/intelligence/jobs/runner';
 import { enqueueWorkItems, type WorkKind } from '../../src/lib/intelligence/jobs/work-queue';
 import {
+  primePrePagingSnapshot,
+  resetPrePagingSnapshot,
+} from '../../src/lib/intelligence/noise-controls';
+import { runtimeOperationalMetrics } from '../../src/lib/metrics/operational/registry';
+import {
   comparePaired,
   judgeHigherIsWorse,
   judgeLowerIsWorse,
@@ -49,6 +62,12 @@ interface Options {
   concurrency: number;
   backlog: number;
   services: number;
+  /** Candidate arm also runs every pre-paging noise control ON (baseline: all OFF). */
+  noiseControls: boolean;
+  /** Candidate arm runs the busy intelligence lane (default). */
+  lane: boolean;
+  /** Resolved incidents (one alert each) seeded per arm before the burst. 0 = none. */
+  history: number;
   /** Release contract: how much the lane may add to ingestion latency, as a median paired difference. */
   maxP99DeltaMs: number;
   maxP50DeltaMs: number;
@@ -84,6 +103,10 @@ interface Sample {
   peakActiveBackends: number;
   /** Work items the lane completed during the burst; must be > 0 for the candidate arm to mean anything. */
   laneItemsProcessed: number;
+  /** Pre-paging evaluations that failed open during the timed burst, by reason. */
+  noiseFailOpen: Record<string, number>;
+  /** Pre-paging decisions recorded during the timed burst (expected 0 with the lookup-only profile). */
+  noiseDecisions: number;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -95,7 +118,15 @@ function parseOptions(argv: string[]): Options {
     return value;
   };
   const outputAt = argv.indexOf('--output');
+  const noiseAt = argv.indexOf('--noise-controls');
+  const historyAt = argv.indexOf('--history');
+  const history = historyAt >= 0 ? Number(argv[historyAt + 1]) : 0;
+  if (!Number.isInteger(history) || history < 0)
+    throw new Error('--history must be a non-negative integer');
   return {
+    noiseControls: noiseAt >= 0 && argv[noiseAt + 1] === 'on',
+    lane: !argv.includes('--no-lane'),
+    history,
     repetitions: read('repetitions', 8),
     events: read('events', 300),
     concurrency: read('concurrency', 16),
@@ -122,6 +153,99 @@ async function reset() {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "Incident", "BackgroundJob", "IntelligenceWorkItem", "IntelligenceCursor" CASCADE'
   );
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE "Alert", "NoiseControlPolicy", "MaintenanceWindow", "SuppressionRule", "PrePagingDecision" CASCADE'
+  );
+}
+
+/** Resolved history spread over 90 days with one fingerprinted alert each, in bounded SQL batches. */
+async function seedHistory(serviceIds: string[], count: number) {
+  const batch = 200_000;
+  for (let offset = 0; offset < count; offset += batch) {
+    const size = Math.min(batch, count - offset);
+    await prisma.$executeRawUnsafe(
+      `WITH rows AS (
+         SELECT g AS n, ($1::text[])[1 + (g % array_length($1::text[], 1))] AS service_id,
+                now() - (interval '90 days' * random()) - interval '1 hour' AS at
+         FROM generate_series($2::int, $2::int + $3::int - 1) AS g
+       ), incidents AS (
+         INSERT INTO "Incident" ("id", "title", "serviceId", "status", "urgency", "createdAt", "updatedAt", "resolvedAt", "dedupKey")
+         SELECT 'hist-' || n, 'Historic latency on api-' || (n % 97), service_id, 'RESOLVED', 'LOW', at, at, at, 'hist-' || n
+         FROM rows RETURNING "id", "serviceId", "createdAt"
+       )
+       INSERT INTO "Alert" ("id", "dedupKey", "status", "payload", "serviceId", "incidentId", "createdAt", "fingerprintHash", "severity")
+       SELECT 'hist-a-' || substr("id", 6), 'hist-' || substr("id", 6), 'RESOLVED', '{}'::jsonb, "serviceId", "id", "createdAt",
+              md5('tpl-' || (hashtext("id") % 997)::text), 'warning'
+       FROM incidents`,
+      serviceIds,
+      offset,
+      size
+    );
+  }
+  await prisma.$executeRawUnsafe('ANALYZE "Incident"');
+  await prisma.$executeRawUnsafe('ANALYZE "Alert"');
+}
+
+/**
+ * Every control ON for every bench service, tuned so each event runs every lookup (dedup, flapping, storm
+ * count and parent) and every static matcher, yet nothing changes the outcome: the arms do the same work
+ * apart from the hook. The bench events carry a unique label, so the label-subset dedup check never holds.
+ */
+async function enableNoiseControls(serviceIds: string[]) {
+  const now = Date.now();
+  for (const serviceId of serviceIds) {
+    await prisma.noiseControlPolicy.create({
+      data: {
+        scopeKey: `service:${serviceId}`,
+        serviceId,
+        mode: 'ON',
+        definition: {
+          schemaVersion: 1,
+          contentDedup: { enabled: true, windowSeconds: 900, requireLabelSubset: true },
+          flapping: { enabled: true, windowSeconds: 180, threshold: 50, keyOnFingerprint: true },
+          storm: { enabled: true, threshold: 1000, windowSeconds: 60, holdSeconds: 0 },
+          orchestration: {
+            rules: [
+              {
+                id: 'never',
+                name: 'Never matches',
+                enabled: true,
+                conditions: [{ field: 'source', op: 'equals', value: 'not-the-bench' }],
+                actions: [{ type: 'SUPPRESS' }],
+              },
+            ],
+          },
+        },
+      },
+    });
+    await prisma.suppressionRule.create({
+      data: {
+        name: 'Never matches',
+        serviceId,
+        matchers: [{ field: 'summary', op: 'regex', value: '^never-[0-9]+$' }],
+        effect: 'SUPPRESS',
+      },
+    });
+  }
+  await prisma.maintenanceWindow.create({
+    data: {
+      name: 'Never matches',
+      scope: 'LABEL',
+      labelKey: 'bench_window',
+      labelValue: 'never',
+      startsAt: new Date(now - 60_000),
+      endsAt: new Date(now + 6 * 3_600_000),
+    },
+  });
+  resetPrePagingSnapshot();
+  const snapshot = await primePrePagingSnapshot();
+  if (!snapshot || snapshot.policies.size < serviceIds.length)
+    throw new Error('Noise-control snapshot did not load');
+}
+
+function failOpenCounts(): Record<string, number> {
+  const rows = runtimeOperationalMetrics().get('opsknight_prepaging_fail_open_total') ?? [];
+  return Object.fromEntries(rows.map(row => [row.labels.reason ?? 'unknown', row.value]));
 }
 
 async function seedFixtures(serviceCount: number) {
@@ -203,6 +327,7 @@ function eventFor(index: number, tag: string): EventPayload {
       summary: `Latency high on api-${index % 11}`,
       source: 'ab-benchmark',
       severity: 'warning',
+      custom_details: { bench_event: `${tag}-${index}` },
     },
   };
 }
@@ -281,10 +406,14 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
   await reset();
   const services = await seedFixtures(options.services);
   const serviceIds = services.map(service => service.id);
-  await setIntelligence(arm === 'candidate');
-  await seedBacklog(serviceIds, options.backlog, arm === 'candidate');
+  const laneOn = arm === 'candidate' && options.lane;
+  await setIntelligence(laneOn);
+  if (options.history > 0) await seedHistory(serviceIds, options.history);
+  await seedBacklog(serviceIds, options.backlog, laneOn);
+  if (arm === 'candidate' && options.noiseControls) await enableNoiseControls(serviceIds);
+  else resetPrePagingSnapshot();
 
-  const lane = arm === 'candidate' ? busyCandidate() : null;
+  const lane = laneOn ? busyCandidate() : null;
   // Warm connections and caches in both arms so neither pays cold-start cost inside the timed window.
   await runBurst(serviceIds, { ...options, events: 20 }, `warm-${arm}-${repetition}`);
   // The queue length stays flat (indexing chains an analysis item), so progress is read from the
@@ -300,9 +429,18 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
     }
   }
   const completedBefore = lane?.tracker.completed ?? 0;
+  const failOpenBefore = failOpenCounts();
+  const decisionsBefore = await prisma.prePagingDecision.count();
   const burst = await runBurst(serviceIds, options, `${arm}-${repetition}`);
   const completedAfter = lane?.tracker.completed ?? 0;
+  const failOpenAfter = failOpenCounts();
+  const noiseDecisions = (await prisma.prePagingDecision.count()) - decisionsBefore;
   await lane?.stop();
+  const noiseFailOpen = Object.fromEntries(
+    Object.entries(failOpenAfter)
+      .map(([reason, value]) => [reason, value - (failOpenBefore[reason] ?? 0)] as const)
+      .filter(([, value]) => value > 0)
+  );
 
   return {
     arm,
@@ -316,7 +454,9 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
     failures: burst.failures,
     peakLockWaiters: burst.peakLockWaiters,
     peakActiveBackends: burst.peakActiveBackends,
-    laneItemsProcessed: arm === 'candidate' ? Math.max(0, completedAfter - completedBefore) : 0,
+    laneItemsProcessed: laneOn ? Math.max(0, completedAfter - completedBefore) : 0,
+    noiseFailOpen,
+    noiseDecisions,
   };
 }
 
@@ -366,7 +506,10 @@ async function main() {
       samples.push(sample);
       console.log(
         `rep ${repetition} ${arm.padEnd(9)} p50=${sample.p50Ms.toFixed(1)}ms p99=${sample.p99Ms.toFixed(1)}ms ` +
-          `${sample.throughputPerSec.toFixed(0)}/s fail=${sample.failures} lane=${sample.laneItemsProcessed}`
+          `${sample.throughputPerSec.toFixed(0)}/s fail=${sample.failures} lane=${sample.laneItemsProcessed}` +
+          (options.noiseControls
+            ? ` noiseFailOpen=${JSON.stringify(sample.noiseFailOpen)} noiseDecisions=${sample.noiseDecisions}`
+            : '')
       );
     }
   }
@@ -382,7 +525,7 @@ async function main() {
       failures: rows.reduce((sum, row) => sum + row.failures, 0),
     };
   });
-  const laneBusy = candidate.every(sample => sample.laneItemsProcessed > 0);
+  const laneBusy = !options.lane || candidate.every(sample => sample.laneItemsProcessed > 0);
   const totalFailures = samples.reduce((sum, sample) => sum + sample.failures, 0);
   const p99DeltaMs = medianPairedDelta(samples, sample => sample.p99Ms);
   const p50DeltaMs = medianPairedDelta(samples, sample => sample.p50Ms);
@@ -403,6 +546,13 @@ async function main() {
     generatedAt: new Date().toISOString(),
     options,
     laneWasBusyInEveryCandidateRun: laneBusy,
+    noiseControlsInCandidate: options.noiseControls,
+    noiseFailOpenInCandidate: candidate.reduce<Record<string, number>>((sum, sample) => {
+      for (const [reason, value] of Object.entries(sample.noiseFailOpen))
+        sum[reason] = (sum[reason] ?? 0) + value;
+      return sum;
+    }, {}),
+    noiseDecisionsInCandidate: candidate.reduce((sum, sample) => sum + sample.noiseDecisions, 0),
     node: process.version,
     pagingBackpressureBypassed: true,
     totalFailures,
