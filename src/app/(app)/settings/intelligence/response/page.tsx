@@ -1,3 +1,4 @@
+import EmptyState from '@/components/ui/EmptyState';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { DeclareDependencyForm, DependencyList } from '@/components/settings/DependencyManager';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -91,7 +92,12 @@ export default async function IntelligenceResponsePage() {
         {dependencies ? (
           <DependencyList dependencies={dependencies} canManage={canManage} />
         ) : (
-          <p className="py-4 text-sm text-muted-foreground">Unavailable.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="Dependencies unavailable"
+            description="They could not be loaded. Refresh to try again."
+          />
         )}
       </SettingsSection>
 
@@ -104,7 +110,12 @@ export default async function IntelligenceResponsePage() {
         {sources ? (
           <TopologySourceList sources={sources} canManage={canManage} />
         ) : (
-          <p className="py-2 text-sm text-muted-foreground">Unavailable.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="Topology sources unavailable"
+            description="They could not be loaded. Refresh to try again."
+          />
         )}
       </SettingsSection>
 
@@ -153,7 +164,12 @@ export default async function IntelligenceResponsePage() {
             ))}
           </ul>
         ) : (
-          <p className="py-2 text-sm text-muted-foreground">No changes recorded yet.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="No changes recorded yet"
+            description="Deploys, flags and config changes appear here once a change webhook sends them."
+          />
         )}
       </SettingsSection>
 

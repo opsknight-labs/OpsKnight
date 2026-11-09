@@ -1,3 +1,4 @@
+import EmptyState from '@/components/ui/EmptyState';
 import { incidentAnalysisStateForRequest } from '@/lib/intelligence/analysis/view';
 
 export default async function IntelligenceEmptyState({
@@ -18,8 +19,11 @@ export default async function IntelligenceEmptyState({
           ? state.message
           : 'No verified suggestions are available in this section yet.';
   return (
-    <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-      {message}
-    </p>
+    <EmptyState
+      size="sm"
+      variant="dashed"
+      title={message}
+      className="items-start p-4 text-left sm:p-4"
+    />
   );
 }

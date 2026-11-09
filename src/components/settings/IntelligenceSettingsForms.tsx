@@ -22,7 +22,11 @@ function Status({ state }: { state: IntelligenceActionState }) {
   return (
     <p
       role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
+      className={
+        state.ok
+          ? 'text-sm text-status-ok-deep dark:text-status-ok-soft'
+          : 'text-sm text-destructive'
+      }
     >
       {state.message}
     </p>
