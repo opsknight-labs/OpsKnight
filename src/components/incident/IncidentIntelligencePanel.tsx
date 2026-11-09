@@ -12,6 +12,7 @@ export default function IncidentIntelligencePanel({
   assistant,
   triage,
   timeline,
+  impact,
   analysisStatus,
 }: {
   similar: ReactNode;
@@ -23,6 +24,8 @@ export default function IncidentIntelligencePanel({
   triage?: ReactNode;
   /** Unified time axis of alerts, changes, upstream incidents and noise decisions. */
   timeline?: ReactNode;
+  /** Estimated impact: dependent services, status-page components, SLO budget at risk. */
+  impact?: ReactNode;
   analysisStatus?: ReactNode;
 }) {
   const sections = [
@@ -30,6 +33,7 @@ export default function IncidentIntelligencePanel({
     ['related', 'Related', related],
     ['response', 'Causes & runbooks', response],
     ...(timeline ? ([['timeline', 'Timeline', timeline]] as const) : []),
+    ...(impact ? ([['impact', 'Impact', impact]] as const) : []),
     ['summary', 'Summary', summary],
     ['assistant', 'Ask Squire', assistant],
   ] as const;

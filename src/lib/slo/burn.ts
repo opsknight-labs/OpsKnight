@@ -76,6 +76,28 @@ export interface ObjectiveBurn {
   fastBurn: number;
   slowBurn: number;
   severity: BurnSeverity;
+  /** The objective's whole error budget in minutes over its window; null when the target allows no downtime. */
+  budgetMinutes: number | null;
+}
+
+/** Days in an objective window (mirrors the evaluator); rolling windows default to 30 days. */
+export function objectiveBudgetMinutes(
+  targetPercent: number,
+  windowType: string,
+  windowValue: number | null
+): number | null {
+  const days =
+    windowType === 'SEVEN_DAYS'
+      ? 7
+      : windowType === 'NINETY_DAYS' || windowType === 'QUARTERLY'
+        ? 90
+        : windowType === 'YEARLY'
+          ? 365
+          : windowType === 'ROLLING_DAYS' && windowValue && windowValue > 0
+            ? windowValue
+            : 30;
+  const budget = (1 - Math.min(100, Math.max(0, targetPercent)) / 100) * days * 1440;
+  return budget > 0 ? Math.round(budget * 10) / 10 : null;
 }
 
 export interface ServiceBurn {
@@ -106,7 +128,7 @@ export async function getSloBurn(
     },
     orderBy: { name: 'asc' },
     take: 20,
-    select: { lineageId: true, name: true, target: true },
+    select: { lineageId: true, name: true, target: true, windowType: true, windowValue: true },
   });
   if (objectives.length === 0) return null;
   const end = now.getTime();
@@ -141,6 +163,11 @@ export async function getSloBurn(
       fastBurn,
       slowBurn,
       severity: classifyBurn(fastBurn, slowBurn),
+      budgetMinutes: objectiveBudgetMinutes(
+        objective.target,
+        objective.windowType,
+        objective.windowValue
+      ),
     };
   });
   const severity: BurnSeverity = rows.some(row => row.severity === 'critical')

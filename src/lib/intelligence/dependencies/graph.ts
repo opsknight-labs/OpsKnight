@@ -61,3 +61,39 @@ export function upstreamDistances(
   }
   return distances;
 }
+
+/**
+ * Services that depend on `serviceId`, transitively, with their distance: the blast radius of an incident on
+ * it. Same bounded breadth-first walk as `upstreamDistances`, in the other direction, plus a node cap so a hub
+ * service cannot produce an unbounded result; `truncated` says the cap was hit.
+ */
+export function downstreamDistances(
+  edges: readonly DependencyEdge[],
+  serviceId: string,
+  maxDepth: number,
+  maxNodes = 200
+): { distances: Map<string, number>; truncated: boolean } {
+  const byUpstream = new Map<string, string[]>();
+  for (const edge of edges) {
+    const list = byUpstream.get(edge.upstreamServiceId);
+    if (list) list.push(edge.downstreamServiceId);
+    else byUpstream.set(edge.upstreamServiceId, [edge.downstreamServiceId]);
+  }
+  const distances = new Map<string, number>();
+  const seen = new Set<string>([serviceId]);
+  let frontier = [serviceId];
+  for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth += 1) {
+    const next: string[] = [];
+    for (const current of frontier) {
+      for (const downstream of byUpstream.get(current) ?? []) {
+        if (seen.has(downstream)) continue;
+        if (distances.size >= maxNodes) return { distances, truncated: true };
+        seen.add(downstream);
+        distances.set(downstream, depth);
+        next.push(downstream);
+      }
+    }
+    frontier = next;
+  }
+  return { distances, truncated: false };
+}

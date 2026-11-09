@@ -1,6 +1,7 @@
 import IncidentIntelligencePanel from './IncidentIntelligencePanel';
 import IncidentTriageCard from './IncidentTriageCard';
 import IncidentTimeAxisCard from './IncidentTimeAxisCard';
+import IncidentImpactCard from './IncidentImpactCard';
 import IncidentAnalysisStatus from './IncidentAnalysisStatus';
 import IntelligenceSkeleton from './IntelligenceSkeleton';
 import prisma from '@/lib/prisma';
@@ -665,6 +666,11 @@ export default async function IncidentDetailScreen({
               timeline={
                 <Suspense fallback={<IntelligenceSkeleton />}>
                   <IncidentTimeAxisCard incidentId={incident.id} />
+                </Suspense>
+              }
+              impact={
+                <Suspense fallback={<IntelligenceSkeleton />}>
+                  <IncidentImpactCard incidentId={incident.id} />
                 </Suspense>
               }
               summary={
