@@ -17,6 +17,21 @@ export type SquireProposalView = {
   href?: string;
   /** The assistant read alerts, notes or other third-party text before suggesting this. */
   untrustedContext?: boolean;
+  /** Server-written facts about exactly what will happen (extended actions). */
+  preview?: Array<{ label: string; value: string }>;
+  /** Server-chosen text for the confirm button. */
+  confirmLabel?: string;
+  /** Who or what the change reaches beyond this incident. */
+  impact?: 'PAGES_PEOPLE' | 'EXTERNAL_SYSTEM' | 'PUBLIC' | 'AUTOMATION';
+  /** Two-step flows, for example "Step 1 of 2". */
+  step?: string;
+};
+
+const IMPACT_NOTICE: Record<NonNullable<SquireProposalView['impact']>, string> = {
+  PAGES_PEOPLE: 'This notifies people right away.',
+  EXTERNAL_SYSTEM: 'This sends incident details to another system.',
+  PUBLIC: 'This is visible to anyone who can see the status page.',
+  AUTOMATION: 'This starts automation. Its own approval steps still apply.',
 };
 
 type State =
@@ -38,6 +53,8 @@ export default function SquireProposalCard({
 }) {
   const { refresh } = useRouter();
   const attempted = useRef(false);
+  // The second step of a two-step action (for example publishing a draft) is its own card and confirmation.
+  const [followUp, setFollowUp] = useState<SquireProposalView | null>(null);
   const [state, setState] = useState<State>(() => ({
     phase: proposal.receiptId && proposal.kind === 'WRITE' ? 'recovering' : 'idle',
   }));
@@ -77,7 +94,13 @@ export default function SquireProposalCard({
           return;
         }
         const body = (await response.json()) as {
-          data?: { outcome?: { status: string; message: string } };
+          data?: {
+            outcome?: {
+              status: string;
+              message: string;
+              result?: { followUp?: SquireProposalView };
+            };
+          };
         };
         if (signal?.aborted) return;
         const outcome = body.data?.outcome;
@@ -92,6 +115,8 @@ export default function SquireProposalCard({
                 : 'unknown',
           message: outcome.message,
         });
+        if (outcome.status === 'SUCCEEDED' && outcome.result?.followUp)
+          setFollowUp(outcome.result.followUp);
         if (outcome.status === 'SUCCEEDED') refresh();
       } catch {
         if (!signal?.aborted)
@@ -138,10 +163,12 @@ export default function SquireProposalCard({
         ok?: boolean;
         message?: string;
         error?: string;
+        followUp?: SquireProposalView;
       } | null;
       if (response.ok && body?.ok) {
         onOutcome?.('success');
         setState({ phase: 'done', message: body.message ?? 'Done.' });
+        if (body.followUp) setFollowUp(body.followUp);
         refresh();
       } else {
         onOutcome?.('error');
@@ -170,12 +197,28 @@ export default function SquireProposalCard({
       className="mt-2 rounded-md border border-border bg-card p-3 text-foreground"
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Suggested action
+        Suggested action{proposal.step ? ` · ${proposal.step}` : ''}
       </p>
       <p className="mt-1 font-medium">{proposal.title}</p>
       <p className="mt-1 whitespace-pre-wrap break-words text-xs text-foreground/80">
         {proposal.detail}
       </p>
+      {proposal.preview && proposal.preview.length > 0 && (
+        <dl
+          aria-label="What will happen"
+          className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md bg-muted/50 p-2 text-xs"
+        >
+          {proposal.preview.map(item => (
+            <div key={item.label} className="contents">
+              <dt className="font-medium text-muted-foreground">{item.label}</dt>
+              <dd className="whitespace-pre-wrap break-words">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {proposal.impact && (
+        <p className="mt-2 text-xs font-medium text-foreground">{IMPACT_NOTICE[proposal.impact]}</p>
+      )}
       {proposal.untrustedContext && (
         <p className="mt-2 rounded-md border border-amber-300/60 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200">
           Suggested after reading alerts, notes or other text written outside this conversation.
@@ -196,6 +239,9 @@ export default function SquireProposalCard({
           >
             {state.message}
           </p>
+          {state.phase === 'done' && followUp && (
+            <SquireProposalCard proposal={followUp} onOutcome={onOutcome} />
+          )}
           {state.phase !== 'done' && proposal.receiptId && (
             <button
               type="button"
@@ -256,7 +302,7 @@ export default function SquireProposalCard({
               ? 'Checking result…'
               : state.phase === 'running'
                 ? 'Working…'
-                : 'Confirm'}
+                : (proposal.confirmLabel ?? 'Confirm')}
           </button>
           <button
             type="button"
