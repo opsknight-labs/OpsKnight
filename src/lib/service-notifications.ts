@@ -107,6 +107,18 @@ export async function sendServiceNotifications(
           eventType === 'triggered' ? `:g${eventGeneration}` : ''
         }`
       : serviceDeliveryKey({ ...incident, escalationGeneration: eventGeneration }, eventType);
+    // A pre-paging storm child (no escalation of its own) rolls its posts up under the parent's.
+    const rollUpParentId =
+      eventType === 'triggered' && incident.escalationStatus === 'COMPLETED'
+        ? ((
+            await prisma.incidentRelationship.findFirst({
+              where: { sourceIncidentId: incident.id, type: 'PARENT_CHILD', decision: 'ACCEPTED' },
+              select: { targetIncidentId: true },
+            })
+          )?.targetIncidentId ?? null)
+        : null;
+    const rollUp = rollUpParentId ? { rollUpParentId } : {};
+    const incidentSourceId = `${service.id}:${rollUpParentId ?? incidentId}`;
     const serviceChannels = service.serviceNotificationChannels || [];
     const errors: string[] = [];
     const incidentPresentation = {
@@ -203,7 +215,8 @@ export async function sendServiceNotifications(
                   incidentId,
                   templateKey: `service-slack-${eventType}`,
                   sourceType: 'SERVICE_INCIDENT',
-                  sourceId: `${service.id}:${incidentId}`,
+                  sourceId: incidentSourceId,
+                  ...rollUp,
                   eventKey: channelDeliveryKey,
                   displayMessage: `${eventType}: ${incident.title}`,
                   ...deliveryPolicy,
@@ -245,7 +258,8 @@ export async function sendServiceNotifications(
               incidentId,
               templateKey: `service-slack-webhook-${eventType}`,
               sourceType: 'SERVICE_INCIDENT',
-              sourceId: `${service.id}:${incidentId}`,
+              sourceId: incidentSourceId,
+              ...rollUp,
               eventKey: deliveryKey,
               displayMessage: `${eventType}: ${incident.title}`,
               ...deliveryPolicy,
@@ -336,7 +350,8 @@ export async function sendServiceNotifications(
                 incidentId,
                 templateKey: `service-webhook-${eventType}`,
                 sourceType: 'WEBHOOK_INTEGRATION',
-                sourceId: webhook.id,
+                sourceId: rollUpParentId ? `${webhook.id}:${rollUpParentId}` : webhook.id,
+                ...rollUp,
                 eventKey: deliveryKey,
                 displayMessage: `${eventType}: ${incident.title}`,
                 ...deliveryPolicy,
@@ -383,7 +398,8 @@ export async function sendServiceNotifications(
             incidentId,
             templateKey: `legacy-service-webhook-${eventType}`,
             sourceType: 'SERVICE_INCIDENT',
-            sourceId: `${service.id}:${incidentId}`,
+            sourceId: incidentSourceId,
+            ...rollUp,
             eventKey: deliveryKey,
             displayMessage: `${eventType}: ${incident.title}`,
             ...deliveryPolicy,

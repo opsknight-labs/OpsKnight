@@ -254,6 +254,8 @@ export type CentralNotificationInput = {
   contentId?: string;
   fanoutId?: string;
   tenantKey?: string;
+  /** Pre-paging storm child: roll this notification up under the parent incident's (noise controller). */
+  rollUpParentId?: string;
 };
 
 const centralNotificationInputSchema = z
@@ -297,6 +299,7 @@ const centralNotificationInputSchema = z
     contentId: z.string().max(191).optional(),
     fanoutId: z.string().max(191).optional(),
     tenantKey: z.string().trim().min(1).max(191).optional(),
+    rollUpParentId: z.string().max(191).optional(),
   })
   .strict();
 
@@ -584,6 +587,7 @@ export async function createCentralNotificationIntent(
         eventType: input.templateKey,
         trafficClass,
         priority,
+        rollUpParentId: input.rollUpParentId,
       });
   const effectiveScheduledAt = noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
 
@@ -697,6 +701,7 @@ export async function createCentralNotificationIntentsBatch(
           eventType: input.templateKey,
           trafficClass,
           priority,
+          rollUpParentId: input.rollUpParentId,
         },
         persistedNoiseCount + inputNoiseCount,
         now
@@ -3445,7 +3450,9 @@ export const CENTRAL_NOTIFICATION_LIMITS = Object.freeze({
  * One-click unsubscribe headers (RFC 2369 + RFC 8058). Gmail and Yahoo require them for
  * bulk senders and show a native "Unsubscribe" control when present.
  */
-export function listUnsubscribeHeaders(url: string | undefined): Record<string, string> | undefined {
+export function listUnsubscribeHeaders(
+  url: string | undefined
+): Record<string, string> | undefined {
   if (!url || !/^https:\/\//i.test(url)) return undefined;
   return {
     'List-Unsubscribe': `<${url}>`,
