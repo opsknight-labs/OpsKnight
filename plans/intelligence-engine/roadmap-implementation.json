@@ -127,25 +127,40 @@
     {
       "id": 4,
       "name": "Squire AI SRE capabilities",
-      "status": "pending",
+      "status": "implemented_pending_full_ci",
       "remaining": [
-        "Scoped metrics/logs/Sentry/GitHub diff tools",
-        "Alert detail, on-call and analytics tools",
-        "Escalate, urgency, merge, responder, snooze, status draft and follow-up proposals",
+        "Merge and ungroup proposals",
+        "Suppression-rule and maintenance-window proposals (extension point in catalog-extended.ts) and a maintenance read tool",
+        "On-call read tool beyond the existing schedule tools",
         "In-chat incident/postmortem/stakeholder/customer drafts and reconstructed timeline",
-        "Budgeted parallel 12-step loop, task model routing and context summary",
-        "Evidence-based partial answer on step exhaustion",
-        "Opt-in proactive briefing, stakeholder nudge and postmortem draft",
-        "Slack/Teams mentions with interactive confirmation",
-        "Extend MCP and alert/change/service/runbook page context; verify existing MCP ask tool",
-        "Encrypted, team-scoped read-only ObservabilityConnection model, admin connection testing and SSRF-safe adapters for Prometheus/Grafana-Loki-Tempo/Datadog/Elastic/CloudWatch/Sentry/GitHub/GitLab",
-        "Runbook steps, traces, raw redacted alert payload, SLO status, escalation and maintenance tools",
-        "Approved runbook execution through existing prepare/approve/execute flow; ungroup, Jira, suppression and maintenance proposals",
-        "Investigation plan, at most four parallel reads, ranked evidence-backed hypotheses and collapsible progress",
-        "Knowledge chunks from postmortems/runbooks/resolution/notes, cited retrieval and optional docs import; human-approved service facts",
-        "Mobile incident Squire surface and knowledge memory; DIAGNOSE/CLASSIFY capability routing"
+        "Optional docs import into knowledge memory",
+        "Runbooks with required inputs that have no default or binding preset (assistant cannot collect inputs yet)",
+        "Proactive briefings as incident timeline notes (needs a deliberate system-actor note path)",
+        "Live-vendor verification of connectors (CloudWatch JSON protocol, Datadog span attributes, Sentry project filter) and connector request metrics",
+        "Grafana data-source type picker and CloudWatch Logs Insights queries",
+        "Teams Action.Submit fallback for clients without Action.Execute",
+        "Live-model run of the investigation eval cases (nightly tier)",
+        "Cost split across several teams per call; built-in prices for self-hosted/OpenAI-compatible endpoints"
       ],
-      "wave": 5
+      "wave": 5,
+      "branch": "wip/intel-f-integrated (stacked on feat/intelligence-engine)",
+      "implemented": [
+        "Encrypted, team-scoped read-only ObservabilityConnection model, admin connection testing and SSRF-safe adapters for Prometheus/Grafana-Loki-Tempo/Datadog/Elastic/CloudWatch/Sentry/GitHub/GitLab (fake-server tested only)",
+        "Scoped metrics/logs/traces/Sentry/GitHub-GitLab diff tools (query_metrics, search_logs, get_traces, get_error_events, get_change_diff)",
+        "Alert payload (redacted), runbook steps, SLO status, incident analytics and escalation policy tools with data classes and citations",
+        "Escalate, urgency, snooze, unlink related, add responder, Jira, status draft with separate publish proposals through the sealed confirm flow (opt-in)",
+        "Approved runbook execution through the existing resolve/preview/start flow with runbook approvals intact",
+        "Per-capability model routing (SQUIRE_CHAT/SUMMARIZE/DIAGNOSE/POSTMORTEM/CLASSIFY) applied after the data policy",
+        "Investigation mode: budgeted loop of at most 12 steps and four parallel reads, ranked evidence-backed hypotheses, collapsible progress",
+        "Evidence-based partial answer on step exhaustion, token ceiling, cancellation or failed diagnosis",
+        "Summaries of turns older than the ten-turn window instead of dropping them",
+        "Knowledge chunks from postmortems, runbook steps, resolution and incident notes with cited, permission-rechecked search_knowledge; human-confirmed service facts",
+        "Opt-in per-service proactive briefing, stakeholder-update nudge and postmortem draft (stored as SquireProactiveNote, shown on the incident page)",
+        "Slack/Teams @squire and /incident ask with owner-only interactive confirmation",
+        "Read-only ask_squire MCP tool (opt-in) and alert/change/service/team/schedule/runbook page context",
+        "Mobile incident Squire surface (opt-in)",
+        "AI cost governance: model price table with overrides, spend by team/capability/model, team and capability token/dollar budgets, 80/100 percent alerts"
+      ]
     },
     {
       "id": 5,
@@ -155,7 +170,6 @@
         "Opt-in encrypted content audit",
         "Approximately 80 structural/live-judge cases, baseline regression gate and labelled engine storm/RCA fixtures",
         "PR mocked contracts and gated nightly live judge",
-        "Token-to-cost price table, per-team/per-capability limits, 80/100 percent alerts and usage breakdown",
         "Refresh architecture and operator docs to match final implementation",
         "Grow live-model cases toward ~80 with an LLM judge; token-to-cost price table and per-team budgets (deferred to the F/H workstreams)"
       ],
@@ -168,7 +182,8 @@
         "Shared replica circuit-breaker state via AiProviderBreaker, best effort with in-process fallback",
         "Answer feedback (thumbs + reason, no text stored) and Quality-page summary",
         "About 45 structural no-model evaluation cases on every PR (squire-evals-contract) and nightly live-model workflow with stored baseline gate",
-        "Basic-mode 429 shows a truthful status instead of AI limit reached"
+        "Basic-mode 429 shows a truthful status instead of AI limit reached",
+        "Token-to-cost price table, per-team/per-capability limits, 80/100 percent alerts and usage breakdown (Workstream F6)"
       ]
     },
     {
