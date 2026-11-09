@@ -51,6 +51,10 @@ export const REVIEW_MESSAGES: Readonly<Record<string, string>> = {
     "The requester's assistant connection was signed out, so this request cannot be approved.",
   MCP_INVALID_TOKEN:
     "The requester's assistant connection is no longer valid, so this request cannot be approved.",
+  MCP_INACTIVE_PRINCIPAL:
+    "The requester's account is no longer active, so this request cannot be approved.",
+  MCP_INVALID_GRANT:
+    "The requester's assistant connection was revoked, so this request cannot be approved.",
 };
 
 /** Own keys only: an inherited name such as "constructor" is not an expected refusal. */

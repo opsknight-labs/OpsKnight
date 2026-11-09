@@ -220,7 +220,8 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     // No credential at all is a first connection, not a bad token: it is answered with a plain
     // challenge and never counts against the peer.
     requireMcp(header.trim() !== '', 'MCP_TOKEN_REQUIRED', 401);
-    requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
+    // The scheme name is case-insensitive (RFC 9110 section 11.1); the token itself is not.
+    requireMcp(/^bearer [A-Za-z0-9_-]{32,256}$/i.test(header), 'MCP_INVALID_TOKEN', 401);
     const row = await resolveBearer(digestMcpSecret(header.slice(7)));
     unknownCredential = !row;
     const now = new Date();

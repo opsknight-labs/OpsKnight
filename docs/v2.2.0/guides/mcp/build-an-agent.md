@@ -7,7 +7,7 @@ product_area: mcp
 audience: [developer]
 verification:
   level: source
-  verified_at: 2026-11-05
+  verified_at: 2026-11-09
   evidence:
     - src/app/mcp/route.ts
     - src/lib/mcp/protocol/server.ts
@@ -24,7 +24,7 @@ verification:
 
 This page is for people writing their own agent or integration against an OpsKnight server. To work on OpsKnight itself, see [Contributing to MCP](../../operate/mcp/contributing.md).
 
-Only Claude Code has a recorded live run (see [client compatibility](self-hosted-setup.md#client-compatibility)). The TypeScript connection below is the same client the certification tests use (`tests/helpers/mcp-sdk-handshake.ts`); the other snippets are illustrative and should be run against a local instance first.
+Only Claude Code has a recorded live run of a vendor application (see [client compatibility](self-hosted-setup.md#client-compatibility); the official SDKs are also covered in the [client matrix run](../../operate/mcp/certification.md#client-matrix-run-8-november-2026)). The TypeScript connection below is the same client the certification tests use (`tests/helpers/mcp-sdk-handshake.ts`); the other snippets are illustrative and should be run against a local instance first.
 
 ## Before you start
 
@@ -127,7 +127,7 @@ do {
 } while (cursor);
 ```
 
-`query.limit` is 1 to 50 (default 25). `execute_plan` runs up to eight reads as one request.
+`query.limit` is 1 to 50 (each list operation advertises its default in `describe_operation`, commonly 25). `execute_plan` runs up to eight reads as one request.
 
 ## Change something safely
 

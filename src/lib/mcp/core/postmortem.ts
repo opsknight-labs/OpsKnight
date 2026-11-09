@@ -14,6 +14,33 @@ export const POSTMORTEM_CONTEXT_OPERATIONS = [
   'listPostmortemVersions',
 ] as const;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The newest snapshot is normally the current revision, so it repeated the whole postmortem a
+ * second time (about 40% of a typical result). When it is the same revision its body is replaced
+ * by a marker; an older snapshot, which is real history, is kept as is.
+ */
+function withoutRepeatedSnapshot<T>(postmortem: unknown, versions: T): T {
+  const current = (postmortem as { data?: { data?: { revision?: unknown } } })?.data?.data
+    ?.revision;
+  const page = (versions as { data?: { data?: unknown } })?.data?.data;
+  if (typeof current !== 'number' || !isRecord(page) || !Array.isArray(page.versions))
+    return versions;
+  const trimmed = page.versions.map(version => {
+    if (!isRecord(version) || version.revision !== current || !('snapshot' in version))
+      return version;
+    const { snapshot: _repeated, ...rest } = version;
+    return { ...rest, snapshotOmitted: 'Identical to the current postmortem above.' };
+  });
+  const result = versions as unknown as { data: { data: Record<string, unknown> } };
+  return {
+    ...versions,
+    data: { ...result.data, data: { ...page, versions: trimmed } },
+  } as T;
+}
+
 /** Four bounded reads, each with fresh grant/resource authorization and redaction. */
 export async function getMcpPostmortemContext(context: ExecutionContext, raw: unknown) {
   const { id } = postmortemContextSchema.parse(raw);
@@ -34,7 +61,7 @@ export async function getMcpPostmortemContext(context: ExecutionContext, raw: un
     postmortem,
     actionItems,
     contributors,
-    versions,
+    versions: withoutRepeatedSnapshot(postmortem, versions),
     interpretation: {
       observed: 'Authorized stored records; see each source observation timestamp and revision.',
       inferred: [],

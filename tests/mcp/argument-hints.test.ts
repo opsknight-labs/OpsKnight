@@ -51,3 +51,27 @@ describe('required argument hints', () => {
     }
   });
 });
+
+describe('ifMatch', () => {
+  it('is refused where the operation does not check revisions, and accepted where it does', async () => {
+    const { validateOperationArgs } = await import('@/lib/mcp/core/execution');
+    const key = 'abcdefghijklmnop1234';
+    // addIncidentNote ignores If-Match: a stale value used to be accepted and the note applied.
+    expect(() =>
+      validateOperationArgs('addIncidentNote', {
+        path: { id: 'inc_1' },
+        body: { content: 'a note' },
+        idempotencyKey: key,
+        ifMatch: '"0"',
+      })
+    ).toThrow('MCP_INVALID_ARGUMENTS');
+    // updateService checks revisions: the same field is normalised and kept.
+    // (a reviewed operation, so validated as it is at commit: mode `approved`)
+    const guarded = validateOperationArgs(
+      'updateService',
+      { path: { id: 'svc_1' }, body: { name: 'Renamed' }, idempotencyKey: key, ifMatch: '3' },
+      true
+    );
+    expect(guarded.ifMatch).toBe('"3"');
+  });
+});

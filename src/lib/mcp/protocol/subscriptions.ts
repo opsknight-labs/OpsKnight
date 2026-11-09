@@ -41,20 +41,30 @@ export const mcpEventBus = new InMemoryServerEventBus(error =>
   logger.warn('mcp.subscription.listener_failed', { error: error.message })
 );
 
+/**
+ * Streams one person may hold across all their connections. The per-connection cap alone let one
+ * person with many connections (a personal token allows twenty) fill every slot on the process.
+ */
+export const MAX_STREAMS_PER_USER = 4;
+
 let processStreams = 0;
 const grantStreams = new Map<string, number>();
+const userStreams = new Map<string, number>();
 
 /** Long-lived streams have their own capacity, separate from database-work admission. */
-export function acquireStreamSlot(grantId: string) {
+export function acquireStreamSlot(grantId: string, ownerId?: string) {
   const forGrant = grantStreams.get(grantId) ?? 0;
+  const forUser = ownerId ? (userStreams.get(ownerId) ?? 0) : 0;
   // Process capacity frees as other streams end (at most STREAM_LIFETIME_MS); a retry can fit.
   if (processStreams >= MAX_STREAMS_PER_PROCESS)
     throw new McpBoundaryError('MCP_SUBSCRIPTIONS_BUSY', 503, true, undefined, {
       retryAfterSeconds: 30,
     });
   requireMcp(forGrant < MAX_STREAMS_PER_GRANT, 'MCP_SUBSCRIPTIONS_LIMIT', 429);
+  requireMcp(forUser < MAX_STREAMS_PER_USER, 'MCP_SUBSCRIPTIONS_LIMIT', 429);
   processStreams++;
   grantStreams.set(grantId, forGrant + 1);
+  if (ownerId) userStreams.set(ownerId, forUser + 1);
   setOperationalGauge('opsknight_mcp_subscriptions_active', processStreams);
   let released = false;
   return () => {
@@ -64,6 +74,11 @@ export function acquireStreamSlot(grantId: string) {
     const remaining = (grantStreams.get(grantId) ?? 1) - 1;
     if (remaining > 0) grantStreams.set(grantId, remaining);
     else grantStreams.delete(grantId);
+    if (ownerId) {
+      const left = (userStreams.get(ownerId) ?? 1) - 1;
+      if (left > 0) userStreams.set(ownerId, left);
+      else userStreams.delete(ownerId);
+    }
     setOperationalGauge('opsknight_mcp_subscriptions_active', processStreams);
   };
 }

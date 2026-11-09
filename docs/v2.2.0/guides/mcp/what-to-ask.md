@@ -7,7 +7,7 @@ product_area: mcp
 audience: [responder, administrator]
 verification:
   level: source
-  verified_at: 2026-11-05
+  verified_at: 2026-11-09
   evidence:
     - src/lib/mcp/catalog/capabilities.ts
     - src/lib/mcp/core/execution.ts
@@ -44,13 +44,13 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 
 ### Incident commander
 
-| Ask                                                                               | Uses                                                            | Needs                                                                                          |
-| --------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| "Why did this page go to the database team, and who gets it next?"                | `explain_escalation` prompt, `escalation_explain`               | `escalation-policies:read`                                                                     |
-| "Is the checkout service healthy, and what's its recent incident history?"        | `service_get_health`                                            | `services:read`                                                                                |
-| "What changed on the payments service this week?"                                 | `service_get_changes`                                           | `services:read`, `incidents:read` (config history also needs `audit:read` and sensitive reads) |
-| "Which runbook fits this incident? Show me what it would do, without running it." | `preview_remediation` prompt, `runbook_find`, `runbook_preview` | `runbooks:read`                                                                                |
-| "Prepare that runbook run for approval."                                          | `runbook_prepare_execution`                                     | `runbooks:execute` and the reads it lists, changes allowed                                     |
+| Ask                                                                               | Uses                                                            | Needs                                                                                                                            |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| "Why did this page go to the database team, and who gets it next?"                | `explain_escalation` prompt, `escalation_explain`               | `escalation-policies:read`                                                                                                       |
+| "Is the checkout service healthy, and what's its recent incident history?"        | `service_get_health`                                            | `services:read`, `incidents:read`, `schedules:read`, `escalation-policies:read`, `notifications:read`, `service-objectives:read` |
+| "What changed on the payments service this week?"                                 | `service_get_changes`                                           | `services:read`, `incidents:read` (config history also needs `audit:read` and sensitive reads)                                   |
+| "Which runbook fits this incident? Show me what it would do, without running it." | `preview_remediation` prompt, `runbook_find`, `runbook_preview` | `runbooks:read`, plus `runbooks:execute` for `runbook_preview`                                                                   |
+| "Prepare that runbook run for approval."                                          | `runbook_prepare_execution`                                     | `runbooks:execute` and the reads it lists, changes allowed                                                                       |
 
 ### Team lead
 
@@ -68,7 +68,7 @@ The assistant can only do what you can do in OpsKnight, and only within what you
 | "Review the automation rule on the billing service: what would it do to a new alert?" | `review_automation_rule` prompt, `automation_get_effective`, `read_operation` (simulateAutomation) | `automation:read`                                |
 | "Find the operation that changes a service's support hours and describe it."          | `search_capabilities`, `describe_operation`                                                        | none to search; the operation's own scope to run |
 | "Change the support hours on the billing service to 08:00 to 18:00."                  | `operation_prepare`, then your approval                                                            | `services:write`, changes allowed                |
-| "List every integration on the checkout service."                                     | `read_operation`                                                                                   | `integrations:read`                              |
+| "List every integration on the checkout service."                                     | `read_operation`                                                                                   | `integrations:read`, sensitive reads on          |
 | "Is the checkout webhook integration failing deliveries?"                             | `read_operation` (getIntegrationDiagnostics)                                                       | `integrations:read`                              |
 | "Who changed the payments escalation policy last week?"                               | `read_operation` (listAuditLogs), sensitive reads on                                               | `audit:read` (Administrators and Auditors)       |
 
@@ -76,7 +76,7 @@ If a request needs a permission the connection was not granted, the assistant ge
 
 ## "Assigned to me"
 
-Assistants do not know who you are until they ask. Incident lists accept `assigneeId: "me"`, which the server resolves to you. For anything else, assistants call `whoami` first: it returns your user id, display name, role, teams, effective permissions, whether changes and sensitive reads are on, and the enabled tools. It never returns your email address.
+Assistants do not know who you are until they ask. Incident lists accept `assigneeId: "me"`, which the server resolves to you. In a direct call, `"me"` also works for `assigneeId` in `incident_assign` and `incident_create` and for `userId` in `incident_watch`; a reviewed change keeps exactly the arguments the reviewer saw. For anything else, assistants call `whoami` first: it returns your user id, display name, role, teams, effective permissions, whether changes and sensitive reads are on, and the enabled tools. It never returns your email address.
 
 ## Annotated sessions
 

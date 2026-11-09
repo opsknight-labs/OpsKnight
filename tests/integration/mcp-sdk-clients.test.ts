@@ -169,6 +169,38 @@ describe('published SDK client handshakes', () => {
     expect(await contentTypes('2025-06-18')).toContain('resource_link');
   });
 
+  it('accepts the Bearer scheme and the JSON media type in any letter case', async () => {
+    // RFC 9110: both are case-insensitive. Some HTTP stacks send "bearer" or "Application/JSON".
+    const { bearer } = await principal();
+    const response = await POST(
+      new Request(mcpResource(), {
+        method: 'POST',
+        headers: {
+          authorization: `bearer ${bearer}`,
+          'content-type': 'Application/JSON; charset=utf-8',
+          accept: 'application/json, text/event-stream',
+          'mcp-protocol-version': '2025-06-18',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+      })
+    );
+    expect(response.status).toBe(200);
+    // The token is still exact: a changed character is refused.
+    const wrong = await POST(
+      new Request(mcpResource(), {
+        method: 'POST',
+        headers: {
+          authorization: `bearer ${bearer.slice(0, -1)}${bearer.endsWith('A') ? 'B' : 'A'}`,
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          'mcp-protocol-version': '2025-06-18',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+      })
+    );
+    expect(wrong.status).toBe(401);
+  });
+
   it('answers a missing bearer with a resource-metadata challenge, not a protocol error', async () => {
     const response = await POST(
       new Request(mcpResource(), {

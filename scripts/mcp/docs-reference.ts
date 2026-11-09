@@ -37,7 +37,7 @@ import { MCP_TOOLS_PAGE, renderTools } from './docs-tools';
 
 export const MCP_DOCS_ROOT = 'docs/v2.2.0';
 /** Date the hand-written explanations below were last checked against the code. */
-export const MCP_DOCS_VERIFIED_AT = '2026-11-04';
+export const MCP_DOCS_VERIFIED_AT = '2026-11-09';
 export const MCP_TROUBLESHOOTING_PAGE = `${MCP_DOCS_ROOT}/guides/mcp/troubleshooting.md`;
 export const MCP_PERMISSIONS_PAGE = `${MCP_DOCS_ROOT}/reference/mcp/permissions.md`;
 export const MCP_MONITORING_PAGE = `${MCP_DOCS_ROOT}/operate/mcp/monitoring.md`;
@@ -143,8 +143,14 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   MCP_BUSY: {
     area: 'tools',
     meaning:
-      'The server is at its concurrent-request limit and the request waited too long in the queue (or the queue is full, or this connection already uses half the slots).',
+      "The server is at its concurrent-request limit and the request waited too long in the queue (or the queue is full, or the person's connections already hold half the slots between them).",
     fix: 'Retry after the Retry-After interval (1 second). Administrators can raise Concurrent requests per process under Workload limits.',
+  },
+  MCP_CONTENTION: {
+    area: 'tools',
+    meaning:
+      'Another request changed the same record at the same moment and the database turned this one back after its own retries.',
+    fix: 'Read the current state, then try again. Reuse the same idempotencyKey for a change so a replay never applies it twice.',
   },
   MCP_CANCELLED: {
     area: 'tools',
@@ -409,7 +415,8 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   },
   MCP_INVALID_REDIRECT: {
     area: 'settings',
-    meaning: 'A manual registration redirect URI is not HTTPS or loopback HTTP.',
+    meaning:
+      'A manual registration redirect URI is not HTTPS, loopback HTTP or a native app scheme (a reverse-DNS scheme, or cursor, vscode, vscode-insiders or windsurf).',
     fix: 'Enter the exact callback the assistant uses.',
   },
   MCP_INVALID_RESOURCE_ID: {
@@ -468,7 +475,7 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   MCP_OPERATION_DISABLED: {
     area: 'tools',
     meaning: 'Changes or sensitive reads are turned off in Access policy.',
-    fix: 'An administrator turns on reviewed actions or sensitive reads under Advanced.',
+    fix: 'An administrator turns on reviewed actions or sensitive reads under Access policy → Reviewed actions.',
   },
   MCP_OPERATION_FORBIDDEN: {
     area: 'tools',
@@ -504,8 +511,8 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   MCP_RATE_LIMITED: {
     area: 'sign-in',
     meaning:
-      'Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person.',
-    fix: 'Wait a minute and retry.',
+      'A rate limit was hit: the connection or person quota on /mcp (HTTP 429 with Retry-After), too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person, too many sign-in requests from one network address, or a network address that keeps sending invalid bearer tokens (30 a minute).',
+    fix: 'Wait for the Retry-After interval (at most a minute) and retry. For a steady /mcp 429, an administrator raises Weighted operations per minute per grant under Workload limits, or checks the per-person cap.',
   },
   MCP_PAT_DISABLED: {
     area: 'settings',
@@ -532,7 +539,7 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   MCP_REGISTRATION_CAPACITY: {
     area: 'sign-in',
     meaning: 'The registry already holds 5,000 automatically registered assistants.',
-    fix: 'Retry later; unused registrations are cleaned up after an hour.',
+    fix: 'Retry later. When the registry is full, the oldest registration never used to sign in (and older than an hour) is replaced; unused registrations are also deleted after 30 days.',
   },
   MCP_REGISTRATION_DISABLED: {
     area: 'sign-in',
@@ -870,7 +877,7 @@ export function renderTroubleshooting(repoRoot = process.cwd()) {
     '- **A permission was granted but the tool still fails:** compare the connection\'s usable permissions on the Connections tab ("N of M usable"). The effective set is the grant ∩ the current ceiling ∩ the person\'s role, minus disabled capabilities.',
     '- **503 with `MCP_BUSY`:** the concurrent-request limit was reached; the client retries after the `Retry-After` interval.',
     '- **Works in a browser but not in a cloud assistant:** check that the cloud assistant can reach your host and trusts its TLS certificate.',
-    '- **An approval expired:** prepare it again with a new `idempotencyKey`; lengthen the review or commit window under **Access policy → Advanced** if reviewers need more time.',
+    '- **An approval expired:** prepare it again with a new `idempotencyKey`; lengthen the review or commit window under **Access policy → Reviewed actions** if reviewers need more time.',
     ''
   );
   return lines.join('\n');

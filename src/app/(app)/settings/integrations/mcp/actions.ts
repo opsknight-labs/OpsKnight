@@ -1,5 +1,6 @@
 'use server';
 
+import { policyAuditDetails } from './policy-audit';
 import { isAllowedRedirect, redirectUriAllowed } from '@/lib/mcp/auth/redirect-uri';
 import { logAudit } from '@/lib/audit';
 import OAuth2Server from '@node-oauth/oauth2-server';
@@ -145,7 +146,7 @@ export async function enableMcpQuickSetup(): Promise<McpReauthenticationRequired
         entityType: 'SYSTEM_CONFIG',
         actorId: actor.id,
         details: {
-          ...(existing ? update : policy),
+          ...policyAuditDetails(existing ? update : policy),
           quickSetup: true,
           reenabled: Boolean(existing),
         },
@@ -461,7 +462,7 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
         entityType: 'SYSTEM_CONFIG',
         actorId: actor.id,
         details: {
-          ...policy,
+          ...policyAuditDetails(policy),
           policyRevision: saved.policyRevision,
           ...(revokedPersonalTokens ? { revokedPersonalTokens } : {}),
         },

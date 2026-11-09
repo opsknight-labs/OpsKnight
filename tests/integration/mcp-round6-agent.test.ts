@@ -41,6 +41,23 @@ describe('oncall_for_service by name', () => {
     expect(result.note).toMatch(/serviceId/);
   });
 
+  it('says so when exactly one service is close but not exact, and quotes the echoed name', async () => {
+    const caller = await principal('RESPONDER', ['services:read', 'schedules:read']);
+    const only = await createTestService(`Solo ${unique()} Worker`);
+    const result = (await getMcpOncallForService(caller.ctx(), {
+      serviceName: only.name.slice(0, only.name.length - 7),
+    })) as { candidates: { id: string }[]; note: string };
+    expect(result.candidates.map(candidate => candidate.id)).toEqual([only.id]);
+    expect(result.note).toMatch(/One service is close but not an exact match/);
+    expect(result.note).not.toMatch(/More than one/);
+    const odd = (await getMcpOncallForService(caller.ctx(), {
+      serviceName: `x"\ny ${unique()}`,
+    })) as { note: string };
+    // One quoted line: the quote and newline are escaped, not echoed raw.
+    expect(odd.note).toContain('\\"');
+    expect(odd.note).not.toContain('\n');
+  });
+
   it('says so when nothing matches, and offers service_list', async () => {
     const caller = await principal('RESPONDER', ['services:read', 'schedules:read']);
     const result = (await getMcpOncallForService(caller.ctx(), {

@@ -117,3 +117,31 @@ describe('UX-6 before/after view of a reviewed change', () => {
     expect(mcpOperationDigest('updateService', frozen)).toBe(digest);
   });
 });
+
+describe('what the reviewer is shown, against what the digest binds', () => {
+  it('says how many list members are not shown, and flags the summary as cut short', () => {
+    const summary = reviewSummary('setTeamLead', {
+      path: { id: 'team_1' },
+      body: { userIds: Array.from({ length: 50 }, (_, index) => `user_${index}`) },
+    } as never);
+    expect(summary.changes.at(-1)).toEqual(['userIds[…]', '[10 more items not shown]']);
+    expect(summary.truncated).toBe(true);
+    expect(summary.changes.length).toBeLessThan(80);
+  });
+
+  it('never calls an edit unchanged when the only difference sits in a redacted part', () => {
+    const changes = reviewSummary('updateService', {
+      path: { id: 'svc_1' },
+      body: { webhook: 'https://hooks.example.com/x?key=ATTACKER', name: 'Same' },
+    } as never).changes;
+    // The stored value differs only in the query string the redaction pass strips.
+    const diff = reviewDiff(changes, {
+      webhook: 'https://hooks.example.com/x?key=OLD',
+      name: 'Same',
+    });
+    const webhook = diff.find(row => row.field === 'webhook')!;
+    expect(webhook.status).toBe('not_compared');
+    expect(webhook.after).toContain('[part not shown]');
+    expect(diff.find(row => row.field === 'name')!.status).toBe('unchanged');
+  });
+});

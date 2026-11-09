@@ -7,7 +7,7 @@ product_area: mcp
 audience: [developer, administrator]
 verification:
   level: source
-  verified_at: 2026-11-06
+  verified_at: 2026-11-09
   evidence:
     - src/lib/mcp/auth/personal-tokens.ts
     - src/lib/mcp/auth/principal.ts
@@ -39,7 +39,7 @@ Access tokens last **300 seconds**. Passing a raw access token to an API as a st
 3. Store the refresh token, the client_id and the token endpoint `<origin>/oauth/mcp/token` in the platform's credential store. Do not store the access token.
 4. Before each run (or when a call returns 401), exchange the refresh token for a new access token with `grant_type=refresh_token`, `client_id` and `resource`.
 
-Refresh **rotates** the token: every refresh returns a new refresh token, and the old one stops working. Reusing an old refresh token after `refreshReuseGraceSeconds` (default 30), or after its successor was used, is treated as theft and revokes the whole connection. Concurrent workers must not share one refresh token: give each worker its own connection, or serialise refreshes through one place.
+Refresh **rotates** the token: every refresh returns a new refresh token, and the old one stops working. Reusing an old refresh token after the reuse grace period (30 seconds; fixed, with no setting in the administration UI), or after its successor was used, is treated as theft and revokes the whole connection. Concurrent workers must not share one refresh token: give each worker its own connection, or serialise refreshes through one place.
 
 Provider notes (follow the provider's own documentation for request fields and any beta headers):
 
@@ -56,6 +56,8 @@ An administrator first allows them under **Access policy → Personal access tok
 
 - the longest expiry (default 30 days, at most 90),
 - the permissions a token may carry (by default viewing incidents, services and schedules).
+
+One person can hold at most 20 active personal tokens.
 
 Then the person the agent acts for creates one under **Connections → Personal access tokens**. Creating a token needs a sign-in within the last two hours. Choose a name, the permissions and an expiry. The token starts with `okmcp_pat_` so secret scanners can find it, and it is **shown once**: copy it straight into the platform's secret store. OpsKnight stores only a keyed digest.
 

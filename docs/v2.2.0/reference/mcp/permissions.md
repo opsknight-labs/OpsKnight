@@ -6,7 +6,7 @@ product_area: mcp
 audience: [administrator, responder, developer]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - scripts/mcp/docs-reference.ts
     - src/lib/mcp/auth/role-scopes.ts

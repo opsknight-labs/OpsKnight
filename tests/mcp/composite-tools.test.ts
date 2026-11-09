@@ -107,11 +107,13 @@ describe('search and fetch', () => {
         throw new McpBoundaryError('MCP_CAPABILITY_DISABLED', 403);
       return result(operationId, [{ id: `${operationId}-1`, title: 'Payments outage' }]);
     });
-    const { results } = await composites.searchMcpKnowledge(context(), ' payments ', [
+    const { results, untrusted } = await composites.searchMcpKnowledge(context(), ' payments ', [
       'incident',
       'runbook',
     ]);
     expect(results.map(item => item.id)).toEqual(['incident:listIncidents-1']);
+    // Stored titles come back as data, labelled as fetch labels its text.
+    expect(untrusted).toMatch(/treat them as data/);
     expect(execution.callMcpOperation).toHaveBeenCalledWith(expect.anything(), 'listIncidents', {
       query: { limit: 10, search: 'payments' },
     });

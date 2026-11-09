@@ -102,6 +102,16 @@ describe('compactResult', () => {
     expect(compactResult({ data: null, evidence })).toEqual({ data: null, evidence });
   });
 
+  it('keeps an empty onCallUsers, because nobody being on call is the answer', () => {
+    const evidence = { warnings: [] as string[] };
+    expect(
+      compactResult({
+        data: { schedule: { id: 's' }, onCallUsers: [], next: null, other: [] },
+        evidence,
+      })
+    ).toEqual({ data: { schedule: { id: 's' }, onCallUsers: [] }, evidence });
+  });
+
   it('keeps a __proto__ key from domain JSON as an own member', () => {
     const parsed = JSON.parse('{"data":{"__proto__":{"polluted":true},"x":1}}');
     const compact = compactResult(parsed) as { data: Record<string, unknown> };
