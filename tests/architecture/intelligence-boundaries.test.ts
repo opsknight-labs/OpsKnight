@@ -57,6 +57,34 @@ describe('intelligence architecture boundaries', () => {
     }
   });
 
+  it('limits the ingestion hook surface to the wake hint and the bounded noise-control hook', () => {
+    const hooks = read(join(intelligenceDir, 'ingest-hooks.ts'));
+    const sources = [...hooks.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1]).sort();
+    expect(sources).toEqual(['./jobs/wake-publisher', './noise-controls/ingest']);
+    // Everything the pre-paging hook can reach uses no model, no network and no analysis internals.
+    for (const file of [
+      'noise-controls/ingest.ts',
+      'noise-controls/evaluate.ts',
+      'noise-controls/cache.ts',
+      'noise-controls/matchers.ts',
+      'noise-controls/recurrence.ts',
+      'noise-controls/contract.ts',
+      'noise-controls/decisions.ts',
+    ]) {
+      expect(read(join(intelligenceDir, file)), file).not.toMatch(
+        /\bfetch\(|from\s+['"](?:ai|@ai-sdk\/[^'"]+)['"]|\/(?:ai|squire|analysis|correlation|similarity|semantic)\//
+      );
+    }
+    // Its reads run under a savepoint with a server-side statement timeout and are always rolled back,
+    // so a slow or failing lookup can neither hold nor abort the event transaction.
+    const ingest = read(join(intelligenceDir, 'noise-controls/ingest.ts'));
+    expect(ingest).toMatch(/SAVEPOINT \$\{SAVEPOINT\}/);
+    expect(ingest).toMatch(/set_config\('statement_timeout'/);
+    expect(ingest).toMatch(/ROLLBACK TO SAVEPOINT \$\{SAVEPOINT\}/);
+    // Re-ingesting a reversed decision must page, so it is never re-evaluated.
+    expect(ingest).toMatch(/NOISE_CONTROL_REVERSAL_INTEGRATION_ID\) return null/);
+  });
+
   it('keeps similarity, correlation and AI work out of the event outbox and job queue core', () => {
     for (const file of ['src/lib/event-outbox.ts', 'src/lib/jobs/queue.ts']) {
       expect(read(join(root, file))).not.toMatch(/@\/lib\/intelligence/);

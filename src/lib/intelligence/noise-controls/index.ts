@@ -53,3 +53,4 @@ export {
 export type { NoiseControlKpis } from './kpis';
 export type { PrePagingDecisionRow, ReversalOutcome } from './decisions';
 export { getNoiseControlKpis } from './kpis';
+export { setPrePagingDeadlineMs } from './ingest';

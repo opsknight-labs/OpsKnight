@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { loadActiveEdges } from '../dependencies/service';
 import { topologyScope } from '../dependencies/graph';
 import {
+  GLOBAL_NOISE_SCOPE_KEY,
   PREPAGING_LIMITS,
   noiseControlDefinitionSchema,
   type Matcher,
@@ -125,6 +126,20 @@ export async function loadPrePagingSnapshot(
   }
   const compiledPolicies = new Map<string, CompiledPolicy>();
   for (const row of policies) compiledPolicies.set(row.scopeKey, compilePolicy(row));
+  // A service switched OFF must not inherit an active global policy, so its OFF row is kept as an
+  // explicit override. Only loaded when a global policy is active; otherwise OFF rows are irrelevant.
+  if (compiledPolicies.has(GLOBAL_NOISE_SCOPE_KEY)) {
+    const overrides = await client.noiseControlPolicy.findMany({
+      where: { mode: 'OFF', serviceId: { not: null } },
+      select: { scopeKey: true, serviceId: true, revision: true },
+      take: 20_000,
+    });
+    for (const row of overrides)
+      compiledPolicies.set(
+        row.scopeKey,
+        compilePolicy({ ...row, mode: 'OFF', definition: { schemaVersion: 1 } })
+      );
+  }
   const topology = new Map<string, readonly string[]>();
   if (
     [...compiledPolicies.values()].some(
@@ -249,6 +264,128 @@ export function prismaLookups(tx: Pick<Prisma.TransactionClient, '$queryRaw'>): 
           AND ("dedupKey" = ${key.dedupKey} OR (${key.fingerprintHash}::text IS NOT NULL AND "fingerprintHash" = ${key.fingerprintHash}))
         ORDER BY "createdAt" DESC LIMIT ${limit}`);
       return rows.map(row => row.status);
+    },
+  };
+}
+
+/** The exact reads the evaluator will make for one alert, derived from the policy before it runs. */
+export interface PrePagingLookupPlan {
+  serviceId: string;
+  dedup: { fingerprintHash: string; since: Date } | null;
+  flapping: { dedupKey: string; fingerprintHash: string | null; since: Date; limit: number } | null;
+  storm: { serviceIds: readonly string[]; since: Date } | null;
+}
+
+interface PrefetchedRow {
+  dedup: { id: string; labels: unknown } | null;
+  statuses: string[] | null;
+  stormCount: bigint | number | null;
+  stormParent: string | null;
+}
+
+function labelsOf(raw: unknown): Record<string, string> | null {
+  return raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? Object.fromEntries(
+        Object.entries(raw as Record<string, unknown>).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string'
+        )
+      )
+    : null;
+}
+
+/**
+ * The same index-backed reads as `prismaLookups`, fetched in ONE round trip on first use and served from
+ * memory afterwards. A call whose arguments differ from the plan falls back to its own query, so the
+ * answers are always exactly what `prismaLookups` would return.
+ */
+export function prefetchedLookups(
+  tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+  plan: PrePagingLookupPlan
+): PrePagingLookups {
+  const base = prismaLookups(tx);
+  const none = Prisma.sql`NULL`;
+  const dedup = plan.dedup
+    ? Prisma.sql`(SELECT json_build_object('id', i."id", 'labels', f."labels") FROM "Alert" a
+        JOIN "Incident" i ON i."id" = a."incidentId"
+        LEFT JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
+        WHERE a."serviceId" = ${plan.serviceId} AND a."fingerprintHash" = ${plan.dedup.fingerprintHash}
+          AND a."createdAt" >= ${plan.dedup.since}
+          AND i."status" IN ('OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED')
+        ORDER BY a."createdAt" DESC LIMIT 1)`
+    : none;
+  const statuses = plan.flapping
+    ? Prisma.sql`(SELECT coalesce(json_agg(s."status" ORDER BY s."createdAt" DESC), '[]'::json) FROM (
+        SELECT "status", "createdAt" FROM "Alert"
+        WHERE "serviceId" = ${plan.serviceId} AND "createdAt" >= ${plan.flapping.since}
+          AND ("dedupKey" = ${plan.flapping.dedupKey} OR (${plan.flapping.fingerprintHash}::text IS NOT NULL AND "fingerprintHash" = ${plan.flapping.fingerprintHash}))
+        ORDER BY "createdAt" DESC LIMIT ${plan.flapping.limit}) s)`
+    : none;
+  const stormCount = plan.storm
+    ? Prisma.sql`(SELECT count(*) FROM "Incident"
+        WHERE "serviceId" = ANY(${[...plan.storm.serviceIds]}::text[]) AND "createdAt" >= ${plan.storm.since})`
+    : none;
+  const stormParent = plan.storm
+    ? Prisma.sql`(SELECT "id" FROM "Incident"
+        WHERE "serviceId" = ANY(${[...plan.storm.serviceIds]}::text[]) AND "createdAt" >= ${plan.storm.since}
+          AND "status" IN ('OPEN', 'ACKNOWLEDGED')
+        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)`
+    : none;
+  let fetched: Promise<PrefetchedRow> | null = null;
+  const prefetch = () =>
+    (fetched ??= tx
+      .$queryRaw<PrefetchedRow[]>(
+        Prisma.sql`SELECT ${dedup} AS "dedup", ${statuses} AS "statuses",
+          ${stormCount} AS "stormCount", ${stormParent} AS "stormParent"`
+      )
+      .then(rows => rows[0]));
+  const sameScope = (a: readonly string[], b: readonly string[]) =>
+    a.length === b.length && a.every((id, index) => id === b.at(index));
+  return {
+    async findOpenIncidentByFingerprint(serviceId, fingerprintHash, since) {
+      const planned = plan.dedup;
+      if (
+        !planned ||
+        serviceId !== plan.serviceId ||
+        fingerprintHash !== planned.fingerprintHash ||
+        since.getTime() !== planned.since.getTime()
+      )
+        return base.findOpenIncidentByFingerprint(serviceId, fingerprintHash, since);
+      const row = (await prefetch()).dedup;
+      return row ? { id: row.id, labels: labelsOf(row.labels) } : null;
+    },
+    async recentAlertStatuses(serviceId, key, since, limit) {
+      const planned = plan.flapping;
+      if (
+        !planned ||
+        serviceId !== plan.serviceId ||
+        key.dedupKey !== planned.dedupKey ||
+        key.fingerprintHash !== planned.fingerprintHash ||
+        since.getTime() !== planned.since.getTime() ||
+        limit !== planned.limit
+      )
+        return base.recentAlertStatuses(serviceId, key, since, limit);
+      return (await prefetch()).statuses ?? [];
+    },
+    async countRecentIncidents(serviceIds, since) {
+      const planned = plan.storm;
+      if (
+        !planned ||
+        !sameScope(serviceIds, planned.serviceIds) ||
+        since.getTime() !== planned.since.getTime()
+      )
+        return base.countRecentIncidents(serviceIds, since);
+      return Number((await prefetch()).stormCount ?? 0);
+    },
+    async findStormParent(serviceIds, since) {
+      const planned = plan.storm;
+      if (
+        !planned ||
+        !sameScope(serviceIds, planned.serviceIds) ||
+        since.getTime() !== planned.since.getTime()
+      )
+        return base.findStormParent(serviceIds, since);
+      const id = (await prefetch()).stormParent;
+      return id ? { id } : null;
     },
   };
 }
