@@ -358,6 +358,27 @@ export async function enqueueEventSideEffects(
     automationDecision
   );
 }
+/**
+ * A pre-paging storm child pages through its parent: no escalation, webhook, status page or war room of
+ * its own. Only the service-channel post is queued, and the notification noise controller rolls it up
+ * under the parent's post.
+ */
+export async function enqueueStormChildSideEffects(
+  tx: Prisma.TransactionClient,
+  incidentId: string,
+  incidentSnapshot: { escalationGeneration?: number | null; status?: IncidentStatus | null }
+): Promise<void> {
+  await enqueueSideEffects(
+    tx,
+    incidentId,
+    ['TRIGGER_SERVICE_NOTIFICATION'],
+    undefined,
+    undefined,
+    undefined,
+    incidentSnapshot,
+    null
+  );
+}
 export async function enqueueIncidentUpdateSideEffects(
   tx: Prisma.TransactionClient,
   incidentId: string,
