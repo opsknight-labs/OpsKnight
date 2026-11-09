@@ -31,6 +31,8 @@ import {
 } from '../core/execution';
 import { executeMcpPlan, planSchema } from '../core/plan';
 import { McpBoundaryError, requireMcp } from '../core/errors';
+import { ERROR_REGISTRY } from '@/lib/errors';
+import { isRetryableTransactionError } from '@/lib/db-utils';
 import { canUseReviewedRunbooks } from '../approvals/policy';
 import { POSTMORTEM_CONTEXT_OPERATIONS } from '../core/postmortem';
 import { resolveDisabledMcpCapabilities } from '../catalog/capabilities';
@@ -212,6 +214,7 @@ const KNOWLEDGE_OUTPUT = {
           },
         },
       },
+      untrusted: { type: 'string' },
     },
   }),
   fetch: fromJsonSchema({
@@ -520,7 +523,56 @@ export function toolErrorResult(text: string, error: unknown, requestId: string)
 /** Room for the JSON-RPC envelope around a tool result within the response budget. */
 const RESULT_ENVELOPE_RESERVE = 1024;
 
-function toolError(context: ExecutionContext, tool: string, error: unknown) {
+/**
+ * An invalid argument or a refused domain rule from inside a composite or an approval step is the
+ * caller's to fix, not a fault of ours: it used to surface as a bare MCP_UNAVAILABLE and be logged
+ * at error level. Only the offending path and rule code are used, never a value.
+ */
+function asCallerError(error: unknown): unknown {
+  if (error instanceof McpBoundaryError) return error;
+  const named = error as { name?: unknown; issues?: unknown; code?: unknown; status?: unknown };
+  if (named?.name === 'ZodError' && Array.isArray(named.issues) && named.issues.length) {
+    const first = named.issues[0] as { path?: unknown; code?: unknown };
+    const path = (Array.isArray(first.path) ? first.path : [])
+      .filter(
+        (part): part is string | number => typeof part === 'string' || typeof part === 'number'
+      )
+      .map(String)
+      .filter(part => /^[A-Za-z0-9_-]{1,64}$/.test(part));
+    const rule =
+      typeof first.code === 'string' && /^[a-z_]{1,40}$/.test(first.code) ? first.code : 'invalid';
+    return new McpBoundaryError(
+      'MCP_INVALID_ARGUMENTS',
+      400,
+      false,
+      `${path.length ? `/${path.join('/')}` : 'The arguments'} are not valid (${rule}). See describe_operation for the allowed shape.`
+    );
+  }
+  if (
+    named?.name === 'AppError' &&
+    typeof named.code === 'string' &&
+    Object.hasOwn(ERROR_REGISTRY, named.code) &&
+    typeof named.status === 'number' &&
+    named.status >= 400 &&
+    named.status < 500
+  )
+    return new McpBoundaryError('MCP_DOMAIN_REJECTED', named.status, false, undefined, {
+      domainCode: named.code,
+    });
+  // Two requests changed the same record at once and the database refused this one after its own
+  // retries. That is the caller's to retry, not an internal fault.
+  if (isRetryableTransactionError(error))
+    return new McpBoundaryError(
+      'MCP_CONTENTION',
+      409,
+      true,
+      'Another request changed the same record at the same moment. Read the current state and try again with the same idempotencyKey.'
+    );
+  return error;
+}
+
+function toolError(context: ExecutionContext, tool: string, rawError: unknown) {
+  const error = asCallerError(rawError);
   // Expected refusals are the assistant's to handle; anything else is ours, so log it once.
   if (!(error instanceof McpBoundaryError) || error.status >= 500) {
     logger.error('mcp.tool.unexpected_error', {

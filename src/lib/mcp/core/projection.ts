@@ -50,6 +50,14 @@ function safeUrl(raw: string) {
   }
 }
 
+/**
+ * An email address inside free text (a timeline line such as "Could not invite user (x@y.io)").
+ * Redaction by field name never saw these. Bounded repetitions keep the match linear; the second
+ * pattern catches an address cut off by a stored title's "..." before its domain ends.
+ */
+const EMAIL_TEXT = /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}\.[A-Za-z0-9.-]{0,190}[A-Za-z]{2,24}/g;
+const EMAIL_TEXT_CUT = /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?=\.{2,}|\u2026)/g;
+
 export function projectMcpData(
   value: unknown,
   redacted: string[] = [],
@@ -84,7 +92,9 @@ export function projectMcpData(
     // Suppress bearer material and URLs that may convey credential access.
     const safe = sanitizeOutputText(stripInvisibleText(value))
       .replace(/\b(?:Bearer\s+\S+|ok_[A-Za-z0-9_-]{16,})/gi, '[REDACTED]')
-      .replace(/https?:\/\/[^\s<>"']+/gi, safeUrl);
+      .replace(/https?:\/\/[^\s<>"']+/gi, safeUrl)
+      .replace(EMAIL_TEXT, '[REDACTED_EMAIL]')
+      .replace(EMAIL_TEXT_CUT, '[REDACTED_EMAIL]');
     if (safe !== value) redacted.push(path);
     return safe;
   }
@@ -110,6 +120,26 @@ export function summarizeRedactions(paths: readonly string[]) {
 export const MCP_FIELD_ALLOWLISTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['listUsers', new Set(['id', 'name', 'role', 'status', 'teams'])],
   ['getUser', new Set(['id', 'name', 'role', 'status', 'teams'])],
+  // A list is for finding one: summaries only. The whole body (timeline, five whys, contributing
+  // factors, action items) is 35 KB for eight postmortems; postmortem_get reads one in full.
+  [
+    'listPostmortems',
+    new Set([
+      'id',
+      'revision',
+      'incidentId',
+      'incident',
+      'title',
+      'summary',
+      'status',
+      'isPublic',
+      'publishedAt',
+      'createdAt',
+      'updatedAt',
+      'createdById',
+      'createdBy',
+    ]),
+  ],
   [
     'listAuditLogs',
     new Set([

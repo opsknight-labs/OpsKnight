@@ -472,14 +472,14 @@ export default function McpPolicySection({
                   required
                 />
                 <p id="mcp-max-operations-help" className="text-xs text-muted-foreground">
-                  Up to {MCP_MAX_OPERATIONS}. Composite tools use several (incident context 3,
+                  Up to {MCP_MAX_OPERATIONS}. Composite tools use several (incident context 4,
                   postmortem context 4).
                 </p>
                 {policy.maxOperations < 4 && (
                   <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
                     {policy.maxOperations < 3
-                      ? 'Below 3, incident_get_context, postmortem_get_context and approval commits stop working.'
-                      : 'Below 4, postmortem_get_context stops working.'}
+                      ? 'Below 3, approval commits stop working, and so do incident_get_context and postmortem_get_context (they need 4).'
+                      : 'Below 4, incident_get_context and postmortem_get_context stop working.'}
                   </p>
                 )}
               </div>

@@ -68,6 +68,8 @@ const REASONS = new Map<string, Blocked>([
 
 /** Expected reasons a person cannot review a request; anything else is a real failure. */
 export function reviewBlockedReason(error: unknown): Blocked | null {
+  // A link whose id is not even the right shape (typed by hand, cut off) is a missing request.
+  if (error instanceof Error && error.name === 'ZodError') return 'unavailable';
   const code =
     error instanceof McpBoundaryError ? error.code : error instanceof Error ? error.message : '';
   return REASONS.get(code) ?? null;

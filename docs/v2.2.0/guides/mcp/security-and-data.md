@@ -7,7 +7,7 @@ product_area: mcp
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-11-05
+  verified_at: 2026-11-09
   evidence:
     - src/lib/mcp/core/projection.ts
     - src/lib/mcp/auth/effective-access.ts
@@ -51,6 +51,7 @@ Results pass through a recursive projection before they leave the server. It rem
 - <!-- generated:mcp-redacted-fields -->Any field whose name contains `secret`, `password`, `token`, `credential`, `authorization`, `apikey` (with or without a separator), `signedurl` (with or without a separator), `email`, `phone`, `payload`, `rawOutput`, `stdout`, `stderr` (in any letter case), and any field named exactly `definition`, `config`, `inputValues`, `executionPlan`, `environment`, `env`.<!-- /generated:mcp-redacted-fields -->
 - Bearer tokens and OpsKnight API keys inside text.
 - URLs that carry credentials or a query string (they may grant access).
+- Email addresses inside text, such as a timeline line saying a war-room invitation to `name@example.com` failed; each becomes `[REDACTED_EMAIL]`, and the result's `redactedFields` lists where.
 
 People directory and audit reads go further: they keep only reviewed fields before that projection runs. `listUsers` and `getUser` return id, name, role, status and teams, never email, phone, time zone, department or job title, and an assistant’s `listUsers` search matches names only, so it cannot test whether an email address belongs to someone. `listAuditLogs` (Administrators and Auditors, sensitive reads on) drops the actor's email and IP address. Audit and report exports are not available to assistants.
 
@@ -58,8 +59,8 @@ Secrets typed into free text are not detected. A password pasted into an inciden
 
 ## What OpsKnight stores and logs
 
-- **Connections:** grant, token and consent metadata. Tokens are stored only as keyed HMAC digests, never as bearer strings. Expired grant, code, token and consent records are removed after a seven-day replay-detection window.
-- **Reviewed changes:** the frozen request is stored as an encrypted envelope until it is committed, rejected or expires; unused runbook previews follow the native preview retention window (30 days after expiry).
+- **Connections:** grant, token and consent metadata. Tokens are stored only as keyed HMAC digests, never as bearer strings. Expired grant, code, token and consent records are removed after a seven-day replay-detection window. Automatically registered assistants that never signed anyone in are deleted after 30 days.
+- **Reviewed changes:** the frozen request is stored as an encrypted envelope until it is committed, rejected or expires; unused runbook previews follow the native preview retention window (30 days after expiry). Finished approval records (committed, failed, rejected or expired) are deleted 90 days after the request; the `mcp.operation.*` audit events remain.
 - **Audit log:** consent, connection and client revocation, policy changes, exports of the usage log (`mcp.usage.exported`), approvals and committed changes, and sensitive reads (`mcp.sensitive_read`).
 - **Request log:** one row per request with the tool, the outcome, how long it took, the request id, an error code and the ids of the assistant and the person. It never holds arguments, results or free text, and it is kept for 30 days unless an administrator sets 7 to 365 days under Access policy. Administrators read it on the **Usage** tab (calls, failures and slowest 5% by tool, assistant or person) and can export it as CSV or JSON; each export is audited.
 - **Server log:** <!-- generated:mcp-log-events -->The server writes 24 MCP log events: `mcp.authorize.client_denied`, `mcp.authorize.invalid_request`, `mcp.authorize.unexpected_error`, `mcp.call_log.write_failed`, `mcp.cimd.client_denied`, `mcp.cimd.client_id_rejected`, `mcp.cimd.document_rejected`, `mcp.cimd.fetch_failed`, `mcp.device.client_denied`, `mcp.device.unexpected_error`, `mcp.grant.last_call_failed`, `mcp.register.unexpected_error`, `mcp.request.completed`, `mcp.request.unexpected_error`, `mcp.revoke.unexpected_error`, `mcp.sensitive_read.audit_failed`, `mcp.subscription.access_lost`, `mcp.subscription.listener_failed`, `mcp.subscription.poll_failed`, `mcp.token.grace_reissued`, `mcp.token.refresh_reuse_revoked`, `mcp.token.transient`, `mcp.token.unexpected_error`, `mcp.tool.unexpected_error`. Each is explained in [troubleshooting](troubleshooting.md#server-log-events).<!-- /generated:mcp-log-events --> Log lines never contain tokens, secrets or tool arguments.
@@ -69,9 +70,9 @@ The only outbound request OpsKnight makes for MCP is fetching an assistant's cli
 ## Controls
 
 - **Enable MCP** (Access policy) turns every MCP surface off at once; `MCP_FORCE_DISABLED=true` does the same from the deployment, whatever the stored policy says.
-- **Allow sensitive reads** is off by default.
+- **Allow reviewed sensitive configuration reads** is off by default.
 - **Changes** are off by default; configuration changes and runbook runs always wait for a person to approve them in OpsKnight, and an assistant can never approve.
 - **Exposed capabilities** turns off individual tools, operations or whole areas.
-- **Revoke** one connection on the Connections tab, or **Revoke all MCP connections** in an emergency.
+- **Revoke** one connection on the Connections tab, or **Revoke all active connections** (Connections tab, Credential security) in an emergency.
 
 See also the [architecture and threat model](../../operate/mcp/architecture.md).

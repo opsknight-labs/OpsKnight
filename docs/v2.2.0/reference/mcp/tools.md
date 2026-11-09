@@ -7,7 +7,7 @@ product_area: mcp
 audience: [developer, administrator]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - src/lib/mcp/protocol/server.ts
     - src/lib/mcp/catalog/capabilities.ts

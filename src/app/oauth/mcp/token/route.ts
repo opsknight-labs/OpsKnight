@@ -54,7 +54,8 @@ async function handlePost(request: Request, browserOrigin: string | null) {
     requireMcp(mcpPolicyInForce(policy), 'MCP_DISABLED', 503);
     await admitMcpOAuthRequest(request, 'token');
     requireMcp(
-      request.headers.get('content-type')?.split(';')[0] === 'application/x-www-form-urlencoded',
+      request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ===
+        'application/x-www-form-urlencoded',
       'invalid_request',
       415
     );

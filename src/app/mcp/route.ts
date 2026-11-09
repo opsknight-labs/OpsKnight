@@ -509,7 +509,7 @@ async function openListenStream(
   identity: Awaited<ReturnType<typeof authenticateMcp>>,
   uris: string[]
 ) {
-  const releaseStream = acquireStreamSlot(identity.grantId);
+  const releaseStream = acquireStreamSlot(identity.grantId, identity.auth.actor.id);
   const untrack = trackSubscription(uris);
   const handler = createMcpHandler(
     () =>

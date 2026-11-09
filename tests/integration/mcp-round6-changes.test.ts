@@ -68,6 +68,24 @@ describe('service_get_changes', () => {
     expect(result.note).toMatch(/delivery receipts/i);
   });
 
+  it('flags which source was cut short, so a full page is not mistaken for everything', async () => {
+    const admin = await principal('ADMIN', scopes);
+    const service = await createTestService(`Busy ${Math.random().toString(36).slice(2, 8)}`);
+    const now = Date.now();
+    for (let i = 0; i < 11; i += 1)
+      await createTestIncident(`Busy incident ${i}`, service.id, {
+        createdAt: new Date(now - (i + 1) * 60_000),
+      });
+    const busy = await run(admin, { serviceId: service.id });
+    expect(busy.sources.incidents).toMatchObject({ status: 'ok', count: 10, truncated: true });
+    expect(busy.sources.runbooks).toMatchObject({ truncated: true });
+
+    const quiet = await createTestService(`Quiet ${Math.random().toString(36).slice(2, 8)}`);
+    await createTestIncident('Quiet incident', quiet.id, { createdAt: new Date(now - 60_000) });
+    const result = await run(admin, { serviceId: quiet.id });
+    expect(result.sources.incidents).toEqual({ status: 'ok', count: 1 });
+  });
+
   it('lists configuration edits, incidents and runbook runs newest first, each with its source', async () => {
     const admin = await principal('ADMIN', scopes);
     const service = await createTestService(`Changes ${Math.random().toString(36).slice(2, 8)}`);

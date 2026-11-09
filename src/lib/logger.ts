@@ -193,11 +193,20 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
     };
   }
 
+  // Only a value that contains itself is circular. One array referenced from two siblings (a
+  // policy saved with the same scope list under two keys) is not, and used to log "[CIRCULAR]".
   if (seen.has(context)) {
     return '[CIRCULAR]';
   }
   seen.add(context);
+  try {
+    return sanitizeObject(context, seen);
+  } finally {
+    seen.delete(context);
+  }
+}
 
+function sanitizeObject(context: object, seen: WeakSet<object>): unknown {
   if (Array.isArray(context)) {
     return context.map(item => sanitizeContext(item, seen));
   }

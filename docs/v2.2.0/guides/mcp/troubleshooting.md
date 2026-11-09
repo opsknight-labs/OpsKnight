@@ -6,7 +6,7 @@ product_area: mcp
 audience: [administrator, responder, operator]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - scripts/mcp/docs-reference.ts
     - src/lib/mcp/auth/friendly-error.ts
@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 105 MCP codes and 24 log events found in the source.
+This page lists 106 MCP codes and 24 log events found in the source.
 
 ## Connecting and signing in
 
@@ -36,7 +36,7 @@ This page lists 105 MCP codes and 24 log events found in the source.
 | <a id="MCP_CONSENT_NO_SCOPES"></a>`MCP_CONSENT_NO_SCOPES` | Allow was clicked with every permission unticked. | Tick at least one permission, or choose Cancel. |
 | <a id="MCP_CONSENT_REPLAY"></a>`MCP_CONSENT_REPLAY` | The consent form was already submitted (for example from another tab). | Return to the assistant; start again if it is not connected. |
 | <a id="MCP_AUTHORIZATION_FAILED"></a>`MCP_AUTHORIZATION_FAILED` | The consent page could not create the authorization code. | Start the connection again from the assistant. Check the server log if it repeats. |
-| <a id="MCP_RATE_LIMITED"></a>`MCP_RATE_LIMITED` | Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person. | Wait a minute and retry. |
+| <a id="MCP_RATE_LIMITED"></a>`MCP_RATE_LIMITED` | A rate limit was hit: the connection or person quota on /mcp (HTTP 429 with Retry-After), too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person, too many sign-in requests from one network address, or a network address that keeps sending invalid bearer tokens (30 a minute). | Wait for the Retry-After interval (at most a minute) and retry. For a steady /mcp 429, an administrator raises Weighted operations per minute per grant under Workload limits, or checks the per-person cap. |
 | <a id="MCP_ACCESS_CHANGED"></a>`MCP_ACCESS_CHANGED` | A security event ended the connection: the person's password or email changed, they were demoted from Administrator, deactivated, signed out everywhere, or an administrator revoked their sessions. | Reconnect OpsKnight from the assistant. Team and ordinary role changes do not cause this. |
 | <a id="MCP_INVALID_TOKEN"></a>`MCP_INVALID_TOKEN` | The bearer token is malformed, unknown or expired. | Let the assistant refresh or reconnect. |
 | <a id="MCP_INSUFFICIENT_SCOPE"></a>`MCP_INSUFFICIENT_SCOPE` | Scope step-up is on and the call needs a permission this connection lacks but a new consent could grant. HTTP 403 with an insufficient_scope challenge naming the scopes to ask for. | A supporting assistant re-opens sign-in for the extra permission; approve it. Others reconnect. |
@@ -47,7 +47,7 @@ This page lists 105 MCP codes and 24 log events found in the source.
 | <a id="MCP_DEVICE_CODE_INVALID"></a>`MCP_DEVICE_CODE_INVALID` | The code entered on /oauth/mcp/device matches no live device sign-in (a typo, or a code another person already entered). Each counts as a wrong code. | Enter the eight letters shown on the device; case and the dash do not matter. |
 | <a id="MCP_DEVICE_CODE_EXPIRED"></a>`MCP_DEVICE_CODE_EXPIRED` | A device sign-in code was entered after its ten minutes ran out, or after it was already approved, denied or used. | Start the sign-in again on the device to get a new code. |
 | <a id="MCP_REGISTRATION_DISABLED"></a>`MCP_REGISTRATION_DISABLED` | Automatic connections are off, so assistants cannot register themselves. | An administrator turns on Automatic connections under Access policy. |
-| <a id="MCP_REGISTRATION_CAPACITY"></a>`MCP_REGISTRATION_CAPACITY` | The registry already holds 5,000 automatically registered assistants. | Retry later; unused registrations are cleaned up after an hour. |
+| <a id="MCP_REGISTRATION_CAPACITY"></a>`MCP_REGISTRATION_CAPACITY` | The registry already holds 5,000 automatically registered assistants. | Retry later. When the registry is full, the oldest registration never used to sign in (and older than an hour) is replaced; unused registrations are also deleted after 30 days. |
 | <a id="MCP_CLIENT_METADATA_TIMEOUT"></a>`MCP_CLIENT_METADATA_TIMEOUT` | Fetching the assistant's metadata document took longer than three seconds. | Retry. Check outbound HTTPS and DNS from the server. |
 | <a id="MCP_CLIENT_METADATA_UNAVAILABLE"></a>`MCP_CLIENT_METADATA_UNAVAILABLE` | The assistant's metadata document could not be fetched. | Retry. Check outbound HTTPS from the server; search the log for mcp.cimd.fetch_failed. |
 | <a id="MCP_CLIENT_METADATA_FORBIDDEN"></a>`MCP_CLIENT_METADATA_FORBIDDEN` | The assistant's metadata document host resolves to a private, loopback or otherwise non-public address. | The assistant must publish its metadata document on a public HTTPS host. |
@@ -68,7 +68,7 @@ This page lists 105 MCP codes and 24 log events found in the source.
 | <a id="MCP_OPERATION_BUDGET_EXCEEDED"></a>`MCP_OPERATION_BUDGET_EXCEEDED` | The request uses more operations than Operations per request allows (at most 8). | Split the work across several calls. |
 | <a id="MCP_INVALID_HEADERS"></a>`MCP_INVALID_HEADERS` | A Tasks request is missing the matching Mcp-Method or Mcp-Protocol-Version header. | Use a client that supports protocol revision 2026-07-28 for Tasks. |
 | <a id="MCP_TASK_NOT_FOUND"></a>`MCP_TASK_NOT_FOUND` | Unknown task id, or a task that belongs to another connection or has passed its 24-hour retention. | Use the task id returned by runbook_execute_approved. |
-| <a id="MCP_BUSY"></a>`MCP_BUSY` | The server is at its concurrent-request limit and the request waited too long in the queue (or the queue is full, or this connection already uses half the slots). | Retry after the Retry-After interval (1 second). Administrators can raise Concurrent requests per process under Workload limits. |
+| <a id="MCP_BUSY"></a>`MCP_BUSY` | The server is at its concurrent-request limit and the request waited too long in the queue (or the queue is full, or the person's connections already hold half the slots between them). | Retry after the Retry-After interval (1 second). Administrators can raise Concurrent requests per process under Workload limits. |
 | <a id="MCP_RESULT_BUDGET_EXCEEDED"></a>`MCP_RESULT_BUDGET_EXCEEDED` | The result is larger than 256 KiB. | Lower query.limit or narrow the filters. |
 | <a id="MCP_INVALID_SUBSCRIPTION"></a>`MCP_INVALID_SUBSCRIPTION` | subscriptions/listen received more than five URIs or a non-string URI. | Subscribe to at most five opsknight:// URIs per stream. |
 | <a id="MCP_UNAVAILABLE"></a>`MCP_UNAVAILABLE` | An unexpected server error. The error text ends with a Reference (the request id). | Retry. Administrators search the log for mcp.tool.unexpected_error with that requestId. |
@@ -83,7 +83,7 @@ This page lists 105 MCP codes and 24 log events found in the source.
 | <a id="MCP_DEADLINE_EXCEEDED"></a>`MCP_DEADLINE_EXCEEDED` | The request ran past its ten-second deadline. | Retry with fewer steps or a smaller query.limit. |
 | <a id="MCP_INVALID_PAGE_SIZE"></a>`MCP_INVALID_PAGE_SIZE` | query.limit is outside 1 to 50. | Use a limit from 1 to 50 and follow nextCursor for more. |
 | <a id="MCP_SCOPE_NOT_GRANTED"></a>`MCP_SCOPE_NOT_GRANTED` | The role allows the operation, but this connection was not granted the permission it needs. The hint names the missing scopes. | Reconnect and tick the named permission on the consent page (the administrator ceiling must include it). |
-| <a id="MCP_OPERATION_DISABLED"></a>`MCP_OPERATION_DISABLED` | Changes or sensitive reads are turned off in Access policy. | An administrator turns on reviewed actions or sensitive reads under Advanced. |
+| <a id="MCP_OPERATION_DISABLED"></a>`MCP_OPERATION_DISABLED` | Changes or sensitive reads are turned off in Access policy. | An administrator turns on reviewed actions or sensitive reads under Access policy → Reviewed actions. |
 | <a id="MCP_INVALID_RESOURCE_ID"></a>`MCP_INVALID_RESOURCE_ID` | A resource id or opsknight:// URI is malformed. | Use an id returned by a list or search. |
 | <a id="MCP_INVALID_QUERY"></a>`MCP_INVALID_QUERY` | A query parameter value is an object or array where a scalar is required. | Send a string, number or boolean. |
 | <a id="MCP_EMPTY_DOMAIN_RESULT"></a>`MCP_EMPTY_DOMAIN_RESULT` | An operation returned no body where one was expected. | Retry; report it if it repeats. |
@@ -96,6 +96,7 @@ This page lists 105 MCP codes and 24 log events found in the source.
 | <a id="MCP_JSON_DEPTH"></a>`MCP_JSON_DEPTH` | The JSON body is nested deeper than 24 levels. | Flatten the arguments. |
 | <a id="MCP_CONTENT_TYPE"></a>`MCP_CONTENT_TYPE` | The POST did not send Content-Type: application/json. | Use an MCP client or the official SDK. |
 | <a id="MCP_SUBSCRIPTIONS_BUSY"></a>`MCP_SUBSCRIPTIONS_BUSY` | The process already holds 32 subscription streams. | Retry later. |
+| <a id="MCP_CONTENTION"></a>`MCP_CONTENTION` | Another request changed the same record at the same moment and the database turned this one back after its own retries. | Read the current state, then try again. Reuse the same idempotencyKey for a change so a replay never applies it twice. |
 | <a id="MCP_NOT_A_READ"></a>`MCP_NOT_A_READ` | read_operation was called with an operation that changes something. | Use call_operation for routine changes or operation_prepare for reviewed ones. |
 | <a id="MCP_SUBSCRIPTIONS_LIMIT"></a>`MCP_SUBSCRIPTIONS_LIMIT` | This connection already holds two subscription streams. | Close a stream first. |
 
@@ -132,7 +133,7 @@ This page lists 105 MCP codes and 24 log events found in the source.
 | <a id="MCP_INVALID_BROWSER_ORIGIN"></a>`MCP_INVALID_BROWSER_ORIGIN` | An Allowed browser origins entry is not an exact origin (scheme, host and optional port), uses plain http off loopback, or the list has more than 10 entries. | Enter origins such as https://inspector.example.com or http://localhost:6274, one per line. |
 | <a id="MCP_DCR_REQUIRES_SCOPES"></a>`MCP_DCR_REQUIRES_SCOPES` | Automatic connections was turned on with no permissions ticked. | Tick at least one permission under What assistants may do. |
 | <a id="MCP_INVALID_NAME"></a>`MCP_INVALID_NAME` | A manually registered assistant needs a name. | Enter a name. |
-| <a id="MCP_INVALID_REDIRECT"></a>`MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS or loopback HTTP. | Enter the exact callback the assistant uses. |
+| <a id="MCP_INVALID_REDIRECT"></a>`MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS, loopback HTTP or a native app scheme (a reverse-DNS scheme, or cursor, vscode, vscode-insiders or windsurf). | Enter the exact callback the assistant uses. |
 | <a id="MCP_CONFIRMATION_REQUIRED"></a>`MCP_CONFIRMATION_REQUIRED` | "Revoke all active connections" was submitted without ticking the confirmation box. | Tick the box in the dialog, then confirm. |
 | <a id="MCP_PAT_INVALID_EXPIRY"></a>`MCP_PAT_INVALID_EXPIRY` | The chosen expiry is outside 1 day to the policy maximum (at most 90 days). | Choose one of the offered expiry options. |
 | <a id="MCP_LOGIN_REQUIRED"></a>`MCP_LOGIN_REQUIRED` | The settings or review page needs a signed-in user. | Sign in. |
@@ -243,4 +244,4 @@ Search the application log for these event names. Entries never contain tokens, 
 - **A permission was granted but the tool still fails:** compare the connection's usable permissions on the Connections tab ("N of M usable"). The effective set is the grant ∩ the current ceiling ∩ the person's role, minus disabled capabilities.
 - **503 with `MCP_BUSY`:** the concurrent-request limit was reached; the client retries after the `Retry-After` interval.
 - **Works in a browser but not in a cloud assistant:** check that the cloud assistant can reach your host and trusts its TLS certificate.
-- **An approval expired:** prepare it again with a new `idempotencyKey`; lengthen the review or commit window under **Access policy → Advanced** if reviewers need more time.
+- **An approval expired:** prepare it again with a new `idempotencyKey`; lengthen the review or commit window under **Access policy → Reviewed actions** if reviewers need more time.

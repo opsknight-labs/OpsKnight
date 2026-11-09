@@ -7,7 +7,7 @@ product_area: mcp
 audience: [developer, operator]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - scripts/mcp/local-check.cjs
     - src/app/mcp/route.ts
@@ -35,7 +35,7 @@ The generated [troubleshooting](../../guides/mcp/troubleshooting.md) and [permis
 ## Manual development setup
 
 1. Install dependencies, run `npx prisma generate` and deploy migrations with the normal safe migration process. Back up a populated database first.
-2. No MCP environment variables are needed. In **Settings → System**, set the **App URL** to the HTTPS address users open (plain HTTP only on localhost). MCP builds its endpoint, OAuth issuer and protected-resource metadata from it. Credential digests use a key derived from the application encryption key, so every replica that shares the key accepts the same connections. Promoting a new active key disconnects every MCP client.
+2. No MCP environment variables are required (the optional ones are listed in [architecture](architecture.md)). In **Settings → System**, set the **App URL** to the HTTPS address users open (plain HTTP only on localhost). MCP builds its endpoint, OAuth issuer and protected-resource metadata from it. Credential digests use a key derived from the application encryption key, so every replica that shares the key accepts the same connections. Promoting a new active key disconnects every MCP client.
 3. Sign in as an administrator and open **Settings → Integrations & ChatOps → MCP (AI Assistants)**. Click **Turn on AI assistant access** on the Overview tab, or set the switches on **Access policy**: **Enable MCP**, **Automatic connections**, the ceiling under **What assistants may do**, and **Workload limits** under **Advanced**. Start with `incidents:read services:read schedules:read` and changes off.
 4. Discovery is at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server/oauth/mcp`. The authorization-server document advertises `registration_endpoint` (ending in `/oauth/mcp/register`) while Automatic connections is on.
 5. Use Authorization Code with PKCE S256 and `resource=<origin>/mcp`. `state` is optional; when sent it is returned unchanged, and clients should validate it and `iss`. Exchange the code at `/oauth/mcp/token` with the same resource, redirect URI and code verifier. Refresh rotates the credential. Replaying an already-rotated refresh token within the reuse grace period (default 30 seconds) while its successor is unused reissues a pair; any other reuse revokes the grant. Token endpoint database contention returns `503 temporarily_unavailable` with `Retry-After`, never `invalid_grant`.
@@ -43,7 +43,7 @@ The generated [troubleshooting](../../guides/mcp/troubleshooting.md) and [permis
 
 An HTTPS ingress must preserve the configured public `Host`, including a non-standard port. `X-Forwarded-Host` does not establish authority. Browser `Origin` must match the configured origin, or be listed exactly under **Allowed browser origins** (Access policy, Advanced) for a browser-hosted client such as MCP Inspector; those origins get CORS on `/mcp` and the token, registration and revocation endpoints, never with credentials. The discovery documents allow any origin.
 
-MCP has its own database pool of two connections per web process, from `DIRECT_DATABASE_URL` (or `DATABASE_URL`); capacity preflight includes it for every web replica. URLs marked `pgbouncer=true` are rejected. Query, lock and idle-transaction deadlines are five, one and five seconds. Retry mutations only with the same idempotency key and identical input.
+MCP has its own database pool of two connections per web process (`MCP_DATABASE_POOL_SIZE`, 1 to 4), from `DIRECT_DATABASE_URL` (or `DATABASE_URL`); capacity preflight includes it for every web replica. URLs marked `pgbouncer=true` are rejected. Query, lock and idle-transaction deadlines are five, one and five seconds. Retry mutations only with the same idempotency key and identical input.
 
 Tokens belong in the client's secure credential store, never in tool arguments, logs, resource URIs or committed configuration. REST API keys and upstream SSO tokens are not MCP credentials.
 
@@ -57,7 +57,7 @@ Errors return structured content with `code`, an optional `domainCode` and `fiel
 
 ## Reviewed configuration changes
 
-With changes on, call `operation_prepare` with the operationId and its arguments (no `idempotencyKey`). Nothing changes yet. The result carries an approval id, a native `reviewUrl`, deadlines, `nextSteps` and `selfApprovable`. Share the `reviewUrl`; administrators are also notified in OpsKnight. Poll `operation_get_approval` until it reports `APPROVED`, then call `operation_commit_approved` with the approval id within the commit window. A rejection returns the reviewer's reason, labelled untrusted.
+With changes on, call `operation_prepare` with `operationId`, `args` (the operation's arguments, without an `idempotencyKey` inside them) and a top-level `idempotencyKey` of 16 to 128 letters, digits, `-` or `_`. Nothing changes yet. The result carries an approval id, a native `reviewUrl`, deadlines, `nextSteps` and `selfApprovable`. Share the `reviewUrl`; administrators are also notified in OpsKnight. Poll `operation_get_approval` until it reports `APPROVED`, then call `operation_commit_approved` with the approval id within the commit window. A rejection returns the reviewer's reason, labelled untrusted.
 
 ## Reviewed runbook runs
 
@@ -71,4 +71,4 @@ Existing installations keep automatic registration off after the additive migrat
 
 Upgrading from the earlier `MCP_TOKEN_HASH_SECRET` implementation changes the credential key: existing tokens and codes stop validating and users reconnect. Administrators can revoke the old connections with **Revoke all active connections** under **Credential security** on the Connections tab.
 
-Client compatibility is tracked in the [setup guide](../../guides/mcp/self-hosted-setup.md#client-compatibility): only Claude Code has a recorded live run, and no client is marked Verified until a full live client checkpoint is recorded. Agents without a browser use an OAuth refresh loop or a personal access token; see [API-hosted and headless agents](../../guides/mcp/api-agents.md). External issuers, client-credentials machine grants, stdio and MCP Apps are not implemented. Do not substitute REST tokens or disable resource validation to work around a client problem.
+Client compatibility is tracked in the [setup guide](../../guides/mcp/self-hosted-setup.md#client-compatibility): only Claude Code has a recorded live run (see the [client matrix run](certification.md#client-matrix-run-8-november-2026) for later SDK and Claude Code results), and no client is marked Verified until a full live client checkpoint is recorded. Agents without a browser use an OAuth refresh loop or a personal access token; see [API-hosted and headless agents](../../guides/mcp/api-agents.md). External issuers, client-credentials machine grants, stdio and MCP Apps are not implemented. Do not substitute REST tokens or disable resource validation to work around a client problem.

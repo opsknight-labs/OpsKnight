@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020';
 import addFormats from 'ajv-formats';
 import { NextRequest } from 'next/server';
@@ -66,6 +67,71 @@ function availableIn(mode: ExecutionMode, operation: (typeof MCP_CATALOG)[number
       : isMcpExecutable(operation);
 }
 
+/**
+ * A NUL character or a lone UTF-16 surrogate cannot be stored or searched in PostgreSQL text; each
+ * used to surface as a retryable internal error that could never succeed.
+ */
+function rejectNul(value: unknown, depth = 0): void {
+  if (depth > 24) return;
+  if (typeof value === 'string') {
+    requireMcp(
+      !value.includes('\u0000') && value.isWellFormed(),
+      'MCP_INVALID_ARGUMENTS',
+      400,
+      'A text value contains a NUL character (\\u0000) or an unpaired Unicode surrogate, which cannot be stored or searched. Remove it.'
+    );
+    return;
+  }
+  if (Array.isArray(value)) for (const item of value) rejectNul(item, depth + 1);
+  else if (typeof value === 'object' && value !== null)
+    for (const item of Object.values(value)) rejectNul(item, depth + 1);
+}
+
+/**
+ * A page cursor is signed for its position only, so one taken from another search, or from another
+ * list altogether, was accepted and quietly returned a wrong page. The cursor an assistant is given
+ * is therefore wrapped with a short fingerprint of the operation and its filters (not the page
+ * size, which may change); it is checked and unwrapped here. A cursor without the wrapper (from
+ * before this was added) is still accepted as before.
+ */
+const CURSOR_PREFIX = 'm1.';
+function cursorFingerprint(operationId: string, query: Record<string, unknown> | undefined) {
+  const filters = Object.entries(query ?? {})
+    .filter(([key]) => key !== 'cursor' && key !== 'limit')
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return createHash('sha256')
+    .update(`${operationId}\0${JSON.stringify(filters)}`)
+    .digest('base64url')
+    .slice(0, 8);
+}
+function unwrapCursor(operationId: string, query: Record<string, unknown> | undefined) {
+  const cursor = query?.cursor;
+  if (typeof cursor !== 'string' || !cursor.startsWith(CURSOR_PREFIX)) return query;
+  const [, fingerprint, inner] = cursor.split('.', 3).length === 3 ? cursor.split('.') : [];
+  requireMcp(
+    fingerprint === cursorFingerprint(operationId, query) && inner,
+    'MCP_INVALID_ARGUMENTS',
+    400,
+    'This cursor belongs to a different list or different filters. Pass nextCursor only to the same operation with the same filters, or start again without a cursor.'
+  );
+  return { ...query, cursor: inner };
+}
+function wrapNextCursor<T>(
+  operationId: string,
+  query: Record<string, unknown> | undefined,
+  data: T
+): T {
+  const page = (data as { pagination?: { nextCursor?: unknown } } | null)?.pagination;
+  if (!page || typeof page.nextCursor !== 'string' || !page.nextCursor) return data;
+  return {
+    ...(data as object),
+    pagination: {
+      ...page,
+      nextCursor: `${CURSOR_PREFIX}${cursorFingerprint(operationId, query)}.${page.nextCursor}`,
+    },
+  } as T;
+}
+
 export function validateOperationArgs(
   operationId: string,
   args: unknown,
@@ -80,6 +146,7 @@ export function validateOperationArgs(
     validate = validator.compile(operation.inputSchema);
     validators.set(operationId, validate);
   }
+  rejectNul(args);
   requireMcp(validate(args), 'MCP_INVALID_ARGUMENTS', 400, argumentHint(validate.errors));
   const parsed = args as {
     path?: Record<string, string>;
@@ -89,6 +156,14 @@ export function validateOperationArgs(
     ifMatch?: string;
   };
   if (parsed.ifMatch === undefined) return parsed;
+  // An ifMatch the route ignores would read as a guard that is not there: the write applies
+  // whatever the revision. Only operations that check revisions (concurrency 'etag') take one.
+  requireMcp(
+    operation.mutation?.concurrency === 'etag',
+    'MCP_INVALID_ARGUMENTS',
+    400,
+    '/ifMatch is not supported by this operation: it does not check revisions, so a stale value would be ignored. Remove it.'
+  );
   return { ...parsed, ifMatch: mcpIfMatch(parsed.ifMatch) };
 }
 
@@ -325,7 +400,9 @@ async function executeMcpOperation(
       return encodeURIComponent(value);
     })}`
   );
-  for (const [key, value] of Object.entries(args.query ?? {})) {
+  // The cursor is checked against this operation and these filters, then handed on unwrapped.
+  const query = unwrapCursor(operationId, args.query);
+  for (const [key, value] of Object.entries(query ?? {})) {
     requireMcp(typeof value !== 'object', 'MCP_INVALID_QUERY');
     // "Assigned to me": the caller's own id, never an argument the assistant had to look up.
     url.searchParams.set(
@@ -455,7 +532,11 @@ async function executeMcpOperation(
       : await readBoundedDomainResult(response, context.budget.maxBytes);
   const redacted: string[] = [];
   // Reviewed field allowlists first, so a dropped field is never even redacted into the result.
-  const data = projectMcpData(allowMcpFields(operationId, raw), redacted);
+  const data = wrapNextCursor(
+    operationId,
+    args.query,
+    projectMcpData(allowMcpFields(operationId, raw), redacted)
+  );
   // One template per list result instead of a URL on every row: rows stay REST-identical.
   const webUrlTemplate = mcpListWebUrlTemplate(operationId);
   // Evidence first: the untrusted-data warning reaches the model before any business text.
@@ -517,6 +598,30 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * own retryability and, for 429 and 503, how long to wait. Titles, details, messages and values
  * are never read into the error.
  */
+/**
+ * What an assistant can do about the commonest bare rejections. Static text per registered code
+ * (never the problem's own message), so a code alone is no longer all the assistant is told.
+ */
+const DOMAIN_HINTS = new Map<string, string>([
+  [
+    'INVALID_PAGINATION_CURSOR',
+    'Pass nextCursor exactly as returned, to the same operation with the same filters. To change the filters, start again without a cursor.',
+  ],
+  ['INVALID_PAGINATION_LIMIT', `query.limit must be an integer from 1 to ${MCP_MAX_PAGE_SIZE}.`],
+  [
+    'INVALID_TIMESTAMP',
+    'Use an ISO 8601 date-time with a UTC offset, for example 2026-11-09T12:00:00Z.',
+  ],
+  [
+    'VALIDATION_FAILED',
+    "A value is out of range, too long, or a combination that is not allowed (for example both hours and since). See describe_operation for this operation's limits.",
+  ],
+  [
+    'RATE_LIMIT_EXCEEDED',
+    'Search and list reads share a lower allowance than other calls. Wait for the time given, then retry with fewer calls.',
+  ],
+]);
+
 export async function domainRejection(response: Response) {
   const problem = await readBoundedDomainResult(response, DOMAIN_PROBLEM_BYTES).catch(() => null);
   const body = isRecord(problem) ? problem : {};
@@ -556,7 +661,7 @@ export async function domainRejection(response: Response) {
     response.status === 404 ? 'MCP_RESOURCE_UNAVAILABLE' : 'MCP_DOMAIN_REJECTED',
     response.status,
     retryable,
-    undefined,
+    domainCode ? DOMAIN_HINTS.get(domainCode) : undefined,
     {
       ...(domainCode ? { domainCode } : {}),
       ...(fields.length ? { fields } : {}),
