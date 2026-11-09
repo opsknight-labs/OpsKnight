@@ -21,7 +21,6 @@ import {
   setMaintenanceWindowEnabled,
   setSuppressionRuleEnabled,
   simulatePrePagingControls,
-  suppressionRuleInputSchema,
   type SimulationOutcome,
 } from '@/lib/intelligence/noise-controls';
 
@@ -389,5 +388,3 @@ export async function simulateAction(
     return failure(error);
   }
 }
-
-export { suppressionRuleInputSchema };
