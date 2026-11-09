@@ -131,6 +131,33 @@ describe('intelligence architecture boundaries', () => {
     expect(executor).toMatch(/isExtendedSquireAction\(proposal\.action\)/);
   });
 
+  it('lets Squire outside the app (chat, MCP) change things only through the sealed proposal executor', () => {
+    const chatDir = join(root, 'src/lib/chatops/squire');
+    const surfaces = [
+      ...sourceFiles(chatDir),
+      join(root, 'src/lib/mcp/core/ask-squire.ts'),
+      join(root, 'src/lib/mcp/core/ask-squire-contract.ts'),
+      join(intelligenceDir, 'squire/surfaces.ts'),
+    ];
+    expect(sourceFiles(chatDir).length).toBeGreaterThan(3);
+    const writes =
+      /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$transaction/;
+    expect(
+      surfaces.filter(file => writes.test(read(file))).map(file => relative(root, file))
+    ).toEqual([]);
+    // Chat confirms go through the executor; nothing else in chat imports it.
+    const executorImports = sourceFiles(chatDir).filter(file =>
+      /squire\/actions\/execute['"]/.test(read(file))
+    );
+    expect(executorImports.map(file => relative(root, file))).toEqual([
+      'src/lib/chatops/squire/handler.ts',
+    ]);
+    // MCP is read-only: it never imports the executor and never hands out a sealed token.
+    const mcp = read(join(root, 'src/lib/mcp/core/ask-squire.ts'));
+    expect(mcp).not.toMatch(/actions\/execute|executeSquireAction/);
+    expect(mcp).not.toMatch(/\.token\b/);
+  });
+
   it('lets assistant support modules write only dialogue state, check templates and feedback', () => {
     const dir = join(intelligenceDir, 'assistant');
     const delegates = sourceFiles(dir).flatMap(file =>
