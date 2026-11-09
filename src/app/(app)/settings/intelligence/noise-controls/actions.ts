@@ -16,6 +16,7 @@ import {
   noiseControlDefinitionSchema,
   orchestrationRuleSchema,
   reversePrePagingDecision,
+  rollbackNoiseControlPolicy,
   saveNoiseControlPolicy,
   setHeartbeatMonitorEnabled,
   setMaintenanceWindowEnabled,
@@ -120,10 +121,41 @@ export async function savePolicyAction(
       actorOf(user)
     );
     revalidatePath(PATH);
-    return { message: `Saved (${view.mode}, revision ${view.revision}).`, ok: true };
+    return {
+      message: `Published version ${view.versionNumber} (${view.mode}, revision ${view.revision}).`,
+      ok: true,
+    };
   } catch (error) {
     if (error instanceof Error && error.name === 'ZodError')
       return { message: `Check the fields: ${error.message.slice(0, 200)}`, ok: false };
+    return failure(error);
+  }
+}
+
+/** Publishes a clone of an earlier policy version as the newest version. */
+export async function rollbackPolicyAction(
+  _state: NoiseActionState,
+  form: FormData
+): Promise<NoiseActionState> {
+  try {
+    const user = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const versionId = text(form, 'versionId');
+    if (!ID.test(versionId)) return { message: 'Invalid version.', ok: false };
+    const view = await rollbackNoiseControlPolicy(
+      {
+        serviceId: optional(form, 'serviceId') ?? null,
+        versionId,
+        expectedRevision: integer(form, 'expectedRevision', 0),
+        acknowledgeReadiness: flag(form, 'acknowledgeReadiness'),
+      },
+      actorOf(user)
+    );
+    revalidatePath(PATH);
+    return {
+      message: `Rolled back: published version ${view.versionNumber} (${view.mode}).`,
+      ok: true,
+    };
+  } catch (error) {
     return failure(error);
   }
 }

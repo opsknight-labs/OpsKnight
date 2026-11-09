@@ -7,6 +7,7 @@ import {
   MaintenanceWindowForm,
   MaintenanceWindowList,
   NoisePolicyForm,
+  PolicyVersionHistory,
   SimulationForm,
   SuggestionList,
   SuppressionRuleForm,
@@ -23,6 +24,7 @@ import {
   listHeartbeatMonitors,
   listMaintenanceWindows,
   listNoiseControlPolicies,
+  listNoiseControlPolicyVersions,
   listPrePagingDecisions,
   listSuppressionRules,
   suggestSuppressionRules,
@@ -66,6 +68,7 @@ export default async function NoiseControlsPage({
     heartbeats,
     decisions,
     kpis,
+    versions,
   ] = await Promise.all([
     safely('services', () =>
       prisma.service.findMany({
@@ -90,6 +93,7 @@ export default async function NoiseControlsPage({
     safely('heartbeats', () => listHeartbeatMonitors()),
     safely('decisions', () => listPrePagingDecisions({ limit: 50 })),
     safely('kpis', () => getNoiseControlKpis({ days: 7 })),
+    safely('policy versions', () => listNoiseControlPolicyVersions(serviceId, { limit: 20 })),
   ]);
 
   return (
@@ -117,6 +121,23 @@ export default async function NoiseControlsPage({
             services={services ?? []}
             policies={policies ?? []}
             selectedServiceId={serviceId}
+            canManage={canManage}
+          />
+        ) : (
+          <p className="py-4 text-sm text-muted-foreground">Unavailable.</p>
+        )}
+      </SettingsSection>
+
+      <SettingsSection
+        title="Policy history"
+        description="Every publish is an immutable version (orchestration rules included). Decisions record the version they were made under. Rolling back publishes a copy of the chosen version as the newest one, so history is never rewritten."
+      >
+        {policy ? (
+          <PolicyVersionHistory
+            versions={versions ?? []}
+            serviceId={serviceId}
+            revision={policy.revision}
+            currentMode={policy.mode}
             canManage={canManage}
           />
         ) : (

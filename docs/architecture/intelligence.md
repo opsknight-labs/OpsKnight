@@ -478,6 +478,18 @@ grouping under a parent incident with an optional bounded hold, and heartbeat mo
 - **Per-service policy, default OFF, SHADOW before ON** (`NoiseControlPolicy`, revision CAS, audited; ON
   is gated by `assessNoiseReadiness`: ≥ 50 shadow decisions in 7 days and ≤ 2% reversed, or an explicit
   acknowledgement).
+- **Versioned like automation rule sets** (`policy-versions.ts`, `versioning.ts`). Each publish appends an
+  immutable `NoiseControlPolicyVersion` (mode + definition + sha256 checksum, `versionNumber` dense per
+  scope) and points `NoiseControlPolicy.activeVersionId` at it in the same transaction under a per-scope
+  advisory lock; a rollback publishes a clone (`origin: ROLLBACK`, `sourceVersionId`). The live row stays
+  what the cache reads, so evaluation is unchanged; the snapshot loader also reads the active version's
+  `policyRevision` and exposes `versionId` only when it equals the row's `revision`, and the decision row
+  stores it as `PrePagingDecision.policyVersionId` (soft reference, no FK). Rows from before versioning, or
+  rewritten by an older replica, are captured as `origin: BACKFILL` by
+  `backfillNoiseControlPolicyVersions` (keyset-paged, ≤ 5 × 100 rows per sweep tick, idempotent), and
+  lazily on publish or history read. Orchestration was kept in noise-controls rather than becoming an
+  automation rule-set kind because automation versions carry a different compiled snapshot evaluated after
+  the incident exists; reusing them would add a second compiler path to the pre-paging hot path.
 - **The hook is bounded and fails open.** `evaluatePrePagingControls` reads only the in-process snapshot
   (`cache.ts`, refreshed every 30 s, previous snapshot keeps serving; a service-level OFF policy
   overrides an active global one) and index-backed lookups under one 5 ms deadline. Static controls

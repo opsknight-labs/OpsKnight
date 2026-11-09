@@ -9,6 +9,7 @@ import {
   deleteRuleAction,
   endWindowAction,
   reverseDecisionAction,
+  rollbackPolicyAction,
   savePolicyAction,
   simulateAction,
   toggleHeartbeatAction,
@@ -26,6 +27,8 @@ import type {
   SuppressionSuggestion,
 } from '@/lib/intelligence/noise-controls/manage';
 import type { PrePagingDecisionRow } from '@/lib/intelligence/noise-controls/decisions';
+import type { NoiseControlVersionView } from '@/lib/intelligence/noise-controls/policy-versions';
+import type { NoiseVersionDiffEntry } from '@/lib/intelligence/noise-controls/versioning';
 
 const initial: NoiseActionState = { message: '', ok: false };
 const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
@@ -362,7 +365,7 @@ export function NoisePolicyForm({
         </label>
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={pending || !canManage}>
-            {pending ? 'Saving…' : 'Save policy'}
+            {pending ? 'Publishing…' : 'Publish new version'}
           </Button>
           <Status state={state} />
         </div>
@@ -1015,6 +1018,9 @@ export function DecisionList({
             </p>
             <p className="text-xs text-muted-foreground">
               {decision.serviceName} · {decision.reason} · {formatAt(decision.createdAt)}
+              {decision.policyVersionNumber !== null && (
+                <> · policy v{decision.policyVersionNumber}</>
+              )}
               {decision.incidentId && (
                 <>
                   {' '}
@@ -1036,5 +1042,125 @@ export function DecisionList({
         </li>
       ))}
     </ul>
+  );
+}
+
+function ChangeList({ changes, empty }: { changes: NoiseVersionDiffEntry[]; empty: string }) {
+  if (changes.length === 0) return <p className="text-xs text-muted-foreground">{empty}</p>;
+  return (
+    <ul className="list-disc space-y-0.5 pl-5 text-xs">
+      {changes.map(change => (
+        <li key={`${change.kind}:${change.path}`}>
+          <span className="font-mono">{change.path}</span> — {change.summary}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function RollbackForm({
+  version,
+  serviceId,
+  expectedRevision,
+  currentMode,
+}: {
+  version: NoiseControlVersionView;
+  serviceId: string | null;
+  expectedRevision: number;
+  currentMode: string;
+}) {
+  const [state, action, pending] = useActionState(rollbackPolicyAction, initial);
+  const needsAcknowledgement = version.mode === 'ON' && currentMode !== 'ON';
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="versionId" value={version.id} />
+      <input type="hidden" name="serviceId" value={serviceId ?? ''} />
+      <input type="hidden" name="expectedRevision" value={String(expectedRevision)} />
+      {needsAcknowledgement && (
+        <label className="flex items-center gap-1 text-xs">
+          <input type="checkbox" name="acknowledgeReadiness" /> I understand this turns noise
+          controls ON
+        </label>
+      )}
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        {pending ? 'Rolling back…' : `Roll back to v${version.versionNumber}`}
+      </Button>
+      <Status state={state} />
+    </form>
+  );
+}
+
+/**
+ * Published versions of the selected scope, newest first. Each shows what it changed from the one before;
+ * older versions also show what rolling back to them would change, and a rollback publishes a clone.
+ */
+export function PolicyVersionHistory({
+  versions,
+  serviceId,
+  revision,
+  currentMode,
+  canManage,
+}: {
+  versions: NoiseControlVersionView[];
+  serviceId: string | null;
+  revision: number;
+  currentMode: string;
+  canManage: boolean;
+}) {
+  if (versions.length === 0)
+    return (
+      <p className="py-4 text-sm text-muted-foreground">
+        No versions yet. Publishing the policy above creates version 1.
+      </p>
+    );
+  return (
+    <ol className="divide-y divide-border">
+      {versions.map(version => (
+        <li key={version.id} className="space-y-2 py-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium">v{version.versionNumber}</span>
+            <Badge variant="secondary">{version.mode}</Badge>
+            {version.active && <Badge>running</Badge>}
+            {version.origin !== 'PUBLISH' && (
+              <Badge variant="outline">
+                {version.origin === 'ROLLBACK'
+                  ? `rollback of v${version.sourceVersionNumber ?? '?'}`
+                  : 'captured from pre-versioning policy'}
+              </Badge>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {formatAt(version.publishedAt)} · {version.orchestrationRuleCount} orchestration rule
+              {version.orchestrationRuleCount === 1 ? '' : 's'} ·{' '}
+              <span className="font-mono" title={version.checksum}>
+                {version.checksum.slice(0, 10)}
+              </span>
+            </span>
+          </div>
+          <ChangeList changes={version.changes} empty="First version in this history." />
+          {!version.active && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">
+                Diff against the running version ({version.changesFromActive.length} change
+                {version.changesFromActive.length === 1 ? '' : 's'})
+              </summary>
+              <div className="pt-1">
+                <ChangeList
+                  changes={version.changesFromActive}
+                  empty="Same content as the running version."
+                />
+              </div>
+            </details>
+          )}
+          {canManage && !version.active && (
+            <RollbackForm
+              version={version}
+              serviceId={serviceId}
+              expectedRevision={revision}
+              currentMode={currentMode}
+            />
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }

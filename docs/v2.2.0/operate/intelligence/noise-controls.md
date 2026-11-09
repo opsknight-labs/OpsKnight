@@ -68,6 +68,28 @@ Post-paging correlation also gained two per-rule options: **allowHighUrgency** (
 as suggestions, never automatically) and **linkType** `PARENT_CHILD` (members are grouped under the
 anchor instead of only linked).
 
+## Versions, history and rollback
+
+The policy for each scope (all services, or one service), orchestration rules included, is versioned the
+same way automation rule sets are:
+
+- **Publishing creates an immutable version.** Every save of the policy publishes a new numbered version
+  holding the mode and the full definition, with a checksum. Earlier versions are never edited.
+- **Decisions name their version.** Each recorded decision stores the version it was evaluated against;
+  _Recent decisions_ shows it as `policy vN`.
+- **History and diff.** _Policy history_ lists versions newest first, marks the running one, and shows
+  what each changed from the version before it (mode, tuning fields, orchestration rules added, removed,
+  changed or reordered). Older versions also show what rolling back to them would change.
+- **Rollback publishes a copy.** _Roll back to vN_ publishes a clone of version N as the newest version
+  (labelled `rollback of vN`), so the history keeps the rollback itself. It uses the same
+  compare-and-set as a save, and rolling back to an ON version from SHADOW or OFF needs the same "I
+  understand" acknowledgement (or shadow evidence) as switching ON directly.
+- **Existing policies.** A policy saved before versioning existed is captured as version 1 (labelled
+  `captured from pre-versioning policy`) by the bounded background sweep, or immediately when the scope is
+  next published or its history is opened. During a rolling upgrade, a save made by an older replica is
+  captured the same way. Until a scope is captured its decisions record no version; evaluation itself is
+  unaffected.
+
 ## Test before you turn it on
 
 _Test against history_ replays the saved controls over the last N days of alerts, read-only, and reports
