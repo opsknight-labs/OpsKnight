@@ -108,6 +108,29 @@ describe('intelligence architecture boundaries', () => {
     expect(proposalTool).not.toMatch(/execute/);
   });
 
+  it('lets extended Squire actions reach the application only through its own entry points', () => {
+    const squireDir = join(intelligenceDir, 'squire');
+    const executor = read(join(squireDir, 'actions/execute.ts'));
+    // The only application (src/app) modules the executor may call: the incident page's Jira action and the
+    // status page settings route, exactly as their pages do. No other route or page module.
+    const appImports = [...executor.matchAll(/import\(\s*'(@\/app\/[^']+)'\s*\)/g)].map(m => m[1]);
+    expect([...new Set(appImports)].sort()).toEqual([
+      '@/app/(app)/incidents/jira/actions',
+      '@/app/api/settings/status-page/announcements/route',
+    ]);
+    // No other Squire file imports application routes or pages.
+    const others = sourceFiles(squireDir).filter(
+      file => !file.endsWith('actions/execute.ts') && /['"]@\/app\//.test(read(file))
+    );
+    expect(others.map(file => relative(root, file))).toEqual([]);
+    // The publish step of a status update is never a model tool: tools.ts skips follow-up-only actions.
+    expect(read(join(squireDir, 'tools.ts'))).toMatch(
+      /FOLLOW_UP_ONLY_ACTIONS\.has\(name\)\) continue;/
+    );
+    // Every extended action is still a sealed proposal executed only after confirmation.
+    expect(executor).toMatch(/isExtendedSquireAction\(proposal\.action\)/);
+  });
+
   it('lets assistant support modules write only dialogue state, check templates and feedback', () => {
     const dir = join(intelligenceDir, 'assistant');
     const delegates = sourceFiles(dir).flatMap(file =>

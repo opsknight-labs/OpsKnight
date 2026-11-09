@@ -256,6 +256,7 @@ export async function* streamSquire(
         messages,
         tools: buildSquireTools(actor, {
           personal: true,
+          extendedActions: settings.squireExtendedActions,
           dataClass,
           signal,
           observability,
