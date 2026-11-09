@@ -670,6 +670,7 @@ model TeamMember {
 
 model Service {
   noiseControlPolicies     NoiseControlPolicy[]
+  noiseControlVersions     NoiseControlPolicyVersion[]
   maintenanceWindows       MaintenanceWindow[]
   suppressionRules         SuppressionRule[]
   heartbeatMonitors        HeartbeatMonitor[]
@@ -5379,9 +5380,40 @@ model NoiseControlPolicy {
   updatedById String?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  /// The published version whose definition this row carries. Null until the first publish (or the
+  /// backfill) after versioning shipped; a version whose policyRevision differs from `revision` is stale.
+  activeVersionId String?
+  activeVersion   NoiseControlPolicyVersion? @relation("ActiveNoiseControlVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
 
   @@index([serviceId])
   @@index([mode])
+}
+
+/// An immutable, published snapshot of a noise-control policy (mode + definition, orchestration rules
+/// included). Every save publishes one; a rollback publishes a clone of an earlier one. Pre-paging
+/// decisions carry the id of the version they were evaluated against.
+model NoiseControlPolicyVersion {
+  id              String                @id @default(cuid())
+  scopeKey        String
+  serviceId       String?
+  service         Service?              @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  versionNumber   Int
+  schemaVersion   Int                   @default(1)
+  mode            NoiseControlMode
+  definition      Json
+  checksum        String                @db.VarChar(64)
+  /// NoiseControlPolicy.revision this version was published at.
+  policyRevision  Int
+  /// PUBLISH, ROLLBACK, or BACKFILL (captured from a row saved before versioning existed).
+  origin          String                @default("PUBLISH") @db.VarChar(16)
+  /// The version a ROLLBACK cloned.
+  sourceVersionId String?
+  publishedById   String?
+  publishedAt     DateTime              @default(now())
+  activeFor       NoiseControlPolicy[]  @relation("ActiveNoiseControlVersion")
+
+  @@unique([scopeKey, versionNumber])
+  @@index([serviceId])
 }
 
 /// A planned period during which matching alerts are stored but never page (or page at a lower urgency).
@@ -5484,6 +5516,9 @@ model PrePagingDecision {
   reversedAt   DateTime?
   reversedById String?
   createdAt    DateTime         @default(now())
+  /// The NoiseControlPolicyVersion the decision was evaluated against (soft reference: no FK, so the
+  /// hot-path insert costs exactly what it did before versioning).
+  policyVersionId String?
 
   @@index([serviceId, createdAt])
   @@index([incidentId])

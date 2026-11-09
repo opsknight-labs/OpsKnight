@@ -37,6 +37,20 @@ export {
 } from './decisions';
 export * from './manage';
 export {
+  backfillNoiseControlPolicyVersions,
+  compareNoiseControlVersions,
+  listNoiseControlPolicyVersions,
+  NOISE_VERSION_BACKFILL_LIMITS,
+  type NoiseControlVersionView,
+} from './policy-versions';
+export {
+  diffNoiseControlVersions,
+  noiseVersionChecksum,
+  NOISE_VERSION_ORIGINS,
+  type NoiseVersionDiffEntry,
+  type NoiseVersionOrigin,
+} from './versioning';
+export {
   recordHeartbeat,
   sweepHeartbeatMonitors,
   sweepPrePagingControls,

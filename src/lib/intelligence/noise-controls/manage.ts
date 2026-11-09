@@ -12,7 +12,9 @@ import {
   GLOBAL_NOISE_SCOPE_KEY,
   heartbeatMonitorInputSchema,
   maintenanceWindowInputSchema,
+  noiseControlDefinitionSchema,
   noiseControlPolicyInputSchema,
+  noiseControlRollbackInputSchema,
   noiseScopeKey,
   suppressionRuleInputSchema,
   type Matcher,
@@ -20,6 +22,7 @@ import {
   type NoiseControlModeValue,
 } from './contract';
 import { refreshPrePagingSnapshot } from './cache';
+import { ensureCurrentVersion, lockNoiseScope, recordPublishedVersion } from './policy-versions';
 import { validateWindowTiming, windowSpans } from './recurrence';
 
 type Client = Prisma.TransactionClient | typeof prisma;
@@ -53,6 +56,9 @@ export interface NoiseControlPolicyView {
   /** 0 when no row exists yet: defaults apply and the first save creates it. */
   revision: number;
   updatedAt: Date | null;
+  /** The published version running now; null before the first publish or backfill of this scope. */
+  versionId: string | null;
+  versionNumber: number | null;
 }
 
 export async function getNoiseControlPolicy(
@@ -61,6 +67,7 @@ export async function getNoiseControlPolicy(
 ): Promise<NoiseControlPolicyView> {
   const row = await client.noiseControlPolicy.findUnique({
     where: { scopeKey: noiseScopeKey(serviceId) },
+    include: { activeVersion: { select: { versionNumber: true, policyRevision: true } } },
   });
   if (!row)
     return {
@@ -70,15 +77,19 @@ export async function getNoiseControlPolicy(
       definition: DEFAULT_NOISE_CONTROL_DEFINITION,
       revision: 0,
       updatedAt: null,
+      versionId: null,
+      versionNumber: null,
     };
-  const parsed = DEFAULT_NOISE_CONTROL_DEFINITION && (row.definition as NoiseControlDefinition);
+  const current = row.activeVersion?.policyRevision === row.revision;
   return {
     scopeKey: row.scopeKey,
     serviceId: row.serviceId,
     mode: row.mode,
-    definition: parsed,
+    definition: row.definition as NoiseControlDefinition,
     revision: row.revision,
     updatedAt: row.updatedAt,
+    versionId: current ? row.activeVersionId : null,
+    versionNumber: current ? (row.activeVersion?.versionNumber ?? null) : null,
   };
 }
 
@@ -156,20 +167,38 @@ export async function assessNoiseReadiness(
   };
 }
 
-/** Caller must authorize INTELLIGENCE_MANAGE. Compare-and-set on revision; ON needs readiness or an explicit acknowledgement. */
-export async function saveNoiseControlPolicy(
-  input: unknown,
+interface PublishRequest {
+  serviceId: string | null;
+  mode: NoiseControlModeValue;
+  definition: NoiseControlDefinition;
+  expectedRevision: number;
+  acknowledgeReadiness?: boolean;
+  origin: 'PUBLISH' | 'ROLLBACK';
+  /** ROLLBACK: the version being cloned. */
+  sourceVersion?: { id: string; versionNumber: number };
+}
+
+/**
+ * Writes the live policy row and appends its immutable version in one transaction, under the scope lock.
+ * The live row is what the pre-paging cache reads, so evaluation is unchanged; the version is the
+ * history, the diff base and what decisions reference.
+ */
+async function publishPolicy(
+  request: PublishRequest,
   actor: IntelligenceActor
 ): Promise<NoiseControlPolicyView> {
-  const parsed = parseOrThrow(noiseControlPolicyInputSchema, input);
-  const serviceId = parsed.serviceId ?? null;
+  const { serviceId } = request;
   const scopeKey = noiseScopeKey(serviceId);
   const view = await prisma.$transaction(async tx => {
     if (serviceId) await assertServiceExists(tx, serviceId);
+    await lockNoiseScope(tx, scopeKey);
     const previous = await tx.noiseControlPolicy.findUnique({ where: { scopeKey } });
-    if ((previous?.revision ?? 0) !== parsed.expectedRevision)
+    if ((previous?.revision ?? 0) !== request.expectedRevision)
       throw new AppError({ code: 'PRECONDITION_FAILED' });
-    if (parsed.mode === 'ON' && previous?.mode !== 'ON' && !parsed.acknowledgeReadiness) {
+    // A row saved before versioning (or by an older replica) becomes a version first, so the history
+    // always contains the state being replaced and a rollback to it is possible.
+    const replaced = previous ? await ensureCurrentVersion(tx, previous) : null;
+    if (request.mode === 'ON' && previous?.mode !== 'ON' && !request.acknowledgeReadiness) {
       const readiness = await assessNoiseReadiness(serviceId, new Date(), tx);
       if (!readiness.ready)
         throw invalid(
@@ -178,8 +207,8 @@ export async function saveNoiseControlPolicy(
         );
     }
     const data = {
-      mode: parsed.mode,
-      definition: parsed.definition as Prisma.InputJsonValue,
+      mode: request.mode,
+      definition: request.definition as Prisma.InputJsonValue,
       updatedById: actor.actorId,
     };
     const row = previous
@@ -188,33 +217,109 @@ export async function saveNoiseControlPolicy(
           data: { ...data, revision: { increment: 1 } },
         })
       : await tx.noiseControlPolicy.create({ data: { ...data, scopeKey, serviceId } });
+    const version = await recordPublishedVersion(tx, row, {
+      origin: request.origin,
+      actorId: actor.actorId,
+      sourceVersionId: request.sourceVersion?.id ?? null,
+    });
     await logAudit(
       {
-        action: 'intelligence.noise.policy.saved',
+        action:
+          request.origin === 'ROLLBACK'
+            ? 'intelligence.noise.policy.rolled_back'
+            : 'intelligence.noise.policy.saved',
         entityType: 'SYSTEM_CONFIG',
         entityId: `noise-policy:${scopeKey}`,
         actorId: actor.actorId,
         source: actor.source,
-        oldValue: previous ? { mode: previous.mode, revision: previous.revision } : null,
+        oldValue: previous
+          ? {
+              mode: previous.mode,
+              revision: previous.revision,
+              versionNumber: replaced?.versionNumber ?? null,
+            }
+          : null,
         newValue: {
           mode: row.mode,
           revision: row.revision,
-          acknowledgedReadiness: parsed.acknowledgeReadiness ?? false,
+          versionId: version.id,
+          versionNumber: version.versionNumber,
+          ...(request.sourceVersion
+            ? { rolledBackToVersionNumber: request.sourceVersion.versionNumber }
+            : {}),
+          acknowledgedReadiness: request.acknowledgeReadiness ?? false,
         },
       },
       tx
     );
-    return row;
+    return { row, version };
   });
   refreshSoon();
   return {
-    scopeKey: view.scopeKey,
-    serviceId: view.serviceId,
-    mode: view.mode,
-    definition: view.definition as NoiseControlDefinition,
-    revision: view.revision,
-    updatedAt: view.updatedAt,
+    scopeKey: view.row.scopeKey,
+    serviceId: view.row.serviceId,
+    mode: view.row.mode,
+    definition: view.row.definition as NoiseControlDefinition,
+    revision: view.row.revision,
+    updatedAt: view.row.updatedAt,
+    versionId: view.version.id,
+    versionNumber: view.version.versionNumber,
   };
+}
+
+/**
+ * Caller must authorize INTELLIGENCE_MANAGE. Publishes a new immutable version. Compare-and-set on
+ * revision; ON needs readiness or an explicit acknowledgement.
+ */
+export async function saveNoiseControlPolicy(
+  input: unknown,
+  actor: IntelligenceActor
+): Promise<NoiseControlPolicyView> {
+  const parsed = parseOrThrow(noiseControlPolicyInputSchema, input);
+  return publishPolicy(
+    {
+      serviceId: parsed.serviceId ?? null,
+      mode: parsed.mode,
+      definition: parsed.definition,
+      expectedRevision: parsed.expectedRevision,
+      acknowledgeReadiness: parsed.acknowledgeReadiness,
+      origin: 'PUBLISH',
+    },
+    actor
+  );
+}
+
+/**
+ * Caller must authorize INTELLIGENCE_MANAGE. Publishes a clone of an earlier version (mode and
+ * definition) as the newest version. The same compare-and-set and SHADOW→ON readiness gate apply, and a
+ * version whose definition no longer validates against the current schema is refused.
+ */
+export async function rollbackNoiseControlPolicy(
+  input: unknown,
+  actor: IntelligenceActor
+): Promise<NoiseControlPolicyView> {
+  const parsed = parseOrThrow(noiseControlRollbackInputSchema, input);
+  const serviceId = parsed.serviceId ?? null;
+  const source = await prisma.noiseControlPolicyVersion.findUnique({
+    where: { id: parsed.versionId },
+  });
+  if (!source || source.scopeKey !== noiseScopeKey(serviceId))
+    throw invalid('versionId', 'Unknown version for this scope');
+  const definition = noiseControlDefinitionSchema.safeParse(source.definition);
+  if (!definition.success)
+    throw invalid('versionId', 'That version no longer validates and cannot be restored');
+  return publishPolicy(
+    {
+      serviceId,
+      mode: source.mode,
+      definition: definition.data,
+      expectedRevision: parsed.expectedRevision,
+      acknowledgeReadiness: parsed.acknowledgeReadiness,
+      origin: 'ROLLBACK',
+      sourceVersion: { id: source.id, versionNumber: source.versionNumber },
+    },
+    actor
+  );
 }
 
 // ---------------------------------------------------------------------------------------------------

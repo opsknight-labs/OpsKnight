@@ -35,6 +35,7 @@ export async function recordPrePagingDecision(
       sourceId: decision.sourceId,
       sourceName: decision.sourceName?.slice(0, 120) ?? null,
       reason: decision.reason.slice(0, 500),
+      policyVersionId: decision.policyVersionId ?? null,
       evidence: {
         ...decision.evidence,
         ...(decision.urgency ? { urgency: decision.urgency } : {}),
@@ -64,6 +65,9 @@ export interface PrePagingDecisionRow {
   reason: string;
   reversedAt: Date | null;
   createdAt: Date;
+  /** The policy version the decision was evaluated against (null for decisions made before versioning). */
+  policyVersionId: string | null;
+  policyVersionNumber: number | null;
 }
 
 export async function listPrePagingDecisions(
@@ -98,9 +102,24 @@ export async function listPrePagingDecisions(
       reason: true,
       reversedAt: true,
       createdAt: true,
+      policyVersionId: true,
     },
   });
-  return rows.map(({ service, ...row }) => ({ ...row, serviceName: service.name }));
+  const versionIds = [
+    ...new Set(rows.map(row => row.policyVersionId).filter((v): v is string => Boolean(v))),
+  ];
+  const versions = versionIds.length
+    ? await client.noiseControlPolicyVersion.findMany({
+        where: { id: { in: versionIds } },
+        select: { id: true, versionNumber: true },
+      })
+    : [];
+  const numbers = new Map(versions.map(version => [version.id, version.versionNumber]));
+  return rows.map(({ service, ...row }) => ({
+    ...row,
+    serviceName: service.name,
+    policyVersionNumber: row.policyVersionId ? (numbers.get(row.policyVersionId) ?? null) : null,
+  }));
 }
 
 export type ReversalOutcome =

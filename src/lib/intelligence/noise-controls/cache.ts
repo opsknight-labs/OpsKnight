@@ -49,6 +49,8 @@ export function compilePolicy(row: {
   mode: 'OFF' | 'SHADOW' | 'ON';
   revision: number;
   definition: unknown;
+  activeVersionId?: string | null;
+  activeVersion?: { policyRevision: number } | null;
 }): CompiledPolicy {
   const definition = parseDefinition(row.definition);
   return {
@@ -56,6 +58,12 @@ export function compilePolicy(row: {
     serviceId: row.serviceId,
     mode: row.mode,
     revision: row.revision,
+    // Only a version published at this exact revision describes what is running; a stale pointer (a row
+    // rewritten by a replica that predates versioning) yields null until the backfill captures it.
+    versionId:
+      row.activeVersionId && row.activeVersion?.policyRevision === row.revision
+        ? row.activeVersionId
+        : null,
     definition,
     orchestration: definition.orchestration.rules
       .filter(rule => rule.enabled)
@@ -98,7 +106,10 @@ export async function loadPrePagingSnapshot(
 ): Promise<PrePagingSnapshot> {
   const horizon = new Date(now.getTime() + WINDOW_HORIZON_MS);
   const [policies, windows, rules] = await Promise.all([
-    client.noiseControlPolicy.findMany({ where: { mode: { not: 'OFF' } } }),
+    client.noiseControlPolicy.findMany({
+      where: { mode: { not: 'OFF' } },
+      include: { activeVersion: { select: { policyRevision: true } } },
+    }),
     client.maintenanceWindow.findMany({
       where: {
         enabled: true,

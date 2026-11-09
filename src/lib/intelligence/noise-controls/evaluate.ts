@@ -36,6 +36,8 @@ export interface CompiledPolicy {
   serviceId: string | null;
   mode: NoiseControlModeValue;
   revision: number;
+  /** The published version this compiled policy came from (null until the scope is backfilled). */
+  versionId?: string | null;
   definition: NoiseControlDefinition;
   orchestration: Array<{
     id: string;
@@ -116,7 +118,7 @@ function labelOf(labels: Readonly<Record<string, string>>, key: string): string 
 }
 
 function result(
-  base: Pick<PrePagingDecisionResult, 'mode' | 'policyRevision'>,
+  base: Pick<PrePagingDecisionResult, 'mode' | 'policyRevision' | 'policyVersionId'>,
   fields: Partial<PrePagingDecisionResult> & {
     action: PrePagingActionName;
     control: PrePagingControlName | null;
@@ -127,6 +129,7 @@ function result(
   return {
     mode: base.mode,
     policyRevision: base.policyRevision,
+    policyVersionId: base.policyVersionId ?? null,
     apply: base.mode === 'ON' && fields.action !== 'NONE' && !fields.failOpen,
     sourceId: null,
     sourceName: null,
@@ -141,11 +144,12 @@ function failOpen(
   reason: PrePagingFailOpenReason,
   mode: NoiseControlModeValue,
   startedAt: number,
-  policyRevision: number | null = null
+  policyRevision: number | null = null,
+  policyVersionId: string | null = null
 ): PrePagingDecisionResult {
   if (reason !== 'off') addOperationalMetric('opsknight_prepaging_fail_open_total', 1, { reason });
   return result(
-    { mode, policyRevision },
+    { mode, policyRevision, policyVersionId },
     { action: 'NONE', control: null, reason: `fail-open: ${reason}`, failOpen: { reason } },
     startedAt
   );
@@ -518,8 +522,9 @@ export async function evaluatePrePagingControls(
   if (!snapshot) return failOpen('cache_cold', 'OFF', startedAt);
   const policy = resolvePolicy(snapshot, input.serviceId);
   if (!policy || policy.mode === 'OFF')
-    return failOpen('off', 'OFF', startedAt, policy?.revision ?? null);
-  const base = { mode: policy.mode, policyRevision: policy.revision };
+    return failOpen('off', 'OFF', startedAt, policy?.revision ?? null, policy?.versionId ?? null);
+  const policyVersionId = policy.versionId ?? null;
+  const base = { mode: policy.mode, policyRevision: policy.revision, policyVersionId };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -540,7 +545,7 @@ export async function evaluatePrePagingControls(
           deadline,
         ]);
         if (outcome === 'deadline')
-          return failOpen('deadline', policy.mode, startedAt, policy.revision);
+          return failOpen('deadline', policy.mode, startedAt, policy.revision, policyVersionId);
         decision = outcome;
       } else {
         decision = stage.transform
@@ -574,7 +579,7 @@ export async function evaluatePrePagingControls(
       });
     return final;
   } catch {
-    return failOpen('error', policy.mode, startedAt, policy.revision);
+    return failOpen('error', policy.mode, startedAt, policy.revision, policyVersionId);
   } finally {
     if (timer) clearTimeout(timer);
     observeOperationalHistogram(

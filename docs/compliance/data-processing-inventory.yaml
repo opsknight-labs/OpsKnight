@@ -123,6 +123,7 @@ domains:
         digest-recipient-ids,
         pre-paging-decision-evidence,
         maintenance-and-suppression-authorship,
+        noise-control-policy-versions-and-publisher-ids,
         heartbeat-token-hashes,
       ]
     purpose:

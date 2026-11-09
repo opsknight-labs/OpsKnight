@@ -6,6 +6,7 @@ import { addOperationalMetric, setOperationalGauge } from '@/lib/metrics/operati
 import { getIntelligenceSettings } from '../settings/service';
 import { purgePrePagingDecisions } from './decisions';
 import { hashHeartbeatToken } from './manage';
+import { backfillNoiseControlPolicyVersions } from './policy-versions';
 
 type Client = Prisma.TransactionClient | typeof prisma;
 
@@ -193,11 +194,13 @@ export interface PrePagingSweepResult {
   heartbeats: HeartbeatSweepResult;
   expiredRulesDisabled: number;
   decisionsPurged: number;
+  /** Policy rows captured as versions by the bounded backfill this tick. */
+  policyVersionsCaptured: number;
 }
 
 /**
  * The cron tick's bounded sweep for the noise controls: heartbeat misses, expired suppression rules and
- * decision retention. Each part is isolated so one failure never stops the others.
+ * decision retention, plus the bounded policy-version backfill. Each part is isolated so one failure never stops the others.
  */
 export async function sweepPrePagingControls(
   now: Date = new Date()
@@ -206,6 +209,7 @@ export async function sweepPrePagingControls(
     heartbeats: { checked: 0, late: 0, missing: 0, raised: 0 },
     expiredRulesDisabled: 0,
     decisionsPurged: 0,
+    policyVersionsCaptured: 0,
   };
   try {
     result.heartbeats = await sweepHeartbeatMonitors(now);
@@ -223,6 +227,14 @@ export async function sweepPrePagingControls(
     ).count;
   } catch (error) {
     logger.warn('[Intelligence] Expired suppression rule sweep failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  try {
+    // Bounded: captures policy rows saved before versioning (or by an older replica) as versions.
+    result.policyVersionsCaptured = (await backfillNoiseControlPolicyVersions()).captured;
+  } catch (error) {
+    logger.warn('[Intelligence] Noise policy version backfill failed', {
       error: error instanceof Error ? error.message : String(error),
     });
   }

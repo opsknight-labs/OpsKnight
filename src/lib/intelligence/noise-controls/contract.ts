@@ -241,6 +241,18 @@ export const noiseControlPolicyInputSchema = z
   .strict();
 export type NoiseControlPolicyInput = z.infer<typeof noiseControlPolicyInputSchema>;
 
+/** Rollback publishes a clone of an earlier version as the newest version; history is never rewritten. */
+export const noiseControlRollbackInputSchema = z
+  .object({
+    serviceId: id.nullable().optional(),
+    versionId: id,
+    /** Compare-and-set against the live policy revision, exactly like a save. */
+    expectedRevision: z.number().int().min(0),
+    acknowledgeReadiness: z.boolean().optional(),
+  })
+  .strict();
+export type NoiseControlRollbackInput = z.infer<typeof noiseControlRollbackInputSchema>;
+
 const isoDate = z.iso.datetime({ offset: true });
 
 export const maintenanceWindowInputSchema = z
@@ -386,6 +398,8 @@ export interface PrePagingDecisionResult {
   transform?: PrePagingTransform;
   evidence: Record<string, unknown>;
   policyRevision: number | null;
+  /** The published NoiseControlPolicyVersion the decision was evaluated against; null before backfill. */
+  policyVersionId?: string | null;
   failOpen?: { reason: PrePagingFailOpenReason };
   elapsedMs: number;
 }
