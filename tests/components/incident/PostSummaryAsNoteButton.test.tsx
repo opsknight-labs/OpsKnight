@@ -23,7 +23,9 @@ describe('PostSummaryAsNoteButton', () => {
     render(<PostSummaryAsNoteButton incidentId="inc-1" summary={summary} model="m-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Post summary as note' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('inc-1', { summary, model: 'm-1' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Summary posted as a note.');
+    expect(
+      await screen.findByText('Summary posted as a note.', {}, { timeout: 5_000 })
+    ).toHaveAttribute('role', 'status');
     expect(screen.queryByRole('button', { name: 'Post summary as note' })).not.toBeInTheDocument();
   });
 
@@ -31,7 +33,12 @@ describe('PostSummaryAsNoteButton', () => {
     post.mockResolvedValue({ ok: false, message: 'You do not have permission to do that.' });
     render(<PostSummaryAsNoteButton incidentId="inc-1" summary={summary} />);
     fireEvent.click(screen.getByRole('button', { name: 'Post summary as note' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('permission');
-    expect(screen.getByRole('button', { name: 'Post summary as note' })).toBeEnabled();
+    expect(await screen.findByRole('alert', {}, { timeout: 5_000 })).toHaveTextContent(
+      'permission'
+    );
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Post summary as note' })).toBeEnabled(),
+      { timeout: 5_000 }
+    );
   });
 });

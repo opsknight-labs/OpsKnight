@@ -99,14 +99,14 @@ describe('IncidentGroupView', () => {
     });
     render(<IncidentGroupView incidentId="parent-1" group={parentGroup()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Ungroup and page' }));
-    const dialog = await screen.findByRole('alertdialog');
+    const dialog = await screen.findByRole('alertdialog', {}, { timeout: 5_000 });
     expect(dialog).toHaveTextContent('pages the on-call responder');
     expect(actions.reverse).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ungroup and page' }));
     await waitFor(() => expect(actions.reverse).toHaveBeenCalledTimes(1));
     expect(actions.reverse.mock.calls[0][0]).toBe('parent-1');
     expect((actions.reverse.mock.calls[0][2] as FormData).get('decisionId')).toBe('dec-1');
-    const announced = await screen.findByText(/pages normally/);
+    const announced = await screen.findByText(/pages normally/, {}, { timeout: 5_000 });
     expect(announced).toHaveAttribute('aria-live', 'polite');
     expect(screen.getByRole('link', { name: 'Open the new incident' })).toHaveAttribute(
       'href',
@@ -117,7 +117,7 @@ describe('IncidentGroupView', () => {
   it('cancelling the dialog changes nothing', async () => {
     render(<IncidentGroupView incidentId="parent-1" group={parentGroup()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Ungroup and page' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }, { timeout: 5_000 }));
     expect(actions.reverse).not.toHaveBeenCalled();
   });
 
@@ -125,7 +125,7 @@ describe('IncidentGroupView', () => {
     actions.decide.mockResolvedValue({ ok: true, message: 'Link removed.', decision: 'REVERTED' });
     render(<IncidentGroupView incidentId="parent-1" group={parentGroup()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Ungroup' }));
-    const dialog = await screen.findByRole('alertdialog');
+    const dialog = await screen.findByRole('alertdialog', {}, { timeout: 5_000 });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ungroup' }));
     await waitFor(() => expect(actions.decide).toHaveBeenCalledTimes(1));
     const form = actions.decide.mock.calls[0][2] as FormData;

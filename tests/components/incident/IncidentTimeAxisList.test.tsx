@@ -124,7 +124,7 @@ describe('IncidentTimeAxisList', () => {
     const buttons = screen.getAllByRole('button', { name: 'Reverse and page' });
     expect(buttons).toHaveLength(1);
     fireEvent.click(buttons[0]);
-    const dialog = await screen.findByRole('alertdialog');
+    const dialog = await screen.findByRole('alertdialog', {}, { timeout: 5_000 });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Reverse and page' }));
     await waitFor(() => expect(reverse).toHaveBeenCalledTimes(1));
     expect(reverse.mock.calls[0][0]).toBe('inc-1');

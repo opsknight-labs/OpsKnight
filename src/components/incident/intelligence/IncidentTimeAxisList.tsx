@@ -87,7 +87,7 @@ export default function IncidentTimeAxisList({
             </p>
             {entry.why && entry.why.length > 0 && (
               <details className="text-xs">
-                <summary className="inline-flex min-h-8 cursor-pointer items-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <summary className="inline-flex min-h-11 cursor-pointer sm:min-h-8 items-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   Why?
                 </summary>
                 <ul className="mt-1 list-disc space-y-0.5 pl-5 text-foreground/80">
