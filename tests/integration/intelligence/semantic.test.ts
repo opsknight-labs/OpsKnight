@@ -683,7 +683,13 @@ it('pauses a budget-exhausted backfill without provider egress or dead letters a
     (await db.aiUsageDay.findUniqueOrThrow({ where: { day } })).backgroundEmbeddingTokens
   ).toBe(100000);
   const settings = await getAiSettings();
-  const { revision, ...values } = settings;
+  // Routing and investigation mode are saved by their own command, not by updateAiSettings.
+  const {
+    revision,
+    capabilityRouting: _routing,
+    squireInvestigationEnabled: _inv,
+    ...values
+  } = settings;
   await updateAiSettings(
     { ...values, backgroundEmbeddingBudgetPercent: 40, expectedRevision: revision },
     ctx
