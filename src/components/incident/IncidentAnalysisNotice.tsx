@@ -122,18 +122,18 @@ export default function IncidentAnalysisNotice({
   };
   const tone =
     state.status === 'CURRENT' && state.lastSuccessfulAt
-      ? 'border-emerald-600/30 bg-emerald-500/5'
+      ? 'border-status-ok/40 bg-status-ok-soft dark:bg-status-ok/10'
       : state.status === 'FAILED'
-        ? 'border-red-600/30 bg-red-500/5'
+        ? 'border-status-critical/40 bg-status-critical-soft dark:bg-status-critical/10'
         : POLLING.has(state.status)
-          ? 'border-amber-600/30 bg-amber-500/5'
+          ? 'border-status-elevated/40 bg-status-elevated-soft dark:bg-status-elevated/10'
           : 'border-border bg-muted/30';
   return (
     <div
       ref={element}
       role="group"
       aria-label="Recommendation freshness"
-      className={`mb-3 rounded-lg border p-3 text-sm ${tone}`}
+      className={`mb-3 rounded-lg border p-3 text-sm text-foreground ${tone}`}
     >
       <p role="status" aria-live="polite" aria-atomic="true">
         {state.message}
@@ -156,7 +156,7 @@ export default function IncidentAnalysisNotice({
           type="button"
           disabled={checking || refreshing}
           onClick={() => setEpoch(value => value + 1)}
-          className="min-h-8 rounded border border-border px-2 disabled:opacity-60"
+          className="min-h-11 rounded border border-border bg-background px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:min-h-8 sm:px-2"
         >
           {checking ? 'Checking…' : 'Check again'}
         </button>
@@ -165,13 +165,16 @@ export default function IncidentAnalysisNotice({
             type="button"
             disabled={checking || refreshing}
             onClick={() => void requestRefresh()}
-            className="min-h-8 rounded border border-border px-2 disabled:opacity-60"
+            className="min-h-11 rounded border border-border bg-background px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:min-h-8 sm:px-2"
           >
             Refresh recommendations
           </button>
         )}
         {state.diagnosticsHref && (
-          <Link href="/settings/intelligence" className="underline underline-offset-2">
+          <Link
+            href="/settings/intelligence"
+            className="inline-flex min-h-11 items-center underline underline-offset-2 sm:min-h-8"
+          >
             Operator diagnostics
           </Link>
         )}

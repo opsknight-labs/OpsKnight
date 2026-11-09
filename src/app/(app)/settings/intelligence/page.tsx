@@ -127,7 +127,7 @@ export default async function IntelligenceSettingsPage() {
         process.env.OPSKNIGHT_INTELLIGENCE_DEDICATED !== 'true' && (
           <p
             role="status"
-            className="rounded-lg border border-amber-600/30 bg-amber-500/5 p-3 text-sm"
+            className="rounded-lg border border-status-elevated/40 bg-status-elevated-soft p-3 text-sm text-foreground dark:bg-status-elevated/10"
           >
             Intelligence shares this process with paging work. For isolated capacity, use the
             dedicated Intelligence worker in a split deployment.

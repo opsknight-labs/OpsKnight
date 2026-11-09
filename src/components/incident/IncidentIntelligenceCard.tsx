@@ -83,7 +83,7 @@ export default async function IncidentIntelligenceCard({ incidentId }: { inciden
                 </p>
               )}
               <details className="text-xs">
-                <summary className="min-h-8 cursor-pointer py-2 font-medium">
+                <summary className="min-h-11 cursor-pointer py-3 font-medium sm:min-h-8 sm:py-2">
                   Why this matched
                 </summary>
                 <ul className="flex flex-wrap gap-1" aria-label="Why this matched">

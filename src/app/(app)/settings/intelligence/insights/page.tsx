@@ -1,3 +1,4 @@
+import EmptyState from '@/components/ui/EmptyState';
 import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import {
@@ -74,7 +75,12 @@ export default async function IntelligenceInsightsPage() {
       </header>
 
       {!insights ? (
-        <p className="text-sm text-muted-foreground">Unavailable.</p>
+        <EmptyState
+          size="sm"
+          variant="simple"
+          title="Insights unavailable"
+          description="They could not be loaded. Refresh to try again."
+        />
       ) : (
         <>
           {insights.weekly && (
@@ -159,7 +165,7 @@ export default async function IntelligenceInsightsPage() {
             description={`The same masked incident title at least ${RECURRING_MIN_OCCURRENCES} times on at least 2 days in the last ${RECURRING_WINDOW_DAYS} days.`}
           >
             {insights.recurring.length === 0 ? (
-              <p className="py-3 text-sm text-muted-foreground">No recurring problems found.</p>
+              <EmptyState size="sm" variant="simple" title="No recurring problems found" />
             ) : (
               <ul className="divide-y divide-border">
                 {insights.recurring.map(item => (
