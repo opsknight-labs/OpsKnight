@@ -564,6 +564,29 @@ and the burst gate passes.
   upstream decay and global changes, fitted by coordinate descent from feedback on cause findings and
   offered only when held-out loss improves on the shipped defaults; applied through `response.weights` in
   a policy version.
+- **Runbook-ranking weights** (`learning/runbook-weights.ts`, sharing `learning/bounded-fit.ts` with the
+  cause fit): `scoreRunbook` in `recommendations/wilson.ts` takes bounded weights for the service-wide
+  record (0.5–1), the same-problem record (0.5–1), the MTTR bonus (0–0.3) and a prior for a bound but untried
+  runbook (0–0.2, so it never outranks even a 1-of-1 record); the defaults reproduce the shipped Wilson
+  ranking exactly. Labels are the latest accept/reject verdict on a `RUNBOOK_RECOMMENDATION` finding and,
+  overriding it, the observed outcome of the first run of that runbook on that incident after it was
+  recommended (fixed = succeeded and resolved within 120 minutes; not fixed = failed, timed out, or that
+  window elapsed unresolved; runs on already-resolved incidents and still-open windows are undecided). Each
+  label carries the evidence the ranker stored, so no history is re-derived. The reads start from recent
+  feedback and from recently finished executions via `(status, updatedAt)`, are capped at 2,000 rows each
+  and run under a 5 s statement timeout. A proposal needs 40 labels, 8 of each verdict and a held-out
+  log-loss improvement of 0.01; it is recomputed server-side on publish and stored as
+  `response.runbookWeights` in a new policy version (absent = shipped ranking; findings ranked with learned
+  weights carry `learnedWeights: true`).
+- **Impact estimate** (`impact/view.ts`, `IncidentImpactCard` in the **Impact** tab): dependent services
+  from `downstreamDistances` over the cached active edges (depth 3, 200 candidates), re-walked over the
+  services the viewer can read so a path through a hidden service is never followed; open-incident counts
+  under the viewer's incident scope; `StatusPageService` components of those services with
+  `Service.status`; and `getSloBurn` for the incident's service with each objective's whole-window budget
+  (`objectiveBudgetMinutes`) and the share this incident has used. SLO burn counts every incident on the
+  service, so it is returned only to viewers with `metrics.read.all` (the shared-objective-history rule).
+  Every query is capped; the card is a lazy server component that renders nothing on failure and the shared
+  `EmptyState` when nothing applies.
 - **Time axis** (`timeline/service.ts`): alerts, changes, upstream incidents and noise decisions (read
   tolerantly, since the noise layer may not be migrated) relative to onset, under the viewer's read rules.
 - **Shift handoff** (`handoff/summary.ts`, `handoff/dispatch.ts`, called from `oncall-handoff.ts` at each

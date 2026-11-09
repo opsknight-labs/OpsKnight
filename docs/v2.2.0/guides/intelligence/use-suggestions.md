@@ -16,7 +16,7 @@ verification:
 # Use Intelligence suggestions and the assistant
 
 Open the **Intelligence** panel on an incident. Its tabs show Similar, Related, Causes & runbooks,
-Summary and Ask Squire. Tabs support arrow keys and scroll within the panel on phones. When enabled
+Timeline, Impact, Summary and Ask Squire. Tabs support arrow keys and scroll within the panel on phones. When enabled
 for the service, they can show:
 
 - **Similar past incidents**, with a match score and the reasons for the match. The score ranks suggestions;
@@ -47,6 +47,21 @@ and the percentage is a match strength from past incidents, not a probability.
 **Timeline** lines up this incident's alerts, recorded changes (with their risk score), incidents on upstream
 services and any noise-control decisions relative to when the incident opened, so you can see what changed
 just before it started.
+
+## Impact tab
+
+**Impact** estimates who else this incident affects:
+
+- **Dependent services**: services that depend on this one in the active dependency graph (up to three hops),
+  with their current status and how many open incidents they have. Only services you can open are listed,
+  and a dependency that runs through a service you cannot open is not followed.
+- **Status-page components** that show this service or a dependent one, with their current status, and a
+  note when the status page is not published.
+- **Error budget at risk**: for each availability or uptime objective on the service, the 1 hour and 6 hour
+  burn rates and roughly how much of the objective's error budget this incident has used so far. This part
+  needs global metrics access, because the burn counts every incident on the service.
+
+It is an estimate to check, not a measurement. When nothing applies the tab says so.
 
 ## Rate a suggestion
 
