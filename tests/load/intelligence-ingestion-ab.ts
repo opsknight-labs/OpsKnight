@@ -29,8 +29,10 @@
  *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate]
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { Session } from 'node:inspector';
+import { cpus, loadavg } from 'node:os';
 import { dirname } from 'node:path';
-import { performance } from 'node:perf_hooks';
+import { monitorEventLoopDelay, performance, PerformanceObserver } from 'node:perf_hooks';
 import prisma from '../../src/lib/prisma';
 import { processEvent, type EventPayload } from '../../src/lib/events';
 import {
@@ -44,6 +46,7 @@ import {
   type WorkHandlers,
 } from '../../src/lib/intelligence/jobs/runner';
 import { enqueueWorkItems, type WorkKind } from '../../src/lib/intelligence/jobs/work-queue';
+import { resolveLanePool } from '../../src/lib/intelligence/jobs/lane-pool';
 import {
   primePrePagingSnapshot,
   resetPrePagingSnapshot,
@@ -81,6 +84,13 @@ interface Options {
   maxP50DeltaMs: number;
   gate: boolean;
   output: string | null;
+  /** When set, a V8 CPU profile of each timed burst (not warm-up or seeding) is written here. */
+  cpuProfileDir: string | null;
+  /**
+   * Diagnosis only: `--no-lane-yield` runs the lane without backing off while ingestion is busy, to
+   * measure what the yield is worth. Not valid for the release gate (the script refuses to gate with it).
+   */
+  laneYield: boolean;
 }
 
 /** Median of the per-repetition differences (candidate minus baseline). */
@@ -115,6 +125,84 @@ interface Sample {
   noiseFailOpen: Record<string, number>;
   /** Pre-paging decisions recorded during the timed burst (expected 0 with the lookup-only profile). */
   noiseDecisions: number;
+  /**
+   * Handlers that ran at some point during the burst (started before it ended and not finished before it
+   * began), completed or not. Reported for context; the gate still requires completed items.
+   */
+  laneItemsActive: number;
+  diagnostics: BurstDiagnostics;
+}
+
+/**
+ * Attribution data for the timed burst, so a regression can be traced to its cause rather than guessed:
+ * event-loop blocking (CPU work sharing the thread), Prisma pool queueing (work waiting for a pooled
+ * connection) and what the database backends were waiting on.
+ */
+interface BurstDiagnostics {
+  eventLoopDelayMs: { p50: number; p99: number; max: number; mean: number };
+  /** Share of wall time the main thread was busy (0..1), and process CPU per wall second. */
+  eventLoopUtilization: number;
+  processCpuPerSec: number;
+  /** Garbage collection pauses on the main thread during the burst (major = mark-compact). */
+  gc: { totalMs: number; majorMs: number; majorCount: number };
+  /** Prisma engine pool: queries that waited for a connection during the burst and how long in total. */
+  poolWait: { queries: number; totalMs: number; meanMs: number; peakWaiting: number };
+  /**
+   * Statements on the process (ingestion) pool, as timed by the Prisma engine: if these grow, the time is
+   * spent in PostgreSQL or the engine; if not, it is spent waiting on this process. When the lane shares
+   * that pool its statements are included too.
+   */
+  primaryStatements: { count: number; p50Ms: number; p99Ms: number; perEventMs: number };
+  /** Sum over 50 ms samples of backends in each wait state (type:event), for this database. */
+  waitEvents: Record<string, number>;
+}
+
+interface PoolSnapshot {
+  waitCount: number;
+  waitSumMs: number;
+}
+
+async function poolSnapshot(): Promise<PoolSnapshot> {
+  try {
+    const metrics = await prisma.$metrics.json();
+    const histogram = metrics.histograms.find(
+      metric => metric.key === 'prisma_client_queries_wait_histogram_ms'
+    )?.value;
+    return { waitCount: histogram?.count ?? 0, waitSumMs: histogram?.sum ?? 0 };
+  } catch {
+    return { waitCount: 0, waitSumMs: 0 };
+  }
+}
+
+type QueryEvent = { duration: number; query: string };
+const statementSink: { durations: number[] | null } = { durations: null };
+let statementListener = false;
+
+/** Listens on the process pool only; the lane's own pool (when it has one) is a different client. */
+function listenToPrimaryStatements() {
+  if (statementListener) return;
+  statementListener = true;
+  const primary = globalThis.prismaGlobal as unknown as
+    { $on(event: 'query', callback: (event: QueryEvent) => void): void } | undefined;
+  primary?.$on('query', event => {
+    if (!statementSink.durations || event.query.includes('pg_stat_activity')) return;
+    statementSink.durations.push(event.duration);
+  });
+}
+
+async function samplePoolWaiting(stop: { done: boolean }) {
+  let peak = 0;
+  while (!stop.done) {
+    try {
+      const metrics = await prisma.$metrics.json();
+      const waiting = metrics.gauges.find(g => g.key === 'prisma_client_queries_wait')?.value ?? 0;
+      peak = Math.max(peak, waiting);
+    } catch {
+      // Metrics unavailable: report zero rather than invent pressure.
+    }
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  return peak;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -150,6 +238,10 @@ function parseOptions(argv: string[]): Options {
     maxP50DeltaMs: read('max-p50-delta-ms', 2),
     gate: !argv.includes('--no-gate'),
     output: outputAt >= 0 ? argv[outputAt + 1] : null,
+    laneYield: !argv.includes('--no-lane-yield'),
+    cpuProfileDir: argv.includes('--cpu-profile-dir')
+      ? argv[argv.indexOf('--cpu-profile-dir') + 1]
+      : null,
   };
 }
 
@@ -321,16 +413,55 @@ async function seedBacklog(serviceIds: string[], count: number, queueWork: boole
 async function sampleDatabase(stop: { done: boolean }) {
   let peakLockWaiters = 0;
   let peakActiveBackends = 0;
+  const waitEvents: Record<string, number> = {};
   while (!stop.done) {
-    const [row] = await prisma.$queryRaw<Array<{ waiting: bigint; active: bigint }>>`
-      SELECT count(*) FILTER (WHERE wait_event_type = 'Lock')::bigint AS waiting,
-             count(*) FILTER (WHERE state = 'active')::bigint AS active
-      FROM pg_stat_activity WHERE datname = current_database()`;
-    peakLockWaiters = Math.max(peakLockWaiters, Number(row?.waiting ?? 0));
-    peakActiveBackends = Math.max(peakActiveBackends, Number(row?.active ?? 0));
+    const rows = await prisma.$queryRaw<
+      Array<{ wait: string; state: string | null; backends: bigint }>
+    >`
+      SELECT coalesce(wait_event_type || ':' || wait_event, 'CPU') AS wait, state, count(*)::bigint AS backends
+      FROM pg_stat_activity
+      WHERE datname = current_database() AND pid <> pg_backend_pid()
+        AND state IN ('active', 'idle in transaction')
+      GROUP BY 1, 2`;
+    let waiting = 0;
+    let active = 0;
+    for (const row of rows) {
+      const count = Number(row.backends);
+      if (row.wait.startsWith('Lock:')) waiting += count;
+      if (row.state === 'active') active += count;
+      const key = `${row.state === 'active' ? '' : 'idle-in-tx '}${row.wait}`;
+      waitEvents[key] = (waitEvents[key] ?? 0) + count;
+    }
+    peakLockWaiters = Math.max(peakLockWaiters, waiting);
+    // The sampler's own backend is excluded above; count it like the previous version did.
+    peakActiveBackends = Math.max(peakActiveBackends, active + 1);
     await new Promise(resolve => setTimeout(resolve, 50));
   }
-  return { peakLockWaiters, peakActiveBackends };
+  return { peakLockWaiters, peakActiveBackends, waitEvents };
+}
+
+/** Profiles only the timed window, so module loading, seeding and warm-up never appear in it. */
+async function profileWindow<T>(path: string | null, work: () => Promise<T>): Promise<T> {
+  if (!path) return work();
+  const session = new Session();
+  session.connect();
+  const post = (method: string, params?: object) =>
+    new Promise<unknown>((resolve, reject) =>
+      session.post(method, params ?? {}, (error, result) =>
+        error ? reject(error) : resolve(result)
+      )
+    );
+  await post('Profiler.enable');
+  await post('Profiler.setSamplingInterval', { interval: 250 });
+  await post('Profiler.start');
+  try {
+    return await work();
+  } finally {
+    const { profile } = (await post('Profiler.stop')) as { profile: unknown };
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(profile));
+    session.disconnect();
+  }
 }
 
 function eventFor(index: number, tag: string): EventPayload {
@@ -352,6 +483,27 @@ async function runBurst(serviceIds: string[], options: Options, tag: string) {
   let next = 0;
   const stopSampling = { done: false };
   const sampler = sampleDatabase(stopSampling);
+  const poolSampler = samplePoolWaiting(stopSampling);
+  const poolBefore = await poolSnapshot();
+  const loopDelay = monitorEventLoopDelay({ resolution: 1 });
+  loopDelay.enable();
+  const gc = { totalMs: 0, majorMs: 0, majorCount: 0 };
+  const gcObserver = new PerformanceObserver(list => {
+    for (const entry of list.getEntries()) {
+      gc.totalMs += entry.duration;
+      // NODE_PERFORMANCE_GC_MAJOR = 4 (mark-sweep-compact).
+      if ((entry as { detail?: { kind?: number } }).detail?.kind === 4) {
+        gc.majorMs += entry.duration;
+        gc.majorCount += 1;
+      }
+    }
+  });
+  gcObserver.observe({ entryTypes: ['gc'] });
+  listenToPrimaryStatements();
+  const statements: number[] = [];
+  statementSink.durations = statements;
+  const eluBefore = performance.eventLoopUtilization();
+  const cpuBefore = process.cpuUsage();
   const started = performance.now();
   await Promise.all(
     Array.from({ length: options.concurrency }, async () => {
@@ -372,27 +524,67 @@ async function runBurst(serviceIds: string[], options: Options, tag: string) {
     })
   );
   const elapsedSec = (performance.now() - started) / 1000;
+  const elu = performance.eventLoopUtilization(eluBefore).utilization;
+  const cpu = process.cpuUsage(cpuBefore);
+  loopDelay.disable();
+  gcObserver.disconnect();
+  statementSink.durations = null;
+  const poolAfter = await poolSnapshot();
   stopSampling.done = true;
-  const db = await sampler;
-  return { latencies, failures, elapsedSec, ...db };
+  const { waitEvents, ...db } = await sampler;
+  const peakWaiting = await poolSampler;
+  const waitQueries = poolAfter.waitCount - poolBefore.waitCount;
+  const waitTotalMs = poolAfter.waitSumMs - poolBefore.waitSumMs;
+  const ns = (value: number) => (Number.isFinite(value) ? value / 1e6 : 0);
+  const diagnostics: BurstDiagnostics = {
+    eventLoopDelayMs: {
+      p50: ns(loopDelay.percentile(50)),
+      p99: ns(loopDelay.percentile(99)),
+      max: ns(loopDelay.max),
+      mean: ns(loopDelay.mean),
+    },
+    eventLoopUtilization: elu,
+    processCpuPerSec: (cpu.user + cpu.system) / 1e6 / elapsedSec,
+    gc,
+    poolWait: {
+      queries: waitQueries,
+      totalMs: waitTotalMs,
+      meanMs: waitQueries > 0 ? waitTotalMs / waitQueries : 0,
+      peakWaiting,
+    },
+    primaryStatements: {
+      count: statements.length,
+      p50Ms: percentile(statements, 0.5),
+      p99Ms: percentile(statements, 0.99),
+      perEventMs: statements.reduce((sum, value) => sum + value, 0) / Math.max(1, latencies.length),
+    },
+    waitEvents,
+  };
+  return { latencies, failures, elapsedSec, ...db, diagnostics };
 }
 
 /** Keep the candidate busy: this harness publishes paging intents but has no paging delivery worker.
  * Bypass that synthetic backlog's backpressure in the harness only to measure worst-case contention.
  */
-function busyCandidate() {
-  const tracker = { completed: 0, stop: false };
+function busyCandidate(options: Options) {
+  const tracker = { completed: 0, started: 0, finished: 0, stop: false };
   const handlers = Object.fromEntries(
     Object.entries(DEFAULT_HANDLERS).map(([kind, handler]) => [
       kind,
       async (...args: Parameters<NonNullable<WorkHandlers[WorkKind]>>) => {
-        const result = await handler!(...args);
-        tracker.completed++;
-        return result;
+        tracker.started++;
+        try {
+          const result = await handler!(...args);
+          tracker.completed++;
+          return result;
+        } finally {
+          tracker.finished++;
+        }
       },
     ])
   ) as WorkHandlers;
   const state = createLaneState();
+  if (!options.laneYield) state.ingestionYield = undefined;
   const active = (async () => {
     while (!tracker.stop) {
       Object.assign(state, {
@@ -427,7 +619,7 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
   if (arm === 'candidate' && options.noiseControls) await enableNoiseControls(serviceIds);
   else resetPrePagingSnapshot();
 
-  const lane = laneOn ? busyCandidate() : null;
+  const lane = laneOn ? busyCandidate(options) : null;
   // Warm connections and caches in both arms so neither pays cold-start cost inside the timed window.
   await runBurst(serviceIds, { ...options, events: 20 }, `warm-${arm}-${repetition}`);
   // The queue length stays flat (indexing chains an analysis item), so progress is read from the
@@ -445,8 +637,13 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
   const completedBefore = lane?.tracker.completed ?? 0;
   const failOpenBefore = failOpenCounts();
   const decisionsBefore = await prisma.prePagingDecision.count();
-  const burst = await runBurst(serviceIds, options, `${arm}-${repetition}`);
+  const finishedBefore = lane?.tracker.finished ?? 0;
+  const burst = await profileWindow(
+    options.cpuProfileDir ? `${options.cpuProfileDir}/${arm}-${repetition}.cpuprofile` : null,
+    () => runBurst(serviceIds, options, `${arm}-${repetition}`)
+  );
   const completedAfter = lane?.tracker.completed ?? 0;
+  const startedAfter = lane?.tracker.started ?? 0;
   const failOpenAfter = failOpenCounts();
   const noiseDecisions = (await prisma.prePagingDecision.count()) - decisionsBefore;
   await lane?.stop();
@@ -469,8 +666,10 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
     peakLockWaiters: burst.peakLockWaiters,
     peakActiveBackends: burst.peakActiveBackends,
     laneItemsProcessed: laneOn ? Math.max(0, completedAfter - completedBefore) : 0,
+    laneItemsActive: laneOn ? Math.max(0, startedAfter - finishedBefore) : 0,
     noiseFailOpen,
     noiseDecisions,
+    diagnostics: burst.diagnostics,
   };
 }
 
@@ -511,7 +710,11 @@ async function main() {
   assertDedicatedDatabase();
   const options = parseOptions(process.argv.slice(2));
   setNoiseLookupRoute(options.noiseLookups);
+  if (options.gate && !options.laneYield) {
+    throw new Error('--no-lane-yield is a diagnosis mode; combine it with --no-gate.');
+  }
   const samples: Sample[] = [];
+  const loadAtStart = loadavg();
   for (let repetition = 0; repetition < options.repetitions; repetition += 1) {
     // Alternate which arm goes first so ordering effects cancel.
     const order: Arm[] =
@@ -521,7 +724,12 @@ async function main() {
       samples.push(sample);
       console.log(
         `rep ${repetition} ${arm.padEnd(9)} p50=${sample.p50Ms.toFixed(1)}ms p99=${sample.p99Ms.toFixed(1)}ms ` +
-          `${sample.throughputPerSec.toFixed(0)}/s fail=${sample.failures} lane=${sample.laneItemsProcessed}` +
+          `${sample.throughputPerSec.toFixed(0)}/s fail=${sample.failures} lane=${sample.laneItemsProcessed}/${sample.laneItemsActive} ` +
+          `elu=${sample.diagnostics.eventLoopUtilization.toFixed(2)} cpu=${sample.diagnostics.processCpuPerSec.toFixed(2)} ` +
+          `gc=${sample.diagnostics.gc.totalMs.toFixed(0)}ms major=${sample.diagnostics.gc.majorCount}/${sample.diagnostics.gc.majorMs.toFixed(0)}ms ` +
+          `eld p50/p99/max=${sample.diagnostics.eventLoopDelayMs.p50.toFixed(1)}/${sample.diagnostics.eventLoopDelayMs.p99.toFixed(1)}/${sample.diagnostics.eventLoopDelayMs.max.toFixed(1)}ms ` +
+          `stmt n/p50/p99/perEvent=${sample.diagnostics.primaryStatements.count}/${sample.diagnostics.primaryStatements.p50Ms}/${sample.diagnostics.primaryStatements.p99Ms}/${sample.diagnostics.primaryStatements.perEventMs.toFixed(1)}ms ` +
+          `poolwait mean=${sample.diagnostics.poolWait.meanMs.toFixed(2)}ms total=${sample.diagnostics.poolWait.totalMs.toFixed(0)}ms peak=${sample.diagnostics.poolWait.peakWaiting}` +
           (options.noiseControls
             ? ` noiseFailOpen=${JSON.stringify(sample.noiseFailOpen)} noiseDecisions=${sample.noiseDecisions}`
             : '')
@@ -569,6 +777,9 @@ async function main() {
     }, {}),
     noiseDecisionsInCandidate: candidate.reduce((sum, sample) => sum + sample.noiseDecisions, 0),
     node: process.version,
+    // Shared hosts skew both arms; record how loaded this one was so readers can judge the numbers.
+    host: { cpus: cpus().length, loadAverageAtStart: loadAtStart, loadAverageAtEnd: loadavg() },
+    lane: { pool: resolveLanePool(), yieldToIngestion: options.laneYield },
     pagingBackpressureBypassed: true,
     totalFailures,
     gate,
