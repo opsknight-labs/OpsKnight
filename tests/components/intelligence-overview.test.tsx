@@ -125,9 +125,7 @@ describe('SpeedPanel', () => {
     expect(within(tile('First insight, 90th percentile')).getByText('12 min')).toBeInTheDocument();
     expect(within(tile('Related suggestions accepted')).getByText('75%')).toBeInTheDocument();
     expect(within(tile('Findings rated helpful')).getByText('—')).toBeInTheDocument();
-    expect(
-      within(tile('Findings rated helpful')).getByText('No rated reviewed yet')
-    ).toBeInTheDocument();
+    expect(within(tile('Findings rated helpful')).getByText('None rated yet')).toBeInTheDocument();
     expect(within(tile('Triage chips accepted')).getByText('50%')).toBeInTheDocument();
   });
 
