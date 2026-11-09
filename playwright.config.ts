@@ -30,7 +30,7 @@ export default defineConfig({
     {
       name: 'chromium',
       testMatch:
-        /(auth-recovery|navigation-fast-path|host-bootstrap-routing|intelligence-ui|intelligence-overview)\.spec\.ts/,
+        /(auth-recovery|navigation-fast-path|host-bootstrap-routing|intelligence-ui|intelligence-overview|intelligence-incident-ux)\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
