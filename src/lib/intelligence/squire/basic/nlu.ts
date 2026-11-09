@@ -566,10 +566,13 @@ export interface Slots {
   /** The person asked for the next page of the previous list. */
   more: boolean;
   /** Explicit action verbs that may become a proposal in basic mode. */
-  action?: 'acknowledge' | 'resolve' | 'note' | 'reassign' | 'snooze' | 'link';
+  action?:
+    'acknowledge' | 'resolve' | 'note' | 'reassign' | 'snooze' | 'link' | 'escalate' | 'urgency';
   actionText?: string;
   /** Snooze duration in minutes when an action is snooze. */
   snoozeMinutes?: number;
+  /** Requested urgency when an action is urgency (extended actions). */
+  targetUrgency?: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -615,6 +618,18 @@ export function extractSlots(normalized: string, original: string): Slots {
     const action = text.match(
       /^(?:please |pls |ok |can you |could you |go ahead and )?(?:(ack(?:nowledge)?)|(resolve|close|mark (?:as )?resolved)|(add (?:a )?note|note|comment|log)|(assign|reassign|hand(?: it)? to)|(snooze|pause|silence|mute)|(link|mark (?:as )?related|relate))\b/
     );
+    // Extended action verbs (F3), checked first so "escalate" / "set urgency" are not read as other verbs.
+    const extended = text.match(
+      /^(?:please |pls |ok |can you |could you |go ahead and )?(?:(escalate|page the next (?:level|tier)|page next (?:level|tier))|((?:set|change|make|raise|lower|bump|drop|downgrade|upgrade)(?: the)? urgency|(?:set|make|mark|change)(?: this| it| the incident| this incident)?(?: urgency)? (?:to |as )?(?:high|medium|low)(?: urgency)?\b))/
+    );
+    if (extended) {
+      slots.action = extended[1] ? 'escalate' : 'urgency';
+      if (slots.action === 'urgency') {
+        const level = text.match(/\b(high|medium|low)\b/)?.[1];
+        if (level) slots.targetUrgency = level.toUpperCase() as Slots['targetUrgency'];
+      }
+      return slots;
+    }
     if (action) {
       slots.action = action[1]
         ? 'acknowledge'

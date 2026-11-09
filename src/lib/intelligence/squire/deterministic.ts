@@ -4,6 +4,7 @@ type Collect = (source: EvidenceSnapshot) => void;
 import prisma from '@/lib/prisma';
 import { readIncidentAnalysisState } from '../analysis/view';
 import { redactSecrets } from '../ai/redact';
+import { getAiSettings } from '../ai/settings';
 import {
   incidentReadWhere,
   scheduleReadWhere,
@@ -893,13 +894,113 @@ async function actionTurn(
       );
     }
     case 'snooze':
+    case 'escalate':
+    case 'urgency': {
+      // Extended actions (F3): offered only when the administrator turned them on.
+      const extended = await extendedBasicProposal(incident, slots, text, now);
+      if (extended) return result(extended.text, 'RESPONDERS', extended.extra);
       return result(
-        `Snoozing is done from the incident page, where you choose a duration and a reason: /incidents/${incident.id}. I can prepare acknowledge, resolve, note and reassign cards here.`,
+        slots.action === 'snooze'
+          ? `Snoozing is done from the incident page, where you choose a duration and a reason: /incidents/${incident.id}. I can prepare acknowledge, resolve, note and reassign cards here.`
+          : `That is done from the incident page: /incidents/${incident.id}. I can prepare acknowledge, resolve, note and reassign cards here.`,
         'RESPONDERS'
       );
+    }
     default:
       return result(text, 'UNKNOWN');
   }
+}
+
+const URGENCY_LADDER = ['LOW', 'MEDIUM', 'HIGH'] as const;
+
+/**
+ * Basic-mode cards for the simple extended actions (escalate, change urgency, snooze) on the incident on
+ * screen. Returns null when extended actions are off, so the caller keeps its plain guidance. The card is
+ * still built and checked by buildProposal; nothing here changes anything.
+ */
+async function extendedBasicProposal(
+  incident: ReadableIncident,
+  slots: Slots,
+  text: string,
+  now: Date
+): Promise<{
+  text: string;
+  extra: Partial<Omit<BasicTurnResult, 'text' | 'intent'>>;
+} | null> {
+  if (!(await getAiSettings()).squireExtendedActions) return null;
+  const confirm = 'Nothing happens until you confirm the card below.';
+  const title = short(incident.title);
+  if (slots.action === 'escalate') {
+    if (incident.status !== 'OPEN')
+      return {
+        text: `${title} is ${incident.status.toLowerCase()}, so there is nothing to escalate. Only an open incident pages the next level.`,
+        extra: {},
+      };
+    return {
+      text: `I can propose paging the next escalation level for ${title} now. ${confirm}`,
+      extra: { proposals: [{ action: 'escalate_incident', input: { incidentId: incident.id } }] },
+    };
+  }
+  if (slots.action === 'urgency') {
+    const current = URGENCY_LADDER.indexOf(incident.urgency as (typeof URGENCY_LADDER)[number]);
+    const direction = /\b(lower|drop|downgrade|reduce|decrease)\b/.test(text)
+      ? -1
+      : /\b(raise|bump|upgrade|increase)\b/.test(text)
+        ? 1
+        : 0;
+    const target =
+      slots.targetUrgency ??
+      (direction !== 0 && current >= 0
+        ? URGENCY_LADDER[Math.max(0, Math.min(2, current + direction))]
+        : undefined);
+    if (!target)
+      return {
+        text: 'Which urgency should it have: high, medium or low?',
+        extra: {
+          suggestions: ['Set urgency to high', 'Set urgency to medium', 'Set urgency to low'],
+          nextState: pendingState(
+            'intent',
+            'set urgency',
+            'RESPONDERS',
+            ['high', 'medium', 'low'].map(level => ({ label: `Set urgency to ${level}` })),
+            now
+          ),
+        },
+      };
+    if (target === incident.urgency)
+      return { text: `${title} is already ${target.toLowerCase()} urgency.`, extra: {} };
+    return {
+      text: `I can propose changing the urgency of ${title} to ${target.toLowerCase()}. ${confirm}`,
+      extra: {
+        proposals: [
+          { action: 'change_urgency', input: { incidentId: incident.id, urgency: target } },
+        ],
+      },
+    };
+  }
+  // Snooze: bounded to one day from here; the incident page allows longer.
+  if (!['OPEN', 'ACKNOWLEDGED', 'SNOOZED'].includes(incident.status))
+    return {
+      text: `${title} is ${incident.status.toLowerCase()}, so it cannot be snoozed.`,
+      extra: {},
+    };
+  if (!slots.snoozeMinutes)
+    return {
+      text: 'For how long? Reply with a duration such as "30 minutes" or "2 hours" (up to 24 hours).',
+      extra: {
+        suggestions: ['30 minutes', '1 hour', '4 hours'],
+        nextState: pendingState('incident', 'snooze this incident', 'RESPONDERS', undefined, now),
+      },
+    };
+  const minutes = Math.min(24 * 60, Math.max(5, slots.snoozeMinutes));
+  const capped =
+    minutes < slots.snoozeMinutes ? ' (the assistant can snooze for at most 24 hours)' : '';
+  return {
+    text: `I can propose snoozing ${title} for ${minutes % 60 === 0 ? `${minutes / 60} hour${minutes === 60 ? '' : 's'}` : `${minutes} minutes`}${capped}. ${confirm}`,
+    extra: {
+      proposals: [{ action: 'snooze_incident', input: { incidentId: incident.id, minutes } }],
+    },
+  };
 }
 
 /** Resolves typed names to visible services, teams and people; asks when several are plausible. */
