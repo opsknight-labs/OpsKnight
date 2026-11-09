@@ -236,7 +236,7 @@ minutes per person; it never holds message text. The only writers outside the ac
 `intelligence/assistant/` (dialogue state, the suggested-checks library and feedback), kept out of
 `squire/` so the architecture test can keep `squire/` read-only and limit `assistant/` to those three
 tables. Identical questions are served from a 10-second
-per-actor cache with their evidence. A `pageContext` (service, team, schedule, runbook, alert) from the
+per-actor cache with their evidence. A `pageContext` (service, team, schedule, runbook, alert, change) from the
 launcher is read under the person's own visibility or ignored. All patterns are bounded literals over a
 message capped at 2,000 characters; a unit test times adversarial input. A 300-utterance paraphrase
 corpus (`tests/unit/intelligence-squire-nlu.test.ts`) must classify at ≥95% and slots at ≥90%.
@@ -347,6 +347,44 @@ straight after the system prompt, so the incident briefing stays pinned first: w
 `SUMMARIZE` route (bounded input and output, classified at the highest class of the turns); otherwise, or
 when that call fails, by a deterministic digest of the questions and answer leads. Browser-held history is
 unchanged (the request schema still keeps the latest ten turns).
+
+**Squire outside the web app (opt-in).** Three switches in the AI settings, all off by default and each
+also requiring the assistant itself to be on: `squireChatOpsEnabled` (Slack and Microsoft Teams),
+`squireMcpEnabled` (the `ask_squire` MCP tool) and `squireMobileEnabled` (mobile incident pages). Every
+surface runs exactly the web turn (`collectSquireTurn` in `squire/surfaces.ts` wraps `streamSquire`):
+basic or AI, the person's own permissions, the same tools, citations and sealed proposals.
+
+- _Slack._ `@squire <question>` (an `app_mention` event) in an incident channel is verified, queued
+  through the durable ChatOps intent pipeline (de-duplicated by Slack's `event_id`, nothing queued while
+  the switch is off) and answered by the worker in the thread with `chat.postMessage`. The stored response
+  is encrypted, like the request payload. `/incident ask <question>` answers privately to the asker. The
+  Slack account resolves to an OpsKnight user through the existing verified-email mapping; an unlinked
+  account gets no answer. Only incident channels (bound to the signed workspace exactly as `/incident`
+  binds them) are answered, with the channel's incident as context.
+- _Teams._ An @mention of the bot in an incident war room (the bot must be the mentioned entity, so
+  channel-message permissions never make it answer everything) is queued the same way and answered in
+  the thread through the Bot Connector, with the JWT-verified, trusted-host service URL. The person
+  resolves through the existing Teams identity links (`ChatIdentityLink`).
+- _Confirm buttons._ A write proposal becomes Confirm/Dismiss buttons (Slack) or an `Action.Execute`
+  (Teams) carrying the sealed token and the asker's user id. The click resolves the clicking account,
+  refuses anyone but the asker, rate-limits (20 per minute per person; questions: 6 per minute), and
+  calls `executeSquireAction(actor, token, channel)`. With a chat channel the executor authorizes the
+  user inside the same serializable transaction as the domain command (the ChatOps incident
+  authorization, plus the responder floor for resolve and reassign), re-checks the signed preconditions
+  and writes the receipt and an audit entry with `source: INTEGRATION`. A result is posted to the channel
+  only from the executor's own outcome. A sealed token too large for a Slack button (a long resolution
+  note) is offered as an OpsKnight link instead.
+- _MCP._ `ask_squire` is listed only while the switch is on and only for connections granted every read
+  scope Squire's tools use (`incidents`, `services`, `schedules`, `teams`, `runbooks`, `postmortems`),
+  so asking cannot read more than the connection could. It is read-only: proposals come back as
+  descriptions with a link and never with their token; the architecture test keeps the executor out of
+  the MCP module. Answer text is projected like other MCP business text. 10 questions per minute per
+  person.
+- _Mobile and page context._ `/m/incidents/[id]` mounts the same lazy launcher full screen
+  (`MobileSquireMount`). The launcher derives page context from desktop and mobile paths
+  (`components/squire/page-context.ts`): incidents, services, teams, schedules, runbooks, alerts and
+  changes. A change page resolves through `readChangeReference` (its service's visibility) and makes
+  "this service" mean the change's service; runbook pages resolve under `runbookReadWhere`.
 
 **Saved conversations (opt-in).** An administrator can let people save conversations. The chat route then
 stores each completed answer (never a failed or cancelled one) in `SquireConversation`/`SquireMessage`,
