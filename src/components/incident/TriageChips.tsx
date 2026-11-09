@@ -82,7 +82,14 @@ function TriageChip({
         {canAct && !decided && (
           <form action={action} className="flex items-center gap-2">
             <input type="hidden" name="findingId" value={suggestion.findingId} />
-            <Button type="submit" name="decision" value="ACCEPT" size="sm" disabled={pending}>
+            <Button
+              type="submit"
+              name="decision"
+              value="ACCEPT"
+              size="sm"
+              className="h-11 sm:h-9"
+              disabled={pending}
+            >
               {informational ? 'Looks right' : 'Apply'}
             </Button>
             <Button
@@ -91,6 +98,7 @@ function TriageChip({
               value="DISMISS"
               size="sm"
               variant="outline"
+              className="h-11 sm:h-9"
               disabled={pending}
             >
               Dismiss
@@ -106,7 +114,11 @@ function TriageChip({
       {state.message && (
         <p
           role={state.ok ? 'status' : 'alert'}
-          className={state.ok ? 'text-xs text-emerald-600' : 'text-xs text-destructive'}
+          className={
+            state.ok
+              ? 'text-xs text-status-ok-deep dark:text-status-ok-soft'
+              : 'text-xs text-destructive'
+          }
         >
           {state.message}
         </p>

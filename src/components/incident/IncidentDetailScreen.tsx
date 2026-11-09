@@ -5,6 +5,7 @@ import IncidentImpactCard from './IncidentImpactCard';
 import IncidentAnalysisStatus from './IncidentAnalysisStatus';
 import IntelligenceSkeleton from './IntelligenceSkeleton';
 import IncidentGroupCard from './intelligence/IncidentGroupCard';
+import MobileIncidentIntelligence from './mobile/MobileIncidentIntelligence';
 import prisma from '@/lib/prisma';
 import { Suspense } from 'react';
 import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
@@ -651,7 +652,10 @@ export default async function IncidentDetailScreen({
             </Suspense>
           )}
 
-          {showIntelligence && (
+          {presentation === 'mobile' && (
+            <MobileIncidentIntelligence incidentId={incident.id} enabled={showIntelligence} />
+          )}
+          {presentation !== 'mobile' && showIntelligence && (
             <IncidentIntelligencePanel
               analysisStatus={
                 <Suspense fallback={null}>
