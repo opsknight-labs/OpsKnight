@@ -247,6 +247,38 @@ tools use, so the card is sealed, user-bound and expiring, and execution goes th
 confirm route and domain commands. Basic mode never writes; the architecture test's single-writer
 invariant still holds.
 
+**Extended actions (opt-in).** `AiSettings.squireExtendedActions` (default off, revision-locked and
+audited with the other AI settings) adds nine proposal kinds, declared in
+`squire/actions/catalog-extended.ts` and offered as `propose_*` tools only while the switch is on:
+`escalate_incident`, `change_urgency`, `snooze_incident` (5 minutes to 24 hours),
+`unlink_related_incident`, `add_responder`, `create_jira_issue`, `draft_status_update`,
+`publish_status_update` and `run_runbook`. The card text is a fixed server template
+(`squire/actions/extended.ts`) with a structured preview (who gets paged, from/to urgency, the Jira project,
+the draft text, runbook step and approval counts), a specific confirm label and an impact note for
+paging, external systems, public pages and automation. Proposing re-checks the same capability as the
+matching UI control and refuses API keys; when the switch is turned off, open cards are refused at
+confirmation. Each proposal seals a snapshot of the facts it depends on (escalation step and generation,
+urgency, link decision, watcher role, Jira link count, chosen status page, draft revision, runbook binding
+revision and version) and the executor re-reads it inside a serializable transaction before acting.
+
+Execution reuses the application's commands: urgency via `applyIncidentUrgencyChange` (extracted from the
+incident page action, which now calls it), snooze via the lifecycle engine's `SNOOZE`, unlinking via
+`decideRelationship(… 'REVERTED')`, watchers via `setIncidentWatcher`, and runbooks via
+`resolveV2RunbookExecution` + `previewRunbookExecution` + `startRunbookExecution` from the sealed binding
+on the incident's service (the same resolve, preview and start sequence MCP's `runbook_prepare_execution` /
+`runbook_execute_approved` use; the person's confirm stands in for the review, and runbook approval steps
+still apply). These commit in the same transaction as the receipt. Escalation (the escalation
+service's `requestIncidentEscalation`, keyed by the proposal id so a retry never pages twice), Jira (the
+incident page's `createJiraIssueFromIncident`) and status pages (the status page settings route handlers,
+called in-process) notify people or call out, so they check the facts first and record the outcome after;
+a lost response becomes UNKNOWN and is never repeated. A status update is two proposals: confirming
+`draft_status_update` creates an inactive announcement (never shown, no subscriber notification) and
+returns a sealed `publish_status_update` follow-up card in the result; that kind is never offered to the
+model, so publishing always needs its own confirmation. Basic mode proposes escalate, change urgency and
+snooze for an explicit request on an incident page. `create_suppression_rule` and
+`create_maintenance_window` are a marked extension point in `catalog-extended.ts`, waiting for their
+models.
+
 **Data classes, untrusted data and redaction.** Each tool declares the class of what it returns
 (`SQUIRE_TOOL_DATA_CLASS`); the saved turn is classified as the highest of the conversation baseline and
 the tools that actually ran. Every tool result reaches the model inside an untrusted-data envelope:
