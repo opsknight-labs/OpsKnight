@@ -13,6 +13,7 @@ import {
   ClipboardList,
   BarChart,
   Workflow,
+  Sparkles,
   LucideIcon,
 } from 'lucide-react';
 
@@ -167,6 +168,14 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Reports & Dashboards',
     icon: BarChart,
     section: 'ANALYTICS',
+  },
+  {
+    // Roles holding INTELLIGENCE_READ (pinned by tests/unit/intelligence-overview-nav.test.ts).
+    href: '/intelligence',
+    label: 'AIOps Overview',
+    icon: Sparkles,
+    section: 'ANALYTICS',
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
 
   // ── GOVERNANCE ────────────────────────────────────────────────────────────
