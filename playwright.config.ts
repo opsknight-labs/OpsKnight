@@ -29,7 +29,8 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testMatch: /(auth-recovery|navigation-fast-path|host-bootstrap-routing|intelligence-ui)\.spec\.ts/,
+      testMatch:
+        /(auth-recovery|navigation-fast-path|host-bootstrap-routing|intelligence-ui|intelligence-overview)\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
