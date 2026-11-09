@@ -3,6 +3,7 @@ import IncidentTriageCard from './IncidentTriageCard';
 import IncidentTimeAxisCard from './IncidentTimeAxisCard';
 import IncidentAnalysisStatus from './IncidentAnalysisStatus';
 import IntelligenceSkeleton from './IntelligenceSkeleton';
+import IncidentGroupCard from './intelligence/IncidentGroupCard';
 import prisma from '@/lib/prisma';
 import { Suspense } from 'react';
 import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
@@ -633,6 +634,12 @@ export default async function IncidentDetailScreen({
               postmortemStatus={postmortem?.status ?? null}
               canManage={canManageIncident}
             />
+          )}
+
+          {canReadIntelligence && (
+            <Suspense fallback={null}>
+              <IncidentGroupCard incidentId={incident.id} />
+            </Suspense>
           )}
 
           {showIntelligence && (
