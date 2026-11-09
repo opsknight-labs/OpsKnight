@@ -3,7 +3,7 @@ import { formatCount, formatDuration, formatPercent } from '@/lib/intelligence/o
 import { FeatureOff, StatGrid, StatTile } from './primitives';
 
 function reviewedHint(rate: AcceptanceRate, noun: string): string {
-  if (rate.reviewed === 0) return `No ${noun} reviewed yet`;
+  if (rate.reviewed === 0) return `None ${noun} yet`;
   return `${formatCount(rate.accepted)} of ${formatCount(rate.reviewed)} ${noun}`;
 }
 
