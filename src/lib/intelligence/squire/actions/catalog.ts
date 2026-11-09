@@ -1,4 +1,11 @@
 import { z } from 'zod/v4';
+import {
+  EXTENDED_SQUIRE_ACTION_DESCRIPTIONS,
+  EXTENDED_SQUIRE_ACTION_INPUTS,
+  EXTENDED_SQUIRE_ACTION_JSON_SCHEMAS,
+  EXTENDED_SQUIRE_ACTION_KIND,
+  EXTENDED_SQUIRE_ACTION_NAMES,
+} from './catalog-extended';
 
 /**
  * Actions Squire may propose. The model can only ever *propose* one: the proposal is shown to the person
@@ -17,6 +24,8 @@ export const SQUIRE_ACTION_NAMES = [
   'link_related_incident',
   'open_runbook',
   'draft_postmortem',
+  // Extended actions (opt-in, catalog-extended.ts).
+  ...EXTENDED_SQUIRE_ACTION_NAMES,
 ] as const;
 export type SquireActionName = (typeof SQUIRE_ACTION_NAMES)[number];
 
@@ -41,6 +50,7 @@ export const SQUIRE_ACTION_INPUTS = {
     .strict(),
   open_runbook: z.object({ incidentId, runbookId: z.string().trim().min(1).max(64) }).strict(),
   draft_postmortem: z.object({ incidentId }).strict(),
+  ...EXTENDED_SQUIRE_ACTION_INPUTS,
 } satisfies Record<SquireActionName, z.ZodType>;
 
 export type SquireActionInput<N extends SquireActionName> = z.infer<
@@ -55,6 +65,7 @@ export const SQUIRE_ACTION_KIND: Record<SquireActionName, 'WRITE' | 'NAVIGATE'> 
   link_related_incident: 'WRITE',
   open_runbook: 'NAVIGATE',
   draft_postmortem: 'NAVIGATE',
+  ...EXTENDED_SQUIRE_ACTION_KIND,
 };
 
 /** What the model is told about each action. Every description says the person must confirm it. */
@@ -71,6 +82,7 @@ export const SQUIRE_ACTION_DESCRIPTIONS: Record<SquireActionName, string> = {
   open_runbook:
     'Offer to open a runbook against this incident. The application then runs its normal run and approval flow.',
   draft_postmortem: 'Offer to open a postmortem draft for this incident.',
+  ...EXTENDED_SQUIRE_ACTION_DESCRIPTIONS,
 };
 
 /** JSON-schema shapes for the model, kept in step with SQUIRE_ACTION_INPUTS by a unit test. */
@@ -101,6 +113,7 @@ export const SQUIRE_ACTION_JSON_SCHEMAS: Record<SquireActionName, Record<string,
     'runbookId',
   ]),
   draft_postmortem: objectSchema({ incidentId: idSchema() }, ['incidentId']),
+  ...EXTENDED_SQUIRE_ACTION_JSON_SCHEMAS,
 };
 
 function idSchema() {
@@ -129,4 +142,12 @@ export interface SquireProposal {
   expiresAt: string;
   /** The turn read third-party text (alerts, notes, payloads) before proposing this. */
   untrustedContext?: boolean;
+  /** Server-written facts shown on the card before confirming (extended actions). Plain text only. */
+  preview?: Array<{ label: string; value: string }>;
+  /** Server-chosen confirm button text, for example "Escalate" or "Publish". */
+  confirmLabel?: string;
+  /** The change reaches people or systems outside this incident (paging, Jira, a public page, automation). */
+  impact?: 'PAGES_PEOPLE' | 'EXTERNAL_SYSTEM' | 'PUBLIC' | 'AUTOMATION';
+  /** Step marker for two-step flows, for example "Step 1 of 2". */
+  step?: string;
 }

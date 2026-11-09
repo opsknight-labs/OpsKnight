@@ -34,6 +34,7 @@ import {
   SQUIRE_ACTION_NAMES,
   type SquireActionName,
 } from './actions/catalog';
+import { FOLLOW_UP_ONLY_ACTIONS, isExtendedSquireAction } from './actions/catalog-extended';
 import { readIncidentForActor } from './deterministic';
 // --- Observability connectors (slice F1): tools live in their own module and are appended below.
 import type { EligibleConnection } from '../connectors/service';
@@ -127,6 +128,8 @@ export function buildSquireTools(
     observe?: (name: string, input: unknown, result: unknown) => Promise<unknown>;
     /** Enabled observability connections this person may use; their tools are offered only if any exist. */
     observability?: readonly EligibleConnection[];
+    /** Offer the opt-in extended action proposals (AiSettings.squireExtendedActions). */
+    extendedActions?: boolean;
   }
 ): AiToolDefinition[] {
   const tools: AiToolDefinition[] = [
@@ -796,6 +799,10 @@ export function buildSquireTools(
 
   for (const name of SQUIRE_ACTION_NAMES) {
     if (!options.personal && name === 'reassign_incident') continue;
+    // Extended actions (F3): opt-in; follow-up steps are never offered to the model; naming a person needs Personal.
+    if (isExtendedSquireAction(name) && !options.extendedActions) continue;
+    if (FOLLOW_UP_ONLY_ACTIONS.has(name)) continue;
+    if (!options.personal && name === 'add_responder') continue;
     tools.push(proposalTool(name));
   }
   // Each tool carries the class of what it can return; the turn's class is the highest of the tools that

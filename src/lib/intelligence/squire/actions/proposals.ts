@@ -13,6 +13,13 @@ import {
   type SquireActionName,
   type SquireProposal,
 } from './catalog';
+import { isExtendedSquireAction } from './catalog-extended';
+import {
+  describeExtended,
+  extendedActionsAvailable,
+  extendedSnapshot,
+  type ExtendedDescription,
+} from './extended';
 
 /** A proposal must be confirmed soon after it was made, while the situation it describes still holds. */
 export const PROPOSAL_TTL_MS = 10 * 60_000;
@@ -32,6 +39,10 @@ const preconditionsSchema = z
       .object({ id: z.string(), updatedAt: z.string().datetime() })
       .strict()
       .nullable()
+      .optional(),
+    // Extended actions: the facts the card was built on (extended.ts), re-read before executing.
+    extra: z
+      .record(z.string().max(64), z.union([z.string().max(256), z.number(), z.boolean(), z.null()]))
       .optional(),
   })
   .strict();
@@ -60,9 +71,13 @@ export async function buildProposal(
   actor: AuthorizationActor,
   name: string,
   rawInput: unknown,
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: { followUp?: boolean } = {}
 ): Promise<(SquireProposal & { href?: string }) | null> {
   if (!isSquireActionName(name)) return null;
+  // Extended actions are opt-in, never for API keys, and some exist only as a second step.
+  if (isExtendedSquireAction(name) && !(await extendedActionsAvailable(actor, name, options)))
+    return null;
   // eslint-disable-next-line security/detect-object-injection -- name was checked by isSquireActionName
   const parsed = SQUIRE_ACTION_INPUTS[name].safeParse(rawInput);
   if (!parsed.success) return null;
@@ -70,7 +85,7 @@ export async function buildProposal(
   const incident = await readIncidentForActor(actor, input.incidentId);
   if (!incident) return null;
 
-  const described = await describe(actor, name, input, incident);
+  const described = await describe(actor, name, input, incident, now);
   if (!described) return null;
 
   let preconditions: SquireProposalPreconditions | undefined;
@@ -104,6 +119,11 @@ export async function buildProposal(
         ? { id: relationship.id, updatedAt: relationship.updatedAt.toISOString() }
         : null;
     }
+    if (isExtendedSquireAction(name)) {
+      const extra = await extendedSnapshot(prisma, actor, name, input, incident.id);
+      if (!extra) return null;
+      preconditions.extra = extra;
+    }
   }
 
   const sealed: SealedProposal = {
@@ -126,6 +146,12 @@ export async function buildProposal(
     incidentId: incident.id,
     expiresAt: new Date(sealed.exp).toISOString(),
     ...(described.href ? { href: described.href } : {}),
+    ...('preview' in described && described.preview ? { preview: described.preview } : {}),
+    ...('confirmLabel' in described && described.confirmLabel
+      ? { confirmLabel: described.confirmLabel }
+      : {}),
+    ...('impact' in described && described.impact ? { impact: described.impact } : {}),
+    ...('step' in described && described.step ? { step: described.step } : {}),
   };
 }
 
@@ -133,8 +159,9 @@ async function describe(
   actor: AuthorizationActor,
   name: SquireActionName,
   input: Record<string, unknown>,
-  incident: { id: string; title: string; status: string }
-): Promise<{ title: string; detail: string; href?: string } | null> {
+  incident: { id: string; title: string; status: string; urgency?: string },
+  now: Date
+): Promise<{ title: string; detail: string; href?: string } | ExtendedDescription | null> {
   const subject = `“${short(incident.title, 80)}”`;
   switch (name) {
     case 'acknowledge_incident':
@@ -201,6 +228,8 @@ async function describe(
         detail: `Open the postmortem for ${subject}, where “Draft with AI” fills in what is still empty.`,
         href: `/postmortems/${encodeURIComponent(incident.id)}`,
       };
+    default:
+      return describeExtended(actor, name, input, incident, now);
   }
 }
 

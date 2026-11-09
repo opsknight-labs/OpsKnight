@@ -6,15 +6,24 @@ import { encrypt } from '@/lib/encryption';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { assertCanAddIncidentNote, assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
+import {
+  assertCanAddIncidentNote,
+  assertCanViewIncident,
+  assertCapability,
+  assertResponderOrAbove,
+  getCurrentUser,
+} from '@/lib/rbac';
+import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { resolveIncidentWithNote, updateIncidentStatus } from '@/lib/incidents/operator-lifecycle';
-import { linkIncidents } from '../../correlation/commands';
+import { decideRelationship, linkIncidents } from '../../correlation/commands';
 import { readIncidentForActor } from '../deterministic';
 import { SQUIRE_ACTION_INPUTS, SQUIRE_ACTION_KIND, type SquireActionInput } from './catalog';
-import { openProposal, type OpenedProposal } from './proposals';
+import { buildProposal, openProposal, type OpenedProposal } from './proposals';
+import { isExtendedSquireAction, type ExtendedSquireActionName } from './catalog-extended';
+import { checkExtendedPreconditions, extendedActionsAvailable } from './extended';
 import {
   readSquireActionOutcome,
   UNKNOWN_ACTION_MESSAGE,
@@ -44,6 +53,12 @@ export async function executeSquireAction(
   if (!parsed.success) return failed('This suggestion is no longer valid.');
   if (proposal.action !== 'add_incident_note' && !proposal.preconditions)
     return failed('This suggestion needs a fresh review. Ask again for a new suggestion.');
+  // Extended actions stay opt-in at confirmation time too: switching them off withdraws open cards.
+  if (
+    isExtendedSquireAction(proposal.action) &&
+    !(await extendedActionsAvailable(actor, proposal.action, { followUp: true }))
+  )
+    return failed('This kind of action is turned off. Ask an administrator to enable it.');
   const incidentId = (parsed.data as { incidentId: string }).incidentId;
   if (!(await readIncidentForActor(actor, incidentId)))
     return failed('That incident is not available to you.');
@@ -95,7 +110,7 @@ export async function executeSquireAction(
       where: { id: proposal.id },
       data: { status: 'RUNNING', startedAt: new Date() },
     });
-    const complete = async (tx: Prisma.TransactionClient, message: string) => {
+    const complete: Complete = async (tx, message, followUp) => {
       await tx.squireActionReceipt.update({
         where: { id: proposal.id },
         data: {
@@ -106,26 +121,43 @@ export async function executeSquireAction(
               ok: true,
               message,
               href: `/incidents/${encodeURIComponent(incidentId)}`,
+              ...(followUp ? { followUp } : {}),
             })
           ),
         },
       });
       await audit('SUCCEEDED', tx);
     };
-    const message = await run(
-      actor,
-      proposal.action as WriteAction,
-      parsed.data as never,
-      proposal.id,
-      complete,
-      tx => checkPreconditions(tx, proposal, incidentId)
-    );
+    const { message, followUp } = isExtendedSquireAction(proposal.action)
+      ? await runExtended(
+          actor,
+          proposal,
+          parsed.data as Record<string, unknown>,
+          incidentId,
+          complete
+        )
+      : {
+          message: await run(
+            actor,
+            proposal.action as WriteAction,
+            parsed.data as never,
+            proposal.id,
+            complete,
+            tx => checkPreconditions(tx, proposal, incidentId)
+          ),
+          followUp: undefined,
+        };
     try {
       revalidatePath(`/incidents/${incidentId}`);
     } catch {
       logger.warn('[Squire] Action succeeded; page refresh failed', { action: proposal.action });
     }
-    return { ok: true, message, href: `/incidents/${encodeURIComponent(incidentId)}` };
+    return {
+      ok: true,
+      message,
+      href: `/incidents/${encodeURIComponent(incidentId)}`,
+      ...(followUp ? { followUp } : {}),
+    };
   } catch (error) {
     // A lost commit response must not erase an atomically persisted success.
     const known = await readSquireActionOutcome(actor, proposal.id).catch(() => null);
@@ -150,14 +182,23 @@ export async function executeSquireAction(
   }
 }
 
-type WriteAction = Exclude<keyof typeof SQUIRE_ACTION_INPUTS, 'open_runbook' | 'draft_postmortem'>;
+type WriteAction = Exclude<
+  keyof typeof SQUIRE_ACTION_INPUTS,
+  'open_runbook' | 'draft_postmortem' | ExtendedSquireActionName
+>;
+type FollowUp = Extract<SquireActionResult, { ok: true }>['followUp'];
+type Complete = (
+  tx: Prisma.TransactionClient,
+  message: string,
+  followUp?: FollowUp
+) => Promise<void>;
 
 async function run<N extends WriteAction>(
   actor: AuthorizationActor,
   action: N,
   input: SquireActionInput<N>,
   proposalId: string,
-  complete: (tx: Prisma.TransactionClient, message: string) => Promise<void>,
+  complete: Complete,
   beforeTx: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<string> {
   switch (action) {
@@ -244,6 +285,282 @@ async function run<N extends WriteAction>(
         { isolationLevel: 'Serializable' }
       );
       return 'Incidents marked as related.';
+    }
+  }
+  throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'Unknown action.' });
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Extended actions (opt-in). Each case calls the same domain command, with the same capability checks, as the
+// matching control in the application, under the confirming person's session. Changes that commit in the
+// database join the receipt in one serializable transaction after the sealed facts are re-read; changes that
+// notify people or call another system (escalation, Jira, status page routes) re-check the facts in a
+// serializable transaction first and then record the outcome, so a lost response is reported as unknown and
+// never repeated.
+// ---------------------------------------------------------------------------------------------------------
+
+const serializable = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) =>
+  prisma.$transaction(work, { isolationLevel: 'Serializable' });
+
+async function sessionUser(actor: AuthorizationActor) {
+  const user = await getCurrentUser();
+  if (user.id !== actor.id) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
+  return user;
+}
+
+const rejected = (userMessage: string) => new AppError({ code: 'VALIDATION_FAILED', userMessage });
+
+/** Calls one of the application's own JSON route handlers in-process, exactly as its page does. */
+async function callAppRoute(
+  handler: (request: import('next/server').NextRequest) => Promise<Response>,
+  method: 'POST' | 'PATCH',
+  path: string,
+  body: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const { NextRequest } = await import('next/server');
+  const response = await handler(
+    new NextRequest(new URL(path, 'http://opsknight.internal'), {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  );
+  const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  if (response.ok && payload) return payload;
+  const message = typeof payload?.error === 'string' ? payload.error.slice(0, 300) : '';
+  // A 4xx is the application refusing the change; anything else leaves the outcome unknown.
+  if (response.status >= 400 && response.status < 500)
+    throw rejected(message || 'The change was refused.');
+  throw new Error(`Route returned ${response.status}`);
+}
+
+async function runExtended(
+  actor: AuthorizationActor,
+  proposal: OpenedProposal,
+  input: Record<string, unknown>,
+  incidentId: string,
+  complete: Complete
+): Promise<{ message: string; followUp?: FollowUp }> {
+  const action = proposal.action as ExtendedSquireActionName;
+  const recheck = (tx: Prisma.TransactionClient) =>
+    checkExtendedPreconditions(tx, actor, action, input, incidentId, proposal.preconditions?.extra);
+  const finish = async (message: string, followUp?: FollowUp) => {
+    await serializable(tx => complete(tx, message, followUp));
+    return { message, ...(followUp ? { followUp } : {}) };
+  };
+
+  switch (action) {
+    case 'escalate_incident': {
+      const user = await sessionUser(actor);
+      await serializable(recheck);
+      const { requestIncidentEscalation } = await import('@/lib/escalation/authorization');
+      // The engine's own manual-escalation receipt makes a retry of this proposal page nobody twice.
+      const outcome = await requestIncidentEscalation({
+        incidentId,
+        actor: { userId: actor.id, name: user.name },
+        source: 'WEB',
+        idempotency: { key: `squire:${proposal.id}`, principalId: actor.id },
+      });
+      if (!outcome.requested)
+        throw rejected('Only an open incident can be escalated. Review the incident first.');
+      const execution = outcome.execution;
+      return finish(
+        execution.escalated
+          ? `Escalated: paged ${execution.targetName ? `“${execution.targetName.slice(0, 80)}”` : 'the next level'}.`
+          : `Escalation requested; nobody new was paged (${(execution.reason ?? execution.outcome).slice(0, 160)}).`
+      );
+    }
+    case 'change_urgency': {
+      const { urgency } = input as SquireActionInput<'change_urgency'>;
+      const responder = await assertResponderOrAbove();
+      if (responder.id !== actor.id) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
+      const { applyIncidentUrgencyChange } = await import('@/lib/incidents/urgency-command');
+      const message = `Urgency changed to ${urgency}.`;
+      await serializable(async tx => {
+        await recheck(tx);
+        await applyIncidentUrgencyChange(tx, { incidentId, urgency });
+        await complete(tx, message);
+      });
+      return { message };
+    }
+    case 'snooze_incident': {
+      const { minutes, reason } = input as SquireActionInput<'snooze_incident'>;
+      const responder = await assertResponderOrAbove();
+      if (responder.id !== actor.id) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
+      const { applyIncidentLifecycleCommand } = await import('@/lib/incidents/lifecycle');
+      // The duration is measured from confirmation, not from when the card was offered.
+      const snoozedUntil = new Date(Date.now() + minutes * 60_000);
+      const message = `Incident snoozed until ${snoozedUntil.toISOString().slice(11, 16)} UTC.`;
+      await serializable(async tx => {
+        await recheck(tx);
+        await applyIncidentLifecycleCommand(tx, {
+          incidentId,
+          command: 'SNOOZE',
+          source: 'WEB',
+          actor: { id: responder.id, name: responder.name ?? undefined },
+          snoozedUntil,
+          snoozeReason: reason?.trim() || null,
+          eventMessage: `Incident snoozed until ${snoozedUntil.toISOString()}${reason?.trim() ? ` (Reason: ${reason.trim()})` : ''} by ${responder.name ?? 'a responder'}`,
+        });
+        await complete(tx, message);
+      });
+      return { message };
+    }
+    case 'unlink_related_incident': {
+      const { note } = input as SquireActionInput<'unlink_related_incident'>;
+      const message = 'Related link removed.';
+      await serializable(async tx => {
+        const facts = await recheck(tx);
+        await decideRelationship(
+          actor,
+          {
+            relationshipId: String(facts.relationshipId),
+            decision: 'REVERTED',
+            ...(note ? { note } : {}),
+          },
+          tx
+        );
+        await complete(tx, message);
+      });
+      return { message };
+    }
+    case 'add_responder': {
+      const { userId, role } = input as SquireActionInput<'add_responder'>;
+      const user = await sessionUser(actor);
+      // Same rule as the incident page's watcher control.
+      const canManage = hasCapability(user.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE);
+      if (!canManage) {
+        await assertCanViewIncident(incidentId);
+        if (userId !== user.id || role !== 'FOLLOWER')
+          throw new AppError({
+            code: 'AUTHORIZATION_DENIED',
+            userMessage: 'You may only subscribe yourself as a follower.',
+          });
+      }
+      const { setIncidentWatcher } = await import('@/lib/incidents/watchers');
+      const message = `Watcher added as ${role.toLowerCase()}.`;
+      await serializable(async tx => {
+        await recheck(tx);
+        await setIncidentWatcher(
+          { incidentId, userId, role },
+          { id: user.id, role: user.role as AppRole },
+          tx
+        );
+        await complete(tx, message);
+      });
+      return { message };
+    }
+    case 'create_jira_issue': {
+      await sessionUser(actor);
+      await serializable(recheck);
+      const { createJiraIssueFromIncident } = await import('@/app/(app)/incidents/jira/actions');
+      const created = await createJiraIssueFromIncident(incidentId);
+      if (!created.success)
+        throw rejected(created.error?.slice(0, 300) || 'Jira did not create the issue.');
+      return finish(
+        created.key
+          ? `Jira issue ${created.key.slice(0, 40)} created and linked.`
+          : 'Jira issue created and linked.'
+      );
+    }
+    case 'draft_status_update': {
+      const { title, message: body, type } = input as SquireActionInput<'draft_status_update'>;
+      await sessionUser(actor);
+      const facts = await serializable(recheck);
+      const statusPageId = String(facts.statusPageId);
+      const route = await import('@/app/api/settings/status-page/announcements/route');
+      // An inactive announcement is the status page's draft: it is never shown or sent to subscribers.
+      const created = await callAppRoute(
+        route.POST,
+        'POST',
+        '/api/settings/status-page/announcements',
+        {
+          statusPageId,
+          title,
+          message: body,
+          type,
+          startDate: new Date().toISOString(),
+          isActive: false,
+          notifySubscribers: false,
+          notificationTiming: 'NONE',
+          publishOption: 'NOW',
+        }
+      );
+      const announcementId = (created.data as { announcement?: { id?: unknown } } | undefined)
+        ?.announcement?.id;
+      if (typeof announcementId !== 'string') throw new Error('Draft id missing from response');
+      // Publishing is its own sealed proposal and needs a second, separate confirmation.
+      const publish = await buildProposal(
+        actor,
+        'publish_status_update',
+        { incidentId, statusPageId, announcementId },
+        new Date(),
+        { followUp: true }
+      ).catch(() => null);
+      return finish(
+        publish
+          ? 'Draft saved on the status page. Review it below and confirm to publish.'
+          : 'Draft saved on the status page. Publish it from the status page settings.',
+        publish ?? undefined
+      );
+    }
+    case 'publish_status_update': {
+      const { statusPageId, announcementId } = input as SquireActionInput<'publish_status_update'>;
+      await sessionUser(actor);
+      const facts = await serializable(recheck);
+      if (facts.isActive !== false) throw rejected('That status update is already published.');
+      const route = await import('@/app/api/settings/status-page/announcements/route');
+      await callAppRoute(route.PATCH, 'PATCH', '/api/settings/status-page/announcements', {
+        statusPageId,
+        id: announcementId,
+        isActive: true,
+        publishOption: 'NOW',
+        notificationTiming: 'NONE',
+      });
+      return finish('Status update published.');
+    }
+    case 'run_runbook': {
+      const user = await assertCapability(CAPABILITIES.RUNBOOK_EXECUTE);
+      if (user.id !== actor.id) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
+      await assertCanViewIncident(incidentId);
+      const { previewRunbookExecution, startRunbookExecution } =
+        await import('@/lib/runbooks/orchestrator');
+      const { resolveV2RunbookExecution } = await import('@/lib/api-v2/runbook-execution');
+      const message = 'Runbook started. Follow it on the incident’s Runbooks tab.';
+      await serializable(async tx => {
+        const facts = await recheck(tx);
+        // The same path MCP uses (runbook_prepare_execution then runbook_execute_approved): resolve the
+        // bound request, preview it, then start it with the preview's digest and authorization. The person's
+        // confirm stands in for the review, and every runbook approval step still applies.
+        const request = await resolveV2RunbookExecution(
+          tx,
+          { id: String((input as SquireActionInput<'run_runbook'>).runbookId) },
+          { incidentId, bindingId: String(facts.bindingId), parameters: {} },
+          actor
+        );
+        if (
+          request.bindingId !== facts.bindingId ||
+          request.runbookVersionId !== facts.versionId ||
+          request.serviceId !== facts.serviceId
+        )
+          throw new AppError({
+            code: 'PRECONDITION_FAILED',
+            userMessage:
+              'The runbook binding changed after this suggestion was prepared. Ask for a fresh suggestion.',
+          });
+        const preview = await previewRunbookExecution(request, tx);
+        if (!preview.authorizationToken) throw rejected('This runbook cannot start right now.');
+        await startRunbookExecution(
+          {
+            ...request,
+            expectedPlanDigest: preview.digest,
+            previewAuthorizationToken: preview.authorizationToken,
+          },
+          tx
+        );
+        await complete(tx, message);
+      });
+      return { message };
     }
   }
   throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'Unknown action.' });
