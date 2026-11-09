@@ -251,17 +251,18 @@ async function loadSlo(
   return {
     state: 'AVAILABLE',
     severity: burn.severity,
-    objectives: burn.objectives.map(objective => ({
-      name: objective.name,
-      targetPercent: objective.targetPercent,
-      fastBurn: objective.fastBurn,
-      slowBurn: objective.slowBurn,
-      severity: objective.severity,
-      budgetMinutes: objective.budgetMinutes,
-      incidentBudgetPercent:
-        objective.budgetMinutes === null
-          ? null
-          : Math.round((incidentMinutes / objective.budgetMinutes) * 1000) / 10,
-    })),
+    objectives: burn.objectives.map(objective => {
+      const budgetMinutes = objective.budgetMinutes ?? null;
+      return {
+        name: objective.name,
+        targetPercent: objective.targetPercent,
+        fastBurn: objective.fastBurn,
+        slowBurn: objective.slowBurn,
+        severity: objective.severity,
+        budgetMinutes,
+        incidentBudgetPercent:
+          budgetMinutes === null ? null : Math.round((incidentMinutes / budgetMinutes) * 1000) / 10,
+      };
+    }),
   };
 }

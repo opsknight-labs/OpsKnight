@@ -76,8 +76,11 @@ export interface ObjectiveBurn {
   fastBurn: number;
   slowBurn: number;
   severity: BurnSeverity;
-  /** The objective's whole error budget in minutes over its window; null when the target allows no downtime. */
-  budgetMinutes: number | null;
+  /**
+   * The objective's whole error budget in minutes over its window; null when the target allows no downtime.
+   * Optional so existing constructors of this type stay valid; getSloBurn always sets it.
+   */
+  budgetMinutes?: number | null;
 }
 
 /** Days in an objective window (mirrors the evaluator); rolling windows default to 30 days. */
