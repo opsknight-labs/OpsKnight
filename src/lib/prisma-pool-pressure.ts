@@ -5,9 +5,13 @@ interface MetricsReader {
   $metrics: { json(): Promise<{ gauges: Array<{ key: string; value: number }> }> };
 }
 
-/** Engine-local observation: never borrows a connection from the pool being measured. */
+/**
+ * Engine-local observation: never borrows a connection from the pool being measured. It always reads
+ * the process pool that ingestion and paging use, even when called from a workload that has a pool of
+ * its own (the intelligence lane in a shared process), because that is the pool the lane protects.
+ */
 export async function getPrismaPoolWaitCount(
-  client: MetricsReader = prisma
+  client: MetricsReader = globalThis.prismaGlobal ?? prisma
 ): Promise<number | null> {
   try {
     const { gauges } = await client.$metrics.json();

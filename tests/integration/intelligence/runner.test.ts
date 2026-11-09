@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { evaluatePause } from '@/lib/intelligence/jobs/backpressure';
 import { enqueueWorkItems } from '@/lib/intelligence/jobs/work-queue';
 import { DISCOVERY_SAFETY_LAG_MS } from '@/lib/intelligence/jobs/discovery';
+import { IngestionYield } from '@/lib/intelligence/jobs/ingestion-yield';
 import {
   DEFAULT_HANDLERS,
   createLaneState,
@@ -363,6 +364,103 @@ describe('intelligence cycle', () => {
     });
     expect(result.completed).toBe(8);
     expect(peak).toBeLessThanOrEqual(2);
+  });
+
+  it('runs lane work on its own pool in a shared process, and on the process pool otherwise', async () => {
+    await enable();
+    await enqueueWorkItems([
+      { kind: 'INDEX_INCIDENT', subjectKey: 'own-pool' },
+      { kind: 'INDEX_INCIDENT', subjectKey: 'shared-pool' },
+    ]);
+    const seen: Record<string, string> = {};
+    const handler: WorkHandler = async item => {
+      const [row] = await prisma.$queryRaw<Array<{ name: string }>>`
+        SELECT current_setting('application_name') AS name`;
+      seen[item.subjectKey] = row.name;
+    };
+    const [primary] = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT current_setting('application_name') AS name`;
+    await db.intelligenceWorkItem.updateMany({
+      where: { subjectKey: 'shared-pool' },
+      data: { scheduledAt: new Date(Date.now() + 60_000) },
+    });
+    // Default plan: the test process has the integrated role, so the lane has its own pool.
+    expect(
+      await runIntelligenceCycle(createLaneState(), {
+        getCriticalLagMs: noLag,
+        handlers: { INDEX_INCIDENT: handler },
+      })
+    ).toMatchObject({ completed: 1 });
+    await db.intelligenceWorkItem.updateMany({
+      where: { subjectKey: 'shared-pool' },
+      data: { scheduledAt: new Date(0) },
+    });
+    expect(
+      await runIntelligenceCycle(createLaneState(), {
+        getCriticalLagMs: noLag,
+        handlers: { INDEX_INCIDENT: handler },
+        lanePool: { ownPool: false, size: 0 },
+      })
+    ).toMatchObject({ completed: 1 });
+    expect(seen['own-pool']).toBe('opsknight-intelligence-lane');
+    expect(seen['shared-pool']).toBe(primary.name);
+    // Ingestion's pool is untouched by the lane's workload.
+    const [after] = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT current_setting('application_name') AS name`;
+    expect(after.name).toBe(primary.name);
+  });
+
+  it('runs one item at a time and paces itself while ingestion in this process is busy', async () => {
+    await enable({ maxConcurrency: 4, batchSize: 10 });
+    await enqueueWorkItems(
+      Array.from({ length: 6 }, (_, i) => ({
+        kind: 'INDEX_INCIDENT' as const,
+        subjectKey: `busy-${i}`,
+      }))
+    );
+    // A synthetic, constantly busy ingestion: eight events in flight on every reading.
+    const started = performance.now();
+    const source = () => {
+      const at = performance.now() - started + 1_000;
+      return { inFlight: 8, integralMs: 8 * at, at };
+    };
+    const slept: number[] = [];
+    const state = createLaneState();
+    state.ingestionYield = new IngestionYield(
+      source,
+      { sampleMs: 0, duty: 0.5, maxPauseMs: 40, pollMs: 10 },
+      async ms => {
+        slept.push(ms);
+        await new Promise(resolve => setTimeout(resolve, ms));
+      }
+    );
+    let active = 0;
+    let peak = 0;
+    const handler: WorkHandler = async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      active -= 1;
+    };
+    const result = await runIntelligenceCycle(state, {
+      getCriticalLagMs: noLag,
+      handlers: { INDEX_INCIDENT: handler },
+    });
+    expect(result).toMatchObject({ status: 'worked', claimed: 1, completed: 1 });
+    expect(peak).toBe(1);
+    expect(slept.length).toBeGreaterThan(0);
+    expect(state.ingestionYield.pausedMs).toBeGreaterThan(0);
+    // Queued work stays queued, untouched, for the next paced cycle.
+    expect(await db.intelligenceWorkItem.count({ where: { attempts: 0 } })).toBe(5);
+
+    // Once ingestion is quiet the lane returns to its configured concurrency and batch size.
+    const quiet = createLaneState();
+    const after = await runIntelligenceCycle(quiet, {
+      getCriticalLagMs: noLag,
+      handlers: { INDEX_INCIDENT: handler },
+    });
+    expect(after).toMatchObject({ claimed: 5, completed: 5 });
+    expect(peak).toBeGreaterThan(1);
   });
 
   it('never throws even if the database settings read fails', async () => {
