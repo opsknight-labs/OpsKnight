@@ -6,6 +6,7 @@ import {
   RuleSuggestionsPanel,
   SendTestDigestButton,
   ResponseWeightsForm,
+  RunbookWeightsForm,
   ScoringWeightsForm,
 } from '@/components/settings/InsightsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -22,6 +23,11 @@ import { listPolicyVersions, resolveEffectivePolicy } from '@/lib/intelligence/s
 import { getDigestSettings, getLatestDigestRun } from '@/lib/intelligence/digest/service';
 import { suggestScoringWeights } from '@/lib/intelligence/learning/weights-service';
 import { suggestResponseWeights } from '@/lib/intelligence/learning/response-weights';
+import {
+  RUNBOOK_FIT_LIMITS,
+  suggestRunbookWeights,
+} from '@/lib/intelligence/learning/runbook-weights';
+import { DEFAULT_RUNBOOK_WEIGHTS } from '@/lib/intelligence/contract';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -30,15 +36,17 @@ async function load() {
   try {
     const actor = await getCurrentAuthorizationActor();
     const canManage = hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE);
-    const [insights, versions, digest, lastRun, policy, scoring, causeWeights] = await Promise.all([
-      getInsights(actor),
-      listPolicyVersions({}, { limit: 1 }),
-      getDigestSettings(),
-      getLatestDigestRun(),
-      resolveEffectivePolicy(null),
-      canManage ? suggestScoringWeights() : Promise.resolve(null),
-      canManage ? suggestResponseWeights().catch(() => null) : Promise.resolve(null),
-    ]);
+    const [insights, versions, digest, lastRun, policy, scoring, causeWeights, runbookWeights] =
+      await Promise.all([
+        getInsights(actor),
+        listPolicyVersions({}, { limit: 1 }),
+        getDigestSettings(),
+        getLatestDigestRun(),
+        resolveEffectivePolicy(null),
+        canManage ? suggestScoringWeights() : Promise.resolve(null),
+        canManage ? suggestResponseWeights().catch(() => null) : Promise.resolve(null),
+        canManage ? suggestRunbookWeights().catch(() => null) : Promise.resolve(null),
+      ]);
     return {
       insights,
       headVersion: versions.headVersion,
@@ -47,6 +55,8 @@ async function load() {
       mode: policy.mode,
       scoring,
       causeWeights,
+      runbookWeights,
+      currentRunbookWeights: policy.definition.response.runbookWeights ?? null,
     };
   } catch (error) {
     logger.warn('[Intelligence] Insights could not load', {
@@ -149,6 +159,60 @@ export default async function IntelligenceInsightsPage() {
                 <p className="py-3 text-sm text-muted-foreground">
                   No supported improvement yet. A proposal needs at least 40 rated possible causes
                   with both helpful and unhelpful verdicts, and better results on held-out examples.
+                </p>
+              )}
+            </SettingsSection>
+          )}
+
+          {canManage && loaded && (
+            <SettingsSection
+              title="Runbook-ranking weights"
+              description="Fitted from accept/reject feedback on runbook recommendations and from what happened when a recommended runbook was run. Published only when you choose to, as a new policy version you can roll back."
+            >
+              {loaded.runbookWeights ? (
+                <div className="space-y-3 py-3">
+                  <p className="text-sm text-muted-foreground">
+                    {loaded.runbookWeights.support} labelled recommendations (
+                    {loaded.runbookWeights.fromOutcomes} observed outcomes,{' '}
+                    {loaded.runbookWeights.fromFeedback} responder verdicts). Held-out loss{' '}
+                    {loaded.runbookWeights.heldOutLoss.toFixed(3)} versus{' '}
+                    {loaded.runbookWeights.baselineLoss.toFixed(3)} with the shipped ranking.
+                  </p>
+                  <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                    {(() => {
+                      const proposed = loaded.runbookWeights.weights;
+                      const current = loaded.currentRunbookWeights ?? DEFAULT_RUNBOOK_WEIGHTS;
+                      return [
+                        ['service-wide record', proposed.overall, current.overall],
+                        ['same-problem record', proposed.sameProblem, current.sameProblem],
+                        ['MTTR improvement bonus', proposed.mttrBonus, current.mttrBonus],
+                        ['untried bound runbook', proposed.boundPrior, current.boundPrior],
+                      ] as const;
+                    })().map(([name, proposed, current]) => (
+                      <div key={name}>
+                        <dt className="text-muted-foreground">{name}</dt>
+                        <dd>
+                          {proposed.toFixed(2)}{' '}
+                          <span className="text-xs text-muted-foreground">
+                            (now {current.toFixed(2)})
+                          </span>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <RunbookWeightsForm
+                    suggestionId={loaded.runbookWeights.id}
+                    expectedHeadVersion={loaded.headVersion}
+                  />
+                </div>
+              ) : (
+                <p className="py-3 text-sm text-muted-foreground">
+                  No supported improvement yet. A proposal needs at least{' '}
+                  {RUNBOOK_FIT_LIMITS.minExamples} labelled runbook recommendations from the last{' '}
+                  {RUNBOOK_FIT_LIMITS.lookbackDays} days, at least{' '}
+                  {RUNBOOK_FIT_LIMITS.minPerVerdict} that helped and{' '}
+                  {RUNBOOK_FIT_LIMITS.minPerVerdict} that did not, and better results on held-out
+                  examples.
                 </p>
               )}
             </SettingsSection>

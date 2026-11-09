@@ -13,6 +13,14 @@ import {
   resolveEffectivePolicy,
   type IntelligenceActor,
 } from '../settings/service';
+import {
+  clamp,
+  coordinateDescent,
+  hasMinimumSupport,
+  holdOutSplit,
+  logLoss,
+  sigmoid,
+} from './bounded-fit';
 
 /**
  * Offline fitting of probable-cause ranking weights from responder feedback on cause findings. Each
@@ -39,8 +47,6 @@ export interface ResponseWeightsProposal {
   support: number;
 }
 
-const sigmoid = (x: number) => 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, x))));
-
 function predict(example: CauseExample, weights: ResponseWeights): number {
   const relation =
     example.relation === 'SAME_SERVICE'
@@ -53,12 +59,7 @@ function predict(example: CauseExample, weights: ResponseWeights): number {
 }
 
 const loss = (rows: readonly CauseExample[], weights: ResponseWeights) =>
-  rows.reduce((sum, row) => {
-    const p = Math.max(1e-6, Math.min(1 - 1e-6, predict(row, weights)));
-    return sum - Math.log(row.helpful ? p : 1 - p);
-  }, 0) / rows.length;
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  logLoss(rows, weights, predict);
 
 /** Coordinate-descent over the bounded multipliers; offered only if held-out loss improves. */
 export function fitResponseWeights(
@@ -71,48 +72,27 @@ export function fitResponseWeights(
       row.proximity >= 0 &&
       row.chance > 0
   );
-  if (
-    rows.length < 40 ||
-    rows.filter(r => r.helpful).length < 8 ||
-    rows.filter(r => !r.helpful).length < 8
-  )
-    return null;
-  const train = rows.filter((_, i) => i % 5 !== 0);
-  const held = rows.filter((_, i) => i % 5 === 0);
+  if (!hasMinimumSupport(rows, { rows: 40, perVerdict: 8 })) return null;
+  const { train, held } = holdOutSplit(rows);
   if (new Set(held.map(row => row.helpful)).size < 2) return null;
-  let weights: ResponseWeights = {
-    kind: { ...DEFAULT_RESPONSE_WEIGHTS.kind },
-    upstreamDecay: DEFAULT_RESPONSE_WEIGHTS.upstreamDecay,
-    globalWeight: DEFAULT_RESPONSE_WEIGHTS.globalWeight,
-  };
-  const steps = [0.1, 0.05, 0.02];
-  for (const step of steps) {
-    for (let pass = 0; pass < 10; pass += 1) {
-      let improved = false;
-      const candidates: Array<(w: ResponseWeights, delta: number) => ResponseWeights> = [
-        (w, d) => ({ ...w, upstreamDecay: clamp(w.upstreamDecay + d, 0.3, 1) }),
-        (w, d) => ({ ...w, globalWeight: clamp(w.globalWeight + d, 0.1, 1) }),
-        ...(['DEPLOY', 'CONFIG', 'FEATURE_FLAG', 'INFRA'] as const).map(
-          kind => (w: ResponseWeights, d: number) => ({
-            ...w,
-            kind: { ...w.kind, [kind]: clamp(w.kind[kind] + d, 0.2, 1) },
-          })
-        ),
-      ];
-      for (const candidate of candidates) {
-        const current = loss(train, weights);
-        for (const delta of [step, -step]) {
-          const next = candidate(weights, delta);
-          if (loss(train, next) < current - 1e-6) {
-            weights = next;
-            improved = true;
-            break;
-          }
-        }
-      }
-      if (!improved) break;
-    }
-  }
+  const weights = coordinateDescent<ResponseWeights>(
+    {
+      kind: { ...DEFAULT_RESPONSE_WEIGHTS.kind },
+      upstreamDecay: DEFAULT_RESPONSE_WEIGHTS.upstreamDecay,
+      globalWeight: DEFAULT_RESPONSE_WEIGHTS.globalWeight,
+    },
+    [
+      (w, d) => ({ ...w, upstreamDecay: clamp(w.upstreamDecay + d, 0.3, 1) }),
+      (w, d) => ({ ...w, globalWeight: clamp(w.globalWeight + d, 0.1, 1) }),
+      ...(['DEPLOY', 'CONFIG', 'FEATURE_FLAG', 'INFRA'] as const).map(
+        kind => (w: ResponseWeights, d: number) => ({
+          ...w,
+          kind: { ...w.kind, [kind]: clamp(w.kind[kind] + d, 0.2, 1) },
+        })
+      ),
+    ],
+    candidate => loss(train, candidate)
+  );
   const heldOutLoss = loss(held, weights);
   const baselineLoss = loss(held, DEFAULT_RESPONSE_WEIGHTS);
   return heldOutLoss < baselineLoss - 0.01

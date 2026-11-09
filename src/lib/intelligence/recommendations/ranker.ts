@@ -1,6 +1,6 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
-import { RESPONSE_LIMITS } from '../contract';
+import { RESPONSE_LIMITS, type RunbookWeights } from '../contract';
 import type { FindingRow } from '../similarity/findings';
 import { rankRunbooks, type RunbookOutcomeCounts } from './wilson';
 import { createHash } from 'node:crypto';
@@ -32,11 +32,13 @@ type HistoryRow = {
  * evidence. Runs on incidents with the same masked title as this one form a separate record, so a runbook
  * that fixed this exact problem before ranks first. Candidates are the runbooks bound to the service plus any
  * run against it; only published, non-archived runbooks are recommended. Nothing is ever executed from here.
+ * `weights` are the reviewed runbook-ranking weights from the published policy; absent, the shipped ranking applies.
  */
 export async function computeRunbookFindings(
   tx: Prisma.TransactionClient,
   incident: { id?: string; serviceId: string },
-  now: Date = new Date()
+  now: Date = new Date(),
+  weights?: RunbookWeights
 ): Promise<FindingRow[]> {
   const since = new Date(now.getTime() - RESPONSE_LIMITS.runbookHistoryDays * DAY_MS);
   const template = incident.id
@@ -154,7 +156,8 @@ export async function computeRunbookFindings(
       candidate =>
         usableIds.has(candidate.runbookId) && (candidate.bound || candidate.succeeded > 0)
     ),
-    RESPONSE_LIMITS.maxRunbookFindings
+    RESPONSE_LIMITS.maxRunbookFindings,
+    weights
   );
   return ranked.map(candidate => ({
     confidence: candidate.confidence,
@@ -169,6 +172,7 @@ export async function computeRunbookFindings(
         ? { mttrImprovement: candidate.mttrImprovement }
         : {}),
       ...(candidate.sameProblem ? { sameProblem: { ...candidate.sameProblem } } : {}),
+      ...(weights ? { learnedWeights: true } : {}),
       windowDays: RESPONSE_LIMITS.runbookHistoryDays,
     },
   }));

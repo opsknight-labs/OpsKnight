@@ -1,3 +1,5 @@
+import { DEFAULT_RUNBOOK_WEIGHTS, type RunbookWeights } from '../contract';
+
 const Z_95 = 1.959964;
 
 /**
@@ -31,30 +33,47 @@ export interface RankedRunbook extends RunbookOutcomeCounts {
   confidence: number;
 }
 
+/** Features of one candidate as the ranker and the weight fitter both see them. */
+export type RunbookScoreFeatures = Pick<
+  RunbookOutcomeCounts,
+  'succeeded' | 'eligible' | 'bound' | 'sameProblem' | 'mttrImprovement'
+>;
+
+/**
+ * Confidence for one candidate: the stronger of its weighted service-wide and same-problem lower bounds (or a
+ * small prior when it is bound but untried), with a bounded bonus for observed MTTR improvement. A runbook
+ * that has fixed this exact problem before is never penalised for it.
+ */
+export function scoreRunbook(
+  candidate: RunbookScoreFeatures,
+  weights: RunbookWeights = DEFAULT_RUNBOOK_WEIGHTS
+): number {
+  const base = Math.max(
+    weights.overall * wilsonLowerBound(candidate.succeeded, candidate.eligible),
+    candidate.sameProblem
+      ? weights.sameProblem *
+          wilsonLowerBound(candidate.sameProblem.succeeded, candidate.sameProblem.eligible)
+      : 0,
+    candidate.bound ? weights.boundPrior : 0
+  );
+  return Math.min(
+    1,
+    Math.round(
+      base *
+        (1 + weights.mttrBonus * Math.max(0, Math.min(1, candidate.mttrImprovement ?? 0))) *
+        1000
+    ) / 1000
+  );
+}
+
 /** Highest lower bound first; bound-but-untried runbooks come after proven ones; ties are stable by id. */
 export function rankRunbooks(
   candidates: readonly RunbookOutcomeCounts[],
-  limit: number
+  limit: number,
+  weights: RunbookWeights = DEFAULT_RUNBOOK_WEIGHTS
 ): RankedRunbook[] {
   return candidates
-    .map(candidate => ({
-      ...candidate,
-      // A runbook that has fixed this exact problem before is judged on that record when it is the stronger
-      // evidence; it is never penalised for it.
-      confidence: Math.min(
-        1,
-        Math.round(
-          Math.max(
-            wilsonLowerBound(candidate.succeeded, candidate.eligible),
-            candidate.sameProblem
-              ? wilsonLowerBound(candidate.sameProblem.succeeded, candidate.sameProblem.eligible)
-              : 0
-          ) *
-            (1 + 0.1 * Math.max(0, Math.min(1, candidate.mttrImprovement ?? 0))) *
-            1000
-        ) / 1000
-      ),
-    }))
+    .map(candidate => ({ ...candidate, confidence: scoreRunbook(candidate, weights) }))
     .sort(
       (a, b) =>
         b.confidence - a.confidence ||

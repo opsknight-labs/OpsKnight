@@ -71,7 +71,7 @@ export async function analyzeResponse(
       return 'stale' as const;
     const [causes, runbooks] = await Promise.all([
       computeCauseFindings(tx, incident, edges, policy.definition.response.weights),
-      computeRunbookFindings(tx, incident),
+      computeRunbookFindings(tx, incident, undefined, policy.definition.response.runbookWeights),
     ]);
     const common = {
       incidentId,

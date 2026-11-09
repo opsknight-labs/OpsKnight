@@ -15,6 +15,7 @@ import { adoptRuleSuggestion, suggestCorrelationRules } from '@/lib/intelligence
 import { MINING_LIMITS } from '@/lib/intelligence/learning/rule-mining';
 import { adoptScoringWeights } from '@/lib/intelligence/learning/weights-service';
 import { adoptResponseWeights } from '@/lib/intelligence/learning/response-weights';
+import { adoptRunbookWeights } from '@/lib/intelligence/learning/runbook-weights';
 
 export type InsightsActionState = { message: string; ok: boolean };
 
@@ -39,6 +40,31 @@ export async function adoptResponseWeightsAction(
     return {
       ok: true,
       message: `Reviewed cause-ranking weights published as policy version ${result.version}.`,
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Publishes the reviewed runbook-ranking weights; recomputed server-side, never taken from the form. */
+export async function adoptRunbookWeightsAction(
+  _state: InsightsActionState,
+  form: FormData
+): Promise<InsightsActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const result = await adoptRunbookWeights(
+      {
+        suggestionId: form.get('suggestionId'),
+        expectedHeadVersion: Number(form.get('expectedHeadVersion')),
+      },
+      { actorId: actor.id, source: 'UI' }
+    );
+    revalidatePath(PATH);
+    revalidatePath('/settings/intelligence');
+    return {
+      ok: true,
+      message: `Reviewed runbook-ranking weights published as policy version ${result.version}.`,
     };
   } catch (error) {
     return failure(error);

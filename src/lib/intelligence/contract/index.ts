@@ -178,6 +178,31 @@ export const responseWeightsSchema = z
   .strict();
 export type ResponseWeights = z.infer<typeof responseWeightsSchema>;
 
+/**
+ * Learned adjustments for runbook ranking, fitted from accept/reject feedback and observed outcomes. The
+ * defaults reproduce the shipped Wilson ranking exactly; the bounds let a fit re-balance the evidence but
+ * never invert a proven record into an unproven one.
+ */
+export const runbookWeightsSchema = z
+  .object({
+    /** Multiplier on the service-wide success lower bound (default 1). */
+    overall: z.number().min(0.5).max(1),
+    /** Multiplier on the same-problem success lower bound (default 1). */
+    sameProblem: z.number().min(0.5).max(1),
+    /** Ranking bonus per unit of observed MTTR improvement (default 0.1). */
+    mttrBonus: z.number().min(0).max(0.3),
+    /** Prior confidence for a runbook bound to the service but without a record (default 0). */
+    boundPrior: z.number().min(0).max(0.2),
+  })
+  .strict();
+export type RunbookWeights = z.infer<typeof runbookWeightsSchema>;
+export const DEFAULT_RUNBOOK_WEIGHTS: RunbookWeights = {
+  overall: 1,
+  sameProblem: 1,
+  mttrBonus: 0.1,
+  boundPrior: 0,
+};
+
 export const policyDefinitionSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -207,6 +232,8 @@ export const policyDefinitionSchema = z
         enabled: z.boolean().default(true),
         /** Offline-fitted cause-ranking adjustments, applied only by a person publishing a policy version. */
         weights: responseWeightsSchema.optional(),
+        /** Offline-fitted runbook-ranking adjustments, applied only by a person publishing a policy version. */
+        runbookWeights: runbookWeightsSchema.optional(),
       })
       .strict()
       .default({ enabled: true }),
