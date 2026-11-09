@@ -33,13 +33,23 @@ export interface NoiseControlKpis {
 const AVOIDING = ['SUPPRESS', 'DROP', 'APPEND', 'GROUP_CHILD'] as const;
 
 export async function getNoiseControlKpis(
-  options: { days?: number; serviceId?: string | null; now?: Date } = {},
+  options: {
+    days?: number;
+    serviceId?: string | null;
+    /** Restricts every count to these services (a scoped reader's visible services). */
+    serviceIds?: readonly string[] | null;
+    now?: Date;
+  } = {},
   client: Client = prisma
 ): Promise<NoiseControlKpis> {
   const days = Math.max(1, Math.min(options.days ?? 7, 90));
   const now = options.now ?? new Date();
   const since = new Date(now.getTime() - days * 86_400_000);
-  const serviceWhere = options.serviceId ? { serviceId: options.serviceId } : {};
+  const serviceWhere = options.serviceId
+    ? { serviceId: options.serviceId }
+    : options.serviceIds
+      ? { serviceId: { in: [...options.serviceIds] } }
+      : {};
   const [alerts, incidents, decisions, perSource, monitors] = await Promise.all([
     client.alert.count({ where: { ...serviceWhere, createdAt: { gte: since } } }),
     client.incident.count({ where: { ...serviceWhere, createdAt: { gte: since } } }),
