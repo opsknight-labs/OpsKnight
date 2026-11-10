@@ -220,7 +220,7 @@ export default function DetailHeroBanner({
                   </p>
                   <div
                     className={cn(
-                      'mt-0.5 flex h-6 items-center justify-center gap-1.5 text-xs sm:text-sm md:text-base font-extrabold text-white min-w-0 max-w-full px-1',
+                      'mt-0.5 flex min-h-6 items-center justify-center gap-1.5 text-xs sm:h-6 sm:text-sm md:text-base font-extrabold text-white min-w-0 max-w-full px-1',
                       stat.valueClassName
                     )}
                   >
@@ -228,7 +228,7 @@ export default function DetailHeroBanner({
                       <span className="shrink-0 flex items-center justify-center">{stat.icon}</span>
                     )}
                     <span
-                      className="truncate max-w-full leading-tight"
+                      className="max-w-full break-words leading-tight sm:truncate"
                       title={
                         stat.tooltip ?? (typeof stat.value === 'string' ? stat.value : undefined)
                       }
@@ -237,7 +237,7 @@ export default function DetailHeroBanner({
                     </span>
                   </div>
                   {stat.subtext && (
-                    <p className="text-[9px] text-slate-400 mt-0.5 truncate w-full">
+                    <p className="text-[9px] text-slate-400 mt-0.5 w-full break-words sm:truncate">
                       {stat.subtext}
                     </p>
                   )}

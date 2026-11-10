@@ -155,6 +155,27 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
         </dd>
       </dl>
       <DecisionReason reason={preview.decisionReason} />
+      {summary.inputs.length > 0 && (
+        <section className="space-y-2 rounded border p-4" aria-labelledby="runbook-inputs">
+          <h2 id="runbook-inputs" className="text-lg font-semibold">
+            Inputs the assistant supplied
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            These values are used in the actions below. Credentials are never shown, and a value
+            that was shortened or partly hidden says so.
+          </p>
+          <dl className="space-y-2 break-words">
+            {summary.inputs.map(input => (
+              <div key={input.key}>
+                <dt className="font-medium">
+                  {input.key} <span className="text-xs text-muted-foreground">({input.type})</span>
+                </dt>
+                <dd className="whitespace-pre-wrap">{input.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       <h2 className="text-lg font-semibold">Frozen actions</h2>
       {summary.steps.map(step => (
         <section key={step.key} className="space-y-2 rounded border p-4">

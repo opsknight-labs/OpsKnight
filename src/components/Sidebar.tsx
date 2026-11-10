@@ -13,7 +13,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
-import { X, HelpCircle, Settings, LogOut, Keyboard, Activity, Globe, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import {
+  X,
+  HelpCircle,
+  Settings,
+  LogOut,
+  Keyboard,
+  Activity,
+  Globe,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import UserAvatar from '@/components/UserAvatar';
 import BrandLockup from '@/components/layout/BrandLockup';
@@ -60,8 +71,6 @@ type SidebarProps = {
   initialStatusPages?: SidebarStatusPage[];
   initialIsStatusPageAdmin?: boolean;
 };
-
-
 
 export default function Sidebar({
   userName = null,
@@ -268,7 +277,11 @@ export default function Sidebar({
                 <Globe className="h-[18px] w-[18px]" />
               </Link>
             </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={12} className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl">
+            <TooltipContent
+              side="right"
+              sideOffset={12}
+              className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+            >
               Setup Status Page
             </TooltipContent>
           </Tooltip>
@@ -288,7 +301,9 @@ export default function Sidebar({
               <Globe className="h-[18px] w-[18px]" />
             </span>
             <span className="min-w-0 flex-1 truncate">Status Page</span>
-            <span className="ml-auto text-[10px] text-slate-500 font-medium bg-slate-800 px-1.5 py-0.5 rounded">Setup</span>
+            <span className="ml-auto text-[10px] text-slate-500 font-medium bg-slate-800 px-1.5 py-0.5 rounded">
+              Setup
+            </span>
           </Link>
         </div>
       );
@@ -319,7 +334,11 @@ export default function Sidebar({
                 <Activity className={cn('h-[18px] w-[18px]', active && 'text-rose-400')} />
               </Link>
             </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={12} className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl">
+            <TooltipContent
+              side="right"
+              sideOffset={12}
+              className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+            >
               {page.name}
             </TooltipContent>
           </Tooltip>
@@ -344,7 +363,12 @@ export default function Sidebar({
             {active && (
               <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
             )}
-            <span className={cn('shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform', active ? 'text-rose-400' : 'text-slate-400 group-hover:text-white')}>
+            <span
+              className={cn(
+                'shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform',
+                active ? 'text-rose-400' : 'text-slate-400 group-hover:text-white'
+              )}
+            >
               <Activity className="h-[18px] w-[18px]" />
             </span>
             <span className="min-w-0 flex-1 truncate">{page.name}</span>
@@ -390,7 +414,11 @@ export default function Sidebar({
               <Globe className={cn('h-[18px] w-[18px]', active && 'text-rose-400')} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={12} className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl p-2 max-w-48">
+          <TooltipContent
+            side="right"
+            sideOffset={12}
+            className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl p-2 max-w-48"
+          >
             <p className="font-semibold mb-1.5 text-slate-300">Status Pages</p>
             <div className="flex flex-col gap-1">
               {statusPages.map(page => (
@@ -429,16 +457,24 @@ export default function Sidebar({
           {active && (
             <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
           )}
-          <span className={cn('shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform', active ? 'text-rose-400' : 'text-slate-400 group-hover:text-white')}>
+          <span
+            className={cn(
+              'shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform',
+              active ? 'text-rose-400' : 'text-slate-400 group-hover:text-white'
+            )}
+          >
             <Globe className="h-[18px] w-[18px]" />
           </span>
           <span className="min-w-0 flex-1 truncate text-left">Status Pages</span>
           <span className="ml-auto flex items-center gap-1">
-            <span className="text-[10px] font-bold text-slate-500 tabular-nums">{statusPages.length}</span>
-            {statusPagesExpanded
-              ? <ChevronDown className="h-3.5 w-3.5 text-slate-500 transition-transform" />
-              : <ChevronRight className="h-3.5 w-3.5 text-slate-500 transition-transform" />
-            }
+            <span className="text-[10px] font-bold text-slate-500 tabular-nums">
+              {statusPages.length}
+            </span>
+            {statusPagesExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5 text-slate-500 transition-transform" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-slate-500 transition-transform" />
+            )}
           </span>
         </button>
 
@@ -461,10 +497,17 @@ export default function Sidebar({
                       : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/40'
                   )}
                 >
-                  <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', pageActive ? 'bg-emerald-400' : 'bg-slate-600')} />
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full shrink-0',
+                      pageActive ? 'bg-emerald-400' : 'bg-slate-600'
+                    )}
+                  />
                   <span className="truncate flex-1">{page.name}</span>
                   {page.isDefault && (
-                    <span className="text-[9px] font-semibold text-slate-500 bg-slate-800 px-1 py-0.5 rounded shrink-0">default</span>
+                    <span className="text-[9px] font-semibold text-slate-500 bg-slate-800 px-1 py-0.5 rounded shrink-0">
+                      default
+                    </span>
                   )}
                 </Link>
               );
@@ -536,6 +579,8 @@ export default function Sidebar({
         id={sidebarId}
         aria-label="Main navigation"
         aria-hidden={isMobile && !isMobileOpen}
+        // Closed off-canvas: hidden from assistive tech AND out of the tab order.
+        inert={isMobile && !isMobileOpen}
         data-collapsed={isDesktopCollapsed ? 'true' : 'false'}
         className={cn(
           // Base styles

@@ -272,7 +272,7 @@ export default async function McpSettings({
             icon: <Globe className="h-4 w-4" />,
             tooltip: endpoint ?? undefined,
             valueClassName: endpoint
-              ? 'text-primary-foreground font-semibold text-xs sm:text-sm font-mono truncate max-w-full'
+              ? 'text-primary-foreground font-semibold text-xs sm:text-sm font-mono break-all sm:truncate max-w-full'
               : 'text-amber-300 font-semibold text-xs sm:text-sm',
             subtext: originSource ?? 'Set App URL in System settings',
           },
