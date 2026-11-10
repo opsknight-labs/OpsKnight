@@ -9,8 +9,14 @@ reader:
   task: Use the suggestions on an incident page and ask the assistant about an incident.
 verification:
   level: test
-  verified_at: 2026-11-03
-  evidence: [src/components/incident, src/components/squire, tests/e2e/intelligence-ui.spec.ts]
+  verified_at: 2026-11-10
+  evidence:
+    [
+      src/components/incident,
+      src/components/squire,
+      tests/components/squire/SquireChatPolish.test.tsx,
+      tests/e2e/intelligence-ui.spec.ts,
+    ]
 ---
 
 # Use Intelligence suggestions and the assistant
@@ -73,6 +79,8 @@ or withdraw. Ratings help administrators tune how strict matching is.
 The assistant (named by your administrator, Squire by default) opens from:
 
 - the **Ask** button in the corner,
+- the keyboard shortcut **⌘ J** (macOS) or **Ctrl J** (Windows and Linux), from any page; press it again to
+  close the assistant. It is listed on the **Keyboard Shortcuts** page,
 - **Ask** in global search,
 - the **Ask** panel on an incident page, which offers ready-made questions about that incident.
 
@@ -99,8 +107,21 @@ have caused this?" or "which runbook fits?".
   automatically after a period without use. An incident conversation must be continued on its original
   incident; a global conversation must be continued outside an incident. Opening one from another context
   explains this instead of relabeling its history. Otherwise **New chat** or reloading the page clears them.
-- Press **Escape** to close it. The arrows button moves it to the other side of the screen; your choice is
+- Press **Escape** to close it. While it is open, **Tab** and **Shift Tab** move only between its own controls;
+  closing it returns you to where you were. Screen readers hear what it is looking up while it works and
+  when the answer is complete. The arrows button moves it to the other side of the screen; your choice is
   remembered in this browser.
+
+### When the assistant cannot use AI
+
+A strip under the assistant's header says why, and what you can do:
+
+| Strip                           | Meaning                                                                                                             | What to do                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Too many requests**           | You sent many questions in a short time.                                                                            | Wait for the countdown, then select **Retry**.                                        |
+| **Daily AI budget reached**     | Your organization used today's AI budget (it resets at 00:00 UTC). Answers come from your incident data until then. | Administrators see **Review AI budget**; others can ask an administrator to raise it. |
+| **AI is off · basic mode**      | AI has not been turned on. Answers come from your incident data.                                                    | Administrators see **Turn on AI**.                                                    |
+| **Basic mode · AI unavailable** | AI is on but could not answer this time (no approved provider, or the provider failed).                             | Select **Retry with AI**.                                                             |
 
 ## Summaries and postmortem drafts
 

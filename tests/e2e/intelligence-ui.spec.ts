@@ -390,6 +390,43 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(dialog).toBeVisible();
   });
 
+  test('the assistant dialog is modal: Tab stays inside, the shortcut restores focus, and AI-off is explained', async ({
+    page,
+  }) => {
+    await page.goto('/shortcuts');
+    await expect(page.getByText('Open or close Squire')).toBeVisible();
+    await assistantReady(page);
+    const origin = page.getByPlaceholder(/Search shortcuts/);
+    await origin.focus();
+    const shortcut = process.platform === 'darwin' ? 'Meta+j' : 'Control+j';
+    await page.keyboard.press(shortcut);
+    const dialog = page.getByRole('dialog', { name: /Pip/ });
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await expect(page.getByLabel('Message Pip')).toBeFocused();
+
+    // AI is off in this spec: the notice says so and, for this administrator, links to the setting.
+    const notice = dialog.getByTestId('squire-availability');
+    await expect(notice).toHaveAttribute('data-state', 'disabled');
+    await expect(notice.getByRole('link', { name: 'Turn on AI' })).toHaveAttribute(
+      'href',
+      '/settings/intelligence/ai'
+    );
+
+    // However far Tab and Shift+Tab go, focus never leaves the dialog.
+    for (let step = 0; step < 25; step += 1) {
+      await page.keyboard.press('Tab');
+      expect(await dialog.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    }
+    for (let step = 0; step < 25; step += 1) {
+      await page.keyboard.press('Shift+Tab');
+      expect(await dialog.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    }
+
+    await page.keyboard.press(shortcut);
+    await expect(dialog).toBeHidden();
+    await expect(origin).toBeFocused();
+  });
+
   test('basic mode answers reports and service questions with durable citations and no provider call', async ({
     page,
   }) => {

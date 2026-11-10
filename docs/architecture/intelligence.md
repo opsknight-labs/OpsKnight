@@ -266,6 +266,24 @@ one day, and cards recover outcomes when reopened. Legacy consumed receipts rema
 live in the browser only and audit entries hold metadata (user, provider, model, token counts, prompt id,
 version and hash), never prompts or answers.
 
+**Chat client.** `SquireLauncher` reads the newline-delimited event stream and joins text deltas per
+animation frame (`delta-batcher.ts`; a short timer when the tab is hidden), so a long answer renders and
+re-parses its markdown once per frame rather than once per token; every other event first applies the
+queued text, which keeps stream order, and **Stop** keeps the text of the current frame. `SquireMessage` and
+its markdown are memoised, so only the answer still streaming is ever re-parsed. The panel is a modal
+dialog (`aria-modal`, Tab and Shift+Tab wrap inside it via `focus-trap.ts`) and closing returns focus to
+the element focused before it opened, else the launcher. A polite live region announces the current
+lookup and completion. ⌘/Ctrl+J toggles it from any page (key repeat ignored) and is listed in the shared
+shortcut registry rendered on `/shortcuts`. Why AI is not answering has four distinct visible states
+(`SquireAvailabilityNotice`): **rate limited** (HTTP 429 with an optional Retry-After countdown, or an AI
+`Too many requests` reported in the stream) → Retry; **budget** (daily AI budget) → settings link for
+people with `INTELLIGENCE_MANAGE`; **disabled** → settings link for the same people; **basic** (AI on but
+no permitted provider or a provider failure) → Retry with AI. The stream tells the first two apart with
+an additive `limit: 'rate' | 'budget'` on the `meta` and `error` events (`aiLimitFrom` in `contract.ts`);
+older clients ignore it and keep showing the shared `quota` availability, and a client meeting an older
+server treats `quota` without `limit` as the budget. An AI `meta` event without availability now resets a
+stale limit state to ready.
+
 **Basic mode pipeline.** Without a model, a turn runs `planBasicTurn` (`squire/deterministic.ts`):
 normalise (contractions, `24h`/`7d` shorthand) → correct spelling against a closed domain vocabulary
 (edit distance ≤ 2, first letter fixed, protected ordinary words, names never touched) → classify (the
