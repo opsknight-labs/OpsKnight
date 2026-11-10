@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { subscribeSquireOpen } from './squire-bus';
+import { parseSquireOpenDetail, subscribeSquireOpen } from './squire-bus';
 export { openSquire } from './squire-bus';
 import { usePathname } from 'next/navigation';
 import { useOptionalRealtime } from '@/hooks/useRealtime';
@@ -50,6 +50,10 @@ import SquireAvailabilityNotice, {
   squireAvailabilityState,
   type SquireRateLimit,
 } from './SquireAvailabilityNotice';
+import { DOCK_PANEL_CLASS, DOCK_WRAPPER_CLASS } from './dock';
+import { useSquireSurfaces } from './use-squire-surfaces';
+import SquirePinnedBriefing from './SquirePinnedBriefing';
+import { SquireContextLabel, SquireDockToggle, SquireEvidenceChip } from './SquireSurfaceControls';
 type SavedConversation = {
   id: string;
   title: string;
@@ -134,6 +138,7 @@ export default function SquireLauncher({
   history = null,
   fullscreen = false,
   canManageAi = false,
+  pinBriefing = false,
 }: {
   name: string;
   avatar?: SquireAvatarKind;
@@ -146,6 +151,8 @@ export default function SquireLauncher({
   fullscreen?: boolean;
   /** The person may change AI settings; limit and disabled notices then link to them. */
   canManageAi?: boolean;
+  /** Pin the incident briefing above a conversation about an incident (loaded from the briefing API). */
+  pinBriefing?: boolean;
 }) {
   const pathname = usePathname();
   const realtime = useOptionalRealtime();
@@ -267,6 +274,17 @@ export default function SquireLauncher({
 
   // Closing only hides the panel: an answer in progress keeps arriving and is there when it is reopened.
   const close = useCallback(() => setOpen(false), []);
+  const openPanel = useCallback(() => setOpen(true), []);
+  // Docked display, hand-off evidence and the ?squire=open deep link live in their own hook.
+  const surfaces = useSquireSurfaces({
+    pathname,
+    incidentId,
+    open,
+    fullscreen,
+    onOpen: openPanel,
+    onPrefill: setInput,
+  });
+  const { dock, receive: receiveHandOff, clearEvidence } = surfaces;
 
   useEffect(() => {
     document.documentElement.dataset.squireName = name;
@@ -280,12 +298,12 @@ export default function SquireLauncher({
   useEffect(() => {
     const onOpen = (event: Event) => {
       setOpen(true);
-      const message = (event as CustomEvent<{ message?: unknown } | undefined>).detail?.message;
-      if (typeof message === 'string' && message.trim())
-        void sendRef.current(message.slice(0, MAX_LENGTH));
+      const request = parseSquireOpenDetail((event as CustomEvent<unknown>).detail);
+      receiveHandOff(request);
+      if (request.message) void sendRef.current(request.message.slice(0, MAX_LENGTH));
     };
     return subscribeSquireOpen(onOpen);
-  }, []);
+  }, [receiveHandOff]);
 
   const switchSide = useCallback(() => {
     try {
@@ -681,8 +699,9 @@ export default function SquireLauncher({
     setConversationId(undefined);
     setActiveScope(undefined);
     setShowHistory(false);
+    clearEvidence();
     inputRef.current?.focus();
-  }, [stopCurrent]);
+  }, [stopCurrent, clearEvidence]);
 
   const loadSaved = useCallback(async (cursor?: string) => {
     setHistoryLoading(true);
@@ -827,10 +846,12 @@ export default function SquireLauncher({
       className={
         fullscreen
           ? `fixed z-50 print:hidden ${open ? 'inset-0' : 'bottom-24 right-4'}`
-          : `fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-4' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`
+          : dock.docked && open
+            ? DOCK_WRAPPER_CLASS
+            : `fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-4' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`
       }
       data-side={side}
-      data-presentation={fullscreen ? 'fullscreen' : 'panel'}
+      data-presentation={fullscreen ? 'fullscreen' : dock.docked ? 'docked' : 'panel'}
     >
       {!open && launcher === 'FLOATING' && (
         <button
@@ -864,7 +885,9 @@ export default function SquireLauncher({
           className={
             fullscreen
               ? 'relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]'
-              : `relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card shadow-2xl sm:h-[min(52rem,calc(100dvh-2rem))] sm:rounded-2xl sm:border sm:border-border ${expanded ? 'sm:w-[min(52rem,calc(100vw-2rem))]' : 'sm:w-[min(34rem,calc(100vw-2rem))]'}`
+              : dock.docked
+                ? DOCK_PANEL_CLASS
+                : `relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card shadow-2xl sm:h-[min(52rem,calc(100dvh-2rem))] sm:rounded-2xl sm:border sm:border-border ${expanded ? 'sm:w-[min(52rem,calc(100vw-2rem))]' : 'sm:w-[min(34rem,calc(100vw-2rem))]'}`
           }
         >
           <header className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -881,7 +904,8 @@ export default function SquireLauncher({
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {!fullscreen && (
+              <SquireDockToggle dock={dock} name={name} />
+              {!fullscreen && !dock.docked && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -914,15 +938,17 @@ export default function SquireLauncher({
                   <History className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={switchSide}
-                aria-label={`Move ${name} to the ${side === 'right' ? 'left' : 'right'} side`}
-                title="Move to the other side"
-                className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-accent"
-              >
-                <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
-              </button>
+              {!dock.docked && (
+                <button
+                  type="button"
+                  onClick={switchSide}
+                  aria-label={`Move ${name} to the ${side === 'right' ? 'left' : 'right'} side`}
+                  title="Move to the other side"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-accent"
+                >
+                  <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={close}
@@ -996,7 +1022,7 @@ export default function SquireLauncher({
                 <button
                   type="button"
                   onClick={newChat}
-                  className="min-h-8 rounded border border-current px-2 py-1"
+                  className="min-h-11 rounded border border-current px-3 py-1"
                 >
                   New chat here
                 </button>
@@ -1005,7 +1031,7 @@ export default function SquireLauncher({
           )}
           {!showHistory && !contextMismatch && (
             <p className="flex items-center gap-2 border-b border-border bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground">
-              <span>{incidentId ? 'Discussing this incident' : 'General conversation'}</span>
+              <SquireContextLabel pathname={pathname} />
               <span className="ml-auto inline-flex items-center gap-1.5">
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${availabilityState === null ? 'bg-emerald-500' : availabilityState === 'rate_limited' || availabilityState === 'budget' ? 'bg-amber-500' : 'bg-muted-foreground'}`}
@@ -1019,6 +1045,17 @@ export default function SquireLauncher({
                       : 'Basic mode'}
               </span>
             </p>
+          )}
+          {!showHistory && !contextMismatch && (
+            <SquireEvidenceChip
+              evidence={surfaces.evidence}
+              incidentId={incidentId}
+              mobile={fullscreen}
+              onDismiss={clearEvidence}
+            />
+          )}
+          {pinBriefing && !showHistory && !contextMismatch && incidentId && (
+            <SquirePinnedBriefing incidentId={incidentId} mobile={fullscreen} />
           )}
           {showHistory && history ? (
             <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm">

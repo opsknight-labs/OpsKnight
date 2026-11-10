@@ -166,6 +166,45 @@ describe('SidebarSearch component', () => {
       const entry = await screen.findByText('Ask Pip');
       fireEvent.click(entry);
       expect(opened).toHaveBeenCalledTimes(1);
+      // Only the assistant's name was typed: the panel opens with nothing to ask.
+      expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({});
+      window.removeEventListener('squire:open', opened);
+    });
+
+    it('hands the typed question to the assistant so it is asked without retyping', async () => {
+      render(<SidebarSearch />);
+      document.documentElement.dataset.squireName = 'Pip';
+      window.dispatchEvent(new Event('squire:ready'));
+      const opened = vi.fn();
+      window.addEventListener('squire:open', opened);
+      fireEvent.change(screen.getByPlaceholderText('Search...'), {
+        target: { value: 'ask pip why is checkout failing?' },
+      });
+      const entry = await screen.findByText('Ask Pip');
+      // The entry previews exactly what will be asked.
+      expect(screen.getByText('why is checkout failing?')).toBeInTheDocument();
+      fireEvent.click(entry);
+      expect(opened).toHaveBeenCalledTimes(1);
+      expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
+        message: 'why is checkout failing?',
+      });
+      expect(screen.getByPlaceholderText('Search...')).toHaveValue('');
+      window.removeEventListener('squire:open', opened);
+    });
+
+    it('offers the assistant for a plain question that does not name it', async () => {
+      render(<SidebarSearch />);
+      document.documentElement.dataset.squireName = 'Pip';
+      window.dispatchEvent(new Event('squire:ready'));
+      const opened = vi.fn();
+      window.addEventListener('squire:open', opened);
+      fireEvent.change(screen.getByPlaceholderText('Search...'), {
+        target: { value: 'who is on call for checkout?' },
+      });
+      fireEvent.click(await screen.findByText('Ask Pip'));
+      expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
+        message: 'who is on call for checkout?',
+      });
       window.removeEventListener('squire:open', opened);
     });
   });

@@ -10,6 +10,7 @@ import SquireSavedAction from './SquireSavedAction';
 import OpsKnightSquire from './OpsKnightSquire';
 import SquireInvestigationSteps from './SquireInvestigationSteps';
 import type { Turn } from './chat-types';
+import { SquireCitationFindingLink } from './SquireSurfaceControls';
 
 // Parsing markdown is the most expensive part of a message. Memoized on its props, a finished answer is
 // parsed once; only the answer still streaming is parsed again, once per animation frame of new text.
@@ -134,7 +135,10 @@ export default memo(function SquireMessage({
         {!!turn.citations?.length && (
           <ul aria-label="Sources" className="mt-3 flex flex-wrap gap-2">
             {turn.citations.map(citation => (
-              <li key={`${citation.kind}:${citation.id}`} className="min-w-0 max-w-full">
+              <li
+                key={`${citation.kind}:${citation.id}`}
+                className="flex min-w-0 max-w-full items-center gap-1"
+              >
                 <Link
                   href={citation.href}
                   className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-accent"
@@ -146,6 +150,7 @@ export default memo(function SquireMessage({
                   </span>
                   <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
                 </Link>
+                <SquireCitationFindingLink citation={citation} incidentId={turn.incidentId} />
               </li>
             ))}
           </ul>

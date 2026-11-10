@@ -34,6 +34,11 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
+import { openSquire } from '@/components/squire/squire-bus';
+import {
+  queryAddressesAssistant,
+  questionFromPaletteQuery,
+} from '@/components/squire/palette-question';
 
 type SearchResult = {
   type: 'incident' | 'service' | 'team' | 'user' | 'policy' | 'postmortem';
@@ -415,7 +420,8 @@ export default function SidebarSearch() {
   const handleSelect = useCallback(
     (_value: string, item?: { href?: string; id?: string; query?: string }) => {
       if (item?.id === 'ask-assistant') {
-        window.dispatchEvent(new Event('squire:open'));
+        // The typed question goes with it, so it is asked without being typed twice.
+        openSquire(assistantName ? questionFromPaletteQuery(query, assistantName) : undefined);
         setOpen(false);
         setQuery('');
         inputRef.current?.blur();
@@ -439,7 +445,7 @@ export default function SidebarSearch() {
         setIsLoading(item.query.trim().length >= 2);
       }
     },
-    [router, openCreateIncident, query, results.length, saveRecentSearch]
+    [router, openCreateIncident, query, results.length, saveRecentSearch, assistantName]
   );
 
   const matchingNavigation = useMemo(() => {
@@ -453,17 +459,14 @@ export default function SidebarSearch() {
     );
   }, [query]);
 
-  const assistantMatches = useMemo(() => {
-    if (!assistantName || query.trim().length < 2) return false;
-    const q = query.trim().toLowerCase();
-    return q
-      .split(/[^\p{L}\p{N}_]+/u)
-      .some(token =>
-        ['ask', 'assistant', 'ai', 'help', ...assistantName.toLowerCase().split(/\s+/)].includes(
-          token
-        )
-      );
-  }, [assistantName, query]);
+  const assistantMatches = useMemo(
+    () => Boolean(assistantName) && queryAddressesAssistant(query, assistantName ?? ''),
+    [assistantName, query]
+  );
+  const assistantQuestion = useMemo(
+    () => (assistantName ? questionFromPaletteQuery(query, assistantName) : undefined),
+    [assistantName, query]
+  );
 
   const groupedResults = useMemo(() => {
     const groups = new Map<string, SearchResult[]>();
@@ -650,7 +653,7 @@ export default function SidebarSearch() {
                       <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
                         <span className="font-medium text-sm">Ask {assistantName}</span>
                         <span className="text-[10px] text-muted-foreground truncate">
-                          Questions about incidents you can access
+                          {assistantQuestion ?? 'Questions about incidents you can access'}
                         </span>
                       </div>
                     </CommandItem>

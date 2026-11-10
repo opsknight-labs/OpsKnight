@@ -557,6 +557,92 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(dialog).toBeVisible();
   });
 
+  test('Squire opens from a deep link, pins the incident briefing, docks beside the page and takes the palette question', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const sent: string[] = [];
+    page.on('request', request => {
+      if (request.method() === 'POST' && request.url().endsWith('/api/intelligence/squire'))
+        sent.push(request.postData() ?? '');
+    });
+    await page.goto(`/incidents/${incidentId}?squire=open&q=What%20changed%3F`);
+    await assistantReady(page);
+    const dialog = page.getByRole('dialog', { name: /Pip/ });
+    await expect(dialog).toBeVisible();
+    // A link only writes the question; the person sends it.
+    await expect(page.getByLabel('Message Pip')).toHaveValue('What changed?');
+    await expect(page).not.toHaveURL(/squire=open/);
+    expect(sent).toEqual([]);
+    await expect(dialog.getByText('Discussing this incident')).toBeVisible();
+
+    const briefing = dialog.getByRole('region', { name: 'Incident briefing' });
+    await expect(briefing).toBeVisible();
+    // Findings link to their anchor in the incident's insights, the one place each finding lives.
+    expect(await briefing.getByRole('link', { name: /last month/ }).getAttribute('href')).toMatch(
+      /^\/incidents\/[A-Za-z0-9_-]+\?insights=similar#finding-[A-Za-z0-9_-]+$/
+    );
+    const changeHref = await briefing
+      .getByRole('link', { name: /checkout v42 rollout/ })
+      .getAttribute('href');
+    expect(changeHref).toMatch(/\?insights=why#finding-[A-Za-z0-9_-]+$/);
+    expect(changeHref?.startsWith(`/incidents/${incidentId}?`)).toBe(true);
+
+    const content = page.locator('.content-shell');
+    const rightEdge = async (target: typeof content) => {
+      const box = (await target.boundingBox())!;
+      return box.x + box.width;
+    };
+    const floatingEdge = await rightEdge(content);
+    await dialog.getByRole('button', { name: 'Dock Pip beside the page' }).click();
+    await expect(page.locator('html.squire-docked')).toHaveCount(1);
+    // Docked: the page ends where the panel starts, so nothing is covered.
+    await expect
+      .poll(async () => (await rightEdge(content)) - (await dialog.boundingBox())!.x)
+      .toBeLessThanOrEqual(1);
+    expect(await rightEdge(content)).toBeLessThan(floatingEdge);
+    expect(await rightEdge(dialog)).toBeLessThanOrEqual(1440);
+    await noHorizontalOverflow(page);
+    await expect(dialog.getByRole('button', { name: 'Expand chat' })).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('opsknight.squire.display'))).toBe(
+      'docked'
+    );
+    await expectAccessible(page, 'section[role="dialog"]');
+
+    await page.getByLabel('Message Pip').focus();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('html.squire-docked')).toHaveCount(0);
+    await expect.poll(() => rightEdge(content)).toBe(floatingEdge);
+
+    // The choice is remembered; floating again restores the default for the other specs.
+    await page.keyboard.press('Control+j');
+    await expect(page.locator('html.squire-docked')).toHaveCount(1);
+    await dialog.getByRole('button', { name: 'Float Pip over the page' }).click();
+    await expect(page.locator('html.squire-docked')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => localStorage.removeItem('opsknight.squire.display'));
+
+    // Below the desktop breakpoint docking is not offered.
+    await page.setViewportSize({ width: 900, height: 800 });
+    await page.keyboard.press('Control+j');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Dock Pip|Float Pip/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const search = page.getByPlaceholder('Search...');
+    await search.click();
+    await search.fill('ask pip what is on fire?');
+    await page.getByText('Ask Pip', { exact: true }).last().click();
+    await expect(dialog).toBeVisible();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(JSON.parse(sent[0])).toMatchObject({ message: 'what is on fire?', incidentId });
+
+    await page.goto('/shortcuts');
+    await expect(page.getByText('Open or close Squire')).toBeVisible();
+  });
+
   test('the assistant dialog is modal: Tab stays inside, the shortcut restores focus, and AI-off is explained', async ({
     page,
   }) => {

@@ -37,6 +37,7 @@ export default async function SquireMount() {
       aiEnabled={status.aiEnabled}
       history={status.historyEnabled ? { retentionDays: status.historyRetentionDays } : null}
       canManageAi={status.canManageAi}
+      pinBriefing
     />
   );
 }

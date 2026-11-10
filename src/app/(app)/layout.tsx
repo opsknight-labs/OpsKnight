@@ -156,7 +156,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                           />
                         </div>
                       </AppHeader>
-                      <div className="relative flex min-h-0 flex-1 pt-14">
+                      {/* A docked assistant sets --squire-dock-width; the content row makes room for it. */}
+                      <div className="relative flex min-h-0 flex-1 pt-14 lg:pr-[var(--squire-dock-width,0px)]">
                         <Sidebar
                           userName={userName}
                           userEmail={userEmail}
