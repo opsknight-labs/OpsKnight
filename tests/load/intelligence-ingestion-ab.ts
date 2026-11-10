@@ -160,7 +160,8 @@ async function reset() {
 
 /** Resolved history spread over 90 days with one fingerprinted alert each, in bounded SQL batches. */
 async function seedHistory(serviceIds: string[], count: number) {
-  const batch = 200_000;
+  // Small enough to stay well inside the default statement timeout on a busy host.
+  const batch = 20_000;
   for (let offset = 0; offset < count; offset += batch) {
     const size = Math.min(batch, count - offset);
     await prisma.$executeRawUnsafe(
