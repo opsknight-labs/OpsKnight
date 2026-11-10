@@ -12,6 +12,7 @@ import {
   type NoiseControlDefinition,
 } from './contract';
 import { compileMatcher } from './matchers';
+import { warmNoiseLookupClient } from './lookup-client';
 import type {
   CompiledPolicy,
   CompiledSuppressionRule,
@@ -191,6 +192,7 @@ export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   loading = loadPrePagingSnapshot()
     .then(snapshot => {
       current = snapshot;
+      if (needsLookups(snapshot)) void warmNoiseLookupClient();
       return snapshot;
     })
     .catch(error => {
@@ -208,10 +210,17 @@ export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   return loading;
 }
 
-/** Awaits a fresh snapshot: for process start, tests and the settings page preview. */
+/** Whether any policy can make the hook read (SHADOW or ON). */
+function needsLookups(snapshot: PrePagingSnapshot): boolean {
+  return [...snapshot.policies.values()].some(policy => policy.mode !== 'OFF');
+}
+
+/** Awaits a fresh snapshot (and the lookup pool it needs): for process start and tests. */
 export async function primePrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   current = null;
-  return refreshPrePagingSnapshot();
+  const snapshot = await refreshPrePagingSnapshot();
+  if (snapshot && needsLookups(snapshot)) await warmNoiseLookupClient();
+  return snapshot;
 }
 
 export function resetPrePagingSnapshot(): void {

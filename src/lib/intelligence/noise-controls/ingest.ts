@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { INTELLIGENCE_ENGINE_VERSION } from '../contract';
-import { PREPAGING_LIMITS, type PrePagingDecisionResult, type PrePagingInput } from './contract';
+import type { PrePagingDecisionResult, PrePagingInput } from './contract';
 import {
   evaluatePrePagingControls,
   resolvePolicy,
@@ -13,31 +13,27 @@ import {
 } from './evaluate';
 import { getPrePagingSnapshot, prefetchedLookups, type PrePagingLookupPlan } from './cache';
 import { NOISE_CONTROL_REVERSAL_INTEGRATION_ID, recordPrePagingDecision } from './decisions';
+import { getNoiseLookupClient, lookupTimeoutMs, prePagingDeadlineMs } from './lookup-client';
 
 /**
  * The ingestion side of the pre-paging controls: the only noise-control code `processEvent` reaches
  * (through `ingest-hooks`). It runs inside the event transaction, before the incident is written.
  *
  * - Policy OFF (the default) or no snapshot yet: one in-process map lookup, no database access.
- * - SHADOW / ON: every read the policy can need is fetched in one index-backed statement, inside a
- *   savepoint with a server-side statement timeout equal to the shared deadline, so an abandoned lookup
- *   can delay the transaction by at most one deadline and never leaves it aborted. The savepoint is
- *   always rolled back (the lookups only read). Three round trips inside the deadline, one after.
+ * - SHADOW / ON: every read the policy can need is fetched in one index-backed statement. By default it
+ *   runs on the dedicated lookup pool (`lookup-client.ts`), whose connections carry a server-side
+ *   statement timeout equal to the shared deadline: one round trip, and an abandoned or failing lookup
+ *   never touches the event transaction. Behind a transaction pooler (or with no datasource) it runs on the
+ *   event transaction inside a savepoint with the same server-side timeout, so an abandoned lookup can
+ *   delay the transaction by at most one deadline and never leaves it aborted; the savepoint is always
+ *   rolled back (the lookups only read). Three round trips inside the deadline, one after.
  * - Any error, timeout or cold cache returns `null`: the caller pages exactly as it does without controls.
  */
 
 type Tx = Prisma.TransactionClient;
 const SAVEPOINT = 'opsknight_prepaging';
-const MAX_DEADLINE_MS = 50;
-let deadlineOverrideMs: number | null = null;
 
-/**
- * Process-level override of the shared deadline (1–50 ms; null restores the 5 ms default). For
- * benchmarks and tests that must not depend on host timing; production code never calls it.
- */
-export function setPrePagingDeadlineMs(ms: number | null): void {
-  deadlineOverrideMs = ms === null ? null : Math.min(MAX_DEADLINE_MS, Math.max(1, Math.round(ms)));
-}
+export { setPrePagingDeadlineMs } from './lookup-client';
 
 export interface IngestNoiseOptions {
   integrationId: string;
@@ -91,12 +87,17 @@ export function lookupPlan(
   };
 }
 
-/** Wraps the prefetched lookups in a lazily opened, timeout-bounded savepoint. */
+/**
+ * The prefetched lookups on the dedicated pool (server-side timeout set per connection; nothing to
+ * open or close), or on the event transaction inside a lazily opened, timeout-bounded savepoint.
+ */
 function boundedLookups(tx: Tx, deadlineMs: number, plan: PrePagingLookupPlan) {
+  const timeoutMs = lookupTimeoutMs(deadlineMs);
+  const pool = getNoiseLookupClient(timeoutMs);
+  if (pool) return { lookups: prefetchedLookups(pool, plan), async close() {} };
   const base = prefetchedLookups(tx, plan);
   let opening: Promise<void> | null = null;
   let closed = false;
-  const timeoutMs = Math.max(1, Math.ceil(deadlineMs));
   const open = async () => {
     if (closed) throw new Error('pre-paging lookups closed');
     opening ??= (async () => {
@@ -159,7 +160,7 @@ export async function evaluateIngestNoiseControls(
     // OFF is the default: decided from the in-process snapshot alone, nothing else runs.
     if (!policy || policy.mode === 'OFF') return null;
 
-    const deadlineMs = options.deadlineMs ?? deadlineOverrideMs ?? PREPAGING_LIMITS.deadlineMs;
+    const deadlineMs = options.deadlineMs ?? prePagingDeadlineMs();
     const now = options.now ?? input.receivedAt;
     const bounded = options.lookups
       ? null

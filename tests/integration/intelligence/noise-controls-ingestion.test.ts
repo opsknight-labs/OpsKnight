@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { processEvent, type EventPayload } from '@/lib/events';
 import { normalizeAlertShape } from '@/lib/alerts/normalization';
@@ -11,6 +11,10 @@ import {
   setPrePagingDeadlineMs,
   type PrePagingInput,
 } from '@/lib/intelligence/noise-controls';
+import {
+  disconnectNoiseLookupClient,
+  setNoiseLookupRoute,
+} from '@/lib/intelligence/noise-controls/lookup-client';
 import { createCentralNotificationIntent } from '@/lib/notification-control-plane';
 import {
   createTestService,
@@ -33,7 +37,11 @@ beforeEach(async () => {
   setPrePagingDeadlineMs(50);
   await resetDatabase();
 });
-afterAll(() => setPrePagingDeadlineMs(null));
+afterAll(async () => {
+  setPrePagingDeadlineMs(null);
+  setNoiseLookupRoute(null);
+  await disconnectNoiseLookupClient();
+});
 
 type Mode = 'OFF' | 'SHADOW' | 'ON';
 
@@ -629,66 +637,102 @@ describe('fail-open', () => {
     expect((await ingest(service.id)).action).toBe('suppressed');
   });
 
-  it('a failing lookup (missing table) rolls back to the savepoint and the event pages', async () => {
+  describe.each(['pool', 'transaction'] as const)('lookups on the %s route', route => {
+    beforeEach(() => {
+      setNoiseLookupRoute(route);
+    });
+    afterEach(() => {
+      setNoiseLookupRoute(null);
+    });
+
+    it('a failing lookup (missing table) fails open and the event pages', async () => {
+      const { service } = await setup();
+      incidentOf(await ingest(service.id));
+      await policy(service.id, 'ON', {
+        contentDedup: { enabled: true, requireLabelSubset: false },
+        storm: { enabled: true, threshold: 1_000 },
+      });
+      await db.$executeRawUnsafe(
+        'ALTER TABLE "IncidentFingerprint" RENAME TO "IncidentFingerprint_x"'
+      );
+      try {
+        const result = await ingest(service.id);
+        expect(result.action).toBe('triggered');
+        expect(await pagingJobs(incidentOf(result).id)).toHaveLength(1);
+        expect(await decisions(service.id)).toEqual([]);
+      } finally {
+        await db.$executeRawUnsafe(
+          'ALTER TABLE "IncidentFingerprint_x" RENAME TO "IncidentFingerprint"'
+        );
+      }
+    });
+
+    it('a blocked lookup is cut off by the server-side deadline and the event pages promptly', async () => {
+      setPrePagingDeadlineMs(null);
+      const { service } = await setup();
+      incidentOf(await ingest(service.id));
+      await policy(service.id, 'ON', {
+        contentDedup: { enabled: true, requireLabelSubset: false },
+      });
+      let release: () => void = () => undefined;
+      const locked = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      let held: () => void = () => undefined;
+      const holding = new Promise<void>(resolve => {
+        held = resolve;
+      });
+      const blocker = db.$transaction(
+        async tx => {
+          await tx.$executeRawUnsafe('LOCK TABLE "IncidentFingerprint" IN ACCESS EXCLUSIVE MODE');
+          held();
+          await locked;
+        },
+        { timeout: 30_000 }
+      );
+      await holding;
+      try {
+        const started = performance.now();
+        const result = await ingest(service.id);
+        const elapsed = performance.now() - started;
+        expect(result.action).toBe('triggered');
+        expect(await decisions(service.id)).toEqual([]);
+        // Bounded by the deadline (plus normal ingestion work), not by the 30 s lock.
+        expect(elapsed).toBeLessThan(5_000);
+      } finally {
+        release();
+        await blocker;
+      }
+      expect(
+        await pagingJobs(
+          (await db.incident.findFirstOrThrow({ orderBy: { createdAt: 'desc' } })).id
+        )
+      ).toHaveLength(1);
+    });
+  });
+
+  it('on the pool route SHADOW and ON lookups never touch the event transaction', async () => {
     const { service } = await setup();
     incidentOf(await ingest(service.id));
     await policy(service.id, 'ON', {
       contentDedup: { enabled: true, requireLabelSubset: false },
       storm: { enabled: true, threshold: 1_000 },
     });
-    await db.$executeRawUnsafe(
-      'ALTER TABLE "IncidentFingerprint" RENAME TO "IncidentFingerprint_x"'
-    );
-    try {
-      const result = await ingest(service.id);
-      expect(result.action).toBe('triggered');
-      expect(await pagingJobs(incidentOf(result).id)).toHaveLength(1);
-      expect(await decisions(service.id)).toEqual([]);
-    } finally {
-      await db.$executeRawUnsafe(
-        'ALTER TABLE "IncidentFingerprint_x" RENAME TO "IncidentFingerprint"'
-      );
-    }
-  });
-
-  it('a blocked lookup is cut off by the server-side deadline and the event pages promptly', async () => {
-    setPrePagingDeadlineMs(null);
-    const { service } = await setup();
-    incidentOf(await ingest(service.id));
-    await policy(service.id, 'ON', {
-      contentDedup: { enabled: true, requireLabelSubset: false },
-    });
-    let release: () => void = () => undefined;
-    const locked = new Promise<void>(resolve => {
-      release = resolve;
-    });
-    let held: () => void = () => undefined;
-    const holding = new Promise<void>(resolve => {
-      held = resolve;
-    });
-    const blocker = db.$transaction(
-      async tx => {
-        await tx.$executeRawUnsafe('LOCK TABLE "IncidentFingerprint" IN ACCESS EXCLUSIVE MODE');
-        held();
-        await locked;
+    const snapshot = await primePrePagingSnapshot();
+    const untouchable = new Proxy({} as Prisma.TransactionClient, {
+      get() {
+        throw new Error('the pool route must not use the event transaction');
       },
-      { timeout: 30_000 }
+    });
+    const { fingerprintHash } = await db.alert.findFirstOrThrow({
+      where: { serviceId: service.id },
+      select: { fingerprintHash: true },
+    });
+    const decision = await evaluateIngestNoiseControls(
+      untouchable,
+      { ...input(service.id), fingerprintHash },
+      { integrationId: 'x', snapshot }
     );
-    await holding;
-    try {
-      const started = performance.now();
-      const result = await ingest(service.id);
-      const elapsed = performance.now() - started;
-      expect(result.action).toBe('triggered');
-      expect(await decisions(service.id)).toEqual([]);
-      // Bounded by the deadline (plus normal ingestion work), not by the 30 s lock.
-      expect(elapsed).toBeLessThan(5_000);
-    } finally {
-      release();
-      await blocker;
-    }
-    expect(
-      await pagingJobs((await db.incident.findFirstOrThrow({ orderBy: { createdAt: 'desc' } })).id)
-    ).toHaveLength(1);
+    expect(decision).toMatchObject({ control: 'CONTENT_DEDUP', action: 'APPEND', apply: true });
   });
 });

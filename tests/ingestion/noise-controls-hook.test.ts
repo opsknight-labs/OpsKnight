@@ -8,6 +8,10 @@ import {
   resetPrePagingSnapshot,
   setPrePagingDeadlineMs,
 } from '@/lib/intelligence/noise-controls';
+import {
+  disconnectNoiseLookupClient,
+  setNoiseLookupRoute,
+} from '@/lib/intelligence/noise-controls/lookup-client';
 
 /**
  * The pre-paging hook on the real ingestion path at the production 5 ms deadline: concurrent bursts stay
@@ -31,6 +35,7 @@ afterAll(async () => {
   await prisma.alert.deleteMany({ where: owned });
   await prisma.incident.deleteMany({ where: owned });
   await prisma.service.deleteMany({ where: { id: { in: services } } });
+  await disconnectNoiseLookupClient();
   await prisma.$disconnect();
 });
 
@@ -133,26 +138,31 @@ it('pages normally when the noise-control tables are missing', async () => {
   }
 });
 
-it('pages normally when a lookup fails inside the event transaction', async () => {
-  const serviceId = await serviceWith('ON', {
-    contentDedup: { enabled: true, requireLabelSubset: false },
-    flapping: { enabled: true },
-    storm: { enabled: true, threshold: 2 },
-  });
-  await prisma.$executeRawUnsafe(
-    'ALTER TABLE "IncidentFingerprint" RENAME TO "IncidentFingerprint_x"'
-  );
-  try {
-    for (let i = 0; i < 4; i += 1) {
-      const result = await processEvent(event(), serviceId, 'noise-hook');
-      expect(result.action).toBe('triggered');
-      if (!('incident' in result) || !result.incident) throw new Error('expected an incident');
-      expect(await pagingJob(result.incident.id)).not.toBeNull();
-    }
-    expect(await prisma.prePagingDecision.count({ where: { serviceId } })).toBe(0);
-  } finally {
+it.each(['pool', 'transaction'] as const)(
+  'pages normally when a lookup fails on the %s route',
+  async route => {
+    setNoiseLookupRoute(route);
+    const serviceId = await serviceWith('ON', {
+      contentDedup: { enabled: true, requireLabelSubset: false },
+      flapping: { enabled: true },
+      storm: { enabled: true, threshold: 2 },
+    });
     await prisma.$executeRawUnsafe(
-      'ALTER TABLE "IncidentFingerprint_x" RENAME TO "IncidentFingerprint"'
+      'ALTER TABLE "IncidentFingerprint" RENAME TO "IncidentFingerprint_x"'
     );
+    try {
+      for (let i = 0; i < 4; i += 1) {
+        const result = await processEvent(event(), serviceId, 'noise-hook');
+        expect(result.action).toBe('triggered');
+        if (!('incident' in result) || !result.incident) throw new Error('expected an incident');
+        expect(await pagingJob(result.incident.id)).not.toBeNull();
+      }
+      expect(await prisma.prePagingDecision.count({ where: { serviceId } })).toBe(0);
+    } finally {
+      setNoiseLookupRoute(null);
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "IncidentFingerprint_x" RENAME TO "IncidentFingerprint"'
+      );
+    }
   }
-});
+);

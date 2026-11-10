@@ -17,13 +17,15 @@
  * flapping and storm grouping with thresholds that run every lookup on every event but never change the
  * outcome), so the gate measures the hook's full cost: "all features ON vs everything OFF". `--no-lane`
  * keeps the lane idle in both arms to isolate the hook. `--history N` seeds N resolved incidents (one
- * alert each, spread over 90 days) per arm, so lookups run against a large table.
+ * alert each, spread over 90 days) per arm, so lookups run against a large table. `--noise-lookups
+ * transaction` keeps the hook's reads on the event transaction (savepoint) instead of the default
+ * dedicated lookup pool.
  *
  * Usage (dedicated database whose name ends in _bench or _test; the script truncates incident data):
  *   DATABASE_URL=postgresql://.../opsknight_bench \
  *   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
  *     tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 300 --concurrency 16 --backlog 400 \
- *     [--noise-controls on] [--no-lane] [--history 1000000] \
+ *     [--noise-controls on] [--noise-lookups pool|transaction] [--no-lane] [--history 1000000] \
  *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate]
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -46,6 +48,10 @@ import {
   primePrePagingSnapshot,
   resetPrePagingSnapshot,
 } from '../../src/lib/intelligence/noise-controls';
+import {
+  disconnectNoiseLookupClient,
+  setNoiseLookupRoute,
+} from '../../src/lib/intelligence/noise-controls/lookup-client';
 import { runtimeOperationalMetrics } from '../../src/lib/metrics/operational/registry';
 import {
   comparePaired,
@@ -64,6 +70,8 @@ interface Options {
   services: number;
   /** Candidate arm also runs every pre-paging noise control ON (baseline: all OFF). */
   noiseControls: boolean;
+  /** Where the hook's reads run: the dedicated lookup pool (default) or the event transaction. */
+  noiseLookups: 'pool' | 'transaction';
   /** Candidate arm runs the busy intelligence lane (default). */
   lane: boolean;
   /** Resolved incidents (one alert each) seeded per arm before the burst. 0 = none. */
@@ -119,12 +127,17 @@ function parseOptions(argv: string[]): Options {
   };
   const outputAt = argv.indexOf('--output');
   const noiseAt = argv.indexOf('--noise-controls');
+  const lookupsAt = argv.indexOf('--noise-lookups');
+  const noiseLookups = lookupsAt >= 0 ? argv[lookupsAt + 1] : 'pool';
+  if (noiseLookups !== 'pool' && noiseLookups !== 'transaction')
+    throw new Error('--noise-lookups must be pool or transaction');
   const historyAt = argv.indexOf('--history');
   const history = historyAt >= 0 ? Number(argv[historyAt + 1]) : 0;
   if (!Number.isInteger(history) || history < 0)
     throw new Error('--history must be a non-negative integer');
   return {
     noiseControls: noiseAt >= 0 && argv[noiseAt + 1] === 'on',
+    noiseLookups,
     lane: !argv.includes('--no-lane'),
     history,
     repetitions: read('repetitions', 8),
@@ -497,6 +510,7 @@ function summarize(samples: Sample[]) {
 async function main() {
   assertDedicatedDatabase();
   const options = parseOptions(process.argv.slice(2));
+  setNoiseLookupRoute(options.noiseLookups);
   const samples: Sample[] = [];
   for (let repetition = 0; repetition < options.repetitions; repetition += 1) {
     // Alternate which arm goes first so ordering effects cancel.
@@ -592,6 +606,7 @@ async function main() {
       `p99 ${p99DeltaMs >= 0 ? '+' : ''}${p99DeltaMs.toFixed(2)} ms (limit +${options.maxP99DeltaMs}) → ${gate.passed ? 'PASS' : 'FAIL'}`
   );
   for (const breach of breaches) console.log(`  breach: ${breach}`);
+  await disconnectNoiseLookupClient();
   await prisma.$disconnect();
   if (options.gate && !gate.passed) process.exitCode = 1;
 }

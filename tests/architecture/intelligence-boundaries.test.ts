@@ -70,14 +70,22 @@ describe('intelligence architecture boundaries', () => {
       'noise-controls/recurrence.ts',
       'noise-controls/contract.ts',
       'noise-controls/decisions.ts',
+      'noise-controls/lookup-client.ts',
     ]) {
       expect(read(join(intelligenceDir, file)), file).not.toMatch(
         /\bfetch\(|from\s+['"](?:ai|@ai-sdk\/[^'"]+)['"]|\/(?:ai|squire|analysis|correlation|similarity|semantic)\//
       );
     }
-    // Its reads run under a savepoint with a server-side statement timeout and are always rolled back,
-    // so a slow or failing lookup can neither hold nor abort the event transaction.
+    // By default its reads run on a dedicated pool whose connections carry a server-side statement and
+    // lock timeout equal to the deadline (overriding inherited options), so they never touch the event
+    // transaction; a missing datasource or the `transaction` route falls back to the savepoint below.
+    const pool = read(join(intelligenceDir, 'noise-controls/lookup-client.ts'));
+    expect(pool).toMatch(/-c statement_timeout=\$\{timeoutMs\} -c lock_timeout=\$\{timeoutMs\}/);
+    expect(pool).toMatch(/searchParams\.set\(\s*'options'/);
+    // On the event transaction its reads run under a savepoint with a server-side statement timeout and
+    // are always rolled back, so a slow or failing lookup can neither hold nor abort the transaction.
     const ingest = read(join(intelligenceDir, 'noise-controls/ingest.ts'));
+    expect(ingest).toMatch(/getNoiseLookupClient\(timeoutMs\)/);
     expect(ingest).toMatch(/SAVEPOINT \$\{SAVEPOINT\}/);
     expect(ingest).toMatch(/set_config\('statement_timeout'/);
     expect(ingest).toMatch(/ROLLBACK TO SAVEPOINT \$\{SAVEPOINT\}/);
