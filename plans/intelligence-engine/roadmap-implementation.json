@@ -85,14 +85,21 @@
         "Heartbeat monitors: hashed tokens shown once, GET/POST /api/heartbeats/<token> with rate limiting, cron-tick sweep raising and resolving incidents only through processEvent",
         "Replay simulation over recent alerts using the real evaluator with in-memory lookups, recorded as an evaluation run; KPIs (compression, pages avoided, shadow would-avoid, downgrades, holds, false-group rate, per-source, heartbeats)",
         "Correlation rules: allowHighUrgency (SUGGEST only, never AUTO) and linkType PARENT_CHILD (IncidentRelationshipType extended)",
-        "Noise controls settings page with policy, windows, rules, suggestions, heartbeats, simulation and decision list; privacy registry and processing inventory entries; operator doc"
+        "Noise controls settings page with policy, windows, rules, suggestions, heartbeats, simulation and decision list; privacy registry and processing inventory entries; operator doc",
+        "Pre-paging hook wired into processEvent (p1): bounded ingest hook (src/lib/intelligence/noise-controls/ingest.ts) evaluates the cached snapshot before incident creation, records the decision and applies SUPPRESS/DOWNGRADE/APPEND/GROUP_CHILD/HOLD/DROP/TRANSFORM; OFF policies do no reads; fail-open on deadline or error",
+        "Pre-paging lookups run in one prefetched round trip on a dedicated, deadline-bounded 2-connection pool (lookup-client.ts), with a 4-round-trip savepoint fallback when the only URL is a transaction pooler (pgbouncer=true)",
+        "Storm children roll up under their parent in the notification noise controller (GROUP_CHILD applied on the hot path)",
+        "Ingestion A/B with every control ON and large history (tests/load/intelligence-ingestion-ab.ts, 20k-row seeding batches); evidence under certification/perf (2026-11-09/10 runs)",
+        "Versioned, traceable orchestration policies (p1): NoiseControlPolicyVersion (migration 20261111100000_noise_control_policy_versions), checksum, origin (publish / rollback / captured), bounded backfill of existing policies as version 1, policyVersionId recorded on every PrePagingDecision; settings Policy history with per-version change summary, diff against running, and rollback via compare-and-set (ON needs the readiness acknowledgement). Kept in noise-controls rather than the automation rule-set kinds (reason in commit 0969e14a2)"
       ],
       "remaining": [
-        "INTEGRATION POINT (one call, blocked on the ingestion-side noise layer landing): in processEvent before incident creation, `evaluatePrePagingControls(input, getPrePagingSnapshot(), prismaLookups(tx))` → `recordPrePagingDecision` → act on decision.apply (SUPPRESS/DOWNGRADE/APPEND/GROUP_CHILD/HOLD/DROP/TRANSFORM); then the ingestion A/B gate with controls ON",
-        "Child paging roll-up through the notification noise controller once GROUP_CHILD is applied on the hot path",
-        "Browser (Playwright) journeys for the noise controls page",
-        "10k burst / 1M history benchmark with controls ON, fault injection on the wired hook and paging regression certification",
-        "Merge orchestration rules into the automation engine's versioned rule sets (today they live in the noise policy definition)"
+        "Browser (Playwright) journeys for the noise controls page (including policy history and rollback)",
+        "OPEN gate: ingestion A/B with every control ON and the lane busy fails on p50 (2026-11-10, host load 1-6: +4.45 ms, limit +2; hook alone on the pool route PASSES at +1.14 ms p50 / +0.34 ms p99; savepoint route +3.68 ms p50 FAIL). Main cost is the in-process intelligence lane, not the hook: needs a worker thread for lane CPU work or the dedicated intelligence-worker above a size threshold (workstream B). Thresholds unchanged. See certification/perf/README.md",
+        "OPEN gate: 10k burst over 1.01M history with controls ON fails on both routes (pool +12.56 ms / +17.45 ms). Needs a cleaner arm (storm threshold above the burst size) and a lookup pool sized to event concurrency: the pool is fixed at 2 connections per process, so at concurrency 16 it queues and 28% of evaluations failed open; making it configurable needs a database-backed setting because the intelligence directory may not read environment variables",
+        "Savepoint route effectiveness: a deployment whose only URL is pgbouncer=true fails open more often under load (8-14% on the A/B runs, 63% in the burst)",
+        "Orchestration REROUTE_SERVICE and ATTACH_RUNBOOK are recorded on the decision and noted on the timeline but not applied at ingestion",
+        "Fault injection on the wired hook and paging regression certification on dedicated hardware",
+        "Ingestion p50 lane work (branch wip/intel-p1-ingest-p50: dedicated lane Prisma pool and ingestion yield, 4 commits) NOT integrated: the slice reported no commits for landing, its ownership is unresolved (two agent instances, uncommitted AB_TALLY/README edits in its worktree), CI-shape A/B p99 still fails at +15.32 ms, storm gate not re-run, full typecheck and lint not done"
       ],
       "wave": 2
     },
@@ -107,11 +114,13 @@
         "Feedback-driven cause-ranking weight fitting (kind, upstream decay, global) published as a policy version",
         "Change risk score on ChangeEvent from historical follow rate, dependency blast radius, timing and size labels, computed in the LATE_CHANGE handler",
         "Multi-window SLO burn (lib/slo/burn.ts) and SLO-aware urgency suggestion; rankByBurn exposed for parent selection",
-        "Unified incident time axis (alerts, changes with risk, upstream incidents, noise decisions when present) with a Timeline tab"
+        "Unified incident time axis (alerts, changes with risk, upstream incidents, noise decisions when present) with a Timeline tab",
+        "Runbook-ranking weight fitting (p1): bounded, policy-versioned weights (service-wide record, same-problem record, MTTR bonus, untried-binding prior) whose defaults reproduce the Wilson ranking; suggest-only offline fit from recommendation verdicts and first-run outcomes (40-label minimum, held-out improvement), published by a person as response.runbookWeights"
       ],
       "remaining": [
         "Scheduled lane-only Prometheus/Datadog anomaly evidence using seasonal baseline/MAD (needs the observability connectors from phase 4; interface note: produce IntelligenceFinding kind evidence 'metric deviated at T' for the time axis)",
-        "Runbook-ranking weight fitting (cause weights are learned; runbook ranking still uses the Wilson score only)"
+        "Runbook-ranking fit runs only when someone opens the insights page; nothing refits on a schedule",
+        "The 120-minute 'resolved after a run' window is a fixed constant (RUNBOOK_FIT_LIMITS.resolvedWithinMinutes), not a policy setting"
       ],
       "wave": 3
     },
@@ -201,9 +210,13 @@
         "Urgency, team/assignee, duplicate and resolution-time suggestions voted from similar resolved outcomes (TRIAGE_* findings, policy triage.enabled default off)",
         "Accept/dismiss chips through the incident's own domain commands (urgency command, assignment command, human link) with HELPFUL/NOT_HELPFUL feedback for calibration",
         "Noisy alert report by service and team with flapping ratio, Jira issue action, routing/integration links and a link to suppression rules (suggested from alert quality by the noise-controls layer)",
-        "Shift handoff summary (open, recently resolved, overdue follow-ups) at each rotation through the notification control plane; AI narrative only when a provider is enabled (handoffSummaryEnabled, default off)"
+        "Shift handoff summary (open, recently resolved, overdue follow-ups) at each rotation through the notification control plane; AI narrative only when a provider is enabled (handoffSummaryEnabled, default off)",
+        "Impact estimate on the incident page (p1): lazy Impact tab listing actor-scoped dependent services, linked status-page components with current status, and SLO error budget at risk for the incident's own service"
       ],
-      "remaining": ["Impact estimate for dependencies, status components and SLO budget"]
+      "remaining": [
+        "Impact estimate: SLO budget at risk only for the incident's own service, not downstream services' SLOs",
+        "Impact estimate: customer or user counts are not estimated"
+      ]
     },
     {
       "id": 8,
