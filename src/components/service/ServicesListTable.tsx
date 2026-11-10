@@ -27,6 +27,9 @@ import {
 } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/service/Pagination';
+import ServiceIntelligenceBadges, {
+  type ServiceIntelligenceBadgeData,
+} from '@/components/service/ServiceIntelligenceBadges';
 
 export type ServiceListItem = {
   id: string;
@@ -39,6 +42,8 @@ export type ServiceListItem = {
   hasCritical: boolean;
   incidentCount?: number;
   metricDataState?: 'available' | 'unavailable';
+  /** Optional intelligence badges; absent when there is nothing to show or the viewer may not see them. */
+  intelligenceBadges?: ServiceIntelligenceBadgeData;
   team?: { id: string; name: string } | null;
   _count?: { incidents: number };
 };
@@ -214,6 +219,10 @@ export default function ServicesListTable({
                       </Link>
 
                       <div className="flex flex-wrap items-center gap-2">
+                        <ServiceIntelligenceBadges
+                          serviceId={service.id}
+                          badges={service.intelligenceBadges}
+                        />
                         <ServiceStatusBadge status={service.dynamicStatus} />
                       </div>
                     </div>

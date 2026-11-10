@@ -2,7 +2,7 @@
 
 import React, { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
-import { Flame, ShieldAlert, Zap, Bell, Settings, Workflow } from 'lucide-react';
+import { Flame, ShieldAlert, Zap, Bell, Settings, Sparkles, Workflow } from 'lucide-react';
 
 export type ServiceDetailTab =
   | 'automation'
@@ -11,6 +11,7 @@ export type ServiceDetailTab =
   | 'runbooks'
   | 'integrations'
   | 'notifications'
+  | 'intelligence'
   | 'settings';
 
 export type ServiceDetailTabsProps = {
@@ -26,6 +27,9 @@ export type ServiceDetailTabsProps = {
   integrationsContent: ReactNode;
   notificationsContent: ReactNode;
   settingsContent: ReactNode;
+  /** Offers the Intelligence tab. The page passes its content only while the tab is selected. */
+  showIntelligenceTab?: boolean;
+  intelligenceContent?: ReactNode;
   actions?: ReactNode;
 };
 
@@ -42,6 +46,8 @@ export default function ServiceDetailTabs({
   integrationsContent,
   notificationsContent,
   settingsContent,
+  showIntelligenceTab = false,
+  intelligenceContent,
   actions,
 }: ServiceDetailTabsProps) {
   const tabItems = [
@@ -77,6 +83,9 @@ export default function ServiceDetailTabs({
       icon: <Bell className="h-4 w-4" />,
       count: notificationsCount,
     },
+    ...(showIntelligenceTab
+      ? [{ id: 'intelligence', label: 'Intelligence', icon: <Sparkles className="h-4 w-4" /> }]
+      : []),
     {
       id: 'settings',
       label: 'Service Settings',
@@ -112,6 +121,11 @@ export default function ServiceDetailTabs({
       <DetailTabContent value="notifications" className="mt-0 space-y-6">
         {notificationsContent}
       </DetailTabContent>
+      {showIntelligenceTab && (
+        <DetailTabContent value="intelligence" className="mt-0 space-y-6">
+          {intelligenceContent}
+        </DetailTabContent>
+      )}
       <DetailTabContent value="settings" className="mt-0 space-y-6">
         {settingsContent}
       </DetailTabContent>
