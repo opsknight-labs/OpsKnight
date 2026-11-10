@@ -45,6 +45,45 @@ describe('Squire investigation steps', () => {
     expect(container.querySelector('a, button')).toBeNull();
   });
 
+  it('is operable from the keyboard: every disclosure is a focusable summary with a visible focus ring', () => {
+    const { container } = render(<SquireInvestigationSteps steps={steps} streaming={true} />);
+    const summaries = Array.from(container.querySelectorAll('summary'));
+    expect(summaries).toHaveLength(3);
+    for (const summary of summaries) {
+      // A summary is natively focusable and toggled by Enter/Space; nothing may take it out of the order.
+      expect(summary).not.toHaveAttribute('tabindex', '-1');
+      expect(summary.className).toContain('focus-visible:ring-2');
+      summary.focus();
+      expect(summary).toHaveFocus();
+    }
+    expect(screen.getByRole('list', { name: 'Investigation steps' })).toBeInTheDocument();
+  });
+
+  it('moves focus to the heading when the list folds away under the keyboard', () => {
+    const { container, rerender } = render(
+      <SquireInvestigationSteps steps={steps} streaming={true} />
+    );
+    const outer = container.querySelector<HTMLDetailsElement>(
+      '[data-testid="squire-investigation"]'
+    )!;
+    const heading = outer.querySelector<HTMLElement>(':scope > summary')!;
+    const step = screen.getByLabelText('Step 1: Check the alert and recent changes (done)');
+    step.focus();
+    rerender(<SquireInvestigationSteps steps={steps} streaming={false} />);
+    expect(outer).not.toHaveAttribute('open');
+    expect(heading).toHaveFocus();
+  });
+
+  it('leaves focus alone when it is outside the list as it folds away', () => {
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    const { rerender } = render(<SquireInvestigationSteps steps={steps} streaming={true} />);
+    outside.focus();
+    rerender(<SquireInvestigationSteps steps={steps} streaming={false} />);
+    expect(outside).toHaveFocus();
+    outside.remove();
+  });
+
   it('renders nothing without steps', () => {
     const { container } = render(<SquireInvestigationSteps steps={[]} streaming={false} />);
     expect(container).toBeEmptyDOMElement();

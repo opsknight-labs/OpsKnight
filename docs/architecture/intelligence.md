@@ -273,7 +273,10 @@ queued text, which keeps stream order, and **Stop** keeps the text of the curren
 its markdown are memoised, so only the answer still streaming is ever re-parsed. The panel is a modal
 dialog (`aria-modal`, Tab and Shift+Tab wrap inside it via `focus-trap.ts`) and closing returns focus to
 the element focused before it opened, else the launcher. A polite live region announces the current
-lookup and completion. ⌘/Ctrl+J toggles it from any page (key repeat ignored) and is listed in the shared
+lookup and completion; during an investigation it names the running step first (`Step 2: … . Checking
+recent changes…`). Investigation steps are nested native `<details>` (Enter/Space toggle, visible focus
+ring); the trap skips steps inside a folded list, and when the list folds on completion while a step has
+focus, focus moves to the list heading. ⌘/Ctrl+J toggles it from any page (key repeat ignored) and is listed in the shared
 shortcut registry rendered on `/shortcuts`. Why AI is not answering has four distinct visible states
 (`SquireAvailabilityNotice`): **rate limited** (HTTP 429 with an optional Retry-After countdown, or an AI
 `Too many requests` reported in the stream) → Retry; **budget** (daily AI budget) → settings link for

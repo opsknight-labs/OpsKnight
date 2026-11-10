@@ -54,6 +54,10 @@ While it works, the assistant shows **Investigation · N steps** above the answe
 reads it ran; a read you are not permitted to make shows as failed. The list folds away when the answer
 is complete.
 
+With the keyboard, Tab to the list heading or a step and press Enter or Space to expand or fold it. A
+screen reader announces the step in progress and each read as it starts, then that the answer is
+complete.
+
 ## Read the answer
 
 - **Ranked hypotheses**, most likely first, each with a confidence (the model's estimate, not proof) and

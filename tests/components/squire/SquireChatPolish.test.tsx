@@ -23,6 +23,7 @@ vi.mock('@/components/squire/SquireMarkdown', () => ({
 }));
 
 import SquireLauncher from '@/components/squire/SquireLauncher';
+import { focusableWithin } from '@/components/squire/focus-trap';
 
 const encoder = new TextEncoder();
 const line = (event: unknown) => encoder.encode(`${JSON.stringify(event)}\n`);
@@ -247,6 +248,61 @@ describe('dialog focus management', () => {
       controller.close();
     });
     await waitFor(() => expect(progress).toHaveTextContent('Answer complete'));
+  });
+});
+
+describe('investigation steps in the dialog', () => {
+  it('announces the running step and its lookups, and the steps stay inside the focus trap', async () => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream<Uint8Array>({
+        start(value) {
+          controller = value;
+        },
+      }),
+    });
+    render(<SquireLauncher name="Pip" aiEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    await ask('investigate');
+    const progress = screen.getByTestId('squire-progress');
+    const step = (status: string, calls: unknown[] = []) => ({
+      type: 'investigation',
+      step: { index: 1, title: 'Check recent changes', status, calls },
+    });
+    await act(async () => controller.enqueue(line(step('running'))));
+    await waitFor(() => expect(progress).toHaveTextContent('Step 1: Check recent changes…'));
+    await act(async () => controller.enqueue(line({ type: 'tool', label: 'Reading deploys' })));
+    await waitFor(() =>
+      expect(progress).toHaveTextContent('Step 1: Check recent changes. Reading deploys…')
+    );
+
+    // Open while it runs; the list heading and the step are tab stops of the modal dialog.
+    const list = screen.getByTestId('squire-investigation');
+    expect(list).toHaveAttribute('open');
+    const dialog = screen.getByRole('dialog');
+    const stops = focusableWithin(dialog);
+    const heading = list.querySelector<HTMLElement>(':scope > summary')!;
+    const stepSummary = screen.getByLabelText('Step 1: Check recent changes (in progress)');
+    expect(stops).toContain(heading);
+    expect(stops).toContain(stepSummary);
+
+    await act(async () => {
+      controller.enqueue(
+        line(step('done', [{ tool: 'get_recent_changes', label: 'Reading deploys', ok: true }]))
+      );
+      controller.enqueue(line({ type: 'delta', text: 'A deploy went out.' }));
+      controller.enqueue(line({ type: 'done' }));
+      controller.close();
+    });
+    await waitFor(() => expect(progress).toHaveTextContent('Answer complete'));
+    // Folded once the answer is in: the heading stays reachable, the step inside does not.
+    expect(list).not.toHaveAttribute('open');
+    expect(screen.getByText(/Investigation · 1 step · 1 read/)).toBeInTheDocument();
+    const after = focusableWithin(dialog);
+    expect(after).toContain(heading);
+    expect(after).not.toContain(screen.getByLabelText('Step 1: Check recent changes (done)'));
   });
 });
 

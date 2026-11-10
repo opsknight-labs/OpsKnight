@@ -112,6 +112,19 @@ const subscribeOnline = (change: () => void) => {
 const incidentIdFrom = incidentIdFromPath;
 const pageContextFrom = pageContextFromPath;
 
+/**
+ * What the polite live region reads out. An investigation announces the step it is on, then each lookup
+ * inside that step; a plain answer announces its lookups, then that text is arriving.
+ */
+function progressAnnouncement(busy: boolean, turn: Turn | undefined, hasTurns: boolean): string {
+  if (!busy) return hasTurns ? 'Answer complete' : '';
+  const running = turn?.investigation?.find(step => step.status === 'running');
+  const step = running ? `Step ${running.index}: ${running.title}` : '';
+  if (turn?.activity) return `${step ? `${step}. ` : ''}${turn.activity}…`;
+  if (turn?.content) return 'Writing a response';
+  return step ? `${step}…` : 'Response in progress';
+}
+
 export default function SquireLauncher({
   name,
   avatar = 'SQUIRE',
@@ -804,15 +817,6 @@ export default function SquireLauncher({
   const availabilityState = squireAvailabilityState({ availability, rateLimit });
   const canRetry = !busy && !contextMismatch && turns.some(turn => turn.role === 'user');
   const retryLatest = () => retryAnswer(turnsRef.current.length);
-  const progress = busy
-    ? lastTurn?.activity
-      ? `${lastTurn.activity}…`
-      : lastTurn?.content
-        ? 'Writing a response'
-        : 'Response in progress'
-    : turns.length > 0
-      ? 'Answer complete'
-      : '';
 
   const suggestions = incidentId
     ? [...INCIDENT_SUGGESTIONS, 'Who is assigned to this incident?', 'Help']
@@ -1228,7 +1232,7 @@ export default function SquireLauncher({
           )}
 
           <div className="sr-only" role="status" aria-live="polite" data-testid="squire-progress">
-            {progress}
+            {progressAnnouncement(busy, lastTurn, turns.length > 0)}
           </div>
           {!showHistory && unread && (
             <div className="absolute bottom-40 left-0 right-0 flex justify-center pointer-events-none">
