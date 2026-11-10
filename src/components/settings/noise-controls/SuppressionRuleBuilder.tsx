@@ -56,16 +56,26 @@ export default function SuppressionRuleBuilder({
   services,
   owners,
   currentUserId,
+  initialServiceId = null,
 }: {
   services: Option[];
   owners: Option[];
   currentUserId: string;
+  /**
+   * The service the page was opened for (`?service=`, e.g. from the overview's "Create suppression rule"),
+   * so the rule starts scoped to it. Ignored unless it is one of `services`.
+   */
+  initialServiceId?: string | null;
 }) {
   const id = useId();
   const formatAt = useFormatAt();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [serviceId, setServiceId] = useState('');
+  const [serviceId, setServiceId] = useState(() =>
+    initialServiceId && services.some(service => service.id === initialServiceId)
+      ? initialServiceId
+      : ''
+  );
   const [rows, setRows] = useState<MatcherDraft[]>([emptyMatcher()]);
   const [effect, setEffect] = useState<'SUPPRESS' | 'DOWNGRADE'>('SUPPRESS');
   const [downgradeUrgency, setDowngradeUrgency] = useState<'LOW' | 'MEDIUM'>('LOW');

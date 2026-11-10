@@ -20,8 +20,14 @@ vi.mock('@/app/(app)/settings/intelligence/noise-controls/actions', () => action
 vi.mock('@/app/(app)/settings/intelligence/noise-controls/preview-actions', () => previews);
 
 import MaintenanceWindowsPanel, {
+  draftFromWindow,
+  emptyWindowDraft,
   MaintenanceWindowBuilder,
+  windowInputFromDraft,
 } from '@/components/settings/noise-controls/MaintenanceWindowsPanel';
+import { toLocalInput } from '@/components/settings/noise-controls/shared';
+import { TimezoneProvider } from '@/contexts/TimezoneContext';
+import { upcomingOccurrences } from '@/lib/intelligence/noise-controls/builders';
 import SuppressionRuleBuilder, {
   LIVE_PREVIEW_DELAY_MS,
 } from '@/components/settings/noise-controls/SuppressionRuleBuilder';
@@ -142,10 +148,65 @@ describe('MaintenanceWindowBuilder', () => {
       name: 'Weekend batch',
       scope: 'SERVICE',
       serviceId: 'svc-a',
-      recurrence: 'FREQ=WEEKLY;BYDAY=SA,SU',
       effect: 'SUPPRESS',
     });
     expect(Date.parse(input.endsAt) - Date.parse(input.startsAt)).toBe(2 * 3_600_000);
+    // Whatever this machine's time zone, the saved rule repeats on the local Saturday and Sunday.
+    const check = upcomingOccurrences(
+      new Date(input.startsAt),
+      new Date(input.endsAt),
+      input.recurrence,
+      new Date(input.startsAt),
+      4
+    );
+    expect(check.ok && check.occurrences.map(span => span.startsAt.getDay())).toEqual([6, 0, 6, 0]);
+  });
+
+  it('saves weekday presets as the weekdays the user meant in their time zone', () => {
+    // Monday 2026-11-16 02:00 in Kolkata is Sunday 20:30Z: the rule must cover Monday, not Saturday.
+    const draft = {
+      ...emptyWindowDraft(),
+      name: 'Weekday batch',
+      serviceId: 'svc-a',
+      startsAt: '2026-11-16T02:00',
+      endsAt: '2026-11-16T03:00',
+      preset: 'weekdays' as const,
+    };
+    const startsAt = new Date('2026-11-15T20:30:00Z');
+    const fixed = windowInputFromDraft(
+      {
+        ...draft,
+        // datetime-local values are browser-local; build them from the instant so this runs anywhere.
+        startsAt: toLocalInput(startsAt),
+        endsAt: toLocalInput(new Date(startsAt.getTime() + 3_600_000)),
+      },
+      'Asia/Kolkata'
+    );
+    expect(fixed.input?.recurrence).toBe('FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,SU');
+    const edited = draftFromWindow(
+      {
+        id: 'w',
+        name: 'Weekday batch',
+        description: null,
+        scope: 'SERVICE',
+        serviceId: 'svc-a',
+        serviceName: 'Checkout',
+        teamId: null,
+        labelKey: null,
+        labelValue: null,
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + 3_600_000),
+        recurrence: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,SU',
+        effect: 'SUPPRESS',
+        downgradeUrgency: null,
+        enabled: true,
+        endedAt: null,
+        active: false,
+        nextSpan: null,
+      },
+      'Asia/Kolkata'
+    );
+    expect(edited.preset).toBe('weekdays');
   });
 
   it('announces preview failures', async () => {
@@ -253,6 +314,59 @@ describe('MaintenanceWindowsPanel', () => {
     expect(toggled.get('enabled')).toBe('false');
   });
 
+  it('groups the agenda by the viewer time zone the entry times are shown in', () => {
+    // Tue 2026-11-10 18:00 PT is Wed 02:00Z; at 20:00 PT on Tue (04:00Z Wed) "today" is Tuesday.
+    const evening: MaintenanceWindowView = {
+      ...window,
+      id: 'win-pt',
+      name: 'Evening deploy',
+      startsAt: new Date('2026-11-18T02:00:00Z'),
+      endsAt: new Date('2026-11-18T03:00:00Z'),
+      recurrence: null,
+      active: false,
+      nextSpan: null,
+    };
+    render(
+      <TimezoneProvider initialTimeZone="America/Los_Angeles">
+        <MaintenanceWindowsPanel
+          windows={[evening]}
+          services={services}
+          teams={teams}
+          canManage={false}
+          now={new Date('2026-11-11T04:00:00Z')}
+        />
+      </TimezoneProvider>
+    );
+    const agenda = screen.getByRole('list', { name: 'Maintenance agenda' });
+    const day = within(agenda).getByText('Evening deploy').closest('ul')!.parentElement!;
+    expect(day.querySelector('time')).toHaveAttribute('dateTime', '2026-11-17');
+    expect(day.querySelector('time')).toHaveTextContent('Tue, Nov 17');
+  });
+
+  it('describes weekday presets by the viewer local days', () => {
+    // Stored as UTC days SU..TH for a Monday 02:00 IST start: shown as "Every weekday" in Kolkata.
+    render(
+      <TimezoneProvider initialTimeZone="Asia/Kolkata">
+        <MaintenanceWindowsPanel
+          windows={[
+            {
+              ...window,
+              startsAt: new Date('2026-11-15T20:30:00Z'),
+              endsAt: new Date('2026-11-15T21:30:00Z'),
+              recurrence: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,SU',
+              active: false,
+            },
+          ]}
+          services={services}
+          teams={teams}
+          canManage={false}
+          now={now}
+        />
+      </TimezoneProvider>
+    );
+    expect(screen.getByText(/Every weekday/)).toBeInTheDocument();
+  });
+
   it('shows read-only viewers an empty state without builders', () => {
     render(
       <MaintenanceWindowsPanel
@@ -322,6 +436,43 @@ describe('SuppressionRuleBuilder', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('starts scoped to the service the page was opened for, and ignores unknown ones', () => {
+    const { unmount } = render(
+      <SuppressionRuleBuilder
+        services={services}
+        owners={owners}
+        currentUserId="user-1"
+        initialServiceId="svc-b"
+      />
+    );
+    expect(screen.getByLabelText('Service')).toHaveValue('svc-b');
+    unmount();
+    render(
+      <SuppressionRuleBuilder
+        services={services}
+        owners={owners}
+        currentUserId="user-1"
+        initialServiceId="svc-unreadable"
+      />
+    );
+    expect(screen.getByLabelText('Service')).toHaveValue('');
+  });
+
+  it('keeps the save-result live region mounted before the result arrives', async () => {
+    actions.createRuleAction.mockResolvedValue({ ok: true, message: 'Suppression rule saved.' });
+    render(<SuppressionRuleBuilder services={services} owners={owners} currentUserId="user-1" />);
+    const regions = screen.getAllByRole('status');
+    const region = regions.find(node => node.getAttribute('aria-live') === 'polite');
+    expect(region).toBeDefined();
+    expect(region).toBeEmptyDOMElement();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Mute info' } });
+    fireEvent.change(screen.getByLabelText('Value'), { target: { value: 'info' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    // The same node, already in the DOM, receives the text.
+    await waitFor(() => expect(region).toHaveTextContent('Suppression rule saved.'));
+    expect(region).toBeInTheDocument();
   });
 
   it('shows validation errors and blocks saving', async () => {
@@ -554,10 +705,16 @@ describe('HeartbeatPanel', () => {
         appUrl="https://ops.example.com/"
       />
     );
+    // The polite region that announces the result is in the DOM before the result arrives.
+    const region = screen
+      .getAllByRole('status')
+      .find(node => node.getAttribute('aria-live') === 'polite' && node.textContent === '');
+    expect(region).toBeDefined();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Backup' } });
     fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc-a' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create monitor' }));
     const box = await screen.findByTestId('heartbeat-token');
+    expect(region).toHaveTextContent('Heartbeat monitor created.');
     expect(within(box).getByLabelText('Ping URL')).toHaveValue(
       'https://ops.example.com/api/heartbeats/tok_secret'
     );

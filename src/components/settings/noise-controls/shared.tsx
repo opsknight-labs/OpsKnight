@@ -19,19 +19,34 @@ export const initialActionState: NoiseActionState = { message: '', ok: false };
 
 export type Option = { id: string; name: string };
 
-/** Success and failure messages from a server action, announced politely or assertively. */
+/**
+ * Success and failure messages from a server action. Success goes into a polite status region that is
+ * always mounted (empty, and visually hidden, until there is a message): screen readers do not reliably
+ * announce a polite region that is inserted already holding its text. Failures use role="alert", which
+ * is announced when it is inserted.
+ */
 export function ActionMessage({ state }: { state: { message: string; ok: boolean } }) {
-  if (!state.message) return null;
+  const success = state.ok && state.message ? state.message : '';
+  const failure = !state.ok && state.message ? state.message : '';
   return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={cn(
-        'text-sm',
-        state.ok ? 'text-status-ok-deep dark:text-status-ok-soft' : 'text-destructive'
+    <>
+      <p
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className={cn(
+          'text-sm text-status-ok-deep dark:text-status-ok-soft',
+          !success && 'sr-only'
+        )}
+      >
+        {success}
+      </p>
+      {failure && (
+        <p role="alert" className="text-sm text-destructive">
+          {failure}
+        </p>
       )}
-    >
-      {state.message}
-    </p>
+    </>
   );
 }
 

@@ -20,6 +20,8 @@ import {
   type RecurrencePreset,
 } from '@/lib/intelligence/noise-controls/builders';
 import type { MaintenanceWindowView } from '@/lib/intelligence/noise-controls/manage';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { getBrowserTimeZone } from '@/lib/timezone';
 import type { WindowPreview } from '@/lib/intelligence/noise-controls/preview';
 import {
   ActionMessage,
@@ -79,8 +81,15 @@ export function emptyWindowDraft(): WindowDraft {
   };
 }
 
-export function draftFromWindow(window: MaintenanceWindowView): WindowDraft {
-  const preset = presetForRecurrence(window.recurrence, window.startsAt);
+/**
+ * The builder's start and end are `datetime-local` values in the browser's time zone, so weekday presets
+ * mean weekdays in that zone; `timeZone` is only overridden by tests.
+ */
+export function draftFromWindow(
+  window: MaintenanceWindowView,
+  timeZone: string = getBrowserTimeZone()
+): WindowDraft {
+  const preset = presetForRecurrence(window.recurrence, window.startsAt, timeZone);
   return {
     name: window.name,
     description: window.description ?? '',
@@ -99,7 +108,10 @@ export function draftFromWindow(window: MaintenanceWindowView): WindowDraft {
 }
 
 /** Builder rows → the `maintenanceWindowInputSchema` shape, or the field errors that block it. */
-export function windowInputFromDraft(draft: WindowDraft): {
+export function windowInputFromDraft(
+  draft: WindowDraft,
+  timeZone: string = getBrowserTimeZone()
+): {
   input: Record<string, unknown> | null;
   errors: DraftErrors;
 } {
@@ -113,7 +125,7 @@ export function windowInputFromDraft(draft: WindowDraft): {
   const endsAt = fromLocalInput(draft.endsAt);
   if (!startsAt) errors.startsAt = 'Enter a start time.';
   if (!endsAt) errors.endsAt = 'Enter an end time.';
-  const recurrence = recurrenceForPreset(draft.preset, startsAt, draft.customRule);
+  const recurrence = recurrenceForPreset(draft.preset, startsAt, draft.customRule, timeZone);
   if (draft.preset === 'custom' && !recurrence) errors.customRule = 'Enter an RRULE.';
   if (startsAt && endsAt) {
     const check = upcomingOccurrences(startsAt, endsAt, recurrence, startsAt, 1);
@@ -197,7 +209,12 @@ export function MaintenanceWindowBuilder({
     const startsAt = fromLocalInput(draft.startsAt);
     const endsAt = fromLocalInput(draft.endsAt);
     if (!startsAt || !endsAt) return null;
-    const recurrence = recurrenceForPreset(draft.preset, startsAt, draft.customRule);
+    const recurrence = recurrenceForPreset(
+      draft.preset,
+      startsAt,
+      draft.customRule,
+      getBrowserTimeZone()
+    );
     if (draft.preset === 'custom' && !recurrence) return null;
     return { recurrence, check: upcomingOccurrences(startsAt, endsAt, recurrence, new Date(), 5) };
   }, [draft.startsAt, draft.endsAt, draft.preset, draft.customRule]);
@@ -575,8 +592,13 @@ export default function MaintenanceWindowsPanel({
   now: Date;
 }) {
   const formatAt = useFormatAt();
+  const { userTimeZone } = useTimezone();
   const [editing, setEditing] = useState<MaintenanceWindowView | null>(null);
-  const agenda = useMemo(() => buildMaintenanceAgenda(windows, now, 14), [windows, now]);
+  // Grouped by day in the zone the entry times are shown in, so a row never sits under the wrong day.
+  const agenda = useMemo(
+    () => buildMaintenanceAgenda(windows, now, 14, 31, userTimeZone),
+    [windows, now, userTimeZone]
+  );
   const byId = useMemo(() => new Map(windows.map(window => [window.id, window])), [windows]);
 
   return (
@@ -677,7 +699,7 @@ export default function MaintenanceWindowsPanel({
                     {window.effect === 'SUPPRESS'
                       ? 'suppress'
                       : `downgrade to ${window.downgradeUrgency}`}{' '}
-                    · {describeRecurrence(window.recurrence)} ·{' '}
+                    · {describeRecurrence(window.recurrence, window.startsAt, userTimeZone)} ·{' '}
                     {window.recurrence
                       ? `next ${formatAt(window.nextSpan?.startsAt)}`
                       : `${formatAt(window.startsAt)} → ${formatAt(window.endsAt)}`}
