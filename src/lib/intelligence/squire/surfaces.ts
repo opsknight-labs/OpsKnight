@@ -1,7 +1,7 @@
 import 'server-only';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { redactSecrets } from '../ai/redact';
-import { streamSquire } from './chat';
+import { streamSquire, type SquireTurnScope } from './chat';
 import {
   SQUIRE_LIMITS,
   squireRequestSchema,
@@ -47,7 +47,7 @@ const MAX_PROPOSALS = 2;
 export async function collectSquireTurn(
   actor: AuthorizationActor,
   input: SquireSurfaceInput,
-  options: { timeoutMs?: number; signal?: AbortSignal } = {}
+  options: { timeoutMs?: number; signal?: AbortSignal; scope?: SquireTurnScope } = {}
 ): Promise<SquireSurfaceAnswer> {
   const answer: SquireSurfaceAnswer = {
     name: 'Squire',
@@ -68,7 +68,7 @@ export async function collectSquireTurn(
   const abort = () => controller.abort();
   options.signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(abort, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  const events = streamSquire(actor, parsed.data, controller.signal);
+  const events = streamSquire(actor, parsed.data, controller.signal, options.scope);
   try {
     for await (const event of events) {
       if (controller.signal.aborted) break;

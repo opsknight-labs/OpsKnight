@@ -42,7 +42,7 @@ import { readDialogueState, writeDialogueState } from '../assistant/dialogue-sta
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
 import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';
-import { OBSERVABILITY_TOOL_LABELS } from './tools-observability';
+import { OBSERVABILITY_TOOL_LABELS, OBSERVABILITY_TOOL_NAMES } from './tools-observability';
 import { listEligibleConnections } from '../connectors/service';
 import { INCIDENT_TOOL_LABELS } from './tools-incident';
 import { summarizeOlderTurns } from './context-summary';
@@ -83,6 +83,23 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 /**
+ * Narrows the tools a turn may use below the person's own permissions, for surfaces that act for a
+ * narrower principal (an MCP connection limited by its granted scopes). Unset means every tool.
+ */
+export interface SquireTurnScope {
+  /**
+   * When set, the only READ tools offered to the model or the investigation planner in this turn
+   * (proposal tools are unaffected: they only describe a change the person confirms in OpsKnight).
+   */
+  readTools?: ReadonlySet<string>;
+}
+
+/** Whether the turn may use any of these read tools. */
+function mayRead(scope: SquireTurnScope, ...names: string[]): boolean {
+  return !scope.readTools || names.some(name => scope.readTools!.has(name));
+}
+
+/**
  * One Squire turn as a stream of events. It never throws: any failure becomes an `error` or a graceful fall
  * back to the basic (no-AI) answer, so a model outage degrades the assistant rather than breaking it.
  * Unreadable or unknown incident ids are dropped silently so they cannot be probed.
@@ -90,7 +107,8 @@ const TOOL_LABELS: Record<string, string> = {
 export async function* streamSquire(
   actor: AuthorizationActor,
   request: SquireRequest,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  scope: SquireTurnScope = {}
 ): AsyncGenerator<SquireEvent> {
   try {
     const [settings, requestedIncident, page] = await Promise.all([
@@ -176,7 +194,9 @@ export async function* streamSquire(
       const evidence = new SquireEvidenceRegistry(actor, dataClass);
       const prepared = briefing ? await evidence.briefing(briefing) : null;
       // Observability connectors are optional: a lookup failure only means their tools are not offered.
-      const observability = await listEligibleConnections(actor).catch(() => []);
+      const observability = !mayRead(scope, ...OBSERVABILITY_TOOL_NAMES)
+        ? []
+        : await listEligibleConnections(actor).catch(() => []);
       const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
       const messages: AiMessage[] = [
         { role: 'system', content: prompt.system, dataClass: 'PERSONAL' },
@@ -215,6 +235,7 @@ export async function* streamSquire(
           verifiedHash: authorizationContextHash(actor),
           observability,
           knowledge: await squireKnowledgeEnabled(),
+          ...(scope.readTools ? { readTools: scope.readTools } : {}),
           finish: answer =>
             contextProofs(
               actor,
@@ -271,7 +292,7 @@ export async function* streamSquire(
             readUntrusted = true;
             return evidence.observe(name, input, result);
           },
-        }),
+        }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
         maxSteps: SQUIRE_LIMITS.maxSteps,
       })) {
         for (const text of evidence.notices()) {

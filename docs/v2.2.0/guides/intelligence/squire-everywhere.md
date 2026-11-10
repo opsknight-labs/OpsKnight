@@ -60,6 +60,7 @@ When Squire suggests a change (for example "Acknowledge the incident"), the repl
 - **Only the person who asked can confirm.** Anyone else gets a private message and nothing changes.
 - Confirming runs the same command and permission checks as the button in OpsKnight. If the incident changed since the suggestion, or your access changed, nothing happens and you are told why.
 - A success message is posted only after OpsKnight recorded the result. Clicking twice does not repeat the change.
+- Chat can confirm acknowledge, resolve, add a note, reassign and mark incidents as related. Other suggestions (escalate, snooze, change urgency, Jira, status updates, runbooks, saving a service fact) show an **Open in OpsKnight** link instead, and you confirm them there.
 - Suggestions expire after 10 minutes. Ask again for a fresh one.
 - A suggestion that read alert or note text is marked: check that content before confirming.
 - A long resolution or note does not fit in a Slack button. Squire then shows **Open in OpsKnight** instead.
@@ -69,6 +70,8 @@ Each person can ask 6 questions and confirm 20 suggestions per minute across Sla
 ## MCP: ask_squire
 
 With the MCP switch on, an AI assistant connected to OpsKnight sees an `ask_squire` tool, if its connection was granted the read permissions for incidents, services, schedules, teams, runbooks and postmortems. Pass a `question` and optionally an `incidentId`.
+
+The answer never reads more than the connection could read itself. Squire looks up people only if the connection also has `users:read`, escalation policies only with `escalation-policies:read`, status pages only with `status-pages:read`, and service objectives only with `service-objectives:read`. Raw alert payloads and the knowledge index are used only while the MCP policy allows sensitive reads. Observability connections (metrics, logs, traces, errors, diffs) are never used over MCP.
 
 The tool is read-only. Suggested actions come back as descriptions with a link (`executed: false`); a person confirms them in OpsKnight. Answers are limited to 10 per minute per person. See the [MCP tool reference](../../reference/mcp/tools.md).
 

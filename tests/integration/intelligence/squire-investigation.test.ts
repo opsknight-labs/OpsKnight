@@ -5,6 +5,8 @@ import { updateAiRouting } from '@/lib/intelligence/ai/routing-settings';
 import { getAiSettings, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { saveObservabilityConnection } from '@/lib/intelligence/connectors/service';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
+import { askSquireForMcp } from '@/lib/mcp/core/ask-squire';
+import { ASK_SQUIRE_SCOPES } from '@/lib/mcp/core/ask-squire-contract';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';
 import { INVESTIGATION_CASES } from '../../evals/squire/investigation-cases';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
@@ -334,5 +336,78 @@ describe('Squire investigation mode (scripted model)', () => {
       events.push(event);
     expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
     expect(events.at(-1)).toEqual({ type: 'done' });
+  });
+});
+describe('ask_squire over MCP: the turn reads only what the connection could', () => {
+  const offered = () =>
+    new Set(
+      model.requests.flatMap(request =>
+        ((request.body as { tools?: Array<{ function?: { name?: string } }> }).tools ?? []).map(
+          tool => tool.function?.name ?? ''
+        )
+      )
+    );
+
+  async function mcpWorld() {
+    const seeded = await world(false);
+    await saveObservabilityConnection(
+      null,
+      {
+        name: 'Loki',
+        kind: 'LOKI',
+        baseUrl: model.url,
+        allowPrivateNetwork: true,
+        enabled: true,
+      },
+      { actorId: seeded.admin.id, source: 'UI' }
+    );
+    await db.squireMemorySettings.create({ data: { id: 'default', knowledgeEnabled: true } });
+    await db.aiSettings.update({ where: { id: 'default' }, data: { squireMcpEnabled: true } });
+    respondWith(() => ({ content: 'Checkout is failing.' }));
+    return seeded;
+  }
+
+  it('leaves out people, escalation, status page, sensitive and connector tools without their grant', async () => {
+    const seeded = await mcpWorld();
+    const result = await askSquireForMcp(
+      { ...seeded.actor, apiKey: { id: 'grant', scopes: ASK_SQUIRE_SCOPES } },
+      { question: 'find the email of everyone named Alex', incidentId: seeded.incident.id }
+    );
+    expect(result.mode).toBe('ai');
+    const tools = offered();
+    expect(tools.has('get_incident')).toBe(true);
+    for (const name of [
+      'find_people',
+      'get_escalation_policy',
+      'get_status_page',
+      'get_slo_status',
+      'get_alert_payload',
+      'search_knowledge',
+      'search_logs',
+      'query_metrics',
+    ])
+      expect(tools.has(name), name).toBe(false);
+  });
+
+  it('offers a scoped tool once its scope is granted, sensitive tools only with sensitive reads, and connectors never', async () => {
+    const seeded = await mcpWorld();
+    await askSquireForMcp(
+      {
+        ...seeded.actor,
+        apiKey: {
+          id: 'grant',
+          scopes: [...ASK_SQUIRE_SCOPES, 'users:read', 'escalation-policies:read'],
+        },
+      },
+      { question: 'who should I talk to?', incidentId: seeded.incident.id },
+      { sensitiveReads: true }
+    );
+    const tools = offered();
+    expect(tools.has('find_people')).toBe(true);
+    expect(tools.has('get_escalation_policy')).toBe(true);
+    expect(tools.has('get_alert_payload')).toBe(true);
+    expect(tools.has('search_knowledge')).toBe(true);
+    expect(tools.has('get_status_page')).toBe(false);
+    expect(tools.has('search_logs')).toBe(false);
   });
 });
