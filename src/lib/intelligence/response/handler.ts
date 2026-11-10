@@ -1,4 +1,5 @@
 import 'server-only';
+import type { IntelligenceFindingKind } from '@prisma/client';
 import { analysisPolicyHash } from '../analysis/contract';
 import prisma from '@/lib/prisma';
 import { withDbBudget } from '../jobs/db-budget';
@@ -8,6 +9,14 @@ import { computeCauseFindings } from '../root-cause/analyzer';
 import { resolveEffectivePolicy, type IntelligenceSettingsView } from '../settings/service';
 import { replaceFindings } from '../similarity/findings';
 import { loadActiveEdges } from '../dependencies/service';
+
+/** Every kind this analysis writes; fenced together so one run never leaves a mix of generations. */
+const RESPONSE_FINDING_KINDS: IntelligenceFindingKind[] = [
+  'CHANGE_CORRELATION',
+  'PROBABLE_CAUSE',
+  'RUNBOOK_RECOMMENDATION',
+  'METRIC_ANOMALY',
+];
 
 export type ResponseOutcome =
   'analyzed' | 'skipped_off' | 'skipped_disabled_feature' | 'incident_gone' | 'stale';
@@ -51,19 +60,19 @@ export async function analyzeResponse(
   const edges = await loadActiveEdges();
 
   return withDbBudget(settings, async tx => {
-    // A newer analysis may already have written; fence all three kinds together so an older
+    // A newer analysis may already have written; fence every response kind together so an older
     // run never leaves a mix of generations.
     const newest = await tx.intelligenceFinding.aggregate({
       where: {
         incidentId,
-        kind: { in: ['CHANGE_CORRELATION', 'PROBABLE_CAUSE', 'RUNBOOK_RECOMMENDATION'] },
+        kind: { in: RESPONSE_FINDING_KINDS },
       },
       _max: { generation: true },
     });
     const completed = await tx.intelligenceAnalysisSnapshot.aggregate({
       where: {
         incidentId,
-        kind: { in: ['CHANGE_CORRELATION', 'PROBABLE_CAUSE', 'RUNBOOK_RECOMMENDATION'] },
+        kind: { in: RESPONSE_FINDING_KINDS },
       },
       _max: { generation: true },
     });
@@ -90,6 +99,22 @@ export async function analyzeResponse(
       }),
       await replaceFindings(tx, { ...common, kind: 'RUNBOOK_RECOMMENDATION', rows: runbooks }),
     ];
+    // Metric evidence is optional: written only when there is some, or to clear what an earlier run wrote,
+    // so incidents on services without metric templates keep exactly the rows they had before.
+    if (
+      causes.metricAnomalies.length > 0 ||
+      (await tx.intelligenceAnalysisSnapshot.findUnique({
+        where: { incidentId_kind: { incidentId, kind: 'METRIC_ANOMALY' } },
+        select: { generation: true },
+      }))
+    )
+      results.push(
+        await replaceFindings(tx, {
+          ...common,
+          kind: 'METRIC_ANOMALY',
+          rows: causes.metricAnomalies,
+        })
+      );
     return results.every(result => result === 'stale') ? 'stale' : 'analyzed';
   });
 }

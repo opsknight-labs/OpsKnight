@@ -11,6 +11,7 @@ export const TIME_AXIS_KIND_LABEL: Record<TimeAxisKind, string> = {
   GROUPING: 'Grouping',
   SUGGESTION: 'Suggestion',
   TRIAGE: 'Triage',
+  METRIC_ANOMALY: 'Metric anomaly',
 };
 
 const KIND_CLASS: Record<TimeAxisKind, string> = {
@@ -22,6 +23,7 @@ const KIND_CLASS: Record<TimeAxisKind, string> = {
   GROUPING: 'bg-status-shift',
   SUGGESTION: 'bg-status-ok',
   TRIAGE: 'bg-status-ok',
+  METRIC_ANOMALY: 'bg-status-critical',
 };
 
 const formatOffset = (minutes: number) => {

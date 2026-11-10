@@ -20,6 +20,9 @@ const formatLead = (minutes: number) =>
       ? `${minutes} min before`
       : `${Math.round(minutes / 60)} h before`;
 
+const formatMetric = (value: number) =>
+  Number.isFinite(value) ? String(Math.round(value * 1000) / 1000) : '—';
+
 /**
  * Likely contributing changes and proven runbooks. These are hypotheses to verify, not conclusions,
  * and the card says so. Renders nothing unless there is something the viewer may see, and nothing at
@@ -112,6 +115,28 @@ export default async function IncidentResponseCard({ incidentId }: { incidentId:
                 <p className="text-xs text-muted-foreground">
                   {item.serviceName} · {formatLead(item.leadMinutes)} this one ·{' '}
                   {item.status.toLowerCase()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {view.metricAnomalies && view.metricAnomalies.length > 0 && (
+        <div className="space-y-1">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Metrics that moved
+          </h3>
+          <ul className="divide-y divide-border" aria-label="Metric anomalies">
+            {view.metricAnomalies.map(item => (
+              <li key={item.findingId} className="py-2">
+                <p className="text-sm font-medium">{item.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  {item.leadMinutes >= 0
+                    ? `${formatLead(item.leadMinutes)} onset`
+                    : `${-item.leadMinutes} min after onset`}{' '}
+                  · {RELATION_LABEL[item.relation]} ({item.serviceName}) ·{' '}
+                  {formatMetric(item.value)} vs usual {formatMetric(item.baselineMedian)}
                 </p>
               </li>
             ))}

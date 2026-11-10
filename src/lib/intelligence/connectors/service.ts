@@ -320,6 +320,24 @@ export async function loadConnectionForActor(
   return row ? resolve(row) : null;
 }
 
+/**
+ * Loads one connection with its decrypted credential for the intelligence lane, which acts for no person.
+ * The caller enforces its own scope (enabled, capability, the owning team of the service it acts for)
+ * before using it. Server-only; the result must never be returned to a client or logged.
+ */
+export async function loadConnectionForLane(
+  id: string,
+  client: Client = prisma
+): Promise<{ connection: ResolvedConnection; enabled: boolean; allowedTeamIds: string[] } | null> {
+  const row = await client.observabilityConnection.findUnique({ where: { id }, select: SELECT });
+  if (!row) return null;
+  return {
+    connection: await resolve(row),
+    enabled: row.enabled,
+    allowedTeamIds: [...row.allowedTeamIds],
+  };
+}
+
 export function contextFor(
   connection: ResolvedConnection,
   options: { fetch?: ConnectorFetch; signal?: AbortSignal } = {}

@@ -195,6 +195,49 @@ minutes or are never acknowledged (at least five incidents in 30 days). It never
 to every change (service scope), upstream incident (incident scope) and runbook (runbook scope) at
 display time, and anything they cannot read is dropped silently. SHADOW mode records but shows nothing.
 
+### Metric anomaly evidence (optional, lane-only)
+
+Off by default: there are no templates after upgrade and a new one is created disabled. An administrator
+(Intelligence manage) attaches a `ServiceMetricTemplate` to a service: a query, an enabled
+`ObservabilityConnection` the service's team may use, and bounded tuning (threshold 2 to 50 MAD, 2 to 8
+baseline weeks, 15 to 360 minute window, 5 minute to 1 day interval; 10 templates per service, 500 in
+total). Code lives in `src/lib/intelligence/metric-anomaly/`; operators read
+[the how-to](../v2.2.0/operate/intelligence/metric-anomaly-evidence.md).
+
+- **Scheduling.** Once a minute the lane runs one index-backed probe for enabled templates whose interval
+  has elapsed (at most 100 per check, oldest first) and enqueues one coalesced
+  `EVALUATE_METRIC_TEMPLATE` work item per template. With no enabled template this is one empty probe.
+  Nothing is read or written on the ingestion or paging path; the architecture test forbids the module
+  from being imported there.
+- **Evaluation.** The handler loads the template under `withDbBudget`, re-checks the connection scope
+  (enabled, supports series, allowed for the service's team) and fetches the current window and the same
+  window in each baseline week through the connector's guarded fetch, outside any transaction. At most
+  two requests per evaluation and two evaluations per process are in flight; the connection's own timeout
+  and the lane's abort signal bound each call, and the item's budget is 60 seconds. At most 10 series and
+  2,000 points per series are read.
+- **Detector.** Pure and deterministic (`detector.ts`). For each sample the baseline is the values at the
+  same time of week, plus one step either side, in each baseline week; the score is
+  `|value - median| / max(1.4826 x MAD, 1% of |median|)`. A deviation needs two consecutive samples past
+  the threshold in the same direction and at least `minDeviation` in absolute terms. A gap ends a run and
+  a sample with fewer than three baseline values is not judged.
+- **Writing.** One budgeted transaction locks the template row and is fenced on the work generation
+  (`lastGeneration`), so an older run never overwrites a newer one. A deviation that overlaps or continues
+  one already stored extends it instead of adding a row. The 10 strongest deviations per evaluation are
+  kept as `MetricAnomaly` rows (numbers and series labels only; raw series are not stored).
+  Incidents the new anomaly may explain are re-signalled for response analysis.
+- **Degradation.** A connector error, timeout, missing, disabled or disallowed connection yields no
+  evidence: the status is stored on the template (`CONNECTOR_ERROR:TIMEOUT`, `CONNECTION_NOT_ALLOWED`, ...),
+  counted in `opsknight_intelligence_metric_evaluations_total{status}`, and the work item completes. Only
+  database failures retry.
+- **Use.** `ANALYZE_RESPONSE` adds `METRIC_ANOMALY` findings for anomalies on the incident's service or
+  an upstream service that began within the cause lookback (six hours) or up to ten minutes after onset.
+  Score = time proximity x relation weight x strength (half weight at the threshold, full at twice the
+  threshold) x 0.85, capped at 0.9 like every other lead. The incident time axis
+  (`timeline/service.ts`) shows them as `METRIC_ANOMALY` rows. Both surfaces filter by the viewer's
+  service read scope before reading.
+- **Retention.** Anomalies are purged with the finding retention and cascade with their template and
+  service.
+
 ## Assistant (Squire) and the AI gateway
 
 Everything is configured in Settings → Intelligence → Assistant and AI; there are no environment

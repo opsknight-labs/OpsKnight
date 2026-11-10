@@ -4,6 +4,7 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, runbookReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resolveEffectivePolicy, resolveEffectivePolicyForRequest } from '../settings/service';
+import { describeDeviation } from '../metric-anomaly/evidence';
 
 export interface ChangeCauseView {
   findingId: string;
@@ -42,10 +43,30 @@ export interface RunbookRecommendationView {
   bound: boolean;
 }
 
+export interface MetricAnomalyCauseView {
+  findingId: string;
+  anomalyId: string;
+  /** "p99 latency deviated at 14:02 UTC by 7.3 MAD (rose)". */
+  title: string;
+  templateName: string;
+  serviceName: string;
+  at: Date;
+  direction: 'UP' | 'DOWN';
+  madScore: number;
+  value: number;
+  baselineMedian: number;
+  relation: 'SAME_SERVICE' | 'UPSTREAM';
+  /** Minutes the deviation started before onset; negative when it started just after. */
+  leadMinutes: number;
+  confidencePercent: number;
+}
+
 export interface ResponseIntelligenceView {
   changes: ChangeCauseView[];
   upstreamIncidents: UpstreamIncidentView[];
   runbooks: RunbookRecommendationView[];
+  /** Optional metric anomaly evidence; empty unless metric templates are configured and fired. */
+  metricAnomalies?: MetricAnomalyCauseView[];
 }
 
 const MAX_PER_SECTION = 5;
@@ -96,11 +117,13 @@ export async function getResponseIntelligenceForActor(
     where: {
       incidentId,
       status: 'ACTIVE',
-      kind: { in: ['CHANGE_CORRELATION', 'PROBABLE_CAUSE', 'RUNBOOK_RECOMMENDATION'] },
+      kind: {
+        in: ['CHANGE_CORRELATION', 'PROBABLE_CAUSE', 'RUNBOOK_RECOMMENDATION', 'METRIC_ANOMALY'],
+      },
       subjectRef: { not: null },
     },
     orderBy: [{ kind: 'asc' }, { rank: 'asc' }],
-    take: MAX_PER_SECTION * 6,
+    take: MAX_PER_SECTION * 8,
     select: { id: true, kind: true, confidence: true, subjectRef: true, evidence: true },
   });
   if (findings.length === 0) return null;
@@ -109,6 +132,7 @@ export async function getResponseIntelligenceForActor(
   const changeFindings = refs('CHANGE_CORRELATION');
   const causeFindings = refs('PROBABLE_CAUSE');
   const runbookFindings = refs('RUNBOOK_RECOMMENDATION');
+  const metricFindings = refs('METRIC_ANOMALY');
 
   let serviceReadable: ReturnType<typeof serviceReadWhere> | null = null;
   try {
@@ -123,7 +147,7 @@ export async function getResponseIntelligenceForActor(
     runbookReadable = null;
   }
 
-  const [changeRows, incidentRows, runbookRows] = await Promise.all([
+  const [changeRows, incidentRows, runbookRows, anomalyRows] = await Promise.all([
     changeFindings.length === 0 || !serviceReadable
       ? []
       : client.changeEvent.findMany({
@@ -164,6 +188,25 @@ export async function getResponseIntelligenceForActor(
             ],
           },
           select: { id: true, name: true },
+        }),
+    // An anomaly is shown only when the viewer may read its service.
+    metricFindings.length === 0 || !serviceReadable
+      ? []
+      : client.metricAnomaly.findMany({
+          where: {
+            id: { in: metricFindings.map(f => f.subjectRef as string) },
+            ...(Object.keys(serviceReadable).length === 0 ? {} : { service: serviceReadable }),
+          },
+          select: {
+            id: true,
+            at: true,
+            score: true,
+            direction: true,
+            value: true,
+            baselineMedian: true,
+            template: { select: { name: true } },
+            service: { select: { name: true } },
+          },
         }),
   ]);
 
@@ -226,6 +269,41 @@ export async function getResponseIntelligenceForActor(
     if (runbooks.length === MAX_PER_SECTION) break;
   }
 
-  if (changes.length + upstreamIncidents.length + runbooks.length === 0) return null;
-  return { changes, upstreamIncidents, runbooks };
+  const anomalyById = new Map(anomalyRows.map(row => [row.id, row]));
+  const metricAnomalies: MetricAnomalyCauseView[] = [];
+  for (const finding of metricFindings) {
+    const anomaly = anomalyById.get(finding.subjectRef as string);
+    if (!anomaly) continue;
+    const evidence = asEvidence(finding.evidence);
+    metricAnomalies.push({
+      findingId: finding.id,
+      anomalyId: anomaly.id,
+      title: describeDeviation({
+        templateName: anomaly.template.name,
+        at: anomaly.at,
+        score: anomaly.score,
+        direction: anomaly.direction,
+      }),
+      templateName: anomaly.template.name,
+      serviceName: anomaly.service.name,
+      at: anomaly.at,
+      direction: anomaly.direction === 'DOWN' ? 'DOWN' : 'UP',
+      madScore: Math.round(anomaly.score * 10) / 10,
+      value: anomaly.value,
+      baselineMedian: anomaly.baselineMedian,
+      relation: evidence.relation === 'UPSTREAM' ? 'UPSTREAM' : 'SAME_SERVICE',
+      leadMinutes: Math.round(num(evidence.leadSeconds) / 60),
+      confidencePercent: Math.round(finding.confidence * 100),
+    });
+    if (metricAnomalies.length === MAX_PER_SECTION) break;
+  }
+
+  if (changes.length + upstreamIncidents.length + runbooks.length + metricAnomalies.length === 0)
+    return null;
+  return {
+    changes,
+    upstreamIncidents,
+    runbooks,
+    ...(metricAnomalies.length > 0 ? { metricAnomalies } : {}),
+  };
 }

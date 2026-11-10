@@ -45,6 +45,7 @@ export interface RetentionResult {
   noiseDecisions?: number;
   knowledgeChunks?: number;
   proactiveNotes?: number;
+  metricAnomalies?: number;
   /** Tables whose step failed this sweep (timeout, contention); every other table still progressed. */
   failedTables: string[];
   /** True when any table hit the batch ceiling or failed, so more expired rows may remain. */
@@ -147,9 +148,8 @@ export async function purgeExpiredIntelligenceData(
 
   try {
     const fingerprintCutoff = cutoff(settings.fingerprintRetentionDays);
-    const alertFingerprints = await step(
-      'AlertFingerprint',
-      tx => tx.$executeRaw(Prisma.sql`
+    const alertFingerprints = await step('AlertFingerprint', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "AlertFingerprint" WHERE "alertId" IN (
           SELECT a."alertId" FROM "AlertFingerprint" a
           JOIN "IncidentFingerprint" f ON f."incidentId" = a."incidentId"
@@ -157,9 +157,8 @@ export async function purgeExpiredIntelligenceData(
           LIMIT ${limit * ALERT_FINGERPRINT_BATCH_MULTIPLIER})`)
     );
     // Parents go only once their alert rows are gone, so the cascade below is always small.
-    const fingerprints = await step(
-      'IncidentFingerprint',
-      tx => tx.$executeRaw(Prisma.sql`
+    const fingerprints = await step('IncidentFingerprint', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IncidentFingerprint" WHERE "incidentId" IN (
           SELECT f."incidentId" FROM "IncidentFingerprint" f
           WHERE f."incidentCreatedAt" < ${fingerprintCutoff}
@@ -167,46 +166,40 @@ export async function purgeExpiredIntelligenceData(
           LIMIT ${limit})`)
     );
     // Vectors are derived from the same title as the fingerprint and share its retention.
-    const embeddings = await step(
-      'IncidentEmbedding',
-      tx => tx.$executeRaw(Prisma.sql`
+    const embeddings = await step('IncidentEmbedding', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IncidentEmbedding" WHERE "incidentId" IN (
           SELECT "incidentId" FROM "IncidentEmbedding"
           WHERE "incidentCreatedAt" < ${fingerprintCutoff} LIMIT ${limit})`)
     );
-    const correlationGroups = await step(
-      'CorrelationGroup',
-      tx => tx.$executeRaw(Prisma.sql`
+    const correlationGroups = await step('CorrelationGroup', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "CorrelationGroup" WHERE "id" IN (
           SELECT "id" FROM "CorrelationGroup"
           WHERE "createdAt" < ${cutoff(settings.correlationRetentionDays)} LIMIT ${limit})`)
     );
-    const relationships = await step(
-      'IncidentRelationship',
-      tx => tx.$executeRaw(Prisma.sql`
+    const relationships = await step('IncidentRelationship', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IncidentRelationship" WHERE "id" IN (
           SELECT "id" FROM "IncidentRelationship"
           WHERE "createdAt" < ${cutoff(settings.correlationRetentionDays)}
             AND "origin" <> 'HUMAN'::"IntelligenceOrigin" AND "decision" <> 'ACCEPTED'::"CorrelationDecision"
           LIMIT ${limit})`)
     );
-    const findings = await step(
-      'IntelligenceFinding',
-      tx => tx.$executeRaw(Prisma.sql`
+    const findings = await step('IntelligenceFinding', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IntelligenceFinding" WHERE "id" IN (
           SELECT "id" FROM "IntelligenceFinding"
           WHERE "createdAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`)
     );
-    const analysisSnapshots = await step(
-      'IntelligenceAnalysisSnapshot',
-      tx => tx.$executeRaw(Prisma.sql`
+    const analysisSnapshots = await step('IntelligenceAnalysisSnapshot', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IntelligenceAnalysisSnapshot" WHERE ("incidentId", "kind") IN (
           SELECT "incidentId", "kind" FROM "IntelligenceAnalysisSnapshot"
           WHERE "completedAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`)
     );
-    const supersededFindings = await step(
-      'IntelligenceFinding:superseded',
-      tx => tx.$executeRaw(Prisma.sql`
+    const supersededFindings = await step('IntelligenceFinding:superseded', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IntelligenceFinding" WHERE "id" IN (
           SELECT "id" FROM "IntelligenceFinding"
           WHERE "status" = 'SUPERSEDED'::"IntelligenceFindingStatus"
@@ -219,65 +212,56 @@ export async function purgeExpiredIntelligenceData(
     const closedGroups = await step('CorrelationGroup:closed', tx =>
       closeExpiredGroups(tx, now, limit)
     );
-    const feedback = await step(
-      'IntelligenceFeedback',
-      tx => tx.$executeRaw(Prisma.sql`
+    const feedback = await step('IntelligenceFeedback', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IntelligenceFeedback" WHERE "id" IN (
           SELECT "id" FROM "IntelligenceFeedback"
           WHERE "createdAt" < ${cutoff(settings.feedbackRetentionDays)} LIMIT ${limit})`)
     );
-    const evaluationRuns = await step(
-      'IntelligenceEvaluationRun',
-      tx => tx.$executeRaw(Prisma.sql`
+    const evaluationRuns = await step('IntelligenceEvaluationRun', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IntelligenceEvaluationRun" WHERE "id" IN (
           SELECT "id" FROM "IntelligenceEvaluationRun"
           WHERE "createdAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`)
     );
-    const patterns = await step(
-      'IntelligencePattern',
-      tx => tx.$executeRaw(Prisma.sql`
+    const patterns = await step('IntelligencePattern', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IntelligencePattern" WHERE "id" IN (
           SELECT "id" FROM "IntelligencePattern"
           WHERE "lastSeenAt" < ${fingerprintCutoff} LIMIT ${limit})`)
     );
     // Change history is evidence for findings, so it ages out with them.
-    const changeEvents = await step(
-      'ChangeEvent',
-      tx => tx.$executeRaw(Prisma.sql`
+    const changeEvents = await step('ChangeEvent', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "ChangeEvent" WHERE "id" IN (
           SELECT "id" FROM "ChangeEvent"
           WHERE "occurredAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`)
     );
     // Digest delivery records name recipients by id; they are operational history only.
-    const digestRuns = await step(
-      'IntelligenceDigestRun',
-      tx => tx.$executeRaw(Prisma.sql`
+    const digestRuns = await step('IntelligenceDigestRun', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "IntelligenceDigestRun" WHERE "weekKey" IN (
           SELECT "weekKey" FROM "IntelligenceDigestRun"
           WHERE "startedAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`)
     );
-    const aiReservations = await step(
-      'AiTokenReservation',
-      tx => tx.$executeRaw(Prisma.sql`
+    const aiReservations = await step('AiTokenReservation', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "AiTokenReservation" WHERE id IN (
           SELECT id FROM "AiTokenReservation" WHERE "expiresAt" < ${cutoff(1)} LIMIT ${limit})`)
     );
-    const actionReceipts = await step(
-      'SquireActionReceipt',
-      tx => tx.$executeRaw(Prisma.sql`
+    const actionReceipts = await step('SquireActionReceipt', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "SquireActionReceipt" WHERE id IN (
           SELECT id FROM "SquireActionReceipt" WHERE "createdAt" < ${cutoff(1)} LIMIT ${limit})`)
     );
-    const dependencyObservations = await step(
-      'DependencyObservationBucket',
-      tx => tx.$executeRaw(Prisma.sql`
+    const dependencyObservations = await step('DependencyObservationBucket', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "DependencyObservationBucket" WHERE (bucket, "serviceId") IN (
           SELECT bucket, "serviceId" FROM "DependencyObservationBucket"
           WHERE bucket < ${cutoff(30)} ORDER BY bucket, "serviceId" LIMIT ${limit})`)
     );
-    const noiseDecisions = await step(
-      'NoiseDecision',
-      tx => tx.$executeRaw(Prisma.sql`
+    const noiseDecisions = await step('NoiseDecision', tx =>
+      tx.$executeRaw(Prisma.sql`
         DELETE FROM "NoiseDecision" WHERE id IN (
           SELECT id FROM "NoiseDecision" WHERE "createdAt" < ${cutoff(settings.correlationRetentionDays)}
           ORDER BY "createdAt", id LIMIT ${limit})`)
@@ -289,6 +273,13 @@ export async function purgeExpiredIntelligenceData(
     );
     const proactiveNotes = await step('SquireProactiveNote', tx =>
       purgeExpiredProactiveNotes(tx, { cutoff: cutoff(settings.findingRetentionDays), limit })
+    );
+    // Metric anomalies are evidence for findings, so they age out with them.
+    const metricAnomalies = await step('MetricAnomaly', tx =>
+      tx.$executeRaw(Prisma.sql`
+        DELETE FROM "MetricAnomaly" WHERE id IN (
+          SELECT id FROM "MetricAnomaly" WHERE "at" < ${cutoff(settings.findingRetentionDays)}
+          ORDER BY "at", id LIMIT ${limit})`)
     );
     const counts = {
       fingerprints,
@@ -312,6 +303,7 @@ export async function purgeExpiredIntelligenceData(
       ...(dependencyObservations > 0 ? { dependencyObservations } : {}),
       ...(knowledgeChunks > 0 ? { knowledgeChunks } : {}),
       ...(proactiveNotes > 0 ? { proactiveNotes } : {}),
+      ...(metricAnomalies > 0 ? { metricAnomalies } : {}),
     };
     const ceilings =
       Object.values(counts).some(count => count >= limit) ||
@@ -319,9 +311,11 @@ export async function purgeExpiredIntelligenceData(
     return { ...counts, failedTables, more: ceilings || failedTables.length > 0 };
   } finally {
     await prisma
-      .$executeRaw(Prisma.sql`
+      .$executeRaw(
+        Prisma.sql`
         UPDATE "IntelligenceCursor" SET "watermarkAt" = now(), "updatedAt" = now()
-        WHERE "name" = ${LEASE_NAME} AND "lastId" = ${token}`)
+        WHERE "name" = ${LEASE_NAME} AND "lastId" = ${token}`
+      )
       .catch(() => {
         /* The lease expires on its own. */
       });

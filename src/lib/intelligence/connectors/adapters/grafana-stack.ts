@@ -43,6 +43,14 @@ function promMatrix(body: unknown): RawSeries[] {
 }
 
 async function promRange(context: AdapterContext, prefix: string, query: MetricsQuery) {
+  return summarizeSeries(query.query, query.window, await promSeries(context, prefix, query));
+}
+
+async function promSeries(
+  context: AdapterContext,
+  prefix: string,
+  query: MetricsQuery
+): Promise<RawSeries[]> {
   const http = httpFor(context, {
     ...bearerOrBasic(context.connection.credential),
     ...grafanaOrg(context),
@@ -57,7 +65,7 @@ async function promRange(context: AdapterContext, prefix: string, query: Metrics
   });
   if (asRecord(body).status !== 'success')
     throw new ConnectorError('INVALID_RESPONSE', 'The query was not accepted');
-  return summarizeSeries(query.query, query.window, promMatrix(body));
+  return promMatrix(body);
 }
 
 const nanos = (date: Date) => `${BigInt(date.getTime()) * BigInt(1_000_000)}`;
@@ -175,6 +183,7 @@ export const prometheusAdapter: ConnectorAdapter = {
     );
   },
   metrics: (context, query) => promRange(context, '', query),
+  series: (context, query) => promSeries(context, '', query),
 };
 
 export const lokiAdapter: ConnectorAdapter = {
@@ -204,5 +213,6 @@ export const grafanaAdapter: ConnectorAdapter = {
     }).getJson(`/api/datasources/uid/${encodeURIComponent(context.connection.project ?? '')}`);
   },
   metrics: (context, query) => promRange(context, proxy(context), query),
+  series: (context, query) => promSeries(context, proxy(context), query),
   logs: (context, query) => lokiRange(context, proxy(context), query),
 };

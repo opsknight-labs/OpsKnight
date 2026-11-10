@@ -38,6 +38,12 @@ import {
   TOPOLOGY_SYNC_CHECK_INTERVAL_MS,
 } from '../dependencies/topology-sources';
 import { purgeConversations } from '../conversations/store';
+import { evaluateMetricTemplate } from '../metric-anomaly/evaluate';
+import { scheduleMetricEvaluationsIfDue } from '../metric-anomaly/service';
+import {
+  METRIC_EVALUATION_BUDGET_MS,
+  METRIC_SCHEDULE_CHECK_INTERVAL_MS,
+} from '../metric-anomaly/contract';
 import { AiGatewayError } from '../ai/gateway';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
 import { scheduleSquireMemoryWork, SQUIRE_MEMORY_HANDLERS } from '../memory/handlers';
@@ -159,6 +165,11 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   [WORK_KINDS.SYNC_TOPOLOGY]: async (item, { settings, signal }) => {
     await syncTopologySource(item.subjectKey, settings, signal);
   },
+  // Optional metric anomaly evidence: one template per item. A connector that fails is recorded on the
+  // template as degraded and the item completes; only database failures retry.
+  [WORK_KINDS.EVALUATE_METRIC_TEMPLATE]: async (item, { settings, signal }) => {
+    await evaluateMetricTemplate(item, settings, signal);
+  },
   // Semantic search is optional and never sits in front of analysis: incidents are analysed lexically
   // straight away, then re-analysed once their vector exists, so a slow or failing embedding provider
   // only delays the semantic signal. One provider call per pass, however many incidents arrive.
@@ -215,6 +226,7 @@ const KIND_MIN_BUDGET_MS: Partial<Record<WorkKind, number>> = {
   // Squire memory (F4): optional provider calls (embedding, proactive AI text).
   [WORK_KINDS.SYNC_KNOWLEDGE]: 120_000,
   [WORK_KINDS.SQUIRE_PROACTIVE]: 120_000,
+  [WORK_KINDS.EVALUATE_METRIC_TEMPLATE]: METRIC_EVALUATION_BUDGET_MS,
 };
 
 export function workBudgetMs(
@@ -235,6 +247,8 @@ export interface LaneState {
   lastDigestCheckAt: number;
   lastConversationSweepAt: number;
   lastTopologyCheckAt: number;
+  /** Optional so lane states built before metric templates existed stay valid. */
+  lastMetricCheckAt?: number;
   /** Handlers that exceeded their budget and are still running; they count against concurrency until they let go. */
   timedOut: Set<Promise<unknown>>;
   kinds: KindBreaker;
@@ -254,6 +268,7 @@ export function createLaneState(): LaneState {
     lastDigestCheckAt: 0,
     lastConversationSweepAt: 0,
     lastTopologyCheckAt: 0,
+    lastMetricCheckAt: 0,
     timedOut: new Set(),
     kinds: new KindBreaker(),
     saturatedLogged: false,
@@ -606,6 +621,21 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
       logger.warn('[Intelligence] Could not schedule Squire memory work; will retry', {
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+
+    // Metric templates are evaluated on their own intervals; with none enabled this is one empty index probe.
+    if (
+      handlers[WORK_KINDS.EVALUATE_METRIC_TEMPLATE] &&
+      now() - (state.lastMetricCheckAt ?? 0) >= METRIC_SCHEDULE_CHECK_INTERVAL_MS
+    ) {
+      state.lastMetricCheckAt = now();
+      try {
+        await scheduleMetricEvaluationsIfDue(settings, new Date(now()));
+      } catch (error) {
+        logger.warn('[Intelligence] Could not schedule metric template evaluations; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     let discovered = 0;

@@ -288,6 +288,14 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 6,
   },
   {
+    name: 'opsknight_intelligence_metric_evaluations_total',
+    help: 'Metric anomaly template evaluations by outcome (OK, NO_DATA, THIN_BASELINE, CONNECTOR_ERROR and scope problems)',
+    kind: 'counter',
+    labels: ['status'],
+    scope: 'counter',
+    estimatedMaxSeries: 8,
+  },
+  {
     name: 'opsknight_prepaging_decisions_total',
     help: 'Pre-paging noise control decisions by control, action and mode; SHADOW decisions were not applied',
     kind: 'counter',

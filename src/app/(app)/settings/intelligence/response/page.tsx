@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import EmptyState from '@/components/ui/EmptyState';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { DeclareDependencyForm, DependencyList } from '@/components/settings/DependencyManager';
@@ -117,6 +118,17 @@ export default async function IntelligenceResponsePage() {
             description="They could not be loaded. Refresh to try again."
           />
         )}
+      </SettingsSection>
+
+      <SettingsSection
+        title="Metric anomaly evidence"
+        description="Optional, off by default: per-service metric queries evaluated against a seasonal baseline, as extra leads for probable causes and the incident timeline."
+      >
+        <p className="py-3 text-sm">
+          <Link href="/settings/intelligence/response/metrics" className="hover:underline">
+            Manage metric templates
+          </Link>
+        </p>
       </SettingsSection>
 
       <SettingsSection

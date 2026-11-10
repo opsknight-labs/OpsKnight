@@ -7,10 +7,12 @@ import { RESPONSE_LIMITS } from '../contract';
 import { loadActiveEdges } from '../dependencies/service';
 import { upstreamDistances } from '../dependencies/graph';
 import { explainNoiseDecision, incidentRef } from '../incident-ux/explain';
+import { loadMetricAnomaliesForAxis } from '../metric-anomaly/evidence';
 
 /**
  * One time axis for an incident: its alerts, the changes on it and its upstream services around onset,
- * upstream incidents, the noise decisions taken on its events (with why and, for managers, the reversal),
+ * upstream incidents, metric anomalies on it and its upstream services (when metric templates are configured),
+ * the noise decisions taken on its events (with why and, for managers, the reversal),
  * grouping into a parent, and people's decisions on intelligence suggestions (related links accepted or
  * rejected, triage suggestions accepted or dismissed). Every row is filtered by what the viewer may read.
  * Bounded: at most MAX_ROWS per kind, within the cause window before onset and up to now.
@@ -24,7 +26,8 @@ export type TimeAxisKind =
   | 'INCIDENT'
   | 'GROUPING'
   | 'SUGGESTION'
-  | 'TRIAGE';
+  | 'TRIAGE'
+  | 'METRIC_ANOMALY';
 
 export interface TimeAxisEntry {
   kind: TimeAxisKind;
@@ -83,7 +86,7 @@ export async function getIncidentTimeAxisForActor(
   const upstream = upstreamDistances(edges, incident.serviceId, RESPONSE_LIMITS.maxUpstreamDepth);
   const serviceIds = [incident.serviceId, ...upstream.keys()];
 
-  const [alerts, changes, upstreamIncidents, noise, decisions] = await Promise.all([
+  const [alerts, changes, upstreamIncidents, noise, decisions, anomalies] = await Promise.all([
     client.alert.findMany({
       where: { incidentId },
       orderBy: { createdAt: 'asc' },
@@ -138,6 +141,9 @@ export async function getIncidentTimeAxisForActor(
         }),
     loadNoiseDecisions(client, incidentId),
     loadSuggestionDecisions(client, incidentId, readable),
+    services
+      ? loadReadableAnomalies(client, serviceIds, services, { start: windowStart, end: until })
+      : [],
   ]);
   const canReverse =
     actor.status === 'ACTIVE' && hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE);
@@ -184,6 +190,16 @@ export async function getIncidentTimeAxisForActor(
       offsetMinutes: offset(other.createdAt),
     });
   }
+  for (const anomaly of anomalies.slice(0, MAX_ROWS)) {
+    entries.push({
+      kind: 'METRIC_ANOMALY',
+      at: anomaly.at,
+      title: anomaly.title,
+      detail: anomaly.detail,
+      href: null,
+      offsetMinutes: offset(anomaly.at),
+    });
+  }
   for (const decision of noise.slice(0, MAX_ROWS)) {
     entries.push({
       kind: 'NOISE_DECISION',
@@ -220,9 +236,29 @@ export async function getIncidentTimeAxisForActor(
       alerts.length > MAX_ROWS ||
       changes.length > MAX_ROWS ||
       upstreamIncidents.length > MAX_ROWS ||
-      noise.length > MAX_ROWS,
+      noise.length > MAX_ROWS ||
+      anomalies.length > MAX_ROWS,
     canReverse,
   };
+}
+
+/** Metric anomalies on the services the viewer may read; the service filter is applied before the read. */
+async function loadReadableAnomalies(
+  client: typeof prisma,
+  serviceIds: string[],
+  services: NonNullable<ReturnType<typeof serviceReadWhere>>,
+  window: { start: Date; end: Date }
+) {
+  const readable =
+    Object.keys(services).length === 0
+      ? serviceIds
+      : (
+          await client.service.findMany({
+            where: { AND: [{ id: { in: serviceIds } }, services] },
+            select: { id: true },
+          })
+        ).map(row => row.id);
+  return loadMetricAnomaliesForAxis(client, readable, window, MAX_ROWS);
 }
 
 type NoiseEntry = {

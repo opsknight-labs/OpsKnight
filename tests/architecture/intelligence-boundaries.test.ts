@@ -322,6 +322,52 @@ describe('intelligence architecture boundaries', () => {
     expect(tools).not.toMatch(/connectorFetchFor|guardedFetchFor|safeOutboundFetch/);
   });
 
+  it('keeps metric anomaly evidence in the lane, behind the connectors, writing only its own tables', () => {
+    const dir = join(intelligenceDir, 'metric-anomaly');
+    const files = sourceFiles(dir);
+    expect(files.length).toBeGreaterThan(0);
+    // No network client of its own: every query goes through a connector adapter's guarded fetch.
+    for (const file of files) {
+      const source = read(file);
+      expect(source, relative(root, file)).not.toMatch(
+        /\bfetch\(|globalThis\.fetch|from\s+['"](?:node:)?(?:http|https|net|tls|undici|axios|node-fetch|got)['"]|connectorFetchFor|guardedFetchFor|safeOutboundFetch/
+      );
+      expect(source).not.toMatch(
+        /\$executeRawUnsafe|\$queryRawUnsafe|from\s+['"](?:ai|@ai-sdk\/[^'"]+)['"]/
+      );
+    }
+    const evaluate = read(join(dir, 'evaluate.ts'));
+    expect(evaluate).toMatch(/contextFor\(connection, \{ fetch, signal \}\)/);
+    // Writes: its configuration, its anomalies, and coalesced lane work (through the work queue).
+    const delegates = files.flatMap(file =>
+      [
+        ...read(file).matchAll(
+          /\b(?:tx|prisma|client)\.(\w+)\s*\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+        ),
+      ].map(match => match[1])
+    );
+    expect([...new Set(delegates)].sort()).toEqual(['metricAnomaly', 'serviceMetricTemplate']);
+    // Never reachable from ingestion or the pre-paging hook: only the lane, the views and settings import it.
+    const importers = sourceFiles(join(root, 'src'))
+      .filter(file => !file.startsWith(dir))
+      .filter(file => /from\s+['"][^'"]*metric-anomaly\//.test(read(file)))
+      .map(file => relative(root, file))
+      .sort();
+    expect(importers).toEqual([
+      'src/app/(app)/settings/intelligence/response/metrics/actions.ts',
+      'src/app/(app)/settings/intelligence/response/metrics/page.tsx',
+      'src/components/settings/MetricTemplateManager.tsx',
+      'src/lib/intelligence/jobs/runner.ts',
+      'src/lib/intelligence/response/view.ts',
+      'src/lib/intelligence/root-cause/analyzer.ts',
+      'src/lib/intelligence/timeline/service.ts',
+    ]);
+    // Its tables are registered for privacy like every other intelligence table.
+    const registry = read(join(root, 'src/lib/privacy/registry.ts'));
+    for (const table of ['ServiceMetricTemplate', 'MetricAnomaly'])
+      expect(registry).toContain(`'${table}'`);
+  });
+
   it('routes every AI provider through the guarded fetch', () => {
     const gateway = read(join(intelligenceDir, 'ai/gateway.ts'));
     expect(gateway).toMatch(/const common = \{[^}]*fetch: fetchImpl[^}]*\}/);

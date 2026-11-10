@@ -125,6 +125,8 @@ domains:
         maintenance-and-suppression-authorship,
         noise-control-policy-versions-and-publisher-ids,
         heartbeat-token-hashes,
+        metric-template-queries-and-authorship,
+        numeric-metric-anomaly-evidence-and-series-labels,
       ]
     purpose:
       [
@@ -137,6 +139,7 @@ domains:
         policy-history,
         probable-cause-and-runbook-recommendations,
         pre-paging-noise-controls-and-heartbeat-monitoring,
+        optional-metric-anomaly-evidence-from-administrator-configured-connectors,
       ]
     storage: [postgresql]
     recipients:

@@ -5,6 +5,7 @@ import type {
   ErrorsSummary,
   LogsSummary,
   MetricsSummary,
+  RawSeries,
   TimeWindow,
   TracesSummary,
 } from '../normalize';
@@ -71,6 +72,11 @@ export interface ConnectorAdapter {
   /** A harmless read that proves the address and credential work. */
   test(context: AdapterContext): Promise<void>;
   metrics?(context: AdapterContext, query: MetricsQuery): Promise<MetricsSummary>;
+  /**
+   * The same metrics query as raw points, for lane-side analysis (metric anomaly evidence). Never handed to a
+   * model; the caller bounds series and points itself. Present exactly where `metrics` is.
+   */
+  series?(context: AdapterContext, query: MetricsQuery): Promise<RawSeries[]>;
   logs?(context: AdapterContext, query: LogsQuery): Promise<LogsSummary>;
   traces?(context: AdapterContext, query: TracesQuery): Promise<TracesSummary>;
   errors?(context: AdapterContext, query: ErrorsQuery): Promise<ErrorsSummary>;

@@ -1,6 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
 import { ConnectorError } from '../http';
-import { summarizeLogs, summarizeSeries } from '../normalize';
+import { summarizeLogs, summarizeSeries, type RawSeries } from '../normalize';
 import {
   asArray,
   asRecord,
@@ -9,6 +9,7 @@ import {
   seconds,
   type AdapterContext,
   type ConnectorAdapter,
+  type MetricsQuery,
 } from './types';
 
 const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
@@ -87,6 +88,47 @@ function client(context: AdapterContext) {
 const logsUrl = (region: string) => `https://logs.${region}.amazonaws.com/`;
 const METRICS_TARGET = 'GraniteServiceVersion20100801';
 
+async function cloudwatchSeries(
+  context: AdapterContext,
+  query: MetricsQuery
+): Promise<RawSeries[]> {
+  const body = await client(context).postJson(
+    '/',
+    {
+      MetricDataQueries: [
+        { Id: 'q1', Expression: query.query, Period: autoStep(query.window, query.stepSeconds) },
+      ],
+      StartTime: seconds(query.window.start),
+      EndTime: seconds(query.window.end),
+      ScanBy: 'TimestampAscending',
+      MaxDatapoints: 5_000,
+    },
+    {
+      headers: {
+        'content-type': 'application/x-amz-json-1.0',
+        'x-amz-target': `${METRICS_TARGET}.GetMetricData`,
+      },
+    }
+  );
+  const series = asArray(asRecord(body).MetricDataResults).map(item => {
+    const result = asRecord(item);
+    const timestamps = asArray(result.Timestamps);
+    const values = asArray(result.Values);
+    return {
+      labels: { label: result.Label, id: result.Id },
+      points: timestamps.flatMap((at, index) => {
+        const time = typeof at === 'number' ? at * 1000 : Date.parse(String(at));
+        // eslint-disable-next-line security/detect-object-injection -- index of a parallel array
+        const value = Number(values[index]);
+        return Number.isFinite(time) && Number.isFinite(value)
+          ? [[time, value] as [number, number]]
+          : [];
+      }),
+    };
+  });
+  return series;
+}
+
 export const cloudwatchAdapter: ConnectorAdapter = {
   async test(context) {
     await client(context).postJson(
@@ -103,42 +145,10 @@ export const cloudwatchAdapter: ConnectorAdapter = {
 
   /** A Metrics Insights query or a metric-math SEARCH expression, through GetMetricData. */
   async metrics(context, query) {
-    const body = await client(context).postJson(
-      '/',
-      {
-        MetricDataQueries: [
-          { Id: 'q1', Expression: query.query, Period: autoStep(query.window, query.stepSeconds) },
-        ],
-        StartTime: seconds(query.window.start),
-        EndTime: seconds(query.window.end),
-        ScanBy: 'TimestampAscending',
-        MaxDatapoints: 5_000,
-      },
-      {
-        headers: {
-          'content-type': 'application/x-amz-json-1.0',
-          'x-amz-target': `${METRICS_TARGET}.GetMetricData`,
-        },
-      }
-    );
-    const series = asArray(asRecord(body).MetricDataResults).map(item => {
-      const result = asRecord(item);
-      const timestamps = asArray(result.Timestamps);
-      const values = asArray(result.Values);
-      return {
-        labels: { label: result.Label, id: result.Id },
-        points: timestamps.flatMap((at, index) => {
-          const time = typeof at === 'number' ? at * 1000 : Date.parse(String(at));
-          // eslint-disable-next-line security/detect-object-injection -- index of a parallel array
-          const value = Number(values[index]);
-          return Number.isFinite(time) && Number.isFinite(value)
-            ? [[time, value] as [number, number]]
-            : [];
-        }),
-      };
-    });
-    return summarizeSeries(query.query, query.window, series);
+    return summarizeSeries(query.query, query.window, await cloudwatchSeries(context, query));
   },
+
+  series: (context, query) => cloudwatchSeries(context, query),
 
   /** A filter pattern over the log group saved on the connection. */
   async logs(context, query) {

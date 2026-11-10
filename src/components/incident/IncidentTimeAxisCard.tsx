@@ -7,7 +7,7 @@ import IncidentTimeAxisList from './intelligence/IncidentTimeAxisList';
 
 /**
  * One time axis for the incident: its alerts, changes on it and its upstream services, upstream incidents,
- * noise decisions (with why, and the reversal for those who may reverse), grouping and people's decisions
+ * metric anomalies (when templates are configured), noise decisions (with why, and the reversal for those who may reverse), grouping and people's decisions
  * on suggestions, each relative to onset. Renders nothing at all on any failure.
  */
 export default async function IncidentTimeAxisCard({ incidentId }: { incidentId: string }) {
@@ -35,8 +35,8 @@ export default async function IncidentTimeAxisCard({ incidentId }: { incidentId:
           </h2>
         </div>
         <p className="text-xs text-muted-foreground">
-          Alerts, changes, upstream incidents, noise decisions and suggestion decisions on one
-          timeline, relative to when the incident opened.
+          Alerts, changes, upstream incidents, metric anomalies, noise decisions and suggestion
+          decisions on one timeline, relative to when the incident opened.
           {axis.truncated ? ' Showing the first 50 of each kind.' : ''}
         </p>
       </div>

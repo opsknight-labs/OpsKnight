@@ -318,6 +318,8 @@ export const personalDataRegistry = [
       'SuppressionRule',
       'HeartbeatMonitor',
       'PrePagingDecision',
+      'ServiceMetricTemplate',
+      'MetricAnomaly',
     ],
     fields: [
       'IncidentFingerprint.template',
@@ -353,6 +355,10 @@ export const personalDataRegistry = [
       'HeartbeatMonitor.createdById',
       'PrePagingDecision.evidence',
       'PrePagingDecision.reversedById',
+      'ServiceMetricTemplate.query',
+      'ServiceMetricTemplate.createdById',
+      'ServiceMetricTemplate.updatedById',
+      'MetricAnomaly.labels',
     ],
     purpose: [
       'Similar-incident suggestions',
@@ -363,6 +369,7 @@ export const personalDataRegistry = [
       'Policy change history',
       'Probable-cause and runbook recommendations from service dependencies and change events',
       'Optional weekly digest email to people who manage intelligence',
+      'Optional metric anomaly evidence from administrator-configured metric queries',
     ],
     classifications: ['INTERNAL', 'PERSONAL'],
     locations: ['DATABASE', 'FREE_TEXT'],
@@ -375,6 +382,7 @@ export const personalDataRegistry = [
     discoverable: 'PARTIAL',
     notes: [
       'Derived data only; incidents and alerts remain the source of truth and are never modified. Fingerprint templates are masked copies of incident titles and can still contain customer identifiers typed by operators. Label values drop credential-shaped fields, and finding evidence stores numeric scores only, never text from another incident. When an administrator turns on semantic search, masked titles are sent to the configured embedding provider (only one allowed to receive PERSONAL data, because masking does not anonymize names) and the returned vectors are stored with fingerprint retention. The optional weekly digest is built per recipient from services they can read; delivery records keep recipient user ids only and age out with finding retention. Feedback and policy authorship use foreign keys that clear to null when a user is erased; free-text feedback notes need manual review. New work failures retain fixed diagnostic codes rather than exception messages. Legacy queue error text remains subject to existing retention and is withheld from diagnostic DTOs and pages.',
+      'Metric anomaly evidence is off by default. Administrators may attach metric query templates to a service; the intelligence lane evaluates enabled ones through an observability connection the service team may use and stores only numeric deviations (time, score, value, baseline median and MAD) with up to six compacted series labels, which can name hosts or pods. Template authorship uses plain user ids. Anomalies age out with finding retention and are deleted with their template or service; raw metric series are never stored.',
     ],
   },
   {

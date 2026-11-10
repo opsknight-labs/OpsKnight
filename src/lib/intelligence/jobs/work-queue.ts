@@ -42,6 +42,8 @@ export const WORK_KINDS = {
   SQUIRE_PROACTIVE_SCAN: 'SQUIRE_PROACTIVE_SCAN',
   /** One item per (kind, incident), subject `KIND:incidentId`: writes one proactive note. */
   SQUIRE_PROACTIVE: 'SQUIRE_PROACTIVE',
+  /** Evaluates one per-service metric template against its seasonal baseline (subject = template id). */
+  EVALUATE_METRIC_TEMPLATE: 'EVALUATE_METRIC_TEMPLATE',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -61,6 +63,7 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   SQUIRE_PROACTIVE: 32,
   SQUIRE_PROACTIVE_SCAN: 33,
   SYNC_KNOWLEDGE: 55,
+  EVALUATE_METRIC_TEMPLATE: 46,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

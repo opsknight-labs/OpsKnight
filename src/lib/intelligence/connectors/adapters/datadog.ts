@@ -1,4 +1,10 @@
-import { summarizeLogs, summarizeSeries, summarizeTraces, type RawSpan } from '../normalize';
+import {
+  summarizeLogs,
+  summarizeSeries,
+  summarizeTraces,
+  type RawSeries,
+  type RawSpan,
+} from '../normalize';
 import {
   asArray,
   asRecord,
@@ -6,6 +12,7 @@ import {
   seconds,
   type AdapterContext,
   type ConnectorAdapter,
+  type MetricsQuery,
 } from './types';
 
 /** Datadog authenticates with an API key and an application key, both stored encrypted. */
@@ -17,6 +24,31 @@ function headers(context: AdapterContext): Record<string, string> {
   };
 }
 
+async function ddSeries(context: AdapterContext, query: MetricsQuery): Promise<RawSeries[]> {
+  const body = await httpFor(context, headers(context)).getJson('/api/v1/query', {
+    query: {
+      from: seconds(query.window.start),
+      to: seconds(query.window.end),
+      query: query.query,
+    },
+  });
+  const series = asArray(asRecord(body).series).map(item => {
+    const entry = asRecord(item);
+    return {
+      labels: { metric: entry.metric, scope: entry.scope },
+      points: asArray(entry.pointlist).flatMap(point => {
+        const pair = asArray(point);
+        const at = Number(pair[0]);
+        const value = Number(pair[1]);
+        return pair[1] !== null && Number.isFinite(at) && Number.isFinite(value)
+          ? [[at, value] as [number, number]]
+          : [];
+      }),
+    };
+  });
+  return series;
+}
+
 const TRACE_ID = /^[0-9a-f]{1,32}$/i;
 
 export const datadogAdapter: ConnectorAdapter = {
@@ -25,29 +57,10 @@ export const datadogAdapter: ConnectorAdapter = {
   },
 
   async metrics(context, query) {
-    const body = await httpFor(context, headers(context)).getJson('/api/v1/query', {
-      query: {
-        from: seconds(query.window.start),
-        to: seconds(query.window.end),
-        query: query.query,
-      },
-    });
-    const series = asArray(asRecord(body).series).map(item => {
-      const entry = asRecord(item);
-      return {
-        labels: { metric: entry.metric, scope: entry.scope },
-        points: asArray(entry.pointlist).flatMap(point => {
-          const pair = asArray(point);
-          const at = Number(pair[0]);
-          const value = Number(pair[1]);
-          return pair[1] !== null && Number.isFinite(at) && Number.isFinite(value)
-            ? [[at, value] as [number, number]]
-            : [];
-        }),
-      };
-    });
-    return summarizeSeries(query.query, query.window, series);
+    return summarizeSeries(query.query, query.window, await ddSeries(context, query));
   },
+
+  series: (context, query) => ddSeries(context, query),
 
   async logs(context, query) {
     const body = await httpFor(context, headers(context)).postJson('/api/v2/logs/events/search', {

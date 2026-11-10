@@ -670,6 +670,8 @@ model TeamMember {
 }
 
 model Service {
+  metricTemplates          ServiceMetricTemplate[]
+  metricAnomalies          MetricAnomaly[]
   noiseControlPolicies     NoiseControlPolicy[]
   noiseControlVersions     NoiseControlPolicyVersion[]
   maintenanceWindows       MaintenanceWindow[]
@@ -4942,6 +4944,7 @@ enum IntelligenceFindingKind {
   TRIAGE_ASSIGNMENT
   TRIAGE_DUPLICATE
   TRIAGE_RESOLUTION_TIME
+  METRIC_ANOMALY
 }
 
 enum IntelligenceFindingStatus {
@@ -5830,6 +5833,7 @@ model ObservabilityConnection {
   updatedById         String?
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
+  metricTemplates     ServiceMetricTemplate[]
 }
 
 model SquireActionReceipt {
@@ -6381,4 +6385,72 @@ model SquireProactiveNote {
 
   @@unique([incidentId, kind], map: "uq_squire_proactive_note")
   @@index([createdAt], map: "idx_squire_proactive_note_retention")
+}
+
+// Optional per-service metric query an administrator points at an observability connection. The intelligence
+// lane evaluates enabled templates on their schedule against a seasonal baseline; nothing here is read on the
+// paging path. Off by default.
+model ServiceMetricTemplate {
+  id              String                   @id @default(cuid())
+  serviceId       String
+  service         Service                  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  // Cleared when the connection is deleted; the template then stays inert until re-pointed.
+  connectionId    String?
+  connection      ObservabilityConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  name            String
+  query           String
+  enabled         Boolean                  @default(false)
+  // UP, DOWN or BOTH: which deviations count.
+  direction       String                   @default("BOTH")
+  thresholdMad    Float                    @default(5)
+  baselineWeeks   Int                      @default(4)
+  windowMinutes   Int                      @default(60)
+  stepSeconds     Int                      @default(60)
+  intervalMinutes Int                      @default(15)
+  // Absolute difference from the baseline median below which nothing counts (flat or near-zero metrics).
+  minDeviation    Float                    @default(0)
+  lastEvaluatedAt DateTime?
+  lastStatus      String?
+  // Generation fence: the newest work generation whose result was written.
+  lastGeneration  Int                      @default(0)
+  createdById     String?
+  updatedById     String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  anomalies       MetricAnomaly[]
+
+  @@unique([serviceId, name])
+  @@index([enabled, lastEvaluatedAt])
+  @@index([connectionId])
+}
+
+// One detected deviation of a template's series from its seasonal baseline. Numeric evidence only.
+model MetricAnomaly {
+  id              String                @id @default(cuid())
+  templateId      String
+  template        ServiceMetricTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  serviceId       String
+  service         Service               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  // Stable hash of the series labels, so one template with several series keeps them apart.
+  seriesKey       String
+  labels          Json?
+  at              DateTime
+  peakAt          DateTime
+  endAt           DateTime
+  // UP or DOWN.
+  direction       String
+  // Peak deviation in robust standard units: |value - median| / max(1.4826 * MAD, floor).
+  score           Float
+  value           Float
+  baselineMedian  Float
+  baselineMad     Float
+  baselineSamples Int
+  points          Int
+  generation      Int
+  detectedAt      DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([templateId, seriesKey, at])
+  @@index([serviceId, at])
+  @@index([at])
 }

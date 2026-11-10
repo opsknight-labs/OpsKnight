@@ -6,10 +6,13 @@ import { upstreamDistances, type DependencyEdge } from '../dependencies/graph';
 import type { FindingRow } from '../similarity/findings';
 import { scoreCause, type CauseRelation, type ChangeKindValue } from './scoring';
 import { loadChangeBaselines } from './baseline';
+import { computeMetricAnomalyFindings } from '../metric-anomaly/evidence';
 
 export interface CauseFindings {
   changes: FindingRow[];
   upstreamIncidents: FindingRow[];
+  /** Metric deviations on the service or upstream (empty unless metric templates exist and fired). */
+  metricAnomalies: FindingRow[];
 }
 
 const MINUTE_MS = 60_000;
@@ -61,7 +64,7 @@ export async function computeCauseFindings(
   const serviceIds = [incident.serviceId, ...upstream.keys()];
 
   // Separate scoped/global budgets preserve local evidence during a noisy global rollout.
-  const [scopedChanges, globalChanges, upstreamIncidents, baselines, fingerprint] =
+  const [scopedChanges, globalChanges, upstreamIncidents, baselines, fingerprint, metricAnomalies] =
     await Promise.all([
       recentChangeCandidates(tx, serviceIds, windowStart, incident.createdAt, false),
       recentChangeCandidates(tx, serviceIds, windowStart, incident.createdAt, true),
@@ -82,6 +85,7 @@ export async function computeCauseFindings(
         where: { incidentId: incident.id },
         select: { labels: true, tokens: true },
       }),
+      computeMetricAnomalyFindings(tx, incident, upstream, weights),
     ]);
   const labels =
     fingerprint?.labels &&
@@ -182,5 +186,5 @@ export async function computeCauseFindings(
       },
     }));
 
-  return { changes: changeRows, upstreamIncidents: incidentRows };
+  return { changes: changeRows, upstreamIncidents: incidentRows, metricAnomalies };
 }
