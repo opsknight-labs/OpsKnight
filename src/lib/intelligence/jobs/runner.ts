@@ -259,6 +259,8 @@ export interface LaneState {
   retentionBatchSize: number | null;
   /** Backs the lane off while ingestion in this process is busy (createLaneState sets it). */
   ingestionYield?: IngestionYield;
+  /** Set once the lane has run enabled on its own pool in this process; later cycles start there. */
+  lanePoolOpened?: boolean;
 }
 
 export function createLaneState(): LaneState {
@@ -479,6 +481,9 @@ export async function runIntelligenceCycle(
   const result = await withIntelligenceReadMemo(async () => {
     const plan = dependencies.lanePool ?? resolveLanePool();
     if (!plan.ownPool) return runCycle(state, dependencies, plan);
+    // Once the lane has run enabled in this process its pool is open, so every later cycle (settings read
+    // included) stays on it and never queues a lane statement on the pool ingestion uses.
+    if (state.lanePoolOpened) return runOnLanePool(plan, () => runCycle(state, dependencies, plan));
     // Only an enabled lane moves onto its own pool, so a disabled install never opens it. The settings
     // read is memoised for the cycle, so runCycle does not read the row again.
     let enabled: boolean;
@@ -496,17 +501,23 @@ export async function runIntelligenceCycle(
         pausedKinds: state.kinds.pausedKinds((dependencies.now ?? Date.now)()),
       };
     }
-    return enabled
-      ? runOnLanePool(plan, () => runCycle(state, dependencies, plan))
-      : runCycle(state, dependencies, plan);
+    if (!enabled) return runCycle(state, dependencies, plan);
+    state.lanePoolOpened = true;
+    return runOnLanePool(plan, () => runCycle(state, dependencies, plan));
   });
   // While ingestion in this process is busy, keep the lane's share of wall time bounded. The pause comes
-  // after the cycle, when no item, transaction or connection is held.
-  if (state.ingestionYield && (result.status === 'worked' || result.status === 'idle')) {
+  // after the cycle, when no item, transaction or connection is held. A cycle that backed off for pool
+  // pressure did almost no work, so it waits at least the back-off floor: otherwise a caller looping on
+  // cycles would re-check pool metrics and settings many times a second during the burst.
+  if (
+    state.ingestionYield &&
+    (result.status === 'worked' || result.status === 'idle' || result.status === 'paused')
+  ) {
     const pausedInCycle = state.ingestionYield.pausedMs - pausedBefore;
     await state.ingestionYield.pause(
       performance.now() - startedAt - pausedInCycle,
-      dependencies.signal
+      dependencies.signal,
+      result.status === 'paused' ? state.ingestionYield.backoffFloorMs : 0
     );
   }
   return result;
@@ -891,19 +902,23 @@ async function acceptWakeSignals(ids: string[]): Promise<void> {
     while (lane.running && signalled.size) {
       const batch = [...signalled].slice(0, 50);
       for (const id of batch) signalled.delete(id);
-      if (!(await getIntelligenceSettings()).enabled) {
-        signalled.clear();
-        break;
-      }
-      await runOnLanePool(resolveLanePool(), () =>
-        enqueueWorkItems(
+      // The settings read runs on the lane's pool too: a burst of wake hints arrives exactly when
+      // ingestion is busiest, and the lane must not queue on the pool processEvent uses.
+      const enabled = await runOnLanePool(resolveLanePool(), async () => {
+        if (!(await getIntelligenceSettings()).enabled) return false;
+        await enqueueWorkItems(
           batch.map(subjectKey => ({
             kind: WORK_KINDS.INDEX_INCIDENT,
             subjectKey,
             priority: FIRST_INSIGHT_INDEX_PRIORITY,
           }))
-        )
-      );
+        );
+        return true;
+      });
+      if (!enabled) {
+        signalled.clear();
+        break;
+      }
       wakeRequested = true;
       if (!lane.active) {
         if (lane.timer) clearTimeout(lane.timer);

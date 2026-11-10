@@ -25,6 +25,8 @@ export interface IngestionYieldOptions {
   maxPauseMs: number;
   pollMs: number;
   sampleMs: number;
+  /** Least wait after a cycle that backed off for pool pressure while yielding (see `pause`). */
+  backoffFloorMs: number;
 }
 
 export const INGESTION_YIELD_DEFAULTS: IngestionYieldOptions = {
@@ -35,6 +37,7 @@ export const INGESTION_YIELD_DEFAULTS: IngestionYieldOptions = {
   maxPauseMs: 1_000,
   pollMs: 25,
   sampleMs: 50,
+  backoffFloorMs: 100,
 };
 
 type Sleep = (ms: number) => Promise<void>;
@@ -61,6 +64,10 @@ export class IngestionYield {
   /** Total time spent in `pause`, so callers can tell their own work time from time spent yielding. */
   get pausedMs(): number {
     return this.pausedTotalMs;
+  }
+
+  get backoffFloorMs(): number {
+    return this.options.backoffFloorMs;
   }
 
   /** The most recent measured load (average events in flight). */
@@ -96,13 +103,14 @@ export class IngestionYield {
 
   /**
    * After `workMs` of lane work, waits long enough to keep the lane's share of wall time at `duty`, capped
-   * at `maxPauseMs`. Returns early once ingestion goes quiet or `signal` aborts. Nothing is held while
-   * waiting: no claimed item, transaction or connection. Returns how long it waited.
+   * at `maxPauseMs`, and at least `minMs` (also capped at `maxPauseMs`). Returns early once ingestion goes
+   * quiet or `signal` aborts. Nothing is held while waiting: no claimed item, transaction or connection.
+   * Returns how long it waited.
    */
-  async pause(workMs: number, signal?: AbortSignal): Promise<number> {
+  async pause(workMs: number, signal?: AbortSignal, minMs = 0): Promise<number> {
     if (!this.isYielding()) return 0;
     const { duty, maxPauseMs, pollMs } = this.options;
-    const target = Math.min(maxPauseMs, Math.max(0, workMs) * ((1 - duty) / duty));
+    const target = Math.min(maxPauseMs, Math.max(minMs, Math.max(0, workMs) * ((1 - duty) / duty)));
     let waited = 0;
     while (waited < target && !signal?.aborted) {
       const step = Math.min(pollMs, target - waited);

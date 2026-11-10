@@ -126,6 +126,23 @@ describe('lane yield to ingestion', () => {
     expect(gate.isYielding()).toBe(false);
   });
 
+  it('waits at least the requested floor while yielding, capped, and not at all when quiet', async () => {
+    const activity = fakeActivity();
+    const gate = new IngestionYield(
+      activity.source,
+      { duty: 0.2, maxPauseMs: 1_000, pollMs: 25, backoffFloorMs: 100 },
+      async ms => activity.run(ms, 8)
+    );
+    expect(gate.backoffFloorMs).toBe(100);
+    expect(await gate.pause(0, undefined, 100)).toBe(0); // quiet: the floor does not apply
+    activity.run(100, 8);
+    // Almost no work (a cycle that backed off) still waits the floor, not 4x of nearly nothing.
+    expect(await gate.pause(1, undefined, 100)).toBe(100);
+    // More work than the floor implies keeps the duty-cycle pause.
+    expect(await gate.pause(100, undefined, 100)).toBe(400);
+    expect(await gate.pause(0, undefined, 5_000)).toBe(1_000); // the cap still holds
+  });
+
   it('ends a pause when the lane is aborted', async () => {
     const activity = fakeActivity();
     const controller = new AbortController();
