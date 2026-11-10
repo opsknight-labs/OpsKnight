@@ -50,7 +50,9 @@ export function readPoolWaiting(buffer: SharedArrayBuffer): number | null {
 }
 
 /** What the lane observes when it runs in a thread: the main thread's ingestion and pool, not its own. */
-export function laneHostForThread(data: LaneThreadData): Required<Omit<LaneHost, 'onCycle'>> {
+export function laneHostForThread(
+  data: LaneThreadData
+): Required<Omit<LaneHost, 'onCycle' | 'handOffWhenEnabled'>> {
   return {
     activity: () => readSharedIngestionActivity(data.activity),
     poolWaitingQueries: async () => readPoolWaiting(data.poolWaiting),

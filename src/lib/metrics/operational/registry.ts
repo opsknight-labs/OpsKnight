@@ -231,6 +231,22 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
   },
   {
+    name: 'opsknight_intelligence_lane_mode',
+    help: '1 for where this instance runs the Intelligence lane: thread (its own worker thread) or in-process (the main thread)',
+    kind: 'gauge',
+    labels: ['mode'],
+    scope: 'instance',
+    estimatedMaxSeries: 2,
+  },
+  {
+    name: 'opsknight_intelligence_lane_thread_fallback',
+    help: '1 while an integrated instance runs the Intelligence lane in-process because the lane thread is unavailable or switched off (outside the ingestion latency contract), else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_intelligence_work_quarantined',
     help: 'Intelligence work items that died twice within a day and wait for an operator replay',
     kind: 'gauge',

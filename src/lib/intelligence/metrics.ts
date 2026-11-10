@@ -26,7 +26,8 @@ export function evaluateLaneHealth(status: LaneStatus, now: number = Date.now())
   // A lane thread that crashed is waiting to be restarted: it is not running any cycle, whatever it last reported.
   if (status.thread?.state === 'restarting')
     return { status: 'degraded', error: 'Lane thread stopped unexpectedly; restarting it' };
-  if (status.lastResult?.status === 'disabled') return { status: 'disabled', expected: false };
+  if (status.lastResult?.status === 'disabled' || status.thread?.state === 'parked')
+    return { status: 'disabled', expected: false };
   if (status.paused)
     return {
       status: 'degraded',
@@ -44,6 +45,15 @@ export function evaluateLaneHealth(status: LaneStatus, now: number = Date.now())
   if (since && now - since.getTime() > LANE_STALE_AFTER_MS) {
     return { status: 'degraded', error: 'Lane has not completed a cycle recently' };
   }
+  // The lane works, but beside ingestion on the main thread: that is outside the ingestion latency contract.
+  if (status.fallbackReason)
+    return {
+      status: 'degraded',
+      error:
+        status.fallbackReason === 'disabled-by-env'
+          ? 'Lane runs in-process because INTELLIGENCE_LANE_THREAD=off; ingestion latency is outside its contract'
+          : 'Lane runs in-process because the lane thread bundle is missing; ingestion latency is outside its contract',
+    };
   return { status: 'healthy' };
 }
 
@@ -60,6 +70,8 @@ export interface IntelligenceMetricSample {
     | 'opsknight_intelligence_work_quarantined'
     | 'opsknight_intelligence_lane_paused'
     | 'opsknight_intelligence_lane_up'
+    | 'opsknight_intelligence_lane_mode'
+    | 'opsknight_intelligence_lane_thread_fallback'
     | 'opsknight_intelligence_kind_paused'
     | 'opsknight_intelligence_timed_out_in_flight'
     | 'opsknight_intelligence_wake_leader'
@@ -80,6 +92,17 @@ export async function collectIntelligenceMetrics(
     // Emitted from the first scrape after start: a crashed process makes the series vanish, and a lane
     // wedged on its first cycle already shows a growing age, so neither failure is silent.
     samples.push({ name: 'opsknight_intelligence_lane_up', value: 1 });
+    // Where the lane runs. `in-process` is the design in worker roles; in `integrated` it is a fallback
+    // outside the ingestion latency contract, which the second gauge singles out for alerting.
+    samples.push({
+      name: 'opsknight_intelligence_lane_mode',
+      value: 1,
+      labels: { mode: lane.mode ?? 'in-process' },
+    });
+    samples.push({
+      name: 'opsknight_intelligence_lane_thread_fallback',
+      value: lane.fallbackReason ? 1 : 0,
+    });
     samples.push({ name: 'opsknight_intelligence_lane_paused', value: lane.paused ? 1 : 0 });
     samples.push({
       name: 'opsknight_intelligence_timed_out_in_flight',

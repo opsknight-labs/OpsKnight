@@ -149,13 +149,31 @@ export async function register() {
         await import('./lib/intelligence/jobs/runner');
       if (shouldRunIntelligenceLane(role)) {
         // In `integrated` the lane runs in a worker thread of its own, so its heap, garbage collection and
-        // Prisma client never pause ingestion on this thread. Without the thread bundle (or with
-        // INTELLIGENCE_LANE_THREAD=off) it runs here as before.
-        const { shouldRunLaneInThread, startIntelligenceLaneThread, stopIntelligenceLaneThread } =
+        // Prisma client never pause ingestion on this thread. The thread exists only while intelligence is
+        // enabled. Without the thread bundle (or with INTELLIGENCE_LANE_THREAD=off) the lane runs here as
+        // before; that fallback is outside the ingestion latency contract, so it is never silent.
+        const { planIntegratedLane, startIntelligenceLaneThread, stopIntelligenceLaneThread } =
           await import('./lib/intelligence/jobs/lane-thread');
-        if (shouldRunLaneInThread(role) && startIntelligenceLaneThread()) {
+        const { setIntelligenceLaneMode } = await import('./lib/intelligence/jobs/runner');
+        const plan = planIntegratedLane(role);
+        const { mainThreadLaneStandIn } = await import('./lib/intelligence/jobs/lane-stand-in');
+        if (
+          plan.mode === 'thread' &&
+          startIntelligenceLaneThread({ standIn: mainThreadLaneStandIn })
+        ) {
+          setIntelligenceLaneMode({ mode: 'thread', fallbackReason: null });
           stopIntelligenceLaneService = stopIntelligenceLaneThread;
         } else {
+          setIntelligenceLaneMode({ mode: 'in-process', fallbackReason: plan.fallbackReason });
+          if (plan.fallbackReason) {
+            const { logger } = await import('./lib/logger');
+            logger.warn(
+              '[Intelligence] The lane runs on the main thread beside ingestion (in-process mode). ' +
+                'This mode is outside the ingestion latency contract. ' +
+                plan.remedy,
+              { reason: plan.fallbackReason }
+            );
+          }
           startIntelligenceLane();
           stopIntelligenceLaneService = stopIntelligenceLane;
         }

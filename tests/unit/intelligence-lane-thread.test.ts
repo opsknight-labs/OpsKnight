@@ -8,7 +8,10 @@ import {
 } from '@/lib/ingestion/activity';
 import {
   LANE_THREAD_BUNDLE,
+  laneThreadAppRoots,
   laneThreadMode,
+  planIntegratedLane,
+  type LaneStandIn,
   laneThreadWorker,
   resolveLaneThreadEntry,
   restartDelayMs,
@@ -23,7 +26,11 @@ import {
   serveLaneThread,
   writePoolWaiting,
 } from '@/lib/intelligence/jobs/lane-thread-channel';
-import { getIntelligenceLaneStatus } from '@/lib/intelligence/jobs/runner';
+import {
+  getIntelligenceLaneStatus,
+  setIntelligenceLaneMode,
+  type LaneStatus,
+} from '@/lib/intelligence/jobs/runner';
 import { evaluateLaneHealth } from '@/lib/intelligence/metrics';
 import {
   clearRuntimeOperationalMetrics,
@@ -48,6 +55,7 @@ async function until(condition: () => boolean, timeoutMs = 5_000) {
 afterEach(async () => {
   await stopIntelligenceLaneThread();
   globalThis.opsKnightIntelligenceLaneStatusSource = undefined;
+  setIntelligenceLaneMode(undefined);
 });
 
 describe('lane thread placement', () => {
@@ -67,6 +75,47 @@ describe('lane thread placement', () => {
       join('/app', LANE_THREAD_BUNDLE)
     );
     expect(resolveLaneThreadEntry('/app', () => false)).toBeNull();
+  });
+
+  it('finds the bundle from the app root in dev, Docker and a standalone start from source', () => {
+    // `next dev`, `next start` and the Docker image run from the app root.
+    expect(laneThreadAppRoots('/app')).toEqual(['/app']);
+    // `node .next/standalone/server.js` changes into the standalone directory of a source checkout.
+    const standalone = join('/src/opsknight', '.next', 'standalone');
+    expect(laneThreadAppRoots(standalone)).toEqual([standalone, '/src/opsknight']);
+    expect(
+      resolveLaneThreadEntry(
+        standalone,
+        path => path === join('/src/opsknight', LANE_THREAD_BUNDLE)
+      )
+    ).toBe(join('/src/opsknight', LANE_THREAD_BUNDLE));
+    // A bundle beside the standalone server wins over the checkout's.
+    expect(resolveLaneThreadEntry(standalone, () => true)).toBe(
+      join(standalone, LANE_THREAD_BUNDLE)
+    );
+    // Only that exact layout looks further up.
+    expect(laneThreadAppRoots('/srv/standalone')).toEqual(['/srv/standalone']);
+  });
+
+  it('plans the thread for integrated and names the reason when it has to fall back', () => {
+    expect(planIntegratedLane('integrated', 'auto', '/app/bundle.cjs')).toEqual({
+      mode: 'thread',
+      fallbackReason: null,
+      remedy: '',
+    });
+    const missing = planIntegratedLane('integrated', 'auto', null);
+    expect(missing).toMatchObject({ mode: 'in-process', fallbackReason: 'bundle-missing' });
+    expect(missing.remedy).toContain('npm run build');
+    const off = planIntegratedLane('integrated', 'off', '/app/bundle.cjs');
+    expect(off).toMatchObject({ mode: 'in-process', fallbackReason: 'disabled-by-env' });
+    expect(off.remedy).toContain('INTELLIGENCE_LANE_THREAD=off');
+    // In-process is the design in every other role, never a fallback.
+    for (const role of ['intelligence-worker', 'worker', 'general-worker'])
+      expect(planIntegratedLane(role, 'auto', null)).toEqual({
+        mode: 'in-process',
+        fallbackReason: null,
+        remedy: '',
+      });
   });
 
   it('backs restarts off exponentially up to a minute', () => {
@@ -336,6 +385,106 @@ describe('lane thread host', () => {
     // A terminated thread is not a crash: nothing restarts it.
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(getIntelligenceLaneStatus().thread).toMatchObject({ state: 'stopped', restarts: 0 });
+  });
+});
+
+describe('lane thread only while intelligence is enabled', () => {
+  const totals = { cycles: 3, claimed: 0, completed: 0, requeued: 0, failed: 0, lost: 0 };
+  function standIn() {
+    const calls = { started: 0, stopped: 0 };
+    let handOff: (() => void) | null = null;
+    const lane: LaneStandIn = {
+      start: callback => {
+        calls.started += 1;
+        handOff = callback;
+      },
+      stop: async () => {
+        calls.stopped += 1;
+        handOff = null;
+      },
+      status: () =>
+        ({
+          running: true,
+          startedAt: new Date(),
+          lastCycleAt: new Date(),
+          lastResult: { status: 'disabled' },
+          paused: false,
+          timedOutInFlight: 0,
+          saturated: false,
+          pausedKinds: [],
+          wakeLeader: null,
+          totals: { ...totals },
+        }) as unknown as LaneStatus,
+    };
+    return { lane, calls, enable: () => handOff?.() };
+  }
+
+  it('starts no thread while disabled and reports the lane as disabled, not degraded', async () => {
+    const main = standIn();
+    expect(startIntelligenceLaneThread({ entry: FAKE_LANE, standIn: main.lane })).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(laneThreadWorker()).toBeNull();
+    expect(main.calls).toEqual({ started: 1, stopped: 0 });
+    const status = getIntelligenceLaneStatus();
+    expect(status.thread).toMatchObject({ state: 'parked', restarts: 0 });
+    expect(status.totals.cycles).toBe(3);
+    expect(evaluateLaneHealth(status)).toEqual({ status: 'disabled', expected: false });
+    await stopIntelligenceLaneThread();
+    expect(main.calls).toEqual({ started: 1, stopped: 1 });
+    expect(laneThreadWorker()).toBeNull();
+  });
+
+  it('hands the lane to a thread once enabled, exactly once', async () => {
+    const main = standIn();
+    startIntelligenceLaneThread({ entry: FAKE_LANE, standIn: main.lane });
+    main.enable();
+    main.enable();
+    await until(() => getIntelligenceLaneStatus().thread?.state === 'running');
+    expect(main.calls).toEqual({ started: 1, stopped: 1 });
+    expect(laneThreadWorker()).not.toBeNull();
+    await until(() => getIntelligenceLaneStatus().totals.cycles > 5);
+    expect(evaluateLaneHealth(getIntelligenceLaneStatus())).toEqual({ status: 'healthy' });
+  });
+
+  it('stops the thread and parks the lane again when intelligence is disabled', async () => {
+    const main = standIn();
+    startIntelligenceLaneThread({
+      entry: FAKE_LANE,
+      standIn: main.lane,
+      workerData: { disabledAfterMs: 60 },
+    });
+    main.enable();
+    await until(() => laneThreadWorker() !== null);
+    await until(() => getIntelligenceLaneStatus().thread?.state === 'parked');
+    expect(laneThreadWorker()).toBeNull();
+    expect(main.calls).toEqual({ started: 2, stopped: 1 });
+    const status = getIntelligenceLaneStatus();
+    // Parking is not a crash: no restart is counted and nothing is degraded.
+    expect(status.thread).toMatchObject({ restarts: 0, lastExit: null });
+    expect(evaluateLaneHealth(status)).toEqual({ status: 'disabled', expected: false });
+  });
+
+  it('starts no thread when stopped while the hand-off is in progress', async () => {
+    const main = standIn();
+    startIntelligenceLaneThread({ entry: FAKE_LANE, standIn: main.lane });
+    main.enable();
+    await stopIntelligenceLaneThread();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(laneThreadWorker()).toBeNull();
+    expect(getIntelligenceLaneStatus().running).toBe(false);
+  });
+});
+
+describe('lane mode in status', () => {
+  it('reports the mode recorded at startup and the fallback reason', () => {
+    expect(getIntelligenceLaneStatus()).toMatchObject({ mode: 'in-process', fallbackReason: null });
+    setIntelligenceLaneMode({ mode: 'in-process', fallbackReason: 'bundle-missing' });
+    expect(getIntelligenceLaneStatus()).toMatchObject({
+      mode: 'in-process',
+      fallbackReason: 'bundle-missing',
+    });
+    setIntelligenceLaneMode({ mode: 'thread', fallbackReason: null });
+    expect(getIntelligenceLaneStatus()).toMatchObject({ mode: 'thread', fallbackReason: null });
   });
 });
 

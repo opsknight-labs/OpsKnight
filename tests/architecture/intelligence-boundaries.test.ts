@@ -142,6 +142,35 @@ describe('intelligence architecture boundaries', () => {
     expect(events).not.toMatch(/lane-thread/);
   });
 
+  it('never lets an integrated lane fall back to the main thread silently', () => {
+    // The stand-in (the disabled lane on the main thread) is wired only at startup.
+    for (const file of sourceFiles(join(root, 'src'))) {
+      const name = relative(root, file);
+      if (name === 'src/lib/intelligence/jobs/lane-stand-in.ts') continue;
+      if (/['"][^'"]*lane-stand-in['"]/.test(read(file)))
+        expect(name).toBe('src/instrumentation.ts');
+    }
+    // Startup decides the mode once, records it for health and /metrics, and warns about a fallback.
+    const instrumentation = read(join(root, 'src/instrumentation.ts'));
+    expect(instrumentation).toMatch(/planIntegratedLane\(role\)/);
+    expect(instrumentation).toMatch(
+      /setIntelligenceLaneMode\(\{ mode: 'in-process', fallbackReason: plan\.fallbackReason \}\)/
+    );
+    expect(instrumentation).toMatch(/if \(plan\.fallbackReason\) \{[\s\S]*?logger\.warn\(/);
+    expect(instrumentation).toMatch(/outside the ingestion latency contract/);
+    const metrics = read(join(intelligenceDir, 'metrics.ts'));
+    expect(metrics).toMatch(/opsknight_intelligence_lane_mode/);
+    expect(metrics).toMatch(/status\.fallbackReason/);
+    // Every way of building or starting from source produces the thread bundle; the image keeps its own step.
+    const pkg = JSON.parse(read(join(root, 'package.json'))) as { scripts: Record<string, string> };
+    const builder = 'node scripts/build-intelligence-lane-thread.mjs';
+    expect(pkg.scripts.postbuild).toBe(builder);
+    expect(pkg.scripts.prestart).toBe(`${builder} --if-missing --optional`);
+    expect(pkg.scripts['prestart:prod']).toBe(`${builder} --if-missing --optional`);
+    expect(pkg.scripts['build:scripts']).toContain(builder);
+    expect(read(join(root, 'Dockerfile'))).toMatch(/RUN npm run build:scripts/);
+  });
+
   it('keeps similarity, correlation and AI work out of the event outbox and job queue core', () => {
     for (const file of ['src/lib/event-outbox.ts', 'src/lib/jobs/queue.ts']) {
       expect(read(join(root, file))).not.toMatch(/@\/lib\/intelligence/);
