@@ -584,3 +584,77 @@ it('expires saved chats even when the Intelligence engine has never been configu
   });
   expect(await db.squireConversation.findUnique({ where: { id } })).toBeNull();
 });
+
+describe('a lane standing in for a parked lane thread', () => {
+  it('idles while disabled and never asks for the hand-off', async () => {
+    const handOff = vi.fn();
+    const result = await runIntelligenceCycle(createLaneState(), {
+      getCriticalLagMs: noLag,
+      handOffWhenEnabled: handOff,
+      handlers: {},
+    });
+    expect(result.status).toBe('disabled');
+    expect(handOff).not.toHaveBeenCalled();
+  });
+
+  it('hands off instead of working once intelligence is enabled', async () => {
+    await enable();
+    const service = await createTestService('stand-in');
+    const incident = await createTestIncident('stand-in incident', service.id);
+    await enqueueWorkItems([{ kind: 'INDEX_INCIDENT', subjectKey: incident.id, priority: 100 }]);
+    const handOff = vi.fn();
+    const handler = vi.fn(async () => {});
+    const state = createLaneState();
+    const result = await runIntelligenceCycle(state, {
+      getCriticalLagMs: noLag,
+      handOffWhenEnabled: handOff,
+      handlers: { INDEX_INCIDENT: handler as unknown as WorkHandler },
+    });
+    expect(handOff).toHaveBeenCalledTimes(1);
+    expect(handler).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: 'idle', claimed: 0, completed: 0 });
+    // Nothing was claimed and the lane pool of this thread was never opened: the thread owns the work.
+    expect(state.lanePoolOpened).toBeFalsy();
+    expect(await db.intelligenceWorkItem.count({ where: { claimedAt: { not: null } } })).toBe(0);
+  });
+});
+
+describe('lane mode in /metrics', () => {
+  it('reports where the lane runs and singles out an integrated fallback', async () => {
+    const { collectIntelligenceMetrics } = await import('@/lib/intelligence/metrics');
+    const { setIntelligenceLaneMode } = await import('@/lib/intelligence/jobs/runner');
+    startIntelligenceLane({ initialDelayMs: 60_000 });
+    try {
+      const pick = async () => {
+        const samples = await collectIntelligenceMetrics();
+        return {
+          mode: samples.filter(sample => sample.name === 'opsknight_intelligence_lane_mode'),
+          fallback: samples.find(
+            sample => sample.name === 'opsknight_intelligence_lane_thread_fallback'
+          )?.value,
+        };
+      };
+      // A worker role: in-process by design, not a fallback.
+      expect(await pick()).toEqual({
+        mode: [
+          { name: 'opsknight_intelligence_lane_mode', value: 1, labels: { mode: 'in-process' } },
+        ],
+        fallback: 0,
+      });
+      setIntelligenceLaneMode({ mode: 'in-process', fallbackReason: 'bundle-missing' });
+      expect(await pick()).toMatchObject({ fallback: 1 });
+      expect(getIntelligenceLaneStatus()).toMatchObject({
+        mode: 'in-process',
+        fallbackReason: 'bundle-missing',
+      });
+      setIntelligenceLaneMode({ mode: 'thread', fallbackReason: null });
+      expect(await pick()).toEqual({
+        mode: [{ name: 'opsknight_intelligence_lane_mode', value: 1, labels: { mode: 'thread' } }],
+        fallback: 0,
+      });
+    } finally {
+      setIntelligenceLaneMode(undefined);
+      await stopIntelligenceLane();
+    }
+  });
+});

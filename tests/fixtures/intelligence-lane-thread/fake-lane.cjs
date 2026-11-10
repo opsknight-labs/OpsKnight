@@ -4,6 +4,7 @@
 //            `crashAfterMs`, so a test can watch the host restart it.
 //   exitCode: exit with this code instead of throwing (when crashing).
 //   stopDelayMs: how long stopping the lane takes (an in-flight cycle finishing).
+//   disabledAfterMs: after this long every cycle reports `disabled` (intelligence switched off).
 //   ignoreStop: never answer `stop`, so the host must terminate the thread.
 const { parentPort, workerData } = require('node:worker_threads');
 
@@ -18,7 +19,10 @@ const status = () => ({
   lastCycleAt: cycles ? new Date() : null,
   lastResult: cycles
     ? {
-        status: 'worked',
+        status:
+          data.disabledAfterMs !== undefined && Date.now() - startedAt.getTime() >= data.disabledAfterMs
+            ? 'disabled'
+            : 'worked',
         criticalLagMs: 0,
         discovered: 0,
         repaired: 0,

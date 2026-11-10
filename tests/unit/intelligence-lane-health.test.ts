@@ -102,4 +102,45 @@ describe('evaluateLaneHealth', () => {
       error: 'Timed-out work is still holding database connections; new work is deferred',
     });
   });
+
+  it('is degraded with a fixed reason when an integrated lane fell back to the main thread', () => {
+    expect(evaluateLaneHealth(status({ fallbackReason: 'bundle-missing' }), NOW)).toEqual({
+      status: 'degraded',
+      error:
+        'Lane runs in-process because the lane thread bundle is missing; ingestion latency is outside its contract',
+    });
+    expect(evaluateLaneHealth(status({ fallbackReason: 'disabled-by-env' }), NOW)).toEqual({
+      status: 'degraded',
+      error:
+        'Lane runs in-process because INTELLIGENCE_LANE_THREAD=off; ingestion latency is outside its contract',
+    });
+    // In-process without a fallback (worker roles) stays healthy.
+    expect(evaluateLaneHealth(status({ mode: 'in-process', fallbackReason: null }), NOW)).toEqual({
+      status: 'healthy',
+    });
+  });
+
+  it('keeps a disabled lane disabled, and more urgent reasons first, in fallback mode', () => {
+    expect(
+      evaluateLaneHealth(
+        status({ fallbackReason: 'bundle-missing', lastResult: result('disabled') as never }),
+        NOW
+      )
+    ).toEqual({ status: 'disabled', expected: false });
+    expect(
+      evaluateLaneHealth(status({ fallbackReason: 'bundle-missing', paused: true }), NOW)
+    ).toMatchObject({ status: 'degraded', error: expect.stringContaining('Paused') });
+  });
+
+  it('is disabled while the lane thread is parked for a disabled install', () => {
+    expect(
+      evaluateLaneHealth(
+        status({
+          lastResult: null,
+          thread: { state: 'parked', restarts: 0, startedAt: null, lastExit: null },
+        }),
+        NOW
+      )
+    ).toEqual({ status: 'disabled', expected: false });
+  });
 });

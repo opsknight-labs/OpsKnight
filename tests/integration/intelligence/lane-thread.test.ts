@@ -8,6 +8,7 @@ import {
   startIntelligenceLaneThread,
   stopIntelligenceLaneThread,
 } from '@/lib/intelligence/jobs/lane-thread';
+import { mainThreadLaneStandIn } from '@/lib/intelligence/jobs/lane-stand-in';
 import { getIntelligenceLaneStatus } from '@/lib/intelligence/jobs/runner';
 import { evaluateLaneHealth } from '@/lib/intelligence/metrics';
 import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
@@ -99,4 +100,49 @@ describe('intelligence lane in a worker thread', () => {
     // Its pool was disconnected before the thread ended.
     await until(async () => (await laneConnections()) === 0, 10_000);
   }, 60_000);
+
+  it('starts no thread and opens no lane connection while intelligence is disabled', async () => {
+    expect(startIntelligenceLaneThread({ entry, standIn: mainThreadLaneStandIn })).toBe(true);
+    // The stand-in's first cycle runs after the initial idle delay and reads settings as disabled.
+    await until(() => getIntelligenceLaneStatus().totals.cycles >= 1, 25_000);
+    const status = getIntelligenceLaneStatus();
+    expect(status.thread).toMatchObject({ state: 'parked', restarts: 0 });
+    expect(laneThreadWorker()).toBeNull();
+    expect(evaluateLaneHealth(status)).toEqual({ status: 'disabled', expected: false });
+    expect(await laneConnections()).toBe(0);
+    await stopIntelligenceLaneThread();
+    expect(getIntelligenceLaneStatus().running).toBe(false);
+  }, 60_000);
+
+  it('moves the lane into a thread when enabled and parks it again when disabled', async () => {
+    await db.intelligenceSettings.create({
+      data: {
+        id: 'default',
+        ...INTELLIGENCE_SETTINGS_DEFAULTS,
+        maxJobMs: 60_000,
+        maxDbMs: 30_000,
+        enabled: true,
+      },
+    });
+    const service = await createTestService('Parked lane service');
+    const incident = await createTestIncident('Parked lane incident', service.id);
+    await enqueueWorkItems([{ kind: 'INDEX_INCIDENT', subjectKey: incident.id }]);
+
+    expect(startIntelligenceLaneThread({ entry, standIn: mainThreadLaneStandIn })).toBe(true);
+    expect(laneThreadWorker()).toBeNull();
+    // The stand-in's first cycle reads settings as enabled and hands off; the thread does the work.
+    await until(() => getIntelligenceLaneStatus().thread?.state === 'running', 30_000);
+    await until(() => getIntelligenceLaneStatus().totals.completed >= 1, 30_000);
+    expect(await laneConnections()).toBeGreaterThanOrEqual(1);
+
+    await db.intelligenceSettings.update({ where: { id: 'default' }, data: { enabled: false } });
+    await until(() => getIntelligenceLaneStatus().thread?.state === 'parked', 60_000);
+    expect(laneThreadWorker()).toBeNull();
+    const parked = getIntelligenceLaneStatus();
+    expect(parked.thread).toMatchObject({ restarts: 0, lastExit: null });
+    // Work the thread did still counts after it is gone, and its connections are closed.
+    expect(parked.totals.completed).toBeGreaterThanOrEqual(1);
+    await until(async () => (await laneConnections()) === 0, 15_000);
+    await stopIntelligenceLaneThread();
+  }, 150_000);
 });

@@ -4,12 +4,17 @@
  * into scripts/dist/intelligence-lane-thread.cjs. An `integrated` process runs its lane in that thread
  * when the file exists (see src/lib/intelligence/jobs/lane-thread.ts); without it the lane stays on the
  * main thread. Packages stay external (the runtime image ships node_modules, including the generated
- * Prisma client); application code under src/ is bundled. Part of `npm run build:scripts`.
+ * Prisma client); application code under src/ is bundled.
+ *
+ * Every way of building or starting the app from source produces it: `npm run build` (postbuild),
+ * `npm start` / `npm run start:prod` (prestart, `--if-missing`) and `npm run build:scripts` (the Docker
+ * image). A process that still has no bundle warns at startup and reports the in-process fallback.
  *
  * Usage: node scripts/build-intelligence-lane-thread.mjs [--entry <file.ts>] [--outfile <file.cjs>]
+ *          [--if-missing]   skip when the outfile exists (never rebuilds, so it cannot refresh a stale one)
+ *          [--optional]     exit 0 with a warning when the bundle cannot be built (no esbuild installed)
  */
-import { build } from 'esbuild';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -28,6 +33,8 @@ export async function buildIntelligenceLaneThread({
   entry = DEFAULT_ENTRY,
   outfile = DEFAULT_OUTFILE,
 } = {}) {
+  // Loaded here so `--optional` can report a missing esbuild instead of failing at import time.
+  const { build } = await import('esbuild');
   await build({
     absWorkingDir: root,
     entryPoints: [resolve(root, entry)],
@@ -53,9 +60,19 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     const index = args.indexOf(name);
     return index >= 0 ? args[index + 1] : undefined;
   };
-  const out = await buildIntelligenceLaneThread({
-    entry: option('--entry'),
-    outfile: option('--outfile'),
-  });
-  console.log(`Built ${out}`);
+  const outfile = option('--outfile') ?? DEFAULT_OUTFILE;
+  if (args.includes('--if-missing') && existsSync(resolve(root, outfile))) {
+    process.exit(0);
+  }
+  try {
+    const out = await buildIntelligenceLaneThread({ entry: option('--entry'), outfile });
+    console.log(`Built ${out}`);
+  } catch (error) {
+    if (!args.includes('--optional')) throw error;
+    console.warn(
+      `[Intelligence] The lane thread bundle could not be built (${error instanceof Error ? error.message : error}). ` +
+        'An integrated process will run its intelligence lane in-process, outside the ingestion latency ' +
+        'contract. Run `npm run build` with dev dependencies installed to fix it.'
+    );
+  }
 }
