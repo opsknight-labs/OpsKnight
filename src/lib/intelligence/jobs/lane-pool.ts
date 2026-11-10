@@ -1,6 +1,10 @@
 import 'server-only';
 import { withIntelligenceDatabase } from '@/lib/database-workload';
-import { intelligenceLanePoolSize } from '@/lib/prisma-datasource';
+import {
+  DEFAULT_INTELLIGENCE_LANE_POOL_SIZE,
+  intelligenceLanePoolSize,
+  isIntelligenceLaneThread,
+} from '@/lib/prisma-datasource';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
 
 /**
@@ -8,7 +12,8 @@ import { getOpsKnightProcessRole } from '@/lib/runtime-role';
  * `worker`, `general-worker`) the lane gets a small pool of its own, so an analysis transaction can
  * never hold a connection that `processEvent` is queueing for. The dedicated `intelligence-worker`
  * role is the lane alone and keeps the process pool. `INTELLIGENCE_LANE_DATABASE_POOL_SIZE=0` restores
- * the shared pool.
+ * the shared pool. In a lane thread (see lane-thread.ts) the thread's whole Prisma client is the lane's pool,
+ * sized like the in-process lane pool, so nothing is switched per call but concurrency is still capped.
  */
 export interface LanePoolPlan {
   ownPool: boolean;
@@ -17,8 +22,11 @@ export interface LanePoolPlan {
 
 export function resolveLanePool(
   role: string = getOpsKnightProcessRole(),
-  size: number = intelligenceLanePoolSize()
+  size: number = intelligenceLanePoolSize(),
+  laneThread: boolean = isIntelligenceLaneThread()
 ): LanePoolPlan {
+  if (laneThread)
+    return { ownPool: false, size: size > 0 ? size : DEFAULT_INTELLIGENCE_LANE_POOL_SIZE };
   if (role === 'intelligence-worker' || size <= 0) return { ownPool: false, size: 0 };
   return { ownPool: true, size };
 }
@@ -29,11 +37,11 @@ const LANE_POOL_RESERVE = 2;
 /**
  * Handlers run in transactions and may read outside them, so concurrency is capped below the lane pool
  * size: a full pool would make handlers queue on each other until the pool timeout. With the default
- * pool of 10 that cap is 8, above the default `maxConcurrency` of 2. On the shared pool the operator's
- * setting applies unchanged.
+ * pool of 10 that cap is 8, above the default `maxConcurrency` of 2. On the shared pool (size 0) the
+ * operator's setting applies unchanged.
  */
 export function laneConcurrency(plan: LanePoolPlan, maxConcurrency: number): number {
-  if (!plan.ownPool) return maxConcurrency;
+  if (plan.size <= 0) return maxConcurrency;
   return Math.max(1, Math.min(maxConcurrency, plan.size - LANE_POOL_RESERVE));
 }
 

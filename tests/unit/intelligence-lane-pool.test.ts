@@ -3,6 +3,7 @@ import {
   configureIntelligenceLanePrismaDatasource,
   DEFAULT_INTELLIGENCE_LANE_POOL_SIZE,
   intelligenceLanePoolSize,
+  isIntelligenceLaneThread,
 } from '@/lib/prisma-datasource';
 import { isIntelligenceDatabaseWorkload, withIntelligenceDatabase } from '@/lib/database-workload';
 import { laneConcurrency, resolveLanePool, runOnLanePool } from '@/lib/intelligence/jobs/lane-pool';
@@ -28,6 +29,21 @@ describe('intelligence lane pool', () => {
     // The dedicated role is the lane alone: it keeps the process pool and is unaffected.
     expect(resolveLanePool('intelligence-worker', 10)).toEqual({ ownPool: false, size: 0 });
     expect(resolveLanePool('integrated', 0)).toEqual({ ownPool: false, size: 0 });
+  });
+
+  it('treats a lane thread client as the lane pool: no per-call switch, concurrency still capped', () => {
+    expect(isIntelligenceLaneThread('1')).toBe(true);
+    expect(isIntelligenceLaneThread(undefined)).toBe(false);
+    expect(isIntelligenceLaneThread('true')).toBe(false);
+    const thread = resolveLanePool('integrated', 6, true);
+    expect(thread).toEqual({ ownPool: false, size: 6 });
+    expect(laneConcurrency(thread, 16)).toBe(4);
+    // INTELLIGENCE_LANE_DATABASE_POOL_SIZE=0 only means "shared" in-process; a thread always has its own.
+    expect(resolveLanePool('integrated', 0, true)).toEqual({
+      ownPool: false,
+      size: DEFAULT_INTELLIGENCE_LANE_POOL_SIZE,
+    });
+    expect(resolveLanePool('integrated', 10, false)).toEqual({ ownPool: true, size: 10 });
   });
 
   it('keeps handler concurrency below its own pool so handlers never queue on each other', () => {

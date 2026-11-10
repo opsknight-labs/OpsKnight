@@ -109,6 +109,36 @@ export function selectPrePagingLookupDatasourceUrl(
   return env.DIRECT_DATABASE_URL ?? env.DATABASE_URL;
 }
 
+/**
+ * Set (to `1`) only in the environment of the worker thread that runs the intelligence lane for an
+ * `integrated` process (see intelligence/jobs/lane-thread.ts). That thread's Prisma client is the lane's
+ * own pool. Internal: operators never set it.
+ */
+export const INTELLIGENCE_LANE_THREAD_ENV = 'OPSKNIGHT_INTELLIGENCE_LANE_THREAD';
+
+export function isIntelligenceLaneThread(
+  value: string | undefined = process.env.OPSKNIGHT_INTELLIGENCE_LANE_THREAD
+): boolean {
+  return value === '1';
+}
+
+/** The environment of a lane thread: this process's, marked as the lane's (see `isIntelligenceLaneThread`). */
+export function intelligenceLaneThreadEnv(
+  env: NodeJS.ProcessEnv = process.env
+): Record<string, string | undefined> {
+  return { ...env, [INTELLIGENCE_LANE_THREAD_ENV]: '1' };
+}
+
+/**
+ * `INTELLIGENCE_LANE_THREAD`: `off` keeps an `integrated` process's lane on its main thread; anything else
+ * (the default) runs it in a worker thread when the build includes the thread bundle.
+ */
+export function intelligenceLaneThreadMode(
+  value: string | undefined = process.env.INTELLIGENCE_LANE_THREAD
+): 'auto' | 'off' {
+  return value?.trim().toLowerCase() === 'off' ? 'off' : 'auto';
+}
+
 /** Connections the intelligence lane uses on its own when it shares a process with ingestion. */
 export const DEFAULT_INTELLIGENCE_LANE_POOL_SIZE = 10;
 /** A lane pool always keeps one connection beside a running handler (claims, lease renewal, cancel). */

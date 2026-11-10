@@ -105,6 +105,43 @@ describe('intelligence architecture boundaries', () => {
     expect(events).not.toMatch(/ingestion-yield|lane-pool|database-workload/);
   });
 
+  it('keeps the integrated lane thread behind its host and its protocol free of the lane', () => {
+    const jobs = join(intelligenceDir, 'jobs');
+    // The thread entry is a bundle root (scripts/build-intelligence-lane-thread.mjs), never imported.
+    for (const file of [...sourceFiles(join(root, 'src')), ...sourceFiles(join(root, 'scripts'))]) {
+      if (file.endsWith('lane-thread-entry.ts')) continue;
+      expect(read(file), relative(root, file)).not.toMatch(/['"][^'"]*lane-thread-entry['"]/);
+    }
+    expect(read(join(root, 'scripts/build-intelligence-lane-thread.mjs'))).toMatch(
+      /src\/lib\/intelligence\/jobs\/lane-thread-entry\.ts/
+    );
+    // The host runs on the ingestion thread: it may know the lane's types, never load the lane itself.
+    const typeOnly = /^import type [^;]+ from '\.\/runner';$/m;
+    const host = read(join(jobs, 'lane-thread.ts'));
+    expect(host).toMatch(typeOnly);
+    expect(host).not.toMatch(/^import (?!type )[^;]*from '\.\/runner';$/m);
+    expect(host).not.toMatch(
+      /from '\.\/(?:indexer|discovery|work-queue|lane-pool)'|\/(?:similarity|correlation|ai)\//
+    );
+    // The protocol module is shared by both sides; on the main thread it must stay as light.
+    const channel = read(join(jobs, 'lane-thread-channel.ts'));
+    expect(channel).toMatch(typeOnly);
+    expect(channel).not.toMatch(/^import (?!type )[^;]*from '\.\/runner';$/m);
+    expect(channel).not.toMatch(/@\/lib\/prisma'/);
+    // Only the host starts a lane thread, and only the host marks a thread as the lane's.
+    for (const file of sourceFiles(join(root, 'src'))) {
+      const source = read(file);
+      const name = relative(root, file);
+      if (/new Worker\(/.test(source))
+        expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
+      if (/intelligenceLaneThreadEnv\(\)/.test(source))
+        expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
+    }
+    // Ingestion never imports the thread or its protocol; the shared activity mirror lives in activity.ts.
+    const events = read(join(root, 'src/lib/events.ts'));
+    expect(events).not.toMatch(/lane-thread/);
+  });
+
   it('keeps similarity, correlation and AI work out of the event outbox and job queue core', () => {
     for (const file of ['src/lib/event-outbox.ts', 'src/lib/jobs/queue.ts']) {
       expect(read(join(root, file))).not.toMatch(/@\/lib\/intelligence/);

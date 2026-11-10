@@ -22,8 +22,11 @@ export type LaneHealth =
  * database or an exception is exposed.
  */
 export function evaluateLaneHealth(status: LaneStatus, now: number = Date.now()): LaneHealth {
-  if (!status.running || status.lastResult?.status === 'disabled')
-    return { status: 'disabled', expected: false };
+  if (!status.running) return { status: 'disabled', expected: false };
+  // A lane thread that crashed is waiting to be restarted: it is not running any cycle, whatever it last reported.
+  if (status.thread?.state === 'restarting')
+    return { status: 'degraded', error: 'Lane thread stopped unexpectedly; restarting it' };
+  if (status.lastResult?.status === 'disabled') return { status: 'disabled', expected: false };
   if (status.paused)
     return {
       status: 'degraded',
