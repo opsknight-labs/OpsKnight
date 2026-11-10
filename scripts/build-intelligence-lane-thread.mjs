@@ -9,6 +9,7 @@
  * Usage: node scripts/build-intelligence-lane-thread.mjs [--entry <file.ts>] [--outfile <file.cjs>]
  */
 import { build } from 'esbuild';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -16,6 +17,12 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const DEFAULT_ENTRY = 'src/lib/intelligence/jobs/lane-thread-entry.ts';
 export const DEFAULT_OUTFILE = 'scripts/dist/intelligence-lane-thread.cjs';
+
+/** Packages the runtime image installs (`npm ci --omit=dev`): these, and their subpaths, are required at runtime. */
+export function productionPackages() {
+  const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  return Object.keys({ ...pkg.dependencies, ...pkg.optionalDependencies }).sort();
+}
 
 export async function buildIntelligenceLaneThread({
   entry = DEFAULT_ENTRY,
@@ -29,7 +36,7 @@ export async function buildIntelligenceLaneThread({
     platform: 'node',
     format: 'cjs',
     target: 'node20',
-    packages: 'external',
+    external: productionPackages().flatMap(name => [name, `${name}/*`]),
     tsconfig: resolve(root, 'tsconfig.json'),
     // `server-only` guards Next.js client bundles; a server worker thread is not one.
     alias: { 'server-only': resolve(root, 'scripts/perf/shims/server-only.js') },
