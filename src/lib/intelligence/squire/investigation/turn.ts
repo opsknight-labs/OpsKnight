@@ -12,6 +12,7 @@ import {
 import { redactSecrets } from '../../ai/redact';
 import type { AiSettingsView } from '../../ai/settings';
 import type { SquireEvent } from '../contract';
+import type { EligibleConnection } from '../../connectors/service';
 import type { SquireEvidenceRegistry } from '../evidence';
 import { buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from '../tools';
 import { INVESTIGATION_LIMITS, runInvestigation } from './engine';
@@ -55,12 +56,19 @@ export async function* streamInvestigation(input: {
   verifiedHash: string;
   finish: (answer: string) => Promise<SquireEvent>;
   fallback: () => AsyncGenerator<SquireEvent>;
+  /** Enabled observability connections this person may use, as the ordinary AI turn receives them. */
+  observability?: readonly EligibleConnection[];
+  /** The knowledge index is on: offer search_knowledge to the planner. */
+  knowledge?: boolean;
 }): AsyncGenerator<SquireEvent> {
   const ranClasses: AiDataClass[] = [];
   const tools = buildSquireTools(input.actor, {
     personal: true,
     dataClass: input.dataClass,
     signal: input.context.signal,
+    // The same sources as an ordinary AI answer: metrics, logs, traces, errors, diffs and past knowledge.
+    ...(input.observability?.length ? { observability: input.observability } : {}),
+    ...(input.knowledge ? { knowledge: true } : {}),
     observe: (name, toolInput, result) => {
       // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
       ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');

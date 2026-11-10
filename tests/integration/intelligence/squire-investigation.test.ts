@@ -3,6 +3,7 @@ import { resolveUserActor } from '@/lib/authorization-actors';
 import { breakers, invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
 import { updateAiRouting } from '@/lib/intelligence/ai/routing-settings';
 import { getAiSettings, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
+import { saveObservabilityConnection } from '@/lib/intelligence/connectors/service';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';
 import { INVESTIGATION_CASES } from '../../evals/squire/investigation-cases';
@@ -118,7 +119,7 @@ async function world(investigation: boolean) {
   invalidateGatewayCache();
   const actor = await resolveUserActor(member.id);
   if (!actor) throw new Error('actor');
-  return { actor, incident, hidden, alert, service };
+  return { actor, admin, incident, hidden, alert, service };
 }
 
 beforeEach(async () => {
@@ -282,6 +283,43 @@ describe('Squire investigation mode (scripted model)', () => {
     const firstDelta = events.findIndex(event => event.type === 'delta');
     const lastStep = events.map(event => event.type).lastIndexOf('investigation');
     expect(lastStep).toBeLessThan(firstDelta);
+  });
+
+  it('offers the planner the connector and knowledge tools an ordinary AI answer gets', async () => {
+    const seeded = await world(true);
+    await saveObservabilityConnection(
+      null,
+      {
+        name: 'Prometheus',
+        kind: 'PROMETHEUS',
+        baseUrl: model.url,
+        allowPrivateNetwork: true,
+        enabled: true,
+      },
+      { actorId: seeded.admin.id, source: 'UI' }
+    );
+    await db.squireMemorySettings.create({ data: { id: 'default', knowledgeEnabled: true } });
+    const catalogs: string[] = [];
+    respondWith(body => {
+      const text = lastText(body);
+      if (text.includes('You are planning')) {
+        catalogs.push(JSON.stringify(body.messages ?? []));
+        return { content: JSON.stringify({ thought: 'done', calls: [], done: true }) };
+      }
+      return { content: JSON.stringify({ summary: 's', hypotheses: [], nextChecks: [] }) };
+    });
+    for await (const event of streamSquire(seeded.actor, {
+      message: 'investigate',
+      history: [],
+      incidentId: seeded.incident.id,
+    }))
+      void event;
+    expect(catalogs.length).toBeGreaterThan(0);
+    // The planner's tool catalog lists one tool per line as "- <name>: <description>".
+    expect(catalogs[0]).toContain('- query_metrics:');
+    expect(catalogs[0]).toContain('- search_knowledge:');
+    // Still read-only: no proposal tool reaches the planner.
+    expect(catalogs[0]).not.toMatch(/- propose_[a-z_]+:/);
   });
 
   it('falls back to a basic answer when planning fails before anything is read', async () => {

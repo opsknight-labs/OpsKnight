@@ -213,6 +213,8 @@ export async function* streamSquire(
           labels: TOOL_LABELS,
           suggestions: followUps(incident, true),
           verifiedHash: authorizationContextHash(actor),
+          observability,
+          knowledge: await squireKnowledgeEnabled(),
           finish: answer =>
             contextProofs(
               actor,
