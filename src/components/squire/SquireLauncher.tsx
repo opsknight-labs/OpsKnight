@@ -43,6 +43,13 @@ import type { SquireProposalView } from './SquireProposalCard';
 
 import { mergeInvestigationStep, type Turn, type Citation } from './chat-types';
 import { incidentIdFromPath, pageContextFromPath } from './page-context';
+import { createDeltaBatcher, type DeltaBatcher } from './delta-batcher';
+import { trapTabKey } from './focus-trap';
+import SquireAvailabilityNotice, {
+  retryAfterUntil,
+  squireAvailabilityState,
+  type SquireRateLimit,
+} from './SquireAvailabilityNotice';
 type SavedConversation = {
   id: string;
   title: string;
@@ -113,6 +120,7 @@ export default function SquireLauncher({
   aiEnabled = false,
   history = null,
   fullscreen = false,
+  canManageAi = false,
 }: {
   name: string;
   avatar?: SquireAvatarKind;
@@ -123,6 +131,8 @@ export default function SquireLauncher({
   history?: { retentionDays: number } | null;
   /** Mobile pages: the open chat fills the screen at every width; the button clears the bottom bar. */
   fullscreen?: boolean;
+  /** The person may change AI settings; limit and disabled notices then link to them. */
+  canManageAi?: boolean;
 }) {
   const pathname = usePathname();
   const realtime = useOptionalRealtime();
@@ -146,6 +156,7 @@ export default function SquireLauncher({
   const [availability, setAvailability] = useState<AiAvailability>(
     aiEnabled ? 'ready' : 'disabled'
   );
+  const [rateLimit, setRateLimit] = useState<SquireRateLimit | null>(null);
   const [attention, setAttention] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [historySearch, setHistorySearch] = useState('');
@@ -166,6 +177,8 @@ export default function SquireLauncher({
     const onShortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j' && !event.altKey) {
         event.preventDefault();
+        // Holding the keys down must not flicker the dialog open and closed.
+        if (event.repeat) return;
         setOpen(value => !value);
       }
     };
@@ -208,11 +221,13 @@ export default function SquireLauncher({
   const mascotState = presence.state;
   const statusLabel =
     mascotState === 'offline' && online
-      ? availability === 'quota'
-        ? 'Basic mode · AI limit reached'
-        : availability === 'unavailable'
-          ? 'Basic mode · AI unavailable'
-          : 'Basic mode · AI disabled'
+      ? rateLimit && availability === 'quota'
+        ? 'Basic mode · AI rate limited'
+        : availability === 'quota'
+          ? 'Basic mode · AI limit reached'
+          : availability === 'unavailable'
+            ? 'Basic mode · AI unavailable'
+            : 'Basic mode · AI disabled'
       : presence.label;
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [showHistory, setShowHistory] = useState(false);
@@ -228,6 +243,11 @@ export default function SquireLauncher({
   const pendingRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  /** Where focus was before the dialog opened, so closing puts the person back where they were. */
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  /** Streamed text of the answer in progress, applied once per animation frame. */
+  const deltasRef = useRef<DeltaBatcher | null>(null);
   const wasOpen = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -263,11 +283,33 @@ export default function SquireLauncher({
     window.dispatchEvent(new Event(SIDE_EVENT));
   }, []);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      deltasRef.current?.cancel();
+      abortRef.current?.abort();
+    },
+    []
+  );
+  useEffect(() => {
+    // Remember the last focused element outside the dialog: the launcher, a page control, or the field
+    // the global shortcut was pressed in.
+    const remember = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && !dialogRef.current?.contains(target))
+        returnFocusRef.current = target;
+    };
+    document.addEventListener('focusin', remember);
+    return () => document.removeEventListener('focusin', remember);
+  }, []);
   useEffect(() => {
     if (open) inputRef.current?.focus();
-    // Closing returns focus to the launcher so keyboard users are not left at the top of the page.
-    else if (wasOpen.current) launcherRef.current?.focus();
+    else if (wasOpen.current) {
+      // Closing returns focus to where it was (or the launcher) so keyboard users are not left at the
+      // top of the page. The floating launcher is re-created on close, so a stale reference falls back.
+      const previous = returnFocusRef.current;
+      if (previous?.isConnected && previous !== document.body) previous.focus();
+      else launcherRef.current?.focus();
+    }
     wasOpen.current = open;
   }, [open]);
   useEffect(() => {
@@ -329,12 +371,23 @@ export default function SquireLauncher({
       const controller = new AbortController();
       abortRef.current = controller;
       const seq = ++requestSeq.current;
-      const patch = (update: (turn: Turn) => Turn) => {
+      const patchNow = (update: (turn: Turn) => Turn) => {
         if (seq !== requestSeq.current) return;
         if (!atBottomRef.current) setUnread(true);
         setTurns(current =>
           current.map((turn, index) => (index === current.length - 1 ? update(turn) : turn))
         );
+      };
+      // Text deltas are joined per animation frame: one render (and one markdown parse) per frame
+      // instead of one per token. Every other update first applies the queued text, so order is kept.
+      deltasRef.current?.cancel();
+      const deltas = createDeltaBatcher(text =>
+        patchNow(turn => ({ ...turn, content: turn.content + text, activity: undefined }))
+      );
+      deltasRef.current = deltas;
+      const patch = (update: (turn: Turn) => Turn) => {
+        deltas.flush();
+        patchNow(update);
       };
       try {
         const payload = {
@@ -356,6 +409,13 @@ export default function SquireLauncher({
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
+        if (seq === requestSeq.current) {
+          if (response.status === 429)
+            setRateLimit({
+              until: retryAfterUntil(response.headers?.get?.('retry-after') ?? null),
+            });
+          else if (response.ok) setRateLimit(null);
+        }
         if (!response.ok || !response.body) {
           patch(turn => ({
             ...turn,
@@ -389,6 +449,7 @@ export default function SquireLauncher({
             mode?: 'ai' | 'basic';
             intent?: string;
             availability?: AiAvailability;
+            limit?: 'rate' | 'budget';
             attention?: boolean;
             id?: string;
             userProof?: string;
@@ -406,8 +467,11 @@ export default function SquireLauncher({
           if (
             event.availability &&
             ['ready', 'disabled', 'quota', 'unavailable'].includes(event.availability)
-          )
+          ) {
             setAvailability(event.availability);
+            if (event.availability === 'quota' && event.limit === 'rate')
+              setRateLimit({ until: null });
+          } else if (event.type === 'meta' && event.mode === 'ai') setAvailability('ready');
           if (event.type === 'meta') setAttention(event.attention === true);
           if (event.type === 'done') {
             completed = true;
@@ -427,8 +491,7 @@ export default function SquireLauncher({
             return;
           }
           if (event.type === 'error') reportedError = true;
-          if (event.type === 'delta' && event.text)
-            patch(turn => ({ ...turn, content: turn.content + event.text, activity: undefined }));
+          if (event.type === 'delta' && event.text) deltas.push(event.text);
           else if (event.type === 'meta' && event.mode)
             patch(turn => ({
               ...turn,
@@ -551,7 +614,10 @@ export default function SquireLauncher({
   };
 
   const stopResponse = () => {
-    // Fence late chunks before aborting so they cannot replace the retained answer.
+    // Keep the text that already arrived this frame, then fence late chunks before aborting so they
+    // cannot replace the retained answer.
+    deltasRef.current?.flush();
+    deltasRef.current = null;
     requestSeq.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -581,6 +647,8 @@ export default function SquireLauncher({
   }, [busy, send]);
 
   const stopCurrent = useCallback(() => {
+    deltasRef.current?.cancel();
+    deltasRef.current = null;
     requestSeq.current += 1;
     abortRef.current?.abort();
     pendingRef.current = null;
@@ -733,6 +801,19 @@ export default function SquireLauncher({
     }
   };
 
+  const availabilityState = squireAvailabilityState({ availability, rateLimit });
+  const canRetry = !busy && !contextMismatch && turns.some(turn => turn.role === 'user');
+  const retryLatest = () => retryAnswer(turnsRef.current.length);
+  const progress = busy
+    ? lastTurn?.activity
+      ? `${lastTurn.activity}…`
+      : lastTurn?.content
+        ? 'Writing a response'
+        : 'Response in progress'
+    : turns.length > 0
+      ? 'Answer complete'
+      : '';
+
   const suggestions = incidentId
     ? [...INCIDENT_SUGGESTIONS, 'Who is assigned to this incident?', 'Help']
     : SUGGESTIONS;
@@ -766,11 +847,16 @@ export default function SquireLauncher({
       )}
       {open && (
         <section
+          ref={dialogRef}
           id={panelId}
           role="dialog"
+          aria-modal="true"
           aria-label={`${name}, your incident assistant`}
-          onKeyDown={event => event.key === 'Escape' && close()}
-          aria-modal={fullscreen ? true : undefined}
+          tabIndex={-1}
+          onKeyDown={event => {
+            if (event.key === 'Escape') close();
+            else if (dialogRef.current) trapTabKey(event, dialogRef.current);
+          }}
           className={
             fullscreen
               ? 'relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]'
@@ -844,6 +930,15 @@ export default function SquireLauncher({
             </div>
           </header>
 
+          {!showHistory && availabilityState && (
+            <SquireAvailabilityNotice
+              state={availabilityState}
+              rateLimit={rateLimit}
+              canManageAi={canManageAi}
+              canRetry={canRetry}
+              onRetry={retryLatest}
+            />
+          )}
           {actionOutcome && (
             <div
               role="status"
@@ -909,9 +1004,15 @@ export default function SquireLauncher({
               <span>{incidentId ? 'Discussing this incident' : 'General conversation'}</span>
               <span className="ml-auto inline-flex items-center gap-1.5">
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${availability === 'ready' ? 'bg-emerald-500' : 'bg-muted-foreground'}`}
+                  className={`h-1.5 w-1.5 rounded-full ${availabilityState === null ? 'bg-emerald-500' : availabilityState === 'rate_limited' || availabilityState === 'budget' ? 'bg-amber-500' : 'bg-muted-foreground'}`}
                 />
-                {availability === 'ready' ? 'AI enabled' : 'Basic mode'}
+                {availabilityState === null
+                  ? 'AI enabled'
+                  : availabilityState === 'rate_limited'
+                    ? 'Rate limited'
+                    : availabilityState === 'budget'
+                      ? 'Budget reached · basic mode'
+                      : 'Basic mode'}
               </span>
             </p>
           )}
@@ -1126,8 +1227,8 @@ export default function SquireLauncher({
             </div>
           )}
 
-          <div className="sr-only" role="status" aria-live="polite">
-            {busy ? 'Response in progress' : turns.length > 0 ? 'Answer complete' : ''}
+          <div className="sr-only" role="status" aria-live="polite" data-testid="squire-progress">
+            {progress}
           </div>
           {!showHistory && unread && (
             <div className="absolute bottom-40 left-0 right-0 flex justify-center pointer-events-none">

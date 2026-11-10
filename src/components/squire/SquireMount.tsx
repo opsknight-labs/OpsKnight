@@ -9,7 +9,9 @@ async function loadStatus() {
     const actor = await getCurrentAuthorizationActor();
     if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)) return null;
     const status = await getAiPublicStatus();
-    return status.squireEnabled ? status : null;
+    return status.squireEnabled
+      ? { ...status, canManageAi: hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE) }
+      : null;
   } catch (error) {
     logger.debug('[Squire] Not mounted', {
       error: error instanceof Error ? error.message : String(error),
@@ -34,6 +36,7 @@ export default async function SquireMount() {
       animated={status.squireAnimations}
       aiEnabled={status.aiEnabled}
       history={status.historyEnabled ? { retentionDays: status.historyRetentionDays } : null}
+      canManageAi={status.canManageAi}
     />
   );
 }

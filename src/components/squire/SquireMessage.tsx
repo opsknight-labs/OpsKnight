@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Copy, Pencil, RefreshCw, ArrowUpRight, ThumbsDown, ThumbsUp } from 'lucide-react';
@@ -11,9 +11,13 @@ import OpsKnightSquire from './OpsKnightSquire';
 import SquireInvestigationSteps from './SquireInvestigationSteps';
 import type { Turn } from './chat-types';
 
-const Markdown = dynamic(() => import('./SquireMarkdown'), {
-  loading: () => <span>Formatting answer…</span>,
-});
+// Parsing markdown is the most expensive part of a message. Memoized on its props, a finished answer is
+// parsed once; only the answer still streaming is parsed again, once per animation frame of new text.
+const Markdown = memo(
+  dynamic(() => import('./SquireMarkdown'), {
+    loading: () => <span>Formatting answer…</span>,
+  })
+);
 
 export default memo(function SquireMessage({
   turn,
@@ -48,6 +52,10 @@ export default memo(function SquireMessage({
   const [reason, setReason] = useState('');
   const assistant = turn.role === 'assistant';
   const streaming = busy && last;
+  const allowed = useMemo(
+    () => (turn.citations ?? []).map(citation => citation.href),
+    [turn.citations]
+  );
   const sendFeedback = async (rating: 'UP' | 'DOWN', chosenReason?: string) => {
     try {
       const response = await fetch('/api/intelligence/squire/feedback', {
@@ -92,11 +100,7 @@ export default memo(function SquireMessage({
         )}
         {turn.content ? (
           assistant ? (
-            <Markdown
-              text={turn.content}
-              allowed={(turn.citations ?? []).map(citation => citation.href)}
-              references={turn.citations}
-            />
+            <Markdown text={turn.content} allowed={allowed} references={turn.citations} />
           ) : (
             turn.content
           )

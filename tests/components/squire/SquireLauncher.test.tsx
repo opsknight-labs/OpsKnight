@@ -620,7 +620,8 @@ describe('supplied Squire mascot lifecycle', () => {
         )
       );
     });
-    expect(avatar()).toHaveAttribute('data-state', 'speaking');
+    // Streamed text is applied on the next animation frame.
+    await waitFor(() => expect(avatar()).toHaveAttribute('data-state', 'speaking'));
     await act(async () => {
       controller.enqueue(new TextEncoder().encode('{"type":"done"}\n'));
       controller.close();
@@ -760,8 +761,10 @@ it('lets the reader stay above a streaming answer and jump back deliberately', a
   await act(async () =>
     controller.enqueue(new TextEncoder().encode('{"type":"delta","text":"New evidence"}\n'))
   );
+  // Streamed text is applied on the next animation frame.
+  const jump = await screen.findByRole('button', { name: 'Jump to latest' });
   expect(scroll).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Jump to latest' }));
+  fireEvent.click(jump);
   expect(scroll).toHaveBeenCalled();
   await act(async () => {
     controller.enqueue(new TextEncoder().encode('{"type":"done"}\n'));
