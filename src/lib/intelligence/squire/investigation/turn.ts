@@ -60,6 +60,8 @@ export async function* streamInvestigation(input: {
   observability?: readonly EligibleConnection[];
   /** The knowledge index is on: offer search_knowledge to the planner. */
   knowledge?: boolean;
+  /** When set, the only read tools this turn may use (an MCP connection's scopes). */
+  readTools?: ReadonlySet<string>;
 }): AsyncGenerator<SquireEvent> {
   const ranClasses: AiDataClass[] = [];
   const tools = buildSquireTools(input.actor, {
@@ -74,7 +76,7 @@ export async function* streamInvestigation(input: {
       ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
       return input.evidence.observe(name, toolInput, result);
     },
-  }).filter(tool => tool.kind === 'READ');
+  }).filter(tool => tool.kind === 'READ' && (!input.readTools || input.readTools.has(tool.name)));
   const [planner, diagnoser] = await Promise.all([
     portFor('CLASSIFY', input.dataClass, input.chatPort),
     portFor('DIAGNOSE', input.dataClass, input.chatPort),

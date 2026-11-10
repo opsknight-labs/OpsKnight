@@ -2,7 +2,7 @@ import 'server-only';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { collectSquireTurn } from '@/lib/intelligence/squire/surfaces';
-import { askSquireInputSchema, canAskSquire } from './ask-squire-contract';
+import { askSquireAllowedTools, askSquireInputSchema, canAskSquire } from './ask-squire-contract';
 import { isAskSquireEnabled } from './ask-squire-settings';
 import { McpBoundaryError, requireMcp } from './errors';
 import { projectMcpData } from './projection';
@@ -22,7 +22,12 @@ const web = (href: string | undefined) => {
   return origin && href?.startsWith('/') ? `${origin}${href}` : undefined;
 };
 
-export async function askSquireForMcp(actor: AuthorizationActor, args: unknown) {
+export async function askSquireForMcp(
+  actor: AuthorizationActor,
+  args: unknown,
+  /** The MCP policy's sensitive-read switch, as the server was created with. Off unless passed. */
+  options: { sensitiveReads?: boolean } = {}
+) {
   const parsed = askSquireInputSchema.safeParse(args);
   requireMcp(parsed.success, 'MCP_INVALID_ARGUMENTS', 400);
   requireMcp(canAskSquire(actor), 'MCP_OPERATION_FORBIDDEN', 403);
@@ -35,6 +40,11 @@ export async function askSquireForMcp(actor: AuthorizationActor, args: unknown) 
     });
   // Squire refuses API-key principals (it is a browser surface); the scope gate above stands in for
   // the connection's consent, and every read below still runs under the person's own role and teams.
+  // Tools for areas the connection was not granted are left out of the turn, so the answer never
+  // carries more than the connection could read itself.
+  const readTools = askSquireAllowedTools(actor.apiKey?.scopes ?? [], {
+    sensitiveReads: options.sensitiveReads === true,
+  });
   const person: AuthorizationActor = {
     id: actor.id,
     role: actor.role,
@@ -45,7 +55,7 @@ export async function askSquireForMcp(actor: AuthorizationActor, args: unknown) 
   const answer = await collectSquireTurn(
     person,
     { message: question, ...(incidentId ? { incidentId } : {}) },
-    { timeoutMs: 30_000 }
+    { timeoutMs: 30_000, scope: { readTools } }
   );
   if (answer.error) throw new McpBoundaryError('MCP_UNAVAILABLE', 503, true, answer.error);
   return {

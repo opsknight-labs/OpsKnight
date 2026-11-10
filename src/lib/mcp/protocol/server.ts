@@ -1103,7 +1103,7 @@ export function createOpsKnightMcpServer(
       async args =>
         safeTool(context, 'ask_squire', async () => {
           const { askSquireForMcp } = await import('../core/ask-squire');
-          return askSquireForMcp(actor, args);
+          return askSquireForMcp(actor, args, { sensitiveReads: sensitiveReadsEnabled });
         })
     );
   }
