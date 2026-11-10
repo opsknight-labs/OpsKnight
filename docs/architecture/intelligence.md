@@ -97,10 +97,31 @@ create a match by themselves, and the match percentage is a ranking signal, **no
   with backoff (1 s doubling to 60 s, reset after five minutes of running), health is degraded until
   it runs again, and work it had claimed is re-claimed after its lease. Stopping asks the thread to
   stop its lane (aborting pauses, waiting for the in-flight cycle) and disconnect, and terminates it
-  after 30 s. The entry is bundled to `scripts/dist/intelligence-lane-thread.cjs` by
-  `npm run build:scripts` (the Docker image builds and ships it); without the bundle (for example
-  `next dev`) or with `INTELLIGENCE_LANE_THREAD=off` the lane runs on the main thread as below.
-  `worker`, `general-worker` and the dedicated `intelligence-worker` role are unchanged.
+  after 30 s. `worker`, `general-worker` and the dedicated `intelligence-worker` role are unchanged.
+- **The thread exists only while intelligence is enabled.** `instrumentation.ts` starts the host with a
+  stand-in (`jobs/lane-stand-in.ts`): while settings say disabled, the ordinary lane idles on the main
+  thread as it did before the thread existed (one settings row per poll on the process pool, the
+  disabled-time sweeps), so a disabled install carries no second heap, Prisma engine or lane
+  connection. The stand-in never works enabled: the first cycle that reads settings as enabled calls
+  `LaneHost.handOffWhenEnabled`, the host stops the stand-in and starts the thread. A thread that
+  reports a `disabled` cycle is stopped and the lane is parked again (`thread.state` `parked`, health
+  `disabled`). Totals carry across both moves.
+- **Bundle build path.** The thread entry (`jobs/lane-thread-entry.ts`) is bundled to
+  `scripts/dist/intelligence-lane-thread.cjs` by `scripts/build-intelligence-lane-thread.mjs`. Every
+  build or start from source produces it: `npm run build` (`postbuild`), `npm start` and
+  `npm run start:prod` (`prestart`, only when missing, never failing the start) and
+  `npm run build:scripts` (the Dockerfile, unchanged). The host looks for it under the working
+  directory (dev, `next start`, the Docker image) and, when the working directory is
+  `<root>/.next/standalone` (a standalone start from a checkout), under `<root>`.
+- **The in-process fallback is explicit.** If the bundle is missing or `INTELLIGENCE_LANE_THREAD=off`,
+  an `integrated` lane runs on the main thread beside ingestion. That configuration is outside the
+  ingestion contract (see the perf README for its measurements). Startup decides the mode once
+  (`planIntegratedLane`), logs one warning with the reason and the remedy, and records it
+  (`setIntelligenceLaneMode`): `getIntelligenceLaneStatus()` carries `mode` and `fallbackReason`, lane
+  health is `degraded` with a fixed reason once the lane is enabled, and `/metrics` exposes
+  `opsknight_intelligence_lane_mode{mode="thread"|"in-process"}` and
+  `opsknight_intelligence_lane_thread_fallback` (1 only for an `integrated` fallback; worker roles are
+  in-process by design and report 0).
 - **Its own pool in a shared process.** In `integrated`, `worker` and `general-worker` processes an
   enabled lane runs its database work on a separate small Prisma pool (`application_name`
   `opsknight-intelligence-lane`, at most `INTELLIGENCE_LANE_DATABASE_POOL_SIZE` connections, default
@@ -109,7 +130,11 @@ create a match by themselves, and the match percentage is a ranking signal, **no
   restores the shared pool. The pool-pressure pause still watches the process pool. The dedicated
   `intelligence-worker` role keeps its single pool.
 - **Yielding to in-process ingestion.** `processEvent` keeps an in-process count of events in flight
-  (two clock reads per event, no I/O). When its average over at least 50 ms reaches one event, the
+  (two clock reads per event, no I/O). The lane starts yielding at once when two or more events are in
+  flight (the start of a burst), and otherwise when the average over at least 50 ms reaches one event.
+  The immediate trigger exists because the averaged signal alone engaged only after the first sample
+  window that covered the burst, so a cycle that started with the burst ran at full concurrency through
+  its first ~200 ms, which is where the remaining p99 cost of the lane thread sat. While yielding, the
   lane runs one item per cycle and pauses after each item and cycle so it is active for at most 20% of
   wall time (pauses capped at 1 s). It returns to full speed only after the load has stayed below 0.25
   for one second. It never stops completely, and it holds no claim, transaction or connection while
@@ -157,8 +182,21 @@ Each timed burst also records attribution data: event-loop delay and utilisation
 garbage-collection pauses, Prisma pool wait on the ingestion pool, engine-timed ingestion statements
 per event and sampled PostgreSQL wait events. The report records host load and the lane's pool plan.
 `--lane-mode thread` (the default) runs the candidate's lane in a worker thread through the production
-host, as `integrated` does; `--lane-mode in-process` runs it on the ingestion thread. The storm drain
-takes the same flag (default `in-process`).
+host, as `integrated` does; `--lane-mode in-process` runs it on the ingestion thread (the fallback
+configuration, measured separately and outside the contract). The storm drain takes the same flag
+(default `in-process`).
+
+The candidate is a **yielding** lane: during a burst the production lane backs off to one item at a
+time at a bounded duty cycle, so the gate measures ingestion beside a lane that backs off, not beside
+one at full speed. "Lane busy" therefore means lane handlers ran **inside** the timed burst (the union
+of handler spans clipped to the burst is above zero in every candidate run); the report gives that
+share of burst wall time per run (`laneBusyFractionOfBurst`).
+
+A run is judged only on a quiet host. The script samples the host from a worker thread every 3 s and
+marks the run `INVALID` (exit code 2, never a pass or a fail) unless the 1-minute load was below 4 at
+the start, no other heavy process (compiler, test runner, build, another load test, headless browser)
+was seen, and no gap between samples exceeded 15 s. `--wait-for-quiet-ms <ms>` waits for a quiet host
+before the first arm. Invalid runs are discarded and repeated, never averaged in.
 `--cpu-profile-dir <dir>` writes a V8 profile of each timed burst, and `--no-lane-yield --no-gate`
 measures the lane without yielding (diagnosis only). The attribution behind the lane pool and the
 ingestion yield is in `plans/intelligence-engine/certification/perf/ingestion-p50-diagnosis-2026-11-09.md`.
