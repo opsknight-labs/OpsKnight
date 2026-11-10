@@ -76,6 +76,8 @@ export type SquireEvent =
       mode: 'ai' | 'basic';
       name: string;
       availability?: 'ready' | 'disabled' | 'quota' | 'unavailable';
+      /** With `availability: 'quota'`: whether a short-term request rate or the daily budget was hit. */
+      limit?: SquireAiLimit;
       attention?: boolean;
       /** The deterministic intent the basic answer was built for; used for feedback and tests. */
       intent?: string;
@@ -98,7 +100,12 @@ export type SquireEvent =
   | { type: 'done' }
   /** Sent after `done` when the exchange was saved, so the next question continues the same conversation. */
   | { type: 'conversation'; id: string }
-  | { type: 'error'; message: string; availability?: 'quota' | 'unavailable' }
+  | {
+      type: 'error';
+      message: string;
+      availability?: 'quota' | 'unavailable';
+      limit?: SquireAiLimit;
+    }
   /**
    * One step of an investigation (AI mode only, when an administrator enabled it). Sent when a step starts
    * and again when it finishes, with the same `index`; the client replaces the step it already shows.
@@ -111,4 +118,18 @@ export interface SquireInvestigationStep {
   title: string;
   status: 'running' | 'done' | 'failed';
   calls: Array<{ tool: string; label: string; ok?: boolean }>;
+}
+
+/**
+ * Which AI limit stopped a turn. A rate limit clears within minutes and is worth retrying; an exhausted
+ * daily budget needs an administrator. Older browsers ignore the field and keep showing the shared
+ * `quota` availability, so adding it is backward compatible.
+ */
+export type SquireAiLimit = 'rate' | 'budget';
+
+/** Reads the limit from the AI gateway's error text ("Too many requests", "Daily AI budget reached"). */
+export function aiLimitFrom(message: string): SquireAiLimit | undefined {
+  if (/too many/i.test(message)) return 'rate';
+  if (/budget|quota/i.test(message)) return 'budget';
+  return undefined;
 }

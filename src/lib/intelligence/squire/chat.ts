@@ -27,6 +27,8 @@ import { getSimilarIncidentsForActor } from '../similarity/view';
 import { buildProposal } from './actions/proposals';
 import {
   SQUIRE_LIMITS,
+  aiLimitFrom,
+  type SquireAiLimit,
   type SquireCitation,
   type SquireEvent,
   type SquireRequest,
@@ -319,11 +321,13 @@ export async function* streamSquire(
             };
           }
         } else if (event.type === 'error') {
+          const limit = aiLimitFrom(event.message);
           if (answer || proposals > 0) {
             yield {
               type: 'error',
               message: event.message,
-              availability: /budget|quota|too many/i.test(event.message) ? 'quota' : 'unavailable',
+              availability: limit ? 'quota' : 'unavailable',
+              ...(limit ? { limit } : {}),
             };
             failed = true;
             break;
@@ -343,8 +347,9 @@ export async function* streamSquire(
             settings.squireName,
             dataClass,
             savedConversation,
-            /budget|quota|too many/i.test(event.message) ? 'quota' : 'unavailable',
-            page
+            limit ? 'quota' : 'unavailable',
+            page,
+            limit
           );
           return;
         }
@@ -424,7 +429,8 @@ async function* basicAnswer(
   dataClass: AiDataClass = 'PERSONAL',
   savedConversation: ConversationDetail | null = null,
   availability: 'ready' | 'disabled' | 'quota' | 'unavailable' = 'disabled',
-  page: ResolvedPageContext | null = null
+  page: ResolvedPageContext | null = null,
+  limit?: SquireAiLimit
 ): AsyncGenerator<SquireEvent> {
   const scope = {
     userId: actor.id,
@@ -455,6 +461,7 @@ async function* basicAnswer(
     mode: 'basic',
     name,
     availability,
+    ...(limit ? { limit } : {}),
     intent: plan.intent,
     ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
   };

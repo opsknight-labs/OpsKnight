@@ -378,7 +378,7 @@ describe('AI mode', () => {
     expect(textOf(events)).toContain('I never change anything');
     expect(model.requests.length).toBe(calls);
     expect(events).toContainEqual(
-      expect.objectContaining({ type: 'meta', mode: 'basic', availability: 'quota' })
+      expect.objectContaining({ type: 'meta', mode: 'basic', availability: 'quota', limit: 'rate' })
     );
   });
 
