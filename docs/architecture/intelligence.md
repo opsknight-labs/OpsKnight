@@ -514,6 +514,47 @@ basic or AI, the person's own permissions, the same tools, citations and sealed 
   changes. A change page resolves through `readChangeReference` (its service's visibility) and makes
   "this service" mean the change's service; runbook pages resolve under `runbookReadWhere`.
 
+**Panel surfaces (web).** Entry points, display and deep links live beside the launcher in small modules
+so `SquireLauncher.tsx` only wires them in (`use-squire-surfaces.ts`):
+
+- _Bus contract_ (`components/squire/squire-bus.ts`). `openSquire()` takes a string (asked at once, the
+  original form) or `{ message?, question?, evidence?, incidentId? }`. `message` is sent; `question` is
+  only placed in the composer; `evidence` is a handle `{ kind, id, label? }` naming the item the question
+  is about and is shown as an "About" chip; `incidentId` is the incident the caller is showing.
+  `parseSquireOpenDetail` treats the event detail as untrusted: wrong types, over-long text and ids that
+  are not plain identifiers are dropped. The handle is client-side context only; it is not sent to the
+  chat route, whose request contract is unchanged.
+- _Finding anchors._ `findingAnchor(id)` is `finding-<findingId>` and `findingHref(incidentId, { kind, id })`
+  is `/incidents/<id>?insights=<section>#finding-<findingId>` (`/m/...` on mobile). The section comes from
+  the evidence kind (`similar`, `related`/`group` → `related`, `cause`/`change`/`upstream` → `why`,
+  `runbook` → `runbooks`, `triage`, `impact`, `summary`, `briefing`). The insights inspector renders the
+  matching element ids; Squire's pinned briefing, the "About" chip and the finding link beside a cited
+  source all build links through these two functions.
+- _Docked display_ (`components/squire/dock.ts`). A third display next to floating and expanded, for
+  viewports at Tailwind `lg` and wider and never for the full-screen mobile presentation. While docked
+  and open the launcher sets `--squire-dock-width` (`clamp(20rem, 26vw, 28rem)`) and the `squire-docked`
+  class on `<html>`; the app shell's content row (`src/app/(app)/layout.tsx`) has
+  `lg:pr-[var(--squire-dock-width,0px)]`, so the page reflows and falls back to no padding whenever the
+  variable is absent. The panel is fixed below the app header on the right. The explicit choice is stored
+  in `localStorage` `opsknight.squire.display` (next to `opsknight.squire.side`). Without a stored choice
+  the panel floats, except that a bus request whose `incidentId` equals the page's incident docks it until
+  the person leaves that incident. Esc, focus return and the `⌘J` shortcut are unchanged.
+- _Pinned briefing._ `GET /api/intelligence/squire/briefing?incidentId=` (session only, same-origin, 60
+  per minute per person, `no-store`) returns `getPinnedBriefingForActor` (`squire/briefing-view.ts`): the
+  top three similar incidents, likely changes and runbooks with their finding ids, composed from
+  `getSimilarIncidentsForActor` and `getResponseIntelligenceForActor`, the same reads and cut as the chat
+  briefing (`brief` in `chat.ts`). Those views apply `incidentReadWhere`, `serviceReadWhere`,
+  `runbookReadWhere` and the service's effective mode (only SUGGEST and AUTO show anything), so OFF and
+  SHADOW yield `briefing: null`, as do an unreadable incident, the assistant being off and "no findings";
+  the response does not tell these apart. `SquirePinnedBriefing` renders nothing for null. The mounts pass
+  `pinBriefing`; the launcher requests the briefing only on an incident page while the panel is open.
+- _Deep link_ (`components/squire/deep-link.ts`). `?squire=open&q=<question>` opens the panel with the
+  question in the composer and then removes both parameters with `history.replaceState`. It never sends:
+  a link must not be able to start a turn or spend budget.
+- _Command palette._ `SidebarSearch` offers "Ask <name>" when the query names the assistant, uses a
+  trigger word or reads as a question, and calls `openSquire(question)` with the addressing words removed
+  (`components/squire/palette-question.ts`).
+
 **Saved conversations (opt-in).** An administrator can let people save conversations. The chat route then
 stores each completed answer (never a failed or cancelled one) in `SquireConversation`/`SquireMessage`,
 encrypted at rest and registered in the encryption registry. Every read and write is keyed by the owner,

@@ -9,7 +9,7 @@ reader:
   task: Enable and use Squire in Slack, Microsoft Teams, MCP clients and the mobile incident page.
 verification:
   level: test
-  verified_at: 2026-11-08
+  verified_at: 2026-11-10
   evidence:
     [
       src/lib/chatops/squire,
@@ -18,6 +18,9 @@ verification:
       tests/integration/intelligence/squire-chat-surfaces.test.ts,
       tests/unit/chatops-squire-render.test.ts,
       tests/components/squire/SquireMobile.test.tsx,
+      tests/components/squire/SquireSurfaces.test.tsx,
+      tests/unit/squire-surfaces-contract.test.ts,
+      tests/integration/intelligence/squire-pinned-briefing.test.ts,
       tests/mcp/tools-list-contract.test.ts,
     ]
 ---
@@ -82,3 +85,35 @@ With the mobile switch on, an **Ask Squire** button appears on mobile incident p
 ## Page context in the web app
 
 Squire knows the page you opened it on: an incident, service, team, schedule, runbook, alert or change. On a change page, "this service" means the service the change was recorded on. A page you cannot read is ignored.
+
+The line under the panel header says what the conversation is about: **Discussing this incident**, **this service**, **this team**, **this runbook**, **this schedule**, **this alert** or **this change**, or **General conversation** on any other page.
+
+## Dock Squire beside the page
+
+On a desktop-width window (1024 px and wider) the panel can sit beside the page instead of on top of it.
+
+- Select **Dock beside the page** in the panel header. The panel becomes a full-height column on the right and the page narrows to make room, so nothing is covered. Select **Float over the page** to go back.
+- Your choice is remembered in this browser, like the side the floating panel opens on.
+- If you have not chosen, the panel floats. The one exception: when you ask about an item from an incident's insights, the panel docks for as long as you stay on that incident, so you can read the incident and the answer together.
+- While docked, the **Expand chat** and **Move to the other side** controls are hidden; they only apply to the floating panel.
+- `Esc` closes the panel and returns focus to where it was opened from, docked or floating. `⌘J` / `Ctrl+J` opens and closes it.
+
+On narrower windows and on mobile the panel always opens over the page.
+
+## Pinned incident briefing
+
+While the conversation is about an incident, an **Incident briefing** is pinned above the messages: the likely changes, the most similar past incidents and the runbooks that worked, up to three of each. Each row opens that finding in the incident's insights. Select the heading to collapse or expand it; the panel remembers which you prefer.
+
+The briefing is not shown when there is nothing to show: the service's intelligence mode is Off or Shadow, analysis has found nothing yet, or you cannot read the incident. It only ever lists what you are allowed to read.
+
+Under an answer, a source that is one of the incident's findings has a second, small link next to it that jumps to that finding in the insights.
+
+## Ask from the command palette
+
+Type a question in the search box at the top of the app (`/` or `⌘K` / `Ctrl+K`). **Ask Squire** appears when the text names the assistant, starts with `ask`, or reads as a question (it ends with `?` or starts with a question word). The entry shows the question it will ask; choosing it opens the panel and asks it straight away. Typing only the assistant's name opens the panel without asking anything.
+
+## Links that open Squire
+
+Add `?squire=open&q=<question>` to any app address to open the panel with that question written in the message box, for example `/incidents/<id>?squire=open&q=What%20changed%3F`. The question is **not** sent until you send it, so opening a link never starts a conversation or spends AI budget on your behalf. The two parameters are removed from the address once the panel has opened.
+
+Links to a single finding use `/incidents/<id>?insights=<section>#finding-<finding id>`.
