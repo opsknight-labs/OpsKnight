@@ -114,6 +114,35 @@ describe('IncidentGroupView', () => {
     );
   });
 
+  it('keeps the result and the new-incident link after the server refresh marks the alert reversed', async () => {
+    actions.reverse.mockResolvedValue({
+      ok: true,
+      done: true,
+      pagedIncidentId: 'new-incident',
+      message: 'Ungrouped. The alert was re-ingested as its own incident and pages normally.',
+    });
+    const { rerender } = render(<IncidentGroupView incidentId="parent-1" group={parentGroup()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ungroup and page' }));
+    const dialog = await screen.findByRole('alertdialog', {}, { timeout: 5_000 });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ungroup and page' }));
+    await screen.findByText(/pages normally/, {}, { timeout: 5_000 });
+
+    // revalidatePath re-renders the server component: the alert is now reversed, not ungroupable.
+    const refreshed = parentGroup();
+    refreshed.members = refreshed.members.map(member =>
+      member.kind === 'ALERT' && member.decisionId === 'dec-1'
+        ? { ...member, ungroupable: false, reversed: true }
+        : member
+    );
+    rerender(<IncidentGroupView incidentId="parent-1" group={refreshed} />);
+    expect(screen.getByText(/pages normally/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open the new incident' })).toHaveAttribute(
+      'href',
+      '/incidents/new-incident'
+    );
+    expect(screen.queryByRole('button', { name: 'Ungroup and page' })).not.toBeInTheDocument();
+  });
+
   it('cancelling the dialog changes nothing', async () => {
     render(<IncidentGroupView incidentId="parent-1" group={parentGroup()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Ungroup and page' }));
