@@ -568,14 +568,13 @@ async function priorTurns(
         message.envelope?.verified &&
         message.envelope.completion === 'COMPLETED');
     const replayable = turns.filter(isReplayable);
-    // Turns before the replay window are summarised (pinned after the system prompt), not dropped.
+    // Turns before the replay window are summarised (pinned after the system prompt), not dropped. The
+    // summary is the deterministic digest: a model summary here would add a SUMMARIZE call, a per-user
+    // rate-limit slot, budget spend and a serial round trip before the answer to every turn of a long
+    // conversation, with nothing to switch it off.
     const summary = await summarizeOlderTurns(
       saved.messages.slice(0, -SQUIRE_LIMITS.historyMax).filter(isReplayable),
-      {
-        actorId: actor.id,
-        incidentId: incidentId ?? undefined,
-        resolve: dataClass => resolveLanguageModel('SUMMARIZE', dataClass),
-      }
+      { actorId: actor.id, incidentId: incidentId ?? undefined }
     ).catch(() => null);
     return {
       messages: [

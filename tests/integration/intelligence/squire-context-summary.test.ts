@@ -6,7 +6,7 @@ import { recordExchange } from '@/lib/intelligence/conversations/store';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
 import { SQUIRE_LIMITS, type SquireEvent } from '@/lib/intelligence/squire/contract';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
-import { createTestUser, resetDatabase } from '../../helpers/test-db';
+import { createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
 let model: FakeServer;
 beforeAll(async () => {
@@ -88,21 +88,22 @@ async function run(actor: NonNullable<Awaited<ReturnType<typeof resolveUserActor
 }
 
 describe('earlier-turn summary in AI conversations', () => {
-  it('summarises turns beyond the replay window with the SUMMARIZE route, right after the system prompt', async () => {
+  it('digests turns beyond the replay window right after the system prompt, with no extra model call', async () => {
     const { actor, conversationId } = await longConversation();
-    model.script.push({ content: '- Asked about the checkout pool twice' }, { content: 'Done.' });
+    model.script.push({ content: 'Done.' }, { content: 'Done again.' });
     const events = await run(actor, conversationId);
     expect(events.at(-1)).toEqual({ type: 'done' });
-    const summaryCall = model.requests[0].body as unknown as Body;
-    expect(summaryCall.stream).not.toBe(true);
-    expect(summaryCall.messages.at(-1)!.content).toContain('Question number 1');
-    expect(summaryCall.messages.at(-1)!.content).not.toContain('Question number 7');
-
-    const chat = model.requests[1].body as unknown as Body;
+    // One request per turn: the chat answer itself. No SUMMARIZE call that would spend a per-user
+    // rate-limit slot, tokens and a serial round trip before the answer.
+    expect(model.requests).toHaveLength(1);
+    const chat = model.requests[0].body as unknown as Body;
+    expect(chat.stream).toBe(true);
     expect(chat.messages[0].role).toBe('system');
     expect(chat.messages[1].role).toBe('system');
     expect(chat.messages[1].content).toContain('Summary of earlier conversation turns');
-    expect(chat.messages[1].content).toContain('- Asked about the checkout pool twice');
+    expect(chat.messages[1].content).toContain(
+      '- Asked: Question number 1 about the checkout pool'
+    );
     // The replay window is unchanged: only the most recent turns are verbatim.
     const verbatim = chat.messages.slice(2, -1).map(message => message.content);
     expect(verbatim.length).toBeLessThanOrEqual(SQUIRE_LIMITS.historyMax);
@@ -110,15 +111,17 @@ describe('earlier-turn summary in AI conversations', () => {
     expect(chat.messages.at(-1)).toMatchObject({ role: 'user', content: 'What did we decide?' });
   });
 
-  it('uses a deterministic digest when the summary model fails', async () => {
+  it('still answers in one model call when a person is limited to one request per minute', async () => {
     const { actor, conversationId } = await longConversation();
-    // The SDK retries once, so both attempts fail.
-    model.script.push({ status: 500 }, { status: 500 }, { content: 'Done.' });
+    await db.aiSettings.update({
+      where: { id: 'default' },
+      data: { requestsPerMinutePerUser: 1 },
+    });
+    invalidateGatewayCache();
+    model.script.push({ content: 'Done.' });
     const events = await run(actor, conversationId);
-    expect(events.at(-1)).toEqual({ type: 'done' });
-    const chat = model.requests.at(-1)!.body as unknown as Body;
-    expect(chat.messages[1].content).toContain(
-      '- Asked: Question number 1 about the checkout pool'
-    );
+    expect(events.some(event => event.type === 'meta' && event.mode === 'ai')).toBe(true);
+    expect(events.some(event => event.type === 'delta' && event.text.includes('Done.'))).toBe(true);
+    expect(model.requests).toHaveLength(1);
   });
 });
