@@ -208,9 +208,14 @@ describe('cron-scheduler lifecycle', () => {
   });
 
   it('fences a stale scheduler before it enters the next operation group', async () => {
-    tasks.schedulerQueryRaw
-      .mockResolvedValueOnce([{ leaseEpoch: 41 }])
-      .mockResolvedValueOnce([{ held: false }]);
+    // Answer by statement, not call order: other sweeps in the tick (for example the noise-policy
+    // version backfill) also read through $queryRaw between lease acquisition and the fence check.
+    tasks.schedulerQueryRaw.mockImplementation((strings: TemplateStringsArray) => {
+      const sql = strings.join(' ');
+      if (sql.includes('RETURNING "leaseEpoch"')) return Promise.resolve([{ leaseEpoch: 41 }]);
+      if (sql.includes('SELECT EXISTS')) return Promise.resolve([{ held: false }]);
+      return Promise.resolve([]);
+    });
 
     startCronScheduler({ profile: 'maintenance' });
     await vi.advanceTimersByTimeAsync(0);
