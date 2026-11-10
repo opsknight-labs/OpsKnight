@@ -16,6 +16,8 @@ verification:
       monitoring/prometheus/opsknight-alerts.yaml,
       tests/integration/intelligence,
       tests/e2e/intelligence-ui.spec.ts,
+      tests/evals/squire,
+      scripts/check-squire-eval-baseline.cjs,
     ]
 ---
 
@@ -191,6 +193,30 @@ unnoticed:
 
 Each script takes `--output` and `--no-gate` (record only). Measured results are committed under
 `plans/intelligence-engine/certification/perf/`.
+
+## Assistant evaluation
+
+Every pull request runs the assistant's structural evaluation with no AI provider: basic-mode answers on a
+seeded database, and AI mode against a scripted local model that checks tool scoping, redaction of secrets
+and injected instructions, which actions become confirmation cards, citations, data-class refusals and the
+token, step and output ceilings.
+
+The nightly **Squire live-model evaluation** workflow (`.github/workflows/squire-evals.yml`) also asks a real
+model, then grades each answer with a second model against a rubric for its category. It runs only when the
+repository has these settings; without `SQUIRE_EVAL_API_KEY` it records a skipped run:
+
+| Setting                      | Kind     | Purpose                                                              |
+| ---------------------------- | -------- | -------------------------------------------------------------------- |
+| `SQUIRE_EVAL_API_KEY`        | secret   | Key for the evaluated OpenAI-compatible model; turns the run on.     |
+| `SQUIRE_EVAL_MODEL`          | variable | Evaluated model (default `gpt-4.1-mini`).                            |
+| `SQUIRE_EVAL_JUDGE_API_KEY`  | secret   | Optional separate key for the judge; defaults to the evaluation key. |
+| `SQUIRE_EVAL_JUDGE_MODEL`    | variable | Optional judge model; defaults to the evaluated model.               |
+| `SQUIRE_EVAL_JUDGE_BASE_URL` | variable | Optional judge endpoint; defaults to the evaluated endpoint.         |
+
+The run uses synthetic data in a disposable database. It fails when the structural pass rate, a must-pass
+safety case, the per-case token ceiling or the judge's scores fall below `tests/evals/squire/baseline.json`;
+the report is uploaded as the `squire-eval-report` artifact. Set `SQUIRE_EVAL_JUDGE=off` to run without
+the judge. Raise the baseline only by committing a reviewed value.
 
 ## Robustness and self-protection
 

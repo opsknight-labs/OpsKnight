@@ -356,12 +356,37 @@ data carries `untrustedContext`, and the card asks the person to check that cont
 one replica's discovery that a provider is down reaches the others. A failing table leaves each replica
 on its own judgement.
 
-**Evaluation and feedback.** Structural cases (`tests/evals/squire/basic-cases.ts`, about 45, with
-follow-ups) run against a seeded database with no model on every pull request; the live-model cases run
-nightly in `squire-evals.yml` when `SQUIRE_EVAL_API_KEY` is set, and `scripts/check-squire-eval-baseline.cjs`
-fails the run below the stored baseline or when a must-pass safety case fails. Thumbs up/down with a
-reason are stored in `SquireFeedback` (mode, intent, reason and a question digest only) and summarised on
-the Quality page.
+**Evaluation and feedback.** Squire is evaluated in three tiers that share nine categories (RCA quality,
+tool choice, wanted and unwanted proposals, multi-turn, prompt injection, permission scope, data-class
+handling, cost ceiling; `tests/evals/squire/categories.ts`).
+
+- _Basic mode_ (`basic-cases.ts`, 48 cases, some with follow-ups) runs against a seeded database with no
+  model on every pull request (`squire-evals-contract.test.ts`).
+- _AI mode against a scripted model_ (`model-cases.ts`, 64 cases) also runs on every pull request
+  (`squire-evals-model.test.ts`). A local OpenAI-compatible fake returns the replies each case fixes, so
+  what is measured is everything around the model: which tools are offered under which data class, what a
+  tool returns under the asker's permissions, what reaches the provider after redaction and instruction
+  defanging (alerts, notes, change summaries, postmortems, connector logs, pasted secrets), which proposals
+  become cards (at most two, flagged after third-party text), what may be cited (only sources read in the
+  turn), and where the step, output, reservation, daily and per-person ceilings stop a turn. Cases that need
+  another workstream's tool or action declare `requires`; the runner reads what is really offered from a
+  probe turn and reports a missing one as skipped, never as passed. The runner turns on Workstream F's
+  opt-in switches and seeds a log connection against a local stand-in when the build has them.
+- _Live model_ (`cases.ts`, 19 cases) runs nightly in `squire-evals.yml` when `SQUIRE_EVAL_API_KEY` is set.
+  Structural checks (tool used, incident cited, nothing hidden leaked, proposal made or not, follow-up
+  answered) decide pass or fail; an LLM judge (`judge.ts`) then grades each answer 1–5 against its
+  category's rubric, with the answer fenced as data. `scripts/check-squire-eval-baseline.cjs` fails the run
+  below the stored pass rate, when a must-pass case failed or did not run, when a case used more than
+  `maxTokensPerCase`, when the judge's mean or pass rate drops below baseline (or too few answers could be
+  graded), or when a keyed run recorded nothing. Without a key the suite is skipped and nothing is compared.
+  `baseline.json` is raised by committing a reviewed value; `--record-catalogue` refreshes only
+  `minimumCases`, which a unit test enforces so the set cannot quietly shrink.
+
+Labelled engine fixtures sit beside them: `tests/fixtures/intelligence/storm-fixture.ts` (35 incidents,
+three real problems, one-offs and decoys) must reach a compression ratio of at least 2.9 with no group
+mixing two problems, and `rca-fixture.ts` (eight scenarios) must rank each expected top cause first
+(`engine-fixtures.test.ts`). Thumbs up/down with a reason are stored in `SquireFeedback` (mode, intent,
+reason and a question digest only) and summarised on the Quality page.
 
 **Incident-response tools.** `squire/tools-incident.ts` adds five read tools, registered from
 `tools.ts`: `get_alert_payload` (one alert of a readable incident; the payload is pruned to bounded depth,
