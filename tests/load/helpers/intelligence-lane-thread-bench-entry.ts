@@ -61,6 +61,7 @@ const host = laneHostForThread(data);
 configureLaneHost(host);
 const state = createLaneState();
 if (!data.laneYield) state.ingestionYield = undefined;
+const cycleStats = { cycles: 0, worked: 0, paused: 0, idle: 0, yieldingCycles: 0 };
 const active = (async () => {
   while (!tracker.stop) {
     Object.assign(state, {
@@ -71,11 +72,15 @@ const active = (async () => {
       lastEmbedAt: Date.now(),
       lastDigestCheckAt: Date.now(),
     });
-    await runIntelligenceCycle(state, {
+    const result = await runIntelligenceCycle(state, {
       handlers,
       getCriticalLagMs: async () => 0,
       getPoolWaitingQueries: host.poolWaitingQueries,
     });
+    cycleStats.cycles += 1;
+    if (result.status === 'worked' || result.status === 'paused' || result.status === 'idle')
+      cycleStats[result.status] += 1;
+    if (state.ingestionYield?.isYielding()) cycleStats.yieldingCycles += 1;
     await new Promise(resolve => setTimeout(resolve, 1));
   }
 })();
@@ -88,6 +93,8 @@ port.on('message', message => {
     started: tracker.started,
     finished: tracker.finished,
     spans: tracker.spans.map(span => ({ ...span })),
+    yieldPausedMs: state.ingestionYield?.pausedMs ?? 0,
+    cycleStats: { ...cycleStats },
   });
 });
 

@@ -178,6 +178,8 @@ interface BurstDiagnostics {
   phases?: { p50Ms: number; p99Ms: number }[];
   /** Lane handlers that overlapped the burst: start and end offsets from the burst start, in ms. */
   laneSpans?: { startMs: number; endMs: number | null }[];
+  /** Thread lane: time it spent yielding to ingestion during the burst and its cycle outcomes. */
+  laneYield?: { pausedMs: number; cycles: Record<string, number> };
 }
 
 interface PoolSnapshot {
@@ -671,6 +673,9 @@ interface LaneSnapshot {
   finished: number;
   /** On this thread's performance clock. */
   spans: { start: number; end: number | null }[];
+  /** Thread lane only: time spent yielding to ingestion and cycle outcomes, cumulative. */
+  yieldPausedMs?: number;
+  cycleStats?: Record<string, number>;
 }
 
 interface CandidateLane {
@@ -720,6 +725,8 @@ async function threadCandidate(options: Options): Promise<CandidateLane> {
           start: span.start - performance.timeOrigin,
           end: span.end === null ? null : span.end - performance.timeOrigin,
         })),
+        yieldPausedMs: report.yieldPausedMs,
+        cycleStats: report.cycleStats,
       });
     },
   });
@@ -798,6 +805,17 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
       }));
   }
   const startedAfter = after?.started ?? 0;
+  if (before?.cycleStats && after?.cycleStats) {
+    burst.diagnostics.laneYield = {
+      pausedMs: Math.round((after.yieldPausedMs ?? 0) - (before.yieldPausedMs ?? 0)),
+      cycles: Object.fromEntries(
+        Object.entries(after.cycleStats).map(([key, value]) => [
+          key,
+          value - (before.cycleStats?.[key] ?? 0),
+        ])
+      ),
+    };
+  }
   const failOpenAfter = failOpenCounts();
   const noiseDecisions = (await prisma.prePagingDecision.count()) - decisionsBefore;
   await lane?.stop();
