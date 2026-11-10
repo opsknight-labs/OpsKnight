@@ -15,10 +15,16 @@
  *   DATABASE_URL=postgresql://.../opsknight_bench \
  *   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
  *     tests/load/intelligence-storm.ts --history 200000 --burst 10000 --services 50 \
- *     [--max-drain-seconds 600] [--max-kind-p99-ms 10000] [--output reports/storm.json] [--no-gate]
+ *     [--max-drain-seconds 600] [--max-kind-p99-ms 10000] [--output reports/storm.json] [--no-gate] \
+ *     [--lane-mode in-process|thread]
+ *
+ * `--lane-mode thread` drains in a lane thread started by the production host (lane-thread.ts), as an
+ * `integrated` process runs its lane; the default drains on this thread.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { cpus, loadavg } from 'node:os';
+import { dirname, resolve as resolvePath } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import prisma from '../../src/lib/prisma';
 import {
@@ -26,14 +32,14 @@ import {
   INTELLIGENCE_ENGINE_VERSION,
   INTELLIGENCE_SETTINGS_DEFAULTS,
 } from '../../src/lib/intelligence/contract';
+import { getIntelligenceLaneStatus } from '../../src/lib/intelligence/jobs/runner';
 import {
-  DEFAULT_HANDLERS,
-  createLaneState,
-  runIntelligenceCycle,
-  type WorkHandlers,
-} from '../../src/lib/intelligence/jobs/runner';
-import { enqueueWorkItems, type WorkKind } from '../../src/lib/intelligence/jobs/work-queue';
+  startIntelligenceLaneThread,
+  stopIntelligenceLaneThread,
+} from '../../src/lib/intelligence/jobs/lane-thread';
+import { enqueueWorkItems } from '../../src/lib/intelligence/jobs/work-queue';
 import { percentile } from './helpers/ab-stats';
+import { drainQueue, type DrainResult } from './helpers/storm-drain';
 
 interface Options {
   history: number;
@@ -46,6 +52,8 @@ interface Options {
   maxKindP99Ms: number;
   gate: boolean;
   output: string | null;
+  /** `in-process` (default; this thread) or `thread` (a lane thread, as `integrated` runs it). */
+  laneMode: 'in-process' | 'thread';
 }
 
 function parseOptions(argv: string[]): Options {
@@ -68,6 +76,13 @@ function parseOptions(argv: string[]): Options {
     maxKindP99Ms: read('max-kind-p99-ms', 10_000),
     gate: !argv.includes('--no-gate'),
     output: outputAt >= 0 ? argv[outputAt + 1] : null,
+    laneMode: (() => {
+      const at = argv.indexOf('--lane-mode');
+      const value = at >= 0 ? argv[at + 1] : 'in-process';
+      if (value !== 'thread' && value !== 'in-process')
+        throw new Error('--lane-mode must be thread or in-process');
+      return value;
+    })(),
   };
 }
 
@@ -232,26 +247,44 @@ async function seed(options: Options) {
   });
 }
 
-function timed(samples: Map<string, number[]>): WorkHandlers {
-  return Object.fromEntries(
-    Object.entries(DEFAULT_HANDLERS).map(([kind, handler]) => [
-      kind,
-      async (...args: Parameters<NonNullable<WorkHandlers[WorkKind]>>) => {
-        const started = performance.now();
-        try {
-          await handler!(...args);
-        } finally {
-          const list = samples.get(kind) ?? [];
-          list.push(performance.now() - started);
-          samples.set(kind, list);
-        }
+/** The same drain loop in a lane thread started by the production host, bundled like production. */
+async function drainInThread(): Promise<DrainResult> {
+  const load = new Function('specifier', 'return import(specifier)') as (
+    specifier: string
+  ) => Promise<{
+    buildIntelligenceLaneThread(options: { entry: string; outfile: string }): Promise<string>;
+  }>;
+  const { buildIntelligenceLaneThread } = await load(
+    pathToFileURL(resolvePath('scripts/build-intelligence-lane-thread.mjs')).href
+  );
+  const entry = await buildIntelligenceLaneThread({
+    entry: 'tests/load/helpers/intelligence-storm-thread-entry.ts',
+    outfile: 'scripts/dist/intelligence-storm-thread.cjs',
+  });
+  const result = new Promise<DrainResult>((resolve, reject) => {
+    const started = startIntelligenceLaneThread({
+      entry,
+      onMessage: message => {
+        const report = message as { type?: string; result?: DrainResult; error?: string };
+        if (report.type !== 'storm-result') return;
+        if (report.error) reject(new Error(report.error));
+        else resolve(report.result!);
       },
-    ])
-  ) as WorkHandlers;
+    });
+    if (!started) reject(new Error('Lane thread did not start'));
+  });
+  try {
+    return await result;
+  } finally {
+    const restarts = getIntelligenceLaneStatus().thread?.restarts ?? 0;
+    await stopIntelligenceLaneThread();
+    if (restarts > 0) throw new Error('Lane thread crashed during the drain');
+  }
 }
 
 async function main() {
   const options = parseOptions(process.argv.slice(2));
+  const loadAtStart = loadavg();
   const seedStarted = performance.now();
   await seed(options);
   const seedSeconds = (performance.now() - seedStarted) / 1000;
@@ -264,43 +297,9 @@ async function main() {
     storm.map(row => ({ kind: 'INDEX_INCIDENT' as const, subjectKey: row.id }))
   );
 
-  const samples = new Map<string, number[]>();
-  const handlers = timed(samples);
-  const state = createLaneState();
-  // Skip the periodic sweeps; this measures the work queue itself.
-  Object.assign(state, {
-    lastReconcileAt: Date.now(),
-    lastUpdatedRepairAt: Date.now(),
-    lastRetentionAt: Date.now(),
-    lastObserveAt: Date.now(),
-    lastEmbedAt: Date.now(),
-    lastDigestCheckAt: Date.now(),
-  });
-
-  const started = performance.now();
-  let cycles = 0;
-  let failed = 0;
-  for (;;) {
-    // A 1M-history run can exceed a sweep interval. Keep sweeps disabled on every cycle so
-    // this benchmark continues to measure the queued burst rather than a history backfill.
-    Object.assign(state, {
-      lastReconcileAt: Date.now(),
-      lastUpdatedRepairAt: Date.now(),
-      lastRetentionAt: Date.now(),
-      lastObserveAt: Date.now(),
-      lastEmbedAt: Date.now(),
-      lastDigestCheckAt: Date.now(),
-    });
-    const result = await runIntelligenceCycle(state, { handlers, getCriticalLagMs: async () => 0 });
-    cycles += 1;
-    failed += result.failed;
-    if (
-      result.claimed === 0 &&
-      (await prisma.intelligenceWorkItem.count({ where: { attempts: { lt: 8 } } })) === 0
-    )
-      break;
-  }
-  const drainSeconds = (performance.now() - started) / 1000;
+  const drain = options.laneMode === 'thread' ? await drainInThread() : await drainQueue();
+  const { drainSeconds, cycles, failed } = drain;
+  const samples = new Map(drain.samples);
 
   const perKind = Object.fromEntries(
     [...samples.entries()].map(([kind, values]) => [
@@ -341,6 +340,7 @@ async function main() {
     node: process.version,
     engineVersion: INTELLIGENCE_ENGINE_VERSION,
     options,
+    host: { cpus: cpus().length, loadAverageAtStart: loadAtStart, loadAverageAtEnd: loadavg() },
     seedSeconds: Math.round(seedSeconds),
     drainSeconds: Math.round(drainSeconds * 10) / 10,
     incidentsPerSecond: Math.round((options.burst / drainSeconds) * 10) / 10,

@@ -26,12 +26,17 @@
  *   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
  *     tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 300 --concurrency 16 --backlog 400 \
  *     [--noise-controls on] [--noise-lookups pool|transaction] [--no-lane] [--history 1000000] \
- *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate]
+ *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate] \
+ *     [--lane-mode thread|in-process]
+ *
+ * `--lane-mode thread` (the default) runs the candidate's lane in a worker thread started by the production
+ * host (lane-thread.ts), as an `integrated` process does; `in-process` runs it on the ingestion thread.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { Session } from 'node:inspector';
 import { cpus, loadavg } from 'node:os';
-import { dirname } from 'node:path';
+import { dirname, resolve as resolvePath } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { monitorEventLoopDelay, performance, PerformanceObserver } from 'node:perf_hooks';
 import prisma from '../../src/lib/prisma';
 import { processEvent, type EventPayload } from '../../src/lib/events';
@@ -42,11 +47,17 @@ import {
 import {
   DEFAULT_HANDLERS,
   createLaneState,
+  getIntelligenceLaneStatus,
   runIntelligenceCycle,
   type WorkHandlers,
 } from '../../src/lib/intelligence/jobs/runner';
 import { enqueueWorkItems, type WorkKind } from '../../src/lib/intelligence/jobs/work-queue';
 import { resolveLanePool } from '../../src/lib/intelligence/jobs/lane-pool';
+import {
+  laneThreadWorker,
+  startIntelligenceLaneThread,
+  stopIntelligenceLaneThread,
+} from '../../src/lib/intelligence/jobs/lane-thread';
 import {
   primePrePagingSnapshot,
   resetPrePagingSnapshot,
@@ -91,6 +102,11 @@ interface Options {
    * measure what the yield is worth. Not valid for the release gate (the script refuses to gate with it).
    */
   laneYield: boolean;
+  /**
+   * Where the candidate's lane runs: `thread` (default; the production `integrated` default, a worker
+   * thread started by lane-thread.ts) or `in-process` (on the ingestion thread, as before the thread).
+   */
+  laneMode: 'thread' | 'in-process';
 }
 
 /** Median of the per-repetition differences (candidate minus baseline). */
@@ -246,6 +262,13 @@ function parseOptions(argv: string[]): Options {
     gate: !argv.includes('--no-gate'),
     output: outputAt >= 0 ? argv[outputAt + 1] : null,
     laneYield: !argv.includes('--no-lane-yield'),
+    laneMode: (() => {
+      const at = argv.indexOf('--lane-mode');
+      const value = at >= 0 ? argv[at + 1] : 'thread';
+      if (value !== 'thread' && value !== 'in-process')
+        throw new Error('--lane-mode must be thread or in-process');
+      return value;
+    })(),
     cpuProfileDir: argv.includes('--cpu-profile-dir')
       ? argv[argv.indexOf('--cpu-profile-dir') + 1]
       : null,
@@ -629,10 +652,98 @@ function busyCandidate(options: Options) {
     }
   })();
   return {
-    tracker,
+    snapshot: async (): Promise<LaneSnapshot> => ({
+      completed: tracker.completed,
+      started: tracker.started,
+      finished: tracker.finished,
+      spans: tracker.spans.map(span => ({ ...span })),
+    }),
     stop: async () => {
       tracker.stop = true;
       await active;
+    },
+  };
+}
+
+interface LaneSnapshot {
+  completed: number;
+  started: number;
+  finished: number;
+  /** On this thread's performance clock. */
+  spans: { start: number; end: number | null }[];
+}
+
+interface CandidateLane {
+  snapshot(): Promise<LaneSnapshot>;
+  stop(): Promise<void>;
+}
+
+const THREAD_BENCH_BUNDLE = 'scripts/dist/intelligence-lane-thread-bench.cjs';
+let threadBundle: Promise<string> | null = null;
+
+/** Bundles the bench entry with the production build script (same esbuild settings as the real thread). */
+function benchThreadBundle(): Promise<string> {
+  threadBundle ??= (async () => {
+    const load = new Function('specifier', 'return import(specifier)') as (
+      specifier: string
+    ) => Promise<{
+      buildIntelligenceLaneThread(options: { entry: string; outfile: string }): Promise<string>;
+    }>;
+    const { buildIntelligenceLaneThread } = await load(
+      pathToFileURL(resolvePath('scripts/build-intelligence-lane-thread.mjs')).href
+    );
+    return buildIntelligenceLaneThread({
+      entry: 'tests/load/helpers/intelligence-lane-thread-bench-entry.ts',
+      outfile: THREAD_BENCH_BUNDLE,
+    });
+  })();
+  return threadBundle;
+}
+
+/** The candidate lane in a worker thread, started and stopped by the production host. */
+async function threadCandidate(options: Options): Promise<CandidateLane> {
+  const entry = await benchThreadBundle();
+  let pending: ((snapshot: LaneSnapshot) => void) | null = null;
+  const started = startIntelligenceLaneThread({
+    entry,
+    workerData: { laneYield: options.laneYield },
+    onMessage: message => {
+      const report = message as { type?: string } & Partial<LaneSnapshot>;
+      if (report.type !== 'bench-tracker' || !pending) return;
+      const resolve = pending;
+      pending = null;
+      resolve({
+        completed: report.completed ?? 0,
+        started: report.started ?? 0,
+        finished: report.finished ?? 0,
+        spans: (report.spans ?? []).map(span => ({
+          start: span.start - performance.timeOrigin,
+          end: span.end === null ? null : span.end - performance.timeOrigin,
+        })),
+      });
+    },
+  });
+  if (!started) throw new Error('Lane thread did not start');
+  const empty: LaneSnapshot = { completed: 0, started: 0, finished: 0, spans: [] };
+  return {
+    snapshot: () =>
+      new Promise<LaneSnapshot>(resolve => {
+        const worker = laneThreadWorker();
+        if (!worker) return resolve(empty);
+        pending = resolve;
+        worker.postMessage({ type: 'bench-snapshot' });
+        setTimeout(() => {
+          if (pending === resolve) {
+            pending = null;
+            resolve(empty);
+          }
+        }, 5_000).unref();
+      }),
+    stop: async () => {
+      const status = getIntelligenceLaneStatus();
+      await stopIntelligenceLaneThread();
+      if (status.thread && status.thread.restarts > 0)
+        throw new Error(`Lane thread crashed during the run: ${status.thread.lastExit}`);
     },
   };
 }
@@ -648,14 +759,18 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
   if (arm === 'candidate' && options.noiseControls) await enableNoiseControls(serviceIds);
   else resetPrePagingSnapshot();
 
-  const lane = laneOn ? busyCandidate(options) : null;
+  const lane: CandidateLane | null = laneOn
+    ? options.laneMode === 'thread'
+      ? await threadCandidate(options)
+      : busyCandidate(options)
+    : null;
   // Warm connections and caches in both arms so neither pays cold-start cost inside the timed window.
   await runBurst(serviceIds, { ...options, events: 20 }, `warm-${arm}-${repetition}`);
   // The queue length stays flat (indexing chains an analysis item), so progress is read from the
   // lane's own completed-work counter.
   if (lane) {
     const deadline = Date.now() + 30000;
-    while (lane.tracker.completed === 0) {
+    while ((await lane.snapshot()).completed === 0) {
       if (Date.now() >= deadline) {
         await lane.stop();
         throw new Error('Candidate lane did not become active');
@@ -663,24 +778,26 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
       await new Promise(resolve => setTimeout(resolve, 5));
     }
   }
-  const completedBefore = lane?.tracker.completed ?? 0;
+  const before = lane ? await lane.snapshot() : null;
+  const completedBefore = before?.completed ?? 0;
   const failOpenBefore = failOpenCounts();
   const decisionsBefore = await prisma.prePagingDecision.count();
-  const finishedBefore = lane?.tracker.finished ?? 0;
+  const finishedBefore = before?.finished ?? 0;
   const burst = await profileWindow(
     options.cpuProfileDir ? `${options.cpuProfileDir}/${arm}-${repetition}.cpuprofile` : null,
     () => runBurst(serviceIds, options, `${arm}-${repetition}`)
   );
-  const completedAfter = lane?.tracker.completed ?? 0;
-  if (lane) {
-    burst.diagnostics.laneSpans = lane.tracker.spans
+  const after = lane ? await lane.snapshot() : null;
+  const completedAfter = after?.completed ?? 0;
+  if (after) {
+    burst.diagnostics.laneSpans = after.spans
       .filter(span => span.start < burst.ended && (span.end === null || span.end > burst.started))
       .map(span => ({
         startMs: Math.round(span.start - burst.started),
         endMs: span.end === null ? null : Math.round(span.end - burst.started),
       }));
   }
-  const startedAfter = lane?.tracker.started ?? 0;
+  const startedAfter = after?.started ?? 0;
   const failOpenAfter = failOpenCounts();
   const noiseDecisions = (await prisma.prePagingDecision.count()) - decisionsBefore;
   await lane?.stop();
@@ -820,7 +937,11 @@ async function main() {
     node: process.version,
     // Shared hosts skew both arms; record how loaded this one was so readers can judge the numbers.
     host: { cpus: cpus().length, loadAverageAtStart: loadAtStart, loadAverageAtEnd: loadavg() },
-    lane: { pool: resolveLanePool(), yieldToIngestion: options.laneYield },
+    lane: {
+      mode: options.laneMode,
+      pool: options.laneMode === 'thread' ? 'thread client' : resolveLanePool(),
+      yieldToIngestion: options.laneYield,
+    },
     pagingBackpressureBypassed: true,
     totalFailures,
     gate,
