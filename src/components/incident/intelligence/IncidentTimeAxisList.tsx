@@ -105,18 +105,20 @@ export default function IncidentTimeAxisList({
             >
               {entry.at.toISOString().slice(11, 16)} UTC
             </time>
-            {entry.reversal && (
+            {(entry.reversal || entry.reversed) && (
+              // Stays mounted once reversed so the result survives the refresh the action triggers.
               <UngroupButton
                 incidentId={incidentId}
-                target={{ type: 'decision', decisionId: entry.reversal.decisionId }}
-                label={entry.reversal.pages ? 'Reverse and page' : 'Mark wrong'}
+                target={{ type: 'decision', decisionId: entry.reversal?.decisionId ?? '' }}
+                settled={!entry.reversal}
+                label={entry.reversal?.pages ? 'Reverse and page' : 'Mark wrong'}
                 confirmTitle={
-                  entry.reversal.pages
+                  entry.reversal?.pages
                     ? 'Reverse this decision and page?'
                     : 'Mark this decision wrong?'
                 }
                 confirmBody={
-                  entry.reversal.pages
+                  entry.reversal?.pages
                     ? 'The alert is re-ingested as its own incident and pages normally. The decision is recorded as wrong, which counts against the rule in noise-control reports.'
                     : 'Nothing pages: the decision only changed how the alert was handled. It is recorded as wrong, which counts against the rule in noise-control reports.'
                 }

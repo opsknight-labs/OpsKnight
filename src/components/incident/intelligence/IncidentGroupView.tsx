@@ -168,17 +168,20 @@ export default function IncidentGroupView({
                     </span>
                   )}
                 </div>
-                {member.kind === 'ALERT' && member.ungroupable && group.canUngroupAlerts && (
-                  <UngroupButton
-                    incidentId={
-                      group.role === 'CHILD' && group.parent ? group.parent.id : incidentId
-                    }
-                    target={{ type: 'decision', decisionId: member.decisionId }}
-                    label="Ungroup and page"
-                    confirmTitle="Ungroup this alert and page?"
-                    confirmBody="The alert is released from this group and re-ingested as its own incident, which pages the on-call responder through its escalation policy. The grouping is recorded as a wrong decision."
-                  />
-                )}
+                {member.kind === 'ALERT' &&
+                  (member.ungroupable || member.reversed) &&
+                  group.canUngroupAlerts && (
+                    <UngroupButton
+                      incidentId={
+                        group.role === 'CHILD' && group.parent ? group.parent.id : incidentId
+                      }
+                      target={{ type: 'decision', decisionId: member.decisionId }}
+                      label="Ungroup and page"
+                      confirmTitle="Ungroup this alert and page?"
+                      confirmBody="The alert is released from this group and re-ingested as its own incident, which pages the on-call responder through its escalation policy. The grouping is recorded as a wrong decision."
+                      settled={member.reversed}
+                    />
+                  )}
                 {member.kind === 'INCIDENT' &&
                   !member.current &&
                   group.role === 'PARENT' &&

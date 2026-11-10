@@ -35,6 +35,7 @@ export default function UngroupButton({
   confirmTitle,
   confirmBody,
   confirmLabel,
+  settled = false,
 }: {
   incidentId: string;
   target: UngroupTarget;
@@ -42,6 +43,12 @@ export default function UngroupButton({
   confirmTitle: string;
   confirmBody: string;
   confirmLabel?: string;
+  /**
+   * The action already happened (the server now reports the item as reversed). Callers keep the button
+   * mounted in that state so the result, and the link to the newly paged incident, survive the page
+   * refresh the server action triggers; on a fresh load it renders nothing.
+   */
+  settled?: boolean;
 }) {
   const [state, setState] = useState<IncidentNoiseActionState>({ ok: true, message: '' });
   const [pending, startTransition] = useTransition();
@@ -69,9 +76,11 @@ export default function UngroupButton({
       }
     });
 
+  if (settled && !state.message) return null;
+
   return (
     <div className="flex flex-col items-end gap-1">
-      {!state.done && (
+      {!state.done && !settled && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <button
