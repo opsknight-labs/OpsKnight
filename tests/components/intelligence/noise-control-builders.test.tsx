@@ -207,6 +207,21 @@ describe('MaintenanceWindowsPanel', () => {
     );
   });
 
+  it('keeps badges out of paragraphs, so server HTML parses as rendered', () => {
+    // Badge renders a <div>; inside a <p> the HTML parser splits the paragraph and hydration fails.
+    const { container } = render(
+      <MaintenanceWindowsPanel
+        windows={[{ ...window, endedAt: new Date('2026-11-09T12:30:00Z'), enabled: false }]}
+        services={services}
+        teams={teams}
+        canManage
+        now={now}
+      />
+    );
+    expect(container.querySelectorAll('[data-badge]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('p div, p [data-badge]')).toHaveLength(0);
+  });
+
   it('edits by creating the updated window, then disabling the original', async () => {
     actions.createWindowAction.mockResolvedValue({
       ok: true,
@@ -454,7 +469,7 @@ describe('OrchestrationRulesBuilder', () => {
       ok: true,
       data: outcome({ matchedRules: { 'drop-test': 5 }, bySource: { 'drop-test': 5 } }),
     });
-    render(
+    const { container } = render(
       <OrchestrationRulesBuilder
         initialRules={rules}
         services={services}
@@ -464,6 +479,7 @@ describe('OrchestrationRulesBuilder', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Test rules against the last 7 days' }));
     expect(await screen.findByText('Matched 5 incidents in 7 days')).toBeInTheDocument();
+    expect(container.querySelectorAll('p div, p [data-badge]')).toHaveLength(0);
     expect(screen.getByText('Matched 0 incidents in 7 days')).toBeInTheDocument();
     expect(screen.getByText(/5 dropped or suppressed/)).toBeInTheDocument();
     expect(previews.previewOrchestrationAction.mock.calls[0][0]).toMatchObject({
@@ -503,7 +519,7 @@ describe('HeartbeatPanel', () => {
   };
 
   it('shows status, last ping and the last incident', () => {
-    render(
+    const { container } = render(
       <HeartbeatPanel
         monitors={[monitor]}
         services={services}
@@ -512,6 +528,7 @@ describe('HeartbeatPanel', () => {
       />
     );
     expect(screen.getByText('Missing')).toBeInTheDocument();
+    expect(container.querySelectorAll('p div, p [data-badge]')).toHaveLength(0);
     expect(screen.getByText(/every 1 d \(\+10 min grace\)/)).toBeInTheDocument();
     expect(screen.getByText(/Last ping never/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'last incident' })).toHaveAttribute(
