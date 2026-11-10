@@ -19,6 +19,14 @@ import {
  */
 export interface IngestionYieldOptions {
   enterLoad: number;
+  /**
+   * Events in flight right now that start yielding at once, without waiting for a sample window: the
+   * start of a burst. The averaged `enterLoad` alone reacted only after the first window that covered
+   * the burst, so a cycle starting with the burst ran at full concurrency through its first ~200 ms
+   * (measured: the whole remaining p99 cost of a lane thread, see the perf README). Leaving still
+   * requires the averaged load to stay below `exitLoad` for `holdMs`.
+   */
+  enterInFlight: number;
   exitLoad: number;
   holdMs: number;
   duty: number;
@@ -31,6 +39,7 @@ export interface IngestionYieldOptions {
 
 export const INGESTION_YIELD_DEFAULTS: IngestionYieldOptions = {
   enterLoad: 1,
+  enterInFlight: 2,
   exitLoad: 0.25,
   holdMs: 1_000,
   duty: 0.2,
@@ -75,9 +84,17 @@ export class IngestionYield {
     return this.lastLoad;
   }
 
-  /** Re-measures the load once at least `sampleMs` has passed and applies the hysteresis. */
+  /**
+   * Starts yielding as soon as `enterInFlight` events are in flight; otherwise re-measures the average
+   * load once at least `sampleMs` has passed and applies the hysteresis.
+   */
   isYielding(): boolean {
     const now = this.source();
+    if (!this.yielding && now.inFlight >= this.options.enterInFlight) {
+      this.yielding = true;
+      this.quietSince = null;
+      return true;
+    }
     if (now.at - this.last.at < this.options.sampleMs) return this.yielding;
     const load = averageInFlight(this.last, now);
     this.last = now;

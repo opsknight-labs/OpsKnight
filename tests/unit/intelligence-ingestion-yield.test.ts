@@ -54,7 +54,7 @@ describe('in-process ingestion activity', () => {
 describe('lane yield to ingestion', () => {
   it('starts yielding once the average load reaches the threshold, not on a single short event', () => {
     const activity = fakeActivity();
-    const gate = new IngestionYield(activity.source);
+    const gate = new IngestionYield(activity.source, { enterInFlight: Infinity });
     activity.run(100, 0.5); // half an event in flight on average: light ingestion
     expect(gate.isYielding()).toBe(false);
     activity.run(100, 8);
@@ -62,9 +62,26 @@ describe('lane yield to ingestion', () => {
     expect(gate.load).toBe(8);
   });
 
-  it('ignores windows shorter than the sample interval', () => {
+  it('starts yielding at once when a burst puts several events in flight, before any window', () => {
     const activity = fakeActivity();
     const gate = new IngestionYield(activity.source, { sampleMs: 50 });
+    activity.run(200, 0); // quiet: the last sample is from before the burst
+    expect(gate.isYielding()).toBe(false);
+    activity.run(1, 1); // one event is not a burst
+    expect(gate.isYielding()).toBe(false);
+    activity.run(1, 16); // 1 ms into a burst: no 50 ms window yet, yet it yields now
+    expect(gate.isYielding()).toBe(true);
+    // Leaving still needs the averaged load to stay low for the hold period.
+    activity.run(100, 0);
+    expect(gate.isYielding()).toBe(true);
+    activity.run(1_100, 0);
+    expect(gate.isYielding()).toBe(false);
+  });
+
+  it('ignores windows shorter than the sample interval', () => {
+    const activity = fakeActivity();
+    // The instantaneous trigger is switched off here to test the averaged path alone.
+    const gate = new IngestionYield(activity.source, { sampleMs: 50, enterInFlight: Infinity });
     activity.run(10, 20);
     expect(gate.isYielding()).toBe(false); // 10 ms is too short to judge
     activity.run(40, 20);
