@@ -18,7 +18,10 @@ describe('Ops Pulse dashboard contract', () => {
   });
 
   it('renders you, needs-attention, hotspots and coverage in the Ops Pulse panel', () => {
-    expect(pageSource).toContain('<OpsPulsePanel />');
+    // The panel now receives the optional AIOps pulse row as a prop, so the tag is no longer self-closed bare.
+    expect(pageSource).toContain('<OpsPulsePanel');
+    expect(pageSource).toContain('getAiopsPulse(actor)');
+    expect(railSource).toContain('{aiops}');
     expect(railSource).toContain('data-testid="pulse-you"');
     expect(railSource).toContain('data-testid="pulse-attention"');
     expect(railSource).toContain('data-testid="services-at-risk"');

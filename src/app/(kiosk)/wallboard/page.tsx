@@ -9,6 +9,8 @@ import { LiveDashboardProvider } from '@/components/dashboard/live/LiveDashboard
 import LiveWallboard from '@/components/dashboard/live/LiveWallboard';
 import WallboardNoiseTile from '@/components/dashboard/live/WallboardNoiseTile';
 import { getWallboardNoiseTile } from '@/lib/intelligence/incident-ux/wallboard-noise';
+import WallboardLargestGroupTile from '@/components/dashboard/live/WallboardLargestGroupTile';
+import { getWallboardLargestGroup } from '@/lib/intelligence/surfaces/dashboard-pulse';
 
 export const revalidate = 0;
 
@@ -38,6 +40,7 @@ export default async function WallboardPage({
   }
   const generation = await getRealtimeChangeGeneration().catch(() => null);
   const noiseTilePromise = getWallboardNoiseTile(actor).catch(() => null);
+  const largestGroupPromise = getWallboardLargestGroup(actor).catch(() => null);
   const snapshot = await getLiveDashboardSnapshot(actor, liveQueryFromParams(urlParams), {
     generation,
   }).catch(error => {
@@ -47,13 +50,20 @@ export default async function WallboardPage({
     return null;
   });
 
-  const noiseTile = await noiseTilePromise;
+  const [noiseTile, largestGroup] = await Promise.all([noiseTilePromise, largestGroupPromise]);
 
   return (
     <LiveDashboardProvider initialSnapshot={snapshot} currentUserId={user.id} persistQuery={false}>
       <LiveWallboard
         timeZone={user.timeZone || 'UTC'}
-        noiseTile={noiseTile ? <WallboardNoiseTile tile={noiseTile} /> : undefined}
+        noiseTile={
+          noiseTile || largestGroup ? (
+            <div className="space-y-[1.2vw]">
+              {noiseTile && <WallboardNoiseTile tile={noiseTile} />}
+              <WallboardLargestGroupTile group={largestGroup} />
+            </div>
+          ) : undefined
+        }
       />
     </LiveDashboardProvider>
   );

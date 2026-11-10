@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Activity,
@@ -295,9 +296,10 @@ const ATTENTION_TONE: Record<'rose' | 'amber' | 'violet', string> = {
 
 /**
  * Ops Pulse: what needs the viewer next, beside the live feed. Every section is derived from the
- * same authorized live snapshot, so it costs no extra queries.
+ * same authorized live snapshot, so it costs no extra queries. `aiops` is an optional server-rendered
+ * row (the AIOps pulse tile); the page omits it when there is nothing to show.
  */
-export function OpsPulsePanel() {
+export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
   const { snapshot, now, currentUserId, query, setQuery } = useLiveDashboard();
   const coverage = snapshot?.coverage;
   const attention = snapshot?.attention ?? [];
@@ -529,7 +531,11 @@ export function OpsPulsePanel() {
           ) : (
             <ul className="flex flex-wrap items-center gap-2" aria-label="Responders on call now">
               {shifts.slice(0, 8).map(shift => (
-                <li key={shift.id} title={`${shift.user.name} · ${shift.scheduleName}`} className="group relative">
+                <li
+                  key={shift.id}
+                  title={`${shift.user.name} · ${shift.scheduleName}`}
+                  className="group relative"
+                >
                   <UserAvatar
                     userId={shift.user.id ?? ''}
                     name={shift.user.name}
@@ -565,6 +571,7 @@ export function OpsPulsePanel() {
             </p>
           )}
         </section>
+        {aiops}
       </div>
     </section>
   );
