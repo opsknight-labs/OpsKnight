@@ -1017,6 +1017,60 @@ rendered between the description and the core tabs.
 - **Mobile.** `/m/incidents/[id]` renders the same strip (horizontally scrollable) and the same inspector
   as a bottom sheet. The separate mobile intelligence card is removed.
 
+## Placement: service, team, dashboard and wallboard surfaces
+
+Read-only surfaces that put existing intelligence data where people already look. All loaders live in
+`src/lib/intelligence/surfaces/`; none adds schema, a job or a write path (the one mutation, reviewing a
+suggested dependency, calls the existing `dependencies/service.reviewDependency`). Every surface renders
+nothing when it has nothing to show.
+
+- **Service Intelligence tab** (`surfaces/service-intelligence.ts`,
+  `src/app/(app)/services/[id]/intelligence/`, `src/components/service/intelligence/`).
+  `resolveServiceIntelligenceAccess` is the single gate: an active actor with `intelligence.read` and a
+  service inside `serviceReadWhere`. It also resolves the effective intelligence mode and the effective
+  noise-control mode (the service's own row, else the global row, else OFF); when both are OFF and the
+  viewer lacks `intelligence.manage`, `visible` is false and the page does not offer the tab. The tab's
+  component is only rendered while `?tab=intelligence` is selected, behind its own `Suspense`, so other
+  tabs issue none of its queries. Sections load in parallel through `overview/scope.loadSection`
+  (fail-soft, one-line error per section):
+  - dependency neighbourhood: the same rows as the topology graph (`dependencies/graph-view`) cut to
+    edges touching the service, at most 24 ACTIVE and 24 SUGGESTED, neighbours re-checked against
+    `serviceReadWhere` (an edge to an unreadable service is dropped), open-incident overlay under
+    `incidentReadWhere`; four queries regardless of edge count. Drawn as server-rendered SVG
+    (`ServiceDependencyGraph`, no client JavaScript, hidden below `sm` where the list is the view);
+    suggested edges are dashed and labelled. Approve/reject is `reviewServiceDependencyAction`
+    (`intelligence.manage`; the edge must be SUGGESTED, touch the viewed service and join two readable
+    services);
+  - SLO burn (`slo/burn.getSloBurn`), alert quality (the leaderboard's window, thresholds and
+    `scoreAlertQuality`, as one aggregate for one service), recent changes with the stored `riskScore`
+    (8 rows, 14 days), noise status (`getNoiseControlKpis` for the service, maintenance windows active now
+    via `isWindowActiveAt` for SERVICE/TEAM/ALL scopes, enabled heartbeat monitors), the AUTO gate
+    (`evaluation/quality.getAutoGate` for the effective policy), recurring problems
+    (`insights/service.recurringProblems`) and the count of confirmed service facts.
+- **Service list badges** (`surfaces/service-list-badges.ts`): maintenance active, SLO burning, noise
+  ON/SHADOW for one page of services. Gated on `intelligence.suggestions.read` and re-scoped with
+  `serviceReadWhere`, so a scoped user gets badges only for their teams' services. Five queries for the
+  whole page whatever its size (readable services, noise policies, maintenance windows, objectives,
+  incidents overlapping the six-hour burn window); the burn maths reuses the pure functions of
+  `slo/burn`. Fails soft to no badges.
+- **Team tiles** (`surfaces/team-tiles.ts`): AI usage today against the team's enabled budget
+  (`ai/cost.getBudgetStatuses`) plus a seven-day total from `AiUsageBreakdownDay`, and noise load
+  (`getNoiseControlKpis` over the team's readable services, at most 500). Requires `intelligence.read`
+  and a readable team; each tile is null when silent.
+- **AIOps pulse** (`surfaces/dashboard-pulse.getAiopsPulse`, rendered as the last row of the Ops Pulse
+  panel): pages avoided in 24 h (applied, unreversed ON decisions), open groups (open incidents with an
+  accepted `PARENT_CHILD` child, under `incidentReadWhere`), triage findings awaiting review (ACTIVE
+  urgency/assignment/duplicate findings from the last 7 days on open readable incidents with no feedback
+  row, counted up to 1,000) and, for `intelligence.manage` only, quarantined work items. Each probe
+  fails soft to zero; the loader returns null when every number is zero, and the page then renders no
+  tile.
+- **Wallboard largest open group** (`surfaces/dashboard-pulse.getWallboardLargestGroup`): one `groupBy`
+  over accepted `PARENT_CHILD` links whose parent is open and readable, plus one read of the parent.
+  Rendered beside `WallboardNoiseTile`; null when no group is open.
+
+The orphaned `src/components/DashboardAnomalyDetection.tsx` was removed; rate anomalies are surfaced by
+the insights pages.
+
 ## Fault tolerance
 
 Every failure is contained to the smallest unit that can fail, and every repair path is bounded:
