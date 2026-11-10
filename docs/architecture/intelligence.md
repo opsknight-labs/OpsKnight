@@ -479,10 +479,10 @@ grouping under a parent incident with an optional bounded hold, and heartbeat mo
   is gated by `assessNoiseReadiness`: ≥ 50 shadow decisions in 7 days and ≤ 2% reversed, or an explicit
   acknowledgement).
 - **The hook is bounded and fails open.** `evaluatePrePagingControls` reads only the in-process snapshot
-  (`cache.ts`, refreshed every 30 s, previous snapshot keeps serving) and at most three index-backed
-  lookups (`prismaLookups`), under one 5 ms deadline. Static controls (windows, rules, orchestration)
-  need no lookups. Any error, timeout or cold cache returns `action: 'NONE'`, so the event pages as
-  before. No model, no network.
+  (`cache.ts`, refreshed every 30 s, previous snapshot keeps serving; a service-level OFF policy
+  overrides an active global one) and index-backed lookups under one 5 ms deadline. Static controls
+  (windows, rules, orchestration) need no lookups. Any error, timeout or cold cache returns
+  `action: 'NONE'`, so the event pages as before. No model, no network.
 - **Every decision is recorded and reversible** (`PrePagingDecision`). Reversal re-ingests the alert
   through `processEvent` under a reversal-scoped dedup key so it pages; shadow reversals are the
   false-positive signal for readiness and the false-group KPI.
@@ -493,9 +493,50 @@ grouping under a parent incident with an optional bounded hold, and heartbeat mo
   in-memory lookups and records an evaluation run.
 - Post-paging correlation rules gained `allowHighUrgency` (suggest only) and `linkType: 'PARENT_CHILD'`.
 
-The one-line hot-path call (evaluate → record → act on `decision.apply`) is documented in
-`docs/v2.2.0/operate/intelligence/noise-controls.md` and lands together with the ingestion-side noise
-layer; until then the controls are exercised by the simulation and the heartbeat monitors are live.
+### Live ingestion wiring
+
+`processEvent` (`src/lib/events.ts`) calls the controls through `intelligence/ingest-hooks.ts` only,
+for a new trigger, after classification and before the incident is written, inside the event
+transaction (`noise-controls/ingest.ts`):
+
+1. **OFF (default):** one in-process map lookup; no statement is sent. A cold snapshot fails open
+   (`cache_cold`) and starts a background refresh.
+2. **SHADOW / ON:** `lookupPlan` derives exactly the reads the evaluator will make;
+   `prefetchedLookups` serves them from **one** statement (dedup target, flapping statuses, storm count
+   and parent as scalar sub-selects on `idx_alert_service_fingerprint_recent`, `idx_alert_by_service`
+   and `idx_incident_sla_by_service`). By default that statement runs on a **dedicated lookup pool**
+   (`noise-controls/lookup-client.ts`: two connections per process on the direct route, opened by the
+   background snapshot refresh once a SHADOW/ON policy exists) whose connections start with
+   `statement_timeout` and `lock_timeout` equal to the deadline: one round trip, and an abandoned or
+   failing lookup never touches the event transaction. A transaction-pooled (`pgbouncer=true`) or
+   missing datasource falls back to the **savepoint route**: the statement is issued lazily inside
+   `SAVEPOINT opsknight_prepaging` with `set_config('statement_timeout', <deadline>, true)` and the
+   savepoint is always rolled back (restoring the transaction's own timeout and clearing an aborted
+   subtransaction). That route costs three round trips inside the deadline and one after it; an
+   abandoned lookup delays the event by at most one deadline.
+3. **Acting on ON:** suppress → SUPPRESSED incident (no escalation, SLA paused); downgrade/transform →
+   effective urgency, restated alert severity/labels, timeline notes (reroute and runbook attachment are
+   recorded, not applied); drop → unlinked alert, no incident; append → alert on the open incident,
+   urgency only rises; group → OPEN child with no escalation, accepted `PARENT_CHILD` (child → parent)
+   with a provenance event, and only `TRIGGER_SERVICE_NOTIFICATION` queued; hold → first page scheduled
+   at `holdUntil` (never for HIGH). A vanished append/group target pages normally.
+4. **Recording:** SHADOW and ON decisions are written with the alert and incident ids (SHADOW keeps the
+   would-be target in `evidence.targetIncidentId`). Reversal re-ingests under
+   `noise-controls:ungroup`, which the hook never evaluates, so the reversal always pages.
+5. **Child roll-up:** `sendServiceNotifications` resolves a storm child's parent and keys its posts on
+   the parent's source with `rollUpParentId`; `decideNotificationNoise` then groups the first and
+   suppresses the rest per recipient and minute, whatever the traffic class, so a storm pages once.
+
+`setPrePagingDeadlineMs` overrides the deadline per process (1–50 ms) for tests and benchmarks only.
+The A/B gate runs with `--noise-controls on` (every control ON, every lookup executed, no outcome
+changed) against everything OFF; results are under `plans/intelligence-engine/certification/perf/`.
+**Local status (2026-11-10, lightly loaded shared host):** the hook alone **passes** on the pool route
+(+1.14 ms p50 / +0.34 ms p99, limit +2 / +10; savepoint route +3.68 ms p50, FAIL), with 1 in 1,200
+evaluations failing open. Every control ON together with the busy lane **fails** on p50 (+4.45 ms; the
+lane alone measured +1.61 and +2.41 ms), and the 10k burst over 1M history fails (+12.56 ms p50 /
++17.45 ms p99, 28% fail-open at concurrency 16 on two lookup connections). No ingestion event failed in
+any run. Keep ON to services where the noise justifies it until the lane's in-process cost is reduced
+and the burst gate passes.
 
 ## Triage, change risk, topology and SLO burn (deterministic)
 
@@ -586,9 +627,9 @@ answers or error messages.
 ## Expanded roadmap
 
 Service-certified reversible AUTO links and confirmed Squire write actions are implemented.
-Pre-paging orchestration/suppression, parent/child paging, external observability connectors,
-expanded agent actions, triage predictions and the responder overview are still tracked as work
-in progress in `plans/intelligence-engine/roadmap-implementation.json`. Implemented code and
+Pre-paging noise controls are wired into live ingestion (default OFF). External observability
+connectors, expanded agent actions, triage predictions and the responder overview are still tracked
+as work in progress in `plans/intelligence-engine/roadmap-implementation.json`. Implemented code and
 local evidence are distinct from deployment certification; synthetic checks do not certify a
 production service.
 

@@ -9,12 +9,16 @@ reader:
   task: Configure pre-paging noise controls in shadow, check them against history, then turn them on per service.
 verification:
   level: test
-  verified_at: 2026-11-07
+  verified_at: 2026-11-10
   evidence:
     [
       src/lib/intelligence/noise-controls,
+      src/lib/events.ts,
       tests/unit/intelligence-noise-controls.test.ts,
       tests/integration/intelligence/noise-controls.test.ts,
+      tests/integration/intelligence/noise-controls-ingestion.test.ts,
+      tests/ingestion/noise-controls-hook.test.ts,
+      tests/unit/intelligence-noise-lookup-client.test.ts,
     ]
 ---
 
@@ -27,10 +31,17 @@ and every decision is recorded and reversible. Highest urgency is never held.
 
 ## How it is safe
 
-- **Off the hot path by default.** The ingestion hook reads an in-process snapshot refreshed every
-  30 seconds and makes at most three index-backed lookups, all under one 5 ms deadline. If the snapshot is
-  cold, the deadline passes, or a lookup fails, the event pages exactly as it does today
-  (`opsknight_prepaging_fail_open_total{reason}`). There is no model and no network call.
+- **Off the hot path by default.** With the policy OFF (the default) ingestion only checks the
+  in-process snapshot, refreshed in the background every 30 seconds; nothing else runs. In SHADOW or ON
+  every read the policy can need (dedup target, flapping history, storm count and parent) is fetched in
+  **one** index-backed statement on a small dedicated connection pool (two connections per process,
+  using `DIRECT_DATABASE_URL` when set) whose server-side statement timeout equals the shared 5 ms
+  deadline, so it never touches the event's own transaction. If the database URL goes through a
+  transaction pooler (`pgbouncer=true`), the statement runs inside the event transaction under a
+  savepoint with the same timeout instead, which costs a few more round trips. If the snapshot is cold, the deadline
+  passes, or a lookup fails (including a missing table), the event pages exactly as it does today
+  (`opsknight_prepaging_fail_open_total{reason}`); a slow lookup can hold the event for at most one
+  deadline. There is no model and no network call.
 - **SHADOW before ON.** In SHADOW the decision is computed and recorded but not applied. ON is refused
   until a week of shadow evidence exists (at least 50 shadow decisions, at most 2% marked wrong), unless
   you tick "I understand" to turn it on anyway.
@@ -71,10 +82,41 @@ state. Metrics: `opsknight_prepaging_decisions_total{control,action,mode}`,
 `opsknight_prepaging_fail_open_total{reason}`, `opsknight_prepaging_evaluation_seconds`,
 `opsknight_heartbeat_monitors_missing`, `opsknight_heartbeat_pings_total{outcome}`.
 
+## What ON does to an alert
+
+The hook runs in `processEvent` for a new trigger (no open incident with the same dedup key), inside the
+event transaction and before the incident is written. Re-triggers of an open incident, resolves,
+acknowledgements, legacy flapping suppression and operator reversals are never evaluated. In SHADOW
+the decision is recorded against the alert and the incident it created, and everything pages as
+before. In ON:
+
+| Decision                                         | What happens                                                                                                                                                                                                                                                                                                                                                                                                                          | Reverse it                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Suppress (window, rule, orchestration, flapping) | The incident is created **SUPPRESSED** with the alert attached: visible, SLA paused, no escalation and no notifications. Its first timeline entry names the control and the reason.                                                                                                                                                                                                                                                   | Re-ingests the alert as a new incident that pages.                |
+| Downgrade (window, rule)                         | The incident is created and pages at the lower urgency; the timeline says from what to what and why.                                                                                                                                                                                                                                                                                                                                  | Marks the decision wrong (the incident already paged).            |
+| Drop (orchestration)                             | No incident. The alert is stored unlinked so the decision can be reviewed.                                                                                                                                                                                                                                                                                                                                                            | Re-ingests the alert as a new incident that pages.                |
+| Transform (orchestration)                        | Severity and labels are restated on the stored alert, urgency is applied to the incident, notes become timeline entries. **Reroute** and **attach runbook** are recorded on the decision and noted on the timeline but not applied at ingestion.                                                                                                                                                                                      | Marks the decision wrong.                                         |
+| Append (content dedup)                           | The alert is attached to the open incident with the same content, like a re-trigger: urgency only ever rises, and the open incident's timeline explains the append.                                                                                                                                                                                                                                                                   | Re-ingests the alert as its own incident that pages.              |
+| Group (storm)                                    | A child incident is created OPEN under the earliest open incident of the storm (accepted `PARENT_CHILD` relationship), with no escalation of its own. Its service-channel and webhook posts go through the notification noise controller keyed on the parent: the parent's post (or one grouped post when the parent posted more than a minute ago) stands for the storm, the rest are recorded as skipped. **The storm pages once.** | Re-ingests the alert as its own incident that pages.              |
+| Hold (storm, ≤ 60 s)                             | The incident is created OPEN and its first page is scheduled for the end of the hold; if it is acknowledged or resolved meanwhile it never pages. **HIGH urgency is never held**, even when the policy opts HIGH in.                                                                                                                                                                                                                  | Re-ingests the alert so it pages now (the held page still fires). |
+
+If an append or group target closed between the lookup and the write, the event pages normally.
+
+## Capacity note
+
+Each SHADOW/ON evaluation adds one database round trip on the lookup pool (about 1 ms per event in local
+measurements), and each process that ingests keeps two extra database connections open once any service
+is in SHADOW or ON; count them in your connection budget. During a burst, or on a busy host, the 5 ms
+budget can be exhausted, in which case the event pages normally and
+`opsknight_prepaging_fail_open_total{reason="deadline"}` rises; watch that counter after switching a
+service to SHADOW. Local measurements (`plans/intelligence-engine/certification/perf/README.md`) meet
+the ingestion latency contract for the controls alone but not yet with the intelligence lane busy in the
+same process or during a 10,000-event burst, so treat ON as opt-in per service and keep it to services
+where the noise justifies the cost.
+
 ## Integration point
 
-The controls are additive: the hook `evaluatePrePagingControls(input, getPrePagingSnapshot(),
-prismaLookups(tx))` plus `recordPrePagingDecision(tx, decision, …)` is one call in `processEvent`
-before the incident is created, and `decision.apply` tells the caller what to do instead of paging.
-Until that call lands (it is wired together with the ingestion-side noise layer), the controls are
-evaluated by the simulation and the heartbeat monitors are fully live.
+`processEvent` reaches the controls only through `src/lib/intelligence/ingest-hooks.ts`
+(`evaluateIngestNoiseControls`, `recordIngestNoiseDecision`, `linkStormChild`); the architecture test
+keeps that surface, the lookup pool's deadline-sized timeouts, the savepoint fallback and the reversal
+bypass in place.

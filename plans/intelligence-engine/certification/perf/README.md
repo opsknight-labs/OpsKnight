@@ -53,6 +53,79 @@ cost, not noise: the harness runs the lane in the _same Node process and pool_ a
 idle host; if it holds, lane CPU work needs a worker thread in `integrated`, or the dedicated
 `intelligence-worker` (default in every split package) should be required above a size threshold.
 
+### Pre-paging noise controls wired into ingestion (2026-11-09/10, all FAIL, host heavily loaded)
+
+`--noise-controls on` turns every control ON for the bench services, tuned so each event runs the full
+lookup (dedup target, flapping statuses, storm count and parent in one statement under the savepoint
+and 5 ms server-side timeout) without changing the outcome. Same contract, same thresholds. The host
+was shared with other agents' builds and suites throughout: load averages 26–38 for the A/B runs and
+17→5 during the burst. Deltas are median paired (candidate − baseline).
+
+| File                                                          | Candidate            | History                       | Events/arm | p50 Δ         | p99 Δ          | Noise fail-open (candidate)   | Result |
+| ------------------------------------------------------------- | -------------------- | ----------------------------- | ---------- | ------------- | -------------- | ----------------------------- | ------ |
+| `ingestion-ab-noise-off-2026-11-09-local.json`                | lane busy, noise OFF | 0                             | 6 × 200    | **+23.26 ms** | **+100.72 ms** | —                             | FAIL   |
+| `ingestion-ab-noise-on-2026-11-09-local.json`                 | lane busy, noise ON  | 0                             | 6 × 200    | **+22.37 ms** | **+108.79 ms** | deadline 1,176 / 1,200 (98%)  | FAIL   |
+| `ingestion-ab-noise-on-no-lane-2026-11-09-local.json`         | lane idle, noise ON  | 0                             | 6 × 200    | **+4.97 ms**  | **+14.52 ms**  | deadline 291, error 6 (25%)   | FAIL   |
+| `ingestion-burst10k-noise-on-history1m-2026-11-09-local.json` | lane busy, noise ON  | 1.01M incidents, 1.01M alerts | 1 × 10,000 | **+12.31 ms** | +4.27 ms       | deadline 6,211 / 10,000 (62%) | FAIL   |
+
+Reading:
+
+- **With the lane busy, noise ON adds nothing measurable on top of the lane** (+22.4 vs +23.3 ms p50,
+  +108.8 vs +100.7 ms p99, within this host's run-to-run spread): the lane-in-process cost dominates and
+  fails the gate on its own, as on 2026-11-08.
+- **The hook alone costs about one deadline**: +5.0 ms p50, +14.5 ms p99 with the lane idle. The hook
+  does three round trips inside the deadline (savepoint, timeout, one combined read) and one after it
+  (rollback); on this host one Prisma interactive-transaction round trip measured 0.5–2 ms, so the
+  5 ms budget is routinely spent, and a fail-open still pays for the work done before the deadline plus
+  the rollback. **OPEN**: re-run on an idle host; if it holds, cut round trips before any service is
+  switched ON at scale (options: run the single read on a separate pooled connection with its own
+  timeout so no savepoint is needed, or set the timeout once per transaction instead of per hook).
+- **Effectiveness under load is low.** With the lane busy 62–98% of evaluations failed open on the
+  deadline, so the controls would mostly not act. That is the designed safe behaviour (the event pages
+  normally) but it is not useful noise reduction on a host this loaded.
+- The burst over 1M history ran without a single ingestion failure. In the candidate 659 storm
+  groupings were recorded (10k events on 4 services exceed the 1,000-in-60 s storm threshold), so the
+  candidate did slightly less paging work than the baseline in that run.
+
+### Re-run on a lightly loaded host, savepoint route vs dedicated lookup pool (2026-11-10)
+
+Same contract, same thresholds, same arguments (6 × 200 events, concurrency 8, backlog 800, 4
+services; burst 1 × 10,000, concurrency 16, 1.01M resolved incidents and 1.01M alerts per arm). Load
+averages (1-minute) at the start/end of each run are given; the host was still shared but far quieter
+than on 2026-11-09. "Savepoint" is the hook as first wired (reads on the event transaction, four round
+trips); "pool" is the dedicated two-connection lookup pool (one round trip, the default since
+`perf(intelligence): run pre-paging lookups on a dedicated deadline-bounded pool`).
+
+| File                                                                    | Candidate                  | Load      | p50 Δ         | p99 Δ         | Noise fail-open (candidate) | Result   |
+| ----------------------------------------------------------------------- | -------------------------- | --------- | ------------- | ------------- | --------------------------- | -------- |
+| `ingestion-ab-noise-off-2026-11-10-run1-local.json`                     | lane busy, noise OFF       | 1.2 → 3.9 | +1.61 ms      | −0.16 ms      | —                           | PASS     |
+| `ingestion-ab-noise-off-2026-11-10-run2-local.json`                     | lane busy, noise OFF       | 2.7 → 3.3 | **+2.41 ms**  | +3.22 ms      | —                           | FAIL     |
+| `ingestion-ab-noise-on-2026-11-10-savepoint-local.json`                 | lane busy, noise ON        | 3.9 → 4.5 | **+6.19 ms**  | **+11.33 ms** | deadline 168 / 1,200 (14%)  | FAIL     |
+| `ingestion-ab-noise-on-2026-11-10-pool-local.json`                      | lane busy, noise ON        | 3.3 → 3.7 | **+4.45 ms**  | −0.41 ms      | deadline 1 / 1,200          | FAIL     |
+| `ingestion-ab-noise-on-no-lane-2026-11-10-savepoint-local.json`         | lane idle, noise ON        | 4.5 → 4.6 | **+3.68 ms**  | −9.28 ms      | deadline 91 / 1,200 (8%)    | FAIL     |
+| `ingestion-ab-noise-on-no-lane-2026-11-10-pool-local.json`              | lane idle, noise ON        | 3.7 → 3.5 | +1.14 ms      | +0.34 ms      | deadline 1 / 1,200          | **PASS** |
+| `ingestion-burst10k-noise-on-history1m-2026-11-10-savepoint-local.json` | lane busy, noise ON, burst | 4.6 → 6.3 | **+8.81 ms**  | −9.21 ms      | deadline 6,258 / 10,000     | FAIL     |
+| `ingestion-burst10k-noise-on-history1m-2026-11-10-pool-local.json`      | lane busy, noise ON, burst | 3.5 → 5.3 | **+12.56 ms** | **+17.45 ms** | deadline 2,774, error 1     | FAIL     |
+
+Reading:
+
+- **The hook alone now meets the contract** on this host: +1.14 ms p50 / +0.34 ms p99 with the lane idle
+  on the pool route, against +3.68 ms p50 on the savepoint route measured minutes earlier. Fail-open
+  on the deadline fell from 8–14% to 1 in 1,200, so the controls actually act instead of mostly
+  paging through.
+- **"All features ON vs everything OFF" still FAILS on p50** (+4.45 ms, limit +2). The lane on its own
+  sits at the edge of the p50 budget (+1.61 PASS and +2.41 FAIL in two runs 30 minutes apart), and the
+  hook's ~1 ms comes on top. The p99 budget holds (−0.41 ms). Closing this needs the lane cost
+  reduced (see the 2026-11-08 notes: worker thread or dedicated `intelligence-worker`), not the hook.
+- **The 10k burst over 1M history FAILS** on both routes (single repetition, so no confidence interval;
+  the two baselines differ by 5 ms p50 run to run). No ingestion event failed. At concurrency 16 the
+  two-connection pool queues: 28% of evaluations failed open on the deadline (63% on the savepoint
+  route). The bench policy's storm threshold (1,000 in 60 s) is exceeded by 10k events on 4 services, so
+  the candidate also did different work: 3,353 storm groupings (child link, provenance event, parent
+  timeline entry, service-notification roll-up) on the pool route, where more evaluations completed.
+  **OPEN**: a burst arm whose storm threshold is above the burst size, and a pool sized to the event
+  concurrency, to separate the hook's cost from the grouping work.
+
 ## Query plans (`tests/load/intelligence-query-plans.ts`)
 
 `query-plans-2026-11-08-local.json` (21k history): **PASS**. Seven queries index-backed, including the
