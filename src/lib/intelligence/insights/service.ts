@@ -89,7 +89,7 @@ async function visibleServices(actor: AuthorizationActor, client: Client) {
   return new Map(rows.map(row => [row.id, row.name]));
 }
 
-async function recurringProblems(
+export async function recurringProblems(
   serviceIds: string[],
   now: Date,
   client: Client
