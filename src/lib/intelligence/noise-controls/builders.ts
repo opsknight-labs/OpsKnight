@@ -29,12 +29,51 @@ export const RECURRENCE_PRESETS = [
 ] as const;
 export type RecurrencePreset = (typeof RECURRENCE_PRESETS)[number]['id'];
 
-/** The RRULE a preset stands for, anchored on the window's (UTC) start. `custom` returns `custom`. */
+/** Weekday (0 = Sunday) of `date` on the wall clock of `timeZone`. Invalid zones fall back to UTC. */
+export function weekdayInTimeZone(date: Date, timeZone = 'UTC'): number {
+  try {
+    const name = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(date);
+    const index = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(name);
+    if (index >= 0) return index;
+  } catch {
+    // Unknown zone: fall through to UTC.
+  }
+  return date.getUTCDay();
+}
+
+/**
+ * How many days the UTC weekday of `startsAt` is ahead of its weekday in `timeZone` (0, 1 or 6).
+ * Occurrences repeat at the UTC time of `startsAt` and BYDAY is evaluated in UTC, so a local weekday
+ * `d` is stored as UTC weekday `(d + shift) % 7`.
+ */
+export function utcWeekdayShift(startsAt: Date | null, timeZone = 'UTC'): number {
+  if (!startsAt || Number.isNaN(startsAt.getTime())) return 0;
+  return (startsAt.getUTCDay() - weekdayInTimeZone(startsAt, timeZone) + 7) % 7;
+}
+
+/** BYDAY codes for weekdays, Monday first, so equal sets always produce the same rule text. */
+function byDayCodes(days: readonly number[]): string {
+  return [...new Set(days)]
+    .sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
+    .map(day => WEEKDAY_CODES.at(day) ?? '')
+    .join(',');
+}
+
+const shiftDays = (days: readonly number[], shift: number) =>
+  days.map(day => (((day + shift) % 7) + 7) % 7);
+
+/**
+ * The RRULE a preset stands for. The weekday presets mean weekdays on the wall clock of `timeZone`
+ * (the zone the start was entered in); they are stored as the UTC weekdays of those occurrences,
+ * because the hook evaluates recurrence in UTC. `custom` returns the custom rule unchanged.
+ */
 export function recurrenceForPreset(
   preset: RecurrencePreset,
   startsAt: Date | null,
-  custom = ''
+  custom = '',
+  timeZone = 'UTC'
 ): string | null {
+  const shift = utcWeekdayShift(startsAt, timeZone);
   switch (preset) {
     case 'none':
       return null;
@@ -43,9 +82,9 @@ export function recurrenceForPreset(
     case 'weekly':
       return startsAt ? `FREQ=WEEKLY;BYDAY=${WEEKDAY_CODES[startsAt.getUTCDay()]}` : 'FREQ=WEEKLY';
     case 'weekdays':
-      return 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
+      return `FREQ=WEEKLY;BYDAY=${byDayCodes(shiftDays([1, 2, 3, 4, 5], shift))}`;
     case 'weekends':
-      return 'FREQ=WEEKLY;BYDAY=SA,SU';
+      return `FREQ=WEEKLY;BYDAY=${byDayCodes(shiftDays([6, 0], shift))}`;
     case 'monthly':
       return 'FREQ=MONTHLY';
     case 'custom':
@@ -58,34 +97,40 @@ export function recurrenceForPreset(
 /** The preset an existing RRULE corresponds to, so an edited window opens on the right choice. */
 export function presetForRecurrence(
   recurrence: string | null,
-  startsAt: Date | null
+  startsAt: Date | null,
+  timeZone = 'UTC'
 ): RecurrencePreset {
   if (!recurrence) return 'none';
   for (const preset of RECURRENCE_PRESETS) {
     if (preset.id === 'custom' || preset.id === 'none') continue;
-    if (recurrenceForPreset(preset.id, startsAt) === recurrence) return preset.id;
+    if (recurrenceForPreset(preset.id, startsAt, '', timeZone) === recurrence) return preset.id;
   }
   return 'custom';
 }
 
-/** A human description of a recurrence, falling back to the raw rule. */
-export function describeRecurrence(recurrence: string | null): string {
+/**
+ * A human description of a recurrence, falling back to the raw rule. With `startsAt` and `timeZone`
+ * the stored (UTC) weekdays are described as the weekdays they fall on in that zone.
+ */
+export function describeRecurrence(
+  recurrence: string | null,
+  startsAt: Date | null = null,
+  timeZone = 'UTC'
+): string {
   if (!recurrence) return 'Once';
-  switch (recurrence) {
-    case 'FREQ=DAILY':
-      return 'Every day';
-    case 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR':
-      return 'Every weekday';
-    case 'FREQ=WEEKLY;BYDAY=SA,SU':
-      return 'Every weekend';
-    case 'FREQ=MONTHLY':
-      return 'Every month';
-    default: {
-      const weekly = /^FREQ=WEEKLY;BYDAY=([A-Z]{2})$/.exec(recurrence);
-      if (weekly) return `Every week (${weekly[1]})`;
-      return recurrence;
-    }
-  }
+  if (recurrence === 'FREQ=DAILY') return 'Every day';
+  if (recurrence === 'FREQ=MONTHLY') return 'Every month';
+  const prefix = 'FREQ=WEEKLY;BYDAY=';
+  if (!recurrence.startsWith(prefix)) return recurrence;
+  const stored = recurrence
+    .slice(prefix.length)
+    .split(',')
+    .map(code => (WEEKDAY_CODES as readonly string[]).indexOf(code));
+  if (stored.length === 0 || stored.some(day => day < 0)) return recurrence;
+  const local = byDayCodes(shiftDays(stored, -utcWeekdayShift(startsAt, timeZone)));
+  if (local === 'MO,TU,WE,TH,FR') return 'Every weekday';
+  if (local === 'SA,SU') return 'Every weekend';
+  return `Every week (${local})`;
 }
 
 export type OccurrenceCheck =
@@ -143,20 +188,37 @@ export interface AgendaEntry {
 }
 
 export interface AgendaDay {
-  /** YYYY-MM-DD (UTC). */
+  /** YYYY-MM-DD in the viewer's time zone. */
   date: string;
   entries: AgendaEntry[];
 }
 
+/** YYYY-MM-DD of `date` on the wall clock of `timeZone` (UTC when the zone is unknown). */
+export function dateKeyInTimeZone(date: Date, timeZone = 'UTC'): string {
+  try {
+    // en-CA formats dates as YYYY-MM-DD.
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
 /**
- * Occurrences of every enabled, not-ended window over the next `days`, grouped by UTC start day. A
- * window already in progress appears on today. Bounded: at most `perWindow` occurrences per window.
+ * Occurrences of every enabled, not-ended window over the next `days`, grouped by start day in the
+ * viewer's `timeZone` (the zone the entries' times are shown in). A window already in progress appears
+ * on today. Bounded: at most `perWindow` occurrences per window.
  */
 export function buildMaintenanceAgenda(
   windows: readonly AgendaWindow[],
   now: Date = new Date(),
   days = 14,
-  perWindow = 31
+  perWindow = 31,
+  timeZone = 'UTC'
 ): AgendaDay[] {
   const horizon = new Date(now.getTime() + days * DAY_MS);
   const entries: AgendaEntry[] = [];
@@ -181,10 +243,10 @@ export function buildMaintenanceAgenda(
       });
   }
   entries.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  const today = now.toISOString().slice(0, 10);
+  const today = dateKeyInTimeZone(now, timeZone);
   const byDay = new Map<string, AgendaEntry[]>();
   for (const entry of entries) {
-    const day = entry.active ? today : entry.startsAt.toISOString().slice(0, 10);
+    const day = entry.active ? today : dateKeyInTimeZone(entry.startsAt, timeZone);
     const list = byDay.get(day) ?? [];
     list.push(entry);
     byDay.set(day, list);

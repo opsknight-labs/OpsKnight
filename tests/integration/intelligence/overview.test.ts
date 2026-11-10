@@ -9,6 +9,7 @@ import {
   getOverviewQuality,
   getOverviewSpeed,
   loadSection,
+  OVERVIEW_MAX_SERVICES,
   resolveOverviewScope,
   resolveOverviewWindow,
 } from '@/lib/intelligence/overview';
@@ -346,12 +347,26 @@ describe('AIOps overview data', () => {
     const team = await createTestTeam('Big');
     const user = await createTestUser({ role: 'USER' });
     await db.teamMember.create({ data: { userId: user.id, teamId: team.id } });
+    const actor: AuthorizationActor = await actorOf(user.id);
+
     await db.service.createMany({
       data: Array.from({ length: 3 }, (_, i) => ({ name: `svc-cap-${i}`, teamId: team.id })),
     });
-    const actor: AuthorizationActor = await actorOf(user.id);
+    const small = await resolveOverviewScope(actor);
+    expect(small.serviceIds).toHaveLength(3);
+    expect(small.servicesTruncated).toBe(false);
+
+    // One past the cap: the list stops at the cap and says it did.
+    await db.service.createMany({
+      data: Array.from({ length: OVERVIEW_MAX_SERVICES - 2 }, (_, i) => ({
+        name: `svc-cap-more-${i}`,
+        teamId: team.id,
+      })),
+    });
     const scope = await resolveOverviewScope(actor);
-    expect(scope.serviceIds).toHaveLength(3);
-    expect(scope.servicesTruncated).toBe(false);
+    expect(scope.global).toBe(false);
+    expect(scope.serviceIds).toHaveLength(OVERVIEW_MAX_SERVICES);
+    expect(new Set(scope.serviceIds).size).toBe(OVERVIEW_MAX_SERVICES);
+    expect(scope.servicesTruncated).toBe(true);
   });
 });

@@ -204,6 +204,7 @@ export default async function NoiseControlsPage({
               services={services ?? []}
               owners={ownerOptions}
               currentUserId={user.id}
+              initialServiceId={serviceId}
             />
           </div>
         )}
