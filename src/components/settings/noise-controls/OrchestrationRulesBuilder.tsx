@@ -474,7 +474,7 @@ export default function OrchestrationRulesBuilder({
                     </Button>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   Rule id <code>{rule.id}</code>
                   {replay && (
                     <>
@@ -486,7 +486,7 @@ export default function OrchestrationRulesBuilder({
                       {decisive ? ` (${decisive} dropped or suppressed)` : ''}
                     </>
                   )}
-                </p>
+                </div>
                 <MatcherRows
                   rows={rule.conditions}
                   max={PREPAGING_LIMITS.maxConditions}

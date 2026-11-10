@@ -34,11 +34,28 @@ const FILES = [
 const RAW_STATUS_COLOUR =
   /\b(?:text|bg|border|ring|from|to|via|fill|stroke|outline|divide|decoration)-(?:red|green|emerald|amber|yellow|rose|orange|lime)-\d{2,3}\b/g;
 
-describe('intelligence UI status colours', () => {
+describe('intelligence UI status colours and markup', () => {
   it.each(FILES)('%s uses status-* tokens, not raw red/green/amber classes', file => {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed list of repository files above
     const source = readFileSync(join(process.cwd(), file), 'utf8');
     expect(source.match(RAW_STATUS_COLOUR) ?? []).toEqual([]);
+  });
+
+  // Badge renders a <div>. Inside a <p>, the browser's HTML parser splits the paragraph, so the
+  // server HTML no longer matches the React tree and hydration fails.
+  const BLOCK_IN_PARAGRAPH = /<p\b[^>]*>(?:(?!<\/p>)[\s\S])*?<(?:Badge|div|ul|ol)\b/g;
+
+  it.each(FILES)('%s keeps badges and blocks out of <p>', file => {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed list of repository files above
+    const source = readFileSync(join(process.cwd(), file), 'utf8');
+    expect(source.match(BLOCK_IN_PARAGRAPH) ?? []).toEqual([]);
+  });
+
+  it('detects a badge in a paragraph, so the nesting check cannot pass vacuously', () => {
+    expect(
+      '<p className="x">name <Badge>Repeats</Badge></p>'.match(BLOCK_IN_PARAGRAPH)
+    ).toHaveLength(1);
+    expect('<p>a</p><div><Badge>b</Badge></div>'.match(BLOCK_IN_PARAGRAPH)).toBeNull();
   });
 
   it('detects a raw class, so the check cannot pass vacuously', () => {

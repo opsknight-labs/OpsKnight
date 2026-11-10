@@ -253,9 +253,9 @@ export default function HeartbeatPanel({
                 className="flex flex-wrap items-center justify-between gap-2 py-3"
               >
                 <div className="min-w-0 space-y-1">
-                  <p className="text-sm font-medium">
+                  <div className="text-sm font-medium">
                     {monitor.name} <Badge variant={badge.variant}>{badge.label}</Badge>
-                  </p>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {monitor.serviceName} · every {formatInterval(monitor.intervalSeconds)} (+
                     {formatInterval(monitor.graceSeconds)} grace) · {monitor.urgency} when missing ·

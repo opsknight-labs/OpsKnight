@@ -203,12 +203,12 @@ export function NoisePolicyForm({
             </a>
           ))}
       </div>
-      <p className="text-sm text-muted-foreground">
+      <div className="text-sm text-muted-foreground">
         Readiness for ON: {readiness.shadowDecisions}/{readiness.minimumShadowDecisions} shadow
         decisions in {readiness.windowDays} days, {Math.round(readiness.falsePositiveRate * 100)}%
         marked wrong (max {readiness.maxFalsePositiveRate * 100}%).{' '}
         {readiness.ready ? <Badge>Ready</Badge> : <Badge variant="secondary">Keep shadowing</Badge>}
-      </p>
+      </div>
       <form action={action} className="grid gap-4">
         <input type="hidden" name="expectedRevision" value={policy.revision} />
         <div className="grid gap-3 sm:grid-cols-3">
@@ -535,11 +535,11 @@ export function MaintenanceWindowList({
       {windows.map(window => (
         <li key={window.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div className="min-w-0 space-y-1">
-            <p className="text-sm font-medium">
+            <div className="text-sm font-medium">
               {window.name} {window.active && <Badge>Active now</Badge>}
               {window.endedAt && <Badge variant="secondary">Ended early</Badge>}
               {!window.enabled && <Badge variant="outline">Disabled</Badge>}
-            </p>
+            </div>
             <p className="text-xs text-muted-foreground">
               {window.scope === 'SERVICE' && `Service ${window.serviceName ?? window.serviceId}`}
               {window.scope === 'TEAM' && `Team ${window.teamId}`}
@@ -750,10 +750,10 @@ export function SuppressionRuleList({
       {rules.map(rule => (
         <li key={rule.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div className="min-w-0 space-y-1">
-            <p className="text-sm font-medium">
+            <div className="text-sm font-medium">
               {rule.name} {!rule.enabled && <Badge variant="outline">Disabled</Badge>}{' '}
               {rule.origin === 'SUGGESTED' && <Badge variant="secondary">Suggested</Badge>}
-            </p>
+            </div>
             <p className="text-xs text-muted-foreground">
               {rule.serviceName ?? 'Any service'} ·{' '}
               {rule.matchers
@@ -893,10 +893,10 @@ export function HeartbeatList({
       {monitors.map(monitor => (
         <li key={monitor.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div className="min-w-0 space-y-1">
-            <p className="text-sm font-medium">
+            <div className="text-sm font-medium">
               {monitor.name}{' '}
               <Badge variant={tone(monitor.state) as 'default'}>{monitor.state}</Badge>
-            </p>
+            </div>
             <p className="text-xs text-muted-foreground">
               {monitor.serviceName} · every {monitor.intervalSeconds}s (+{monitor.graceSeconds}s
               grace) · {monitor.urgency} · token {monitor.tokenPrefix}… · last ping{' '}
@@ -1004,7 +1004,7 @@ export function DecisionList({
       {decisions.map(decision => (
         <li key={decision.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div className="min-w-0 space-y-1">
-            <p className="text-sm font-medium">
+            <div className="text-sm font-medium">
               {decision.control} → {decision.action}{' '}
               <Badge variant={decision.applied ? 'default' : 'secondary'}>
                 {decision.applied
@@ -1014,7 +1014,7 @@ export function DecisionList({
                     : 'not applied'}
               </Badge>{' '}
               {decision.reversedAt && <Badge variant="outline">reversed</Badge>}
-            </p>
+            </div>
             <p className="text-xs text-muted-foreground">
               {decision.serviceName} · {decision.reason} · {formatAt(decision.createdAt)}
               {decision.policyVersionNumber !== null && (
