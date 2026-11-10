@@ -55,6 +55,7 @@ import { CostBudget } from '@/lib/mcp/core/budget';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resolvePageContext } from '@/lib/intelligence/squire/deterministic';
 import {
+  createTestEscalationPolicy,
   createTestIncident,
   createTestService,
   createTestTeam,
@@ -177,6 +178,28 @@ describe('Squire in Slack: @mention', () => {
     const stored = await db.chatOpsIntent.findFirstOrThrow({ orderBy: { createdAt: 'desc' } });
     expect(JSON.stringify(stored.responsePayload)).not.toContain('acknowledge');
     expect(stored.status).toBe('COMPLETED');
+  });
+
+  it('offers an action only OpsKnight can confirm as a link, never as a Confirm button', async () => {
+    const w = await world();
+    await db.aiSettings.update({
+      where: { id: 'default' },
+      data: { squireExtendedActions: true },
+    });
+    const policy = await createTestEscalationPolicy('Checkout escalation', [
+      { stepOrder: 0, delayMinutes: 5, targetType: 'USER', targetUserId: w.teammate.id },
+      { stepOrder: 1, delayMinutes: 10, targetType: 'USER', targetUserId: w.owner.id },
+    ]);
+    await db.service.update({
+      where: { id: w.service.id },
+      data: { escalationPolicyId: policy.id },
+    });
+    const { reply } = await mentionAndReply('U_OWNER', '<@U0BOT> escalate this');
+    const json = JSON.stringify(reply.blocks);
+    expect(json).toContain('Escalate');
+    expect(confirmValue(reply.blocks)).toBeUndefined();
+    expect(json).toContain('Open in OpsKnight');
+    expect(json).toContain(`/incidents/${w.incident.id}`);
   });
 
   it('refuses to answer for a Slack account that is not linked to an active user', async () => {

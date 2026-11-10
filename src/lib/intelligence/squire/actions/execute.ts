@@ -27,6 +27,7 @@ import {
 import { readIncidentForActor } from '../deterministic';
 import { recordServiceFactCommand } from '../../memory/facts';
 import {
+  CHAT_CONFIRMABLE_ACTIONS,
   SNAPSHOT_FREE_ACTIONS,
   SQUIRE_ACTION_INPUTS,
   SQUIRE_ACTION_KIND,
@@ -43,6 +44,9 @@ import {
 export type { SquireActionResult } from './outcomes';
 
 const failed = (message: string): SquireActionResult => ({ ok: false, message });
+
+/** Returned for a chat confirmation of an action that only the application can confirm. */
+export const CHAT_UNCONFIRMABLE_MESSAGE = 'Open OpsKnight to confirm this suggestion.';
 
 /**
  * Runs an action the signed-in person confirmed. This is the only place an assistant proposal turns into a
@@ -66,6 +70,10 @@ export async function executeSquireAction(
   if (!parsed.success) return failed('This suggestion is no longer valid.');
   if (!SNAPSHOT_FREE_ACTIONS.has(proposal.action) && !proposal.preconditions)
     return failed('This suggestion needs a fresh review. Ask again for a new suggestion.');
+  // Only the core actions have a chat path. Refuse the rest before the single-use receipt is written, so
+  // the same suggestion can still be confirmed in OpsKnight.
+  if (channel && !CHAT_CONFIRMABLE_ACTIONS.has(proposal.action))
+    return failed(CHAT_UNCONFIRMABLE_MESSAGE);
   // Extended actions stay opt-in at confirmation time too: switching them off withdraws open cards.
   if (
     isExtendedSquireAction(proposal.action) &&
@@ -783,9 +791,6 @@ async function runFromChat<N extends WriteAction>(
       return 'Incidents marked as related.';
     }
   }
-  // An action added later without a chat path is confirmed in the application instead.
-  throw new AppError({
-    code: 'VALIDATION_FAILED',
-    userMessage: 'Open OpsKnight to confirm this suggestion.',
-  });
+  // Unreachable: executeSquireAction refuses actions outside CHAT_CONFIRMABLE_ACTIONS before this point.
+  throw new AppError({ code: 'VALIDATION_FAILED', userMessage: CHAT_UNCONFIRMABLE_MESSAGE });
 }

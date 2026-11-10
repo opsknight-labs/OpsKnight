@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { getAiSettings } from '@/lib/intelligence/ai/settings';
 import { collectSquireTurn } from '@/lib/intelligence/squire/surfaces';
 import { executeSquireAction } from '@/lib/intelligence/squire/actions/execute';
+import { isChatConfirmableAction } from '@/lib/intelligence/squire/actions/catalog';
 import type { ChatSquireAnswer } from './render';
 
 /**
@@ -107,6 +108,7 @@ export async function answerChatQuestion(input: {
       expiresAt: proposal.expiresAt,
       ...(proposal.href ? { href: proposal.href } : {}),
       ...(proposal.untrustedContext ? { untrustedContext: true } : {}),
+      chatConfirmable: proposal.kind === 'WRITE' && isChatConfirmableAction(proposal.action),
     })),
     ...(answer.error ? { error: answer.error } : {}),
   };
