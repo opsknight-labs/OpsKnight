@@ -155,6 +155,13 @@ interface BurstDiagnostics {
   primaryStatements: { count: number; p50Ms: number; p99Ms: number; perEventMs: number };
   /** Sum over 50 ms samples of backends in each wait state (type:event), for this database. */
   waitEvents: Record<string, number>;
+  /**
+   * Latency by when the event started: p50/p99 of the first, middle and last third of the burst, so
+   * contention that only hits the start of a burst (before the lane notices it) can be told apart.
+   */
+  phases?: { p50Ms: number; p99Ms: number }[];
+  /** Lane handlers that overlapped the burst: start and end offsets from the burst start, in ms. */
+  laneSpans?: { startMs: number; endMs: number | null }[];
 }
 
 interface PoolSnapshot {
@@ -477,8 +484,18 @@ function eventFor(index: number, tag: string): EventPayload {
   };
 }
 
+function burstPhases(timeline: { at: number; ms: number }[]) {
+  const ordered = [...timeline].sort((a, b) => a.at - b.at);
+  const third = Math.ceil(ordered.length / 3);
+  return [0, 1, 2].map(index => {
+    const values = ordered.slice(index * third, (index + 1) * third).map(entry => entry.ms);
+    return { p50Ms: percentile(values, 0.5), p99Ms: percentile(values, 0.99) };
+  });
+}
+
 async function runBurst(serviceIds: string[], options: Options, tag: string) {
   const latencies: number[] = [];
+  const timeline: { at: number; ms: number }[] = [];
   let failures = 0;
   let next = 0;
   const stopSampling = { done: false };
@@ -520,9 +537,11 @@ async function runBurst(serviceIds: string[], options: Options, tag: string) {
           failures += 1;
         }
         latencies.push(performance.now() - t0);
+        timeline.push({ at: t0, ms: performance.now() - t0 });
       }
     })
   );
+  const ended = performance.now();
   const elapsedSec = (performance.now() - started) / 1000;
   const elu = performance.eventLoopUtilization(eluBefore).utilization;
   const cpu = process.cpuUsage(cpuBefore);
@@ -559,26 +578,36 @@ async function runBurst(serviceIds: string[], options: Options, tag: string) {
       perEventMs: statements.reduce((sum, value) => sum + value, 0) / Math.max(1, latencies.length),
     },
     waitEvents,
+    phases: burstPhases(timeline),
   };
-  return { latencies, failures, elapsedSec, ...db, diagnostics };
+  return { latencies, failures, elapsedSec, started, ended, ...db, diagnostics };
 }
 
 /** Keep the candidate busy: this harness publishes paging intents but has no paging delivery worker.
  * Bypass that synthetic backlog's backpressure in the harness only to measure worst-case contention.
  */
 function busyCandidate(options: Options) {
-  const tracker = { completed: 0, started: 0, finished: 0, stop: false };
+  const tracker = {
+    completed: 0,
+    started: 0,
+    finished: 0,
+    stop: false,
+    spans: [] as { start: number; end: number | null }[],
+  };
   const handlers = Object.fromEntries(
     Object.entries(DEFAULT_HANDLERS).map(([kind, handler]) => [
       kind,
       async (...args: Parameters<NonNullable<WorkHandlers[WorkKind]>>) => {
         tracker.started++;
+        const span = { start: performance.now(), end: null as number | null };
+        tracker.spans.push(span);
         try {
           const result = await handler!(...args);
           tracker.completed++;
           return result;
         } finally {
           tracker.finished++;
+          span.end = performance.now();
         }
       },
     ])
@@ -643,6 +672,14 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
     () => runBurst(serviceIds, options, `${arm}-${repetition}`)
   );
   const completedAfter = lane?.tracker.completed ?? 0;
+  if (lane) {
+    burst.diagnostics.laneSpans = lane.tracker.spans
+      .filter(span => span.start < burst.ended && (span.end === null || span.end > burst.started))
+      .map(span => ({
+        startMs: Math.round(span.start - burst.started),
+        endMs: span.end === null ? null : Math.round(span.end - burst.started),
+      }));
+  }
   const startedAfter = lane?.tracker.started ?? 0;
   const failOpenAfter = failOpenCounts();
   const noiseDecisions = (await prisma.prePagingDecision.count()) - decisionsBefore;
@@ -729,7 +766,11 @@ async function main() {
           `gc=${sample.diagnostics.gc.totalMs.toFixed(0)}ms major=${sample.diagnostics.gc.majorCount}/${sample.diagnostics.gc.majorMs.toFixed(0)}ms ` +
           `eld p50/p99/max=${sample.diagnostics.eventLoopDelayMs.p50.toFixed(1)}/${sample.diagnostics.eventLoopDelayMs.p99.toFixed(1)}/${sample.diagnostics.eventLoopDelayMs.max.toFixed(1)}ms ` +
           `stmt n/p50/p99/perEvent=${sample.diagnostics.primaryStatements.count}/${sample.diagnostics.primaryStatements.p50Ms}/${sample.diagnostics.primaryStatements.p99Ms}/${sample.diagnostics.primaryStatements.perEventMs.toFixed(1)}ms ` +
-          `poolwait mean=${sample.diagnostics.poolWait.meanMs.toFixed(2)}ms total=${sample.diagnostics.poolWait.totalMs.toFixed(0)}ms peak=${sample.diagnostics.poolWait.peakWaiting}` +
+          `poolwait mean=${sample.diagnostics.poolWait.meanMs.toFixed(2)}ms total=${sample.diagnostics.poolWait.totalMs.toFixed(0)}ms peak=${sample.diagnostics.poolWait.peakWaiting} ` +
+          `thirds p99=${(sample.diagnostics.phases ?? []).map(phase => phase.p99Ms.toFixed(0)).join('/')}ms` +
+          (sample.diagnostics.laneSpans
+            ? ` laneSpans=${sample.diagnostics.laneSpans.map(span => `${span.startMs}..${span.endMs ?? '?'}`).join(',')}`
+            : '') +
           (options.noiseControls
             ? ` noiseFailOpen=${JSON.stringify(sample.noiseFailOpen)} noiseDecisions=${sample.noiseDecisions}`
             : '')
