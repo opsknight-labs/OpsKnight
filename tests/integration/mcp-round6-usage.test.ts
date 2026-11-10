@@ -170,6 +170,35 @@ describe('fleet usage', () => {
     expect(usage.rows[0]!.calls).toBeGreaterThanOrEqual(usage.rows[1]!.calls);
   });
 
+  it('pages the groups in a stable order and falls back to page one for a stale page', async () => {
+    const { grant } = await connection();
+    // 45 tools; tool_NN has NN+1 calls so the order is fixed (busiest first).
+    await db.mcpCallLog.createMany({
+      data: Array.from({ length: 45 }, (_, n) =>
+        Array.from({ length: n + 1 }, () =>
+          row(grant.id, { tool: `tool_${String(n).padStart(2, '0')}` })
+        )
+      ).flat(),
+    });
+    const admin = viewerOf('admin', true);
+    const first = await getMcpUsage(admin, { window: '24h', by: 'tool', page: 1 });
+    const second = await getMcpUsage(admin, { window: '24h', by: 'tool', page: 2 });
+    const third = await getMcpUsage(admin, { window: '24h', by: 'tool', page: 3 });
+    expect([first.rows.length, second.rows.length, third.rows.length]).toEqual([20, 20, 5]);
+    expect([first.groupCount, second.groupCount, third.groupCount]).toEqual([45, 45, 45]);
+    expect(first.rows[0]!.key).toBe('tool_44');
+    expect(second.rows[0]!.key).toBe('tool_24');
+    expect(third.rows.at(-1)!.key).toBe('tool_00');
+    const keys = [...first.rows, ...second.rows, ...third.rows].map(entry => entry.key);
+    expect(new Set(keys).size).toBe(45);
+    // Totals describe the whole window, not the page.
+    expect(third.totals.calls).toBe((45 * 46) / 2);
+    // A page past the end (a stale link) shows the first page.
+    const stale = await getMcpUsage(admin, { window: '24h', by: 'tool', page: 9 });
+    expect(stale.page).toBe(1);
+    expect(stale.rows[0]!.key).toBe('tool_44');
+  });
+
   it('groups by assistant and by person with names, never emails, and flags older unattributed calls', async () => {
     const a = await connection('Alpha assistant');
     const b = await connection('Beta assistant');

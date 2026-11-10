@@ -125,6 +125,10 @@ beforeEach(() => {
       agentPoolId: null,
       incidentId: null,
       serviceId: null,
+      inputs: [
+        { key: 'unit', type: 'STRING', value: 'nginx' },
+        { key: 'access_token', type: 'STRING', value: '[withheld: credential]' },
+      ],
       steps: [
         { key: 'a', name: 'Look', type: 'HTTP', risk: 'READ_ONLY', configuration: [] },
         { key: 'b', name: 'Restart', type: 'SCRIPT', risk: 'NON_IDEMPOTENT', configuration: [] },
@@ -184,5 +188,12 @@ describe('UX-7 runbook review page', () => {
     expect(verification).toHaveTextContent('c'.repeat(64));
     expect(verification).toHaveTextContent(digest);
     expect(screen.getByText('Waiting for review')).toBeTruthy();
+    // The reviewer sees what the assistant supplied; a credential shows only that it exists.
+    const inputs = screen.getByRole('heading', {
+      name: 'Inputs the assistant supplied',
+    }).parentElement!;
+    expect(inputs).toHaveTextContent('unit');
+    expect(inputs).toHaveTextContent('nginx');
+    expect(inputs).toHaveTextContent('[withheld: credential]');
   });
 });

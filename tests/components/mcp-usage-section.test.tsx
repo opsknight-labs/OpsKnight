@@ -23,7 +23,8 @@ const usage = (overrides: Partial<McpUsage> = {}): McpUsage => ({
     { key: 'oncall_now', label: 'oncall_now', calls: 40, failed: 8, errorRate: 0.2, p95Ms: null },
   ],
   totals: { calls: 1240, failed: 14, errorRate: 0.0113, p95Ms: 210 },
-  truncated: false,
+  page: 1,
+  groupCount: 2,
   retentionDays: 30,
   ...overrides,
 });
@@ -89,6 +90,27 @@ describe('Usage tab', () => {
     expect(screen.getByText(/No assistant has called OpsKnight/)).toBeTruthy();
     rerender(<McpUsageSection usage={empty} q="zzz" exportAction={exportAction} />);
     expect(screen.getByText(/matches that search/)).toBeTruthy();
+  });
+
+  it('pages through more groups than one page holds', () => {
+    render(
+      <McpUsageSection
+        usage={usage({ page: 2, groupCount: 45 })}
+        q=""
+        exportAction={exportAction}
+      />
+    );
+    const nav = screen.getByRole('navigation', { name: 'Usage pages' });
+    expect(document.body.textContent).toMatch(/21.{1,3}40 of 45/);
+    expect(nav.textContent).toContain('2 / 3');
+    expect(
+      within(nav)
+        .getByRole('link', { name: /Previous/ })
+        .getAttribute('href')
+    ).not.toMatch(/page=/);
+    expect(within(nav).getByRole('link', { name: /Next/ }).getAttribute('href')).toContain(
+      'page=3'
+    );
   });
 
   it('exports the current view and reports a cut-off honestly', async () => {
