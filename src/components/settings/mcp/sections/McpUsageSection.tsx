@@ -4,6 +4,7 @@ import {
   FilterChips,
   ListEmpty,
   ListSearch,
+  Pagination,
   ResponsiveCell,
   ResponsiveRow,
   ResponsiveTable,
@@ -14,6 +15,7 @@ import type { McpUsage } from '@/app/(app)/settings/integrations/mcp/usage';
 import type { McpUsageExportResult } from '@/app/(app)/settings/integrations/mcp/usage-actions';
 import {
   USAGE_GROUPS,
+  USAGE_PAGE_SIZE,
   USAGE_WINDOW_KEYS,
   mcpHref,
   type UsageGroup,
@@ -56,8 +58,14 @@ type Props = {
 
 export default function McpUsageSection({ usage, q, exportAction }: Props) {
   const { window: range, by } = usage;
-  const link = (next: { window?: UsageWindow; by?: UsageGroup; q?: string | null }) =>
+  const link = (next: {
+    window?: UsageWindow;
+    by?: UsageGroup;
+    q?: string | null;
+    page?: number;
+  }) =>
     mcpHref({
+      page: next.page ?? 1,
       tab: 'usage',
       window: (next.window ?? range) === '24h' ? null : (next.window ?? range),
       by: (next.by ?? by) === 'tool' ? null : (next.by ?? by),
@@ -190,12 +198,15 @@ export default function McpUsageSection({ usage, q, exportAction }: Props) {
           ))}
         </ResponsiveTable>
       )}
-      {usage.truncated && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          Showing the busiest {usage.rows.length}. Search to narrow the list, or export for
-          everything.
-        </p>
-      )}
+      <div className="-mx-4 mt-4 md:-mx-6">
+        <Pagination
+          label="Usage pages"
+          page={usage.page}
+          pageSize={USAGE_PAGE_SIZE}
+          total={usage.groupCount}
+          href={n => link({ page: n })}
+        />
+      </div>
     </SettingsSection>
   );
 }

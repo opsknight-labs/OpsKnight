@@ -5,6 +5,8 @@
  */
 
 export const MCP_PAGE_SIZE = 20;
+/** Groups per page of the Usage table. */
+export const USAGE_PAGE_SIZE = 20;
 
 export const MCP_SECTIONS = [
   'overview',

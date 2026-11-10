@@ -552,6 +552,7 @@ export default async function McpSettings({
           window: params.usageWindow,
           by: params.usageBy,
           q: params.q,
+          page: params.page,
         });
         return <McpUsageSection usage={usage} q={params.q} exportAction={exportMcpUsage} />;
       }

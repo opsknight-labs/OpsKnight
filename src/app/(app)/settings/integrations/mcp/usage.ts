@@ -5,7 +5,13 @@ import { requireMcp } from '@/lib/mcp/core/errors';
 import { MCP_PAT_CLIENT_ID } from '@/lib/mcp/auth/effective-access';
 import { MCP_CALL_LOG_DEFAULT_RETENTION_DAYS } from '@/lib/mcp/core/call-log';
 import type { McpViewer } from './queries';
-import { USAGE_GROUPS, USAGE_WINDOW_KEYS, type UsageGroup, type UsageWindow } from './list-params';
+import {
+  USAGE_GROUPS,
+  USAGE_PAGE_SIZE,
+  USAGE_WINDOW_KEYS,
+  type UsageGroup,
+  type UsageWindow,
+} from './list-params';
 
 export { USAGE_GROUPS, USAGE_WINDOW_KEYS };
 export type { UsageGroup, UsageWindow };
@@ -23,7 +29,6 @@ export const USAGE_WINDOWS: Record<UsageWindow, number> = {
 };
 
 /** Groups shown per view; the rest are summed into the totals only. */
-export const USAGE_ROW_LIMIT = 50;
 /** Rows in one export. A longer result is cut and says so. */
 export const USAGE_EXPORT_LIMIT = 10_000;
 
@@ -56,8 +61,9 @@ export type McpUsage = {
   since: string;
   rows: McpUsageRow[];
   totals: { calls: number; failed: number; errorRate: number; p95Ms: number | null };
-  /** More groups exist than the view shows. */
-  truncated: boolean;
+  /** The page shown (1-based; clamped to the last page) and how many groups exist in all. */
+  page: number;
+  groupCount: number;
   /** Days the log is kept; a window longer than this is incomplete. */
   retentionDays: number;
 };
@@ -120,7 +126,7 @@ export function usageLabel(
 
 export async function getMcpUsage(
   viewer: McpViewer,
-  input: { window: UsageWindow; by: UsageGroup; q?: string },
+  input: { window: UsageWindow; by: UsageGroup; q?: string; page?: number },
   now = new Date()
 ): Promise<McpUsage> {
   requireAdmin(viewer);
@@ -130,16 +136,25 @@ export async function getMcpUsage(
   const success = Prisma.join(SUCCESS_OUTCOMES);
   const timed = Prisma.join(TIMED_OUTCOMES);
 
+  const page = Math.max(1, Math.floor(input.page ?? 1));
   const [groups, total, policy] = await Promise.all([
     prisma.$queryRaw<
-      { key: string | null; calls: bigint; failed: bigint; p95: number | null }[]
+      {
+        key: string | null;
+        calls: bigint;
+        failed: bigint;
+        p95: number | null;
+        groupCount: bigint;
+      }[]
     >`SELECT ${column} AS "key",
+        COUNT(*) OVER () AS "groupCount",
         COUNT(*) AS calls,
         COUNT(*) FILTER (WHERE "outcome" NOT IN (${success})) AS failed,
         percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")
           FILTER (WHERE "outcome" IN (${timed})) AS p95
       FROM "McpCallLog" WHERE ${where}
-      GROUP BY 1 ORDER BY calls DESC, "key" ASC NULLS LAST LIMIT ${USAGE_ROW_LIMIT + 1}`,
+      GROUP BY 1 ORDER BY calls DESC, "key" ASC NULLS LAST
+      LIMIT ${USAGE_PAGE_SIZE} OFFSET ${(page - 1) * USAGE_PAGE_SIZE}`,
     prisma.$queryRaw<{ calls: bigint; failed: bigint; p95: number | null }[]>`
       SELECT COUNT(*) AS calls,
         COUNT(*) FILTER (WHERE "outcome" NOT IN (${success})) AS failed,
@@ -152,7 +167,10 @@ export async function getMcpUsage(
     }),
   ]);
 
-  const shown = groups.slice(0, USAGE_ROW_LIMIT);
+  // A page past the end (a stale link after the window shrank) shows the first page instead.
+  if (groups.length === 0 && page > 1) return getMcpUsage(viewer, { ...input, page: 1 }, now);
+  const shown = groups;
+  const groupCount = Number(groups.at(0)?.groupCount ?? 0);
   const names = await labels(
     input.by,
     shown.flatMap(group => (group.key ? [group.key] : []))
@@ -184,7 +202,8 @@ export async function getMcpUsage(
       p95Ms:
         totals?.p95 === null || totals?.p95 === undefined ? null : Math.round(Number(totals.p95)),
     },
-    truncated: groups.length > USAGE_ROW_LIMIT,
+    page,
+    groupCount,
     retentionDays: policy?.callLogRetentionDays ?? MCP_CALL_LOG_DEFAULT_RETENTION_DAYS,
   };
 }
