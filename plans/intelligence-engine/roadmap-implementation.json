@@ -148,16 +148,15 @@
         "Finish extracting composer/history/list/panel from the launcher",
         "Resizable docked Sheet panel",
         "Complete shared settings form primitives, toasts and remaining dark-mode fixes",
-        "Lazy server tab content, Intelligence timeline, post-summary note and collapse preference",
-        "User-facing AIOps overview",
-        "Grouping timeline and incident-list badges",
         "Citation layouts and breadcrumbs",
         "Complete browser coverage and incident bundle certification",
         "Animation-frame streaming batches, aria-modal and focus trap, collapsible investigation and feedback",
-        "Orchestration/suppression/heartbeat builders with seven-day replay and maintenance calendar",
-        "Mobile Intelligence panels and theme-token analysis notices",
-        "Noise decision list badges/filters and wallboard KPI tile",
-        "Responder overview includes MTTA, AI cost and one-click noisy-alert fixes with existing SVG chart kit"
+        "Collapse preference for incident intelligence sections",
+        "Maintenance calendar view (builders show upcoming occurrences only)",
+        "Overview AI cost and one-click severity lowering for noisy alerts (today: link to service automation, Jira issue when configured)",
+        "Remove legacy noise-control list components superseded by the builders",
+        "Wallboard noise tile e2e (needs the kiosk token flow in the e2e seed) and browser dark-mode contrast check of the new intelligence surfaces",
+        "Browser coverage for the timeline Reverse action and the mobile 44 px assertion; CI run of the new intelligence e2e specs with the shared Playwright config"
       ],
       "implemented": [
         "Memoized messages, stable ids, safe lazy markdown and code copying",
@@ -166,7 +165,12 @@
         "Expandable docked desktop panel and mobile full screen",
         "Global shortcut, distinct availability states, retry and app-timezone history dates",
         "Configured assistant name, shared chat buttons and 44px touch targets",
-        "Production browser journeys with mobile, dark mode and accessibility checks"
+        "Production browser journeys with mobile, dark mode and accessibility checks",
+        "User-facing AIOps overview (/intelligence): scoped, bounded noise, acceptance, MTTA/MTTR trends on the SVG chart kit, change, health and noisy-alert panels with Jira issue",
+        "Incident group card and view with Ungroup and page; timeline noise/grouping/suggestion events with Why? and reversal; Post summary as note",
+        "Incident-list noise-decision badges and filter; wallboard noise tile",
+        "Maintenance, suppression, orchestration and heartbeat builders with seven-day previews",
+        "Mobile Intelligence sections and status-token analysis notices with 44 px touch targets"
       ],
       "wave": 7
     },

@@ -29,6 +29,13 @@ Pages for features unchanged since 2.1.0 remain in the [2.1.0 documentation](../
 - Operating: [architecture](./operate/mcp/architecture.md), [monitoring](./operate/mcp/monitoring.md)
   and [certification status](./operate/mcp/certification.md)
 
+## Intelligence (AIOps)
+
+- [Use suggestions](./guides/intelligence/use-suggestions.md) and [basic-mode questions](./guides/intelligence/basic-mode.md)
+- [AIOps overview](./guides/intelligence/aiops-overview.md), [intelligence on incidents and lists](./guides/intelligence/incidents-and-lists.md)
+  and [noise-control builders](./guides/intelligence/noise-control-builders.md)
+- Operating: [production guide](./operate/intelligence/production.md)
+
 ## Identity
 
 - [Single sign-on guides](./guides/identity/README.md) and [sign-in troubleshooting](./troubleshooting/login/README.md)
