@@ -35,7 +35,16 @@ export interface ChatSquireProposal {
   expiresAt: string;
   href?: string;
   untrustedContext?: boolean;
+  /**
+   * False when the action has no chat confirmation path (extended and knowledge actions): the card then
+   * opens OpsKnight instead of offering a Confirm button that could only fail.
+   */
+  chatConfirmable?: boolean;
 }
+
+/** A WRITE proposal that chat can actually confirm. */
+const confirmableInChat = (proposal: ChatSquireProposal) =>
+  proposal.kind === 'WRITE' && proposal.chatConfirmable !== false;
 
 /** One answered turn, already collected from the stream. */
 export interface ChatSquireAnswer {
@@ -198,7 +207,7 @@ export function renderSlackAnswer(
       options.baseUrl
     );
     const value = squireButtonValue(proposal.token, options.ownerUserId);
-    if (proposal.kind === 'WRITE' && value.length <= SLACK_BUTTON_VALUE_MAX) {
+    if (confirmableInChat(proposal) && value.length <= SLACK_BUTTON_VALUE_MAX) {
       blocks.push({
         type: 'actions',
         elements: [
@@ -218,7 +227,8 @@ export function renderSlackAnswer(
         ],
       });
     } else if (link) {
-      // Navigation, or a proposal too large for a Slack button: open it in OpsKnight instead.
+      // Navigation, an action only the application can confirm, or a proposal too large for a Slack
+      // button: open it in OpsKnight instead.
       blocks.push({
         type: 'actions',
         elements: [
@@ -238,9 +248,7 @@ export function renderSlackAnswer(
       {
         type: 'mrkdwn',
         text: `${escapeSlack(answer.name)} · ${answer.mode === 'ai' ? 'AI' : 'Basic mode'} · answered with the asker's permissions${
-          answer.proposals.some(proposal => proposal.kind === 'WRITE')
-            ? ' · only the asker can confirm'
-            : ''
+          answer.proposals.some(confirmableInChat) ? ' · only the asker can confirm' : ''
         }`,
       },
     ],
@@ -304,14 +312,22 @@ export function renderTeamsAnswer(
         proposal.href ?? `/incidents/${encodeURIComponent(proposal.incidentId)}`,
         options.baseUrl
       );
-      if (proposal.kind === 'WRITE')
+      if (confirmableInChat(proposal))
         actions.push({
           type: 'Action.Execute',
           title: `Confirm: ${proposal.title}`.slice(0, 80),
           verb: SQUIRE_TEAMS_CONFIRM_VERB,
           data: { squire: { v: 1, t: proposal.token, o: options.ownerUserId } },
         });
-      else if (link) actions.push({ type: 'Action.OpenUrl', title: proposal.title, url: link });
+      else if (link)
+        actions.push({
+          type: 'Action.OpenUrl',
+          title: (proposal.kind === 'WRITE'
+            ? `Open in OpsKnight: ${proposal.title}`
+            : proposal.title
+          ).slice(0, 80),
+          url: link,
+        });
     }
   }
   body.push({

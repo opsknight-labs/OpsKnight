@@ -126,6 +126,23 @@ describe('Squire chat rendering: Slack', () => {
     expect(json).toContain(`${BASE}/runbooks/r1`);
   });
 
+  it('opens OpsKnight for a WRITE action chat cannot confirm, with no Confirm button', () => {
+    const { blocks } = renderSlackAnswer(
+      answer({
+        proposals: [
+          { ...writeProposal, title: 'Escalate to the next level', chatConfirmable: false },
+        ],
+      }),
+      { baseUrl: BASE, ownerUserId: 'u1' }
+    );
+    const json = JSON.stringify(blocks);
+    expect(json).not.toContain(SQUIRE_SLACK_CONFIRM_ACTION);
+    expect(json).not.toContain(SQUIRE_SLACK_DISMISS_ACTION);
+    expect(json).not.toContain('only the asker can confirm');
+    expect(json).toContain('Open in OpsKnight');
+    expect(json).toContain(`${BASE}/incidents/inc_1`);
+  });
+
   it('shows an error alone, escaped', () => {
     const { text, blocks } = renderSlackAnswer(answer({ error: 'Nope <@here>', text: '' }), {
       baseUrl: BASE,
@@ -196,6 +213,19 @@ describe('Squire chat rendering: Teams', () => {
     expect(isTeamsSquireInvoke(value)).toBe(true);
     expect(parseTeamsSquireAction(value)).toEqual({ token: 'sealed-token', owner: 'u1' });
     expect(JSON.stringify(card)).toContain(`[Checkout errors](${BASE}/incidents/inc_1)`);
+  });
+
+  it('renders a WRITE action chat cannot confirm as an OpenUrl, never Action.Execute', () => {
+    const card = renderTeamsAnswer(
+      answer({ proposals: [{ ...writeProposal, chatConfirmable: false }] }),
+      { baseUrl: BASE, ownerUserId: 'u1' }
+    ) as { actions: { type: string; verb?: string; url?: string }[] };
+    expect(card.actions).toHaveLength(1);
+    expect(card.actions[0]).toMatchObject({
+      type: 'Action.OpenUrl',
+      url: `${BASE}/incidents/inc_1`,
+    });
+    expect(JSON.stringify(card)).not.toContain(SQUIRE_TEAMS_CONFIRM_VERB);
   });
 
   it('never treats an incident-card action as a Squire action', () => {

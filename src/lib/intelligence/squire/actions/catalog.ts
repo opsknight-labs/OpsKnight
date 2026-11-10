@@ -81,6 +81,23 @@ export const SNAPSHOT_FREE_ACTIONS: ReadonlySet<SquireActionName> = new Set([
   'learn_service_fact',
 ]);
 
+/**
+ * WRITE actions that have a chat confirmation path (Slack and Teams buttons, `runFromChat`). Every other
+ * WRITE action needs the web session: chat renders it as an "Open in OpsKnight" link, and the executor
+ * refuses a chat confirmation of it before the single-use receipt is written, so the card stays usable.
+ */
+export const CHAT_CONFIRMABLE_ACTIONS: ReadonlySet<SquireActionName> = new Set([
+  'acknowledge_incident',
+  'resolve_incident',
+  'add_incident_note',
+  'reassign_incident',
+  'link_related_incident',
+]);
+
+export function isChatConfirmableAction(action: string): boolean {
+  return (CHAT_CONFIRMABLE_ACTIONS as ReadonlySet<string>).has(action);
+}
+
 /** What the model is told about each action. Every description says the person must confirm it. */
 export const SQUIRE_ACTION_DESCRIPTIONS: Record<SquireActionName, string> = {
   acknowledge_incident:

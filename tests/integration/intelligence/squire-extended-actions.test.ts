@@ -259,6 +259,25 @@ describe('escalate_incident', () => {
     ).toBe(1);
   });
 
+  it('refuses a chat confirmation before the receipt, so the card can still be confirmed in OpsKnight', async () => {
+    const { responder, incident } = await world();
+    const proposal = await propose(responder.id, 'escalate_incident', { incidentId: incident.id });
+    const fromChat = await executeSquireAction(await actorOf(responder.id), proposal!.token, {
+      provider: 'SLACK',
+      actorName: 'Rae Responder',
+    });
+    expect(fromChat).toEqual({ ok: false, message: 'Open OpsKnight to confirm this suggestion.' });
+    expect(await receipts()).toBe(0);
+    expect(
+      await db.auditLog.count({
+        where: { action: 'intelligence.squire.action', entityId: incident.id },
+      })
+    ).toBe(0);
+
+    expect(await confirm(responder.id, proposal!.token)).toMatchObject({ ok: true });
+    expect(await receipts('SUCCEEDED')).toBe(1);
+  });
+
   it('is not offered for an incident that is not open, nor to someone who may not escalate it', async () => {
     const { responder, member, incident, service } = await world();
     const acked = await createTestIncident('Already handled', service.id, {
