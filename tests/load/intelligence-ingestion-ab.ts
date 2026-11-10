@@ -73,6 +73,8 @@ import {
   judgeLowerIsWorse,
   percentile,
 } from './helpers/ab-stats';
+import { waitForQuietHost, watchHost } from './helpers/host-validity';
+import { laneWorkInBurstMs } from './helpers/lane-busy';
 
 type Arm = 'baseline' | 'candidate';
 
@@ -107,6 +109,8 @@ interface Options {
    * thread started by lane-thread.ts) or `in-process` (on the ingestion thread, as before the thread).
    */
   laneMode: 'thread' | 'in-process';
+  /** Wait up to this long for a quiet host (load and other heavy processes) before the first arm. */
+  waitForQuietMs: number;
 }
 
 /** Median of the per-repetition differences (candidate minus baseline). */
@@ -146,6 +150,10 @@ interface Sample {
    * began), completed or not. Reported for context; the gate still requires completed items.
    */
   laneItemsActive: number;
+  /** Wall time inside the timed burst with at least one lane handler running. */
+  laneWorkInBurstMs: number;
+  /** The same as a share of the burst's wall time. */
+  laneBusyFraction: number;
   diagnostics: BurstDiagnostics;
 }
 
@@ -271,6 +279,9 @@ function parseOptions(argv: string[]): Options {
         throw new Error('--lane-mode must be thread or in-process');
       return value;
     })(),
+    waitForQuietMs: argv.includes('--wait-for-quiet-ms')
+      ? Math.max(0, Number(argv[argv.indexOf('--wait-for-quiet-ms') + 1]) || 0)
+      : 0,
     cpuProfileDir: argv.includes('--cpu-profile-dir')
       ? argv[argv.indexOf('--cpu-profile-dir') + 1]
       : null,
@@ -839,6 +850,13 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
     peakActiveBackends: burst.peakActiveBackends,
     laneItemsProcessed: laneOn ? Math.max(0, completedAfter - completedBefore) : 0,
     laneItemsActive: laneOn ? Math.max(0, startedAfter - finishedBefore) : 0,
+    laneWorkInBurstMs: laneOn
+      ? laneWorkInBurstMs(burst.diagnostics.laneSpans, burst.elapsedSec)
+      : 0,
+    laneBusyFraction: laneOn
+      ? laneWorkInBurstMs(burst.diagnostics.laneSpans, burst.elapsedSec) /
+        Math.max(1, burst.elapsedSec * 1000)
+      : 0,
     noiseFailOpen,
     noiseDecisions,
     diagnostics: burst.diagnostics,
@@ -886,7 +904,9 @@ async function main() {
     throw new Error('--no-lane-yield is a diagnosis mode; combine it with --no-gate.');
   }
   const samples: Sample[] = [];
+  const quiet = options.waitForQuietMs > 0 ? await waitForQuietHost(options.waitForQuietMs) : null;
   const loadAtStart = loadavg();
+  const hostWatch = watchHost();
   for (let repetition = 0; repetition < options.repetitions; repetition += 1) {
     // Alternate which arm goes first so ordering effects cancel.
     const order: Arm[] =
@@ -924,7 +944,13 @@ async function main() {
       failures: rows.reduce((sum, row) => sum + row.failures, 0),
     };
   });
-  const laneBusy = !options.lane || candidate.every(sample => sample.laneItemsProcessed > 0);
+  const hostValidation = await hostWatch.stop();
+  // Busy means lane handlers ran inside the timed burst, not merely that the lane completed something
+  // between the snapshots around it (an item started before the burst, or finished after it).
+  const laneBusy =
+    !options.lane ||
+    candidate.every(sample => sample.laneItemsProcessed > 0 && sample.laneWorkInBurstMs > 0);
+  const laneBusyFractions = candidate.map(sample => sample.laneBusyFraction);
   const totalFailures = samples.reduce((sum, sample) => sum + sample.failures, 0);
   const p99DeltaMs = medianPairedDelta(samples, sample => sample.p99Ms);
   const p50DeltaMs = medianPairedDelta(samples, sample => sample.p50Ms);
@@ -933,18 +959,37 @@ async function main() {
     breaches.push(`p99 +${p99DeltaMs.toFixed(2)} ms > ${options.maxP99DeltaMs} ms`);
   if (!(p50DeltaMs <= options.maxP50DeltaMs))
     breaches.push(`p50 +${p50DeltaMs.toFixed(2)} ms > ${options.maxP50DeltaMs} ms`);
-  if (!laneBusy) breaches.push('lane idle in a candidate run (contention not exercised)');
+  if (!laneBusy)
+    breaches.push(
+      'no lane work inside the timed burst of a candidate run (contention not exercised)'
+    );
   if (totalFailures > 0) breaches.push(`${totalFailures} ingestion failures`);
   const gate = {
     contract: { maxP99DeltaMs: options.maxP99DeltaMs, maxP50DeltaMs: options.maxP50DeltaMs },
     medianPairedDeltaMs: { p50: p50DeltaMs, p99: p99DeltaMs },
     breaches,
-    passed: breaches.length === 0,
+    // A run on a host that was not quiet cannot be judged: it is neither a pass nor a fail.
+    status: (!hostValidation.valid ? 'INVALID' : breaches.length === 0 ? 'PASS' : 'FAIL') as
+      'PASS' | 'FAIL' | 'INVALID',
+    passed: hostValidation.valid && breaches.length === 0,
+    invalidReasons: hostValidation.reasons,
   };
   const report = {
     generatedAt: new Date().toISOString(),
     options,
     laneWasBusyInEveryCandidateRun: laneBusy,
+    // The candidate is a YIELDING lane: while ingestion is busy the production lane runs one item at a
+    // time at a bounded duty cycle. The gate therefore measures ingestion beside a lane that backs off,
+    // which is what an integrated node runs; these fractions say how much lane work the burst really saw.
+    laneBusyFractionOfBurst: {
+      min: laneBusyFractions.length ? Math.min(...laneBusyFractions) : 0,
+      median: laneBusyFractions.length
+        ? [...laneBusyFractions].sort((a, b) => a - b)[Math.floor(laneBusyFractions.length / 2)]
+        : 0,
+      perCandidateRun: laneBusyFractions,
+    },
+    hostValidation,
+    hostQuietWait: quiet,
     noiseControlsInCandidate: options.noiseControls,
     noiseFailOpenInCandidate: candidate.reduce<Record<string, number>>((sum, sample) => {
       for (const [reason, value] of Object.entries(sample.noiseFailOpen))
@@ -987,19 +1032,29 @@ async function main() {
   console.log(
     `\nRaw counts: ${rawCounts.map(c => `${c.arm}: lock waiters ≤ ${c.maxPeakLockWaiters}, active backends ≤ ${c.maxPeakActiveBackends}, failures ${c.failures}`).join(' | ')}`
   );
-  console.log(`Lane busy in every candidate run: ${laneBusy}. Report: ${path}`);
+  console.log(
+    `Lane work inside every candidate burst: ${laneBusy} (yielding lane; share of burst wall time ` +
+      `${laneBusyFractions.map(fraction => `${(fraction * 100).toFixed(0)}%`).join(', ')}). Report: ${path}`
+  );
+  console.log(
+    `Host: start load ${hostValidation.startLoad1?.toFixed(2)}, peak ${hostValidation.peakLoad1?.toFixed(2)}, ` +
+      `max sample gap ${hostValidation.maxSampleGapSec} s → ${hostValidation.valid ? 'VALID' : 'INVALID'}`
+  );
+  for (const reason of hostValidation.reasons) console.log(`  invalid: ${reason}`);
   if (!laneBusy)
     console.log(
       'WARNING: the lane did no work in some candidate runs; those results do not test contention.'
     );
   console.log(
     `Gate: p50 ${p50DeltaMs >= 0 ? '+' : ''}${p50DeltaMs.toFixed(2)} ms (limit +${options.maxP50DeltaMs}), ` +
-      `p99 ${p99DeltaMs >= 0 ? '+' : ''}${p99DeltaMs.toFixed(2)} ms (limit +${options.maxP99DeltaMs}) → ${gate.passed ? 'PASS' : 'FAIL'}`
+      `p99 ${p99DeltaMs >= 0 ? '+' : ''}${p99DeltaMs.toFixed(2)} ms (limit +${options.maxP99DeltaMs}) → ${gate.status}` +
+      (gate.status === 'INVALID' ? ' (host not quiet: discard this run and repeat it)' : '')
   );
   for (const breach of breaches) console.log(`  breach: ${breach}`);
   await disconnectNoiseLookupClient();
   await prisma.$disconnect();
-  if (options.gate && !gate.passed) process.exitCode = 1;
+  // 1 = contract breached on a quiet host; 2 = the run cannot be judged and must be repeated.
+  if (options.gate && !gate.passed) process.exitCode = gate.status === 'INVALID' ? 2 : 1;
 }
 
 main().catch(async error => {
