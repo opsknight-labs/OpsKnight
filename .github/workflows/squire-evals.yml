@@ -1,8 +1,11 @@
 name: Squire live-model evaluation
 
 # Nightly, and on demand. Runs the assistant's live evaluation cases against a real model with the
-# SQUIRE_EVAL_API_KEY secret; the structural (mocked, deterministic) tier runs on every pull request inside
-# the database integration suite in tests.yml. Without the secret this workflow records a skipped run.
+# SQUIRE_EVAL_API_KEY secret, then grades every answer with an LLM judge against its category's rubric
+# (tests/evals/squire/judge.ts) and gates pass rate, must-pass cases, the per-case token ceiling and the
+# judge's scores against tests/evals/squire/baseline.json. The structural tiers (basic mode, and AI mode
+# against a scripted model) run on every pull request inside the database integration suite in tests.yml.
+# Without the secret the live suite is skipped, no report is written and the compare step is skipped.
 on:
   schedule:
     - cron: '17 3 * * *'
@@ -37,6 +40,10 @@ jobs:
       DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opsknight_test
       SQUIRE_EVAL_API_KEY: ${{ secrets.SQUIRE_EVAL_API_KEY }}
       SQUIRE_EVAL_MODEL: ${{ vars.SQUIRE_EVAL_MODEL }}
+      # The judge defaults to the evaluated provider and model; set these to grade with a different model.
+      SQUIRE_EVAL_JUDGE_API_KEY: ${{ secrets.SQUIRE_EVAL_JUDGE_API_KEY }}
+      SQUIRE_EVAL_JUDGE_MODEL: ${{ vars.SQUIRE_EVAL_JUDGE_MODEL }}
+      SQUIRE_EVAL_JUDGE_BASE_URL: ${{ vars.SQUIRE_EVAL_JUDGE_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,7 +53,7 @@ jobs:
       - run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - run: npx prisma generate
       - run: npx prisma migrate deploy
-      - name: Live evaluation (skipped without SQUIRE_EVAL_API_KEY)
+      - name: Live evaluation and judge (skipped without SQUIRE_EVAL_API_KEY)
         run: npm run test:squire:eval
       - name: Upload report
         if: always()
@@ -55,6 +62,6 @@ jobs:
           name: squire-eval-report
           path: reports/squire-eval.json
           if-no-files-found: ignore
-      - name: Compare with the stored baseline
-        if: env.SQUIRE_EVAL_API_KEY != ''
+      - name: Compare with the stored baseline (pass rate, must-pass, tokens, judge)
+        if: always() && env.SQUIRE_EVAL_API_KEY != ''
         run: node scripts/check-squire-eval-baseline.cjs
