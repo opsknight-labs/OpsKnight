@@ -50,7 +50,7 @@ import {
 import { askSquireForMcp } from '@/lib/mcp/core/ask-squire';
 import { ASK_SQUIRE_SCOPES } from '@/lib/mcp/core/ask-squire-contract';
 import { createMcpHandler } from '@modelcontextprotocol/server';
-import { createOpsKnightMcpServer } from '@/lib/mcp/protocol/server';
+import { createOpsKnightMcpServer, MCP_ERROR_META_KEY } from '@/lib/mcp/protocol/server';
 import { CostBudget } from '@/lib/mcp/core/budget';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resolvePageContext } from '@/lib/intelligence/squire/deterministic';
@@ -542,7 +542,11 @@ describe('ask_squire over the MCP protocol', () => {
         })
       );
       return (await response.json()) as {
-        result: { isError?: boolean; structuredContent: Record<string, unknown> };
+        result: {
+          isError?: boolean;
+          structuredContent: Record<string, unknown>;
+          _meta?: Record<string, unknown>;
+        };
       };
     } finally {
       await handler.close();
@@ -566,8 +570,9 @@ describe('ask_squire over the MCP protocol', () => {
     await db.aiSettings.update({ where: { id: 'default' }, data: { squireMcpEnabled: false } });
     const off = await callTool(actor, { question: 'help' });
     expect(off.result.isError).toBe(true);
-    expect(off.result.structuredContent).toMatchObject({
-      error: { code: 'MCP_CAPABILITY_DISABLED' },
+    // Tool errors carry their machine-readable details in _meta, not structuredContent (#971).
+    expect(off.result._meta?.[MCP_ERROR_META_KEY]).toMatchObject({
+      code: 'MCP_CAPABILITY_DISABLED',
     });
   });
 });
