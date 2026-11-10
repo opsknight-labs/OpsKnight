@@ -463,6 +463,74 @@ describe('intelligence cycle', () => {
     expect(peak).toBeGreaterThan(1);
   });
 
+  it('reads settings on the lane pool once it has opened it, never again on the ingestion pool', async () => {
+    await enable();
+    // The process (ingestion) client; the lane's own pool is a different client.
+    const primary = globalThis.prismaGlobal!;
+    const spy = vi.spyOn(primary.intelligenceSettings, 'findUnique');
+    const state = createLaneState();
+    state.ingestionYield = undefined;
+    const dependencies = {
+      getCriticalLagMs: noLag,
+      getPoolWaitingQueries: async () => 0,
+      handlers: {},
+      lanePool: { ownPool: true, size: 4 },
+    };
+    try {
+      expect((await runIntelligenceCycle(state, dependencies)).status).toBe('idle');
+      // One pre-read decides whether to open the lane pool at all (a disabled install never opens it).
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(state.lanePoolOpened).toBe(true);
+      spy.mockClear();
+      for (let cycle = 0; cycle < 3; cycle += 1) await runIntelligenceCycle(state, dependencies);
+      expect(spy).not.toHaveBeenCalled();
+      // A lane that is switched off later still reads the flag on its own pool.
+      await db.intelligenceSettings.update({ where: { id: 'default' }, data: { enabled: false } });
+      expect((await runIntelligenceCycle(state, dependencies)).status).toBe('disabled');
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('waits the back-off floor after a pool-pressure pause while ingestion is busy, not a tight loop', async () => {
+    await enable();
+    const started = performance.now();
+    const busy = () => {
+      const at = performance.now() - started + 1_000;
+      return { inFlight: 8, integralMs: 8 * at, at };
+    };
+    const slept: number[] = [];
+    const state = createLaneState();
+    state.ingestionYield = new IngestionYield(
+      busy,
+      { sampleMs: 0, backoffFloorMs: 80, pollMs: 20 },
+      async ms => {
+        slept.push(ms);
+      }
+    );
+    const pressured = {
+      getCriticalLagMs: noLag,
+      getPoolWaitingQueries: async () => 3,
+      handlers: {},
+    };
+    expect((await runIntelligenceCycle(state, pressured)).status).toBe('paused');
+    expect(slept.reduce((sum, ms) => sum + ms, 0)).toBeGreaterThanOrEqual(80);
+
+    // With ingestion quiet the pause does not wait: production already waits 5 s after `paused`.
+    const quietSlept: number[] = [];
+    const quiet = createLaneState();
+    quiet.ingestionYield = new IngestionYield(
+      () => ({ inFlight: 0, integralMs: 0, at: performance.now() }),
+      { sampleMs: 0, backoffFloorMs: 80, pollMs: 20 },
+      async ms => {
+        quietSlept.push(ms);
+      }
+    );
+    expect((await runIntelligenceCycle(quiet, pressured)).status).toBe('paused');
+    expect(quietSlept).toEqual([]);
+  });
+
   it('never throws even if the database settings read fails', async () => {
     const spy = vi
       .spyOn(prisma.intelligenceSettings, 'findUnique')
