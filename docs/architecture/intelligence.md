@@ -80,6 +80,21 @@ create a match by themselves, and the match percentage is a ranking signal, **no
 - **Time budgets.** Every work item has a wall-clock budget; every intelligence transaction sets a
   statement and lock timeout. Work that exceeds its budget is stopped and retried with backoff.
 - **Bounded concurrency, batch size and candidate counts** are all settings with enforced limits.
+- **Its own pool in a shared process.** In `integrated`, `worker` and `general-worker` processes an
+  enabled lane runs its database work on a separate small Prisma pool (`application_name`
+  `opsknight-intelligence-lane`, at most `INTELLIGENCE_LANE_DATABASE_POOL_SIZE` connections, default
+  10, opened only as needed), so an analysis transaction never holds a connection `processEvent` is
+  queueing for. Handler concurrency stays two below that size. `INTELLIGENCE_LANE_DATABASE_POOL_SIZE=0`
+  restores the shared pool. The pool-pressure pause still watches the process pool. The dedicated
+  `intelligence-worker` role keeps its single pool.
+- **Yielding to in-process ingestion.** `processEvent` keeps an in-process count of events in flight
+  (two clock reads per event, no I/O). When its average over at least 50 ms reaches one event, the
+  lane runs one item per cycle and pauses after each item and cycle so it is active for at most 20% of
+  wall time (pauses capped at 1 s). It returns to full speed only after the load has stayed below 0.25
+  for one second. It never stops completely, and it holds no claim, transaction or connection while
+  paused (claims it already holds are renewed before they run). Nothing is ingested in a dedicated
+  `intelligence-worker`, so it never yields there. `getIntelligenceLaneStatus().yieldingToIngestion`
+  shows the state.
 
 ## Data and retention
 
@@ -116,6 +131,13 @@ LOG_LEVEL=error DATABASE_URL=postgresql://.../opsknight_bench \
   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
   tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 1500 --concurrency 12 --backlog 4000
 ```
+
+Each timed burst also records attribution data: event-loop delay and utilisation, process CPU,
+garbage-collection pauses, Prisma pool wait on the ingestion pool, engine-timed ingestion statements
+per event and sampled PostgreSQL wait events. The report records host load and the lane's pool plan.
+`--cpu-profile-dir <dir>` writes a V8 profile of each timed burst, and `--no-lane-yield --no-gate`
+measures the lane without yielding (diagnosis only). The attribution behind the lane pool and the
+ingestion yield is in `plans/intelligence-engine/certification/perf/ingestion-p50-diagnosis-2026-11-09.md`.
 
 The database name must end in `_bench` or `_test` (the script truncates incident data). Results
 from a shared or loaded host are indicative only; the confidence intervals on tail latency are wide
@@ -774,9 +796,12 @@ process. Its wake listener uses one additional session connection, accounted for
 Prisma pool. Pool contention is measured through Prisma's local engine metrics without acquiring
 another SQL connection; contention pauses the lane and requires two measured quiet samples before
 recovery. Paging-lag hysteresis remains independent. Missing pool telemetry is unknown, not a zero
-measurement. A single-node `integrated` install keeps the lane in-process; there, Settings →
-Intelligence should run with `maxConcurrency` 1 and `batchSize` 10 so analysis never competes with
-paging for more than one connection at a time.
+measurement. A single-node `integrated` install keeps the lane in-process. There it uses its own
+small pool and backs off while ingestion is busy (see "Backpressure and budgets"). A shared process
+can therefore use up to `INTELLIGENCE_LANE_DATABASE_POOL_SIZE` more PostgreSQL connections while the
+lane is enabled and busy. Size `max_connections` for that, or set the variable lower. Lowering
+`maxConcurrency` and `batchSize` in Settings → Intelligence still reduces the lane's share of
+PostgreSQL further.
 
 ### Scale behaviour
 

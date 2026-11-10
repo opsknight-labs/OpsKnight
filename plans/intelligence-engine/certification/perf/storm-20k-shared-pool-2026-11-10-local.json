@@ -1,0 +1,62 @@
+{
+  "measuredAt": "2026-11-10T00:42:56.131Z",
+  "node": "v20.20.2",
+  "engineVersion": "1.5.0",
+  "options": {
+    "history": 20000,
+    "burst": 1000,
+    "services": 50,
+    "batchSize": 50,
+    "concurrency": 8,
+    "reuseHistory": false,
+    "maxDrainSeconds": 600,
+    "maxKindP99Ms": 10000,
+    "gate": false,
+    "output": "plans/intelligence-engine/certification/perf/storm-20k-shared-pool-2026-11-10-local.json"
+  },
+  "seedSeconds": 12,
+  "drainSeconds": 1873.2,
+  "incidentsPerSecond": 0.5,
+  "cycles": 2736,
+  "averageCycleMs": 685,
+  "handlerBusyFraction": 0.5,
+  "failedItems": 8,
+  "deadLetters": 0,
+  "activeFindings": 10500,
+  "correlationGroups": 1039,
+  "perKind": {
+    "INDEX_INCIDENT": {
+      "count": 1050,
+      "p50Ms": 26.1,
+      "p95Ms": 182.8,
+      "p99Ms": 438.3
+    },
+    "ANALYZE_INCIDENT": {
+      "count": 1058,
+      "p50Ms": 63.1,
+      "p95Ms": 392.4,
+      "p99Ms": 531.2
+    },
+    "CORRELATE_INCIDENT": {
+      "count": 1050,
+      "p50Ms": 27.9,
+      "p95Ms": 68.8,
+      "p99Ms": 121
+    },
+    "ANALYZE_RESPONSE": {
+      "count": 1050,
+      "p50Ms": 66.5,
+      "p95Ms": 167.4,
+      "p99Ms": 439.4
+    }
+  },
+  "gate": {
+    "contract": {
+      "maxDrainSeconds": 600,
+      "maxKindP99Ms": 10000
+    },
+    "breaches": ["drained in 1873.2 s > 600 s", "8 failed item attempts"],
+    "passed": false
+  },
+  "note": "Single process, local PostgreSQL. Indicative only; certification needs dedicated hardware."
+}

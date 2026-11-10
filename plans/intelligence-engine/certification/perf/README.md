@@ -25,6 +25,21 @@ unlike every other sweep, the benchmark could not disable it. The repair is now 
 (`LaneState.lastUpdatedRepairAt`, `UPDATED_REPAIR_INTERVAL_MS`) and the benchmarks reset it like the other
 sweeps. After the fix: one execution per incident per kind, handler-bound (80% busy), 11x faster.
 
+**2026-11-10, after the ingestion p50 fix (lane pool):** the lane now has its own Prisma pool in shared
+processes, and the storm runs in-process (`integrated`), so the pair below checks that this did not
+reduce drain throughput. The storm has no in-process ingestion, so the ingestion yield never engages.
+
+| File                                          | Lane pool        | History / burst | Drain   | Cycles / avg   | Handler busy | Failed attempts | Host load | Result |
+| --------------------------------------------- | ---------------- | --------------- | ------- | -------------- | ------------ | --------------- | --------- | ------ |
+| `storm-20k-shared-pool-2026-11-10-local.json` | shared (`=0`)    | 20k / 1k        | 1,873 s | 2,736 / 685 ms | 0.50         | 8               | 10–13     | probe  |
+| `storm-20k-own-pool-2026-11-10-local.json`    | own (default 10) | 20k / 1k        | 1,889 s | 3,869 / 488 ms | 0.50         | 8               | 10–43     | probe  |
+
+The two are equal within noise, so the lane pool does not cost drain throughput. Both are about 18x
+slower than the 104 s probe on 2026-11-08. The Docker VM was stalling for about 15 minutes at a time
+during these runs (its clock was 13 to 15 minutes behind the host), which accounts for roughly two such
+stalls per run. The 100k / 10k gate run was **stopped during seeding** at load 43 to 64. A run on this host
+in that state could not be judged, so **the storm gate was not re-measured** after this change.
+
 **OPEN.** At 703 s the gate still fails on this loaded host. Re-run on an idle host (`--reuse-history`
 avoids reseeding) and diagnose. Data to start from (after fix, 100k):
 
@@ -46,12 +61,29 @@ qualifiers), so "rare" words each match ~5% of history; production vocabularies 
 ## Ingestion A/B (`tests/load/intelligence-ingestion-ab.ts`)
 
 `ingestion-ab-2026-11-08-local.json`: 6 repetitions, 200 events, concurrency 8, backlog 800, lane busy in
-every candidate run, 0 failures. Median paired delta **p50 +7.61 ms (limit +2) — FAIL**, p99 +4.04 ms
-(limit +10). Candidate p50 was higher in all six repetitions (+5 to +17 ms), so this is a consistent
-cost, not noise: the harness runs the lane in the _same Node process and pool_ as ingestion (the
-`integrated` worst case), so lane CPU work (hashing, scoring) shares the event loop. **OPEN**: re-run on an
-idle host; if it holds, lane CPU work needs a worker thread in `integrated`, or the dedicated
-`intelligence-worker` (default in every split package) should be required above a size threshold.
+every candidate run, 0 failures. Median paired delta **p50 +7.61 ms (limit +2): FAIL**, p99 +4.04 ms
+(limit +10). Candidate p50 was higher in all six repetitions.
+
+**Diagnosed and fixed on 2026-11-09:** see `ingestion-p50-diagnosis-2026-11-09.md`. Causes: the lane
+queued ahead of `processEvent` on the shared Prisma pool, and its CPU and database work competed with
+an event loop that ingestion already keeps about 80% busy. Fix: the lane gets its own pool in shared
+processes and backs off (one item at a time, 20% duty) while in-process ingestion is busy.
+
+| File (2026-11-09/10)                         | Lane behaviour              | Shape (reps/events/conc/backlog) | Host load            | p50 delta | p99 delta | Result                               |
+| -------------------------------------------- | --------------------------- | -------------------------------- | -------------------- | --------- | --------- | ------------------------------------ |
+| `ingestion-ab-before-shared-pool-no-yield-…` | old (shared pool, no yield) | 6/200/8/800                      | 4.2–5.4              | +2.23     | +7.10     | FAIL (diagnosis)                     |
+| `ingestion-ab-own-pool-no-yield-…`           | own pool only               | 6/200/8/800                      | 4.9–5.0              | +2.04     | -21.34    | FAIL (diagnosis)                     |
+| `ingestion-ab-after-2026-11-09-local.json`   | **fix** (own pool + yield)  | 6/200/8/800                      | 7.7–8.5              | **+0.43** | **+1.33** | **PASS**                             |
+| `ingestion-ab-before-12rep-…`                | old                         | 12/200/8/800                     | 3.0–8.9, VM stalled  | +14.96    | +61.03    | FAIL, not judgeable                  |
+| `ingestion-ab-after-12rep-…`                 | fix                         | 12/200/8/800                     | 8.9–19.2, VM stalled | +2.61     | +58.84    | FAIL, not judgeable                  |
+| `ingestion-ab-ci-shape-before-…`             | old                         | 6/300/16/1500                    | 15.4–15.8            | +8.41     | +63.01    | FAIL, overloaded host                |
+| `ingestion-ab-ci-shape-after-…`              | fix                         | 6/300/16/1500                    | 14.1–15.1            | -30.58    | -133.52   | **FAIL: lane idle** in 3 of 6 bursts |
+
+| `ingestion-ab-after-rerun-2026-11-10-local.json` | fix | 6/200/8/800 | 10.1–10.8, VM stalled | -20.82 | -11.51 | PASS by the numbers, **not judgeable** (one event took 899 s) |
+| `ingestion-ab-ci-shape-after-rerun-2026-11-10-…` | fix | 6/300/16/1500 | 8.9–12.8 | -8.35 | -91.15 | **FAIL: lane idle** in 2 of 6 bursts (a handler was running in all 6) |
+"Not judgeable": on those runs the lane-off baseline p50 itself varied 3.5–8x within one run and the Docker
+VM clock fell 15 minutes behind the host. Both arms were measured on that degraded host, so the
+pairs measure the disturbance, not the lane.
 
 ### Pre-paging noise controls wired into ingestion (2026-11-09/10, all FAIL, host heavily loaded)
 
