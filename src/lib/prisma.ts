@@ -3,7 +3,9 @@ import {
   configureIntelligenceLanePrismaDatasource,
   configurePrismaDatasource,
   configureMcpPrismaDatasource,
+  DEFAULT_INTELLIGENCE_LANE_POOL_SIZE,
   intelligenceLanePoolSize,
+  isIntelligenceLaneThread,
   selectMcpPrismaDatasourceUrl,
   selectPrismaDatasourceUrl,
 } from './prisma-datasource';
@@ -54,17 +56,19 @@ const prismaClientSingleton = (workload: 'primary' | 'mcp' | 'intelligence' = 'p
   const role = getOpsKnightProcessRole();
   const rawDatasourceUrl = selectPrismaDatasourceUrl(role);
   const transactionPooler = isDedicatedHttpRole(role) && process.env.PGBOUNCER_ENABLED === 'true';
-  // Log configuration for debugging
+  // A lane thread's process client is the lane's own pool (see intelligence/jobs/lane-thread.ts).
+  const laneWorkload =
+    workload === 'intelligence' || (workload === 'primary' && isIntelligenceLaneThread());
   const datasourceUrl =
     workload === 'mcp'
       ? configureMcpPrismaDatasource(
           selectMcpPrismaDatasourceUrl(),
           process.env.MCP_DATABASE_POOL_SIZE
         )
-      : workload === 'intelligence'
+      : laneWorkload
         ? configureIntelligenceLanePrismaDatasource(
             rawDatasourceUrl,
-            intelligenceLanePoolSize(),
+            intelligenceLanePoolSize() || DEFAULT_INTELLIGENCE_LANE_POOL_SIZE,
             transactionPooler
           )
         : configurePrismaDatasource(

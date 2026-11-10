@@ -25,6 +25,7 @@ import { indexIncident } from './indexer';
 import { KindBreaker } from './kind-breaker';
 import { laneConcurrency, resolveLanePool, runOnLanePool, type LanePoolPlan } from './lane-pool';
 import { IngestionYield } from './ingestion-yield';
+import type { IngestionActivitySnapshot } from '@/lib/ingestion/activity';
 import { listenForIntelligenceWake } from './wake-listener';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
@@ -263,6 +264,28 @@ export interface LaneState {
   lanePoolOpened?: boolean;
 }
 
+/**
+ * How the lane observes the process it serves. In-process it reads this thread's ingestion activity and
+ * Prisma pool; a lane thread (see lane-thread-entry.ts) reads the main thread's through shared memory and
+ * reports each cycle back to it.
+ */
+export interface LaneHost {
+  /** Ingestion activity the lane yields to (default: this thread's). */
+  activity?: () => IngestionActivitySnapshot;
+  /** Queries waiting for a connection on the pool ingestion uses (default: this thread's process pool). */
+  poolWaitingQueries?: () => Promise<number | null>;
+  /** Called after every cycle of the scheduled lane with its status. */
+  onCycle?: (status: LaneStatus) => void;
+}
+
+let laneHost: LaneHost = {};
+
+/** Installs the host before `startIntelligenceLane`; a lane thread calls it once on start. */
+export function configureLaneHost(host: LaneHost): void {
+  laneHost = host;
+  lane.state.ingestionYield = new IngestionYield(host.activity);
+}
+
 export function createLaneState(): LaneState {
   return {
     pause: { paused: false },
@@ -279,7 +302,7 @@ export function createLaneState(): LaneState {
     kinds: new KindBreaker(),
     saturatedLogged: false,
     retentionBatchSize: null,
-    ingestionYield: new IngestionYield(),
+    ingestionYield: new IngestionYield(laneHost.activity),
   };
 }
 
@@ -841,6 +864,19 @@ export interface LaneStatus {
   wakeLeader: boolean | null;
   /** Cumulative since process start; lets operators and benchmarks see real throughput. */
   totals: LaneTotals;
+  /** Present when the lane runs in a worker thread of this process (`integrated`; see lane-thread.ts). */
+  thread?: LaneThreadStatus;
+}
+
+export interface LaneThreadStatus {
+  /** `restarting` while a crashed thread waits to be started again; `fallback` when it could not start. */
+  state: 'starting' | 'running' | 'restarting' | 'stopping' | 'stopped';
+  /** Threads started after a crash since the lane started. */
+  restarts: number;
+  /** When the current thread started. */
+  startedAt: Date | null;
+  /** Fixed description of the last abnormal exit, if any; never an exception message. */
+  lastExit: string | null;
 }
 
 const lane: {
@@ -949,7 +985,10 @@ function schedule(delayMs: number) {
   if (!lane.running) return;
   lane.timer = setTimeout(() => {
     lane.timer = null;
-    lane.active = runIntelligenceCycle(lane.state, { signal: lane.stopping?.signal })
+    lane.active = runIntelligenceCycle(lane.state, {
+      signal: lane.stopping?.signal,
+      getPoolWaitingQueries: laneHost.poolWaitingQueries,
+    })
       .then(result => {
         lane.lastCycleAt = new Date();
         lane.lastResult = result;
@@ -959,6 +998,11 @@ function schedule(delayMs: number) {
         lane.totals.requeued += result.requeued;
         lane.totals.failed += result.failed;
         lane.totals.lost += result.lost;
+        try {
+          laneHost.onCycle?.(getLocalIntelligenceLaneStatus());
+        } catch {
+          // Reporting is best effort; the lane keeps running.
+        }
         schedule(jittered(nextDelayMs(result)));
       })
       // runIntelligenceCycle never throws, but a lane that dies silently is the worst outcome: keep it alive.
@@ -1002,7 +1046,23 @@ export async function stopIntelligenceLane(): Promise<void> {
   await lane.active;
 }
 
+declare global {
+  /** Set while the lane runs in a worker thread; the status it reports replaces the local one. */
+  var opsKnightIntelligenceLaneStatusSource: (() => LaneStatus) | undefined;
+}
+
+/** Lets lane-thread.ts report the thread's lane as this process's lane (undefined restores the local one). */
+export function setIntelligenceLaneStatusSource(source: (() => LaneStatus) | undefined): void {
+  globalThis.opsKnightIntelligenceLaneStatusSource = source;
+}
+
+/** This process's lane, wherever it runs: in this thread or in a lane thread. */
 export function getIntelligenceLaneStatus(): LaneStatus {
+  return globalThis.opsKnightIntelligenceLaneStatusSource?.() ?? getLocalIntelligenceLaneStatus();
+}
+
+/** The lane scheduled in this thread. */
+export function getLocalIntelligenceLaneStatus(): LaneStatus {
   return {
     running: lane.running,
     startedAt: lane.startedAt,

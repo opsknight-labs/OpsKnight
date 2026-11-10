@@ -148,8 +148,17 @@ export async function register() {
       const { shouldRunIntelligenceLane, startIntelligenceLane, stopIntelligenceLane } =
         await import('./lib/intelligence/jobs/runner');
       if (shouldRunIntelligenceLane(role)) {
-        startIntelligenceLane();
-        stopIntelligenceLaneService = stopIntelligenceLane;
+        // In `integrated` the lane runs in a worker thread of its own, so its heap, garbage collection and
+        // Prisma client never pause ingestion on this thread. Without the thread bundle (or with
+        // INTELLIGENCE_LANE_THREAD=off) it runs here as before.
+        const { shouldRunLaneInThread, startIntelligenceLaneThread, stopIntelligenceLaneThread } =
+          await import('./lib/intelligence/jobs/lane-thread');
+        if (shouldRunLaneInThread(role) && startIntelligenceLaneThread()) {
+          stopIntelligenceLaneService = stopIntelligenceLaneThread;
+        } else {
+          startIntelligenceLane();
+          stopIntelligenceLaneService = stopIntelligenceLane;
+        }
       }
     } catch (error) {
       console.error('[Runtime] Intelligence lane failed to start; continuing without it', error);
