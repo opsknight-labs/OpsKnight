@@ -81,6 +81,14 @@ processes and backs off (one item at a time, 20% duty) while in-process ingestio
 
 | `ingestion-ab-after-rerun-2026-11-10-local.json` | fix | 6/200/8/800 | 10.1–10.8, VM stalled | -20.82 | -11.51 | PASS by the numbers, **not judgeable** (one event took 899 s) |
 | `ingestion-ab-ci-shape-after-rerun-2026-11-10-…` | fix | 6/300/16/1500 | 8.9–12.8 | -8.35 | -91.15 | **FAIL: lane idle** in 2 of 6 bursts (a handler was running in all 6) |
+| `ingestion-ab-after-2026-11-10b-local.json` | fix (own pool + yield, **in-process lane**, before the worker thread) | 6/200/8/800 | 2.8 → 3.1 (quiet host) | +0.45 | +2.35 | PASS |
+| `ingestion-ab-ci-shape-after-2026-11-10b-local.json` | same state, **in-process lane** | 6/300/16/1500 (CI shape) | 2.1 → 2.7 (quiet host) | +1.23 | **+15.32** | **FAIL (p99)** |
+
+The two `2026-11-10b` rows are historical evidence from the phase-1 p50 work (`wip/intel-p1-ingest-p50`, run
+04:54 UTC on a quiet host): the in-process lane with its own pool and the 50 ms-window yield, before the
+lane moved into a worker thread. They show the in-process configuration passing the small shape and failing
+the CI shape on p99; they are the baseline the thread lane is compared against below.
+
 "Not judgeable": on those runs the lane-off baseline p50 itself varied 3.5–8x within one run and the Docker
 VM clock fell 15 minutes behind the host. Both arms were measured on that degraded host, so the
 pairs measure the disturbance, not the lane.
