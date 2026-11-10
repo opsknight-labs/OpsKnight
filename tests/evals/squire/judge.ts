@@ -99,6 +99,9 @@ export interface JudgeInput {
   earlierTurns?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }>;
 }
 
+/** The environment variables the judge reads (a plain record, so tests can pass their own). */
+export type EvalEnv = Readonly<Record<string, string | undefined>>;
+
 export interface JudgeVerdict {
   score: number;
   pass: boolean;
@@ -160,7 +163,7 @@ export function parseJudgeVerdict(text: string, category: SquireEvalCategory): J
   };
 }
 
-export function judgeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function judgeEnabled(env: EvalEnv = process.env): boolean {
   return (
     Boolean(env.SQUIRE_EVAL_JUDGE_API_KEY || env.SQUIRE_EVAL_API_KEY) &&
     env.SQUIRE_EVAL_JUDGE !== 'off'
@@ -170,7 +173,7 @@ export function judgeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 /** Grades one answer with the judge model (OpenAI-compatible chat completions). */
 export async function judgeAnswer(
   input: JudgeInput,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EvalEnv = process.env,
   fetcher: typeof fetch = fetch
 ): Promise<JudgeVerdict | null> {
   const key = env.SQUIRE_EVAL_JUDGE_API_KEY || env.SQUIRE_EVAL_API_KEY;

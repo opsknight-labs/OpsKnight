@@ -169,7 +169,8 @@ describe('RCA fixture: expected top cause', () => {
       where: { incidentId: incident.id, kind: 'CHANGE_CORRELATION', status: 'ACTIVE' },
       orderBy: { rank: 'asc' },
     });
-    return top ? (labels.get(top.subjectRef) ?? `unlabelled:${top.subjectRef}`) : null;
+    if (!top) return null;
+    return (top.subjectRef && labels.get(top.subjectRef)) || `unlabelled:${top.subjectRef}`;
   }
 
   const outcomes: Array<{ id: string; expected: string | null; actual: string | null }> = [];
