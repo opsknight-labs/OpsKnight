@@ -851,7 +851,7 @@ export default function SquireLauncher({
             : `fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-4' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`
       }
       data-side={side}
-      data-presentation={fullscreen ? 'fullscreen' : dock.docked ? 'docked' : 'panel'}
+      data-presentation={fullscreen ? 'fullscreen' : dock.docked && open ? 'docked' : 'panel'}
     >
       {!open && launcher === 'FLOATING' && (
         <button
@@ -1015,7 +1015,7 @@ export default function SquireLauncher({
                   href={
                     activeScope ? `/incidents/${encodeURIComponent(activeScope)}` : '/incidents'
                   }
-                  className="underline underline-offset-2"
+                  className="inline-flex min-h-11 items-center underline underline-offset-2"
                 >
                   Return to original context
                 </Link>

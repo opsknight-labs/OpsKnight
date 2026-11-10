@@ -40,7 +40,7 @@ export default function SquireSavedAction({ action }: { action: SavedActionRefer
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <Link
           href={`/incidents/${encodeURIComponent(action.incidentId)}`}
-          className="text-primary underline underline-offset-2"
+          className="inline-flex min-h-11 items-center text-primary underline underline-offset-2"
         >
           View incident
         </Link>
@@ -48,7 +48,7 @@ export default function SquireSavedAction({ action }: { action: SavedActionRefer
           type="button"
           disabled={checking}
           onClick={() => void check()}
-          className="min-h-8 rounded border border-border px-3 py-1 hover:bg-accent disabled:opacity-60"
+          className="min-h-11 rounded border border-border px-3 py-1 hover:bg-accent disabled:opacity-60"
         >
           {checking ? 'Checking…' : 'Check result'}
         </button>
