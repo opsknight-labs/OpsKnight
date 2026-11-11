@@ -250,26 +250,112 @@ test.describe.serial('intelligence responder workflows', () => {
   });
 
   test('every settings section renders with its navigation', async ({ page }) => {
-    const sections: Array<[string, string, RegExp]> = [
-      ['/settings/intelligence', 'Overview', /^Intelligence$/],
-      ['/settings/intelligence/services', 'Per-service policies', /Per-service policies/],
+    // Five groups, each one page with anchored sections (Workstream I3).
+    const groups: Array<[string, string, RegExp, string[]]> = [
       [
-        '/settings/intelligence/response',
-        'Dependencies & changes',
-        /Dependencies, changes and alert quality/,
+        '/settings/intelligence',
+        'Engine',
+        /^Intelligence$/,
+        ['lane-health', 'general', 'global-policy', 'triage', 'correlation-rules'],
       ],
-      ['/settings/intelligence/insights', 'Insights', /^Insights$/],
-      ['/settings/intelligence/quality', 'Quality', /Grouping quality/],
-      ['/settings/intelligence/ai', 'Assistant & AI', /Assistant and AI/],
+      [
+        '/settings/intelligence/noise-controls',
+        'Noise controls',
+        /^Noise controls$/,
+        [
+          'policy',
+          'suppression-rules',
+          'maintenance-windows',
+          'policy-history',
+          'heartbeats',
+          'simulation',
+          'decisions',
+        ],
+      ],
+      [
+        '/settings/intelligence/services',
+        'Services & changes',
+        /^Services & changes$/,
+        ['service-policies', 'dependencies', 'topology-sources', 'change-sources', 'alert-quality'],
+      ],
+      [
+        '/settings/intelligence/ai',
+        'Assistant',
+        /Assistant and AI/,
+        [
+          'assistant',
+          'providers',
+          'model-routing',
+          'prompts',
+          'checks',
+          'connections',
+          'knowledge-memory',
+          'proactive',
+        ],
+      ],
+      [
+        '/settings/intelligence/evaluation',
+        'Evaluation & spend',
+        /^Evaluation & spend$/,
+        ['grouping-quality', 'answer-feedback', 'insights', 'learned-weights', 'usage'],
+      ],
     ];
-    for (const [path, tab, heading] of sections) {
+    const nav = page.getByRole('navigation', { name: 'Intelligence sections' });
+    for (const [path, tab, heading, anchors] of groups) {
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
-      const nav = page.getByRole('navigation', { name: 'Intelligence sections' });
-      await expect(nav.getByRole('link', { name: tab })).toHaveAttribute('aria-current', 'page');
+      await expect(nav.getByRole('link')).toHaveCount(groups.length);
+      await expect(nav.getByRole('link', { name: tab, exact: true })).toHaveAttribute(
+        'aria-current',
+        'page'
+      );
       await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
+      // Every "on this page" link has a section to land on, and every expected section is there.
+      const onThisPage = page.getByRole('navigation', { name: 'On this page' });
+      for (const href of await onThisPage
+        .getByRole('link')
+        .evaluateAll(links => links.map(link => link.getAttribute('href') ?? ''))) {
+        await expect(page.locator(href)).toHaveCount(1);
+      }
+      for (const anchor of anchors) await expect(page.locator(`#${anchor}`)).toHaveCount(1);
       await expectAccessible(page, '#main-content');
     }
+
+    // Settings lists Intelligence as a first-class area, and it is the active tab here.
+    const settingsNav = page.getByRole('navigation', { name: 'Settings Navigation' });
+    await expect(
+      settingsNav.getByRole('link', { name: 'Intelligence', exact: true })
+    ).toHaveAttribute('href', '/settings/intelligence');
+
+    // Every earlier address still works and lands on the section that now holds its controls.
+    const moved: Array<[string, string]> = [
+      ['/settings/intelligence/response', '/settings/intelligence/services#dependencies'],
+      ['/settings/intelligence/insights', '/settings/intelligence/evaluation#insights'],
+      [
+        '/settings/intelligence/quality?q=zz',
+        '/settings/intelligence/evaluation?q=zz#grouping-quality',
+      ],
+      ['/settings/intelligence/connections', '/settings/intelligence/ai#connections'],
+      ['/settings/intelligence/ai/memory', '/settings/intelligence/ai#knowledge-memory'],
+      ['/settings/intelligence/ai?spend=30', '/settings/intelligence/evaluation?spend=30#ai-spend'],
+    ];
+    for (const [from, to] of moved) {
+      await page.goto(from);
+      await expect(page).toHaveURL(url => `${url.pathname}${url.search}${url.hash}` === to);
+      await expect(page.locator(`#${to.split('#')[1]}`)).toBeVisible();
+    }
+    // Alert quality has a single home in settings.
+    await page.goto('/settings/intelligence/services#alert-quality');
+    await expect(page.getByRole('heading', { name: 'Alert quality', exact: true })).toHaveCount(1);
+    // Triage is its own card with its own save, no longer a checkbox in the global policy form.
+    await page.goto('/settings/intelligence#triage');
+    const triage = page.locator('#triage');
+    await expect(triage.getByRole('checkbox', { name: /Suggest triage/ })).toBeVisible();
+    await expect(triage.getByRole('button', { name: 'Save triage setting' })).toBeVisible();
+    await expect(
+      page.locator('#global-policy').getByRole('checkbox', { name: /Suggest triage/ })
+    ).toHaveCount(0);
+
     // The settings page reflects what was configured and never offers AUTO.
     await page.goto('/settings/intelligence');
     await expect(page.getByRole('option', { name: /Automatic/ })).toBeDisabled();
@@ -277,6 +363,7 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(page.getByRole('textbox', { name: 'Assistant name', exact: true })).toHaveValue(
       'Pip'
     );
+    // The seed stores the SQUIRE mascot (the chat tests below rely on it).
     await expect(page.getByRole('radio', { name: 'Squire mascot' })).toBeChecked();
   });
 
@@ -650,9 +737,10 @@ test.describe.serial('intelligence responder workflows', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     for (const path of [
       '/settings/intelligence',
+      '/settings/intelligence/noise-controls',
+      '/settings/intelligence/services',
       '/settings/intelligence/ai',
-      '/settings/intelligence/insights',
-      '/settings/intelligence/quality',
+      '/settings/intelligence/evaluation',
       `/incidents/${incidentId}`,
     ]) {
       await page.goto(path);
@@ -715,10 +803,10 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(
       page.getByRole('heading', { level: 1, name: 'Checkout synthetic alert' })
     ).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open incident', exact: true })).toHaveAttribute(
-      'href',
-      `/incidents/${incidentId}`
-    );
+    // Scoped to the page body: the Squire launcher and the sidebar also name incidents.
+    await expect(
+      page.locator('#main-content').getByRole('link', { name: 'Open incident', exact: true })
+    ).toHaveAttribute('href', `/incidents/${incidentId}`);
     await expectAccessible(page, '#main-content');
   });
 
@@ -937,7 +1025,7 @@ test.describe.serial('intelligence responder workflows', () => {
     });
     try {
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto(`/settings/intelligence/quality?q=${encodeURIComponent(prefix)}`);
+      await page.goto(`/settings/intelligence/evaluation?q=${encodeURIComponent(prefix)}`);
       const choose = page.getByRole('combobox', { name: 'Service', exact: true });
       await expect(choose.locator('option')).toHaveCount(25);
       await page.getByRole('link', { name: 'More services', exact: true }).click();
