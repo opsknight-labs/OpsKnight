@@ -327,11 +327,16 @@ describe('lane thread host', () => {
     });
     const carried = restarting.totals.cycles;
     expect(carried).toBeGreaterThan(0);
+    // The last real cycle time survives the crash and the restart, until the new thread reports one.
+    expect(restarting.lastCycleAt).not.toBeNull();
+    await until(() => getIntelligenceLaneStatus().thread?.restarts === 1);
+    expect(getIntelligenceLaneStatus().lastCycleAt).not.toBeNull();
     await until(
       () =>
         getIntelligenceLaneStatus().thread?.restarts === 2 &&
         getIntelligenceLaneStatus().thread?.state === 'running'
     );
+    expect(getIntelligenceLaneStatus().lastCycleAt).not.toBeNull();
     expect(delays).toEqual([1, 2]); // consecutive failures back off
     await until(() => getIntelligenceLaneStatus().totals.cycles > carried + 2);
     expect(Atomics.load(new Int32Array(crashes), 0)).toBe(2);
