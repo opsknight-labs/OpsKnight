@@ -54,6 +54,18 @@ describe('MobileMoreContent', () => {
     expect(screen.queryByRole('link', { name: /Policies/i })).not.toBeInTheDocument();
   });
 
+  it.each(['ADMIN', 'RESPONDER', 'AUDITOR'])('offers the AIOps page to %s', role => {
+    render(<MobileMoreContent name="Reader" email="" role={role} />);
+
+    expect(screen.getByRole('link', { name: /AIOps/ })).toHaveAttribute('href', '/m/intelligence');
+  });
+
+  it('hides the AIOps page from roles without intelligence read access', () => {
+    render(<MobileMoreContent name="User" email="" role="USER" />);
+
+    expect(screen.queryByRole('link', { name: /AIOps/ })).not.toBeInTheDocument();
+  });
+
   it('renders preference toggles', () => {
     render(<MobileMoreContent name="User" email="" role="User" />);
 
