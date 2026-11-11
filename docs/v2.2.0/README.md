@@ -32,7 +32,7 @@ Pages for features unchanged since 2.1.0 remain in the [2.1.0 documentation](../
 ## Intelligence (AIOps)
 
 - [Use suggestions](./guides/intelligence/use-suggestions.md) and [basic-mode questions](./guides/intelligence/basic-mode.md)
-- [AIOps overview](./guides/intelligence/aiops-overview.md), [intelligence on incidents and lists](./guides/intelligence/incidents-and-lists.md)
+- [AIOps overview](./guides/intelligence/aiops-overview.md), [alerts and changes lists](./guides/intelligence/alerts-and-changes-lists.md), [intelligence on incidents and lists](./guides/intelligence/incidents-and-lists.md)
   and [noise-control builders](./guides/intelligence/noise-control-builders.md)
 - [Intelligence on services, teams and dashboards](./guides/intelligence/services-teams-and-dashboards.md)
 - Operating: [production guide](./operate/intelligence/production.md)

@@ -1125,6 +1125,32 @@ AI calls emit OpenTelemetry spans (`intelligence.work`, `intelligence.ai.generat
 registered. Span attributes are bounded categories and token counts; never incident ids, prompts,
 answers or error messages.
 
+## Lists, overview inbox and mobile entry
+
+- **Alerts list** (`/alerts`, `lists/alerts.ts`): a keyset walk of `Alert(createdAt)` (or
+  `(serviceId, createdAt)`) inside a 24 h / 7 d / 30 d window, 50 rows a page, cursor
+  (`<createdAt base36>.<id>`) in the URL. Scope is `serviceReadWhere(actor)` and, when the alert has an
+  incident, `incidentReadWhere(actor)`. The noise decision for each row is read from
+  `PrePagingDecision(serviceId, createdAt)` restricted to the page's services, time span and alert
+  ids; an applied decision wins over a shadow one and reversed decisions are ignored. With a decision
+  filter the walk runs over `PrePagingDecision(createdAt)` instead and the alerts are read by primary
+  key, so such a page can be shorter than 50 rows.
+- **Changes list** (`/changes`, `lists/changes.ts`): the same walk over `ChangeEvent(occurredAt)`.
+  A global reader sees every change; a team-scoped reader sees changes of their teams' services.
+  Linked incidents come from the readable incidents opened between the page's oldest change and 24 h
+  after its newest (capped at 500), joined to `CHANGE_CORRELATION` findings through the finding lookup
+  index. Risk bands (`lists/contract.ts`) are shared with the overview's change panel.
+- Both loaders run inside one `withDbBudget` transaction (4 s) and the pages render the failure as a
+  notice. URL parameters are parsed in `lists/contract.ts`; anything unrecognised falls back to the
+  default view. Both pages assert `INTELLIGENCE_READ`.
+- **Needs-attention inbox** (`overview/attention.ts`): independent, fail-soft probes, each capped at
+  200 rows and a seven-day lookback: undecided triage findings and `SUGGESTED` relationships on open
+  readable incidents (only for services whose effective mode is SUGGEST or AUTO), services whose AUTO
+  gate passes while in SHADOW or SUGGEST, `SUGGESTED` dependencies and quarantined work. The last
+  three require `INTELLIGENCE_MANAGE`. The section renders nothing when empty or unavailable.
+  Connector test results are not persisted, so failing connectors are not listed.
+- **Mobile**: `/m/intelligence` renders the inbox and the Noise section from the same loaders.
+
 ## Expanded roadmap
 
 Service-certified reversible AUTO links and confirmed Squire write actions are implemented.

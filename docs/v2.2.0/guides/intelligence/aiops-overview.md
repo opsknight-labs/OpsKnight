@@ -9,11 +9,13 @@ reader:
   task: Read noise, speed, alert quality, change and response metrics for the incidents you can see, and open the fix for a noisy service.
 verification:
   level: test
-  verified_at: 2026-11-09
+  verified_at: 2026-11-11
   evidence:
     [
       src/app/(app)/intelligence,
       src/lib/intelligence/overview,
+      src/app/(mobile)/m/intelligence/page.tsx,
+      tests/integration/intelligence/overview-attention.test.ts,
       tests/integration/intelligence/overview.test.ts,
       tests/components/intelligence-overview.test.tsx,
       tests/e2e/intelligence-overview.spec.ts,
@@ -31,6 +33,29 @@ limited to your teams, the page says so under the title.
 
 The page only reads data. Each section loads on its own: if one cannot load, it shows a short error and
 the others still appear. Paging and escalation never depend on this page.
+
+Each section has a link in its top-right corner to the full list behind it: **View alerts**, **View
+incidents**, **View services**, **View changes** and **Open analytics**.
+
+## Needs attention
+
+When something is waiting for a decision, a **Needs attention** list appears above the sections. Each
+row opens the place where you make that decision. When nothing is waiting, the list is not shown.
+
+- **Triage**: open incidents with triage suggestions nobody has accepted or dismissed, from the last
+  seven days. The row opens the incident.
+- **Related incidents**: open incidents with related or duplicate suggestions nobody has confirmed or
+  rejected, from the last seven days. The row opens the incident.
+- **Ready for AUTO** (administrators): services running in shadow or suggest mode whose quality
+  certification currently passes. The row opens that service's policy. The first 100 services by name
+  are checked.
+- **Dependencies** (administrators): dependencies inferred from incidents that keep occurring
+  together, waiting to be approved or rejected under **Dependencies & changes**.
+- **Failed work** (administrators): analysis work that was quarantined and waits for a replay.
+
+Up to three incidents are listed for triage and for related incidents; the rest are summed in one row
+that opens the incident list. Suggestions are listed only for services whose policy shows suggestions
+to responders (suggest or auto mode), and only for incidents you can open.
 
 ## Noise
 
@@ -95,6 +120,11 @@ value.
 Whether the Intelligence lane on the instance serving the page is healthy, degraded (with the reason) or not
 running there, and the shared work backlog: ready, running, oldest waiting and failed work. Use **Open
 Intelligence settings** to replay failed work.
+
+## On a phone
+
+In the mobile app, open **More > AIOps** (`/m/intelligence`). It shows **Needs attention** and
+**Noise** with the same window picker. The other sections are on the desktop overview.
 
 ## When Intelligence is off
 
