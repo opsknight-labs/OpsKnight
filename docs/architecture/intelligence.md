@@ -941,7 +941,22 @@ transaction (`noise-controls/ingest.ts`):
    (`noise-controls/lookup-client.ts`: two connections per process on the direct route, opened by the
    background snapshot refresh once a SHADOW/ON policy exists) whose connections start with
    `statement_timeout` and `lock_timeout` equal to the deadline: one round trip, and an abandoned or
-   failing lookup never touches the event transaction. A transaction-pooled (`pgbouncer=true`) or
+   failing lookup never touches the event transaction. On this route `processEvent` **sends the
+   statement early** (`beginIngestNoiseLookups`): as soon as the event is known to open a new incident,
+   after the dedup-key advisory lock and the open-incident check, so it overlaps the resolve-buffer,
+   policy, classification and automation reads the transaction makes before the hook. The reason is
+   queueing, not the round trip itself: while the hook waits, the event holds its connection from the
+   main pool, and with more events in flight than connections every millisecond of hold is paid again
+   by each event queued behind it (measured: about 1.5 ms of wait in the hook cost +2.1 to +3.5 ms p50
+   at concurrency 16). The hook reuses the answer only for the same event, instant, deadline and
+   snapshot object, otherwise it reads for itself; the deadline counts from the moment the statement
+   was sent, so the lookup never gets more than one deadline and the hook waits only for the rest. The
+   early start reads the same committed state the hook would (the event has written nothing these
+   lookups read), a few milliseconds sooner; events for one dedup key still read in order because the
+   lock is taken first. It uses `peekPrePagingSnapshot`, so only the hook starts snapshot refreshes and
+   cold-cache behaviour is unchanged. A lookup started for an event that then takes the buffered
+   out-of-order resolve path, or that a static control (window, suppression rule, orchestration)
+   decides, is wasted; it never touches the event. A transaction-pooled (`pgbouncer=true`) or
    missing datasource falls back to the **savepoint route**: the statement is issued lazily inside
    `SAVEPOINT opsknight_prepaging` with `set_config('statement_timeout', <deadline>, true)` and the
    savepoint is always rolled back (restoring the transaction's own timeout and clearing an aborted

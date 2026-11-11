@@ -39,7 +39,13 @@
       "p99": -11.511167000004207
     },
     "breaches": [],
-    "passed": true
+    "passed": false,
+    "passedAsWrittenByTheScript": true,
+    "status": "INVALID",
+    "invalidReasons": [
+      "host not quiet: 1-minute load 10.1-10.8, the Docker VM stalled and one event took 899 s (see README); the script of that day had no host check and wrote passed=true"
+    ],
+    "annotation": "Verdict corrected by hand on 2026-11-11: this run is not judgeable and must not be read as a pass. Measurements are unchanged."
   },
   "summary": [
     {

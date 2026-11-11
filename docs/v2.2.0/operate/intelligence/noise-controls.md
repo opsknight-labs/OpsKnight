@@ -127,7 +127,9 @@ If an append or group target closed between the lookup and the write, the event 
 ## Capacity note
 
 Each SHADOW/ON evaluation adds one database round trip on the lookup pool (about 1 ms per event in local
-measurements), and each process that ingests keeps two extra database connections open once any service
+measurements). Ingestion sends it as soon as it knows the event opens a new incident, so it runs alongside
+the reads the event makes anyway instead of delaying it; the 5 ms deadline counts from that moment.
+Each process that ingests keeps two extra database connections open once any service
 is in SHADOW or ON; count them in your connection budget. During a burst, or on a busy host, the 5 ms
 budget can be exhausted, in which case the event pages normally and
 `opsknight_prepaging_fail_open_total{reason="deadline"}` rises; watch that counter after switching a
