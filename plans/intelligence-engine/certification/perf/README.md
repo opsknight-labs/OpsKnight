@@ -133,3 +133,22 @@ production claim statement and the AUTO paging-outbox lookup (`idx_background_jo
 the repair watermark and embed page are recorded as not judged below 200k rows, where the planner
 rightly prefers a sequential scan. `query-plans-100k-2026-11-08-local.json` is the same run at 100k with
 `--no-gate`, kept for its timings.
+
+## Incident route bundle (Workstream I1, 2026-11-11)
+
+First-load JS of the incident detail routes from a webpack production build (`npm run build`), before
+(`14eb802d1`, the seven-tab intelligence panel) and after (strip + lazy insights inspector). Measured as
+the build manifest's root files plus every layout and page entry chunk on the route and the shared chunks
+those entries name in their webpack startup call; lazy (`next/dynamic`) chunks are excluded, as they are
+from the browser's first load. Both builds were measured with the same script on the same host. A few
+startup chunk ids (8 before, 7 after on the desktop route) had no matching file under
+`.next/static/chunks` and are left out of both sides, so read the figures as a like-for-like comparison,
+not an absolute size. `scripts/perf/check-performance-budgets.cjs` passes on the after build.
+
+| Route                       | Before raw | After raw | Before gzip | After gzip | Change (gzip) |
+| --------------------------- | ---------: | --------: | ----------: | ---------: | ------------: |
+| `(app)/incidents/[id]`      |  1,848,211 | 1,843,409 |     536,757 |    534,716 |        -2,041 |
+| `(mobile)/m/incidents/[id]` |  1,628,143 | 1,619,435 |     480,577 |    477,543 |        -3,034 |
+
+Bytes. **PASS**: neither route grew. The inspector and its section components load on first open
+(`next/dynamic`), so they are not in these figures.
