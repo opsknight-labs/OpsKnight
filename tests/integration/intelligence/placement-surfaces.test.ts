@@ -30,6 +30,7 @@ import {
   getWallboardLargestGroup,
 } from '@/lib/intelligence/surfaces/dashboard-pulse';
 import { utcDay } from '@/lib/intelligence/ai/budget';
+import { resetWorkBacklogCacheForTests } from '@/lib/intelligence/jobs/work-queue';
 import { reviewServiceDependencyAction } from '@/app/(app)/services/[id]/intelligence/actions';
 import {
   createTestIncident,
@@ -48,6 +49,8 @@ beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
     throw new Error('Dedicated test DB required');
   await resetDatabase();
+  // The pulse reads the backlog through a 10 s process cache; a previous test's count must not leak in.
+  resetWorkBacklogCacheForTests();
   session.userId = null;
 });
 
