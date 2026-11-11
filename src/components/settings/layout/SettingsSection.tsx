@@ -5,6 +5,8 @@ import { Separator } from '@/components/ui/shadcn/separator';
 import { cn } from '@/lib/utils';
 
 interface SettingsSectionProps {
+  /** Anchor id, so `#id` links can deep-link to the section. */
+  id?: string;
   title: string;
   description?: string;
   children: React.ReactNode;
@@ -14,6 +16,7 @@ interface SettingsSectionProps {
 }
 
 export function SettingsSection({
+  id,
   title,
   description,
   children,
@@ -22,7 +25,7 @@ export function SettingsSection({
   footer,
 }: SettingsSectionProps) {
   return (
-    <Card className={cn('overflow-hidden', className)}>
+    <Card id={id} className={cn('overflow-hidden', id && 'scroll-mt-24', className)}>
       {/* Header */}
       <div className="px-4 py-4 md:px-6 md:py-5">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">

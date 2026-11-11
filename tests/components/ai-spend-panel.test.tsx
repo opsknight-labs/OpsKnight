@@ -123,8 +123,8 @@ describe('AiSpendPanel', () => {
     const period = screen.getByRole('navigation', { name: 'Spend period' });
     const links = within(period).getAllByRole('link');
     expect(links.map(link => link.getAttribute('href'))).toEqual([
-      '/settings/intelligence/ai?spend=7#ai-spend',
-      '/settings/intelligence/ai?spend=30#ai-spend',
+      '/settings/intelligence/evaluation?spend=7#ai-spend',
+      '/settings/intelligence/evaluation?spend=30#ai-spend',
     ]);
     expect(links[0]).toHaveAttribute('aria-current', 'page');
     const teams = screen.getByRole('table', { name: 'AI spend by team' });

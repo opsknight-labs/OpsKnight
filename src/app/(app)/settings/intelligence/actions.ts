@@ -84,6 +84,36 @@ export async function saveIntelligenceSettings(
   }
 }
 
+/** Turns triage suggestions on or off as its own policy version; everything else is carried over. */
+export async function publishTriagePolicy(
+  _state: IntelligenceActionState,
+  form: FormData
+): Promise<IntelligenceActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const enabled = form.get('triageEnabled') === 'on';
+    const current = await resolveEffectivePolicy(null);
+    const definition: PolicyDefinition = { ...current.definition, triage: { enabled } };
+    const result = await publishPolicyVersion(
+      {},
+      {
+        mode: current.mode,
+        definition,
+        reason: `Triage suggestions turned ${enabled ? 'on' : 'off'}`,
+        expectedHeadVersion: integer(form, 'expectedHeadVersion'),
+      },
+      { actorId: actor.id, source: 'UI' }
+    );
+    revalidatePath(SETTINGS_PATH);
+    return {
+      message: `Triage suggestions ${enabled ? 'on' : 'off'}. Policy version ${result.version} published.`,
+      ok: true,
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 export async function publishGlobalPolicy(
   _state: IntelligenceActionState,
   form: FormData
@@ -105,7 +135,8 @@ export async function publishGlobalPolicy(
       },
       // Learned weights are carried over; the form only toggles the feature.
       response: { ...current.definition.response, enabled: form.get('responseEnabled') === 'on' },
-      triage: { enabled: form.get('triageEnabled') === 'on' },
+      // Triage has its own card and action (publishTriagePolicy); it is carried over here.
+      triage: current.definition.triage,
     };
     const result = await publishPolicyVersion(
       {},

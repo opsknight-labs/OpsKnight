@@ -193,7 +193,7 @@ function BudgetMeters({ statuses }: { statuses: BudgetStatus[] }) {
 export default function AiSpendPanel({
   breakdown,
   statuses,
-  basePath = '/settings/intelligence/ai',
+  basePath = '/settings/intelligence/evaluation',
 }: {
   breakdown: SpendBreakdown;
   statuses: BudgetStatus[];

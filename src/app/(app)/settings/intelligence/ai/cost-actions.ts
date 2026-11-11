@@ -14,7 +14,8 @@ import {
 
 export type CostActionState = { message: string; ok: boolean };
 
-const PATH = '/settings/intelligence/ai';
+// Usage, spend and budgets live on Evaluation & spend.
+const PATH = '/settings/intelligence/evaluation';
 
 const text = (form: FormData, name: string) => {
   const value = form.get(name);

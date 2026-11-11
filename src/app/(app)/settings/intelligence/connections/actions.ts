@@ -14,7 +14,8 @@ import type { ConnectorTestResult } from '@/lib/intelligence/connectors/contract
 
 export type ConnectionActionState = { message: string; ok: boolean };
 
-const PATH = '/settings/intelligence/connections';
+// Connections are a section of the Assistant page.
+const PATH = '/settings/intelligence/ai';
 
 function failure(error: unknown): ConnectionActionState {
   if (error instanceof AppError) {

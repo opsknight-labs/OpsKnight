@@ -3,6 +3,7 @@
 import { useActionState, useId } from 'react';
 import {
   publishGlobalPolicy,
+  publishTriagePolicy,
   replayIntelligenceDeadLetter,
   rollbackGlobalPolicy,
   saveIntelligenceSettings,
@@ -265,7 +266,6 @@ export function IntelligencePolicyForm({
   mode,
   similarityEnabled,
   responseEnabled,
-  triageEnabled = false,
   minScore,
   canManage,
   autoAvailable,
@@ -274,7 +274,6 @@ export function IntelligencePolicyForm({
   mode: IntelligenceModeValue;
   similarityEnabled: boolean;
   responseEnabled: boolean;
-  triageEnabled?: boolean;
   minScore: number;
   canManage: boolean;
   autoAvailable: boolean;
@@ -337,23 +336,6 @@ export function IntelligencePolicyForm({
           </span>
         </label>
       </div>
-      <div className="flex items-start gap-3">
-        <input
-          id={`${id}-triage`}
-          name="triageEnabled"
-          type="checkbox"
-          defaultChecked={triageEnabled}
-          disabled={disabled}
-          className="mt-1 h-4 w-4"
-        />
-        <label htmlFor={`${id}-triage`} className="text-sm font-medium">
-          Suggest triage: urgency, owner, duplicates and expected time to resolve
-          <span className="block text-xs font-normal text-muted-foreground">
-            Derived from how similar incidents were resolved. Shown as chips a responder accepts or
-            dismisses; nothing is applied on its own.
-          </span>
-        </label>
-      </div>
       <div className="space-y-1">
         <label htmlFor={`${id}-score`} className="text-sm font-medium">
           Minimum similarity (0 to 1)
@@ -387,6 +369,49 @@ export function IntelligencePolicyForm({
         {canManage && (
           <Button type="submit" disabled={pending}>
             {pending ? 'Publishing…' : 'Publish new version'}
+          </Button>
+        )}
+        <Status state={state} />
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Triage has its own card and its own publish: one switch, one policy version. The global policy
+ * form no longer carries the checkbox, so publishing either never changes the other.
+ */
+export function TriagePolicyForm({
+  headVersion,
+  enabled,
+  canManage,
+}: {
+  headVersion: number;
+  enabled: boolean;
+  canManage: boolean;
+}) {
+  const [state, action, pending] = useActionState(publishTriagePolicy, initialState);
+  const id = useId();
+  return (
+    <form action={action} className="space-y-4 border-t border-border py-4">
+      <input type="hidden" name="expectedHeadVersion" value={headVersion} />
+      <div className="flex min-h-11 items-center gap-3">
+        <input
+          id={`${id}-triage`}
+          name="triageEnabled"
+          type="checkbox"
+          defaultChecked={enabled}
+          disabled={!canManage || pending}
+          className="h-4 w-4"
+        />
+        <label htmlFor={`${id}-triage`} className="text-sm font-medium">
+          Suggest triage: urgency, owner, duplicates and expected time to resolve
+        </label>
+      </div>
+      <div className="flex items-center gap-3">
+        {canManage && (
+          <Button type="submit" disabled={pending}>
+            {pending ? 'Publishing…' : 'Save triage setting'}
           </Button>
         )}
         <Status state={state} />

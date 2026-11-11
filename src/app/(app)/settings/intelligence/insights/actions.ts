@@ -19,7 +19,8 @@ import { adoptRunbookWeights } from '@/lib/intelligence/learning/runbook-weights
 
 export type InsightsActionState = { message: string; ok: boolean };
 
-const PATH = '/settings/intelligence/insights';
+// Insights, learned weights and the digest live on Evaluation & spend.
+const PATH = '/settings/intelligence/evaluation';
 
 /** Publishes the reviewed probable-cause ranking weights; recomputed server-side, never taken from the form. */
 export async function adoptResponseWeightsAction(

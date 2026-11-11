@@ -73,7 +73,7 @@ export function ServicePolicyForm({
         <p className="text-xs text-muted-foreground">
           {row.autoReason ?? 'Review quality certification before enabling automatic grouping.'}{' '}
           <Link
-            href={`/settings/intelligence/quality?serviceId=${encodeURIComponent(row.serviceId)}`}
+            href={`/settings/intelligence/evaluation?serviceId=${encodeURIComponent(row.serviceId)}#grouping-quality`}
             className="underline"
           >
             Review grouping quality

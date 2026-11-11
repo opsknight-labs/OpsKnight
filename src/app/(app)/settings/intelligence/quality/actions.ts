@@ -40,7 +40,7 @@ export async function measureQualityAction(
       { actorId: user.id, source: 'UI' },
       parsed.data.kind === 'CERTIFICATION'
     );
-    revalidatePath('/settings/intelligence/quality');
+    revalidatePath('/settings/intelligence/evaluation');
     revalidatePath('/settings/intelligence/services');
     return {
       ok: true,

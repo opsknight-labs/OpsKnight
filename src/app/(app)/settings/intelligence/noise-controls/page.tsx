@@ -1,4 +1,5 @@
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import { IntelligenceGroupHeader } from '@/components/settings/layout/IntelligenceGroupHeader';
 import {
   DecisionList,
   KpiTiles,
@@ -128,19 +129,16 @@ export default async function NoiseControlsPage({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Noise controls</h1>
-        <p className="text-sm text-muted-foreground">
-          Decide before paging: maintenance windows, suppression rules, orchestration, content
-          dedup, flapping, storm grouping and heartbeat monitors. Everything starts OFF, runs in
-          SHADOW first, and every decision is recorded and reversible. Highest urgency is never
-          held.
-        </p>
-      </header>
+      <IntelligenceGroupHeader group="noise">
+        Decide before paging: maintenance windows, suppression rules, orchestration, content dedup,
+        flapping, storm grouping and heartbeat monitors. Everything starts OFF, runs in SHADOW
+        first, and every decision is recorded and reversible. Highest urgency is never held.
+      </IntelligenceGroupHeader>
 
       {kpis && <KpiTiles kpis={kpis} />}
 
       <SettingsSection
+        id="policy"
         title="Policy"
         description="OFF ignores everything below. SHADOW records what would have happened. ON applies it. Turning ON needs a week of shadow evidence, or an explicit acknowledgement."
       >
@@ -165,36 +163,7 @@ export default async function NoiseControlsPage({
       </SettingsSection>
 
       <SettingsSection
-        title="Policy history"
-        description="Every publish is an immutable version (orchestration rules included). Decisions record the version they were made under. Rolling back publishes a copy of the chosen version as the newest one, so history is never rewritten."
-      >
-        {policy ? (
-          <PolicyVersionHistory
-            versions={versions ?? []}
-            serviceId={serviceId}
-            revision={policy.revision}
-            currentMode={policy.mode}
-            canManage={canManage}
-          />
-        ) : (
-          <p className="py-4 text-sm text-muted-foreground">Unavailable.</p>
-        )}
-      </SettingsSection>
-
-      <SettingsSection
-        title="Maintenance windows"
-        description="Alerts in a window are stored and visible but never page (or page at a lower urgency). Windows can repeat (weekly, weekdays, weekends, monthly or a custom RRULE) and can be ended early. Test a window against the last 7 days before saving it."
-      >
-        <MaintenanceWindowsPanel
-          windows={windows ?? []}
-          services={services ?? []}
-          teams={teams ?? []}
-          canManage={canManage}
-          now={now}
-        />
-      </SettingsSection>
-
-      <SettingsSection
+        id="suppression-rules"
         title="Suppression rules"
         description="Match on source, summary, severity, resource or labels. Rules expire, have an owner, and are audited. Suggestions come from services whose incidents mostly clear within minutes."
       >
@@ -213,6 +182,39 @@ export default async function NoiseControlsPage({
       </SettingsSection>
 
       <SettingsSection
+        id="maintenance-windows"
+        title="Maintenance windows"
+        description="Alerts in a window are stored and visible but never page (or page at a lower urgency). Windows can repeat (weekly, weekdays, weekends, monthly or a custom RRULE) and can be ended early. Test a window against the last 7 days before saving it."
+      >
+        <MaintenanceWindowsPanel
+          windows={windows ?? []}
+          services={services ?? []}
+          teams={teams ?? []}
+          canManage={canManage}
+          now={now}
+        />
+      </SettingsSection>
+
+      <SettingsSection
+        id="policy-history"
+        title="Orchestration and policy versions"
+        description="Compare versions, see what changed and roll back. Every publish is an immutable version (orchestration rules included). Decisions record the version they were made under. Rolling back publishes a copy of the chosen version as the newest one, so history is never rewritten."
+      >
+        {policy ? (
+          <PolicyVersionHistory
+            versions={versions ?? []}
+            serviceId={serviceId}
+            revision={policy.revision}
+            currentMode={policy.mode}
+            canManage={canManage}
+          />
+        ) : (
+          <p className="py-4 text-sm text-muted-foreground">Unavailable.</p>
+        )}
+      </SettingsSection>
+
+      <SettingsSection
+        id="heartbeats"
         title="Heartbeat monitors"
         description="A job that stops pinging raises an incident on its service through the normal ingestion path, and resolves it when the pings return."
       >
@@ -225,6 +227,7 @@ export default async function NoiseControlsPage({
       </SettingsSection>
 
       <SettingsSection
+        id="simulation"
         title="Test against history"
         description="Replays the saved controls over recent incidents, read-only, and says what would have been suppressed, grouped, downgraded or held."
       >
@@ -241,6 +244,7 @@ export default async function NoiseControlsPage({
       </SettingsSection>
 
       <SettingsSection
+        id="decisions"
         title="Recent decisions"
         description="Shadow and applied decisions. Reversing an applied decision re-ingests the alert so it pages; reversing a shadow decision marks it wrong and counts against readiness."
       >

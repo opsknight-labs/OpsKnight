@@ -1,9 +1,12 @@
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import { IntelligenceGroupHeader } from '@/components/settings/layout/IntelligenceGroupHeader';
+import { RuleSuggestionsPanel } from '@/components/settings/InsightsForms';
 import {
   IntelligencePolicyForm,
   IntelligenceSettingsForm,
   ReplayForm,
   RollbackForm,
+  TriagePolicyForm,
 } from '@/components/settings/IntelligenceSettingsForms';
 import CorrelationRulesEditor from '@/components/settings/CorrelationRulesEditor';
 import OpsInsightsSettingsForm from '@/components/settings/OpsInsightsSettingsForm';
@@ -70,20 +73,31 @@ export default async function IntelligenceSettingsPage() {
     ]);
 
   const headVersion = versions?.headVersion ?? 0;
+  const hasFailedWork = Boolean(deadLetters && deadLetters.length > 0);
+  const triageEnabled = policy?.definition.triage.enabled ?? false;
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Intelligence</h1>
-        <p className="text-sm text-muted-foreground">
-          Learns from your incident history to suggest similar past incidents, related incidents,
-          possible causes and runbooks. It runs entirely off the paging path: it never delays
-          escalation or notifications. Certified service AUTO adds reversible related links after
-          paging. Turning it off stops analysis; existing accepted links remain available to undo.
-        </p>
-      </header>
+      <IntelligenceGroupHeader
+        group="engine"
+        title="Intelligence"
+        visible={[
+          'lane-health',
+          'general',
+          'global-policy',
+          'triage',
+          'correlation-rules',
+          ...(hasFailedWork ? ['failed-work'] : []),
+        ]}
+      >
+        Learns from your incident history to suggest similar past incidents, related incidents,
+        possible causes and runbooks. It runs entirely off the paging path: it never delays
+        escalation or notifications. Certified service AUTO adds reversible related links after
+        paging. Turning it off stops analysis; existing accepted links remain available to undo.
+      </IntelligenceGroupHeader>
 
       <SettingsSection
+        id="lane-health"
         title="Status"
         description="Live health of the intelligence lane."
         action={
@@ -136,6 +150,7 @@ export default async function IntelligenceSettingsPage() {
         )}
 
       <SettingsSection
+        id="general"
         title="General"
         description="Master switch, worker budgets and retention. Changes apply within seconds."
       >
@@ -143,6 +158,7 @@ export default async function IntelligenceSettingsPage() {
       </SettingsSection>
 
       <SettingsSection
+        id="operations-insights"
         title="Operations insights"
         description="Suggestions about service automation, escalation policies, on-call schedules, postmortems, runbooks and notifications. Off by default."
       >
@@ -150,6 +166,7 @@ export default async function IntelligenceSettingsPage() {
       </SettingsSection>
 
       <SettingsSection
+        id="global-policy"
         title="Global policy"
         description="Each save publishes a new immutable version, so any change can be undone and every decision stays traceable."
         action={<Badge variant="outline">Version {headVersion}</Badge>}
@@ -159,7 +176,6 @@ export default async function IntelligenceSettingsPage() {
           mode={policy?.mode ?? 'OFF'}
           similarityEnabled={policy?.definition.similarity.enabled ?? true}
           responseEnabled={policy?.definition.response.enabled ?? true}
-          triageEnabled={policy?.definition.triage.enabled ?? false}
           minScore={policy?.definition.similarity.minScore ?? 0.35}
           canManage={canManage}
           autoAvailable={AUTO_MODE_AVAILABLE}
@@ -196,6 +212,41 @@ export default async function IntelligenceSettingsPage() {
       </SettingsSection>
 
       <SettingsSection
+        id="triage"
+        title="Triage suggestions"
+        description="Off by default. Suggestions only: nothing is applied until a responder accepts it."
+        action={
+          <Badge variant={triageEnabled ? 'default' : 'secondary'}>
+            {triageEnabled ? 'On' : 'Off'}
+          </Badge>
+        }
+      >
+        <div className="space-y-2 py-4 text-sm text-muted-foreground">
+          <p>
+            When an incident opens, triage looks at how similar incidents were handled and proposes,
+            as chips on the incident:
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>an urgency, when similar incidents were raised or lowered;</li>
+            <li>an owning team or person, from who resolved them;</li>
+            <li>a likely duplicate, when an open incident looks the same;</li>
+            <li>an expected time to resolve.</li>
+          </ul>
+          <p>
+            It needs similar-incident matching to be on and a mode of Suggest or higher to be
+            visible. A service with its own policy decides for itself. Turning it on or off
+            publishes a new policy version, so it can be rolled back from the history above.
+          </p>
+        </div>
+        <TriagePolicyForm
+          headVersion={headVersion}
+          enabled={triageEnabled}
+          canManage={canManage && policy !== null}
+        />
+      </SettingsSection>
+
+      <SettingsSection
+        id="correlation-rules"
         title="Correlation rules"
         description="Group related incidents of the same service. Rules only suggest links for responders to confirm."
       >
@@ -207,8 +258,18 @@ export default async function IntelligenceSettingsPage() {
         />
       </SettingsSection>
 
+      {canManage && policy && (
+        <SettingsSection
+          title="Suggested grouping rules"
+          description="Grouping rules learned from the links responders confirmed and the suggestions they rejected, checked against recent history before they are offered."
+        >
+          <RuleSuggestionsPanel expectedHeadVersion={headVersion} mode={policy.mode} />
+        </SettingsSection>
+      )}
+
       {deadLetters && deadLetters.length > 0 && (
         <SettingsSection
+          id="failed-work"
           title="Failed work"
           description="Items that exhausted their retries. Quarantined items failed twice within a day and wait for a replay instead of retrying on their own. Nothing here affects incident handling."
         >

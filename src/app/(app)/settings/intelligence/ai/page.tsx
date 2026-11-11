@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import { IntelligenceGroupHeader } from '@/components/settings/layout/IntelligenceGroupHeader';
 import {
   AiSettingsForm,
   DeleteProviderButton,
@@ -11,18 +13,20 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
-import { getTodayUsage, getUsageHistory } from '@/lib/intelligence/ai/budget';
-import AiUsageChart from '@/components/settings/AiUsageChart';
 import { getAiSettings, listAiProviders } from '@/lib/intelligence/ai/settings';
 import { BUILT_IN_PROMPTS, listGuidance, promptHash } from '@/lib/intelligence/ai/prompts';
 import { getSemanticIndexStatus } from '@/lib/intelligence/semantic/embedder';
 import { listCheckTemplates } from '@/lib/intelligence/assistant/check-templates';
 import SquireChecksForm from '@/components/squire/SquireChecksForm';
-import { backgroundEmbeddingTokenBudget } from '@/lib/intelligence/ai/contract';
 import AiRoutingForm from '@/components/settings/AiRoutingForm';
-import { loadAiCostView } from '@/lib/intelligence/ai/cost-view';
-import AiSpendPanel from '@/components/settings/AiSpendPanel';
-import { AiBudgetsForm, AiModelPricesForm } from '@/components/settings/AiCostForms';
+import {
+  intelligenceSettingsHref,
+  intelligenceSettingsPath,
+  serializeSearchParams,
+  type RouteSearchParams,
+} from '@/lib/intelligence/settings/routes';
+import ConnectionsSection from '../_sections/ConnectionsSection';
+import KnowledgeMemorySection from '../_sections/KnowledgeMemorySection';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -38,19 +42,21 @@ async function safely<T>(label: string, load: () => Promise<T>): Promise<T | nul
   }
 }
 
-export default async function IntelligenceAiPage({
+export default async function IntelligenceAssistantPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  searchParams?: Promise<RouteSearchParams>;
 }) {
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
-  const spendDays = (await searchParams)?.spend === '30' ? 30 : 7;
+  // Usage, spend and budgets moved to Evaluation & spend; links carrying the spend period follow.
+  const params = await searchParams;
+  if (params?.spend !== undefined) {
+    redirect(`${intelligenceSettingsPath('evaluation')}${serializeSearchParams(params)}#ai-spend`);
+  }
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
-  const [settings, providers, usage, history] = await Promise.all([
+  const [settings, providers] = await Promise.all([
     getAiSettings(),
     safely('providers', () => listAiProviders()),
-    safely('usage', () => getTodayUsage()),
-    safely('usage history', () => getUsageHistory(14)),
   ]);
   const [guidance, semantic, checkTemplates] = await Promise.all([
     safely('prompt guidance', () => listGuidance()),
@@ -59,24 +65,22 @@ export default async function IntelligenceAiPage({
       : Promise.resolve(null),
     safely('suggested checks', () => listCheckTemplates()),
   ]);
-  const cost = await safely('spend and budgets', () =>
-    loadAiCostView(spendDays, settings.dailyTokenBudget, providers ?? [])
-  );
-  const used = usage ? usage.inputTokens + usage.outputTokens : 0;
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Assistant and AI</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure {settings.squireName}, the in-app assistant, and the language models behind it.
-          Everything is set here: no environment variables. The assistant reads only what you can
-          open. Proposed changes require your confirmation and use the same permissions as the
-          application.
-        </p>
-      </header>
+      <IntelligenceGroupHeader group="assistant" title="Assistant and AI">
+        Configure {settings.squireName}, the in-app assistant, and the language models behind it.
+        Everything is set here: no environment variables. The assistant reads only what you can
+        open. Proposed changes require your confirmation and use the same permissions as the
+        application. Usage, spend and budgets are under{' '}
+        <Link href={intelligenceSettingsHref('evaluation', 'usage')} className="underline">
+          Evaluation &amp; spend
+        </Link>
+        .
+      </IntelligenceGroupHeader>
 
       <SettingsSection
+        id="assistant"
         title="General"
         description="Both switches are off by default."
         action={
@@ -89,126 +93,7 @@ export default async function IntelligenceAiPage({
       </SettingsSection>
 
       <SettingsSection
-        title="Investigation and model routing"
-        description="Investigation mode is off by default. Routing is optional: unset capabilities use the provider priority order."
-      >
-        <AiRoutingForm
-          investigationEnabled={settings.squireInvestigationEnabled ?? false}
-          routing={settings.capabilityRouting ?? {}}
-          providers={(providers ?? []).map(provider => ({
-            id: provider.id,
-            name: provider.name,
-            model: provider.model,
-            enabled: provider.enabled,
-          }))}
-          revision={settings.revision}
-          canManage={canManage}
-        />
-      </SettingsSection>
-
-      <SettingsSection
-        title="Usage"
-        description="Today's totals reset at 00:00 UTC. Red bars reached the daily budget."
-      >
-        <div className="grid gap-4 py-3 sm:grid-cols-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Requests</p>
-            <p className="text-lg font-semibold">{usage ? usage.requests : 'Unavailable'}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Tokens</p>
-            <p className="text-lg font-semibold">
-              {usage ? used.toLocaleString('en-US') : 'Unavailable'}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Daily budget</p>
-            <p className="text-lg font-semibold">
-              {settings.dailyTokenBudget.toLocaleString('en-US')}
-            </p>
-          </div>
-        </div>
-        {history && <AiUsageChart history={history} budget={settings.dailyTokenBudget} />}
-        <p className="py-2 text-sm text-muted-foreground">
-          Background embedding:{' '}
-          {usage ? usage.backgroundEmbeddingTokens.toLocaleString('en-US') : 'Unavailable'}
-          {' / '}
-          {backgroundEmbeddingTokenBudget(settings).toLocaleString('en-US')} tokens today (
-          {settings.backgroundEmbeddingBudgetPercent}% of the total allowance). When its allocation
-          is reached, backfills wait and existing vectors remain searchable.
-        </p>
-      </SettingsSection>
-
-      <SettingsSection
-        title="Spend and budgets"
-        description="Dollar spend by team, capability and model, from token counts and the prices below. A call is charged to the incident's team, or else to the person's first team. Optional daily budgets per team or capability are enforced with the global budget: at the limit, new AI requests in that scope are refused until 00:00 UTC and answers fall back to basic mode."
-      >
-        {cost ? (
-          <>
-            <AiSpendPanel breakdown={cost.breakdown} statuses={cost.statuses} />
-            <AiBudgetsForm budgets={cost.budgets} teams={cost.teams} canManage={canManage} />
-          </>
-        ) : (
-          <p className="py-3 text-sm text-muted-foreground">Spend is unavailable right now.</p>
-        )}
-      </SettingsSection>
-
-      <SettingsSection
-        title="Model prices"
-        description="US dollars per million tokens. Built-in list prices cover common hosted models; set your own for negotiated, regional or self-hosted rates. A model with no price still counts toward token budgets."
-      >
-        {cost ? (
-          <AiModelPricesForm
-            configured={cost.configuredPrices}
-            overrides={cost.overrides}
-            canManage={canManage}
-          />
-        ) : (
-          <p className="py-3 text-sm text-muted-foreground">Prices are unavailable right now.</p>
-        )}
-      </SettingsSection>
-
-      {settings.embeddingsEnabled && (
-        <SettingsSection
-          title="Semantic search"
-          description="Similar incidents are found by meaning as well as wording. New incidents are indexed in the background; matching never waits for it. Changing the embedding provider, endpoint or model rebuilds recent vectors within your token budget."
-        >
-          {semantic?.model ? (
-            <dl className="grid gap-4 py-3 sm:grid-cols-3">
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Model</dt>
-                <dd className="break-all text-sm font-medium">
-                  {semantic.modelLabel ?? semantic.model}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Indexed incidents
-                </dt>
-                <dd className="text-lg font-semibold">
-                  {semantic.indexed.toLocaleString('en-US')}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Waiting (last 30 days)
-                </dt>
-                <dd className="text-lg font-semibold">
-                  {semantic.pending >= 1000 ? '1,000+' : semantic.pending.toLocaleString('en-US')}
-                </dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="py-3 text-sm text-muted-foreground">
-              {semantic === null
-                ? 'Status is unavailable right now.'
-                : 'Not active: enable Intelligence and AI, and give an enabled provider an embedding model. Masked titles can still contain names. That provider must be allowed to receive Personal data and be in an allowed region.'}
-            </p>
-          )}
-        </SettingsSection>
-      )}
-
-      <SettingsSection
+        id="providers"
         title="Providers"
         description="Tried in priority order. Each provider has its own limit on the data it may receive."
       >
@@ -254,13 +139,68 @@ export default async function IntelligenceAiPage({
           </details>
         )}
       </SettingsSection>
+
       <SettingsSection
-        title="Suggested checks"
-        description="Investigation prompts the assistant shows with incident answers, with or without AI, when the incident title matches a pattern. They are suggestions only; nothing is executed."
+        id="model-routing"
+        title="Investigation and model routing"
+        description="Investigation mode is off by default. Routing is optional: unset capabilities use the provider priority order."
       >
-        <SquireChecksForm templates={checkTemplates ?? []} canManage={canManage} />
+        <AiRoutingForm
+          investigationEnabled={settings.squireInvestigationEnabled ?? false}
+          routing={settings.capabilityRouting ?? {}}
+          providers={(providers ?? []).map(provider => ({
+            id: provider.id,
+            name: provider.name,
+            model: provider.model,
+            enabled: provider.enabled,
+          }))}
+          revision={settings.revision}
+          canManage={canManage}
+        />
       </SettingsSection>
+
+      {settings.embeddingsEnabled && (
+        <SettingsSection
+          title="Semantic search"
+          description="Similar incidents are found by meaning as well as wording. New incidents are indexed in the background; matching never waits for it. Changing the embedding provider, endpoint or model rebuilds recent vectors within your token budget."
+        >
+          {semantic?.model ? (
+            <dl className="grid gap-4 py-3 sm:grid-cols-3">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Model</dt>
+                <dd className="break-all text-sm font-medium">
+                  {semantic.modelLabel ?? semantic.model}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Indexed incidents
+                </dt>
+                <dd className="text-lg font-semibold">
+                  {semantic.indexed.toLocaleString('en-US')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Waiting (last 30 days)
+                </dt>
+                <dd className="text-lg font-semibold">
+                  {semantic.pending >= 1000 ? '1,000+' : semantic.pending.toLocaleString('en-US')}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="py-3 text-sm text-muted-foreground">
+              {semantic === null
+                ? 'Status is unavailable right now.'
+                : 'Not active: enable Intelligence and AI, and give an enabled provider an embedding model. Masked titles can still contain names. That provider must be allowed to receive Personal data and be in an allowed region.'}
+            </p>
+          )}
+        </SettingsSection>
+      )}
+
       <SettingsSection
+        id="prompts"
         title="Prompts"
         description="Every instruction sent to a model is versioned. The version and fingerprint are recorded with each AI interaction in the audit log."
       >
@@ -300,14 +240,35 @@ export default async function IntelligenceAiPage({
           })}
         </ul>
       </SettingsSection>
-      {/* Squire knowledge memory (F4). */}
+
       <SettingsSection
-        title="Knowledge memory"
-        description="Let Squire search what your organisation already learned: postmortems, resolution and incident notes, runbook steps and confirmed service facts. Off by default."
+        id="checks"
+        title="Suggested checks"
+        description="Investigation prompts the assistant shows with incident answers, with or without AI, when the incident title matches a pattern. They are suggestions only; nothing is executed."
       >
-        <Link href="/settings/intelligence/ai/memory" className="text-sm underline">
-          Manage Squire’s knowledge index
-        </Link>
+        <SquireChecksForm templates={checkTemplates ?? []} canManage={canManage} />
+      </SettingsSection>
+
+      <ConnectionsSection canManage={canManage} />
+
+      <KnowledgeMemorySection canManage={canManage} />
+
+      <SettingsSection
+        id="proactive"
+        title="Proactive help"
+        description="Briefings when an incident opens, reminders to post an update and postmortem drafts. Each is off by default and is turned on per service, so a team opts in for the services it owns."
+      >
+        <p className="py-3 text-sm text-muted-foreground">
+          Open a service under{' '}
+          <Link
+            href={intelligenceSettingsHref('services', 'service-policies')}
+            className="underline"
+          >
+            Per-service policies
+          </Link>{' '}
+          and choose “Squire: proactive help and learned facts”. The same page lists the facts
+          people confirmed about that service.
+        </p>
       </SettingsSection>
     </div>
   );

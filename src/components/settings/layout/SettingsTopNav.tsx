@@ -16,6 +16,7 @@ import {
   Settings,
   ClipboardList,
   Search,
+  Sparkles,
   ChevronDown,
   type LucideIcon,
 } from 'lucide-react';
@@ -43,6 +44,8 @@ export type SettingsTab = {
   requiresAdmin?: boolean;
   requiresAuditor?: boolean;
   requiresResponder?: boolean;
+  /** Visible to responders and above, and to auditors (the roles holding intelligence.read). */
+  requiresResponderOrAuditor?: boolean;
 };
 
 export const SETTINGS_TABS: SettingsTab[] = [
@@ -92,6 +95,15 @@ export const SETTINGS_TABS: SettingsTab[] = [
     requiresAdmin: true,
   },
   {
+    // First-class entry for Settings → Intelligence; the Workspace & Governance card links here too.
+    id: 'intelligence',
+    label: 'Intelligence',
+    href: '/settings/intelligence',
+    icon: Sparkles,
+    matchPrefixes: ['/settings/intelligence'],
+    requiresResponderOrAuditor: true,
+  },
+  {
     id: 'custom-fields',
     label: 'Custom Fields',
     href: '/settings/custom-fields',
@@ -139,6 +151,7 @@ const CORE_TAB_IDS = new Set([
   'compliance',
   'incident-sla',
   'integrations',
+  'intelligence',
 ]);
 
 export default function SettingsTopNav({
@@ -152,6 +165,7 @@ export default function SettingsTopNav({
     if (tab.requiresAdmin && !isAdmin) return false;
     if (tab.requiresAuditor && !isAdmin && !isAuditor) return false;
     if (tab.requiresResponder && !isResponderOrAbove) return false;
+    if (tab.requiresResponderOrAuditor && !isResponderOrAbove && !isAuditor) return false;
     return true;
   };
 

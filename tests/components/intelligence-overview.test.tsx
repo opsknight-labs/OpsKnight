@@ -274,7 +274,7 @@ describe('ChangePanel', () => {
     expect(screen.getByText('No changes recorded in this window')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open settings' })).toHaveAttribute(
       'href',
-      '/settings/intelligence/response'
+      '/settings/intelligence/services#change-sources'
     );
   });
 });

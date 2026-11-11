@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import { IntelligenceGroupHeader } from '@/components/settings/layout/IntelligenceGroupHeader';
+import DependenciesChangesSections from '../_sections/DependenciesChangesSections';
 import { ClearOverrideButton, ServicePolicyForm } from '@/components/settings/ServicePolicyForms';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
@@ -11,14 +13,20 @@ import { listServicePolicyOverview } from '@/lib/intelligence/settings/service';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const SOURCE_LABEL = { service: 'Own policy', global: 'Follows global', default: 'Not configured' } as const;
+const SOURCE_LABEL = {
+  service: 'Own policy',
+  global: 'Follows global',
+  default: 'Not configured',
+} as const;
 
 async function loadRows(search: string) {
   try {
     const actor = await getCurrentAuthorizationActor();
     return await listServicePolicyOverview({ search, serviceWhere: serviceReadWhere(actor) });
   } catch (error) {
-    logger.warn('[Intelligence] Service policies could not load', { error: error instanceof Error ? error.message : String(error) });
+    logger.warn('[Intelligence] Service policies could not load', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }
@@ -35,21 +43,33 @@ export default async function IntelligenceServicesPage({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Per-service policies</h1>
-        <p className="text-sm text-muted-foreground">
-          Services follow the global policy unless you give them their own. An override starts from what currently applies to
-          the service and, like every policy, is versioned and audited. Turning an override off never deletes its history.
-        </p>
-      </header>
+      <IntelligenceGroupHeader group="services">
+        What each service does with intelligence, and the inputs probable-cause suggestions rely on:
+        dependencies, topology sources and recorded changes. Alert quality lives here and nowhere
+        else. Everything on this page is advisory: nothing pages, mutes or runs automatically.
+      </IntelligenceGroupHeader>
 
-      <SettingsSection title="Services" description="Showing the first 50 matches.">
+      <SettingsSection
+        id="service-policies"
+        title="Per-service policies"
+        description="Services follow the global policy unless you give them their own. An override starts from what currently applies to the service and, like every policy, is versioned and audited. Turning an override off never deletes its history. Showing the first 50 matches."
+      >
         <form method="get" className="flex gap-2 py-3">
           <label htmlFor="service-search" className="sr-only">
             Search services
           </label>
-          <input id="service-search" name="q" defaultValue={q} maxLength={100} placeholder="Search services" className="w-full max-w-sm rounded-md border border-border bg-background p-2 text-sm" />
-          <button type="submit" className="rounded-md border border-border px-3 text-sm hover:bg-accent">
+          <input
+            id="service-search"
+            name="q"
+            defaultValue={q}
+            maxLength={100}
+            placeholder="Search services"
+            className="w-full max-w-sm rounded-md border border-border bg-background p-2 text-sm"
+          />
+          <button
+            type="submit"
+            className="min-h-11 rounded-md border border-border px-3 text-sm hover:bg-accent"
+          >
             Search
           </button>
         </form>
@@ -65,7 +85,9 @@ export default async function IntelligenceServicesPage({
                   <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-medium">{row.serviceName}</span>
                     <span className="flex gap-2">
-                      <Badge variant={row.effectiveMode === 'OFF' ? 'secondary' : 'default'}>{row.effectiveMode.toLowerCase()}</Badge>
+                      <Badge variant={row.effectiveMode === 'OFF' ? 'secondary' : 'default'}>
+                        {row.effectiveMode.toLowerCase()}
+                      </Badge>
                       <Badge variant="outline">{SOURCE_LABEL[row.source]}</Badge>
                     </span>
                   </summary>
@@ -85,6 +107,8 @@ export default async function IntelligenceServicesPage({
           </ul>
         )}
       </SettingsSection>
+
+      <DependenciesChangesSections canManage={canManage} />
     </div>
   );
 }

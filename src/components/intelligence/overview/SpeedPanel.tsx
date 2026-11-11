@@ -56,8 +56,8 @@ export default function SpeedPanel({
       {!triageEnabled && (
         <FeatureOff
           title="Triage suggestions are off"
-          adminHint="Turn on triage in the global policy to suggest urgency, owner and duplicates from resolved precedents."
-          href="/settings/intelligence"
+          adminHint="Turn on triage suggestions in the Intelligence engine settings to suggest urgency, owner and duplicates from resolved precedents."
+          href="/settings/intelligence#triage"
           canManage={canManage}
         />
       )}

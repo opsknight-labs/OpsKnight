@@ -30,8 +30,17 @@ const FILES = [
   'src/components/settings/noise-controls/shared.tsx',
   'src/app/(app)/settings/intelligence/page.tsx',
   'src/app/(app)/settings/intelligence/noise-controls/page.tsx',
-  'src/app/(app)/settings/intelligence/response/page.tsx',
-  'src/app/(app)/settings/intelligence/insights/page.tsx',
+  'src/app/(app)/settings/intelligence/services/page.tsx',
+  'src/app/(app)/settings/intelligence/ai/page.tsx',
+  'src/app/(app)/settings/intelligence/evaluation/page.tsx',
+  'src/app/(app)/settings/intelligence/_sections/DependenciesChangesSections.tsx',
+  'src/app/(app)/settings/intelligence/_sections/InsightsSections.tsx',
+  'src/app/(app)/settings/intelligence/_sections/GroupingQualitySection.tsx',
+  'src/app/(app)/settings/intelligence/_sections/AiUsageSpendSections.tsx',
+  'src/app/(app)/settings/intelligence/_sections/ConnectionsSection.tsx',
+  'src/app/(app)/settings/intelligence/_sections/KnowledgeMemorySection.tsx',
+  'src/components/settings/layout/IntelligenceGroupHeader.tsx',
+  'src/components/settings/layout/IntelligenceSubNav.tsx',
 ];
 
 const RAW_STATUS_COLOUR =

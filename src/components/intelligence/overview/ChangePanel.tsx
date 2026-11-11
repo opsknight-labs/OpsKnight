@@ -89,7 +89,7 @@ export default function ChangePanel({
         <FeatureOff
           title="No changes recorded in this window"
           adminHint="Send deploys, config changes and feature flags to the change events webhook so incidents can be linked to them."
-          href="/settings/intelligence/response"
+          href="/settings/intelligence/services#change-sources"
           canManage={canManage}
         />
       ) : null}

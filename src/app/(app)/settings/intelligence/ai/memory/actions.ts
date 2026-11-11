@@ -13,7 +13,8 @@ import {
 
 export type SquireMemoryActionState = { message: string; ok: boolean };
 
-const MEMORY_PATH = '/settings/intelligence/ai/memory';
+// Knowledge memory is a section of the Assistant page.
+const MEMORY_PATH = '/settings/intelligence/ai';
 const servicePath = (serviceId: string) =>
   `/settings/intelligence/services/${encodeURIComponent(serviceId)}/squire`;
 

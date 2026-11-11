@@ -72,7 +72,7 @@ export default async function ServiceSquirePage({
         {!memory.knowledgeEnabled && (
           <p className="py-2 text-sm text-muted-foreground">
             The knowledge index is off, so Squire does not use or propose facts.{' '}
-            <Link href="/settings/intelligence/ai/memory" className="underline">
+            <Link href="/settings/intelligence/ai#knowledge-memory" className="underline">
               Squire memory settings
             </Link>
           </p>

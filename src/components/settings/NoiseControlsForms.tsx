@@ -693,7 +693,12 @@ export function SuggestionList({
   if (suggestions.length === 0) return null;
   return (
     <div className="space-y-2 py-3">
-      <p className="text-sm font-medium">Suggested from alert quality</p>
+      <p className="text-sm font-medium">
+        Suggested from{' '}
+        <a href="/settings/intelligence/services#alert-quality" className="underline">
+          alert quality
+        </a>
+      </p>
       <ul className="divide-y divide-border">
         {suggestions.map(suggestion => (
           <li

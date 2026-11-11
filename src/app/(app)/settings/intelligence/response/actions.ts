@@ -83,7 +83,8 @@ export async function createNoisyAlertIssueAction(
 
 export type DependencyActionState = { message: string; ok: boolean };
 
-const PATH = '/settings/intelligence/response';
+// Dependencies, change sources and alert quality live on Services & changes.
+const PATH = '/settings/intelligence/services';
 
 function failure(error: unknown): DependencyActionState {
   if (error instanceof AppError) {
