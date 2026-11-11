@@ -24,6 +24,7 @@ import {
   INTELLIGENCE_SETTINGS_DEFAULTS,
 } from '@/lib/intelligence/contract';
 import { summarizeIncident } from '@/lib/intelligence/drafts/service';
+import { handoffBrief, type HandoffSummary } from '@/lib/intelligence/handoff/summary';
 import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
 import {
   CONTEXT_SUMMARY_PROMPT,
@@ -376,6 +377,34 @@ describe('result cache', () => {
     expect(first?.content).toContain('asked about the disk');
     expect(second?.content).toBe(first?.content);
     expect(model.requests).toHaveLength(1);
+  });
+});
+
+describe('handoff brief', () => {
+  it('is identical for an unchanged shift a few minutes later, and changes when the facts do', () => {
+    const summary = (ageMinutes: number, title = 'Checkout down'): HandoffSummary => ({
+      scheduleName: 'Primary',
+      generatedAt: new Date(),
+      open: [
+        {
+          id: 'i1',
+          title,
+          serviceName: 'Checkout',
+          urgency: 'HIGH',
+          status: 'OPEN',
+          ageMinutes,
+          assigneeName: null,
+        } as HandoffSummary['open'][number],
+      ],
+      recentlyResolved: [],
+      overdueFollowUps: [],
+      counts: { open: 1, unacknowledged: 1, high: 1, resolved: 0, overdue: 0 },
+      narrative: null,
+    });
+    expect(handoffBrief(summary(12))).toBe(handoffBrief(summary(47)));
+    expect(handoffBrief(summary(12))).toContain('under 1 h old');
+    expect(handoffBrief(summary(300))).toContain('over 4 h old');
+    expect(handoffBrief(summary(12, 'Search down'))).not.toBe(handoffBrief(summary(12)));
   });
 });
 

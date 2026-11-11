@@ -468,6 +468,10 @@ describe('budget administration, read models and metrics', () => {
       tokens: 950,
       costMicros: 2_100_000,
       unpricedRequests: 1,
+      cacheHits: 0,
+      savedMicros: 0,
+      cacheReadTokens: 0,
+      savedTokens: 0,
     });
     expect(week.byTeam.map(slice => [slice.label, slice.costMicros])).toEqual([
       [red.name, 2_000_000],

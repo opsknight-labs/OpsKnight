@@ -227,8 +227,17 @@ export function renderHandoffSummary(
 /** Inline prompt identity for the result cache; bump the version when the instruction below changes. */
 const HANDOFF_NARRATIVE_PROMPT = { id: 'handoff.narrative', version: 1 } as const;
 
-/** The facts the narrative may use, in the shared budgeted brief format. Ages are left out on purpose:
- * they change every minute and would make every request look new. */
+/** A coarse age: exact minutes change on every run and would make an unchanged shift look new. */
+const ageBand = (minutes: number) =>
+  minutes >= 1_440
+    ? 'over a day old'
+    : minutes >= 240
+      ? 'over 4 h old'
+      : minutes >= 60
+        ? 'over 1 h old'
+        : 'under 1 h old';
+
+/** The facts the narrative may use, in the shared budgeted brief format. */
 export function handoffBrief(summary: HandoffSummary): string {
   return renderBrief([
     {
@@ -242,7 +251,7 @@ export function handoffBrief(summary: HandoffSummary): string {
         .slice(0, 10)
         .map(
           row =>
-            `Open: ${row.title} on ${row.serviceName}, ${row.urgency} urgency, ${row.status}, ${row.assigneeName ? 'assigned' : 'unassigned'}.`
+            `Open: ${row.title} on ${row.serviceName}, ${row.urgency} urgency, ${row.status}, ${ageBand(row.ageMinutes)}, ${row.assigneeName ? 'assigned' : 'unassigned'}.`
         ),
       budget: 2_000,
     },
