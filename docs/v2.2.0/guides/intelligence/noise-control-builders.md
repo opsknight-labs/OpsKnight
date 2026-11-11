@@ -15,7 +15,7 @@ verification:
       src/components/settings/noise-controls,
       src/lib/intelligence/noise-controls/preview.ts,
       src/lib/intelligence/noise-controls/builders.ts,
-      src/components/incident/mobile/MobileIncidentIntelligence.tsx,
+      src/components/incident/intelligence/IntelligenceStrip.tsx,
       tests/components/intelligence/noise-control-builders.test.tsx,
       tests/integration/intelligence/noise-builder-previews.test.ts,
       tests/e2e/noise-builders.intelligence-ui.spec.ts,
@@ -84,11 +84,11 @@ next ping is due, and the last incident it raised.
 
 ## Intelligence on your phone
 
-On the mobile incident page, the **Intelligence** card shows triage suggestions you can apply or
-dismiss, up to three similar past incidents, possible causes and runbooks that have worked on this
-service. Each part loads on its own and is left out when there is nothing to show. **Full analysis**
-opens the desktop incident page for related incidents, the timeline and the summary. You only see
-incidents, services and runbooks you can already open.
+The mobile incident page has the same strip of chips as the desktop page, scrolling sideways, directly
+under the incident's actions. Select a chip to open **Insights** as a sheet from the bottom: triage
+suggestions you can apply or dismiss, similar past incidents, related incidents and the group, possible
+causes, runbooks that have worked on this service, impact and the summary. A chip or section with
+nothing to show is left out. You only see incidents, services and runbooks you can already open.
 
-If intelligence is off for the service, intelligence managers see a note with a link to the settings;
-nobody else sees anything.
+If intelligence is off for the service, responders see nothing; intelligence managers who open Insights
+see a one-line note that it is off.

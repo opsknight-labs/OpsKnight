@@ -9,7 +9,7 @@ reader:
   task: Use the suggestions on an incident page and ask the assistant about an incident.
 verification:
   level: test
-  verified_at: 2026-11-10
+  verified_at: 2026-11-11
   evidence:
     [
       src/components/incident,
@@ -21,9 +21,29 @@ verification:
 
 # Use Intelligence suggestions and the assistant
 
-Open the **Intelligence** panel on an incident. Its tabs show Similar, Related, Causes & runbooks,
-Timeline, Impact, Summary and Ask Squire. Tabs support arrow keys and scroll within the panel on phones. When enabled
-for the service, they can show:
+An incident page keeps its own content first: title, status, actions, description, notes and timeline
+stay where they are. Intelligence is one row of chips under the action bar, the **strip**, and one panel
+you open on demand, **Insights**.
+
+## The strip and the Insights panel
+
+The strip shows a chip only when there is something to say, for example **Triage: urgency HIGH**,
+**3 similar**, **Likely cause: deploy api v9**, **Suppressed by rule X**, **Impact: 4 services, SLO
+burning** or **Briefing ready**. When there is nothing to say there is no strip. On a phone the strip
+scrolls sideways.
+
+Select a chip to open **Insights** at that section. You can also press **I** anywhere on the incident
+(press it again to close), or share a link that ends in `?insights=similar` (or `briefing`, `triage`,
+`related`, `why`, `runbooks`, `impact`, `summary`). On a desktop the panel sits on the right, does not
+block the page behind it, and can be resized by dragging its left edge or with the arrow keys on the
+resize handle; the width is remembered in this browser. On a phone it opens as a sheet from the bottom.
+
+A small dot at the end of the strip appears only while analysis is waiting, out of date, paused or
+failed. Select it to read why; intelligence managers can refresh the analysis from there.
+
+Insights has up to eight sections, always in this order, and a section with nothing to show is left
+out: Briefing, Triage, Similar, Related and group, Why, Runbooks, Impact, Summary. When enabled for the
+service, they can show:
 
 - **Similar past incidents**, with a match score and the reasons for the match. The score ranks suggestions;
   it is not a probability. "Similar meaning" means the titles describe the same problem in different words
@@ -38,25 +58,40 @@ for the service, they can show:
 You only ever see suggestions about incidents, services and runbooks you can already open.
 
 Expand **Why this matched** to inspect match reasons. **Mark related** links a precedent through the
-normal visibility and feedback permissions. Empty tabs explain OFF, shadow mode or pending analysis.
+normal visibility and feedback permissions.
+
+Each item has an **Ask** button labelled with your assistant's name (for example **Ask Squire**). It
+opens the assistant with a question about that one item already asked.
+
+When intelligence is off for the service, responders see no strip, no chips and no Insights panel.
+Intelligence managers can still open Insights with **I**: it says intelligence is off and keeps the
+links and groups made before it was turned off, so a wrong grouping can still be undone.
+
+## Suggested runbooks
+
+Runbooks that have worked on similar incidents appear as **Suggested for this incident**, with their
+success rate, at the top of the incident's **Runbooks** tab. The Runbooks section of Insights links
+there.
 
 ## Triage chips
 
-When an administrator has turned on **Suggest triage** for your service, the **Similar** tab also shows
+When an administrator has turned on **Suggest triage** for your service, the **Triage** section shows
 chips derived from how similar incidents were handled: a suggested urgency, a suggested owner, a probable
 duplicate, and the usual time to resolve. **Apply** runs the same action you would take by hand (the change
 appears in the timeline); **Dismiss** records that the suggestion was wrong. Nothing is applied on its own,
 and the percentage is a match strength from past incidents, not a probability.
 
-## Timeline tab
+## Intelligence events on the timeline
 
-**Timeline** lines up this incident's alerts, recorded changes (with their risk score), incidents on upstream
-services and any noise-control decisions relative to when the incident opened, so you can see what changed
-just before it started.
+The incident's **Timeline** tab has a **Show intelligence events** switch. It is on whenever such events
+exist and adds recorded changes (with their risk score), incidents on upstream services, noise-control
+decisions and suggestion history as rows of the same timeline, so you can see what changed just before
+the incident started. The **Intelligence** filter shows only those rows. Turn the switch off to see the
+core timeline alone.
 
-## Impact tab
+## Impact
 
-**Impact** estimates who else this incident affects:
+The **Impact** section estimates who else this incident affects:
 
 - **Dependent services**: services that depend on this one in the active dependency graph (up to three hops),
   with their current status and how many open incidents they have. Only services you can open are listed,
@@ -67,7 +102,7 @@ just before it started.
   burn rates and roughly how much of the objective's error budget this incident has used so far. This part
   needs global metrics access, because the burn counts every incident on the service.
 
-It is an estimate to check, not a measurement. When nothing applies the tab says so.
+It is an estimate to check, not a measurement. When nothing applies the section is left out.
 
 ## Rate a suggestion
 
@@ -82,7 +117,7 @@ The assistant (named by your administrator, Squire by default) opens from:
 - the keyboard shortcut **⌘ J** (macOS) or **Ctrl J** (Windows and Linux), from any page; press it again to
   close the assistant. It is listed on the **Keyboard Shortcuts** page,
 - **Ask** in global search,
-- the **Ask** panel on an incident page, which offers ready-made questions about that incident.
+- the **Ask** button on any item in an incident's Insights panel, which asks about that item.
 
 On an incident page it knows which incident you mean. Ask things like "have we seen this before?", "what could
 have caused this?" or "which runbook fits?".
@@ -125,8 +160,10 @@ A strip under the assistant's header says why, and what you can do:
 
 ## Summaries and postmortem drafts
 
-When AI is set up for it, an incident page offers **Summarise this incident**: it writes a short summary of what
-happened so far, the current state and suggested next steps. In the postmortem editor, **Draft with AI**
+When AI is set up for it, the **Summary** section of Insights offers **Summarise this incident**: it writes
+a short summary of what happened so far, the current state and suggested next steps. **Post summary as
+note** adds it to the incident's notes. **Insert summary** in the note box's toolbar drafts the same
+summary into the note for you to edit before posting. In the postmortem editor, **Draft with AI**
 fills in sections that are still empty and proposes action items. Nothing is saved until you save the
 postmortem, and you should edit the draft: it only knows what is recorded on the incident.
 

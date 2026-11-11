@@ -694,7 +694,7 @@ with a redacted brief marked as data; any AI failure keeps the deterministic not
 _Why not a timeline note._ Intelligence code may not write incident tables, and Squire writes only through
 `execute.ts` on behalf of the person who confirmed; there is no system-actor note command. Proactive output
 is therefore stored as an intelligence finding (`SquireProactiveNote`, one per incident and kind, follows
-finding retention) and rendered on the incident page by `IncidentSquireProactiveCard`. Rendering re-checks
+finding retention) and rendered in the Briefing section of the incident's insights inspector (`ProactiveNotes`). Rendering re-checks
 every reference through the viewer's rules and shows AI text only when the viewer may read every record
 the model saw; otherwise the deterministic version is shown.
 
@@ -970,6 +970,52 @@ and the burst gate passes.
 - **Shift handoff** (`handoff/summary.ts`, `handoff/dispatch.ts`, called from `oncall-handoff.ts` at each
   rotation when `handoffSummaryEnabled`): deterministic summary delivered through the notification control
   plane (de-duplicated per recipient and shift) with an optional AI narrative charged to the recipient.
+
+## Incident page placement: strip and insights inspector
+
+Core incident data (title, status, actions, description, notes, alerts, responders, timeline) keeps its
+position. Intelligence is summarised in one row and expanded on demand; nothing intelligence-related is
+rendered between the description and the core tabs.
+
+- **One read.** `loadIncidentInsights` (`src/lib/intelligence/incident-ux/strip.ts`, wrapped per request by
+  `incidentInsightsForRequest`) composes the existing view functions (`analysis/view`, `memory/proactive-view`,
+  `triage/view`, `similarity/view`, `correlation/view`, `incident-ux/group-view`, `response/view`,
+  `impact/view`, `incident-ux/list-badges`). It adds one scoped incident lookup (`incidentReadWhere`) and no
+  other query; every view keeps its own `take` caps and read scope. Each part is fail-soft: a failing view is
+  logged and treated as "nothing to show". The strip, the hero group line, the suggested-runbooks group and
+  every inspector section render from this one result.
+- **Mode and permission.** Requires `INTELLIGENCE_SUGGESTIONS_READ` and a readable incident. Service mode
+  `OFF` returns `null` for responders, so no strip, chip, group line, timeline overlay or inspector exists.
+  Holders of `INTELLIGENCE_MANAGE` get a reduced result (`mode: 'OFF'`, accepted links and the storm group
+  only) so the inspector can state that intelligence is off and a grouping made earlier can be undone.
+- **`IntelligenceStrip`** (server component, directly under `IncidentCommandBar`): `buildStripChips` emits a
+  chip only when it has content (triage, similar, likely cause, noise state, impact, briefing); an empty
+  strip renders nothing. Chips are links carrying `data-insights-open="<section>"`. `FreshnessDot` is the
+  single freshness indicator (WAITING, STALE, PAUSED, FAILED, UNAVAILABLE); it polls
+  `/api/intelligence/incidents/:id/analysis` and offers refresh to managers. It replaces every former
+  `IncidentAnalysisNotice` placement.
+- **`IncidentInsightsInspector`** (client, `next/dynamic` from `InsightsInspectorHost`, fetched on first
+  open): a `Sheet` on the right (`sm:max-w-xl` by default, not modal on desktop, width stored in
+  `localStorage` under `opsknight.insights.width`), a modal bottom sheet below 640 px and on the mobile
+  route. Sections in fixed order: Briefing, Triage, Similar, Related/Group, Why, Runbooks, Impact, Summary;
+  the section bodies are server-rendered (`InsightsSections`) and passed through as children, so only the
+  shell is client code. Opened by a chip, by `I` (registered in `src/lib/keyboard-shortcuts.ts`, category
+  "Incident Triage", ignored inside the `G` `I` chord and while typing), by `?insights=<section>` and by
+  `#finding-<id>`. Items carry stable anchors `id="finding-<id>"`.
+- **Ask Squire about this.** Every item calls `openSquire(question, { evidence })` on the squire bus. The
+  `evidence` handle (`kind`, `id`, `label`, `href`) is an additive field of the open event; listeners that
+  read only `message` are unaffected. The standalone Ask Squire card is removed.
+- **Timeline.** The intelligence time axis (`timeline/service.ts`, mapped by
+  `incident-ux/timeline-overlay.ts`) is an overlay on the core Timeline tab behind "Show intelligence
+  events" (on when any exist) with an "Intelligence" filter. There is no separate intelligence timeline.
+- **Runbooks.** Recommended runbooks with their success rate are the "Suggested for this incident" group at
+  the top of the core Runbooks tab; the inspector's Runbooks section links there.
+- **Group line.** A storm parent or child gets one line under the title (`incident-group-line`); the full
+  group view with ungroup controls is the inspector's Related/Group section.
+- **Summary.** Lives in the inspector with "Post summary as note"; the notes composer's "Insert summary"
+  drafts the same summary into the composer through the same server action.
+- **Mobile.** `/m/incidents/[id]` renders the same strip (horizontally scrollable) and the same inspector
+  as a bottom sheet. The separate mobile intelligence card is removed.
 
 ## Fault tolerance
 
