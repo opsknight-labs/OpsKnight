@@ -45,6 +45,26 @@ type Row = {
   recentMissingSeverity: number;
 };
 
+/** The production statement, exported so the query-plan gate explains exactly what the lane runs. */
+export function integrationHealthSql(serviceId: string, now: Date): Prisma.Sql {
+  const dayAgo = new Date(now.getTime() - DAY_MS);
+  const eightDaysAgo = new Date(now.getTime() - 8 * DAY_MS);
+  return Prisma.sql`
+      SELECT
+        (SELECT "createdAt" FROM "Alert" WHERE "serviceId" = ${serviceId}
+          ORDER BY "createdAt" DESC LIMIT 1) AS "lastAlertAt",
+        (SELECT count(*)::int FROM (SELECT 1 FROM "Alert"
+          WHERE "serviceId" = ${serviceId} AND "createdAt" >= ${dayAgo} LIMIT ${COUNT_CAP}) recent) AS "last24h",
+        (SELECT count(*)::int FROM (SELECT 1 FROM "Alert"
+          WHERE "serviceId" = ${serviceId} AND "createdAt" >= ${eightDaysAgo} AND "createdAt" < ${dayAgo}
+          LIMIT ${COUNT_CAP}) prior) AS "priorWeek",
+        (SELECT count(*)::int FROM (SELECT 1 FROM "Alert" WHERE "serviceId" = ${serviceId}
+          ORDER BY "createdAt" DESC LIMIT ${RECENT_SAMPLE}) sampled) AS "recentSampled",
+        (SELECT count(*)::int FROM (SELECT "severity" FROM "Alert" WHERE "serviceId" = ${serviceId}
+          ORDER BY "createdAt" DESC LIMIT ${RECENT_SAMPLE}) sampled
+          WHERE "severity" IS NULL) AS "recentMissingSeverity"`;
+}
+
 export const integrationHealthProducer: OpsInsightProducer<IntegrationHealthInput> = {
   kind: 'integration.health',
   version: 1,
@@ -52,22 +72,7 @@ export const integrationHealthProducer: OpsInsightProducer<IntegrationHealthInpu
   scopeType: 'SERVICE',
 
   async loadInput(scope, { tx, now }) {
-    const dayAgo = new Date(now.getTime() - DAY_MS);
-    const eightDaysAgo = new Date(now.getTime() - 8 * DAY_MS);
-    const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`
-      SELECT
-        (SELECT "createdAt" FROM "Alert" WHERE "serviceId" = ${scope.id}
-          ORDER BY "createdAt" DESC LIMIT 1) AS "lastAlertAt",
-        (SELECT count(*)::int FROM (SELECT 1 FROM "Alert"
-          WHERE "serviceId" = ${scope.id} AND "createdAt" >= ${dayAgo} LIMIT ${COUNT_CAP}) recent) AS "last24h",
-        (SELECT count(*)::int FROM (SELECT 1 FROM "Alert"
-          WHERE "serviceId" = ${scope.id} AND "createdAt" >= ${eightDaysAgo} AND "createdAt" < ${dayAgo}
-          LIMIT ${COUNT_CAP}) prior) AS "priorWeek",
-        (SELECT count(*)::int FROM (SELECT 1 FROM "Alert" WHERE "serviceId" = ${scope.id}
-          ORDER BY "createdAt" DESC LIMIT ${RECENT_SAMPLE}) sampled) AS "recentSampled",
-        (SELECT count(*)::int FROM (SELECT "severity" FROM "Alert" WHERE "serviceId" = ${scope.id}
-          ORDER BY "createdAt" DESC LIMIT ${RECENT_SAMPLE}) sampled
-          WHERE "severity" IS NULL) AS "recentMissingSeverity"`);
+    const [row] = await tx.$queryRaw<Row[]>(integrationHealthSql(scope.id, now));
     // A service that never received an alert has no integration behaviour to judge yet.
     if (!row?.lastAlertAt) return null;
 

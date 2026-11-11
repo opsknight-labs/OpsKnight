@@ -22,6 +22,9 @@ import {
 } from '../../src/lib/intelligence/similarity/term-stats';
 import { claimWorkItemsSql } from '../../src/lib/intelligence/jobs/work-queue';
 import { INTELLIGENCE_ENGINE_VERSION } from '../../src/lib/intelligence/contract';
+import { dueOpsInsightScopesSql } from '../../src/lib/intelligence/ops-insights/handlers';
+import { integrationHealthSql } from '../../src/lib/intelligence/ops-insights/producers/integration-health';
+import { OPS_ROLLUP_SOURCES, OPS_ROLLUPS } from '../../src/lib/metric-rollup';
 
 /** Any one of the listed indexes satisfies the query; alternatives cover optional extensions. */
 const EXPECTED_INDEXES: Record<string, string[]> = {
@@ -38,16 +41,37 @@ const EXPECTED_INDEXES: Record<string, string[]> = {
   reconcileWatermark: ['idx_incident_updated_at'],
   embedPage: ['idx_incident_fingerprint_retention', 'idx_incident_fingerprint_service_recent'],
   runbookHistory: ['idx_runbook_execution_service_recent'],
+  // Operations insights (Workstream J): the daily rollups, the reference producer and the scheduler scan.
+  opsPagesRollup: ['idx_notification_created_cursor'],
+  opsRunbookRollup: ['idx_runbook_execution_completed'],
+  opsAutomationRollup: ['IncidentAutomationDecision_serviceId_createdAt_idx'],
+  opsRollupRead: ['idx_metric_rollup_subject'],
+  opsIntegrationHealth: ['idx_alert_by_service'],
+  opsDueScopes: ['OpsInsightScopeState_pkey', 'idx_ops_insight_scope_due'],
 };
+
+type JudgedTable =
+  | 'Incident'
+  | 'IncidentFingerprint'
+  | 'IntelligenceWorkItem'
+  | 'Notification'
+  | 'RunbookExecution'
+  | 'IncidentAutomationDecision'
+  | 'MetricRollup'
+  | 'Alert'
+  | 'OpsInsightScopeState';
 
 /**
  * Range queries whose selectivity depends on history size: on a small table the planner rightly prefers a
  * sequential scan, so these are judged only once their table holds at least this many rows.
  */
-const MIN_ROWS_TO_JUDGE: Record<
-  string,
-  { table: 'Incident' | 'IncidentFingerprint' | 'IntelligenceWorkItem'; rows: number }
-> = {
+const MIN_ROWS_TO_JUDGE: Record<string, { table: JudgedTable; rows: number }> = {
+  opsPagesRollup: { table: 'Notification', rows: 200_000 },
+  opsRunbookRollup: { table: 'RunbookExecution', rows: 50_000 },
+  opsAutomationRollup: { table: 'IncidentAutomationDecision', rows: 50_000 },
+  opsRollupRead: { table: 'MetricRollup', rows: 50_000 },
+  opsIntegrationHealth: { table: 'Alert', rows: 200_000 },
+  opsDueScopes: { table: 'OpsInsightScopeState', rows: 5_000 },
   reconcileWatermark: { table: 'Incident', rows: 200_000 },
   embedPage: { table: 'IncidentFingerprint', rows: 200_000 },
   // A drained queue is tiny and rightly scanned; the claim plan matters while a backlog exists.
@@ -105,6 +129,9 @@ async function main() {
   const [{ latest }] = await prisma.$queryRaw<Array<{ latest: Date | null }>>`
     SELECT max("updatedAt") AS latest FROM "Incident"`;
   const cursorAt = new Date((latest ?? new Date()).getTime() - 60_000);
+
+  const opsDayEnd = new Date(new Date().setUTCHours(0, 0, 0, 0));
+  const opsDay = new Date(opsDayEnd.getTime() - 86_400_000);
 
   const queries: Record<string, { sql: Prisma.Sql; analyze: boolean }> = {
     sameService: {
@@ -166,6 +193,30 @@ async function main() {
         AND e."status" IN ('SUCCEEDED', 'FAILED', 'TIMED_OUT')
       GROUP BY e."runbookId"`,
     },
+    // Operations insights: each daily rollup reads one finished UTC day; the producer and scheduler are bounded.
+    opsPagesRollup: {
+      analyze: true,
+      sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.pagesPerUserHour]!(Prisma.sql, opsDay, opsDayEnd),
+    },
+    opsRunbookRollup: {
+      analyze: true,
+      sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.runbookOutcome]!(Prisma.sql, opsDay, opsDayEnd),
+    },
+    opsAutomationRollup: {
+      analyze: true,
+      sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.automationRuleMatch]!(Prisma.sql, opsDay, opsDayEnd),
+    },
+    opsRollupRead: {
+      analyze: true,
+      sql: Prisma.sql`SELECT "bucket", "count", "sum", "tags" FROM "MetricRollup"
+      WHERE "name" = ${OPS_ROLLUPS.pagesPerUserHour} AND "subjectKey" = ${source.incidentId}
+        AND "bucket" >= ${lowerBound} AND "bucket" < now() ORDER BY "bucket" LIMIT 2000`,
+    },
+    opsIntegrationHealth: {
+      analyze: true,
+      sql: integrationHealthSql(source.serviceId, new Date()),
+    },
+    opsDueScopes: { analyze: true, sql: dueOpsInsightScopesSql('SERVICE', 200) },
   };
 
   const [{ incidents, fingerprints, workItems }] = await prisma.$queryRaw<
@@ -173,10 +224,22 @@ async function main() {
   >`SELECT (SELECT count(*) FROM "Incident") AS incidents,
            (SELECT count(*) FROM "IncidentFingerprint") AS fingerprints,
            (SELECT count(*) FROM "IntelligenceWorkItem") AS "workItems"`;
-  const tableRows = {
+  // Planner estimates are enough to decide whether a table is large enough to judge a range plan.
+  const estimates = await prisma.$queryRaw<Array<{ relname: string; rows: number }>>`
+    SELECT relname, greatest(reltuples, 0)::float AS rows FROM pg_class
+    WHERE relkind = 'r' AND relname IN ('Notification', 'RunbookExecution', 'IncidentAutomationDecision',
+      'MetricRollup', 'Alert', 'OpsInsightScopeState')`;
+  const estimated = (table: string) => estimates.find(row => row.relname === table)?.rows ?? 0;
+  const tableRows: Record<JudgedTable, number> = {
     Incident: Number(incidents),
     IncidentFingerprint: Number(fingerprints),
     IntelligenceWorkItem: Number(workItems),
+    Notification: estimated('Notification'),
+    RunbookExecution: estimated('RunbookExecution'),
+    IncidentAutomationDecision: estimated('IncidentAutomationDecision'),
+    MetricRollup: estimated('MetricRollup'),
+    Alert: estimated('Alert'),
+    OpsInsightScopeState: estimated('OpsInsightScopeState'),
   };
   const plans: Record<string, unknown> = {};
   const indexesUsed: Record<string, string[]> = {};
