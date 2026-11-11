@@ -11,7 +11,12 @@ import {
   type PrePagingLookups,
   type PrePagingSnapshot,
 } from './evaluate';
-import { getPrePagingSnapshot, prefetchedLookups, type PrePagingLookupPlan } from './cache';
+import {
+  getPrePagingSnapshot,
+  peekPrePagingSnapshot,
+  prefetchedLookups,
+  type PrePagingLookupPlan,
+} from './cache';
 import { NOISE_CONTROL_REVERSAL_INTEGRATION_ID, recordPrePagingDecision } from './decisions';
 import { getNoiseLookupClient, lookupTimeoutMs, prePagingDeadlineMs } from './lookup-client';
 
@@ -27,6 +32,13 @@ import { getNoiseLookupClient, lookupTimeoutMs, prePagingDeadlineMs } from './lo
  *   event transaction inside a savepoint with the same server-side timeout, so an abandoned lookup can
  *   delay the transaction by at most one deadline and never leaves it aborted; the savepoint is always
  *   rolled back (the lookups only read). Three round trips inside the deadline, one after.
+ * - On the pool route `processEvent` starts that statement early (`beginIngestNoiseLookups`: after the
+ *   dedup-key lock and the open-incident check, when the event is known to open a new incident) so it
+ *   overlaps the classification reads the transaction makes anyway. Time the hook spends waiting holds the
+ *   event's pooled connection, and with more events in flight than connections every such millisecond
+ *   delays the queue behind it several times over; overlapped, the wait is usually already over when the
+ *   hook runs. The deadline counts from the moment the statement was sent, so the lookup never gets more
+ *   than the one deadline it had before and the hook itself waits for at most what is left of it.
  * - Any error, timeout or cold cache returns `null`: the caller pages exactly as it does without controls.
  */
 
@@ -42,6 +54,28 @@ export interface IngestNoiseOptions {
   lookups?: PrePagingLookups;
   deadlineMs?: number;
   now?: Date;
+  /** The lookups `beginIngestNoiseLookups` started for this event; ignored unless they match it. */
+  prefetch?: IngestNoisePrefetch | null;
+}
+
+/** Lookups already under way for one event, with everything needed to tell whether they still apply. */
+export interface IngestNoisePrefetch {
+  readonly snapshot: PrePagingSnapshot;
+  readonly serviceId: string;
+  readonly fingerprintHash: string | null;
+  readonly dedupKey: string;
+  readonly now: Date;
+  readonly deadlineMs: number;
+  /** `performance.now()` when the statement was sent; the deadline counts from here. */
+  readonly startedAt: number;
+  readonly lookups: PrePagingLookups;
+}
+
+let prefetchEnabled = true;
+
+/** Turns the early start off (null/true restores it). For tests and benchmarks that compare the two. */
+export function setIngestNoisePrefetch(enabled: boolean | null): void {
+  prefetchEnabled = enabled ?? true;
 }
 
 /** What `processEvent` acts on. `null` means "page normally and record nothing". */
@@ -52,7 +86,7 @@ export interface IngestNoiseDecision extends PrePagingDecisionResult {
 
 /** The reads `evaluatePrePagingControls` will make, computed exactly as it computes them. */
 export function lookupPlan(
-  input: PrePagingInput,
+  input: Pick<PrePagingInput, 'serviceId' | 'fingerprintHash' | 'dedupKey'>,
   policy: CompiledPolicy,
   snapshot: PrePagingSnapshot,
   now: Date
@@ -139,6 +173,70 @@ function boundedLookups(tx: Tx, deadlineMs: number, plan: PrePagingLookupPlan) {
 }
 
 /**
+ * Starts the event's lookups on the dedicated pool before the hook needs them, or returns null when there
+ * is nothing to start: reversal re-ingest, cold cache, policy OFF, no lookup enabled, or no lookup pool
+ * (the savepoint route reads on the event transaction, where statements cannot overlap). Never throws
+ * and never touches the event transaction; a prefetch that is not used is simply dropped.
+ *
+ * Call it only once the event is known to open a new incident and after the dedup-key lock, so events for
+ * one key still read in order. `receivedAt` must be the instant later passed to
+ * `evaluateIngestNoiseControls`: the windows are computed from it.
+ */
+export function beginIngestNoiseLookups(
+  input: Pick<PrePagingInput, 'serviceId' | 'fingerprintHash' | 'dedupKey' | 'receivedAt'>,
+  options: Pick<IngestNoiseOptions, 'integrationId' | 'deadlineMs'>
+): IngestNoisePrefetch | null {
+  if (!prefetchEnabled) return null;
+  if (options.integrationId === NOISE_CONTROL_REVERSAL_INTEGRATION_ID) return null;
+  try {
+    const snapshot = peekPrePagingSnapshot();
+    if (!snapshot) return null;
+    const policy = resolvePolicy(snapshot, input.serviceId);
+    if (!policy || policy.mode === 'OFF') return null;
+    const now = input.receivedAt;
+    const plan = lookupPlan(input, policy, snapshot, now);
+    if (!plan.dedup && !plan.flapping && !plan.storm) return null;
+    const deadlineMs = options.deadlineMs ?? prePagingDeadlineMs();
+    const pool = getNoiseLookupClient(lookupTimeoutMs(deadlineMs));
+    if (!pool) return null;
+    const lookups = prefetchedLookups(pool, plan);
+    const startedAt = performance.now();
+    lookups.start();
+    return {
+      snapshot,
+      serviceId: input.serviceId,
+      fingerprintHash: input.fingerprintHash ?? null,
+      dedupKey: input.dedupKey,
+      now,
+      deadlineMs,
+      startedAt,
+      lookups,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The prefetch applies only to the very event, instant, deadline and snapshot it was started for. */
+function usablePrefetch(
+  prefetch: IngestNoisePrefetch | null | undefined,
+  input: PrePagingInput,
+  snapshot: PrePagingSnapshot,
+  now: Date,
+  deadlineMs: number
+): IngestNoisePrefetch | null {
+  return prefetch &&
+    prefetch.snapshot === snapshot &&
+    prefetch.serviceId === input.serviceId &&
+    prefetch.fingerprintHash === (input.fingerprintHash ?? null) &&
+    prefetch.dedupKey === input.dedupKey &&
+    prefetch.now.getTime() === now.getTime() &&
+    prefetch.deadlineMs === deadlineMs
+    ? prefetch
+    : null;
+}
+
+/**
  * Evaluates the controls for a new alert. Returns null when nothing should be recorded or applied:
  * OFF, fail-open, no control matched, or the event is a reversal re-ingest (which must page).
  */
@@ -162,16 +260,26 @@ export async function evaluateIngestNoiseControls(
 
     const deadlineMs = options.deadlineMs ?? prePagingDeadlineMs();
     const now = options.now ?? input.receivedAt;
-    const bounded = options.lookups
+    const prefetch = options.lookups
       ? null
-      : boundedLookups(tx, deadlineMs, lookupPlan(input, policy, snapshot, now));
+      : usablePrefetch(options.prefetch, input, snapshot, now, deadlineMs);
+    const bounded =
+      options.lookups || prefetch
+        ? null
+        : boundedLookups(tx, deadlineMs, lookupPlan(input, policy, snapshot, now));
     let decision: PrePagingDecisionResult;
     try {
       decision = await evaluatePrePagingControls(
         input,
         snapshot,
-        options.lookups ?? bounded!.lookups,
-        { deadlineMs, now }
+        options.lookups ?? prefetch?.lookups ?? bounded!.lookups,
+        {
+          // The early statement has been running since it was sent: only the rest of its deadline is left.
+          deadlineMs: prefetch
+            ? Math.max(0, deadlineMs - (performance.now() - prefetch.startedAt))
+            : deadlineMs,
+          now,
+        }
       );
     } finally {
       await bounded?.close();

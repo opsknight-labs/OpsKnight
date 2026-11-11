@@ -25,6 +25,7 @@
  *   DATABASE_URL=postgresql://.../opsknight_bench \
  *   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
  *     tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 300 --concurrency 16 --backlog 400 \
+ *     [--noise-profile all|static|dedup|flapping|storm] [--noise-prefetch on|off] (attribution, with --no-gate) \
  *     [--noise-controls on] [--noise-lookups pool|transaction] [--no-lane] [--history 1000000] \
  *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate] \
  *     [--lane-mode thread|in-process]
@@ -62,11 +63,15 @@ import {
   primePrePagingSnapshot,
   resetPrePagingSnapshot,
 } from '../../src/lib/intelligence/noise-controls';
+import { setIngestNoisePrefetch } from '../../src/lib/intelligence/noise-controls/ingest';
 import {
   disconnectNoiseLookupClient,
   setNoiseLookupRoute,
 } from '../../src/lib/intelligence/noise-controls/lookup-client';
-import { runtimeOperationalMetrics } from '../../src/lib/metrics/operational/registry';
+import {
+  exportRuntimeOperationalMetricState,
+  runtimeOperationalMetrics,
+} from '../../src/lib/metrics/operational/registry';
 import {
   comparePaired,
   judgeHigherIsWorse,
@@ -78,6 +83,11 @@ import { laneWorkInBurstMs } from './helpers/lane-busy';
 
 type Arm = 'baseline' | 'candidate';
 
+const NOISE_PROFILES = ['all', 'static', 'dedup', 'flapping', 'storm'] as const;
+type NoiseProfile = (typeof NOISE_PROFILES)[number];
+const isNoiseProfile = (value: string | undefined): value is NoiseProfile =>
+  (NOISE_PROFILES as readonly string[]).includes(value ?? '');
+
 interface Options {
   repetitions: number;
   events: number;
@@ -88,6 +98,13 @@ interface Options {
   noiseControls: boolean;
   /** Where the hook's reads run: the dedicated lookup pool (default) or the event transaction. */
   noiseLookups: 'pool' | 'transaction';
+  /**
+   * Which lookup controls the candidate's policy enables: `all` (the gated shape) or, for attribution
+   * only, `static` (no lookup at all), `dedup`, `flapping` or `storm` alone.
+   */
+  noiseProfile: NoiseProfile;
+  /** The hook's lookups start early and overlap the transaction's reads (default); `false` for attribution. */
+  noisePrefetch: boolean;
   /** Candidate arm runs the busy intelligence lane (default). */
   lane: boolean;
   /** Resolved incidents (one alert each) seeded per arm before the burst. 0 = none. */
@@ -145,6 +162,8 @@ interface Sample {
   noiseFailOpen: Record<string, number>;
   /** Pre-paging decisions recorded during the timed burst (expected 0 with the lookup-only profile). */
   noiseDecisions: number;
+  /** Time `processEvent` spent waiting inside the hook during the timed burst (evaluation histogram). */
+  noiseHookWait: { evaluations: number; meanMs: number };
   /**
    * Handlers that ran at some point during the burst (started before it ended and not finished before it
    * began), completed or not. Reported for context; the gate still requires completed items.
@@ -252,6 +271,14 @@ function parseOptions(argv: string[]): Options {
   const noiseLookups = lookupsAt >= 0 ? argv[lookupsAt + 1] : 'pool';
   if (noiseLookups !== 'pool' && noiseLookups !== 'transaction')
     throw new Error('--noise-lookups must be pool or transaction');
+  const profileAt = argv.indexOf('--noise-profile');
+  const noiseProfile = profileAt >= 0 ? argv[profileAt + 1] : 'all';
+  if (!isNoiseProfile(noiseProfile))
+    throw new Error(`--noise-profile must be one of ${NOISE_PROFILES.join(', ')}`);
+  const prefetchAt = argv.indexOf('--noise-prefetch');
+  const noisePrefetch = prefetchAt >= 0 ? argv[prefetchAt + 1] : 'on';
+  if (noisePrefetch !== 'on' && noisePrefetch !== 'off')
+    throw new Error('--noise-prefetch must be on or off');
   const historyAt = argv.indexOf('--history');
   const history = historyAt >= 0 ? Number(argv[historyAt + 1]) : 0;
   if (!Number.isInteger(history) || history < 0)
@@ -259,6 +286,8 @@ function parseOptions(argv: string[]): Options {
   return {
     noiseControls: noiseAt >= 0 && argv[noiseAt + 1] === 'on',
     noiseLookups,
+    noiseProfile,
+    noisePrefetch: noisePrefetch === 'on',
     lane: !argv.includes('--no-lane'),
     history,
     repetitions: read('repetitions', 8),
@@ -340,7 +369,8 @@ async function seedHistory(serviceIds: string[], count: number) {
  * count and parent) and every static matcher, yet nothing changes the outcome: the arms do the same work
  * apart from the hook. The bench events carry a unique label, so the label-subset dedup check never holds.
  */
-async function enableNoiseControls(serviceIds: string[]) {
+async function enableNoiseControls(serviceIds: string[], profile: NoiseProfile = 'all') {
+  const on = (control: NoiseProfile) => profile === 'all' || profile === control;
   const now = Date.now();
   for (const serviceId of serviceIds) {
     await prisma.noiseControlPolicy.create({
@@ -350,9 +380,14 @@ async function enableNoiseControls(serviceIds: string[]) {
         mode: 'ON',
         definition: {
           schemaVersion: 1,
-          contentDedup: { enabled: true, windowSeconds: 900, requireLabelSubset: true },
-          flapping: { enabled: true, windowSeconds: 180, threshold: 50, keyOnFingerprint: true },
-          storm: { enabled: true, threshold: 1000, windowSeconds: 60, holdSeconds: 0 },
+          contentDedup: { enabled: on('dedup'), windowSeconds: 900, requireLabelSubset: true },
+          flapping: {
+            enabled: on('flapping'),
+            windowSeconds: 180,
+            threshold: 50,
+            keyOnFingerprint: true,
+          },
+          storm: { enabled: on('storm'), threshold: 1000, windowSeconds: 60, holdSeconds: 0 },
           orchestration: {
             rules: [
               {
@@ -390,6 +425,18 @@ async function enableNoiseControls(serviceIds: string[]) {
   const snapshot = await primePrePagingSnapshot();
   if (!snapshot || snapshot.policies.size < serviceIds.length)
     throw new Error('Noise-control snapshot did not load');
+}
+
+/** Evaluations and total seconds the hook has observed so far in this process. */
+function hookEvaluationTotals(): { count: number; seconds: number } {
+  const rows =
+    exportRuntimeOperationalMetricState().histograms.find(
+      ([name]) => name === 'opsknight_prepaging_evaluation_seconds'
+    )?.[1] ?? [];
+  return rows.reduce(
+    (sum, row) => ({ count: sum.count + row.count, seconds: sum.seconds + row.value }),
+    { count: 0, seconds: 0 }
+  );
 }
 
 function failOpenCounts(): Record<string, number> {
@@ -774,7 +821,8 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
   await setIntelligence(laneOn);
   if (options.history > 0) await seedHistory(serviceIds, options.history);
   await seedBacklog(serviceIds, options.backlog, laneOn);
-  if (arm === 'candidate' && options.noiseControls) await enableNoiseControls(serviceIds);
+  if (arm === 'candidate' && options.noiseControls)
+    await enableNoiseControls(serviceIds, options.noiseProfile);
   else resetPrePagingSnapshot();
 
   const lane: CandidateLane | null = laneOn
@@ -799,6 +847,7 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
   const before = lane ? await lane.snapshot() : null;
   const completedBefore = before?.completed ?? 0;
   const failOpenBefore = failOpenCounts();
+  const hookBefore = hookEvaluationTotals();
   const decisionsBefore = await prisma.prePagingDecision.count();
   const finishedBefore = before?.finished ?? 0;
   const burst = await profileWindow(
@@ -828,6 +877,8 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
     };
   }
   const failOpenAfter = failOpenCounts();
+  const hookAfter = hookEvaluationTotals();
+  const hookEvaluations = hookAfter.count - hookBefore.count;
   const noiseDecisions = (await prisma.prePagingDecision.count()) - decisionsBefore;
   await lane?.stop();
   const noiseFailOpen = Object.fromEntries(
@@ -859,6 +910,12 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
       : 0,
     noiseFailOpen,
     noiseDecisions,
+    noiseHookWait: {
+      evaluations: hookEvaluations,
+      meanMs: hookEvaluations
+        ? Math.round(((hookAfter.seconds - hookBefore.seconds) * 1e6) / hookEvaluations) / 1000
+        : 0,
+    },
     diagnostics: burst.diagnostics,
   };
 }
@@ -900,6 +957,12 @@ async function main() {
   assertDedicatedDatabase();
   const options = parseOptions(process.argv.slice(2));
   setNoiseLookupRoute(options.noiseLookups);
+  setIngestNoisePrefetch(options.noisePrefetch);
+  if (options.gate && (options.noiseProfile !== 'all' || !options.noisePrefetch)) {
+    throw new Error(
+      '--noise-profile and --noise-prefetch off are attribution modes; combine them with --no-gate.'
+    );
+  }
   if (options.gate && !options.laneYield) {
     throw new Error('--no-lane-yield is a diagnosis mode; combine it with --no-gate.');
   }
@@ -927,7 +990,7 @@ async function main() {
             ? ` laneSpans=${sample.diagnostics.laneSpans.map(span => `${span.startMs}..${span.endMs ?? '?'}`).join(',')}`
             : '') +
           (options.noiseControls
-            ? ` noiseFailOpen=${JSON.stringify(sample.noiseFailOpen)} noiseDecisions=${sample.noiseDecisions}`
+            ? ` noiseFailOpen=${JSON.stringify(sample.noiseFailOpen)} noiseDecisions=${sample.noiseDecisions} hookWait=${sample.noiseHookWait.meanMs}ms`
             : '')
       );
     }
@@ -991,6 +1054,14 @@ async function main() {
     hostValidation,
     hostQuietWait: quiet,
     noiseControlsInCandidate: options.noiseControls,
+    noiseProfile: options.noiseProfile,
+    noisePrefetch: options.noisePrefetch,
+    noiseHookWaitMeanMsInCandidate:
+      Math.round(
+        (candidate.reduce((sum, sample) => sum + sample.noiseHookWait.meanMs, 0) /
+          Math.max(1, candidate.length)) *
+          1000
+      ) / 1000,
     noiseFailOpenInCandidate: candidate.reduce<Record<string, number>>((sum, sample) => {
       for (const [reason, value] of Object.entries(sample.noiseFailOpen))
         sum[reason] = (sum[reason] ?? 0) + value;

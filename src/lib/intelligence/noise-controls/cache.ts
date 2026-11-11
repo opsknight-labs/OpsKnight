@@ -197,6 +197,11 @@ export function getPrePagingSnapshot(now: number = Date.now()): PrePagingSnapsho
   return current;
 }
 
+/** The snapshot as it is right now. Starts no load: only the hook itself decides when to refresh. */
+export function peekPrePagingSnapshot(): PrePagingSnapshot | null {
+  return current;
+}
+
 /** Single-flight refresh. Failures keep the previous snapshot and are logged at debug level. */
 export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   if (loading) return loading;
@@ -316,12 +321,13 @@ function labelsOf(raw: unknown): Record<string, string> | null {
 /**
  * The same index-backed reads as `prismaLookups`, fetched in ONE round trip on first use and served from
  * memory afterwards. A call whose arguments differ from the plan falls back to its own query, so the
- * answers are always exactly what `prismaLookups` would return.
+ * answers are always exactly what `prismaLookups` would return. `start()` sends the statement ahead of
+ * first use (see `beginIngestNoiseLookups`).
  */
 export function prefetchedLookups(
   tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
   plan: PrePagingLookupPlan
-): PrePagingLookups {
+): PrePagingLookups & { start(): void } {
   const base = prismaLookups(tx);
   const none = Prisma.sql`NULL`;
   const dedup = plan.dedup
@@ -361,6 +367,10 @@ export function prefetchedLookups(
   const sameScope = (a: readonly string[], b: readonly string[]) =>
     a.length === b.length && a.every((id, index) => id === b.at(index));
   return {
+    /** Sends the statement now instead of on first use. A failure surfaces on the lookup that reads it. */
+    start() {
+      prefetch().catch(() => undefined);
+    },
     async findOpenIncidentByFingerprint(serviceId, fingerprintHash, since) {
       const planned = plan.dedup;
       if (

@@ -11,6 +11,7 @@ import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { logger } from './logger';
 import {
+  beginIngestNoiseLookups,
   evaluateIngestNoiseControls,
   linkStormChild,
   recordIngestNoiseDecision,
@@ -399,6 +400,22 @@ async function applyEvent(
         return { action: 'deduplicated', incident: existingIncident };
       }
 
+      // This event opens a new incident. Send the pre-paging lookups now (dedicated pool, own deadline) so
+      // they overlap the reads below instead of holding this transaction's connection later. Nothing
+      // happens when the service's policy is OFF; the hook further down decides what the answers mean.
+      const noiseReceivedAt = processingLease ? envelope.receivedAt : new Date();
+      const noisePrefetch = isFlapping
+        ? null
+        : beginIngestNoiseLookups(
+            {
+              serviceId,
+              fingerprintHash: alertShape.fingerprintHash,
+              dedupKey: dedup_key,
+              receivedAt: noiseReceivedAt,
+            },
+            { integrationId }
+          );
+
       // Check if an out-of-order resolve event arrived recently (< 5 minutes ago) for this dedupKey
       const recentResolveAlert = await tx.alert.findFirst({
         where: {
@@ -557,9 +574,9 @@ async function applyEvent(
               resourceKey: alertShape.resourceKey,
               fingerprintHash: alertShape.fingerprintHash,
               dedupKey: dedup_key,
-              receivedAt: processingLease ? envelope.receivedAt : new Date(),
+              receivedAt: noiseReceivedAt,
             },
-            { integrationId }
+            { integrationId, prefetch: noisePrefetch }
           );
       let applied = noise?.apply ? noise : null;
       if (applied?.transform && applied.action !== 'DROP') {

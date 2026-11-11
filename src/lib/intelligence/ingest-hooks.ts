@@ -5,8 +5,10 @@
  */
 export { signalIntelligenceIncident } from './jobs/wake-publisher';
 export {
+  beginIngestNoiseLookups,
   evaluateIngestNoiseControls,
   recordIngestNoiseDecision,
   linkStormChild,
   type IngestNoiseDecision,
+  type IngestNoisePrefetch,
 } from './noise-controls/ingest';

@@ -3,7 +3,12 @@ import type { Prisma } from '@prisma/client';
 import { processEvent, type EventPayload } from '@/lib/events';
 import { normalizeAlertShape } from '@/lib/alerts/normalization';
 import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
-import { evaluateIngestNoiseControls } from '@/lib/intelligence/ingest-hooks';
+import {
+  beginIngestNoiseLookups,
+  evaluateIngestNoiseControls,
+} from '@/lib/intelligence/ingest-hooks';
+import { setIngestNoisePrefetch } from '@/lib/intelligence/noise-controls/ingest';
+import { NOISE_CONTROL_REVERSAL_INTEGRATION_ID } from '@/lib/intelligence/noise-controls/decisions';
 import {
   primePrePagingSnapshot,
   resetPrePagingSnapshot,
@@ -37,6 +42,7 @@ beforeEach(async () => {
   setPrePagingDeadlineMs(50);
   await resetDatabase();
 });
+afterEach(() => setIngestNoisePrefetch(null));
 afterAll(async () => {
   setPrePagingDeadlineMs(null);
   setNoiseLookupRoute(null);
@@ -735,4 +741,180 @@ describe('fail-open', () => {
     );
     expect(decision).toMatchObject({ control: 'CONTENT_DEDUP', action: 'APPEND', apply: true });
   });
+});
+
+describe('early lookups (pool route)', () => {
+  function input(serviceId: string, fingerprintHash: string | null = 'fp'): PrePagingInput {
+    return {
+      serviceId,
+      source: 'prometheus',
+      summary: 'Checkout pool exhausted',
+      severity: 'error',
+      urgency: 'MEDIUM',
+      labels: {},
+      resourceKey: null,
+      fingerprintHash,
+      dedupKey: 'k',
+      receivedAt: new Date(),
+    };
+  }
+  const untouchable = new Proxy({} as Prisma.TransactionClient, {
+    get() {
+      throw new Error('the pool route must not use the event transaction');
+    },
+  });
+
+  it('starts nothing for OFF, a cold cache, a reversal, no lookup control or the savepoint route', async () => {
+    const { service } = await setup();
+    const begin = (integrationId = 'x') =>
+      beginIngestNoiseLookups(input(service.id), { integrationId });
+    expect(begin()).toBeNull(); // no policy
+
+    await policy(service.id, 'OFF', { storm: { enabled: true } });
+    expect(begin()).toBeNull();
+
+    await policy(service.id, 'ON', {}); // ON, but nothing that reads
+    expect(begin()).toBeNull();
+
+    await policy(service.id, 'ON', { storm: { enabled: true, threshold: 1_000 } });
+    expect(begin(NOISE_CONTROL_REVERSAL_INTEGRATION_ID)).toBeNull();
+    setNoiseLookupRoute('transaction');
+    expect(begin()).toBeNull();
+    setNoiseLookupRoute(null);
+    setIngestNoisePrefetch(false);
+    expect(begin()).toBeNull();
+    setIngestNoisePrefetch(null);
+    expect(begin()).not.toBeNull();
+
+    resetPrePagingSnapshot();
+    expect(begin()).toBeNull(); // cold cache
+  });
+
+  it('the hook reuses the started lookups and decides exactly as it does without them', async () => {
+    const { service } = await setup();
+    incidentOf(await ingest(service.id));
+    await policy(service.id, 'ON', {
+      contentDedup: { enabled: true, requireLabelSubset: false },
+      storm: { enabled: true, threshold: 1_000 },
+    });
+    const snapshot = await primePrePagingSnapshot();
+    const { fingerprintHash } = await db.alert.findFirstOrThrow({
+      where: { serviceId: service.id },
+      select: { fingerprintHash: true },
+    });
+    const event = input(service.id, fingerprintHash);
+    const plain = await evaluateIngestNoiseControls(untouchable, event, {
+      integrationId: 'x',
+      snapshot,
+    });
+
+    const prefetch = beginIngestNoiseLookups(event, { integrationId: 'x' });
+    expect(prefetch).not.toBeNull();
+    // Let the statement finish, then make any further read impossible: the hook must not need one.
+    await prefetch!.lookups.countRecentIncidents(
+      [service.id],
+      new Date(event.receivedAt.getTime() - 60_000)
+    );
+    await disconnectNoiseLookupClient();
+    setNoiseLookupRoute('transaction');
+    const early = await evaluateIngestNoiseControls(untouchable, event, {
+      integrationId: 'x',
+      snapshot,
+      prefetch,
+    });
+    setNoiseLookupRoute(null);
+    expect(early).toMatchObject({ control: 'CONTENT_DEDUP', action: 'APPEND', apply: true });
+    expect({ ...early, elapsedMs: 0 }).toEqual({ ...plain, elapsedMs: 0 });
+  });
+
+  it('ignores lookups started for another event, instant or snapshot', async () => {
+    const { service } = await setup();
+    await policy(service.id, 'ON', { storm: { enabled: true, threshold: 2 } });
+    const snapshot = await primePrePagingSnapshot();
+    const event = input(service.id);
+    const poisoned = () => {
+      const prefetch = beginIngestNoiseLookups(event, { integrationId: 'x' })!;
+      return {
+        ...prefetch,
+        lookups: new Proxy(prefetch.lookups, {
+          get() {
+            throw new Error('a prefetch that does not match the event must not be read');
+          },
+        }),
+      };
+    };
+    const evaluate = (
+      prefetch: ReturnType<typeof poisoned>,
+      changed: Partial<PrePagingInput> = {}
+    ) =>
+      evaluateIngestNoiseControls(
+        untouchable,
+        { ...event, ...changed },
+        { integrationId: 'x', snapshot, prefetch }
+      );
+    // Each mismatch falls back to the hook's own lookup, which finds no storm (no incidents yet): null.
+    expect(await evaluate(poisoned(), { dedupKey: 'other' })).toBeNull();
+    expect(await evaluate(poisoned(), { fingerprintHash: 'other' })).toBeNull();
+    expect(
+      await evaluate(poisoned(), { receivedAt: new Date(event.receivedAt.getTime() + 1) })
+    ).toBeNull();
+    const stale = poisoned();
+    const fresh = await primePrePagingSnapshot();
+    expect(fresh).not.toBe(snapshot);
+    expect(
+      await evaluateIngestNoiseControls(untouchable, event, {
+        integrationId: 'x',
+        snapshot: fresh,
+        prefetch: stale,
+      })
+    ).toBeNull();
+  });
+
+  it('the deadline counts from the moment the lookups were sent', async () => {
+    const { service } = await setup();
+    await policy(service.id, 'ON', { storm: { enabled: true, threshold: 2 } });
+    const snapshot = await primePrePagingSnapshot();
+    const event = input(service.id);
+    const prefetch = beginIngestNoiseLookups(event, { integrationId: 'x' })!;
+    const hanging = {
+      ...prefetch,
+      // Sent a full deadline ago and still unanswered: nothing is left to wait for.
+      startedAt: performance.now() - prefetch.deadlineMs,
+      lookups: {
+        ...prefetch.lookups,
+        countRecentIncidents: () => new Promise<number>(() => undefined),
+      },
+    };
+    const started = performance.now();
+    expect(
+      await evaluateIngestNoiseControls(untouchable, event, {
+        integrationId: 'x',
+        snapshot,
+        prefetch: hanging,
+      })
+    ).toBeNull();
+    // The suite's deadline is 50 ms; an expired one must not be waited for again.
+    expect(performance.now() - started).toBeLessThan(40);
+  });
+
+  it.each([true, false])(
+    'processEvent groups, dedups and pages the same with early lookups %s',
+    async enabled => {
+      setIngestNoisePrefetch(enabled);
+      const { service } = await setup();
+      const first = incidentOf(await ingest(service.id));
+      await policy(service.id, 'ON', {
+        contentDedup: { enabled: true, requireLabelSubset: false },
+        storm: { enabled: true, threshold: 1_000 },
+      });
+      const second = await ingest(service.id);
+      expect(incidentOf(second).id).toBe(first.id);
+      expect(await decisions(service.id)).toMatchObject([
+        { control: 'CONTENT_DEDUP', action: 'APPEND', applied: true },
+      ]);
+      const other = incidentOf(await ingest(service.id, event({ summary: 'Disk almost full' })));
+      expect(other.id).not.toBe(first.id);
+      expect(await pagingJobs(other.id)).toHaveLength(1);
+    }
+  );
 });
