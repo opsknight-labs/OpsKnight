@@ -6,7 +6,8 @@ import bcrypt from 'bcryptjs';
 /**
  * Browser journey for the responder-facing AIOps overview: an administrator and a responder open
  * /intelligence, switch the window, see each section, and the page stays accessible on a 390 px phone and
- * in dark mode. State is created directly and removed afterwards.
+ * in dark mode. The inbox, the section drill-downs, the alerts and changes lists they lead to and the
+ * mobile AIOps page are covered by the same seeded state, which is created directly and removed afterwards.
  */
 const prisma = new PrismaClient();
 const password = 'Overview-E2E-Pass-5521!';
@@ -15,6 +16,8 @@ const responderEmail = 'e2e-overview-responder@example.com';
 const prefix = 'e2e-overview-';
 const serviceName = `${prefix}checkout-${Date.now()}`;
 let serviceId = '';
+let heldAlertId = '';
+let changeId = '';
 
 async function cleanup() {
   const services = { name: { startsWith: prefix } };
@@ -45,6 +48,38 @@ async function seed() {
   const service = await prisma.service.create({ data: { name: serviceName } });
   serviceId = service.id;
   const now = Date.now();
+  // An upstream the observer "noticed": one undecided dependency suggestion for the inbox, plus enough
+  // alerts on it that the alerts list has a second page.
+  const upstream = await prisma.service.create({ data: { name: `${prefix}ledger-${Date.now()}` } });
+  await prisma.serviceDependency.create({
+    data: {
+      upstreamServiceId: upstream.id,
+      downstreamServiceId: serviceId,
+      origin: 'OBSERVED',
+      status: 'SUGGESTED',
+      confidence: 0.8,
+      evidence: {},
+    },
+  });
+  await prisma.alert.createMany({
+    data: Array.from({ length: 45 }, (_, i) => ({
+      serviceId: upstream.id,
+      severity: 'info',
+      payload: { summary: `${prefix}ledger heartbeat ${i}` },
+      createdAt: new Date(now - (i + 1) * 60_000),
+    })),
+  });
+  // An alert a suppression rule held back: it never opened an incident.
+  const held = await prisma.alert.create({
+    data: {
+      serviceId,
+      severity: 'critical',
+      labels: { env: 'prod' },
+      payload: { summary: `${prefix}suppressed disk alarm` },
+      createdAt: new Date(now - 2 * 3_600_000),
+    },
+  });
+  heldAlertId = held.id;
   const change = await prisma.changeEvent.create({
     data: {
       serviceId,
@@ -55,6 +90,7 @@ async function seed() {
       riskScore: 0.81,
     },
   });
+  changeId = change.id;
   // Six quick, unacknowledged incidents make the service rank as noisy; three opened as flapping.
   for (let i = 0; i < 6; i += 1) {
     const createdAt = new Date(now - (i + 1) * 3_600_000);
@@ -100,6 +136,7 @@ async function seed() {
           action: 'SUPPRESS',
           mode: 'ON',
           applied: true,
+          alertId: control === 'SUPPRESSION' && i === 0 ? held.id : null,
           sourceId: sourceName,
           sourceName,
           reason: 'e2e',
@@ -246,6 +283,191 @@ test.describe.serial('AIOps overview', () => {
       path: testInfo.outputPath('overview-mobile-dark.png'),
       fullPage: true,
     });
+    await page.context().close();
+  });
+
+  test('the inbox lists what needs a decision and every section drills down', async ({
+    browser,
+  }) => {
+    const page = await signIn(browser, adminEmail);
+    await page.goto('/intelligence');
+    const inbox = page.getByRole('region', { name: 'Needs attention' });
+    await expect(inbox).toBeVisible();
+    const dependency = inbox.getByRole('link', { name: /observed dependenc(y|ies) to review/ });
+    await expect(dependency).toHaveAttribute('href', '/settings/intelligence/response');
+    expect((await dependency.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    // The inbox sits above the sections.
+    const noise = page.getByRole('region', { name: 'Noise', exact: true });
+    await expect(noise).toBeVisible();
+    expect((await inbox.boundingBox())?.y ?? 0).toBeLessThan((await noise.boundingBox())?.y ?? 0);
+
+    for (const [name, label, href] of [
+      ['Noise', 'View alerts', '/alerts'],
+      ['Speed', 'View incidents', '/incidents'],
+      ['Alert quality', 'View services', '/services'],
+      ['Changes', 'View changes', '/changes'],
+      ['Outcomes', 'Open analytics', '/analytics'],
+      ['Lane health', 'Open Intelligence settings', '/settings/intelligence'],
+    ] as const)
+      await expect(
+        page.getByRole('region', { name, exact: true }).getByRole('link', { name: label })
+      ).toHaveAttribute('href', href);
+    await expectAccessible(page);
+    await page.context().close();
+
+    // Administrator-only rows never reach a responder.
+    const responder = await signIn(browser, responderEmail);
+    await responder.goto('/intelligence');
+    await expect(responder.getByRole('region', { name: 'Noise', exact: true })).toBeVisible();
+    for (const kind of ['dependencies', 'quarantine', 'gate'])
+      await expect(responder.locator(`[data-attention-item="${kind}"]`)).toHaveCount(0);
+    await responder.context().close();
+  });
+
+  test('the alerts list filters, pages and opens an alert a noise control held back', async ({
+    browser,
+  }, testInfo) => {
+    const page = await signIn(browser, responderEmail);
+    await page.goto('/');
+    await page.locator('#app-sidebar').getByRole('link', { name: 'Alerts', exact: true }).click();
+    await expect(page).toHaveURL(/\/alerts$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Alerts' })).toBeVisible();
+    const table = page.getByRole('table', { name: 'Alerts, newest first' });
+    await expect(table).toBeVisible();
+
+    // More than one page of alerts in the last 24 hours: the cursor travels in the URL.
+    const pages = page.getByRole('navigation', { name: 'Alert pages' });
+    await pages.getByRole('link', { name: 'Next page' }).click();
+    await expect(page).toHaveURL(/cursor=/);
+    await expect(table).toBeVisible();
+    await pages.getByRole('link', { name: 'First page' }).click();
+    await expect(page).not.toHaveURL(/cursor=/);
+
+    const filters = page.getByRole('search', { name: 'Filter alerts' });
+    await filters.getByLabel('Service').selectOption(serviceId);
+    await expect(page).toHaveURL(url => url.searchParams.get('service') === serviceId);
+    await filters.getByLabel('Noise decision').selectOption('suppressed');
+    await expect(page).toHaveURL(/decision=suppressed/);
+    const row = table.getByRole('row').filter({ hasText: `${prefix}suppressed disk alarm` });
+    await expect(row).toHaveCount(1);
+    await expect(row.getByRole('cell').nth(2)).toContainText('critical');
+    await expect(row.getByRole('cell').nth(4)).toContainText('Suppressed');
+    await expect(row.getByRole('cell').nth(4)).toContainText(`${prefix}known disk alarm`);
+    await expectAccessible(page);
+    await page.screenshot({ path: testInfo.outputPath('alerts-desktop.png'), fullPage: true });
+
+    await filters.getByLabel('Noise decision').selectOption('grouped');
+    await expect(page.getByText('No alerts match these filters')).toBeVisible();
+    await page.getByRole('link', { name: 'Clear filters' }).first().click();
+    await expect(page).toHaveURL(/\/alerts$/);
+
+    await page.goto(`/alerts?service=${serviceId}&decision=suppressed`);
+    await table.getByRole('link', { name: `${prefix}suppressed disk alarm` }).click();
+    await expect(page).toHaveURL(url => url.pathname === `/alerts/${heldAlertId}`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: `${prefix}suppressed disk alarm` })
+    ).toBeVisible();
+    await expect(page.getByText(/Noise decision: suppressed by/)).toBeVisible();
+
+    // Phone width, dark mode: no sideways scroll and the row link is a 44 px target.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/alerts?service=${serviceId}`);
+    await expect(table).toBeVisible();
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await noHorizontalOverflow(page);
+    const target = await table
+      .getByRole('link', { name: `${prefix}suppressed disk alarm` })
+      .boundingBox();
+    expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expectAccessible(page);
+    await page.screenshot({ path: testInfo.outputPath('alerts-mobile-dark.png'), fullPage: true });
+    await page.context().close();
+  });
+
+  test('the changes list shows risk and linked incidents and filters by risk', async ({
+    browser,
+  }, testInfo) => {
+    const page = await signIn(browser, responderEmail);
+    await page.goto('/intelligence');
+    await page
+      .getByRole('region', { name: 'Changes', exact: true })
+      .getByRole('link', { name: 'View changes' })
+      .click();
+    await expect(page).toHaveURL(/\/changes$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Changes' })).toBeVisible();
+    const filters = page.getByRole('search', { name: 'Filter changes' });
+    await filters.getByLabel('Service').selectOption(serviceId);
+    await expect(page).toHaveURL(url => url.searchParams.get('service') === serviceId);
+
+    const table = page.getByRole('table', { name: 'Changes, newest first' });
+    const row = table.getByRole('row').filter({ hasText: `${prefix}checkout v43 rollout` });
+    await expect(row).toHaveCount(1);
+    await expect(row.getByRole('cell').nth(1)).toHaveText('ci');
+    await expect(row.getByRole('cell').nth(3)).toContainText('High risk · 81%');
+    await expect(
+      row
+        .getByRole('cell')
+        .nth(4)
+        .getByRole('link', { name: `${prefix}checkout latency 0` })
+    ).toBeVisible();
+    await expectAccessible(page);
+    await page.screenshot({ path: testInfo.outputPath('changes-desktop.png'), fullPage: true });
+
+    await filters.getByLabel('Risk').selectOption('high');
+    await expect(page).toHaveURL(/risk=high/);
+    await expect(row).toHaveCount(1);
+    await filters.getByLabel('Risk').selectOption('low');
+    await expect(page.getByText('No changes match these filters')).toBeVisible();
+    await page.getByRole('link', { name: 'Clear filters' }).first().click();
+    await expect(page).toHaveURL(/\/changes$/);
+
+    await page.goto(`/changes?service=${serviceId}`);
+    await table.getByRole('link', { name: `${prefix}checkout v43 rollout` }).click();
+    await expect(page).toHaveURL(url => url.pathname === `/changes/${changeId}`);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/changes?service=${serviceId}`);
+    await expect(table).toBeVisible();
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await noHorizontalOverflow(page);
+    const target = await table
+      .getByRole('link', { name: `${prefix}checkout v43 rollout` })
+      .boundingBox();
+    expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expectAccessible(page);
+    await page.screenshot({ path: testInfo.outputPath('changes-mobile-dark.png'), fullPage: true });
+    await page.context().close();
+  });
+
+  test('the mobile More menu opens AIOps with the inbox and the Noise section', async ({
+    browser,
+  }, testInfo) => {
+    const page = await signIn(browser, adminEmail);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/m/more');
+    await page.getByRole('link', { name: /AIOps/ }).click();
+    await expect(page).toHaveURL(/\/m\/intelligence$/);
+    const inbox = page.getByRole('region', { name: 'Needs attention' });
+    await expect(
+      inbox.getByRole('link', { name: /observed dependenc(y|ies) to review/ })
+    ).toBeVisible();
+    const noise = page.getByRole('region', { name: 'Noise', exact: true });
+    await expect(noise.getByText('Pages avoided')).toBeVisible();
+    await page
+      .getByRole('navigation', { name: 'Time window' })
+      .getByRole('link', { name: /24h/ })
+      .click();
+    await expect(page).toHaveURL(/\/m\/intelligence\?window=24h/);
+    await expect(noise).toBeVisible();
+    await noHorizontalOverflow(page);
+    const result = await new AxeBuilder({ page })
+      .include('.responsive-page')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+      .analyze();
+    expect(
+      result.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`)
+    ).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath('m-intelligence.png'), fullPage: true });
     await page.context().close();
   });
 });

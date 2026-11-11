@@ -250,6 +250,12 @@ test.describe('mobile responsive visual integrity matrix', () => {
       // 15. Analytics
       await page.goto('/m/analytics');
       await assertResponsiveIntegrity(page);
+
+      // 16. AIOps (More menu): the overview's Noise section and, when non-empty, its inbox
+      await page.goto('/m/intelligence');
+      await expect(page.getByRole('region', { name: 'Noise', exact: true })).toBeVisible();
+      await assertResponsiveIntegrity(page);
+      await page.screenshot({ path: `screenshots/responsive/intelligence-${vp.width}.png` });
     });
   }
 });
