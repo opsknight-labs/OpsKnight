@@ -761,6 +761,17 @@ async function runOnce() {
           }
         }
 
+        // Operations rollups (Workstream J): incremental from their own watermark, and a no-op while
+        // operations insights are off. A failure here never holds back the incident rollups above.
+        try {
+          const { generateOpsRollups } = await import('./metric-rollup');
+          await generateOpsRollups(now);
+        } catch (error) {
+          logger.warn('[Cron] Operations rollups failed; they resume from their watermark', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+
         // Objective snapshots may consume historical incident rollups. Materialize them only
         // after dirty-day reconciliation and once the missing-rollup backlog is fully drained.
         let serviceObjectiveSnapshots = null;

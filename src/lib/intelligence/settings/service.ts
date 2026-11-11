@@ -70,6 +70,14 @@ export type IntelligenceSettingsView = {
   feedbackRetentionDays: number;
   /** Deterministic shift-handoff summaries to incoming on-call responders. */
   handoffSummaryEnabled: boolean;
+  /** Operations insights (Workstream J): the lane job, then one switch per area. */
+  opsInsightsEnabled: boolean;
+  opsInsightsAutomationEnabled: boolean;
+  opsInsightsEscalationEnabled: boolean;
+  opsInsightsOnCallEnabled: boolean;
+  opsInsightsPostmortemsEnabled: boolean;
+  opsInsightsRunbooksEnabled: boolean;
+  opsInsightsNotificationsEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -88,6 +96,13 @@ const SETTINGS_SELECT = {
   findingRetentionDays: true,
   feedbackRetentionDays: true,
   handoffSummaryEnabled: true,
+  opsInsightsEnabled: true,
+  opsInsightsAutomationEnabled: true,
+  opsInsightsEscalationEnabled: true,
+  opsInsightsOnCallEnabled: true,
+  opsInsightsPostmortemsEnabled: true,
+  opsInsightsRunbooksEnabled: true,
+  opsInsightsNotificationsEnabled: true,
   revision: true,
 } as const;
 

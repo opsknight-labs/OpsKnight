@@ -47,6 +47,7 @@ import {
 import { AiGatewayError } from '../ai/gateway';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
 import { scheduleSquireMemoryWork, SQUIRE_MEMORY_HANDLERS } from '../memory/handlers';
+import { OPS_INSIGHT_HANDLERS, scheduleOpsInsightsWork } from '../ops-insights/handlers';
 import {
   currentEmbeddingModel,
   embedIncidents,
@@ -212,6 +213,8 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   },
   // Squire knowledge memory and proactive notes (F4): opt-in, see memory/handlers.ts.
   ...SQUIRE_MEMORY_HANDLERS,
+  // Operations insights (Workstream J): opt-in, one scope per item, see ops-insights/handlers.ts.
+  ...OPS_INSIGHT_HANDLERS,
 };
 
 const SEMANTIC_SUBJECT = 'pending';
@@ -636,6 +639,15 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+
+    // Operations insights (Workstream J): nothing between scans; one settings read per scan while off.
+    try {
+      await scheduleOpsInsightsWork(now(), handlers);
+    } catch (error) {
+      logger.warn('[Intelligence] Could not schedule operations insights; will retry', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     let discovered = 0;

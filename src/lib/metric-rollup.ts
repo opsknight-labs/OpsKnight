@@ -1107,3 +1107,203 @@ export async function cleanupOldRollups(cutoffDateOverride?: Date): Promise<numb
 
   return deletedCount;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Operations rollups (Workstream J). Daily aggregates the operations insights read, so no insight ever
+// scans raw Notification, RunbookExecution or automation decision history. Stored in the generic
+// MetricRollup table: `name` is the rollup, `bucket` the UTC day, `subjectKey` what the row is about,
+// `tags` the remaining dimensions. `serviceId` is left null on purpose: incident enrichment reads
+// MetricRollup by service as monitoring context and must not pick these rows up.
+// ---------------------------------------------------------------------------------------------------
+
+type PrismaNamespace = typeof import('@prisma/client').Prisma;
+
+export const OPS_ROLLUPS = {
+  /** subjectKey = user id. tags { hour: 0-23 in the user's time zone, weekend }. count = pages, sum = incidents. */
+  pagesPerUserHour: 'ops.pages.user_hour',
+  /**
+   * subjectKey = escalation policy id. tags { step, outcome }. count = attempts, sum = seconds to acknowledge.
+   * Defined here so readers can rely on the name and shape; its source needs the per-step attempt table that
+   * slice J2 adds, and J2 fills OPS_ROLLUP_SOURCES for it.
+   */
+  escalationStepOutcome: 'ops.escalation.step_outcome',
+  /** subjectKey = runbook id. tags { status }. count = finished executions, sum = total run time in ms. */
+  runbookOutcome: 'ops.runbook.outcome',
+  /**
+   * subjectKey = automation version id. tags { serviceId, ruleId (null = no route rule matched), ruleName, mode }.
+   * count = decisions, sum = decisions that fell back.
+   */
+  automationRuleMatch: 'ops.automation.rule_match',
+} as const;
+export type OpsRollupName = (typeof OPS_ROLLUPS)[keyof typeof OPS_ROLLUPS];
+
+type OpsRollupSourceRow = {
+  subjectKey: string;
+  count: number;
+  sum: number;
+  tags: Prisma.JsonObject;
+};
+type OpsRollupSource = (sql: PrismaNamespace['sql'], dayStart: Date, dayEnd: Date) => Prisma.Sql;
+
+/**
+ * The one statement that computes a rollup for one UTC day. Each is driven by an index on the day range
+ * (asserted by the query-plan tests) and returns one row per group, never one per source row.
+ */
+export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>> = {
+  // idx_notification_created_cursor ("createdAt", "id"). An unknown time zone is read as UTC.
+  [OPS_ROLLUPS.pagesPerUserHour]: (sql, dayStart, dayEnd) => sql`
+    SELECT page."userId" AS "subjectKey", count(*)::int AS "count",
+      count(DISTINCT page."incidentId")::float AS "sum",
+      jsonb_build_object('hour', page."hour", 'weekend', page."weekend") AS "tags"
+    FROM (
+      SELECT n."userId", n."incidentId",
+        extract(hour FROM (n."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE coalesce(zone."name", 'UTC'))::int AS "hour",
+        extract(isodow FROM (n."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE coalesce(zone."name", 'UTC')) >= 6 AS "weekend"
+      FROM "Notification" n
+      JOIN "User" u ON u."id" = n."userId"
+      LEFT JOIN pg_timezone_names zone ON zone."name" = u."timeZone"
+      WHERE n."createdAt" >= ${dayStart} AND n."createdAt" < ${dayEnd}
+        AND n."category" = 'INCIDENT' AND n."incidentId" IS NOT NULL
+    ) page
+    GROUP BY page."userId", page."hour", page."weekend"`,
+  // idx_runbook_execution_completed ("completedAt").
+  [OPS_ROLLUPS.runbookOutcome]: (sql, dayStart, dayEnd) => sql`
+    SELECT e."runbookId" AS "subjectKey", count(*)::int AS "count",
+      coalesce(sum(extract(epoch FROM (e."completedAt" - e."startedAt")) * 1000)
+        FILTER (WHERE e."startedAt" IS NOT NULL), 0)::float AS "sum",
+      jsonb_build_object('status', e."status"::text) AS "tags"
+    FROM "RunbookExecution" e
+    WHERE e."completedAt" >= ${dayStart} AND e."completedAt" < ${dayEnd}
+    GROUP BY e."runbookId", e."status"`,
+  // One probe of IncidentAutomationDecision ("serviceId", "createdAt") per service that has automation.
+  [OPS_ROLLUPS.automationRuleMatch]: (sql, dayStart, dayEnd) => sql`
+    SELECT d."versionId" AS "subjectKey", count(*)::int AS "count",
+      (count(*) FILTER (WHERE d."fallbackReason" IS NOT NULL))::float AS "sum",
+      jsonb_build_object('serviceId', d."serviceId", 'ruleId', d."matchedRouteRuleId",
+        'ruleName', max(d."matchedRouteRuleName"), 'mode', d."mode"::text) AS "tags"
+    FROM "ServiceAutomationConfig" config
+    JOIN "IncidentAutomationDecision" d
+      ON d."serviceId" = config."serviceId" AND d."createdAt" >= ${dayStart} AND d."createdAt" < ${dayEnd}
+    WHERE d."versionId" IS NOT NULL
+    GROUP BY d."versionId", d."serviceId", d."matchedRouteRuleId", d."mode"`,
+};
+
+const OPS_ROLLUP_DAY_MS = 86_400_000;
+const OPS_ROLLUP_WRITE_CHUNK = 1000;
+const opsRollupWatermark = (name: OpsRollupName) => `${name}.watermark`;
+
+/**
+ * Brings every operations rollup up to yesterday (UTC), one day per transaction, starting after its own
+ * watermark. Incremental and idempotent: a day is deleted and rewritten together with the watermark, so a
+ * crash or a second scheduler can never double-count. A rollup that has never run starts `lookbackDays`
+ * back; at most `maxDaysPerRun` days are computed per call. Does nothing while operations insights are off.
+ */
+export async function generateOpsRollups(
+  now: Date = new Date(),
+  options: { maxDaysPerRun?: number; lookbackDays?: number; force?: boolean } = {}
+): Promise<Partial<Record<OpsRollupName, number>>> {
+  const { default: prisma } = await import('./prisma');
+  const { Prisma: PrismaRuntime } = await import('@prisma/client');
+  if (!options.force) {
+    const settings = await prisma.intelligenceSettings.findUnique({
+      where: { id: 'default' },
+      select: { opsInsightsEnabled: true },
+    });
+    if (!settings?.opsInsightsEnabled) return {};
+  }
+  const maxDays = Math.max(1, Math.min(options.maxDaysPerRun ?? 31, 90));
+  const lookbackDays = Math.max(1, Math.min(options.lookbackDays ?? 30, 90));
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const earliest = new Date(today.getTime() - lookbackDays * OPS_ROLLUP_DAY_MS);
+  const done: Partial<Record<OpsRollupName, number>> = {};
+
+  for (const [name, source] of Object.entries(OPS_ROLLUP_SOURCES) as Array<
+    [OpsRollupName, OpsRollupSource]
+  >) {
+    done[name] = 0;
+    for (let run = 0; run < maxDays; run += 1) {
+      const advanced = await prisma.$transaction(
+        async tx => {
+          await acquireAdvisoryLock(tx, LOCK_KEYS.ROLLUP_WRITE);
+          const watermark = await tx.metricRollup.findFirst({
+            where: { name: opsRollupWatermark(name) },
+            select: { id: true, bucket: true },
+          });
+          const next = watermark
+            ? new Date(watermark.bucket.getTime() + OPS_ROLLUP_DAY_MS)
+            : earliest;
+          const day = next < earliest ? earliest : next;
+          // Only complete days are rolled up.
+          if (day >= today) return false;
+          const rows = await tx.$queryRaw<OpsRollupSourceRow[]>(
+            source(PrismaRuntime.sql, day, new Date(day.getTime() + OPS_ROLLUP_DAY_MS))
+          );
+          await tx.metricRollup.deleteMany({ where: { name, bucket: day } });
+          for (let start = 0; start < rows.length; start += OPS_ROLLUP_WRITE_CHUNK) {
+            await tx.metricRollup.createMany({
+              data: rows.slice(start, start + OPS_ROLLUP_WRITE_CHUNK).map(row => ({
+                name,
+                bucket: day,
+                subjectKey: row.subjectKey,
+                count: row.count,
+                sum: row.sum,
+                tags: row.tags,
+              })),
+            });
+          }
+          if (watermark) {
+            await tx.metricRollup.update({ where: { id: watermark.id }, data: { bucket: day } });
+          } else {
+            await tx.metricRollup.create({
+              data: { name: opsRollupWatermark(name), bucket: day, count: 0, sum: 0 },
+            });
+          }
+          return true;
+        },
+        { maxWait: 10000, timeout: 30000 }
+      );
+      if (!advanced) break;
+      done[name] = (done[name] ?? 0) + 1;
+    }
+  }
+
+  // Operations rollups follow the metrics retention; the generic table has no other cleaner.
+  const policy = await getRetentionPolicy();
+  await prisma.metricRollup.deleteMany({
+    where: {
+      name: { in: Object.values(OPS_ROLLUPS) },
+      bucket: { lt: new Date(today.getTime() - policy.metricsRetentionDays * OPS_ROLLUP_DAY_MS) },
+    },
+  });
+  return done;
+}
+
+export interface OpsRollupPoint {
+  bucket: Date;
+  subjectKey: string | null;
+  count: number;
+  sum: number;
+  tags: Prisma.JsonValue;
+}
+
+/**
+ * Reads one operations rollup over a date range, optionally for one subject, on
+ * idx_metric_rollup_subject ("name", "subjectKey", "bucket"). Bounded: at most `limit` rows (default 2000).
+ */
+export async function queryOpsRollup(
+  name: OpsRollupName,
+  range: { from: Date; to: Date; subjectKey?: string; limit?: number },
+  client?: Prisma.TransactionClient
+): Promise<OpsRollupPoint[]> {
+  const db = client ?? (await import('./prisma')).default;
+  return db.metricRollup.findMany({
+    where: {
+      name,
+      ...(range.subjectKey === undefined ? {} : { subjectKey: range.subjectKey }),
+      bucket: { gte: range.from, lt: range.to },
+    },
+    orderBy: [{ bucket: 'asc' }, { id: 'asc' }],
+    take: Math.max(1, Math.min(range.limit ?? 2000, 10_000)),
+    select: { bucket: true, subjectKey: true, count: true, sum: true, tags: true },
+  });
+}

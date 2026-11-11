@@ -9,6 +9,7 @@ import { encodeWorkFailure } from './failures';
 import { closeExpiredGroups } from '../correlation/groups';
 import { purgeDeadLetters } from './work-queue';
 import { purgeExpiredKnowledge, purgeExpiredProactiveNotes } from '../memory/sync';
+import { purgeOpsInsights } from '../ops-insights/store';
 import type { IntelligenceSettingsView } from '../settings/service';
 
 export const RETENTION_INTERVAL_MS = 15 * 60_000;
@@ -281,6 +282,10 @@ export async function purgeExpiredIntelligenceData(
           SELECT id FROM "MetricAnomaly" WHERE "at" < ${cutoff(settings.findingRetentionDays)}
           ORDER BY "at", id LIMIT ${limit})`)
     );
+    // Operations insights: decided or resolved ones follow finding retention; orphans go with their scope.
+    const opsInsights = await step('OpsInsight', tx =>
+      purgeOpsInsights(tx, { cutoff: cutoff(settings.findingRetentionDays), limit })
+    );
     const counts = {
       fingerprints,
       alertFingerprints,
@@ -304,6 +309,7 @@ export async function purgeExpiredIntelligenceData(
       ...(knowledgeChunks > 0 ? { knowledgeChunks } : {}),
       ...(proactiveNotes > 0 ? { proactiveNotes } : {}),
       ...(metricAnomalies > 0 ? { metricAnomalies } : {}),
+      ...(opsInsights > 0 ? { opsInsights } : {}),
     };
     const ceilings =
       Object.values(counts).some(count => count >= limit) ||

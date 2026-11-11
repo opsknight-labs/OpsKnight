@@ -50,6 +50,13 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   findingRetentionDays: 365,
   feedbackRetentionDays: 730,
   handoffSummaryEnabled: false,
+  opsInsightsEnabled: false,
+  opsInsightsAutomationEnabled: false,
+  opsInsightsEscalationEnabled: false,
+  opsInsightsOnCallEnabled: false,
+  opsInsightsPostmortemsEnabled: false,
+  opsInsightsRunbooksEnabled: false,
+  opsInsightsNotificationsEnabled: false,
 } as const;
 
 const bounded = (range: { min: number; max: number }) =>
@@ -70,6 +77,14 @@ export const intelligenceSettingsInputSchema = z
     findingRetentionDays: bounded(INTELLIGENCE_SETTINGS_BOUNDS.retentionDays),
     feedbackRetentionDays: bounded(INTELLIGENCE_SETTINGS_BOUNDS.retentionDays),
     handoffSummaryEnabled: z.boolean().default(false),
+    // Operations insights have their own form: a save that omits them leaves the stored switches as they are.
+    opsInsightsEnabled: z.boolean().optional(),
+    opsInsightsAutomationEnabled: z.boolean().optional(),
+    opsInsightsEscalationEnabled: z.boolean().optional(),
+    opsInsightsOnCallEnabled: z.boolean().optional(),
+    opsInsightsPostmortemsEnabled: z.boolean().optional(),
+    opsInsightsRunbooksEnabled: z.boolean().optional(),
+    opsInsightsNotificationsEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()

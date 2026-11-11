@@ -44,6 +44,8 @@ export const WORK_KINDS = {
   SQUIRE_PROACTIVE: 'SQUIRE_PROACTIVE',
   /** Evaluates one per-service metric template against its seasonal baseline (subject = template id). */
   EVALUATE_METRIC_TEMPLATE: 'EVALUATE_METRIC_TEMPLATE',
+  /** Operations insights for one scope, subject `SCOPE_TYPE:scopeId`; see ops-insights/handlers.ts. Opt-in. */
+  OPS_INSIGHTS: 'OPS_INSIGHTS',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -64,6 +66,8 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   SQUIRE_PROACTIVE_SCAN: 33,
   SYNC_KNOWLEDGE: 55,
   EVALUATE_METRIC_TEMPLATE: 46,
+  // Operations insights are daily background analysis: everything about a live incident goes first.
+  OPS_INSIGHTS: 60,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

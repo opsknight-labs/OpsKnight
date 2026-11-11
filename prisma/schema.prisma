@@ -552,6 +552,7 @@ model User {
   aiUsageDays                 AiUsageUserDay[]
   squireActionReceipts        SquireActionReceipt[]
   squireFeedback              SquireFeedback[]
+  opsInsightDecisions         OpsInsight[]
   knowledgeFactsApproved      KnowledgeChunk[]             @relation("KnowledgeFactApprovedBy")
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
   runbookAgentsCreated        RunbookAgent[]               @relation("RunbookAgentCreatedBy")
@@ -2812,9 +2813,12 @@ model MetricRollup {
   min       Float?
   max       Float?
   tags      Json?
+  /// Operations rollups only: the user, runbook, policy or automation version the row is about.
+  subjectKey String?
   createdAt DateTime @default(now())
 
   @@index([name, bucket])
+  @@index([name, subjectKey, bucket], map: "idx_metric_rollup_subject")
   @@index([serviceId, bucket])
   @@index([bucket])
 }
@@ -4084,6 +4088,7 @@ model RunbookExecution {
   @@index([serviceId])
   @@index([serviceId, createdAt], map: "idx_runbook_execution_service_recent")
   @@index([runbookId])
+  @@index([completedAt], map: "idx_runbook_execution_completed")
   @@index([runbookVersionId])
   @@index([triggerId])
   @@index([resolvedTargetAgentId])
@@ -4979,6 +4984,73 @@ enum IntelligenceEvaluationStatus {
   FAILED
 }
 
+enum OpsInsightScopeType {
+  SERVICE
+  POLICY
+  SCHEDULE
+  RUNBOOK
+  USER
+  TEAM
+}
+
+// Declared lowest first: max("severity") is the highest severity.
+enum OpsInsightSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum OpsInsightStatus {
+  OPEN
+  ACCEPTED
+  DISMISSED
+  RESOLVED
+}
+
+// One stored operations insight (Workstream J). Recomputation updates the row on its unique key; an insight
+// that is no longer produced is RESOLVED, never deleted, so a person's decision is kept.
+model OpsInsight {
+  id          String              @id @default(cuid())
+  scopeType   OpsInsightScopeType
+  scopeId     String
+  kind        String
+  key         String              @default("")
+  area        String
+  severity    OpsInsightSeverity
+  title       String
+  summary     String
+  evidence    Json
+  /// In-app path of the pre-filled editor or draft this insight opens. A person publishes there.
+  draftHref   String?
+  inputHash   String
+  status      OpsInsightStatus    @default(OPEN)
+  generation  Int                 @default(0)
+  firstSeenAt DateTime            @default(now())
+  lastSeenAt  DateTime            @default(now())
+  resolvedAt  DateTime?
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  decidedBy   User?               @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@unique([scopeType, scopeId, kind, key], map: "uq_ops_insight_scope_kind_key")
+  @@index([status, severity(sort: Desc), lastSeenAt(sort: Desc), id(sort: Desc)], map: "idx_ops_insight_inbox")
+  @@index([status, updatedAt], map: "idx_ops_insight_retention")
+  @@index([decidedById], map: "idx_ops_insight_decided_by")
+}
+
+// When a scope's insights were last computed and from which inputs: unchanged inputs are skipped.
+model OpsInsightScopeState {
+  scopeType  OpsInsightScopeType
+  scopeId    String
+  inputHash  String
+  computedAt DateTime
+
+  @@id([scopeType, scopeId])
+  @@index([scopeType, computedAt], map: "idx_ops_insight_scope_due")
+}
+
 // Singleton. Every operational knob is edited from the UI and audited; revision is an optimistic lock.
 model IntelligenceSettings {
   id                          String   @id @default("default")
@@ -4996,6 +5068,14 @@ model IntelligenceSettings {
   feedbackRetentionDays       Int      @default(730)
   /// Send incoming on-call responders a deterministic handoff summary at each shift rotation.
   handoffSummaryEnabled       Boolean  @default(false)
+  /// Operations insights (Workstream J): the lane job, then one switch per area. All off by default.
+  opsInsightsEnabled              Boolean  @default(false)
+  opsInsightsAutomationEnabled    Boolean  @default(false)
+  opsInsightsEscalationEnabled    Boolean  @default(false)
+  opsInsightsOnCallEnabled        Boolean  @default(false)
+  opsInsightsPostmortemsEnabled   Boolean  @default(false)
+  opsInsightsRunbooksEnabled      Boolean  @default(false)
+  opsInsightsNotificationsEnabled Boolean  @default(false)
   revision                    Int      @default(1)
   updatedBy                   String?
   createdAt                   DateTime @default(now())
