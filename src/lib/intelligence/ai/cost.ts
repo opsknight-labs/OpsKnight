@@ -493,6 +493,10 @@ export interface SpendSlice {
   tokens: number;
   costMicros: number;
   unpricedRequests: number;
+  /** Answers served from the result cache (no model call). */
+  cacheHits: number;
+  /** Net dollars saved by the result cache and the provider's prompt cache; never below zero. */
+  savedMicros: number;
 }
 
 export interface SpendBreakdown {
@@ -503,7 +507,18 @@ export interface SpendBreakdown {
   byTeam: SpendSlice[];
   byCapability: SpendSlice[];
   byModel: SpendSlice[];
-  total: { requests: number; tokens: number; costMicros: number; unpricedRequests: number };
+  total: {
+    requests: number;
+    tokens: number;
+    costMicros: number;
+    unpricedRequests: number;
+    cacheHits: number;
+    savedMicros: number;
+    /** Prompt tokens the provider served from its cache (already inside `tokens`). */
+    cacheReadTokens: number;
+    /** Tokens result-cache hits did not spend (not inside `tokens`). */
+    savedTokens: number;
+  };
 }
 
 const SLICE_LIMIT = 12;
@@ -531,6 +546,10 @@ export async function getSpendBreakdown(
       outputTokens: true,
       costMicros: true,
       unpricedRequests: true,
+      cacheReadTokens: true,
+      resultCacheHits: true,
+      savedTokens: true,
+      savedCostMicros: true,
     },
     // Bounded: days × teams × capabilities × models. A runaway cardinality is cut, not loaded.
     take: 20_000,
@@ -554,7 +573,11 @@ export async function getSpendBreakdown(
         tokens: 0,
         costMicros: 0,
         unpricedRequests: 0,
+        cacheHits: 0,
+        savedMicros: 0,
       };
+      slice.cacheHits += row.resultCacheHits ?? 0;
+      slice.savedMicros += Number(row.savedCostMicros ?? 0);
       slice.requests += row.requests;
       slice.tokens += row.inputTokens + row.outputTokens;
       slice.costMicros += Number(row.costMicros);
@@ -564,6 +587,9 @@ export async function getSpendBreakdown(
     const sorted = [...slices.values()].sort(
       (a, b) => b.costMicros - a.costMicros || b.tokens - a.tokens || a.key.localeCompare(b.key)
     );
+    // A write-only period nets negative (the cache-write premium); that is a cost, not a saving, and it is
+    // already inside costMicros, so the saving shown is floored at zero.
+    for (const slice of sorted) slice.savedMicros = Math.max(0, slice.savedMicros);
     if (sorted.length <= SLICE_LIMIT) return sorted;
     const rest = sorted.slice(SLICE_LIMIT - 1).reduce(
       (other, slice) => ({
@@ -572,8 +598,19 @@ export async function getSpendBreakdown(
         tokens: other.tokens + slice.tokens,
         costMicros: other.costMicros + slice.costMicros,
         unpricedRequests: other.unpricedRequests + slice.unpricedRequests,
+        cacheHits: other.cacheHits + slice.cacheHits,
+        savedMicros: other.savedMicros + slice.savedMicros,
       }),
-      { key: 'other', label: 'Other', requests: 0, tokens: 0, costMicros: 0, unpricedRequests: 0 }
+      {
+        key: 'other',
+        label: 'Other',
+        requests: 0,
+        tokens: 0,
+        costMicros: 0,
+        unpricedRequests: 0,
+        cacheHits: 0,
+        savedMicros: 0,
+      }
     );
     return [...sorted.slice(0, SLICE_LIMIT - 1), rest];
   };
@@ -597,12 +634,24 @@ export async function getSpendBreakdown(
     byModel,
     total: byModel.reduce(
       (total, slice) => ({
+        ...total,
         requests: total.requests + slice.requests,
         tokens: total.tokens + slice.tokens,
         costMicros: total.costMicros + slice.costMicros,
         unpricedRequests: total.unpricedRequests + slice.unpricedRequests,
+        cacheHits: total.cacheHits + slice.cacheHits,
+        savedMicros: total.savedMicros + slice.savedMicros,
       }),
-      { requests: 0, tokens: 0, costMicros: 0, unpricedRequests: 0 }
+      {
+        requests: 0,
+        tokens: 0,
+        costMicros: 0,
+        unpricedRequests: 0,
+        cacheHits: 0,
+        savedMicros: 0,
+        cacheReadTokens: rows.reduce((sum, row) => sum + (row.cacheReadTokens ?? 0), 0),
+        savedTokens: rows.reduce((sum, row) => sum + (row.savedTokens ?? 0), 0),
+      }
     ),
   };
 }

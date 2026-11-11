@@ -134,6 +134,8 @@ export const aiSettingsInputSchema = z
     squireChatOpsEnabled: z.boolean().optional(),
     squireMcpEnabled: z.boolean().optional(),
     squireMobileEnabled: z.boolean().optional(),
+    // Result cache. Optional: a client that does not send it keeps the saved value.
+    resultCacheEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();

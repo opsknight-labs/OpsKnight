@@ -611,7 +611,7 @@ describe('intelligence data model contracts', () => {
     const schema = read(join(root, 'prisma/schema.prisma'));
     const tables = [
       ...schema.matchAll(
-        /^model ((?:Intelligence|Correlation|IncidentFingerprint|AlertFingerprint|DependencyObservation|IncidentEmbedding|IncidentRelationship|ServiceDependency|ChangeEvent|Squire|Knowledge|OpsInsight)\w*) \{/gm
+        /^model ((?:Intelligence|Correlation|IncidentFingerprint|AlertFingerprint|DependencyObservation|IncidentEmbedding|IncidentRelationship|ServiceDependency|ChangeEvent|Squire|Knowledge|OpsInsight|AiResultCache)\w*) \{/gm
       ),
     ].map(match => match[1]);
     expect(tables.length).toBeGreaterThan(10);
@@ -635,6 +635,12 @@ describe('intelligence data model contracts', () => {
       [
         /(?:INSERT INTO|UPDATE|DELETE FROM) "AiUsageBreakdownDay"|aiUsageBreakdownDay\.(?:create|upsert|update|delete)/,
         ['ai/scoped-budget.ts'],
+      ],
+      [
+        // Cached answers are written, counted and purged only by the cache itself, which is what keeps
+        // every entry encrypted, scoped and never stored for a failed or refused call.
+        /(?:INSERT INTO|UPDATE|DELETE FROM) "AiResultCache"|aiResultCache\.(?:create|upsert|update|delete)/,
+        ['ai/result-cache.ts'],
       ],
       [
         /(?:INSERT INTO|UPDATE|DELETE FROM) "AiBudget"|aiBudget\.(?:create|upsert|update|delete)/,

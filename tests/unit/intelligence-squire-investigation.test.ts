@@ -99,7 +99,7 @@ function inputFor(
   return {
     question: 'Why is checkout failing?',
     preamble: [{ role: 'system', content: 'rules', dataClass: 'PERSONAL' }],
-    context: { actorId: 'u1', dataClass: 'PERSONAL' },
+    context: { actorId: 'u1', callSite: 'interactive', dataClass: 'PERSONAL' },
     dataClass: 'PERSONAL',
     planner,
     diagnoser,
@@ -333,7 +333,12 @@ describe('investigation loop', () => {
     const { outcome } = await drain(
       runInvestigation(
         inputFor(h, scriptedPort([]), scriptedPort([]), {
-          context: { actorId: 'u', dataClass: 'PERSONAL', signal: controller.signal },
+          context: {
+            actorId: 'u',
+            callSite: 'interactive',
+            dataClass: 'PERSONAL',
+            signal: controller.signal,
+          },
         })
       )
     );
@@ -371,7 +376,11 @@ describe('investigation trigger', () => {
   });
 
   it('asks the classifier only for ambiguous questions on an incident, and treats failure as no', async () => {
-    const context = { actorId: 'u', dataClass: 'PERSONAL' as const };
+    const context = {
+      actorId: 'u',
+      callSite: 'interactive' as const,
+      dataClass: 'PERSONAL' as const,
+    };
     const classifier = vi.fn(
       async () =>
         ({

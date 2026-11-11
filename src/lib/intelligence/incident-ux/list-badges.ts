@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { logger } from '@/lib/logger';
+import { deterministicOnly } from '../ai/call-site';
 import { incidentReadableSql } from './readable-sql';
 import { incidentRef, noiseBadgeKind, noiseBadgeLabel } from './explain';
 
@@ -48,7 +49,11 @@ const GROUP_ACTIONS = Prisma.sql`ARRAY['GROUP_CHILD']::"PrePagingAction"[]`;
 const NOISE_CONTROLS = Prisma.sql`ARRAY['MAINTENANCE','SUPPRESSION','FLAPPING','ORCHESTRATION']::"PrePagingControl"[]`;
 const NOISE_ACTIONS = Prisma.sql`ARRAY['SUPPRESS','DROP','DOWNGRADE','HOLD']::"PrePagingAction"[]`;
 
-export async function getIncidentListBadges(
+/** List badges are deterministic: the gateway refuses any model call made while they load. */
+export const getIncidentListBadges: typeof loadIncidentListBadges = (...args) =>
+  deterministicOnly('incident list badges', () => loadIncidentListBadges(...args));
+
+async function loadIncidentListBadges(
   incidentIds: readonly string[],
   actor: AuthorizationActor,
   options: { now?: Date } = {},

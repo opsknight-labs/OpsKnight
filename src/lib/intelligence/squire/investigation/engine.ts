@@ -6,6 +6,7 @@ import type {
   AiToolDefinition,
   LanguageModelPort,
 } from '../../ai/port';
+import { outputTokensFor } from '../../ai/output-limits';
 import { redactSecrets } from '../../ai/redact';
 import type { SquireInvestigationStep } from '../contract';
 
@@ -341,7 +342,7 @@ export async function* runInvestigation(
         messages,
         schema: planSchema,
         schemaName: 'investigation_step',
-        maxOutputTokens: 600,
+        maxOutputTokens: outputTokensFor('squire.plan'),
       });
       tokens += result.usage.inputTokens + result.usage.outputTokens;
       plan = result.object;
@@ -457,7 +458,7 @@ export async function* runInvestigation(
       messages,
       schema: diagnosisSchema,
       schemaName: 'investigation_conclusion',
-      maxOutputTokens: 1_200,
+      maxOutputTokens: outputTokensFor('squire.diagnose'),
     });
     tokens += result.usage.inputTokens + result.usage.outputTokens;
     const rendered = renderDiagnosis(result.object, ledger, meta);

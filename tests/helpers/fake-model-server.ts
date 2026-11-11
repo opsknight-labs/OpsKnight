@@ -8,6 +8,10 @@ type Scripted = {
   content?: string;
   toolCall?: { name: string; args: string };
   usage?: [number, number];
+  /** Prompt tokens reported as served from the provider's prompt cache. */
+  cachedTokens?: number;
+  /** Overrides the finish reason, e.g. `content_filter` for a refusal or `length` for a cut-off. */
+  finishReason?: string;
 };
 
 export interface FakeServer {
@@ -81,6 +85,9 @@ export async function startFakeModel(): Promise<FakeServer> {
         prompt_tokens: promptTokens,
         completion_tokens: completionTokens,
         total_tokens: promptTokens + completionTokens,
+        ...(next.cachedTokens
+          ? { prompt_tokens_details: { cached_tokens: next.cachedTokens } }
+          : {}),
       };
       const message = next.toolCall
         ? {
@@ -95,7 +102,7 @@ export async function startFakeModel(): Promise<FakeServer> {
             ],
           }
         : { role: 'assistant', content: next.content ?? '' };
-      const finish = next.toolCall ? 'tool_calls' : 'stop';
+      const finish = next.finishReason ?? (next.toolCall ? 'tool_calls' : 'stop');
       if (body.stream === true) {
         res.writeHead(200, { 'content-type': 'text/event-stream' });
         const chunk = (delta: unknown, finishReason: string | null = null) =>

@@ -182,6 +182,7 @@ type SettingsValues = {
   squireChatOpsEnabled?: boolean;
   squireMcpEnabled?: boolean;
   squireMobileEnabled?: boolean;
+  resultCacheEnabled?: boolean;
   revision: number;
 };
 
@@ -366,6 +367,15 @@ export function AiSettingsForm({
         label="Semantic search for similar incidents"
         help="Sends masked incident titles (numbers and identifiers removed) to a provider with an embedding model, to find similar incidents by meaning, not just wording. Vectors follow fingerprint retention."
         defaultChecked={settings.embeddingsEnabled}
+        disabled={disabled}
+      />
+      {/* Marks that this form carries the switch, so an unchecked box means "off" rather than "keep". */}
+      <input type="hidden" name="resultCachePresent" value="1" />
+      <Check
+        name="resultCacheEnabled"
+        label="Reuse answers for unchanged facts"
+        help="When a summary, postmortem draft, briefing or handoff is requested again and nothing it reads has changed, the earlier answer is reused and no tokens are spent. Answers are encrypted, kept for up to 24 hours, never shared across teams or data classes, and dropped when a prompt changes."
+        defaultChecked={settings.resultCacheEnabled ?? false}
         disabled={disabled}
       />
       <Check

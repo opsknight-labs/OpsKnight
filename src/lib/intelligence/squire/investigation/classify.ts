@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { outputTokensFor } from '../../ai/output-limits';
 import type { AiDataClass, AiRequestContext, LanguageModelPort } from '../../ai/port';
 
 /** Asking for an investigation outright, or for a cause. */
@@ -59,7 +60,7 @@ export async function wantsInvestigation(
       ],
       schema: verdictSchema,
       schemaName: 'investigation_intent',
-      maxOutputTokens: 64,
+      maxOutputTokens: outputTokensFor('squire.classify'),
     });
     return result.object.investigate;
   } catch {

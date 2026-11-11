@@ -194,7 +194,12 @@ export async function recordAiUsage(
       await recordUsageBreakdown(
         tx,
         day,
-        { inputTokens, outputTokens },
+        {
+          inputTokens,
+          outputTokens,
+          cacheReadTokens: clampTokens(usage.cacheReadTokens ?? 0),
+          cacheWriteTokens: clampTokens(usage.cacheWriteTokens ?? 0),
+        },
         {
           ...attribution,
           // The hold's attribution wins: it is what the budget was checked against.

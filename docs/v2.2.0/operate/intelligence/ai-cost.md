@@ -9,7 +9,7 @@ reader:
   task: Track AI spend and stop one team or feature from using up the shared AI allowance.
 verification:
   level: test
-  verified_at: 2026-11-08
+  verified_at: 2026-11-11
   evidence:
     [
       src/lib/intelligence/ai/pricing.ts,
@@ -21,6 +21,9 @@ verification:
       tests/unit/intelligence-ai-pricing.test.ts,
       tests/integration/intelligence/ai-cost-budgets.test.ts,
       tests/components/ai-spend-panel.test.tsx,
+      src/lib/intelligence/ai/result-cache.ts,
+      tests/integration/intelligence/ai-result-cache.test.ts,
+      tests/unit/intelligence-ai-token-efficiency.test.ts,
     ]
 ---
 
@@ -37,7 +40,7 @@ daily token budgets apply.
 
 **Spend and budgets** shows the last 7 or 30 UTC days (today included):
 
-- total dollars, tokens and requests, and a daily bar chart (open **Show daily spend as a table** for exact numbers);
+- total dollars, tokens and requests, **Saved by cache** when a cache saved anything in the period, and a daily bar chart (open **Show daily spend as a table** for exact numbers);
 - spend **by team**, **by capability** (assistant chat, summaries, diagnosis, postmortem drafts, classification,
   embeddings, provider tests) and **by model**, largest first, with the twelfth and later grouped as **Other**;
 - today's usage against every enabled budget, coloured amber from 80% and red at 100%.
@@ -49,6 +52,33 @@ Each call is charged to exactly one team, so team totals add up to the overall t
 3. otherwise **No team** (background embedding and provider tests are always **No team**).
 
 Usage recorded before this feature existed has tokens but no dollars, and is not broken down by team.
+
+## Spend less on repeated requests
+
+Two caches reduce spend, and **Saved by cache** adds up what both saved.
+
+**Provider prompt cache (always on where the provider supports it).** Anthropic and Bedrock are asked to cache
+the fixed start of each prompt, and OpenAI-style providers cache long prefixes on their own. OpsKnight records
+the cached prompt tokens the provider reports. For Claude models, cached reads are priced at one tenth of the
+input price and cache writes at 1.25 times the input price. For other models OpsKnight does not know the
+discount and charges cached tokens at the full input price, so spend for those models can be overstated, never
+understated; set **Your prices** if you need exact figures.
+
+**Answer reuse (off by default).** Tick **Reuse answers for unchanged facts** under **Assistant & AI** settings.
+When an incident summary, postmortem draft, proactive note or handoff narrative is requested again and nothing
+it reads has changed, OpsKnight returns the earlier answer and calls no model:
+
+- the reused answer costs no tokens, takes nothing from any budget, and is counted as a reused answer;
+- answers are encrypted, kept for at most 24 hours, and removed by the retention job;
+- an answer is reused only for the same data class and team, and a handoff narrative only for the same person;
+- changing a prompt or the model starts fresh, and a failed, refused or cut-off answer is never kept;
+- any new note, timeline event or status change makes the request new, so people never see a stale summary
+  presented as current.
+
+Assistant chat is never reused: its answers depend on live lookups.
+
+List pages, badges, the wallboard and the Intelligence overview never call a model. This is enforced in the
+gateway, not left to each page.
 
 ## Set model prices
 
@@ -110,5 +140,5 @@ deterministic Intelligence engine never depend on AI budgets.
 
 ## Roll back
 
-Remove or untick the budgets. Prices and spend records are inert without budgets and need no clean-up; the
+Remove or untick the budgets, and untick **Reuse answers for unchanged facts** (stored answers expire within 24 hours). Prices and spend records are inert without budgets and need no clean-up; the
 database changes are additive and safe to leave in place on a downgrade.

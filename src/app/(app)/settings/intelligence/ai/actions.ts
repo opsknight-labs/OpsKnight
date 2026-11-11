@@ -78,6 +78,10 @@ export async function saveAiSettingsAction(
               squireMobileEnabled: checked(form, 'squireMobileEnabled'),
             }
           : {}),
+        // Only a form that rendered the switch may change it (an unchecked box is absent).
+        resultCacheEnabled: form.has('resultCachePresent')
+          ? checked(form, 'resultCacheEnabled')
+          : undefined,
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }

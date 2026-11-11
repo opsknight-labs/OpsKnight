@@ -83,7 +83,7 @@ const provider = (name: string, url: string, overrides: Record<string, unknown> 
 });
 
 const request = (actorId: string, extra: Partial<AiGenerateRequest> = {}): AiGenerateRequest => ({
-  context: { actorId, capability: 'SQUIRE_CHAT', dataClass: 'INTERNAL' },
+  context: { actorId, capability: 'SQUIRE_CHAT', callSite: 'interactive', dataClass: 'INTERNAL' },
   messages: [{ role: 'user', content: 'hello' }],
   ...extra,
 });
@@ -555,7 +555,12 @@ it('cannot reuse a lower-clearance port for a higher-class request or silently d
   await saveAiProvider(null, provider('Internal only', primary.url), actor);
   const port = (await resolveGatewayPort('INTERNAL'))!;
   const sensitive = request(admin.id, {
-    context: { actorId: admin.id, capability: 'SQUIRE_CHAT', dataClass: 'SENSITIVE' },
+    context: {
+      actorId: admin.id,
+      capability: 'SQUIRE_CHAT',
+      callSite: 'interactive',
+      dataClass: 'SENSITIVE',
+    },
   });
   await expect(port.generate(sensitive)).rejects.toMatchObject({ code: 'NO_PROVIDER' });
   const mismatched = request(admin.id, {

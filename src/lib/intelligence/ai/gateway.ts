@@ -27,7 +27,8 @@ import {
 } from './budget';
 import { ProviderBreakers } from './breaker';
 import { attributeTeam, priceForModel } from './cost';
-import { costMicrosFor } from './pricing';
+import { costMicrosFor, providerCacheSavedMicros } from './pricing';
+import { callSiteRefusal } from './call-site';
 import { PostgresBreakerStore } from './breaker-store';
 import { embeddingSpaceIdentity } from '../semantic/identity';
 import { AI_SETTINGS_BOUNDS } from './contract';
@@ -48,6 +49,7 @@ import {
   type AiStreamEvent,
   type AiToolCall,
   type AiToolDefinition,
+  type AiUsage,
   type LanguageModelPort,
 } from './port';
 import {
@@ -63,7 +65,9 @@ export type AiGatewayErrorCode =
   | 'NO_PROVIDER'
   | 'ALL_PROVIDERS_FAILED'
   | 'ABORTED'
-  | 'OUTPUT_INVALID';
+  | 'OUTPUT_INVALID'
+  /** The request carried no call-site tag, or was made while a list view or badge was rendering. */
+  | 'CALL_SITE_REFUSED';
 
 export class AiGatewayError extends Error {
   constructor(
@@ -323,6 +327,31 @@ interface GatewayContextData {
   chain: GatewayProvider[];
 }
 
+/** Token counts as the SDK reports them; `inputTokens` is the total and includes both cache figures. */
+export function usageOf(usage: {
+  inputTokens?: number;
+  outputTokens?: number;
+  inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number };
+}): AiUsage {
+  const read = usage.inputTokenDetails?.cacheReadTokens ?? 0;
+  const write = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
+  return {
+    inputTokens: usage.inputTokens ?? 0,
+    outputTokens: usage.outputTokens ?? 0,
+    ...(read > 0 ? { cacheReadTokens: read } : {}),
+    ...(write > 0 ? { cacheWriteTokens: write } : {}),
+  };
+}
+
+/**
+ * Deterministic-first gate: every model call says where it comes from, and none may start while a list view
+ * or badge is rendering. Checked before admission so a refused call costs no rate-limit slot and no tokens.
+ */
+export function assertCallSite(request: AiGenerateRequest): void {
+  const refusal = callSiteRefusal(request.context);
+  if (refusal) throw new AiGatewayError('CALL_SITE_REFUSED', refusal);
+}
+
 /** Prompt size estimate for a call that ended before the provider reported usage. */
 function estimatedInput(request: AiGenerateRequest): number {
   return estimateTokens(request.messages.map(message => message.content).join('\n'));
@@ -330,6 +359,10 @@ function estimatedInput(request: AiGenerateRequest): number {
 
 class GatewayPort implements LanguageModelPort {
   constructor(private readonly data: GatewayContextData) {}
+
+  get model(): string | undefined {
+    return this.data.chain[0]?.model;
+  }
 
   /** One team attribution per request, shared by every provider attempt and its settlement. */
   private readonly teams = new WeakMap<AiGenerateRequest, Promise<string | null>>();
@@ -344,6 +377,7 @@ class GatewayPort implements LanguageModelPort {
   }
 
   private async admit(request: AiGenerateRequest) {
+    assertCallSite(request);
     const decision = await admitAiRequest(request.context.actorId, this.data.settings);
     if (!decision.allowed) {
       throw new AiGatewayError(
@@ -455,6 +489,7 @@ class GatewayPort implements LanguageModelPort {
       // Metadata only: prompts and answers are never stored.
       details: {
         capability: request.context.capability,
+        callSite: request.context.callSite,
         providerId: result.served.providerId,
         model: result.served.model,
         fallbackDepth: result.served.fallbackDepth,
@@ -489,6 +524,7 @@ class GatewayPort implements LanguageModelPort {
       capability: request.context.capability,
       teamId,
       costMicros: costMicrosFor(result.usage, price),
+      cacheSavedMicros: providerCacheSavedMicros(result.usage, price),
     };
   }
 
@@ -532,10 +568,7 @@ class GatewayPort implements LanguageModelPort {
             return generated;
           }
         );
-        const usage = {
-          inputTokens: result.totalUsage.inputTokens ?? 0,
-          outputTokens: result.totalUsage.outputTokens ?? 0,
-        };
+        const usage = usageOf(result.totalUsage);
         const served = { providerId: provider.id, model: provider.model, fallbackDepth: depth };
         // Validated again here, independently of the SDK, so nothing unchecked ever reaches a caller.
         let candidate: unknown;
@@ -554,7 +587,7 @@ class GatewayPort implements LanguageModelPort {
         }
         accounted = true;
         await this.finish(request, { usage, served }, { outputValid: true }, reservation);
-        return { object: checked.data, usage, served };
+        return { object: checked.data, usage, served, finishReason: result.finishReason };
       } catch (error) {
         if (request.context.signal?.aborted) {
           breakers.release(provider.id);
@@ -634,11 +667,9 @@ class GatewayPort implements LanguageModelPort {
         const served: AiGenerateResult = {
           text: result.text,
           toolCalls: proposedCalls(result.steps, request.tools),
-          usage: {
-            inputTokens: result.totalUsage.inputTokens ?? 0,
-            outputTokens: result.totalUsage.outputTokens ?? 0,
-          },
+          usage: usageOf(result.totalUsage),
           served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
+          finishReason: result.finishReason,
         };
         accounted = true;
         await this.finish(request, served, {}, reservation);
@@ -752,10 +783,7 @@ class GatewayPort implements LanguageModelPort {
         const result: AiGenerateResult = {
           text,
           toolCalls: proposedCalls(steps, request.tools),
-          usage: {
-            inputTokens: totalUsage.inputTokens ?? 0,
-            outputTokens: totalUsage.outputTokens ?? 0,
-          },
+          usage: usageOf(totalUsage),
           served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
         };
         span.setAttribute('ai.tokens.input', result.usage.inputTokens);

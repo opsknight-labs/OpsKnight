@@ -78,7 +78,7 @@ async function ask(capability: 'DIAGNOSE' | 'SQUIRE_CHAT' | 'CLASSIFY', actorId:
   const port = await resolveLanguageModel(capability, 'PERSONAL');
   if (!port) throw new Error('no port');
   return port.generate({
-    context: { actorId, capability, dataClass: 'PERSONAL' },
+    context: { actorId, capability, callSite: 'interactive', dataClass: 'PERSONAL' },
     messages: [{ role: 'user', content: 'hello', dataClass: 'PERSONAL' }],
   });
 }

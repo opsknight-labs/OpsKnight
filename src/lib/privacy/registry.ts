@@ -401,9 +401,11 @@ export const personalDataRegistry = [
       'AiModelPrice',
       'AiBudget',
       'AiUsageBreakdownDay',
+      'AiResultCache',
     ],
     fields: [
       'AiProvider.apiKeyEncrypted',
+      'AiResultCache.outputEncrypted',
       'ObservabilityConnection.credentialEncrypted',
       'ObservabilityConnection.createdById',
       'ObservabilityConnection.updatedById',

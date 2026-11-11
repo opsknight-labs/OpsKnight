@@ -3,7 +3,10 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { AiGatewayError, registerAiGateway } from '../ai/gateway';
+import { incidentBrief } from '../ai/brief';
+import { outputTokensFor } from '../ai/output-limits';
 import { resolveLanguageModel, type AiOutputSchema } from '../ai/port';
+import { cachedGenerateStructured } from '../ai/result-cache';
 import { getGuidance, getBuiltInPrompt, renderPrompt } from '../ai/prompts';
 import { getAiSettings } from '../ai/settings';
 import { getResponseIntelligenceForActor } from '../response/view';
@@ -19,11 +22,6 @@ import {
 
 const MAX_EVENTS = 60;
 const MAX_NOTES = 40;
-const EVENT_CHARS = 300;
-const NOTE_CHARS = 600;
-
-const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text);
-const iso = (date: Date) => date.toISOString().replace('.000Z', 'Z');
 
 /**
  * Facts about one incident, gathered only through what the actor may read, as a bounded plain-text brief.
@@ -57,53 +55,40 @@ async function buildIncidentBrief(
     getSimilarIncidentsForActor(incident.id, actor),
   ]);
 
-  const out = [
-    `Incident: ${incident.title}`,
-    `Service: ${incident.serviceName}`,
-    `Status: ${incident.status.toLowerCase()}; urgency ${incident.urgency.toLowerCase()}`,
-    `Opened: ${iso(incident.createdAt)}`,
-    details?.acknowledgedAt
-      ? `Acknowledged: ${iso(details.acknowledgedAt)}`
-      : 'Acknowledged: not yet',
-    details?.resolvedAt ? `Resolved: ${iso(details.resolvedAt)}` : 'Resolved: not yet',
-  ];
-  if (details?.description) out.push(`Description: ${clip(details.description, 1_000)}`);
-  if (events.length) {
-    out.push('Timeline (oldest first):');
-    for (const event of [...events].reverse())
-      out.push(`- ${iso(event.createdAt)} ${clip(event.message, EVENT_CHARS)}`);
-  }
-  if (notes.length) {
-    out.push('Responder notes (oldest first):');
-    for (const note of [...notes].reverse()) {
-      out.push(
-        `- ${iso(note.createdAt)} ${note.user?.name ?? 'Someone'}: ${clip(note.content, NOTE_CHARS)}`
-      );
-    }
-  }
-  if (response?.changes.length) {
-    out.push('Changes shortly before onset (correlation only, not confirmed causes):');
-    for (const change of response.changes)
-      out.push(
-        `- ${change.summary} (${change.kind.toLowerCase()}, ${change.leadMinutes} min before)`
-      );
-  }
-  if (response?.upstreamIncidents.length) {
-    out.push('Upstream incidents shortly before (correlation only):');
-    for (const item of response.upstreamIncidents)
-      out.push(`- ${item.title} on ${item.serviceName}, ${item.leadMinutes} min before`);
-  }
-  if (similar?.length) {
-    out.push('Similar past incidents:');
-    for (const item of similar)
-      out.push(`- ${item.title} (${item.status.toLowerCase()}, ${item.matchPercent}% match)`);
-  }
-  if (response?.runbooks.length) {
-    out.push('Runbooks that have worked on this service:');
-    for (const runbook of response.runbooks)
-      out.push(`- ${runbook.name} (${runbook.succeeded} of ${runbook.eligible} runs succeeded)`);
-  }
-  return out.join('\n');
+  return incidentBrief({
+    title: incident.title,
+    serviceName: incident.serviceName,
+    status: incident.status,
+    urgency: incident.urgency,
+    createdAt: incident.createdAt,
+    acknowledgedAt: details?.acknowledgedAt,
+    resolvedAt: details?.resolvedAt,
+    description: details?.description,
+    timeline: [...events].reverse().map(event => ({ at: event.createdAt, text: event.message })),
+    notes: [...notes].reverse().map(note => ({
+      at: note.createdAt,
+      author: note.user?.name ?? 'Someone',
+      text: note.content,
+    })),
+    changes: response?.changes.map(change => ({
+      label: `${change.summary} (${change.kind.toLowerCase()})`,
+      minutesBefore: change.leadMinutes,
+    })),
+    upstream: response?.upstreamIncidents.map(item => ({
+      title: item.title,
+      serviceName: item.serviceName,
+      minutesBefore: item.leadMinutes,
+    })),
+    similar: similar?.map(item => ({
+      label: `${item.title} (${item.status.toLowerCase()})`,
+      matchPercent: item.matchPercent,
+    })),
+    runbooks: response?.runbooks.map(runbook => ({
+      label: runbook.name,
+      succeeded: runbook.succeeded,
+      eligible: runbook.eligible,
+    })),
+  });
 }
 
 type DraftResult<T> =
@@ -130,10 +115,11 @@ async function generate<T>(
 
   const prompt = renderPrompt(promptId, {}, await getGuidance(promptId));
   try {
-    const result = await port.generateStructured({
+    const result = await cachedGenerateStructured(port, {
       context: {
         actorId: actor.id,
         capability: definition.capability,
+        callSite: 'interactive',
         dataClass: definition.dataClass,
         incidentId,
         prompt: prompt.meta,
@@ -147,8 +133,7 @@ async function generate<T>(
       ],
       schema,
       schemaName,
-      // A postmortem draft fills many fields; a summary is short.
-      maxOutputTokens: definition.capability === 'POSTMORTEM' ? 4_096 : 1_024,
+      maxOutputTokens: outputTokensFor(promptId),
     });
     return {
       ok: true,

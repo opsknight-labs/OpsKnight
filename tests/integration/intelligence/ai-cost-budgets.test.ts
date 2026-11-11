@@ -298,6 +298,7 @@ describe('gateway attribution', () => {
       context: {
         actorId: user.id,
         capability: 'DIAGNOSE',
+        callSite: 'interactive',
         dataClass: 'INTERNAL',
         incidentId: incident.id,
       },
@@ -337,7 +338,12 @@ describe('gateway attribution', () => {
     const port = await resolveGatewayPort('INTERNAL');
     await expect(
       port!.generate({
-        context: { actorId: user.id, capability: 'SUMMARIZE', dataClass: 'INTERNAL' },
+        context: {
+          actorId: user.id,
+          capability: 'SUMMARIZE',
+          callSite: 'interactive',
+          dataClass: 'INTERNAL',
+        },
         messages: [{ role: 'user', content: 'summarise this incident please' }],
       })
     ).rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
@@ -346,7 +352,12 @@ describe('gateway attribution', () => {
     model.script.push({ content: 'hi' });
     await expect(
       port!.generate({
-        context: { actorId: user.id, capability: 'SQUIRE_CHAT', dataClass: 'INTERNAL' },
+        context: {
+          actorId: user.id,
+          capability: 'SQUIRE_CHAT',
+          callSite: 'interactive',
+          dataClass: 'INTERNAL',
+        },
         messages: [{ role: 'user', content: 'hello' }],
       })
     ).resolves.toMatchObject({ text: 'hi' });

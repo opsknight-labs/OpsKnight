@@ -560,6 +560,39 @@ port, so moving to a newer SDK later is a one-adapter change.
   and `OpsKnightAiBudgetExhausted`. Only `scoped-budget.ts` writes the breakdown and only `cost.ts` writes
   prices and budgets (architecture test). The settings page shows 7/30-day spend by team, capability and model
   with dependency-free bars backed by tables. Operator guide: `docs/v2.2.0/operate/intelligence/ai-cost.md`.
+- **Token efficiency** (`ai/result-cache.ts`, `ai/call-site.ts`, `ai/brief.ts`, `ai/output-limits.ts`).
+  - _Result cache (opt-in, `AiSettings.resultCacheEnabled`)._ `cachedGenerate` / `cachedGenerateStructured` /
+    `withResultCache` wrap a resolved port. An entry in `AiResultCache` is keyed by capability, prompt id and
+    version, the routed model (`LanguageModelPort.model`), a scope key (`<data class>|team:<attributed
+team>|<caller scope>`) and a SHA-256 of the exact messages, answer-length cap and schema name. The answer
+    is encrypted with `encrypt()`, expires after 24 hours and is purged in batches by the retention job
+    (`aiResults`). Only a complete answer is stored: an error, a finish reason other than `stop` (refusal,
+    content filter, cut-off), empty text, a tool conversation or schema-invalid output never is, and a stored
+    object is validated again on read. A hit returns zero usage and `cached: true`, takes no rate-limit slot or
+    reservation, and adds only `resultCacheHits`, `savedTokens` and `savedCostMicros` to the day's breakdown
+    row. Any cache failure falls back to the live call. Callers: `summarizeIncident`, `draftPostmortem`,
+    proactive notes, the handoff narrative (scope `user:<recipient>`), and the conversation summariser when
+    its resolver wraps the port. Only `result-cache.ts` writes the table (architecture test).
+  - _Deterministic-first gate._ `AiRequestContext.callSite` (`interactive | proactive | background`) is
+    required; the gateway checks it before admission and refuses an untagged call with `CALL_SITE_REFUSED`.
+    List and badge loaders (`getIncidentListBadges`, `getWallboardNoiseTile`, overview `loadSection`) run inside
+    `deterministicOnly()`, an `AsyncLocalStorage` zone in which every model call is refused whatever its tag,
+    cached or not. `tests/architecture/ai-call-site-contract.test.ts` fails on an untagged call site, a literal
+    `maxOutputTokens` outside `ai/`, or a component or list loader importing the gateway.
+  - _Compact inputs._ `incidentBrief()` builds the one incident brief used by the summary, the postmortem
+    draft and the proactive notes, with a hard character budget per section (`BRIEF_BUDGETS`); a section keeps
+    whole lines and states how many it left out, and timelines and notes keep the most recent lines. The
+    handoff narrative uses the same `renderBrief()` and leaves out incident ages so an unchanged shift hashes
+    the same. `AI_OUTPUT_TOKENS` is the single per-feature answer-length table.
+  - _Honest accounting._ The gateway reads `inputTokenDetails.cacheReadTokens` / `cacheWriteTokens` from the
+    AI SDK (Anthropic `cache_read_input_tokens` / `cache_creation_input_tokens`, Bedrock
+    `cacheReadInputTokens` / `cacheWriteInputTokens`, OpenAI-style `prompt_tokens_details.cached_tokens`);
+    `inputTokens` is the total and already includes them. `costMicrosFor` prices uncached, cache-read and
+    cache-write tokens separately: Claude families on Anthropic, Bedrock and Vertex use 0.1x input for reads
+    and 1.25x for the 5-minute writes the gateway requests; every other family is charged the full input rate
+    (never an invented discount). `AiUsageBreakdownDay.cacheReadTokens/cacheWriteTokens/resultCacheHits/
+savedTokens/savedCostMicros` are nullable and additive; the spend page shows **Saved by cache** (result
+    cache plus net provider-cache saving, floored at zero) and the saving per capability.
 
 **Observability connectors (opt-in).** Settings → Intelligence → Connections stores read-only
 `ObservabilityConnection` rows: Prometheus, Loki, Tempo, Grafana (through its data-source proxy),

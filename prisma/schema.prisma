@@ -5763,6 +5763,8 @@ model AiSettings {
   capabilityRouting       Json?
   // Multi-step investigation mode for diagnostic questions (plan, parallel reads, ranked hypotheses).
   squireInvestigationEnabled Boolean @default(false)
+  // Reuse an earlier AI answer when the exact same input is asked again in the same scope. Opt-in.
+  resultCacheEnabled      Boolean  @default(false)
   revision                Int      @default(1)
   updatedBy               String?
   updatedAt               DateTime @updatedAt
@@ -5995,9 +5997,42 @@ model AiUsageBreakdownDay {
   costMicros       BigInt   @default(0)
   // Calls whose model had no price; their tokens count, their dollars are unknown.
   unpricedRequests Int      @default(0)
+  // Provider prompt-cache tokens (a subset of inputTokens) and result-cache reuse. Null on rows written
+  // before these columns existed.
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
+  resultCacheHits  Int?
+  // Tokens a result-cache hit did not spend, and dollars saved by both caches (net of cache-write premiums).
+  savedTokens      Int?
+  savedCostMicros  BigInt?
   updatedAt        DateTime @updatedAt
 
   @@id([day, teamId, capability, providerKind, model])
+}
+
+// One stored AI answer, keyed by the hash of the exact model input plus the scope it was produced for. The
+// answer is encrypted; rows expire and are swept by the retention job. A new prompt version never matches.
+model AiResultCache {
+  id              String   @id @default(cuid())
+  capability      String
+  promptId        String
+  promptVersion   Int
+  model           String
+  // Data class and team the answer was produced for; an identical input in another scope is a miss.
+  scopeKey        String
+  inputHash       String
+  outputEncrypted String
+  providerKind    String
+  servedModel     String
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  costMicros      BigInt?
+  hits            Int      @default(0)
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@unique([capability, promptId, promptVersion, model, scopeKey, inputHash], map: "AiResultCache_lookup_key")
+  @@index([expiresAt])
 }
 // --- end AI cost governance ---
 

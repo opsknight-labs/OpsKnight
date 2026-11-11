@@ -28,6 +28,12 @@ export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 export interface ModelPrice {
   inputUsdPerMTok: number;
   outputUsdPerMTok: number;
+  /**
+   * Prompt-cache rates. Absent means the provider's cached tokens are charged at the full input rate: a
+   * conservative default that can overstate, never understate, spend for a family whose discount is unknown.
+   */
+  cacheReadUsdPerMTok?: number;
+  cacheWriteUsdPerMTok?: number;
 }
 
 export interface ResolvedModelPrice extends ModelPrice {
@@ -145,6 +151,24 @@ export function normaliseModelId(model: string): string {
   return id;
 }
 
+/**
+ * Anthropic prompt caching: a cache read costs about 0.1x the input rate and a 5-minute cache write (the
+ * only kind the gateway requests) about 1.25x. Applied to Claude families on every host that serves them,
+ * on top of whichever input price resolved (built-in or override). Other families keep the full input rate.
+ */
+export const CLAUDE_CACHE_READ_MULTIPLIER = 0.1;
+export const CLAUDE_CACHE_WRITE_MULTIPLIER = 1.25;
+
+function withCacheRates<T extends ModelPrice>(kind: ProviderKind, model: string, price: T): T {
+  if (!ANTHROPIC_HOSTS.includes(kind) || !normaliseModelId(model).startsWith('claude'))
+    return price;
+  return {
+    ...price,
+    cacheReadUsdPerMTok: price.inputUsdPerMTok * CLAUDE_CACHE_READ_MULTIPLIER,
+    cacheWriteUsdPerMTok: price.inputUsdPerMTok * CLAUDE_CACHE_WRITE_MULTIPLIER,
+  };
+}
+
 const validPrice = (value: number) => Number.isFinite(value) && value >= 0 && value <= 100_000;
 
 /**
@@ -161,11 +185,11 @@ export function resolveModelPrice(
     row => row.providerKind === kind && row.model.trim().toLowerCase() === wanted
   );
   if (override && validPrice(override.inputUsdPerMTok) && validPrice(override.outputUsdPerMTok))
-    return {
+    return withCacheRates(kind, model, {
       inputUsdPerMTok: override.inputUsdPerMTok,
       outputUsdPerMTok: override.outputUsdPerMTok,
-      source: 'override',
-    };
+      source: 'override' as const,
+    });
   const id = normaliseModelId(model);
   let best: BuiltInPrice | null = null;
   for (const entry of BUILT_IN_MODEL_PRICES) {
@@ -173,25 +197,54 @@ export function resolveModelPrice(
     if (!best || entry.prefix.length > best.prefix.length) best = entry;
   }
   return best
-    ? {
+    ? withCacheRates(kind, model, {
         inputUsdPerMTok: best.inputUsdPerMTok,
         outputUsdPerMTok: best.outputUsdPerMTok,
-        source: 'built-in',
-      }
+        source: 'built-in' as const,
+      })
     : null;
 }
 
 const tokens = (value: number) => Math.max(0, Math.trunc(Number.isFinite(value) ? value : 0));
 
 /** Cost in millionths of a dollar: tokens × (USD per million tokens) is already micros. Null when unpriced. */
-export function costMicrosFor(
-  usage: { inputTokens: number; outputTokens: number },
-  price: ModelPrice | null
-): number | null {
+export interface PricedUsage {
+  /** Every prompt token, cached ones included. */
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
+
+/** Splits the prompt into uncached, cache-read and cache-write tokens; the parts never exceed the total. */
+function inputParts(usage: PricedUsage) {
+  const total = tokens(usage.inputTokens);
+  const read = Math.min(total, tokens(usage.cacheReadTokens ?? 0));
+  const write = Math.min(total - read, tokens(usage.cacheWriteTokens ?? 0));
+  return { plain: total - read - write, read, write };
+}
+
+export function costMicrosFor(usage: PricedUsage, price: ModelPrice | null): number | null {
   if (!price) return null;
+  const { plain, read, write } = inputParts(usage);
   return Math.round(
-    tokens(usage.inputTokens) * price.inputUsdPerMTok +
+    plain * price.inputUsdPerMTok +
+      read * (price.cacheReadUsdPerMTok ?? price.inputUsdPerMTok) +
+      write * (price.cacheWriteUsdPerMTok ?? price.inputUsdPerMTok) +
       tokens(usage.outputTokens) * price.outputUsdPerMTok
+  );
+}
+
+/**
+ * What the provider's prompt cache saved on one call against paying the full input rate for every prompt
+ * token. Negative when a call only wrote the cache (the write premium); the sum over a period is the net.
+ */
+export function providerCacheSavedMicros(usage: PricedUsage, price: ModelPrice | null): number {
+  if (!price) return 0;
+  const { read, write } = inputParts(usage);
+  return Math.round(
+    read * (price.inputUsdPerMTok - (price.cacheReadUsdPerMTok ?? price.inputUsdPerMTok)) -
+      write * ((price.cacheWriteUsdPerMTok ?? price.inputUsdPerMTok) - price.inputUsdPerMTok)
   );
 }
 

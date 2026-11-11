@@ -53,6 +53,8 @@ export interface AiSettingsView {
   capabilityRouting?: CapabilityRouting;
   /** Multi-step investigation mode for diagnostic questions; off unless an administrator enables it. */
   squireInvestigationEnabled?: boolean;
+  /** Reuse an earlier AI answer for an identical input in the same scope; off unless enabled. */
+  resultCacheEnabled?: boolean;
   /** 0 means no row has been saved yet and defaults apply. */
   revision: number;
 }
@@ -81,6 +83,7 @@ const SETTINGS_SELECT = {
   requestTimeoutMs: true,
   capabilityRouting: true,
   squireInvestigationEnabled: true,
+  resultCacheEnabled: true,
   revision: true,
 } as const;
 
@@ -142,6 +145,7 @@ export async function updateAiSettings(
       squireChatOpsEnabled: values.squireChatOpsEnabled ?? previous.squireChatOpsEnabled,
       squireMcpEnabled: values.squireMcpEnabled ?? previous.squireMcpEnabled,
       squireMobileEnabled: values.squireMobileEnabled ?? previous.squireMobileEnabled,
+      resultCacheEnabled: values.resultCacheEnabled ?? previous.resultCacheEnabled ?? false,
     };
     const next = toSettingsView(
       await tx.aiSettings.upsert({

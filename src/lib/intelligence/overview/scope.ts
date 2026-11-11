@@ -5,6 +5,7 @@ import { actorMetricReadScope, serviceReadWhere } from '@/lib/authorization-filt
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { compileIncidentMetricFilter } from '@/lib/metrics/domain/filter';
 import { logger } from '@/lib/logger';
+import { deterministicOnly } from '../ai/call-site';
 
 /** A scoped reader sees at most this many services in the overview; beyond it the view says so. */
 export const OVERVIEW_MAX_SERVICES = 2000;
@@ -97,7 +98,8 @@ export async function loadSection<T>(
   load: () => Promise<T>
 ): Promise<SectionResult<T>> {
   try {
-    return { ok: true, data: await load() };
+    // An overview card is a list surface: its loader may never reach a model.
+    return { ok: true, data: await deterministicOnly(`the ${label} overview`, load) };
   } catch (error) {
     logger.warn(`[Intelligence] Overview section failed: ${label}`, {
       error: error instanceof Error ? error.message : String(error),

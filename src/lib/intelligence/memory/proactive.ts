@@ -7,6 +7,8 @@ import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
 import { resolveEffectivePolicy } from '../settings/service';
 import { registerAiGateway } from '../ai/gateway';
 import { resolveLanguageModel, type AiOutputSchema } from '../ai/port';
+import { outputTokensFor } from '../ai/output-limits';
+import { cachedGenerateStructured } from '../ai/result-cache';
 import { getBuiltInPrompt, getGuidance, renderPrompt } from '../ai/prompts';
 import { getAiSettings } from '../ai/settings';
 import { incidentSummarySchema, postmortemDraftSchema } from '../drafts/schemas';
@@ -504,10 +506,11 @@ async function generate<T>(
     const port = await resolveLanguageModel(definition.capability, definition.dataClass);
     if (!port) return null;
     const prompt = renderPrompt(promptId, {}, await getGuidance(promptId));
-    const result = await port.generateStructured({
+    const result = await cachedGenerateStructured(port, {
       context: {
         actorId: PROACTIVE_AI_ACTOR,
         capability: definition.capability,
+        callSite: 'proactive',
         dataClass: definition.dataClass,
         incidentId,
         signal,
@@ -522,7 +525,7 @@ async function generate<T>(
       ],
       schema,
       schemaName,
-      maxOutputTokens: definition.capability === 'POSTMORTEM' ? 4_096 : 1_024,
+      maxOutputTokens: outputTokensFor(promptId),
     });
     return { value: result.object, model: result.served.model };
   } catch (error) {

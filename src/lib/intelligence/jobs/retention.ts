@@ -10,6 +10,7 @@ import { closeExpiredGroups } from '../correlation/groups';
 import { purgeDeadLetters } from './work-queue';
 import { purgeExpiredKnowledge, purgeExpiredProactiveNotes } from '../memory/sync';
 import { purgeOpsInsights } from '../ops-insights/store';
+import { purgeExpiredAiResults } from '../ai/result-cache';
 import type { IntelligenceSettingsView } from '../settings/service';
 
 export const RETENTION_INTERVAL_MS = 15 * 60_000;
@@ -41,6 +42,7 @@ export interface RetentionResult {
   deadLetters: number;
   closedGroups: number;
   aiReservations: number;
+  aiResults: number;
   actionReceipts: number;
   dependencyObservations?: number;
   noiseDecisions?: number;
@@ -86,6 +88,7 @@ const NOTHING: RetentionResult = {
   deadLetters: 0,
   closedGroups: 0,
   aiReservations: 0,
+  aiResults: 0,
   actionReceipts: 0,
   failedTables: [],
   more: false,
@@ -250,6 +253,8 @@ export async function purgeExpiredIntelligenceData(
         DELETE FROM "AiTokenReservation" WHERE id IN (
           SELECT id FROM "AiTokenReservation" WHERE "expiresAt" < ${cutoff(1)} LIMIT ${limit})`)
     );
+    // Cached AI answers carry their own expiry; expired ones are useless and go first-come.
+    const aiResults = await step('AiResultCache', tx => purgeExpiredAiResults(tx, { limit }));
     const actionReceipts = await step('SquireActionReceipt', tx =>
       tx.$executeRaw(Prisma.sql`
         DELETE FROM "SquireActionReceipt" WHERE id IN (
@@ -303,6 +308,7 @@ export async function purgeExpiredIntelligenceData(
       deadLetters,
       closedGroups,
       aiReservations,
+      aiResults,
       actionReceipts,
       ...(noiseDecisions > 0 ? { noiseDecisions } : {}),
       ...(dependencyObservations > 0 ? { dependencyObservations } : {}),

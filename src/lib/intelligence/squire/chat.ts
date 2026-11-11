@@ -209,6 +209,7 @@ export async function* streamSquire(
       // ---- Investigation mode (off unless an administrator enables it) ----
       const investigationContext = {
         actorId: actor.id,
+        callSite: 'interactive',
         dataClass,
         incidentId: incident?.id,
         signal,
@@ -274,6 +275,7 @@ export async function* streamSquire(
         context: {
           actorId: actor.id,
           capability: 'SQUIRE_CHAT',
+          callSite: 'interactive',
           dataClass,
           incidentId: incident?.id,
           signal,

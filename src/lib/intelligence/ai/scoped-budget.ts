@@ -23,6 +23,8 @@ export interface UsageAttribution {
   teamId?: string | null;
   /** Actual cost in micros; null when the model has no price. */
   costMicros: number | null;
+  /** Net dollars the provider's prompt cache saved on this call (negative for a write-only call). */
+  cacheSavedMicros?: number;
 }
 
 const toLimits = (row: {
@@ -97,22 +99,57 @@ export async function exceededScopedBudget(
 export async function recordUsageBreakdown(
   tx: Tx,
   day: string,
-  usage: { inputTokens: number; outputTokens: number },
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  },
   attribution: UsageAttribution
 ): Promise<void> {
   const cost = attribution.costMicros;
+  const saved = BigInt(Math.round(attribution.cacheSavedMicros ?? 0));
   await tx.$executeRaw(Prisma.sql`
     INSERT INTO "AiUsageBreakdownDay"
       (day, "teamId", capability, "providerKind", model, requests, "inputTokens", "outputTokens",
-       "costMicros", "unpricedRequests", "updatedAt")
+       "costMicros", "unpricedRequests", "cacheReadTokens", "cacheWriteTokens", "savedCostMicros",
+       "updatedAt")
     VALUES (${day}, ${attribution.teamId ?? ''}, ${(attribution.capability ?? 'UNKNOWN').slice(0, 64)},
       ${attribution.providerKind.slice(0, 64)}, ${attribution.model.slice(0, 200)}, 1,
-      ${usage.inputTokens}, ${usage.outputTokens}, ${BigInt(cost ?? 0)}, ${cost === null ? 1 : 0}, now())
+      ${usage.inputTokens}, ${usage.outputTokens}, ${BigInt(cost ?? 0)}, ${cost === null ? 1 : 0},
+      ${usage.cacheReadTokens ?? 0}, ${usage.cacheWriteTokens ?? 0}, ${saved}, now())
     ON CONFLICT (day, "teamId", capability, "providerKind", model) DO UPDATE SET
       requests = "AiUsageBreakdownDay".requests + 1,
       "inputTokens" = "AiUsageBreakdownDay"."inputTokens" + EXCLUDED."inputTokens",
       "outputTokens" = "AiUsageBreakdownDay"."outputTokens" + EXCLUDED."outputTokens",
       "costMicros" = "AiUsageBreakdownDay"."costMicros" + EXCLUDED."costMicros",
       "unpricedRequests" = "AiUsageBreakdownDay"."unpricedRequests" + EXCLUDED."unpricedRequests",
+      "cacheReadTokens" = coalesce("AiUsageBreakdownDay"."cacheReadTokens", 0) + EXCLUDED."cacheReadTokens",
+      "cacheWriteTokens" = coalesce("AiUsageBreakdownDay"."cacheWriteTokens", 0) + EXCLUDED."cacheWriteTokens",
+      "savedCostMicros" = coalesce("AiUsageBreakdownDay"."savedCostMicros", 0) + EXCLUDED."savedCostMicros",
+      "updatedAt" = now()`);
+}
+
+/**
+ * Records an answer served from the result cache: no request, no tokens and no dollars are added, only the
+ * hit and what the original call cost, so the spend page can show what the cache saved.
+ */
+export async function recordResultCacheHit(
+  tx: Tx,
+  day: string,
+  saved: { tokens: number; costMicros: number | bigint | null },
+  attribution: Pick<UsageAttribution, 'teamId' | 'capability' | 'providerKind' | 'model'>
+): Promise<void> {
+  await tx.$executeRaw(Prisma.sql`
+    INSERT INTO "AiUsageBreakdownDay"
+      (day, "teamId", capability, "providerKind", model, requests, "resultCacheHits", "savedTokens",
+       "savedCostMicros", "updatedAt")
+    VALUES (${day}, ${attribution.teamId ?? ''}, ${(attribution.capability ?? 'UNKNOWN').slice(0, 64)},
+      ${attribution.providerKind.slice(0, 64)}, ${attribution.model.slice(0, 200)}, 0, 1,
+      ${Math.max(0, Math.trunc(saved.tokens))}, ${BigInt(saved.costMicros ?? 0)}, now())
+    ON CONFLICT (day, "teamId", capability, "providerKind", model) DO UPDATE SET
+      "resultCacheHits" = coalesce("AiUsageBreakdownDay"."resultCacheHits", 0) + 1,
+      "savedTokens" = coalesce("AiUsageBreakdownDay"."savedTokens", 0) + EXCLUDED."savedTokens",
+      "savedCostMicros" = coalesce("AiUsageBreakdownDay"."savedCostMicros", 0) + EXCLUDED."savedCostMicros",
       "updatedAt" = now()`);
 }

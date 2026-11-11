@@ -4,6 +4,7 @@ import {
   type AiMessage,
   type LanguageModelPort,
 } from '../ai/port';
+import { outputTokensFor } from '../ai/output-limits';
 import { redactSecrets } from '../ai/redact';
 
 /**
@@ -69,6 +70,13 @@ export function digestTurns(turns: readonly OlderTurn[]): string {
 }
 
 /**
+ * Result-cache identity of the summariser prompt below; bump the version when its instruction changes. A
+ * resolver that wants repeats for free returns `withResultCache(port, { prompt: CONTEXT_SUMMARY_PROMPT,
+ * scope: 'user:<id>' })`.
+ */
+export const CONTEXT_SUMMARY_PROMPT = { id: 'squire.context-summary', version: 1 } as const;
+
+/**
  * The summary message for turns older than the replay window, or null when there are none. `resolve` returns
  * the SUMMARIZE port for a data class, or null when AI is off or no provider may receive it.
  */
@@ -92,6 +100,7 @@ export async function summarizeOlderTurns(
         context: {
           actorId: options.actorId,
           capability: 'SUMMARIZE',
+          callSite: 'interactive',
           dataClass,
           incidentId: options.incidentId,
           signal: options.signal,
@@ -114,7 +123,7 @@ export async function summarizeOlderTurns(
             dataClass,
           },
         ],
-        maxOutputTokens: 400,
+        maxOutputTokens: outputTokensFor('squire.context-summary'),
       });
       const text = result.text.trim();
       if (text) summary = redactSecrets(text).slice(0, CONTEXT_SUMMARY_LIMITS.summaryChars);

@@ -26,6 +26,8 @@ const slice = (key: string, label: string, tokens: number, costMicros: number, u
   tokens,
   costMicros,
   unpricedRequests: unpriced,
+  cacheHits: 0,
+  savedMicros: 0,
 });
 
 const breakdown: SpendBreakdown = {
@@ -39,7 +41,16 @@ const breakdown: SpendBreakdown = {
   byTeam: [slice('t1', 'Payments', 800, 2_000_000), slice('', 'No team', 150, 100_000, 1)],
   byCapability: [slice('SQUIRE_CHAT', 'SQUIRE_CHAT', 950, 2_100_000)],
   byModel: [slice('OPENAI:gpt-4o', 'gpt-4o', 950, 2_100_000)],
-  total: { requests: 2, tokens: 950, costMicros: 2_100_000, unpricedRequests: 1 },
+  total: {
+    requests: 2,
+    tokens: 950,
+    costMicros: 2_100_000,
+    unpricedRequests: 1,
+    cacheHits: 0,
+    savedMicros: 0,
+    cacheReadTokens: 0,
+    savedTokens: 0,
+  },
 };
 
 const statuses: BudgetStatus[] = [
@@ -76,6 +87,35 @@ const statuses: BudgetStatus[] = [
 ];
 
 describe('AiSpendPanel', () => {
+  it('shows what the caches saved only when there is something to show', () => {
+    const { rerender } = render(<AiSpendPanel breakdown={breakdown} statuses={statuses} />);
+    expect(screen.queryByText('Saved by cache')).toBeNull();
+    rerender(
+      <AiSpendPanel
+        breakdown={{
+          ...breakdown,
+          byCapability: [
+            {
+              ...slice('SUMMARIZE', 'SUMMARIZE', 950, 2_100_000),
+              cacheHits: 3,
+              savedMicros: 400_000,
+            },
+          ],
+          total: { ...breakdown.total, cacheHits: 3, savedMicros: 400_000, cacheReadTokens: 1200 },
+        }}
+        statuses={statuses}
+      />
+    );
+    const saved = screen.getByTestId('ai-spend-saved');
+    expect(saved).toHaveTextContent('Saved by cache');
+    expect(saved).toHaveTextContent('$0.40');
+    expect(saved).toHaveTextContent('3 reused answers');
+    expect(saved).toHaveTextContent('1,200 cached prompt tokens');
+    expect(screen.getByRole('table', { name: 'AI spend by capability' })).toHaveTextContent(
+      'saved $0.40'
+    );
+  });
+
   it('shows totals, a 7/30 day switch and spend by team, capability and model as tables', () => {
     render(<AiSpendPanel breakdown={breakdown} statuses={statuses} />);
     expect(screen.getByText('Spend, last 7 days')).toBeInTheDocument();

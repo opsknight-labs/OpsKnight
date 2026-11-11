@@ -2,7 +2,10 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { escapeHtml } from '../digest/render';
+import { renderBrief } from '../ai/brief';
+import { outputTokensFor } from '../ai/output-limits';
 import { resolveLanguageModel } from '../ai/port';
+import { cachedGenerate } from '../ai/result-cache';
 
 /**
  * Shift handoff summary: what the incoming on-call responder inherits. Built deterministically from the
@@ -221,6 +224,35 @@ export function renderHandoffSummary(
   };
 }
 
+/** Inline prompt identity for the result cache; bump the version when the instruction below changes. */
+const HANDOFF_NARRATIVE_PROMPT = { id: 'handoff.narrative', version: 1 } as const;
+
+/** The facts the narrative may use, in the shared budgeted brief format. Ages are left out on purpose:
+ * they change every minute and would make every request look new. */
+export function handoffBrief(summary: HandoffSummary): string {
+  return renderBrief([
+    {
+      lines: [
+        `${summary.counts.open} open incidents, ${summary.counts.unacknowledged} unacknowledged, ${summary.counts.high} high urgency.`,
+      ],
+      budget: 200,
+    },
+    {
+      lines: summary.open
+        .slice(0, 10)
+        .map(
+          row =>
+            `Open: ${row.title} on ${row.serviceName}, ${row.urgency} urgency, ${row.status}, ${row.assigneeName ? 'assigned' : 'unassigned'}.`
+        ),
+      budget: 2_000,
+    },
+    {
+      lines: summary.overdueFollowUps.slice(0, 5).map(row => `Overdue follow-up: ${row.title}.`),
+      budget: 800,
+    },
+  ]);
+}
+
 /**
  * Optional AI narrative: three sentences on what matters first. Uses the SUMMARIZE capability with the
  * PERSONAL data class (names of responders appear), charged to the recipient's own AI budget. Any failure
@@ -233,29 +265,30 @@ export async function draftHandoffNarrative(
   try {
     const port = await resolveLanguageModel('SUMMARIZE', 'PERSONAL');
     if (!port) return null;
-    const facts = [
-      `${summary.counts.open} open incidents, ${summary.counts.unacknowledged} unacknowledged, ${summary.counts.high} high urgency.`,
-      ...summary.open
-        .slice(0, 10)
-        .map(
-          row =>
-            `Open: ${row.title} on ${row.serviceName}, ${row.urgency} urgency, ${row.status}, ${formatAge(row.ageMinutes)} old, ${row.assigneeName ? 'assigned' : 'unassigned'}.`
-        ),
-      ...summary.overdueFollowUps.slice(0, 5).map(row => `Overdue follow-up: ${row.title}.`),
-    ].join('\n');
-    const result = await port.generate({
-      context: { actorId: recipientUserId, capability: 'SUMMARIZE', dataClass: 'PERSONAL' },
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You write a three-sentence shift handoff for an on-call engineer. Use only the facts given. Say what needs attention first and why. Plain text, no lists, no speculation.',
+    const facts = handoffBrief(summary);
+    const result = await cachedGenerate(
+      port,
+      {
+        context: {
+          actorId: recipientUserId,
+          capability: 'SUMMARIZE',
+          callSite: 'background',
           dataClass: 'PERSONAL',
         },
-        { role: 'user', content: facts, dataClass: 'PERSONAL' },
-      ],
-      maxOutputTokens: 200,
-    });
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You write a three-sentence shift handoff for an on-call engineer. Use only the facts given. Say what needs attention first and why. Plain text, no lists, no speculation.',
+            dataClass: 'PERSONAL',
+          },
+          { role: 'user', content: facts, dataClass: 'PERSONAL' },
+        ],
+        maxOutputTokens: outputTokensFor('handoff.narrative'),
+      },
+      // A handoff is written for one person; another recipient never gets their text.
+      { prompt: HANDOFF_NARRATIVE_PROMPT, scope: `user:${recipientUserId}` }
+    );
     const text = result.text?.trim();
     return text ? text.slice(0, 800) : null;
   } catch (error) {

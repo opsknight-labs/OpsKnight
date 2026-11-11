@@ -34,6 +34,14 @@ export const AI_CAPABILITIES = [
 ] as const;
 export type AiCapability = (typeof AI_CAPABILITIES)[number];
 
+/**
+ * Where a model call comes from. Required on every request so the gateway can refuse calls made while a list
+ * view or badge renders: `interactive` is a person opening a feature, `proactive` a per-incident lane job
+ * behind a proactive switch, `background` any other scheduled work.
+ */
+export const AI_CALL_SITES = ['interactive', 'proactive', 'background'] as const;
+export type AiCallSite = (typeof AI_CALL_SITES)[number];
+
 export interface AiMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -45,6 +53,7 @@ export interface AiMessage {
 export interface AiRequestContext {
   actorId: string;
   capability: AiCapability;
+  callSite: AiCallSite;
   /** Highest classification of any data included in the messages. */
   dataClass: AiDataClass;
   incidentId?: string;
@@ -85,8 +94,12 @@ export interface AiGenerateRequest {
 }
 
 export interface AiUsage {
+  /** Every prompt token, including the provider-cached ones below. */
   inputTokens: number;
   outputTokens: number;
+  /** Prompt tokens the provider served from, or wrote to, its prompt cache (when it reports them). */
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export interface AiGenerateResult {
@@ -95,6 +108,10 @@ export interface AiGenerateResult {
   usage: AiUsage;
   /** Which route/provider/model actually served the request, for audit and the status chip. */
   served: { providerId: string; model: string; fallbackDepth: number };
+  /** Why the model stopped ("stop", "length", "content-filter", ...) when the provider says. */
+  finishReason?: string;
+  /** True when the answer came from the result cache: no model ran and `usage` is zero. */
+  cached?: boolean;
 }
 
 export type AiStreamEvent =
@@ -123,6 +140,8 @@ export interface AiStructuredResult<T> extends Omit<AiGenerateResult, 'text' | '
 }
 
 export interface LanguageModelPort {
+  /** The model a request is routed to first; part of the result-cache key. Absent on test doubles. */
+  readonly model?: string;
   generate(request: AiGenerateRequest): Promise<AiGenerateResult>;
   stream(request: AiGenerateRequest): AsyncIterable<AiStreamEvent>;
   /**

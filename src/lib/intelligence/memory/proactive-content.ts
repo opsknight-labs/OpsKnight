@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { incidentBrief } from '../ai/brief';
 import { redactSecrets } from '../ai/redact';
 import { PROACTIVE_LIMITS } from './contract';
 
@@ -253,38 +254,23 @@ export function buildPostmortemDraft(
 
 /** The plain-text brief the model receives: this incident's facts, plus references the lane already scoped. */
 export function proactiveModelBrief(facts: IncidentFacts, refs: ProactiveRefs): string {
-  const lines = [
-    `Incident: ${facts.title}`,
-    `Service: ${facts.serviceName}`,
-    `Status: ${facts.status.toLowerCase()}; urgency ${facts.urgency.toLowerCase()}; alerts ${facts.alertCount}`,
-    `Opened: ${iso(facts.createdAt)}`,
-    facts.acknowledgedAt ? `Acknowledged: ${iso(facts.acknowledgedAt)}` : 'Acknowledged: not yet',
-    facts.resolvedAt ? `Resolved: ${iso(facts.resolvedAt)}` : 'Resolved: not yet',
-  ];
-  if (facts.resolutionNote) lines.push(`Resolution note: ${clip(facts.resolutionNote, 1_000)}`);
-  if (facts.events.length) {
-    lines.push('Timeline (oldest first):');
-    for (const event of facts.events.slice(0, 40))
-      lines.push(`- ${iso(event.at)} ${clip(event.text, 300)}`);
-  }
-  if (refs.changes.length) {
-    lines.push('Changes shortly before onset (correlation only, not confirmed causes):');
-    for (const change of refs.changes)
-      lines.push(`- ${change.label} (${change.minutesBefore} min before)`);
-  }
-  if (refs.similar.length) {
-    lines.push('Similar past incidents on the same service:');
-    for (const item of refs.similar)
-      lines.push(
-        `- ${item.label} (${item.matchPercent}% match)${item.resolution ? `; resolved with: ${clip(item.resolution, 200)}` : ''}`
-      );
-  }
-  if (refs.runbooks.length) {
-    lines.push('Runbooks that have worked on this service:');
-    for (const runbook of refs.runbooks)
-      lines.push(`- ${runbook.label} (${runbook.succeeded} of ${runbook.eligible} runs succeeded)`);
-  }
-  return redactSecrets(lines.join('\n'));
+  return redactSecrets(
+    incidentBrief({
+      title: facts.title,
+      serviceName: facts.serviceName,
+      status: facts.status,
+      urgency: facts.urgency,
+      alertCount: facts.alertCount,
+      createdAt: facts.createdAt,
+      acknowledgedAt: facts.acknowledgedAt,
+      resolvedAt: facts.resolvedAt,
+      resolutionNote: facts.resolutionNote,
+      timeline: facts.events.slice(0, 40),
+      changes: refs.changes,
+      similar: refs.similar,
+      runbooks: refs.runbooks,
+    })
+  );
 }
 
 export function inputRefsOf(refs: ProactiveRefs) {

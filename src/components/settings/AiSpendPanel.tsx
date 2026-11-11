@@ -118,6 +118,11 @@ function SliceBars({ title, slices }: { title: string; slices: SpendSlice[] }) {
                         *
                       </span>
                     )}
+                    {slice.savedMicros > 0 && (
+                      <span className="block font-normal text-muted-foreground">
+                        saved {formatUsd(slice.savedMicros)}
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
@@ -212,6 +217,22 @@ export default function AiSpendPanel({
             <dt className="text-xs uppercase tracking-wide text-muted-foreground">Requests</dt>
             <dd className="text-lg font-semibold">{tokensText(breakdown.total.requests)}</dd>
           </div>
+          {(breakdown.total.savedMicros > 0 || breakdown.total.cacheHits > 0) && (
+            <div data-testid="ai-spend-saved">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                Saved by cache
+              </dt>
+              <dd className="text-lg font-semibold">
+                {formatUsd(breakdown.total.savedMicros)}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {tokensText(breakdown.total.cacheHits)} reused{' '}
+                  {breakdown.total.cacheHits === 1 ? 'answer' : 'answers'}
+                  {breakdown.total.cacheReadTokens > 0 &&
+                    ` · ${tokensText(breakdown.total.cacheReadTokens)} cached prompt tokens`}
+                </span>
+              </dd>
+            </div>
+          )}
         </dl>
         <nav aria-label="Spend period" className="flex gap-1">
           {([7, 30] as const).map(days => (

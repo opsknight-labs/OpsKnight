@@ -1,5 +1,6 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
+import { deterministicOnly } from '../ai/call-site';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { logger } from '@/lib/logger';
@@ -24,7 +25,11 @@ export type WallboardNoiseTile =
       heartbeatsMissing: number;
     };
 
-export async function getWallboardNoiseTile(
+/** A wallboard tile is deterministic: the gateway refuses any model call made while it loads. */
+export const getWallboardNoiseTile: typeof loadWallboardNoiseTile = (...args) =>
+  deterministicOnly('the wallboard noise tile', () => loadWallboardNoiseTile(...args));
+
+async function loadWallboardNoiseTile(
   actor: AuthorizationActor,
   options: { now?: Date } = {},
   client: typeof prisma = prisma
