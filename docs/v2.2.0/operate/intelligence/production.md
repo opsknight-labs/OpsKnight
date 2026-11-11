@@ -199,7 +199,10 @@ Each script takes `--output` and `--no-gate` (record only). Measured results are
 Every pull request runs the assistant's structural evaluation with no AI provider: basic-mode answers on a
 seeded database, and AI mode against a scripted local model that checks tool scoping, redaction of secrets
 and injected instructions, which actions become confirmation cards, citations, data-class refusals and the
-token, step and output ceilings.
+token, step and output ceilings. It covers every tool and action the assistant offers, including the
+observability connectors (metrics, logs, traces, error events, code diffs, each answered by a local stand-in
+that returns hostile text) and the opt-in extended actions; a tool or action added without an evaluation
+case fails the suite.
 
 The nightly **Squire live-model evaluation** workflow (`.github/workflows/squire-evals.yml`) also asks a real
 model, then grades each answer with a second model against a rubric for its category. It runs only when the

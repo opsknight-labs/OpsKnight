@@ -362,17 +362,20 @@ handling, cost ceiling; `tests/evals/squire/categories.ts`).
 
 - _Basic mode_ (`basic-cases.ts`, 48 cases, some with follow-ups) runs against a seeded database with no
   model on every pull request (`squire-evals-contract.test.ts`).
-- _AI mode against a scripted model_ (`model-cases.ts`, 64 cases) also runs on every pull request
+- _AI mode against a scripted model_ (`model-cases.ts`, 100 cases) also runs on every pull request
   (`squire-evals-model.test.ts`). A local OpenAI-compatible fake returns the replies each case fixes, so
   what is measured is everything around the model: which tools are offered under which data class, what a
   tool returns under the asker's permissions, what reaches the provider after redaction and instruction
-  defanging (alerts, notes, change summaries, postmortems, connector logs, pasted secrets), which proposals
-  become cards (at most two, flagged after third-party text), what may be cited (only sources read in the
-  turn), and where the step, output, reservation, daily and per-person ceilings stop a turn. Cases that need
-  another workstream's tool or action declare `requires`; the runner reads what is really offered from a
-  probe turn and reports a missing one as skipped, never as passed. The runner turns on Workstream F's
-  opt-in switches and seeds a log connection against a local stand-in when the build has them.
-- _Live model_ (`cases.ts`, 19 cases) runs nightly in `squire-evals.yml` when `SQUIRE_EVAL_API_KEY` is set.
+  defanging (alerts, notes, change summaries, postmortems, pasted secrets, and connector logs, traces,
+  error events and code diffs), which proposals become cards (at most two, flagged after third-party text),
+  what may be cited (only sources read in the turn), and where the step, output, reservation, daily and
+  per-person ceilings stop a turn. The runner turns on the opt-in switches (extended actions, the knowledge
+  index) and seeds one observability connection per capability (Loki, Prometheus, Tempo, Sentry, GitHub)
+  against a local stand-in whose payloads carry injected instructions, credentials and an email address.
+  No case is ever skipped: the runner reads what the assistant really offers from a probe turn per asker and
+  fails when an offered tool or proposal has no case, and a unit test requires a scripted proposal for every
+  action in the catalogue, so a new tool or action cannot land unevaluated.
+- _Live model_ (`cases.ts`, 22 cases) runs nightly in `squire-evals.yml` when `SQUIRE_EVAL_API_KEY` is set.
   Structural checks (tool used, incident cited, nothing hidden leaked, proposal made or not, follow-up
   answered) decide pass or fail; an LLM judge (`judge.ts`) then grades each answer 1–5 against its
   category's rubric, with the answer fenced as data. `scripts/check-squire-eval-baseline.cjs` fails the run
