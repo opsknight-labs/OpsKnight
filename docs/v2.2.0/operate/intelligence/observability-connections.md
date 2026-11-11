@@ -52,7 +52,7 @@ and every CloudWatch call, which is signed with AWS Signature Version 4).
 
 ## Add a connection
 
-1. Go to **Settings → Intelligence → Connections** and open **Add a connection**.
+1. Go to **Settings → Intelligence → Assistant → Connections** and open **Add a connection**.
 2. Choose the type, give it a name and enter the base URL (leave it blank for Datadog US1, Sentry SaaS,
    github.com and gitlab.com).
 3. Enter the credential. It is encrypted with the application encryption key, never shown again, never

@@ -87,7 +87,7 @@ A rate shows **—** until someone has reviewed something; it is never shown as 
 ## Alert quality
 
 The noisiest and the most flapping services over the last 30 days, using the same ranking as
-**Settings > Intelligence > Dependencies & changes**. A service needs at least five incidents to be ranked.
+**Settings > Intelligence > Services & changes > Alert quality**. A service needs at least five incidents to be ranked.
 
 Administrators get one-click fixes on each row:
 

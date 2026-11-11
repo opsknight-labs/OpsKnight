@@ -101,6 +101,42 @@ past decisions always reference the exact version that made them.
 | `intelligence.feedback`         | every role except auditor | Rate suggestions (visibility-checked, rate-limited, one live verdict per person) |
 | `intelligence.manage`           | admin                     | Change settings and policies                                                     |
 
+## Settings information architecture
+
+Settings → Intelligence is a first-class tab of `SettingsTopNav` (roles holding `intelligence.read`) and
+keeps its card under Workspace & Governance. It has five group pages, each one server-rendered page of
+anchored sections. `src/lib/intelligence/settings/routes.ts` is the single source of truth: the
+sub-navigation (`IntelligenceSubNav`), the "on this page" links (`IntelligenceGroupHeader`), the
+redirects and the links other surfaces use all read it.
+
+| Group              | Route                                   | Sections (anchor ids)                                                                                                    |
+| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Engine             | `/settings/intelligence`                | `lane-health`, `general`, `global-policy`, `triage`, `correlation-rules`, `failed-work`                                  |
+| Noise controls     | `/settings/intelligence/noise-controls` | `policy`, `suppression-rules`, `maintenance-windows`, `policy-history`, `heartbeats`, `simulation`, `decisions`          |
+| Services & changes | `/settings/intelligence/services`       | `service-policies`, `dependencies`, `topology-sources`, `change-sources`, `alert-quality`                                |
+| Assistant          | `/settings/intelligence/ai`             | `assistant`, `providers`, `model-routing`, `prompts`, `checks`, `connections`, `knowledge-memory`, `proactive`           |
+| Evaluation & spend | `/settings/intelligence/evaluation`     | `grouping-quality`, `answer-feedback`, `insights`, `learned-weights`, `digest`, `usage`, `ai-spend` (and `model-prices`) |
+
+- **Composition.** A group page checks `intelligence.read` once and renders sibling async server
+  components from `src/app/(app)/settings/intelligence/_sections/`. Each section loads its own data with
+  the same bounds and `*ReadWhere` scoping it had as a page, and catches its own failures, so one failed
+  probe leaves one card saying so. A section that has nothing to show for the viewer (failed work when
+  nothing failed, learned weights for a non-manager) is not rendered and gets no "on this page" link.
+- **Server actions did not move.** They stay in the `actions.ts` files next to the earlier routes
+  (`response/`, `insights/`, `quality/`, `connections/`, `ai/memory/`) and revalidate the group page that
+  now renders their forms.
+- **Redirects.** `LEGACY_INTELLIGENCE_ROUTES` maps each earlier route to its group and section; the
+  earlier route's `page.tsx` calls `redirect()` with the query string preserved. `/settings/intelligence/ai`
+  additionally redirects to Evaluation & spend when it carries the `spend` period parameter.
+  `tests/unit/intelligence-settings-routes.test.ts` asserts that every earlier route redirects to a page
+  and section that exist, that every advertised section id is rendered, and that no link in `src/` points
+  at a route that only redirects or at an unknown section.
+- **One home per fact.** Alert quality is rendered only by `DependenciesChangesSections`
+  (`#alert-quality`). Triage is its own card: `publishTriagePolicy` publishes a version that changes only
+  `triage.enabled`, and `publishGlobalPolicy` carries the stored triage value over instead of reading a
+  checkbox. Suggested grouping rules sit under correlation rules on the Engine page. Usage, spend, budgets
+  and model prices are on Evaluation & spend.
+
 ## Measuring the cost to ingestion
 
 `tests/load/intelligence-ingestion-ab.ts` is a controlled A/B benchmark. Both arms run the real
@@ -174,7 +210,7 @@ read as on). Everything is recommendation only; nothing is executed, muted or pa
   the card links to the existing runbook page; it never runs one.
 
 **Dependencies.** "Service A depends on service B" edges are managed in Settings → Intelligence →
-Dependencies, changes and alert quality. Only ACTIVE edges influence analysis. An hourly, bounded
+Services & changes → Dependencies. Only ACTIVE edges influence analysis. An hourly, bounded
 queue job consumes new source incidents in 2,000-row cursor pages into service/time buckets.
 It resumes incomplete bootstrap work before proposing edges and scores retained metadata rather
 than re-reading the raw history each hour. Edges are proposed when incidents on one service repeatedly open within ten minutes after another
@@ -240,7 +276,7 @@ total). Code lives in `src/lib/intelligence/metric-anomaly/`; operators read
 
 ## Assistant (Squire) and the AI gateway
 
-Everything is configured in Settings → Intelligence → Assistant and AI; there are no environment
+Everything is configured in Settings → Intelligence → Assistant; there are no environment
 variables. Both switches (AI, and showing the assistant) are off by default, and the assistant button is
 not even shipped to the browser while it is off.
 
@@ -594,7 +630,7 @@ team>|<caller scope>`) and a SHA-256 of the exact messages, answer-length cap an
 savedTokens/savedCostMicros` are nullable and additive; the spend page shows **Saved by cache** (result
     cache plus net provider-cache saving, floored at zero) and the saving per capability.
 
-**Observability connectors (opt-in).** Settings → Intelligence → Connections stores read-only
+**Observability connectors (opt-in).** Settings → Intelligence → Assistant → Connections stores read-only
 `ObservabilityConnection` rows: Prometheus, Loki, Tempo, Grafana (through its data-source proxy),
 Datadog, Elasticsearch, CloudWatch, Sentry, GitHub and GitLab. Each has a base URL validated exactly like
 an AI provider's (HTTPS and public addresses unless the administrator gives private-network consent;
@@ -739,7 +775,7 @@ Background embedding checks the current service policy before reading title text
 
 ## Per-service policies
 
-Settings → Intelligence → Per-service policies shows, for each service, the mode that applies and
+Settings → Intelligence → Services & changes → Per-service policies shows, for each service, the mode that applies and
 whether it comes from the service's own policy or the global one. An administrator can create an override
 (it starts from what currently applies), publish new versions of it, or return the service to the global
 policy. Turning an override off sets `IntelligencePolicy.overrideActive = false`; it never deletes history,
@@ -748,7 +784,7 @@ bounded page of services, filtered by the viewer's own service visibility.
 
 ## Insights and adaptive suggestions
 
-Settings → Intelligence → Insights is computed on demand from bounded queries, so there is no background
+Settings → Intelligence → Evaluation & spend → Insights is computed on demand from bounded queries, so there is no background
 job to fall behind. Everything is flag-only and a person decides what to do.
 
 - **Recurring problems.** The same masked incident title at least three times on at least two days in
@@ -1172,7 +1208,7 @@ agreement adjustments. Outcome patterns are updated transactionally and idempote
 reopen, title change and suppression. Runbook ranking uses resolution after execution and per-template
 outcomes/MTTR. Insights use seasonal median/MAD comparisons and short-lived dedup-key flapping episodes.
 
-Settings → Intelligence → Quality measures explicit human-reviewed pairs over 30 days, capped at 2,000.
+Settings → Intelligence → Evaluation & spend → Grouping quality measures explicit human-reviewed pairs over 30 days, capped at 2,000.
 Unreviewed pairs never become negative labels. A service certification requires at least 200 predictions,
 20 negative labels and 20 critical labels; precision ≥98%, its Wilson lower bound ≥95%, false merges ≤1%,
 recall ≥50% and zero critical false merges. Each enabled rule needs 100 passing predictions; topology

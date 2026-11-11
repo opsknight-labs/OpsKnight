@@ -31,6 +31,39 @@ Neither changes paging, suppresses incidents nor bypasses runbook approvals. It 
 Everything in this guide except process placement is configured in **Settings → Intelligence**. There are
 no feature environment variables.
 
+## Where each setting lives
+
+**Settings → Intelligence** is a tab of Settings (and a card under Workspace & Governance). It has five
+pages. Each page lists its sections at the top, and every section has a link you can share
+(for example `/settings/intelligence/services#alert-quality`).
+
+| Page               | Address                                 | Sections                                                                                                                                        |
+| ------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Engine             | `/settings/intelligence`                | Lane health, general settings, global policy, triage suggestions, correlation rules (with suggested grouping rules), failed work                |
+| Noise controls     | `/settings/intelligence/noise-controls` | Policy, suppression rules, maintenance windows, orchestration and policy versions (diff and rollback), heartbeats, simulation, recent decisions |
+| Services & changes | `/settings/intelligence/services`       | Per-service policies, dependencies, topology sources, change sources, alert quality                                                             |
+| Assistant          | `/settings/intelligence/ai`             | General, providers, model routing, semantic search, prompts, checks library, connections, knowledge memory, proactive help                      |
+| Evaluation & spend | `/settings/intelligence/evaluation`     | Grouping evaluation, answer feedback, insights, learned weights, weekly digest, usage, spend and budgets, model prices                          |
+
+Three things changed place when the pages were regrouped:
+
+- **Alert quality has one home**: Services & changes → Alert quality. Suppression-rule suggestions and the
+  AIOps overview link to it.
+- **Triage suggestions is its own card** on the Engine page with its own save button. Saving it publishes
+  a policy version that changes only triage; publishing the global policy no longer touches it.
+- **Usage, spend, budgets and model prices** moved from the assistant page to Evaluation & spend.
+
+Addresses from before the regrouping still work and keep their query string:
+
+| Earlier address                      | Now opens                                             |
+| ------------------------------------ | ----------------------------------------------------- |
+| `/settings/intelligence/response`    | `/settings/intelligence/services#dependencies`        |
+| `/settings/intelligence/insights`    | `/settings/intelligence/evaluation#insights`          |
+| `/settings/intelligence/quality`     | `/settings/intelligence/evaluation#grouping-quality`  |
+| `/settings/intelligence/connections` | `/settings/intelligence/ai#connections`               |
+| `/settings/intelligence/ai/memory`   | `/settings/intelligence/ai#knowledge-memory`          |
+| `/settings/intelligence/ai?spend=30` | `/settings/intelligence/evaluation?spend=30#ai-spend` |
+
 ## What it needs
 
 | Need     | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -129,7 +162,7 @@ incidents.
    unhelpful it proposes a higher threshold, which you apply with one click as a new policy version.
 4. **Suggest globally.** Publish the global policy in **Suggest** mode. Keep noisy services on Shadow with
    their own policies.
-5. **Assistant without AI.** In **Assistant & AI**, turn on the assistant and leave AI off. It answers from
+5. **Assistant without AI.** In **Assistant**, turn on the assistant and leave AI off. It answers from
    your incident data only.
 6. **Assistant with AI.** Add a provider and use **Test connection**. Start with a self-hosted model or a
    provider your data-processing agreement covers. AI conversations require a data ceiling of **Personal**
@@ -170,13 +203,13 @@ operator turns it on, and only ever suggests. Each one degrades to "nothing show
 | Triage suggestions      | Policy → **Suggest triage** (global or per service); needs similarity on            | Chips on the incident under Similar: suggested urgency, owner (team or person), probable duplicate, expected time to resolve. Accept runs the normal incident command; dismiss records feedback. A service burning its error budget never gets a suggestion to lower urgency.                                                                                                                                        |
 | Change risk             | On whenever changes are recorded                                                    | A 0–100 risk on each change (history of incidents after the source's changes, blast radius from the dependency graph, off-hours timing, size labels), shown on possible causes and in Settings → Response.                                                                                                                                                                                                           |
 | Native change sources   | Create a generic webhook integration per service and point the tool at the endpoint | `POST /api/integrations/{argocd,launchdarkly,unleash,terraform}?integrationId=…` map the tool's own webhook payload to a change. Argo CD: finished syncs; LaunchDarkly/Unleash: flag changes; Terraform: applied and errored runs.                                                                                                                                                                                   |
-| Topology import         | Settings → Intelligence → Response → **Import topology from Backstage**             | Paste a catalog or add an https catalog URL pulled on a schedule (SSRF-guarded, 2 MB bound). Entities match services by the `opsknight.com/service-id` annotation or exact name; `spec.dependsOn` becomes declared dependencies. `GET /api/intelligence/topology/graph` serves the graph with an open-incident overlay.                                                                                              |
+| Topology import         | Settings → Intelligence → Services & changes → **Import topology from Backstage**   | Paste a catalog or add an https catalog URL pulled on a schedule (SSRF-guarded, 2 MB bound). Entities match services by the `opsknight.com/service-id` annotation or exact name; `spec.dependsOn` becomes declared dependencies. `GET /api/intelligence/topology/graph` serves the graph with an open-incident overlay.                                                                                              |
 | SLO burn                | Define an availability or uptime objective for the service                          | `getSloBurn` reports 1 h / 6 h burn rates; triage and (later) grouping prefer burning services. Suggest-only.                                                                                                                                                                                                                                                                                                        |
-| Cause-ranking weights   | Settings → Intelligence → Insights → **Cause-ranking weights**                      | Fitted from feedback on possible causes; published only by a person, as a policy version you can roll back.                                                                                                                                                                                                                                                                                                          |
-| Runbook-ranking weights | Settings → Intelligence → Insights → **Runbook-ranking weights**                    | Fitted from accept/reject feedback on runbook recommendations and from what happened when a recommended runbook was run (fixed: succeeded and the incident resolved within 2 hours; not fixed: failed, timed out, or no resolution in that window). Needs 40 labelled recommendations with at least 8 of each outcome and a held-out improvement; published only by a person, as a policy version you can roll back. |
+| Cause-ranking weights   | Settings → Intelligence → Evaluation & spend → **Cause-ranking weights**            | Fitted from feedback on possible causes; published only by a person, as a policy version you can roll back.                                                                                                                                                                                                                                                                                                          |
+| Runbook-ranking weights | Settings → Intelligence → Evaluation & spend → **Runbook-ranking weights**          | Fitted from accept/reject feedback on runbook recommendations and from what happened when a recommended runbook was run (fixed: succeeded and the incident resolved within 2 hours; not fixed: failed, timed out, or no resolution in that window). Needs 40 labelled recommendations with at least 8 of each outcome and a held-out improvement; published only by a person, as a policy version you can roll back. |
 | Incident time axis      | On for anyone who can see suggestions                                               | **Show intelligence events** on the incident's Timeline tab: alerts, changes (with risk), upstream incidents and noise decisions relative to onset.                                                                                                                                                                                                                                                                  |
 | Incident impact         | On for anyone who can see suggestions                                               | **Impact** section of the incident's Insights panel: dependent services from the active graph (walked only through services the viewer can read), linked status-page components with their status, and SLO error budget at risk (global metrics access only).                                                                                                                                                        |
-| Alert-quality actions   | Settings → Intelligence → Response                                                  | Noisy services rolled up by team, with a flapping ratio and one-click Jira issue (service mapping or default project), plus links to routing/severity and integrations.                                                                                                                                                                                                                                              |
+| Alert-quality actions   | Settings → Intelligence → Services & changes → **Alert quality**                    | Noisy services rolled up by team, with a flapping ratio and one-click Jira issue (service mapping or default project), plus links to routing/severity and integrations.                                                                                                                                                                                                                                              |
 | Shift handoff summary   | Settings → Intelligence → **Send shift handoff summaries**                          | At each rotation the incoming responders get open and recently resolved incidents and overdue follow-ups for the schedule's services, by email and in-app; an AI narrative is added only when AI is enabled.                                                                                                                                                                                                         |
 
 ## Performance gates
@@ -280,7 +313,7 @@ They need separate certification before they can exist. The open certification g
 ## Measure quality before service AUTO
 
 Start in **Shadow** or **Suggest** and collect explicit human reviews, including negative and critical
-examples. Open **Settings → Intelligence → Quality**, choose a service and measure shadow quality.
+examples. Open **Settings → Intelligence → Evaluation & spend**, choose a service and measure shadow quality.
 The page reports precision, recall, false merges, critical false merges and calibration. Unreviewed
 pairs are excluded; a small or incomplete labelled set fails closed.
 
@@ -300,7 +333,7 @@ AI requests reserve estimated tokens atomically against global and personal UTC-
 calling a provider. Usage settles per attempt, including failed/aborted requests and connection tests.
 Expired reservations and confirmed-action receipts are purged in bounded sweeps, including while OFF.
 
-Background incident embedding has its own allocation within the same global budget. In **Assistant & AI**,
+Background incident embedding has its own allocation within the same global budget. In **Assistant**,
 set **Background embedding allocation (%)** from 0 to 80 (default 20). Zero pauses new backfills;
 interactive semantic queries still use the person's normal allowance and existing vectors stay usable.
 The usage panel shows the charged background tokens and its daily allowance. Both settled usage and
@@ -387,7 +420,7 @@ The metrics registry exports `opsknight_intelligence_work_duration_seconds`, `op
 
 ### Saved chats and basic-mode answers
 
-New installations enable private saved chats with a default retention of **90 days after the last message**. Existing administrator opt-outs and custom retention settings are preserved. Configure this under Intelligence → Assistant & AI. AI providers are not required for saving or reading chats.
+New installations enable private saved chats with a default retention of **90 days after the last message**. Existing administrator opt-outs and custom retention settings are preserved. Configure this under Intelligence → Assistant. AI providers are not required for saving or reading chats.
 
 Open **Saved conversations** in the assistant to read earlier chats. **Load older chats** fetches another page; creating more than 50 chats does not delete earlier unexpired ones. You can read a saved incident chat from another page, then follow **Return to original context** to continue it. Reading a chat does not extend retention. Expired chats disappear from reads immediately; the background sweep removes their encrypted records. Individual threads remain bounded to 100 messages; a full thread continues in a new saved conversation while the earlier thread stays available until its own expiry. Titles and message contents remain encrypted and owner-scoped. Source access is checked again when reopening history, so revoked sources do not become readable through a saved answer.
 
@@ -403,8 +436,8 @@ Basic mode also provides permission-scoped incident and alert reports, personal 
 
 ### Extended assistant actions
 
-**Extended assistant actions** (Intelligence → Assistant & AI) is off by default. When on, Squire can also propose escalating, changing urgency, snoozing (up to 24 hours), removing a related link, adding a watcher, creating a Jira issue, drafting and then separately publishing a status update, and running a runbook bound to the incident's service. Every card is confirmed by a person, runs with that person's permissions through the same commands as the UI, is refused for API keys, re-checks the facts it showed before acting, and writes the usual `intelligence.squire.action` audit entry with a single-use receipt. Escalations, Jira issues and status-page changes reach people or another system, so a dropped response is reported as unknown and never retried automatically. Runbook approval steps and the status page's own permissions still apply. The setting change is revision-locked and audited like the other AI settings; turning it off withdraws open cards. See [Confirm actions the assistant suggests](../../guides/intelligence/assistant-actions.md).
+**Extended assistant actions** (Intelligence → Assistant) is off by default. When on, Squire can also propose escalating, changing urgency, snoozing (up to 24 hours), removing a related link, adding a watcher, creating a Jira issue, drafting and then separately publishing a status update, and running a runbook bound to the incident's service. Every card is confirmed by a person, runs with that person's permissions through the same commands as the UI, is refused for API keys, re-checks the facts it showed before acting, and writes the usual `intelligence.squire.action` audit entry with a single-use receipt. Escalations, Jira issues and status-page changes reach people or another system, so a dropped response is reported as unknown and never retried automatically. Runbook approval steps and the status page's own permissions still apply. The setting change is revision-locked and audited like the other AI settings; turning it off withdraws open cards. See [Confirm actions the assistant suggests](../../guides/intelligence/assistant-actions.md).
 
 ### Squire outside the web app
 
-Three switches under Intelligence → Assistant & AI, all off by default, add Squire to Slack and Microsoft Teams (`@squire`, `/incident ask`), to MCP clients (the read-only `ask_squire` tool) and to the mobile incident pages. Each needs the assistant itself to be on. Chat mentions are queued through the durable ChatOps intent pipeline, so the background worker must run; the Slack app needs the `app_mentions:read` event subscription. Chat answers use the asker's linked OpsKnight account, and a suggestion's **Confirm** button works only for that person and only through the sealed proposal executor. See [Ask Squire in Slack, Microsoft Teams, MCP and on mobile](../../guides/intelligence/squire-everywhere.md).
+Three switches under Intelligence → Assistant, all off by default, add Squire to Slack and Microsoft Teams (`@squire`, `/incident ask`), to MCP clients (the read-only `ask_squire` tool) and to the mobile incident pages. Each needs the assistant itself to be on. Chat mentions are queued through the durable ChatOps intent pipeline, so the background worker must run; the Slack app needs the `app_mentions:read` event subscription. Chat answers use the asker's linked OpsKnight account, and a suggestion's **Confirm** button works only for that person and only through the sealed proposal executor. See [Ask Squire in Slack, Microsoft Teams, MCP and on mobile](../../guides/intelligence/squire-everywhere.md).

@@ -31,7 +31,7 @@ default**.
 
 ## Turn it on
 
-1. Open **Settings → Intelligence → Assistant & AI** (requires the Intelligence manage permission).
+1. Open **Settings → Intelligence → Assistant** (requires the Intelligence manage permission).
 2. In **Investigation and model routing**, select **Investigation mode**.
 3. Optionally route capabilities (below), then select **Save investigation and routing**.
 

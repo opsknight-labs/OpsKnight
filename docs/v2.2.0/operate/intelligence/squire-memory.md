@@ -33,8 +33,8 @@ Intelligence must be enabled (**Settings → Intelligence**) and the intelligenc
 
 ## Turn on the knowledge index
 
-1. Open **Settings → Intelligence → Assistant & AI → Knowledge memory**, or go to
-   `/settings/intelligence/ai/memory`. You need the Intelligence manage capability.
+1. Open **Settings → Intelligence → Assistant → Knowledge memory**, or go to
+   `/settings/intelligence/ai#knowledge-memory`. You need the Intelligence manage capability.
 2. Select **Build Squire's knowledge index** and save. The change is audited and uses a revision check, so
    two administrators cannot overwrite each other.
 3. The intelligence lane fills the index in the background, about every 5 minutes, in small batches. The
@@ -59,7 +59,7 @@ retention.
 When Squire answers in AI mode it can call `search_knowledge`. Every passage is checked against the record
 it came from (incident, postmortem, runbook or service) through the asking person's own permissions, and is
 cited so the person can open the source. Search is lexical (full text, then trigram for typos) and always
-works; when an embedding provider is configured under **Assistant & AI**, results are also re-ranked by
+works; when an embedding provider is configured under **Assistant**, results are also re-ranked by
 meaning.
 
 ### Turn it off
@@ -78,7 +78,7 @@ proposal card and is saved only when you confirm it.
 - Text that looks like a credential is refused, not saved.
 - A service holds at most 50 facts.
 
-To review or remove facts, open **Settings → Intelligence → Per-service policies**, expand the service and
+To review or remove facts, open **Settings → Intelligence → Services & changes → Per-service policies**, expand the service and
 choose **Squire: proactive help and learned facts** (`/settings/intelligence/services/<id>/squire`).
 Removal is audited and works even while the index is off.
 

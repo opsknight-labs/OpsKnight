@@ -28,7 +28,7 @@ Squire answers the same way everywhere: in basic mode without AI, or with AI whe
 
 ## Turn it on
 
-An administrator opens **Settings → Intelligence → Assistant & AI**. The assistant itself must be on. Under **Assistant outside the web app**, each surface has its own switch, all off by default:
+An administrator opens **Settings → Intelligence → Assistant**. The assistant itself must be on. Under **Assistant outside the web app**, each surface has its own switch, all off by default:
 
 | Switch                                  | What it adds                                                                |
 | --------------------------------------- | --------------------------------------------------------------------------- |

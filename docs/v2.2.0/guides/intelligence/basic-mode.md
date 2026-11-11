@@ -23,7 +23,7 @@ verification:
 
 # Use Squire without an AI provider
 
-Enable the assistant under **Settings → Intelligence → Assistant & AI**. The **Enable AI** switch can remain off. Basic mode uses deterministic language rules, product instructions and fresh OpsKnight database reads. It does not call a language model, run commands or send a page, and it changes an incident only when you confirm a card it prepared.
+Enable the assistant under **Settings → Intelligence → Assistant**. The **Enable AI** switch can remain off. Basic mode uses deterministic language rules, product instructions and fresh OpsKnight database reads. It does not call a language model, run commands or send a page, and it changes an incident only when you confirm a card it prepared.
 
 Open the assistant or press **⌘/Ctrl+J**. These are example questions, not required command syntax:
 
@@ -65,7 +65,7 @@ If something is missing (the resolution note, or which of several people you mea
 
 ## Suggested checks and feedback
 
-Incident answers include **suggested checks**: investigation prompts chosen by the incident title. Administrators can add their own in **Settings → Intelligence → Assistant & AI → Suggested checks** (a title pattern and up to six checks); theirs match before the built-in ones. They are prompts only and never run anything.
+Incident answers include **suggested checks**: investigation prompts chosen by the incident title. Administrators can add their own in **Settings → Intelligence → Assistant → Suggested checks** (a title pattern and up to six checks); theirs match before the built-in ones. They are prompts only and never run anything.
 
 Each answer has thumbs up and down. A thumbs down asks for a short reason. Only the mode, the question type and the reason are stored, never the question or the answer; administrators see the totals under **Settings → Intelligence → Quality**.
 

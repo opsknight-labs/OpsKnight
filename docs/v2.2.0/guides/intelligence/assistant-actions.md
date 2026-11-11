@@ -29,7 +29,7 @@ as related. An administrator can add more.
 
 ## Turn on extended actions (administrators)
 
-1. Open **Settings → Intelligence → Assistant & AI**.
+1. Open **Settings → Intelligence → Assistant**.
 2. Select **Extended assistant actions** and save.
 
 Turning it off again withdraws any card that is still open: confirming it then reports that the action is
