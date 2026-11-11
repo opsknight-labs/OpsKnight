@@ -31,7 +31,17 @@ async function cleanup() {
   await prisma.noiseControlPolicy.deleteMany({ where: { service: services } });
   await prisma.maintenanceWindow.deleteMany({ where: { name: { startsWith: prefix } } });
   await prisma.heartbeatMonitor.deleteMany({ where: { service: services } });
-  await prisma.serviceObjective.deleteMany({ where: { service: services } });
+  // Objective revisions are immutable (a row trigger refuses DELETE), so the fixture rows are removed with
+  // the trigger switched off inside one transaction. beforeAll refuses any database that is not a test one.
+  await prisma.$transaction([
+    prisma.$executeRawUnsafe(
+      'ALTER TABLE "ServiceObjective" DISABLE TRIGGER "ServiceObjective_immutable_revision"'
+    ),
+    prisma.serviceObjective.deleteMany({ where: { service: services } }),
+    prisma.$executeRawUnsafe(
+      'ALTER TABLE "ServiceObjective" ENABLE TRIGGER "ServiceObjective_immutable_revision"'
+    ),
+  ]);
   await prisma.serviceDependency.deleteMany({
     where: { OR: [{ upstream: services }, { downstream: services }] },
   });
