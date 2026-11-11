@@ -208,7 +208,7 @@ describe('TeamIntelligenceTiles', () => {
     expect(within(usage).getByText(/of 1,000 tokens a day/)).toBeInTheDocument();
     expect(within(usage).getByRole('link', { name: 'Spend and budgets' })).toHaveAttribute(
       'href',
-      '/settings/intelligence/ai'
+      '/settings/intelligence/evaluation#ai-spend'
     );
     const noise = screen.getByTestId('team-noise-load');
     expect(within(noise).getByText('120')).toBeInTheDocument();

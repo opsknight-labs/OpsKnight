@@ -3,6 +3,11 @@
  * and the labels both the loaders and the components use. Everything the URL can carry is validated here,
  * so a hand-edited query string degrades to the default view instead of reaching a query.
  */
+import {
+  NOISE_DECISION_LABELS,
+  classifyNoiseDecision,
+  type NoiseDecisionKind,
+} from '../incident-ux/explain';
 import { OVERVIEW_WINDOW_LIST, type OverviewWindowKey } from '../overview/window';
 
 /** Rows per page. One extra row is read to learn whether another page exists. */
@@ -62,18 +67,12 @@ export type AlertSeverity = (typeof ALERT_SEVERITIES)[number];
 /** What a noise control did (or, in shadow, would have done) with an alert before paging. */
 export const ALERT_DECISION_KINDS = ['suppressed', 'deduped', 'grouped', 'maintenance'] as const;
 export type AlertDecisionKind = (typeof ALERT_DECISION_KINDS)[number];
-/** Decisions outside the four filterable kinds (held, downgraded, transformed) still show on the row. */
-export type AlertDecisionLabelKind = AlertDecisionKind | 'held' | 'downgraded' | 'transformed';
-
-export const ALERT_DECISION_LABELS: Readonly<Record<AlertDecisionLabelKind, string>> = {
-  suppressed: 'Suppressed',
-  deduped: 'Deduplicated',
-  grouped: 'Grouped',
-  maintenance: 'Maintenance',
-  held: 'Held',
-  downgraded: 'Downgraded',
-  transformed: 'Transformed',
-};
+/**
+ * Decisions outside the four filterable kinds (held, downgraded, transformed) still show on the row. Kinds,
+ * labels and tones are the shared noise-decision vocabulary in `incident-ux/explain.ts`.
+ */
+export type AlertDecisionLabelKind = NoiseDecisionKind;
+export const ALERT_DECISION_LABELS = NOISE_DECISION_LABELS;
 
 export const ALERT_DECISION_OPTIONS: ReadonlyArray<{ value: AlertDecisionKind; label: string }> = [
   { value: 'suppressed', label: ALERT_DECISION_LABELS.suppressed },
@@ -83,22 +82,7 @@ export const ALERT_DECISION_OPTIONS: ReadonlyArray<{ value: AlertDecisionKind; l
 ];
 
 /** Maps a recorded pre-paging decision onto the label responders see. Null when it did nothing. */
-export function classifyAlertDecision(
-  control: string,
-  action: string
-): AlertDecisionLabelKind | null {
-  if (action === 'NONE') return null;
-  if (control === 'MAINTENANCE') return 'maintenance';
-  if (control === 'CONTENT_DEDUP') return 'deduped';
-  if (control === 'STORM') return 'grouped';
-  if (action === 'SUPPRESS' || action === 'DROP') return 'suppressed';
-  if (action === 'APPEND') return 'deduped';
-  if (action === 'GROUP_CHILD') return 'grouped';
-  if (action === 'HOLD') return 'held';
-  if (action === 'DOWNGRADE') return 'downgraded';
-  if (action === 'TRANSFORM') return 'transformed';
-  return null;
-}
+export const classifyAlertDecision = classifyNoiseDecision;
 
 export interface AlertListFilters {
   serviceId: string | null;

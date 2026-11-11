@@ -131,12 +131,8 @@ function TriageChip({
           assistantName={assistantName}
           subject={title}
           question={`Why is this triage suggestion being made: ${title}?`}
-          evidence={{
-            kind: 'finding',
-            id: suggestion.findingId,
-            label: title,
-            href: `#finding-${suggestion.findingId}`,
-          }}
+          incidentId={incidentId}
+          evidence={{ kind: 'triage', id: suggestion.findingId, label: title }}
         />
       )}
     </li>

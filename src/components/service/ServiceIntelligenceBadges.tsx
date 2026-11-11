@@ -1,5 +1,6 @@
 import { Flame, ShieldCheck, Wrench } from 'lucide-react';
 import type { ServiceListBadges } from '@/lib/intelligence/surfaces/service-list-badges';
+import { NOISE_DECISION_LABELS } from '@/lib/intelligence/incident-ux/explain';
 import { cn } from '@/lib/utils';
 
 export type ServiceIntelligenceBadgeData = ServiceListBadges;
@@ -34,7 +35,7 @@ export default function ServiceIntelligenceBadges({
           title={`Maintenance window: ${badges.maintenance.name}`}
         >
           <Wrench className="h-3 w-3 shrink-0" aria-hidden="true" />
-          In maintenance
+          {NOISE_DECISION_LABELS.maintenance}
         </span>
       )}
       {badges.sloBurning && (

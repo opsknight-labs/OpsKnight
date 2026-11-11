@@ -1,3 +1,8 @@
+import {
+  INSIGHTS_SECTIONS,
+  type InsightsSectionId,
+} from '@/lib/intelligence/incident-ux/strip-contract';
+
 /**
  * Small event bridge shared with callers without importing the assistant UI.
  *
@@ -12,7 +17,8 @@
  * | `question`   | Placed in the composer and focused, NOT sent. Use it for links and "Ask about this"     |
  * |              | actions where the person should confirm the wording first. Ignored when `message` is set.|
  * | `evidence`   | The item the question is about: `{ kind, id, label? }`. Shown above the composer as an  |
- * |              | "About" chip that links back to the item (`#finding-<id>` for incident findings).       |
+ * |              | "About" chip that links back to the item (`#finding-<id>` for incident findings). For a |
+ * |              | whole inspector section, `id` is the incident id and the chip links to the section.     |
  * | `incidentId` | The incident the caller is showing. When it matches the page's incident the panel docks |
  * |              | beside the page on desktop, unless the person chose a display mode themselves.          |
  *
@@ -77,18 +83,9 @@ export interface SquireOpenRequest {
   incidentId?: string;
 }
 
-/** The inspector section a finding kind lives in (`?insights=<section>`). */
-export const INSIGHTS_SECTIONS = [
-  'briefing',
-  'triage',
-  'similar',
-  'related',
-  'why',
-  'runbooks',
-  'impact',
-  'summary',
-] as const;
-export type InsightsSection = (typeof INSIGHTS_SECTIONS)[number];
+/** The inspector sections (`?insights=<section>`): defined once, beside the strip's loader contract. */
+export { INSIGHTS_SECTIONS };
+export type InsightsSection = InsightsSectionId;
 
 const SECTION_OF = new Map<SquireEvidenceKind, InsightsSection>([
   ['briefing', 'briefing'],
@@ -130,7 +127,9 @@ export function findingHref(
 ): string | undefined {
   if (!ID.test(incidentId) || !ID.test(finding.id)) return undefined;
   const section = insightsSectionFor(finding.kind);
-  return `${options.mobile ? '/m' : ''}/incidents/${incidentId}${section ? `?insights=${section}` : ''}#${findingAnchor(finding.id)}`;
+  const base = `${options.mobile ? '/m' : ''}/incidents/${incidentId}${section ? `?insights=${section}` : ''}`;
+  // A handle whose id is the incident's own id is about a whole section, which has no item anchor.
+  return finding.id === incidentId ? base : `${base}#${findingAnchor(finding.id)}`;
 }
 
 const text = (value: unknown, max: number): string | undefined => {

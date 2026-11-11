@@ -294,7 +294,10 @@ test.describe.serial('AIOps overview', () => {
     const inbox = page.getByRole('region', { name: 'Needs attention' });
     await expect(inbox).toBeVisible();
     const dependency = inbox.getByRole('link', { name: /observed dependenc(y|ies) to review/ });
-    await expect(dependency).toHaveAttribute('href', '/settings/intelligence/response');
+    await expect(dependency).toHaveAttribute(
+      'href',
+      '/settings/intelligence/services#dependencies'
+    );
     expect((await dependency.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     // The inbox sits above the sections.
     const noise = page.getByRole('region', { name: 'Noise', exact: true });

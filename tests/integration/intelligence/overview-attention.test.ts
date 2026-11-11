@@ -246,11 +246,11 @@ describe('overview needs-attention inbox', () => {
     const items = (await getOverviewAttention(admin)).items;
     expect(items.find(item => item.kind === 'dependencies')).toMatchObject({
       title: '1 observed dependency to review',
-      href: '/settings/intelligence/response',
+      href: '/settings/intelligence/services#dependencies',
     });
     expect(items.find(item => item.kind === 'quarantine')).toMatchObject({
       title: '1 quarantined work item',
-      href: '/settings/intelligence',
+      href: '/settings/intelligence#failed-work',
     });
     expect((await getOverviewAttention(responder)).items).toEqual([]);
   });

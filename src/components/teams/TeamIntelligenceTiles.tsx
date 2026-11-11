@@ -90,7 +90,7 @@ function AiUsage({ tile, canManage }: { tile: TeamAiUsageTile; canManage: boolea
       icon={<Sparkles className="h-3.5 w-3.5" />}
       title="AI usage"
       period="today (UTC)"
-      href={canManage ? '/settings/intelligence/ai' : undefined}
+      href={canManage ? '/settings/intelligence/evaluation#ai-spend' : undefined}
       linkLabel="Spend and budgets"
     >
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2">

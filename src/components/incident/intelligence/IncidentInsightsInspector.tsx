@@ -148,13 +148,18 @@ export default function IncidentInsightsInspector({
         onInteractOutside={event => {
           if (!bottom) event.preventDefault();
         }}
-        style={!bottom && width ? { width: `${width}px`, maxWidth: '100vw' } : undefined}
+        style={
+          !bottom && width
+            ? { width: `${width}px`, maxWidth: 'calc(100vw - var(--squire-dock-width, 0px))' }
+            : undefined
+        }
         className={
           bottom
             ? // The sheet primitive's close button is 34 px; as a bottom sheet it is a touch target.
               'flex max-h-[85dvh] flex-col gap-0 rounded-t-2xl p-0 motion-reduce:!animate-none motion-reduce:!transition-none [&>button]:h-11 [&>button]:w-11'
             : // Above the page chrome (sidebar 30), below the assistant (40), which it must never cover.
-              'z-[35] flex w-full flex-col gap-0 p-0 sm:max-w-xl motion-reduce:!animate-none motion-reduce:!transition-none'
+              // A docked assistant owns the right edge (--squire-dock-width); the panel sits beside it.
+              'z-[35] flex w-full flex-col gap-0 p-0 sm:max-w-xl lg:right-[var(--squire-dock-width,0px)] motion-reduce:!animate-none motion-reduce:!transition-none'
         }
       >
         {!bottom && (

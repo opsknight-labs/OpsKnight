@@ -20,6 +20,7 @@ import { getProactiveNotesForActor, type ProactiveNotesView } from '../memory/pr
 import { getIncidentTimeAxisForActor, type IncidentTimeAxis } from '../timeline/service';
 import { getIncidentGroupForActor, type IncidentGroupView } from './group-view';
 import { getIncidentListBadges } from './list-badges';
+import { NOISE_DECISION_TONE } from './explain';
 import {
   FRESHNESS_DOT_STATUSES,
   INSIGHTS_SECTIONS,
@@ -332,7 +333,7 @@ export function buildStripChips(insights: IncidentInsights): StripChip[] {
     chips.push({
       id: `noise-${state.kind}`,
       target: { anchor: 'timeline-intelligence' },
-      tone: 'shift',
+      tone: NOISE_DECISION_TONE[state.kind],
       label: clip(state.label, 44),
     });
 

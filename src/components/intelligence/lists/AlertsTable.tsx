@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { AlertListDecision, AlertListRow } from '@/lib/intelligence/lists/alerts';
+import { NOISE_DECISION_TONE } from '@/lib/intelligence/incident-ux/explain';
 import { ALERT_DECISION_LABELS } from '@/lib/intelligence/lists/contract';
 import {
   ListChip,
@@ -34,7 +35,7 @@ export function DecisionChip({ decision }: { decision: AlertListDecision | null 
   const label = ALERT_DECISION_LABELS[decision.kind];
   return (
     <span className="inline-flex max-w-full flex-col gap-0.5">
-      <ListChip tone={decision.applied ? 'info' : 'outline'}>
+      <ListChip tone={decision.applied ? NOISE_DECISION_TONE[decision.kind] : 'outline'}>
         {decision.applied ? label : `Shadow: ${label.toLowerCase()}`}
       </ListChip>
       {decision.sourceName && (

@@ -174,3 +174,34 @@ describe('alerts and changes navigation', () => {
     expect(MOBILE_MORE_ROUTES).toContain('/m/intelligence');
   });
 });
+
+describe('one noise-decision vocabulary across incident, lists and service surfaces', () => {
+  it('gives the alerts list the same kinds, labels and classifier the incident surfaces use', async () => {
+    const explain = await import('@/lib/intelligence/incident-ux/explain');
+    const lists = await import('@/lib/intelligence/lists/contract');
+    expect(lists.ALERT_DECISION_LABELS).toBe(explain.NOISE_DECISION_LABELS);
+    expect(lists.classifyAlertDecision).toBe(explain.classifyNoiseDecision);
+    for (const kind of ALERT_DECISION_KINDS) expect(explain.NOISE_DECISION_KINDS).toContain(kind);
+    // Every kind has a label and a status tone, so no surface invents its own.
+    for (const kind of explain.NOISE_DECISION_KINDS) {
+      expect(explain.NOISE_DECISION_LABELS[kind]).toBeTruthy();
+      expect(['neutral', 'info', 'shift']).toContain(explain.NOISE_DECISION_TONE[kind]);
+    }
+  });
+
+  it('words and tones a maintenance decision the same on the badge, the strip and the list', async () => {
+    const explain = await import('@/lib/intelligence/incident-ux/explain');
+    expect(explain.noiseBadgeKind('MAINTENANCE')).toBe(
+      classifyAlertDecision('MAINTENANCE', 'SUPPRESS')
+    );
+    expect(explain.noiseBadgeLabel('MAINTENANCE', null)).toBe(
+      explain.NOISE_DECISION_LABELS.maintenance
+    );
+    expect(explain.noiseBadgeLabel('MAINTENANCE', 'Deploy freeze')).toBe(
+      'In maintenance: Deploy freeze'
+    );
+    expect(explain.NOISE_DECISION_TONE.maintenance).toBe('info');
+    expect(explain.NOISE_DECISION_TONE.suppressed).toBe('neutral');
+    expect(explain.NOISE_DECISION_TONE.grouped).toBe('shift');
+  });
+});

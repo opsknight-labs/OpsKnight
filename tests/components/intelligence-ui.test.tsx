@@ -17,7 +17,16 @@ import IntelligenceSubNav, {
 } from '@/components/settings/layout/IntelligenceSubNav';
 import SquireAvatar from '@/components/squire/SquireAvatar';
 import AskSquireAbout from '@/components/incident/intelligence/AskSquireAbout';
-import { openSquire } from '@/components/squire/squire-bus';
+import {
+  INSIGHTS_SECTIONS as BUS_SECTIONS,
+  SQUIRE_EVIDENCE_KINDS,
+  findingAnchor,
+  findingHref,
+  insightsSectionFor,
+  openSquire,
+  parseSquireOpenDetail,
+} from '@/components/squire/squire-bus';
+import { INSIGHTS_SECTIONS } from '@/lib/intelligence/incident-ux/strip-contract';
 import AiUsageChart from '@/components/settings/AiUsageChart';
 
 describe('IntelligenceSubNav', () => {
@@ -68,7 +77,7 @@ describe('SquireAvatar', () => {
 });
 
 describe('Ask Squire entry points', () => {
-  it('opens the assistant with the question and the item’s evidence handle', () => {
+  it('hands the assistant a prefilled question, the evidence handle and the incident (bus contract)', () => {
     const opened = vi.fn();
     window.addEventListener('squire:open', opened);
     render(
@@ -76,16 +85,37 @@ describe('Ask Squire entry points', () => {
         assistantName="Pip"
         subject="deploy api v9"
         question="What could have caused this?"
-        evidence={{ kind: 'finding', id: 'f1', label: 'deploy api v9', href: '#finding-f1' }}
+        incidentId="inc-1"
+        evidence={{ kind: 'change', id: 'f1', label: 'deploy api v9' }}
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Ask Pip about deploy api v9' }));
     expect(opened).toHaveBeenCalledTimes(1);
-    expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
-      message: 'What could have caused this?',
-      evidence: { kind: 'finding', id: 'f1', label: 'deploy api v9', href: '#finding-f1' },
+    const detail = (opened.mock.calls[0][0] as CustomEvent).detail;
+    // `question` (placed in the composer), never `message` (sent at once): the person confirms the wording.
+    expect(detail).toEqual({
+      question: 'What could have caused this?',
+      evidence: { kind: 'change', id: 'f1', label: 'deploy api v9' },
+      incidentId: 'inc-1',
     });
+    // What the launcher reads back is the same request, and its chip links to the item the inspector renders.
+    const request = parseSquireOpenDetail(detail);
+    expect(request).toEqual(detail);
+    expect(findingHref('inc-1', request.evidence!)).toBe(
+      `/incidents/inc-1?insights=why#${findingAnchor('f1')}`
+    );
     window.removeEventListener('squire:open', opened);
+  });
+
+  it('links a whole-section handle to the section, and shares the section names with the strip', () => {
+    expect(findingHref('inc-1', { kind: 'impact', id: 'inc-1' })).toBe(
+      '/incidents/inc-1?insights=impact'
+    );
+    expect(BUS_SECTIONS).toBe(INSIGHTS_SECTIONS);
+    for (const kind of SQUIRE_EVIDENCE_KINDS) {
+      const section = insightsSectionFor(kind);
+      if (section) expect(INSIGHTS_SECTIONS).toContain(section);
+    }
   });
 
   it('keeps the bus backwards compatible: a plain question carries no evidence key', () => {

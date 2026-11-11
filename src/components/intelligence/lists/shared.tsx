@@ -17,7 +17,7 @@ export function ListWhen({ value }: { value: Date }) {
   );
 }
 
-export type ChipTone = 'neutral' | 'critical' | 'elevated' | 'info' | 'ok' | 'outline';
+export type ChipTone = 'neutral' | 'critical' | 'elevated' | 'info' | 'ok' | 'shift' | 'outline';
 
 /** A small labelled chip. The label carries the meaning; colour only reinforces it. */
 export function ListChip({ tone = 'neutral', children }: { tone?: ChipTone; children: ReactNode }) {
@@ -34,7 +34,9 @@ export function ListChip({ tone = 'neutral', children }: { tone?: ChipTone; chil
         tone === 'info' &&
           'border-status-info-border/40 bg-status-info-soft text-status-info-deep dark:bg-status-info/10 dark:text-foreground',
         tone === 'ok' &&
-          'border-status-ok-border/40 bg-status-ok-soft text-status-ok-deep dark:bg-status-ok/10 dark:text-foreground'
+          'border-status-ok-border/40 bg-status-ok-soft text-status-ok-deep dark:bg-status-ok/10 dark:text-foreground',
+        tone === 'shift' &&
+          'border-status-shift-border/40 bg-status-shift-soft text-status-shift-deep dark:bg-status-shift/10 dark:text-foreground'
       )}
     >
       {children}

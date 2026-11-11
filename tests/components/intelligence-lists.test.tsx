@@ -88,7 +88,7 @@ describe('AlertsTable', () => {
         rows={[alert({ severity: null, labels: [], moreLabels: 0, incidentId: null })]}
       />
     );
-    expect(screen.queryByText(/Suppressed|Shadow|Maintenance|Grouped|Deduplicated/)).toBeNull();
+    expect(screen.queryByText(/Suppressed|Shadow|maintenance|Grouped|Deduplicated/)).toBeNull();
     expect(screen.queryByRole('list', { name: 'Labels' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Open incident' })).toBeNull();
     expect(screen.queryByText('Severity:')).toBeNull();
@@ -112,7 +112,7 @@ describe('AlertsTable', () => {
         decision={{ kind: 'maintenance', applied: false, sourceName: null, reason: 'r' }}
       />
     );
-    expect(screen.getByText('Shadow: maintenance')).toBeInTheDocument();
+    expect(screen.getByText('Shadow: in maintenance')).toBeInTheDocument();
   });
 });
 
@@ -269,7 +269,7 @@ describe('NeedsAttention', () => {
       kind: 'dependencies',
       title: '4 observed dependencies to review',
       detail: 'Inferred from incidents that keep occurring together.',
-      href: '/settings/intelligence/response',
+      href: '/settings/intelligence/services#dependencies',
     },
   ];
 
@@ -284,7 +284,7 @@ describe('NeedsAttention', () => {
     const links = within(section).getAllByRole('link');
     expect(links.map(link => link.getAttribute('href'))).toEqual([
       '/incidents/inc-1?insights=triage',
-      '/settings/intelligence/response',
+      '/settings/intelligence/services#dependencies',
     ]);
     for (const link of links) expect(link.className).toContain('min-h-11');
     expect(within(section).getByText('Triage')).toBeInTheDocument();

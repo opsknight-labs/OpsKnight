@@ -1079,9 +1079,13 @@ rendered between the description and the core tabs.
   shell is client code. Opened by a chip, by `I` (registered in `src/lib/keyboard-shortcuts.ts`, category
   "Incident Triage", ignored inside the `G` `I` chord and while typing), by `?insights=<section>` and by
   `#finding-<id>`. Items carry stable anchors `id="finding-<id>"`.
-- **Ask Squire about this.** Every item calls `openSquire(question, { evidence })` on the squire bus. The
-  `evidence` handle (`kind`, `id`, `label`, `href`) is an additive field of the open event; listeners that
-  read only `message` are unaffected. The standalone Ask Squire card is removed.
+- **Ask Squire about this.** Every item calls `openSquire({ question, evidence, incidentId })` on the
+  squire bus (the contract under "Assistant (Squire)"): the question is placed in the composer, not sent,
+  and the `evidence` handle (`kind`, `id`, `label`) becomes the launcher's "About" chip, which links back to
+  the item's `#finding-<id>` anchor. A whole section (briefing, group, impact) passes the incident id as
+  `id`, and the chip links to the section. The standalone Ask Squire card is removed.
+- **Beside a docked assistant.** The desktop inspector is offset by `--squire-dock-width`, so a docked
+  Squire and the inspector sit side by side instead of overlapping.
 - **Timeline.** The intelligence time axis (`timeline/service.ts`, mapped by
   `incident-ux/timeline-overlay.ts`) is an overlay on the core Timeline tab behind "Show intelligence
   events" (on when any exist) with an "Intelligence" filter. There is no separate intelligence timeline.

@@ -139,8 +139,61 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
+/**
+ * The one vocabulary for what a noise control did with an alert. The incident strip and list badges, the
+ * alerts list and the service surfaces all take the kind, its short label and its status tone from here, so
+ * the same decision never reads or colours differently between pages.
+ */
+export const NOISE_DECISION_KINDS = [
+  'suppressed',
+  'deduped',
+  'grouped',
+  'maintenance',
+  'held',
+  'downgraded',
+  'transformed',
+] as const;
+export type NoiseDecisionKind = (typeof NOISE_DECISION_KINDS)[number];
+
+export const NOISE_DECISION_LABELS: Readonly<Record<NoiseDecisionKind, string>> = {
+  suppressed: 'Suppressed',
+  deduped: 'Deduplicated',
+  grouped: 'Grouped',
+  maintenance: 'In maintenance',
+  held: 'Held',
+  downgraded: 'Urgency lowered',
+  transformed: 'Enriched',
+};
+
+/** Status tone per kind: maintenance is informational, grouping is the "shift" hue, the rest stay neutral. */
+export type NoiseDecisionTone = 'neutral' | 'info' | 'shift';
+export const NOISE_DECISION_TONE: Readonly<Record<NoiseDecisionKind, NoiseDecisionTone>> = {
+  suppressed: 'neutral',
+  deduped: 'neutral',
+  grouped: 'shift',
+  maintenance: 'info',
+  held: 'neutral',
+  downgraded: 'neutral',
+  transformed: 'neutral',
+};
+
+/** Maps a recorded pre-paging decision onto its kind. Null when the control did nothing. */
+export function classifyNoiseDecision(control: string, action: string): NoiseDecisionKind | null {
+  if (action === 'NONE') return null;
+  if (control === 'MAINTENANCE') return 'maintenance';
+  if (control === 'CONTENT_DEDUP') return 'deduped';
+  if (control === 'STORM') return 'grouped';
+  if (action === 'SUPPRESS' || action === 'DROP') return 'suppressed';
+  if (action === 'APPEND') return 'deduped';
+  if (action === 'GROUP_CHILD') return 'grouped';
+  if (action === 'HOLD') return 'held';
+  if (action === 'DOWNGRADE') return 'downgraded';
+  if (action === 'TRANSFORM') return 'transformed';
+  return null;
+}
+
 /** The short label used on incident list badges. */
-export type NoiseBadgeKind = 'suppressed' | 'maintenance';
+export type NoiseBadgeKind = Extract<NoiseDecisionKind, 'suppressed' | 'maintenance'>;
 
 export function noiseBadgeKind(control: string): NoiseBadgeKind | null {
   if (control === 'MAINTENANCE') return 'maintenance';
@@ -151,7 +204,9 @@ export function noiseBadgeKind(control: string): NoiseBadgeKind | null {
 
 export function noiseBadgeLabel(control: string, sourceName: string | null): string {
   if (control === 'MAINTENANCE')
-    return sourceName ? `In maintenance: ${sourceName}` : 'In maintenance';
+    return sourceName
+      ? `${NOISE_DECISION_LABELS.maintenance}: ${sourceName}`
+      : NOISE_DECISION_LABELS.maintenance;
   if (control === 'FLAPPING') return 'Suppressed: flapping';
   return sourceName ? `Suppressed by ${sourceName}` : 'Suppressed by rule';
 }

@@ -219,14 +219,10 @@ describe('IncidentInsights', () => {
     window.removeEventListener('squire:open', opened);
     expect(opened).toHaveBeenCalledTimes(1);
     expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
-      message:
+      question:
         'Have we seen this before? Compare this incident with the similar incident "Checkout pool exhausted (last month)".',
-      evidence: {
-        kind: 'finding',
-        id: 's1',
-        label: 'Checkout pool exhausted (last month)',
-        href: '#finding-s1',
-      },
+      evidence: { kind: 'similar', id: 's1', label: 'Checkout pool exhausted (last month)' },
+      incidentId: 'inc-1',
     });
     // Every item and section offers it, with a touch-sized target.
     const asks = screen.getAllByRole('button', { name: /^Ask Pip about / });

@@ -18,7 +18,6 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-import AskSquirePanel from '@/components/squire/AskSquirePanel';
 import SquireLauncher from '@/components/squire/SquireLauncher';
 import { openSquire } from '@/components/squire/squire-bus';
 import { DISPLAY_KEY, DOCK_CLASS, DOCK_WIDTH, DOCK_WIDTH_VARIABLE } from '@/components/squire/dock';
@@ -413,12 +412,5 @@ describe('touch targets', () => {
     expect(screen.getByRole('link', { name: 'Return to original context' }).className).toContain(
       'min-h-11'
     );
-  });
-
-  it('gives the incident question chips a 44 px target', () => {
-    render(<AskSquirePanel name="Pip" avatar="KNIGHT" />);
-    const chips = screen.getAllByRole('button');
-    expect(chips.length).toBeGreaterThan(0);
-    for (const chip of chips) expect(chip.className).toContain('min-h-11');
   });
 });

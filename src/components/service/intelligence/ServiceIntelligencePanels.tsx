@@ -128,7 +128,10 @@ export function DependenciesPanel({
           {canManage && (
             <>
               {' '}
-              <Link href="/settings/intelligence/response" className="underline underline-offset-2">
+              <Link
+                href="/settings/intelligence/services#dependencies"
+                className="underline underline-offset-2"
+              >
                 See all dependencies
               </Link>
             </>

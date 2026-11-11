@@ -10,6 +10,7 @@ import MarkRelatedIncident from '@/components/incident/MarkRelatedIncident';
 import RelatedIncidentActions from '@/components/incident/RelatedIncidentActions';
 import SimilarIncidentFeedback from '@/components/incident/SimilarIncidentFeedback';
 import TriageChips from '@/components/incident/TriageChips';
+import type { SquireEvidenceKind } from '@/components/squire/squire-bus';
 import AskSquireAbout from './AskSquireAbout';
 import FreshnessDot from './FreshnessDot';
 import IncidentGroupView from './IncidentGroupView';
@@ -102,21 +103,19 @@ export default function InsightsSections({
   const { incidentId } = insights;
   const has = (id: InsightsSectionId) => sections.includes(id);
   const incidentHref = (id: string) => `${routePrefix}/incidents/${id}`;
+  // `id` omitted means the whole section: the handle then carries the incident id (see squire-bus).
   const ask = (
     subject: string,
     question: string,
-    evidence: { kind: 'finding' | 'relationship' | 'section'; id: string; label?: string }
+    evidence: { kind: SquireEvidenceKind; id?: string; label?: string }
   ) =>
     assistantName ? (
       <AskSquireAbout
         assistantName={assistantName}
         subject={subject}
         question={question}
-        evidence={{
-          ...evidence,
-          href:
-            evidence.kind === 'section' ? `#insights-${evidence.id}` : `#finding-${evidence.id}`,
-        }}
+        incidentId={incidentId}
+        evidence={{ ...evidence, id: evidence.id ?? incidentId }}
       />
     ) : null;
 
@@ -163,8 +162,7 @@ export default function InsightsSections({
             notes={insights.proactive}
             routePrefix={routePrefix}
             action={ask('this briefing', 'Summarise this incident', {
-              kind: 'section',
-              id: 'briefing',
+              kind: 'briefing',
               label: 'Briefing',
             })}
           />
@@ -263,7 +261,7 @@ export default function InsightsSections({
                   {ask(
                     item.title,
                     `Have we seen this before? Compare this incident with the similar incident ${quote(item.title)}.`,
-                    { kind: 'finding', id: item.findingId, label: item.title }
+                    { kind: 'similar', id: item.findingId, label: item.title }
                   )}
                 </div>
               </li>
@@ -287,8 +285,7 @@ export default function InsightsSections({
               />
               {!insights.group.parentHidden &&
                 ask('this group', 'Why were these incidents and alerts grouped together?', {
-                  kind: 'section',
-                  id: 'related',
+                  kind: 'group',
                   label: 'Group',
                 })}
             </div>
@@ -347,7 +344,7 @@ export default function InsightsSections({
                         item.title,
                         `Is ${quote(item.title)} a similar incident, and how is it related to this one?`,
                         {
-                          kind: 'relationship',
+                          kind: 'related',
                           id: item.relationshipId,
                           label: item.title,
                         }
@@ -415,7 +412,7 @@ export default function InsightsSections({
                   {ask(
                     change.summary,
                     `What changed before this started? Could ${quote(change.summary)} have caused this incident?`,
-                    { kind: 'finding', id: change.findingId, label: change.summary }
+                    { kind: 'change', id: change.findingId, label: change.summary }
                   )}
                 </li>
               ))}
@@ -442,7 +439,7 @@ export default function InsightsSections({
                     {ask(
                       item.title,
                       `Could the upstream incident ${quote(item.title)} on ${item.serviceName} be causing this one?`,
-                      { kind: 'finding', id: item.findingId, label: item.title }
+                      { kind: 'upstream', id: item.findingId, label: item.title }
                     )}
                   </li>
                 ))}
@@ -470,7 +467,7 @@ export default function InsightsSections({
                 </Link>
                 <p className="text-xs text-muted-foreground">{runbookTrackRecord(item)}</p>
                 {ask(item.name, `Which runbook fits? Would ${quote(item.name)} help here?`, {
-                  kind: 'finding',
+                  kind: 'runbook',
                   id: item.findingId,
                   label: item.name,
                 })}
@@ -493,7 +490,7 @@ export default function InsightsSections({
             action={ask(
               'the estimated impact',
               'What is the impact of this incident on dependent services and error budgets?',
-              { kind: 'section', id: 'impact', label: 'Impact' }
+              { kind: 'impact', label: 'Impact' }
             )}
           />
         </div>

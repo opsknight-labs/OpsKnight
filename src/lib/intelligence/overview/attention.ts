@@ -233,7 +233,7 @@ async function passedGates(actor: AuthorizationActor, client: Client): Promise<A
       kind: 'gate',
       title: `${plural(ready.length - shown.length, 'more service')} ready for AUTO`,
       detail: 'Review them under per-service policies.',
-      href: '/settings/intelligence/services',
+      href: '/settings/intelligence/services#service-policies',
     });
   return items;
 }
@@ -257,7 +257,7 @@ async function suggestedDependencies(client: Client): Promise<AttentionItem[]> {
       kind: 'dependencies',
       title: `${sampled(rows.length)} observed ${rows.length === 1 ? 'dependency' : 'dependencies'} to review`,
       detail: 'Inferred from incidents that keep occurring together. Approve or reject each one.',
-      href: '/settings/intelligence/response',
+      href: '/settings/intelligence/services#dependencies',
     },
   ];
 }
@@ -276,7 +276,7 @@ async function quarantinedWork(client: Client): Promise<AttentionItem[]> {
       kind: 'quarantine',
       title: `${plural(backlog.quarantined, 'quarantined work item')}`,
       detail: 'Analysis work that failed twice within a day and waits for a replay.',
-      href: '/settings/intelligence',
+      href: '/settings/intelligence#failed-work',
     },
   ];
 }
