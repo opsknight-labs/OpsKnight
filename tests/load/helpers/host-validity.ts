@@ -3,12 +3,14 @@
  *
  * The ingestion A/B gate compares milliseconds; on a shared machine another build, typecheck or test run
  * moves both arms by more than the contract allows. A run is VALID only if
- *   - the 1-minute load average was below `maxStartLoad1` when it started,
+ *   - the 1-minute load average was below `maxStartLoad1` when it started and never rose above
+ *     `maxPeakLoad1` at any sample (a start below the limit says nothing about what joined in later),
  *   - no other heavy process (compiler, test runner, build, another load test, headless browser) was
  *     seen at any sample, and
  *   - the host never stalled: no gap longer than `maxGapSec` between two samples.
- * The benchmark's own load is allowed and recorded as the peak. An invalid run is never a pass and never a
- * fail: it is discarded and repeated.
+ * The benchmark's own load counts toward the peak (it adds about 0.3 to 1.2 on an 8-core laptop), so a run
+ * has to start well below the limit to stay valid. An invalid run is never a pass and never a fail: it is
+ * discarded and repeated.
  *
  * Sampling runs in a worker thread, so a busy benchmark event loop neither delays the samples nor is
  * delayed by them, and a gap really is the host (or the whole process) standing still.
@@ -19,6 +21,7 @@ import { Worker } from 'node:worker_threads';
 
 export const HOST_VALIDITY_RULE = {
   maxStartLoad1: 4,
+  maxPeakLoad1: 4,
   maxGapSec: 15,
   sampleEverySec: 3,
 } as const;
@@ -38,6 +41,7 @@ export interface HostSample {
 export interface HostValidation {
   rule: string;
   maxStartLoad1: number;
+  maxPeakLoad1: number;
   startLoad1: number | null;
   peakLoad1: number | null;
   maxSampleGapSec: number | null;
@@ -94,7 +98,7 @@ export function otherHeavyProcesses(rows: ProcessRow[], selfPid: number): string
 
 export function judgeHostSamples(
   samples: HostSample[],
-  rule: { maxStartLoad1: number; maxGapSec: number } = HOST_VALIDITY_RULE
+  rule: { maxStartLoad1: number; maxPeakLoad1: number; maxGapSec: number } = HOST_VALIDITY_RULE
 ): HostValidation {
   const reasons: string[] = [];
   if (samples.length < 3) reasons.push('too few host samples');
@@ -103,6 +107,10 @@ export function judgeHostSamples(
   if (start === null || !(start < rule.maxStartLoad1))
     reasons.push(
       `1-minute load at start ${start === null ? 'unknown' : Number(start.toFixed(2))} is not below ${rule.maxStartLoad1}`
+    );
+  else if (peak !== null && peak > rule.maxPeakLoad1)
+    reasons.push(
+      `1-minute load peaked at ${Number(peak.toFixed(2))} during the run, above ${rule.maxPeakLoad1}`
     );
   let maxGap: number | null = null;
   for (let index = 1; index < samples.length; index += 1)
@@ -119,9 +127,10 @@ export function judgeHostSamples(
     );
   return {
     rule:
-      `valid iff the 1-minute load is below ${rule.maxStartLoad1} at the start, no other heavy process is seen at any ` +
-      `sample and no gap between samples exceeds ${rule.maxGapSec} s; the peak is recorded, not judged`,
+      `valid iff the 1-minute load is below ${rule.maxStartLoad1} at the start and never above ${rule.maxPeakLoad1} at any ` +
+      `sample, no other heavy process is seen at any sample and no gap between samples exceeds ${rule.maxGapSec} s`,
     maxStartLoad1: rule.maxStartLoad1,
+    maxPeakLoad1: rule.maxPeakLoad1,
     startLoad1: start,
     peakLoad1: peak,
     maxSampleGapSec: maxGap,

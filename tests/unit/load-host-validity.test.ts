@@ -14,9 +14,15 @@ const sample = (at: number, load1: number, otherHeavy: string[] = []): HostSampl
 });
 
 describe('benchmark host validity', () => {
-  it('accepts a quiet host and records the peak without judging it', () => {
-    const verdict = judgeHostSamples([sample(0, 3.2), sample(3, 5.5), sample(6, 6.1)]);
-    expect(verdict).toMatchObject({ valid: true, reasons: [], startLoad1: 3.2, peakLoad1: 6.1 });
+  it('accepts a host that stays quiet for the whole run', () => {
+    const verdict = judgeHostSamples([sample(0, 3.2), sample(3, 3.6), sample(6, 4)]);
+    expect(verdict).toMatchObject({ valid: true, reasons: [], startLoad1: 3.2, peakLoad1: 4 });
+  });
+
+  it('rejects a run whose load rose above the limit after a quiet start', () => {
+    const verdict = judgeHostSamples([sample(0, 3.96), sample(3, 8.1), sample(6, 5)]);
+    expect(verdict.valid).toBe(false);
+    expect(verdict.reasons).toEqual(['1-minute load peaked at 8.1 during the run, above 4']);
   });
 
   it('rejects a loaded start, a stall and another heavy process, each with its reason', () => {
