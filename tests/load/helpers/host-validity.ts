@@ -26,6 +26,8 @@ export const HOST_VALIDITY_RULE = {
 export const HEAVY_PROCESS_PATTERN =
   /(^|[\s/])tsc( |$)|vitest|next build|ts-node.*tests\/load|playwright|chrome-headless-shell/;
 
+const SHELL_COMMAND = /^(\S*\/)?(sh|bash|zsh|dash|fish)( |$)/;
+
 export interface HostSample {
   /** Unix seconds. */
   at: number;
@@ -78,11 +80,16 @@ export function otherHeavyProcesses(rows: ProcessRow[], selfPid: number): string
         grew = true;
       }
   }
-  return rows
-    .filter(row => !own.has(row.pid) && !mine.has(row.pid))
-    .filter(row => HEAVY_PROCESS_PATTERN.test(row.command))
-    .filter(row => !/^(ps|grep|sed|awk) /.test(row.command))
-    .map(row => row.command.slice(0, 160));
+  return (
+    rows
+      .filter(row => !own.has(row.pid) && !mine.has(row.pid))
+      .filter(row => HEAVY_PROCESS_PATTERN.test(row.command))
+      .filter(row => !/^(ps|grep|sed|awk) /.test(row.command))
+      // A shell whose command line merely mentions a compiler or test runner (a wrapper script waiting for
+      // the machine lock, say) is not that tool: when the tool runs it is listed as a process of its own.
+      .filter(row => !SHELL_COMMAND.test(row.command))
+      .map(row => row.command.slice(0, 160))
+  );
 }
 
 export function judgeHostSamples(

@@ -51,6 +51,26 @@ describe('benchmark host validity', () => {
       'node ts-node tests/load/intelligence-storm.ts',
     ]);
   });
+
+  it('does not take a shell that only mentions a heavy tool for the tool itself', () => {
+    const rows = parsePs(
+      [
+        '  20     1 node ts-node tests/load/intelligence-ingestion-ab.ts',
+        // Wrapper scripts of other sessions waiting for the machine lock: asleep, not compiling.
+        '  40     1 /bin/zsh -c source snapshot.sh && until mkdir /tmp/lock; do sleep 15; done; npx tsc --noEmit',
+        '  41    40 bash /scratch/heavy.sh tsc build e2e',
+        '  42     1 /bin/bash /scratch/p2evals-tsc.sh',
+        '  43     1 sh -c vitest run',
+        // The tool itself, once such a wrapper starts it, still counts.
+        '  44    41 node /x/node_modules/.bin/tsc --noEmit --incremental false',
+        '  45    43 npm exec vitest run',
+      ].join('\n')
+    );
+    expect(otherHeavyProcesses(rows, 20)).toEqual([
+      'node /x/node_modules/.bin/tsc --noEmit --incremental false',
+      'npm exec vitest run',
+    ]);
+  });
 });
 
 describe('lane work inside the timed burst', () => {
