@@ -302,7 +302,8 @@ function spawn(state: HostState) {
     return;
   }
   state.worker = worker;
-  state.lastStatus = null;
+  // A restarted thread keeps what the previous one last reported (its totals are already carried over),
+  // so health and the cycle-age metric do not fall back to the process start until the first new cycle.
   state.lastMetrics = null;
   state.threadStartedAt = Date.now();
   state.thread.state = 'starting';
