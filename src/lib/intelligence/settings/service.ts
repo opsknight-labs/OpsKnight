@@ -78,6 +78,8 @@ export type IntelligenceSettingsView = {
   opsInsightsPostmortemsEnabled: boolean;
   opsInsightsRunbooksEnabled: boolean;
   opsInsightsNotificationsEnabled: boolean;
+  /** Small deterministic helpers: create-form suggestions, status drafts, palette knowledge search. */
+  opsHelpersEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -103,6 +105,7 @@ const SETTINGS_SELECT = {
   opsInsightsPostmortemsEnabled: true,
   opsInsightsRunbooksEnabled: true,
   opsInsightsNotificationsEnabled: true,
+  opsHelpersEnabled: true,
   revision: true,
 } as const;
 

@@ -57,6 +57,7 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   opsInsightsPostmortemsEnabled: false,
   opsInsightsRunbooksEnabled: false,
   opsInsightsNotificationsEnabled: false,
+  opsHelpersEnabled: false,
 } as const;
 
 const bounded = (range: { min: number; max: number }) =>
@@ -85,6 +86,8 @@ export const intelligenceSettingsInputSchema = z
     opsInsightsPostmortemsEnabled: z.boolean().optional(),
     opsInsightsRunbooksEnabled: z.boolean().optional(),
     opsInsightsNotificationsEnabled: z.boolean().optional(),
+    // A save that omits it (an older API client) leaves the stored switch as it is.
+    opsHelpersEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()

@@ -47,6 +47,7 @@ type SettingsValues = {
   findingRetentionDays: number;
   feedbackRetentionDays: number;
   handoffSummaryEnabled: boolean;
+  opsHelpersEnabled: boolean;
   revision: number;
 };
 
@@ -140,6 +141,27 @@ export function IntelligenceSettingsForm({
             At each on-call rotation the incoming responder gets a summary of open and recently
             resolved incidents and overdue follow-ups for the schedule&apos;s services.
             Deterministic; an AI narrative is added only when AI is enabled.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${enabledId}-helpers`}
+          name="opsHelpersEnabled"
+          type="checkbox"
+          defaultChecked={settings.opsHelpersEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <div>
+          <label htmlFor={`${enabledId}-helpers`} className="text-sm font-medium">
+            Show small helpers
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Suggests a service, urgency and a likely duplicate while someone creates an incident,
+            drafts status-page updates from an incident, searches incidents, postmortems and
+            runbooks from the command palette, and explains what moved a metric on analytics cards.
+            Deterministic; nothing is created or published without a person.
           </p>
         </div>
       </div>

@@ -47,13 +47,13 @@ export interface SimilarityResult {
   results: SimilarIncident[];
 }
 
-const TRIGRAM_THRESHOLD = '0.3';
+export const TRIGRAM_THRESHOLD = '0.3';
 
 /**
  * Runs one candidate source inside a savepoint. A source that hits its statement timeout (or fails for any
  * other reason) is skipped and the others still count, so one slow index can never fail the analysis.
  */
-async function tolerant<T>(
+export async function tolerant<T>(
   tx: Prisma.TransactionClient,
   name: string,
   work: () => Promise<T[]>
@@ -73,7 +73,7 @@ async function tolerant<T>(
   }
 }
 
-type StoredFingerprint = {
+export type StoredFingerprint = {
   incidentId: string;
   serviceId: string;
   template: string;
@@ -83,7 +83,7 @@ type StoredFingerprint = {
   resolvedAt: Date | null;
 };
 
-function toFingerprint(row: StoredFingerprint): SimilarityFingerprint {
+export function toFingerprint(row: StoredFingerprint): SimilarityFingerprint {
   const labels =
     row.labels && typeof row.labels === 'object' && !Array.isArray(row.labels) ? row.labels : {};
   return {
