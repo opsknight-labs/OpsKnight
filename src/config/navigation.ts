@@ -14,6 +14,8 @@ import {
   BarChart,
   Workflow,
   Sparkles,
+  BellRing,
+  GitCommitHorizontal,
   LucideIcon,
 } from 'lucide-react';
 
@@ -109,6 +111,21 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Runbooks',
     releaseStage: 'Beta',
     icon: Workflow,
+    section: 'MAIN',
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
+  },
+  {
+    // Roles holding INTELLIGENCE_READ, the capability both list pages assert.
+    href: '/alerts',
+    label: 'Alerts',
+    icon: BellRing,
+    section: 'MAIN',
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
+  },
+  {
+    href: '/changes',
+    label: 'Changes',
+    icon: GitCommitHorizontal,
     section: 'MAIN',
     requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },

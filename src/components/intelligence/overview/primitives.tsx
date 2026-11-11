@@ -22,12 +22,15 @@ export function OverviewSection({
   description,
   children,
   className,
+  drilldown,
 }: {
   id: string;
   title: string;
   description?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Where the full list behind this section lives. */
+  drilldown?: { href: string; label: string };
 }) {
   return (
     <section
@@ -39,9 +42,21 @@ export function OverviewSection({
       )}
     >
       <header className="space-y-1">
-        <h2 id={`${id}-title`} className="text-base font-semibold tracking-tight">
-          {title}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-x-3">
+          <h2 id={`${id}-title`} className="text-base font-semibold tracking-tight">
+            {title}
+          </h2>
+          {drilldown && (
+            <Link
+              href={drilldown.href}
+              data-overview-drilldown={id}
+              className="inline-flex min-h-11 items-center gap-1 rounded-md text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+            >
+              {drilldown.label}
+              <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </Link>
+          )}
+        </div>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </header>
       {children}

@@ -12,6 +12,7 @@ import WindowSelector from '@/components/intelligence/overview/WindowSelector';
 import { FeatureOff, SectionSkeleton } from '@/components/intelligence/overview/primitives';
 import InsightsInboxSection from '@/components/intelligence/insights/InsightsInboxSection';
 import {
+  AttentionSection,
   ChangeSection,
   HealthSection,
   NoiseSection,
@@ -76,6 +77,11 @@ export default async function IntelligenceOverviewPage({
           canManage={canManage}
         />
       )}
+
+      {/* No skeleton: the inbox is absent when empty, so a placeholder would only flash and vanish. */}
+      <Suspense fallback={null}>
+        <AttentionSection actor={actor} />
+      </Suspense>
 
       {/* Operations insights: renders nothing while the feature is off or there is nothing to say. */}
       <Suspense fallback={null}>

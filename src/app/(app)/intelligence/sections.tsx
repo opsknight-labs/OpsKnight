@@ -1,5 +1,6 @@
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import {
+  getOverviewAttention,
   getOverviewChange,
   getOverviewHealth,
   getOverviewNoise,
@@ -13,6 +14,7 @@ import {
 } from '@/lib/intelligence/overview';
 import ChangePanel from '@/components/intelligence/overview/ChangePanel';
 import HealthPanel from '@/components/intelligence/overview/HealthPanel';
+import NeedsAttention from '@/components/intelligence/overview/NeedsAttention';
 import NoisePanel from '@/components/intelligence/overview/NoisePanel';
 import OutcomesPanel from '@/components/intelligence/overview/OutcomesPanel';
 import QualityPanel from '@/components/intelligence/overview/QualityPanel';
@@ -41,11 +43,22 @@ export const SECTION_TITLES = {
   health: 'Lane health',
 } as const;
 
+/**
+ * The "Needs attention" inbox. Absent when there is nothing to act on; a probe that fails drops out on
+ * its own inside the loader, so this section never renders an error or an empty card.
+ */
+export async function AttentionSection({ actor }: { actor: AuthorizationActor }) {
+  const result = await loadSection('needs attention', () => getOverviewAttention(actor));
+  if (!result.ok) return null;
+  return <NeedsAttention items={result.data.items} />;
+}
+
 export async function NoiseSection({ scope, range, canManage }: SectionProps) {
   const result = await loadSection('noise', () => getOverviewNoise(scope, range));
   return (
     <OverviewSection
       id="overview-noise"
+      drilldown={{ href: '/alerts', label: 'View alerts' }}
       title={SECTION_TITLES.noise}
       description="Alerts received against incidents created, and what noise controls held back. Shadow decisions show what would have happened and are never counted as avoided pages."
     >
@@ -63,6 +76,7 @@ export async function SpeedSection({ scope, range, canManage, status }: SectionP
   return (
     <OverviewSection
       id="overview-speed"
+      drilldown={{ href: '/incidents', label: 'View incidents' }}
       title={SECTION_TITLES.speed}
       description="How soon Intelligence offered its first suggestion, and how often responders accepted what it suggested."
     >
@@ -89,6 +103,7 @@ export async function QualitySection({
   return (
     <OverviewSection
       id="overview-quality"
+      drilldown={{ href: '/services', label: 'View services' }}
       title={SECTION_TITLES.quality}
       description="Services whose incidents mostly clear on their own, go unacknowledged or flap, over the last 30 days."
     >
@@ -106,6 +121,7 @@ export async function ChangeSection({ scope, range, canManage, status }: Section
   return (
     <OverviewSection
       id="overview-change"
+      drilldown={{ href: '/changes', label: 'View changes' }}
       title={SECTION_TITLES.change}
       description="Incidents with a suggested change cause, and the changes most likely to be followed by an incident. Risk is a ranking signal, never a verdict."
     >
@@ -128,6 +144,7 @@ export async function OutcomesSection({ scope, range }: SectionProps) {
   return (
     <OverviewSection
       id="overview-outcomes"
+      drilldown={{ href: '/analytics', label: 'Open analytics' }}
       title={SECTION_TITLES.outcomes}
       description="Mean time to acknowledge and resolve for incidents created in this window, compared with the window before it."
       className="lg:col-span-2"

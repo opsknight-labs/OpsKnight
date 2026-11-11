@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AlertTriangle, CircleDot, Info } from 'lucide-react';
+import { RISK_HIGH_THRESHOLD, RISK_MEDIUM_THRESHOLD } from '@/lib/intelligence/lists/contract';
 import type { OverviewChange } from '@/lib/intelligence/overview/change';
 import { formatCount, formatPercent } from '@/lib/intelligence/overview/window';
 import { cn } from '@/lib/utils';
@@ -7,14 +8,14 @@ import { FeatureOff, StatGrid, StatTile } from './primitives';
 
 /** Risk is a ranking signal, never a verdict; the band label always accompanies its colour. */
 export function riskBand(score: number): { label: string; tone: 'high' | 'medium' | 'low' } {
-  if (score >= 0.6) return { label: 'High risk', tone: 'high' };
-  if (score >= 0.35) return { label: 'Medium risk', tone: 'medium' };
+  if (score >= RISK_HIGH_THRESHOLD) return { label: 'High risk', tone: 'high' };
+  if (score >= RISK_MEDIUM_THRESHOLD) return { label: 'Medium risk', tone: 'medium' };
   return { label: 'Low risk', tone: 'low' };
 }
 
 const formatWhen = (date: Date) => `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 
-function RiskMeter({ score }: { score: number }) {
+export function RiskMeter({ score }: { score: number }) {
   const band = riskBand(score);
   const Icon = band.tone === 'high' ? AlertTriangle : band.tone === 'medium' ? CircleDot : Info;
   return (

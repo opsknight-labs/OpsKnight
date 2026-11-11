@@ -19,6 +19,12 @@ export {
   type OutcomeTotals,
 } from './outcomes';
 export { getOverviewHealth, type OverviewHealth } from './health';
+export {
+  getOverviewAttention,
+  type AttentionItem,
+  type AttentionKind,
+  type OverviewAttention,
+} from './attention';
 
 export interface OverviewStatus {
   /** The Intelligence master switch. */

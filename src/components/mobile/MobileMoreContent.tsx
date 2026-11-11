@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   Signal,
+  Sparkles,
   Users,
   UsersRound,
   Wrench,
@@ -79,6 +80,14 @@ const operations: NavigationItem[] = [
     label: 'Analytics',
     description: 'Responder performance and trends',
     icon: BarChart3,
+  },
+  {
+    // Roles holding INTELLIGENCE_READ, the capability the page asserts.
+    href: '/m/intelligence',
+    label: 'AIOps',
+    description: 'Noise held back and what needs attention',
+    icon: Sparkles,
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
   {
     href: '/m/users',
