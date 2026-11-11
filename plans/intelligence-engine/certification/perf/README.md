@@ -170,6 +170,69 @@ Reading:
 
 <!-- thread-lane-tables -->
 
+**State: thread lane before the burst-start yield (`30bb4d8aa`)**
+
+| File | Mode | p50 Δ ms | p99 Δ ms | Lane share of burst | Load start → peak | GC ms/run base / cand | Recorded | Under the peak rule |
+| :--- | :--- | ---: | ---: | ---: | :---: | :---: | :--- | :--- |
+| `ci-shape-thread-before-yield-fix-2026-11-10-a1-discarded` | CI shape, thread | -3.40 | -7.08 | – | 2.10 → 4.35 | 81 / 75 | INVALID (discarded) | **INVALID (4 other heavy process(es); peak 4.35 > 4)** |
+| `noise-on-thread-before-yield-fix-2026-11-10-a2-discarded` | every noise control ON, thread | +1.94 | +24.41 | – | 3.49 → 13.70 | 93 / 91 | INVALID (discarded) | **INVALID (host stalled; peak 13.70 > 4)** |
+| `ci-shape-thread-before-yield-fix-2026-11-10-a3-discarded` | CI shape, thread | +0.48 | +4.50 | – | 3.57 → 13.67 | 73 / 70 | INVALID (discarded) | **INVALID (host stalled; peak 13.67 > 4)** |
+| `noise-on-thread-before-yield-fix-2026-11-10-a4` | every noise control ON, thread | +0.44 | +5.78 | – | 3.41 → 4.11 | 69 / 69 | PASS | **INVALID (peak 4.11 > 4)** |
+| `ci-shape-thread-before-yield-fix-2026-11-10-a5` | CI shape, thread | -1.10 | -1.46 | – | 3.36 → 5.32 | 72 / 71 | PASS | **INVALID (peak 5.32 > 4)** |
+| `noise-on-thread-before-yield-fix-2026-11-10-a6` | every noise control ON, thread | +2.89 | +6.60 | – | 3.97 → 4.15 | 69 / 71 | FAIL (p50) | **INVALID (peak 4.15 > 4)** |
+| `ci-shape-thread-before-yield-fix-2026-11-10-a7` | CI shape, thread | -0.17 | +11.14 | – | 3.19 → 6.56 | 75 / 70 | FAIL (p99) | **INVALID (peak 6.56 > 4)** |
+| `noise-on-thread-before-yield-fix-2026-11-10-a8` | every noise control ON, thread | +0.08 | -56.36 | – | 3.42 → 8.15 | 71 / 70 | PASS | **INVALID (peak 8.15 > 4)** |
+| `ci-shape-thread-before-yield-fix-2026-11-10-a9` | CI shape, thread | -1.76 | +4.15 | – | 3.48 → 6.30 | 70 / 76 | PASS | **INVALID (peak 6.30 > 4)** |
+| `noise-on-thread-before-yield-fix-2026-11-10-a10` | every noise control ON, thread | +0.33 | +10.20 | – | 3.34 → 5.58 | 74 / 70 | FAIL (p99) | **INVALID (peak 5.58 > 4)** |
+| `ci-shape-thread-before-yield-fix-2026-11-10-a11` | CI shape, thread | -1.87 | +10.81 | – | 3.65 → 4.68 | 71 / 70 | FAIL (p99) | **INVALID (peak 4.68 > 4)** |
+
+**State: burst-start yield (`7d95e616e`)**
+
+| File | Mode | p50 Δ ms | p99 Δ ms | Lane share of burst | Load start → peak | GC ms/run base / cand | Recorded | Under the peak rule |
+| :--- | :--- | ---: | ---: | ---: | :---: | :---: | :--- | :--- |
+| `ci-shape-thread-yield-fix-2026-11-10-a1` | CI shape, thread | -0.91 | -5.45 | 20% | 1.63 → 2.88 | 77 / 75 | PASS | **PASS** |
+| `noise-on-thread-yield-fix-2026-11-10-a2` | every noise control ON, thread | +2.65 | +4.11 | 20% | 2.42 → 3.86 | 77 / 78 | FAIL (p50) | **FAIL (p50)** |
+| `ci-shape-in-process-yield-fix-2026-11-10-a3` | CI shape, in-process | +0.05 | -2.93 | 0% | 3.74 → 4.29 | 76 / 76 | FAIL (no lane work in burst) | **INVALID (peak 4.29 > 4)** |
+| `ci-shape-thread-yield-fix-2026-11-10-a4` | CI shape, thread | -1.13 | -29.84 | 19% | 3.77 → 4.78 | 78 / 77 | PASS | **INVALID (peak 4.78 > 4)** |
+| `noise-on-thread-yield-fix-2026-11-10-a5` | every noise control ON, thread | +2.08 | +1.36 | 18% | 3.77 → 4.77 | 75 / 76 | FAIL (p50) | **INVALID (peak 4.77 > 4)** |
+| `ci-shape-in-process-yield-fix-2026-11-10-a6` | CI shape, in-process | +0.12 | +8.01 | 0% | 3.53 → 3.80 | 77 / 77 | FAIL (no lane work in burst) | **FAIL (no lane work in burst)** |
+| `ci-shape-thread-yield-fix-2026-11-10-a7` | CI shape, thread | -1.23 | -0.09 | 19% | 3.91 → 5.25 | 77 / 76 | PASS | **INVALID (peak 5.25 > 4)** |
+| `noise-on-thread-yield-fix-2026-11-10-a8` | every noise control ON, thread | +3.51 | +4.99 | 19% | 3.60 → 4.29 | 74 / 76 | FAIL (p50) | **INVALID (peak 4.29 > 4)** |
+| `ci-shape-in-process-yield-fix-2026-11-10-a9` | CI shape, in-process | +0.32 | +3.19 | 0% | 3.65 → 5.23 | 77 / 78 | FAIL (no lane work in burst) | **INVALID (peak 5.23 > 4)** |
+
+**State: yield + pre-paging lookups started early (`de5aa1485`)**
+
+| File | Mode | p50 Δ ms | p99 Δ ms | Lane share of burst | Load start → peak | GC ms/run base / cand | Recorded | Under the peak rule |
+| :--- | :--- | ---: | ---: | ---: | :---: | :---: | :--- | :--- |
+| `noise-on-thread-prefetch-2026-11-11-a1` | every noise control ON, thread | +2.14 | -5.39 | 19% | 3.90 → 6.02 | 74 / 76 | FAIL (p50) | **INVALID (peak 6.02 > 4)** |
+| `ci-shape-thread-prefetch-2026-11-11-a2-discarded` | CI shape, thread | -4.08 | -4.06 | 19% | 3.65 → 7.74 | 82 / 75 | INVALID (discarded) | **INVALID (3 other heavy process(es); peak 7.74 > 4)** |
+| `ci-shape-in-process-prefetch-2026-11-11-a3` | CI shape, in-process | -0.86 | +1.44 | 0% | 3.53 → 4.22 | 78 / 76 | FAIL (no lane work in burst) | **INVALID (peak 4.22 > 4)** |
+| `noise-on-thread-prefetch-2026-11-11-a4` | every noise control ON, thread | +6.41 | -4.94 | 19% | 3.96 → 8.10 | 75 / 81 | FAIL (p50) | **INVALID (peak 8.10 > 4)** |
+| `ci-shape-thread-prefetch-2026-11-11-a5` | CI shape, thread | +0.50 | +9.29 | 19% | 3.77 → 6.69 | 72 / 72 | PASS | **INVALID (peak 6.69 > 4)** |
+| `ci-shape-in-process-prefetch-2026-11-11-a6` | CI shape, in-process | +0.67 | +0.88 | 0% | 3.88 → 4.89 | 76 / 77 | FAIL (no lane work in burst) | **INVALID (peak 4.89 > 4)** |
+| `noise-on-thread-prefetch-2026-11-11-a7` | every noise control ON, thread | +0.77 | -3.14 | 19% | 3.65 → 3.65 | 73 / 75 | PASS | **PASS** |
+| `ci-shape-thread-prefetch-2026-11-11-a8` | CI shape, thread | -3.20 | -31.55 | 19% | 2.60 → 4.12 | 91 / 77 | PASS | **INVALID (peak 4.12 > 4)** |
+| `ci-shape-in-process-prefetch-2026-11-11-a9` | CI shape, in-process | +1.45 | +17.45 | 0% | 3.49 → 4.69 | 78 / 88 | FAIL (p99; no lane work in burst) | **INVALID (peak 4.69 > 4)** |
+| `ci-shape-thread-prefetch-2026-11-11-a10` | CI shape, thread | +0.12 | +6.57 | 18% | 3.76 → 4.42 | 75 / 75 | PASS | **INVALID (peak 4.42 > 4)** |
+| `noise-on-thread-prefetch-2026-11-11-attr-all-1` | every noise control ON, thread (ungated attribution run) | +1.72 | +2.36 | 19% | 3.69 → 3.69 | 75 / 76 | PASS | **PASS** |
+| `noise-on-thread-prefetch-2026-11-11-attr-all-2` | every noise control ON, thread (ungated attribution run) | -1.97 | -16.67 | 19% | 3.18 → 4.89 | 88 / 80 | PASS | **INVALID (peak 4.89 > 4)** |
+| `noise-on-thread-prefetch-2026-11-11-attr-all-prof` | every noise control ON, thread (ungated attribution run) | +1.02 | +1.53 | 14% | 3.76 → 3.86 | 78 / 80 | PASS | **PASS** |
+| `noise-on-thread-prefetch-2026-11-11-attr-static-1` | every noise control ON, profile static, thread (ungated attribution run) | +0.35 | -1.88 | 19% | 3.48 → 3.92 | 72 / 73 | PASS | **PASS** |
+| `noise-on-thread-prefetch-2026-11-11-attr-static-2` | every noise control ON, profile static, thread (ungated attribution run) | -1.80 | -0.65 | 19% | 3.57 → 3.80 | 78 / 74 | PASS | **PASS** |
+
+Valid invocations under the peak rule (attribution runs not counted):
+
+- before-yield-fix-2026-11-10, CI shape, thread: 0 PASS, 0 FAIL, 6 invalid
+- before-yield-fix-2026-11-10, every noise control ON, thread: 0 PASS, 0 FAIL, 5 invalid
+- yield-fix-2026-11-10, CI shape, thread: 1 PASS, 0 FAIL, 2 invalid
+- yield-fix-2026-11-10, every noise control ON, thread: 0 PASS, 1 FAIL, 2 invalid
+- yield-fix-2026-11-10, CI shape, in-process: 0 PASS, 1 FAIL, 2 invalid
+- prefetch-2026-11-11, every noise control ON, thread: 1 PASS, 0 FAIL, 2 invalid
+- prefetch-2026-11-11, CI shape, thread: 0 PASS, 0 FAIL, 4 invalid
+- prefetch-2026-11-11, CI shape, in-process: 0 PASS, 0 FAIL, 3 invalid
+
+<!-- /thread-lane-tables -->
+
 Raw files, one per invocation (`aN` is the attempt number inside its campaign; `-discarded` marks a run
 the host check rejected, kept for the record and never averaged in):
 
@@ -179,6 +242,28 @@ the host check rejected, kept for the record and never averaged in):
 - `ingestion-ab-ci-shape-thread-yield-fix-2026-11-10-a*`, `ingestion-ab-noise-on-thread-yield-fix-2026-11-10-a*`
   and `ingestion-ab-ci-shape-in-process-yield-fix-2026-11-10-a*`: at `7d95e616e`, with the burst-start
   yield, judged by the benchmark's own host check.
+- `ingestion-ab-*-prefetch-2026-11-11-a*`: at `de5aa1485`, after the pre-paging lookups were moved off
+  the event's connection and started early. The `-attr-*` files are ungated attribution runs of the
+  every-control-ON shape (`static` = only the controls that need no lookup).
+- `ingestion-ab-*-peak-rule-2026-11-11-a*`: same code, first campaign judged with the peak rule below.
+
+**Host check, tightened on 2026-11-11 (`95454c2d9`).** Until then a run was valid if the 1-minute load
+was below 4 when it started; one run that started at 3.96 and peaked at 8.1 was judged. A run is now
+invalid as soon as any sample of the 1-minute load is above 4. The column "Recorded" is the verdict the
+benchmark gave at the time; "Under the peak rule" re-classifies every earlier run with the new rule
+(threshold breaches unchanged). Most earlier runs do not survive it, so their verdicts, PASS or FAIL,
+are not evidence for the gate.
+
+**Why the in-process fallback fails the gate.** Its p50/p99 deltas are small, but the gate also requires
+lane work inside the timed burst, and the in-process lane now stops completely while two or more events
+are in flight (lane share of burst 0%). Ingestion is protected; the "lane busy" half of the contract is
+not exercised, so this mode stays outside the contract.
+
+**Where the every-control-ON p50 goes.** With the lookups started early the hook waits 0.02 ms per event
+on average in the candidate arm (`noiseHookWaitMeanMsInCandidate`), with no fail-open. The remaining
+candidate cost is in the event's own statements: about 3.0 ms per event against 2.8 ms in the baseline,
+and a pool wait of 12.6 ms against 11.8 ms (attribution run `attr-all-1`), which is PostgreSQL serving the
+lane thread and the lookup pool beside ingestion, not time spent in the hook.
 
 ## Query plans (`tests/load/intelligence-query-plans.ts`)
 

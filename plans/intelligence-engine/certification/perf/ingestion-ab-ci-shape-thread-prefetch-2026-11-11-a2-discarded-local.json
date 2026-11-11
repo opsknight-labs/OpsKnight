@@ -1,0 +1,1400 @@
+{
+  "generatedAt": "2026-11-11T11:08:35.365Z",
+  "options": {
+    "noiseControls": false,
+    "noiseLookups": "pool",
+    "noiseProfile": "all",
+    "noisePrefetch": true,
+    "lane": true,
+    "history": 0,
+    "repetitions": 6,
+    "events": 300,
+    "concurrency": 16,
+    "backlog": 1500,
+    "services": 4,
+    "maxP99DeltaMs": 10,
+    "maxP50DeltaMs": 2,
+    "gate": true,
+    "output": "/private/tmp/claude-501/-Users-dushyantrahangdale-Desktop-Projects/320ca8a9-b6ca-4d2d-a846-6b75432ba1ce/scratchpad/runs-v4/ci-thread-a2.json",
+    "laneYield": true,
+    "laneMode": "thread",
+    "waitForQuietMs": 1800000,
+    "cpuProfileDir": null
+  },
+  "laneWasBusyInEveryCandidateRun": true,
+  "laneBusyFractionOfBurst": {
+    "min": 0.16360435543576432,
+    "median": 0.18505626740495604,
+    "perCandidateRun": [
+      0.18073223218992523,
+      0.16360435543576432,
+      0.2078180187369166,
+      0.18505626740495604,
+      0.18220558134666062,
+      0.19026022144439544
+    ]
+  },
+  "hostValidation": {
+    "rule": "valid iff the 1-minute load is below 4 at the start, no other heavy process is seen at any sample and no gap between samples exceeds 15 s; the peak is recorded, not judged",
+    "maxStartLoad1": 4,
+    "startLoad1": 3.654296875,
+    "peakLoad1": 7.740234375,
+    "maxSampleGapSec": 3,
+    "sampleCount": 11,
+    "otherHeavyProcesses": [
+      "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+      "node /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-int/node_modules/.bin/vitest run -c vitest.unit.config.ts tests/components tests/unit tests/ar",
+      "npm exec vitest run -c vitest.unit.config.ts tests/components tests/unit tests/architecture        "
+    ],
+    "valid": false,
+    "reasons": [
+      "3 other heavy process(es): /Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /U ; node /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-int/node_modules/.bin/vitest run - ; npm exec vitest run -c vitest.unit.config.ts tests/components tests/unit tests/architecture        "
+    ],
+    "samples": [
+      {
+        "at": 1794395286,
+        "load1": 3.654296875,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794395289,
+        "load1": 3.44140625,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794395292,
+        "load1": 3.44140625,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794395295,
+        "load1": 3.80615234375,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794395298,
+        "load1": 3.80615234375,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794395301,
+        "load1": 3.8212890625,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794395304,
+        "load1": 3.99560546875,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794395307,
+        "load1": 3.99560546875,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794395310,
+        "load1": 4.23583984375,
+        "otherHeavy": [
+          "npm exec vitest run -c vitest.unit.config.ts tests/components tests/unit tests/architecture        ",
+          "node /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-int/node_modules/.bin/vitest run -c vitest.unit.config.ts tests/components tests/unit tests/ar",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i"
+        ]
+      },
+      {
+        "at": 1794395313,
+        "load1": 4.23583984375,
+        "otherHeavy": [
+          "npm exec vitest run -c vitest.unit.config.ts tests/components tests/unit tests/architecture        ",
+          "node /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-int/node_modules/.bin/vitest run -c vitest.unit.config.ts tests/components tests/unit tests/ar",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i"
+        ]
+      },
+      {
+        "at": 1794395315,
+        "load1": 7.740234375,
+        "otherHeavy": [
+          "npm exec vitest run -c vitest.unit.config.ts tests/components tests/unit tests/architecture        ",
+          "node /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-int/node_modules/.bin/vitest run -c vitest.unit.config.ts tests/components tests/unit tests/ar",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i",
+          "/Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-i"
+        ]
+      }
+    ]
+  },
+  "hostQuietWait": {
+    "waitedMs": 30160,
+    "quiet": true,
+    "last": {
+      "at": 1794395286,
+      "load1": 3.654296875,
+      "otherHeavy": []
+    }
+  },
+  "noiseControlsInCandidate": false,
+  "noiseProfile": "all",
+  "noisePrefetch": true,
+  "noiseHookWaitMeanMsInCandidate": 0,
+  "noiseFailOpenInCandidate": {},
+  "noiseDecisionsInCandidate": 0,
+  "node": "v20.20.2",
+  "host": {
+    "cpus": 12,
+    "loadAverageAtStart": [
+      3.654296875,
+      5.65673828125,
+      5.3125
+    ],
+    "loadAverageAtEnd": [
+      7.740234375,
+      6.32421875,
+      5.55859375
+    ]
+  },
+  "lane": {
+    "mode": "thread",
+    "pool": "thread client",
+    "yieldToIngestion": true
+  },
+  "pagingBackpressureBypassed": true,
+  "totalFailures": 0,
+  "gate": {
+    "contract": {
+      "maxP99DeltaMs": 10,
+      "maxP50DeltaMs": 2
+    },
+    "medianPairedDeltaMs": {
+      "p50": -4.080957999998645,
+      "p99": -4.062292000002344
+    },
+    "breaches": [],
+    "status": "INVALID",
+    "passed": false,
+    "invalidReasons": [
+      "3 other heavy process(es): /Users/dushyantrahangdale/.local/opt/node20/bin/node --experimental-import-meta-resolve --require /U ; node /Users/dushyantrahangdale/Desktop/Projects/opsknight-intel-i-int/node_modules/.bin/vitest run - ; npm exec vitest run -c vitest.unit.config.ts tests/components tests/unit tests/architecture        "
+    ]
+  },
+  "summary": [
+    {
+      "metric": "p50 latency (ms)",
+      "medianRatio": 0.8959243494593121,
+      "ci95": [
+        0.2498095732638915,
+        0.9626432247045155
+      ],
+      "baselineRunToRunCv": 0.8441117406582646,
+      "noiseFloor": 1.688223481316529,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p95 latency (ms)",
+      "medianRatio": 0.948394274875721,
+      "ci95": [
+        0.675385346189268,
+        1.3156503737309382
+      ],
+      "baselineRunToRunCv": 0.9492566970399352,
+      "noiseFloor": 1.8985133940798704,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p99 latency (ms)",
+      "medianRatio": 0.9190939653455006,
+      "ci95": [
+        0.7297874351073736,
+        1.3019031699014458
+      ],
+      "baselineRunToRunCv": 0.9378327900544511,
+      "noiseFloor": 1.8756655801089022,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p99.9 latency (ms)",
+      "medianRatio": 0.8659822324329037,
+      "ci95": [
+        0.7890934886808094,
+        1.2952421691390703
+      ],
+      "baselineRunToRunCv": 0.9935685779407899,
+      "noiseFloor": 1.9871371558815798,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "throughput (events/s)",
+      "medianRatio": 1.0526891750495988,
+      "ci95": [
+        0.8416290935467945,
+        1.188274526870997
+      ],
+      "baselineRunToRunCv": 0.37678832674943263,
+      "noiseFloor": 0.7535766534988653,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    }
+  ],
+  "rawCounts": [
+    {
+      "arm": "baseline",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 7,
+      "failures": 0
+    },
+    {
+      "arm": "candidate",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 5,
+      "failures": 0
+    }
+  ],
+  "samples": [
+    {
+      "arm": "baseline",
+      "repetition": 0,
+      "p50Ms": 35.24016699999629,
+      "p95Ms": 44.127042000000074,
+      "p99Ms": 50.20999999999913,
+      "p999Ms": 55.578458999996656,
+      "maxMs": 55.578458999996656,
+      "throughputPerSec": 440.22109370729765,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 7,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "laneWorkInBurstMs": 0,
+      "laneBusyFraction": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.020415,
+          "p99": 4.665343,
+          "max": 5.664767,
+          "mean": 1.221251447037702
+        },
+        "eventLoopUtilization": 0.8987065698983737,
+        "processCpuPerSec": 2.9877292038638297,
+        "gc": {
+          "totalMs": 91.822505235672,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 335,
+          "totalMs": 4344.605819,
+          "meanMs": 12.968972594029852,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5195,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 2.966666666666667
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 69,
+          "CPU": 15,
+          "idle-in-tx CPU": 1,
+          "IO:WALSync": 1,
+          "Client:ClientRead": 1
+        },
+        "phases": [
+          {
+            "p50Ms": 38.25325000000157,
+            "p99Ms": 55.067957999999635
+          },
+          {
+            "p50Ms": 36.027666999994835,
+            "p99Ms": 42.713666000003286
+          },
+          {
+            "p50Ms": 34.05816700000287,
+            "p99Ms": 39.81179200000042
+          }
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 0,
+      "p50Ms": 33.92370800000208,
+      "p95Ms": 41.849834000000556,
+      "p99Ms": 46.14770799999678,
+      "p999Ms": 48.129957999997714,
+      "maxMs": 48.129957999997714,
+      "throughputPerSec": 463.41597997416727,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 9,
+      "laneItemsActive": 9,
+      "laneWorkInBurstMs": 117,
+      "laneBusyFraction": 0.18073223218992523,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.018367,
+          "p99": 4.366335,
+          "max": 5.431295,
+          "mean": 1.1535670857142857
+        },
+        "eventLoopUtilization": 0.8834888504711984,
+        "processCpuPerSec": 2.9900742120683876,
+        "gc": {
+          "totalMs": 72.11970901489258,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 333,
+          "totalMs": 4125.376744000002,
+          "meanMs": 12.388518750750757,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5192,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 2.85
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 64,
+          "CPU": 12,
+          "Client:ClientRead": 1,
+          "idle-in-tx CPU": 6,
+          "IO:WALSync": 2,
+          "LWLock:WALWrite": 1
+        },
+        "phases": [
+          {
+            "p50Ms": 34.2543749999968,
+            "p99Ms": 47.81829199999629
+          },
+          {
+            "p50Ms": 35.67033299999457,
+            "p99Ms": 46.14808300000004
+          },
+          {
+            "p50Ms": 32.19233299999905,
+            "p99Ms": 41.25045799999498
+          }
+        ],
+        "laneSpans": [
+          {
+            "startMs": -3,
+            "endMs": 13
+          },
+          {
+            "startMs": -3,
+            "endMs": 13
+          },
+          {
+            "startMs": 83,
+            "endMs": 104
+          },
+          {
+            "startMs": 198,
+            "endMs": 217
+          },
+          {
+            "startMs": 303,
+            "endMs": 320
+          },
+          {
+            "startMs": 400,
+            "endMs": 416
+          },
+          {
+            "startMs": 487,
+            "endMs": 503
+          },
+          {
+            "startMs": 577,
+            "endMs": 592
+          }
+        ],
+        "laneYield": {
+          "pausedMs": 594,
+          "cycles": {
+            "cycles": 0,
+            "worked": 0,
+            "paused": 0,
+            "idle": 0,
+            "yieldingCycles": 0
+          }
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 1,
+      "p50Ms": 34.34162500000093,
+      "p95Ms": 49.285666999996465,
+      "p99Ms": 56.98037500000646,
+      "p999Ms": 61.69958400000178,
+      "maxMs": 61.69958400000178,
+      "throughputPerSec": 454.4565428771231,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 7,
+      "laneItemsActive": 7,
+      "laneWorkInBurstMs": 108,
+      "laneBusyFraction": 0.16360435543576432,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.011199,
+          "p99": 4.419583,
+          "max": 5.459967,
+          "mean": 1.1789821252236137
+        },
+        "eventLoopUtilization": 0.8766961550006016,
+        "processCpuPerSec": 2.9447769025491817,
+        "gc": {
+          "totalMs": 73.55696004629135,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 335,
+          "totalMs": 4222.5815600000005,
+          "meanMs": 12.604721074626868,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5195,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 3.1733333333333333
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 74,
+          "CPU": 9,
+          "Client:ClientRead": 2,
+          "IO:DataFileExtend": 1,
+          "IO:WALSync": 2,
+          "LWLock:WALWrite": 2,
+          "idle-in-tx CPU": 1
+        },
+        "phases": [
+          {
+            "p50Ms": 34.92379199999414,
+            "p99Ms": 43.208458000000974
+          },
+          {
+            "p50Ms": 35.497167000001355,
+            "p99Ms": 58.72525000000314
+          },
+          {
+            "p50Ms": 32.71574999999575,
+            "p99Ms": 40.524834000003466
+          }
+        ],
+        "laneSpans": [
+          {
+            "startMs": -47,
+            "endMs": 3
+          },
+          {
+            "startMs": -3,
+            "endMs": 16
+          },
+          {
+            "startMs": 212,
+            "endMs": 230
+          },
+          {
+            "startMs": 311,
+            "endMs": 332
+          },
+          {
+            "startMs": 426,
+            "endMs": 445
+          },
+          {
+            "startMs": 529,
+            "endMs": 545
+          },
+          {
+            "startMs": 620,
+            "endMs": 638
+          }
+        ],
+        "laneYield": {
+          "pausedMs": 604,
+          "cycles": {
+            "cycles": 0,
+            "worked": 0,
+            "paused": 0,
+            "idle": 0,
+            "yieldingCycles": 0
+          }
+        }
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 1,
+      "p50Ms": 41.03087499999674,
+      "p95Ms": 46.88754200000403,
+      "p99Ms": 48.97541700000147,
+      "p999Ms": 50.541666000004625,
+      "maxMs": 50.541666000004625,
+      "throughputPerSec": 394.4958186559757,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "laneWorkInBurstMs": 0,
+      "laneBusyFraction": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.020415,
+          "p99": 4.710399,
+          "max": 6.389759,
+          "mean": 1.1597374534351146
+        },
+        "eventLoopUtilization": 0.8658080753827369,
+        "processCpuPerSec": 2.622717346268088,
+        "gc": {
+          "totalMs": 83.72754222154617,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 337,
+          "totalMs": 4887.187927000001,
+          "meanMs": 14.502041326409499,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5202,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 4.796666666666667
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 75,
+          "CPU": 12,
+          "Client:ClientRead": 2,
+          "idle-in-tx CPU": 2,
+          "IO:WALSync": 3,
+          "LWLock:WALWrite": 1,
+          "LWLock:BufferContent": 1
+        },
+        "phases": [
+          {
+            "p50Ms": 38.963292000000365,
+            "p99Ms": 47.51799999999639
+          },
+          {
+            "p50Ms": 42.70295800000167,
+            "p99Ms": 48.32641599999624
+          },
+          {
+            "p50Ms": 40.94245899999805,
+            "p99Ms": 50.225124999997206
+          }
+        ]
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 2,
+      "p50Ms": 39.21145799999795,
+      "p95Ms": 67.25974999999744,
+      "p99Ms": 74.66483300000255,
+      "p999Ms": 77.07779099999607,
+      "maxMs": 77.07779099999607,
+      "throughputPerSec": 369.4871364592977,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "laneWorkInBurstMs": 0,
+      "laneBusyFraction": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.036287,
+          "p99": 5.001215,
+          "max": 6.987775,
+          "mean": 1.2230066003016593
+        },
+        "eventLoopUtilization": 0.8608111310871215,
+        "processCpuPerSec": 2.5626112887557406,
+        "gc": {
+          "totalMs": 81.19979172945023,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 337,
+          "totalMs": 5293.003967000001,
+          "meanMs": 15.70624322551929,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5201,
+          "p50Ms": 0,
+          "p99Ms": 5,
+          "perEventMs": 6.6033333333333335
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 74,
+          "CPU": 15,
+          "Client:ClientRead": 1,
+          "IO:WALSync": 2,
+          "LWLock:LockManager": 1,
+          "idle-in-tx CPU": 2
+        },
+        "phases": [
+          {
+            "p50Ms": 39.35779199999524,
+            "p99Ms": 67.2602079999997
+          },
+          {
+            "p50Ms": 37.147375000000466,
+            "p99Ms": 50.4085419999974
+          },
+          {
+            "p50Ms": 43.67687499999738,
+            "p99Ms": 76.31912499999453
+          }
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 2,
+      "p50Ms": 35.1304999999993,
+      "p95Ms": 49.5098749999961,
+      "p99Ms": 59.49237500000163,
+      "p999Ms": 60.82158299999719,
+      "maxMs": 60.82158299999719,
+      "throughputPerSec": 439.05215226109146,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 8,
+      "laneItemsActive": 8,
+      "laneWorkInBurstMs": 142,
+      "laneBusyFraction": 0.2078180187369166,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.011711,
+          "p99": 4.657151,
+          "max": 5.029887,
+          "mean": 1.1700684185248713
+        },
+        "eventLoopUtilization": 0.8580010371807321,
+        "processCpuPerSec": 2.8754388920811658,
+        "gc": {
+          "totalMs": 73.39391815662384,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 335,
+          "totalMs": 4391.168632999994,
+          "meanMs": 13.107966068656697,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5197,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 3.51
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 76,
+          "IO:WALSync": 3,
+          "Client:ClientRead": 1,
+          "CPU": 8,
+          "idle-in-tx CPU": 3
+        },
+        "phases": [
+          {
+            "p50Ms": 37.529209000000264,
+            "p99Ms": 60.1408750000046
+          },
+          {
+            "p50Ms": 35.662584000005154,
+            "p99Ms": 42.07291699999769
+          },
+          {
+            "p50Ms": 33.53729199999361,
+            "p99Ms": 40.47154199999932
+          }
+        ],
+        "laneSpans": [
+          {
+            "startMs": -5,
+            "endMs": 12
+          },
+          {
+            "startMs": -2,
+            "endMs": 30
+          },
+          {
+            "startMs": 91,
+            "endMs": 111
+          },
+          {
+            "startMs": 202,
+            "endMs": 221
+          },
+          {
+            "startMs": 305,
+            "endMs": 324
+          },
+          {
+            "startMs": 407,
+            "endMs": 426
+          },
+          {
+            "startMs": 511,
+            "endMs": 529
+          },
+          {
+            "startMs": 612,
+            "endMs": 629
+          }
+        ],
+        "laneYield": {
+          "pausedMs": 623,
+          "cycles": {
+            "cycles": 0,
+            "worked": 0,
+            "paused": 0,
+            "idle": 0,
+            "yieldingCycles": 0
+          }
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 3,
+      "p50Ms": 34.22941699999501,
+      "p95Ms": 64.89004099999875,
+      "p99Ms": 93.81970800000272,
+      "p999Ms": 102.70383299999958,
+      "maxMs": 102.70383299999958,
+      "throughputPerSec": 405.2327023466191,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 8,
+      "laneItemsActive": 9,
+      "laneWorkInBurstMs": 137,
+      "laneBusyFraction": 0.18505626740495604,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.024511,
+          "p99": 4.653055,
+          "max": 13.836287,
+          "mean": 1.265501808219178
+        },
+        "eventLoopUtilization": 0.8874046744929405,
+        "processCpuPerSec": 3.3600004592637367,
+        "gc": {
+          "totalMs": 96.27012610435486,
+          "majorMs": 10.228416979312897,
+          "majorCount": 1
+        },
+        "poolWait": {
+          "queries": 336,
+          "totalMs": 4680.830205999999,
+          "meanMs": 13.9310422797619,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5199,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 3.796666666666667
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 79,
+          "CPU": 10,
+          "idle-in-tx CPU": 3,
+          "Client:ClientRead": 1,
+          "IO:WALSync": 4
+        },
+        "phases": [
+          {
+            "p50Ms": 41.64012499999808,
+            "p99Ms": 96.39454200000182
+          },
+          {
+            "p50Ms": 32.81091700000252,
+            "p99Ms": 37.37199999999575
+          },
+          {
+            "p50Ms": 33.44966700000077,
+            "p99Ms": 56.45395900000585
+          }
+        ],
+        "laneSpans": [
+          {
+            "startMs": -6,
+            "endMs": 30
+          },
+          {
+            "startMs": -6,
+            "endMs": 21
+          },
+          {
+            "startMs": 173,
+            "endMs": 194
+          },
+          {
+            "startMs": 284,
+            "endMs": 303
+          },
+          {
+            "startMs": 386,
+            "endMs": 402
+          },
+          {
+            "startMs": 475,
+            "endMs": 492
+          },
+          {
+            "startMs": 567,
+            "endMs": 584
+          },
+          {
+            "startMs": 660,
+            "endMs": 677
+          }
+        ],
+        "laneYield": {
+          "pausedMs": 765,
+          "cycles": {
+            "cycles": 0,
+            "worked": 0,
+            "paused": 0,
+            "idle": 0,
+            "yieldingCycles": 0
+          }
+        }
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 3,
+      "p50Ms": 32.903707999998005,
+      "p95Ms": 39.585666999999376,
+      "p99Ms": 42.80420900000172,
+      "p999Ms": 43.620124999994005,
+      "maxMs": 43.620124999994005,
+      "throughputPerSec": 481.4860910272087,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "laneWorkInBurstMs": 0,
+      "laneBusyFraction": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.001983,
+          "p99": 4.313087,
+          "max": 4.857855,
+          "mean": 1.1412123009174313
+        },
+        "eventLoopUtilization": 0.8563342395017534,
+        "processCpuPerSec": 2.8265881716797803,
+        "gc": {
+          "totalMs": 72.4430799484253,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 333,
+          "totalMs": 3982.944086999996,
+          "meanMs": 11.960793054054042,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5196,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 2.66
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 57,
+          "CPU": 11,
+          "idle-in-tx CPU": 6,
+          "IO:WALSync": 1,
+          "Client:ClientRead": 1
+        },
+        "phases": [
+          {
+            "p50Ms": 33.78849999999511,
+            "p99Ms": 43.1463750000039
+          },
+          {
+            "p50Ms": 32.852624999999534,
+            "p99Ms": 41.45854200000031
+          },
+          {
+            "p50Ms": 32.786333999996714,
+            "p99Ms": 39.18266700000095
+          }
+        ]
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 4,
+      "p50Ms": 41.39066699999967,
+      "p95Ms": 49.53991600000154,
+      "p99Ms": 52.07575000000361,
+      "p999Ms": 53.89008299999841,
+      "maxMs": 53.89008299999841,
+      "throughputPerSec": 385.0857367271161,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "laneWorkInBurstMs": 0,
+      "laneBusyFraction": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.036287,
+          "p99": 4.378623,
+          "max": 5.406719,
+          "mean": 1.1753876495468278
+        },
+        "eventLoopUtilization": 0.879294681760882,
+        "processCpuPerSec": 2.6421001956863144,
+        "gc": {
+          "totalMs": 77.10079163312912,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 337,
+          "totalMs": 5068.605914999993,
+          "meanMs": 15.040373635014815,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5204,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 5.04
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 74,
+          "CPU": 13,
+          "IO:WALSync": 3,
+          "idle-in-tx CPU": 3,
+          "LWLock:WALWrite": 1,
+          "IO:DataFileExtend": 1
+        },
+        "phases": [
+          {
+            "p50Ms": 42.462375000002794,
+            "p99Ms": 51.64545799999905
+          },
+          {
+            "p50Ms": 42.486541999998735,
+            "p99Ms": 51.653666000005614
+          },
+          {
+            "p50Ms": 39.24991600000067,
+            "p99Ms": 52.12879200000316
+          }
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 4,
+      "p50Ms": 39.059416999996756,
+      "p95Ms": 65.17720900000131,
+      "p99Ms": 67.79758399999992,
+      "p999Ms": 69.80070800000249,
+      "maxMs": 69.80070800000249,
+      "throughputPerSec": 376.86378739785226,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 8,
+      "laneItemsActive": 8,
+      "laneWorkInBurstMs": 145.0435839999991,
+      "laneBusyFraction": 0.18220558134666062,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.022463,
+          "p99": 4.661247,
+          "max": 6.160383,
+          "mean": 1.174238674556213
+        },
+        "eventLoopUtilization": 0.8481707869122359,
+        "processCpuPerSec": 2.604874961218207,
+        "gc": {
+          "totalMs": 76.93791437149048,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 339,
+          "totalMs": 5162.161871000004,
+          "meanMs": 15.227616138643079,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5208,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 6.11
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 83,
+          "CPU": 10,
+          "idle-in-tx CPU": 3,
+          "IO:WALSync": 3
+        },
+        "phases": [
+          {
+            "p50Ms": 40.82241700000304,
+            "p99Ms": 67.95766699999513
+          },
+          {
+            "p50Ms": 40.84695899999497,
+            "p99Ms": 62.209124999993946
+          },
+          {
+            "p50Ms": 37.31870799999888,
+            "p99Ms": 49.30833300000086
+          }
+        ],
+        "laneSpans": [
+          {
+            "startMs": -45,
+            "endMs": 4
+          },
+          {
+            "startMs": -2,
+            "endMs": 21
+          },
+          {
+            "startMs": 128,
+            "endMs": 159
+          },
+          {
+            "startMs": 295,
+            "endMs": 315
+          },
+          {
+            "startMs": 408,
+            "endMs": 439
+          },
+          {
+            "startMs": 579,
+            "endMs": 600
+          },
+          {
+            "startMs": 694,
+            "endMs": 712
+          },
+          {
+            "startMs": 793,
+            "endMs": 806
+          }
+        ],
+        "laneYield": {
+          "pausedMs": 826,
+          "cycles": {
+            "cycles": 0,
+            "worked": 0,
+            "paused": 0,
+            "idle": 0,
+            "yieldingCycles": 0
+          }
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 5,
+      "p50Ms": 39.287665999996534,
+      "p95Ms": 158.69079199999396,
+      "p99Ms": 183.09466700000485,
+      "p999Ms": 227.50116600000183,
+      "maxMs": 227.50116600000183,
+      "throughputPerSec": 244.97024220308427,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 8,
+      "laneItemsActive": 8,
+      "laneWorkInBurstMs": 233,
+      "laneBusyFraction": 0.19026022144439544,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.069055,
+          "p99": 5.898239,
+          "max": 19.693567,
+          "mean": 1.434872797186401
+        },
+        "eventLoopUtilization": 0.8082204094578512,
+        "processCpuPerSec": 1.792814717563272,
+        "gc": {
+          "totalMs": 109.49991887807846,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 340,
+          "totalMs": 8085.991871999999,
+          "meanMs": 23.782329035294115,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5208,
+          "p50Ms": 0,
+          "p99Ms": 10,
+          "perEventMs": 16.956666666666667
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 90,
+          "CPU": 7,
+          "idle-in-tx CPU": 5,
+          "Client:ClientRead": 5,
+          "IO:WALSync": 4,
+          "LWLock:WALWrite": 1,
+          "IO:WALWrite": 1
+        },
+        "phases": [
+          {
+            "p50Ms": 34.19829100000061,
+            "p99Ms": 45.79820800000016
+          },
+          {
+            "p50Ms": 37.71283400000539,
+            "p99Ms": 51.00012499999866
+          },
+          {
+            "p50Ms": 118.80225000000064,
+            "p99Ms": 201.54533400000219
+          }
+        ],
+        "laneSpans": [
+          {
+            "startMs": -3,
+            "endMs": 19
+          },
+          {
+            "startMs": -3,
+            "endMs": 17
+          },
+          {
+            "startMs": 115,
+            "endMs": 134
+          },
+          {
+            "startMs": 217,
+            "endMs": 235
+          },
+          {
+            "startMs": 316,
+            "endMs": 335
+          },
+          {
+            "startMs": 419,
+            "endMs": 438
+          },
+          {
+            "startMs": 529,
+            "endMs": 603
+          },
+          {
+            "startMs": 958,
+            "endMs": 1023
+          }
+        ],
+        "laneYield": {
+          "pausedMs": 835,
+          "cycles": {
+            "cycles": 0,
+            "worked": 0,
+            "paused": 0,
+            "idle": 0,
+            "yieldingCycles": 0
+          }
+        }
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 5,
+      "p50Ms": 157.27045799999905,
+      "p95Ms": 234.96333300000697,
+      "p99Ms": 250.8876670000027,
+      "p999Ms": 283.2203750000044,
+      "maxMs": 283.2203750000044,
+      "throughputPerSec": 96.35361004055969,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "laneWorkInBurstMs": 0,
+      "laneBusyFraction": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0,
+      "noiseHookWait": {
+        "evaluations": 0,
+        "meanMs": 0
+      },
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.397759,
+          "p99": 11.632639,
+          "max": 26.148863,
+          "mean": 2.0697312340425533
+        },
+        "eventLoopUtilization": 0.7241321407894016,
+        "processCpuPerSec": 0.9584778570571677,
+        "gc": {
+          "totalMs": 132.0747528076172,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 359,
+          "totalMs": 21406.018746999987,
+          "meanMs": 59.626793167130884,
+          "peakWaiting": 8
+        },
+        "primaryStatements": {
+          "count": 5212,
+          "p50Ms": 3,
+          "p99Ms": 15,
+          "perEventMs": 62.42666666666667
+        },
+        "waitEvents": {
+          "Client:ClientRead": 3,
+          "idle-in-tx Client:ClientRead": 214,
+          "IO:WALSync": 5,
+          "CPU": 10,
+          "LWLock:WALWrite": 2,
+          "Timeout:VacuumDelay": 1
+        },
+        "phases": [
+          {
+            "p50Ms": 139.29075000000012,
+            "p99Ms": 186.4414579999866
+          },
+          {
+            "p50Ms": 148.95220800000243,
+            "p99Ms": 187.31779200000165
+          },
+          {
+            "p50Ms": 205.54395799999475,
+            "p99Ms": 254.02274999998917
+          }
+        ]
+      }
+    }
+  ],
+  "interpretation": "Verdicts compare paired repetitions against measured baseline noise. NO_DETECTABLE_DIFFERENCE means the difference is within noise, not that it is zero. The gate judges the median paired difference in absolute milliseconds against the ingestion contract. Treat results from shared or loaded hosts as indicative only."
+}

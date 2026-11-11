@@ -194,9 +194,10 @@ share of burst wall time per run (`laneBusyFractionOfBurst`).
 
 A run is judged only on a quiet host. The script samples the host from a worker thread every 3 s and
 marks the run `INVALID` (exit code 2, never a pass or a fail) unless the 1-minute load was below 4 at
-the start, no other heavy process (compiler, test runner, build, another load test, headless browser)
-was seen, and no gap between samples exceeded 15 s. `--wait-for-quiet-ms <ms>` waits for a quiet host
-before the first arm. Invalid runs are discarded and repeated, never averaged in.
+the start and never rose above 4 at any sample, no other heavy process (compiler, test runner, build,
+another load test, headless browser) was seen, and no gap between samples exceeded 15 s. The
+benchmark's own work counts toward that peak (about 0.3 to 1.2 on an 8-core laptop), so start it well
+below the limit. `--wait-for-quiet-ms <ms>` waits for a quiet host before the first arm. Invalid runs are discarded and repeated, never averaged in.
 `--cpu-profile-dir <dir>` writes a V8 profile of each timed burst, and `--no-lane-yield --no-gate`
 measures the lane without yielding (diagnosis only). The attribution behind the lane pool and the
 ingestion yield is in `plans/intelligence-engine/certification/perf/ingestion-p50-diagnosis-2026-11-09.md`.
