@@ -324,7 +324,16 @@ test.describe.serial('intelligence responder workflows', () => {
 
   test('an incident shows explainable suggestions and accepts feedback', async ({ page }) => {
     await page.goto(`/incidents/${incidentId}`);
-    const similar = page.getByRole('region', { name: 'Similar past incidents' });
+    // One row of chips under the command bar; the full analysis is one click away in the inspector.
+    const strip = page.getByTestId('intelligence-strip');
+    await expect(
+      strip.getByRole('link', { name: 'Likely cause: checkout v42 rollout' })
+    ).toBeVisible();
+    await strip.getByRole('link', { name: '1 similar', exact: true }).click();
+    const inspector = page.getByRole('dialog', { name: 'Insights' });
+    await expect(inspector).toBeVisible();
+    await expect(page).toHaveURL(/[?&]insights=similar/);
+    const similar = inspector.getByRole('region', { name: 'Similar past incidents' });
     await expect(similar).toBeVisible();
     await expect(similar.getByRole('link', { name: /last month/ })).toHaveAttribute(
       'href',
@@ -333,13 +342,13 @@ test.describe.serial('intelligence responder workflows', () => {
 
     await similar.getByText('Why this matched', { exact: true }).click();
     await expect(similar.getByLabel('Why this matched')).toBeVisible();
-    await page.getByRole('tab', { name: 'Causes & runbooks' }).click();
-    const causes = page.getByRole('region', { name: 'Possible causes' });
+    // Causes are a section of the same panel, not another tab bar.
+    const causes = inspector.getByRole('region', { name: 'Possible causes' });
     await expect(causes.getByText('checkout v42 rollout')).toBeVisible();
     await expect(causes.getByText(/leads to verify, not confirmed causes/)).toBeVisible();
 
-    await expectAccessible(page, 'section[aria-labelledby="incident-intelligence-heading"]');
-    await page.getByRole('tab', { name: 'Similar', exact: true }).click();
+    await expectAccessible(page, '[data-testid="insights-inspector"]');
+    await expectAccessible(page, '[data-testid="intelligence-strip"]');
     const helpful = similar.getByRole('button', { name: 'Helpful', exact: true });
     await helpful.click();
     await expect(helpful).toHaveAttribute('aria-pressed', 'true');
@@ -350,23 +359,94 @@ test.describe.serial('intelligence responder workflows', () => {
       .toBe(1);
   });
 
-  test('the assistant answers from the incident panel in basic mode', async ({ page }) => {
+  test('core incident content stays first: one strip, the core tabs near the fold, insights on demand', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/incidents/${incidentId}`);
+    const strip = page.getByTestId('intelligence-strip');
+    await expect(strip).toBeVisible();
+    // The old seven-tab panel and its cards are gone from the main column.
+    await expect(page.getByRole('tablist', { name: 'Incident intelligence' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Intelligence', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Similar past incidents' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: /^Ask / })).toHaveCount(0);
+
+    // Density: hero, command bar, strip, health, description and the top of the core tabs within 1.5 screens.
+    const top = async (locator: ReturnType<Page['locator']>) =>
+      (await locator.boundingBox())!.y + (await page.evaluate(() => window.scrollY));
+    const tabsTop = await top(page.getByRole('tab', { name: 'Overview', exact: true }));
+    const stripTop = await top(strip);
+    expect(tabsTop).toBeLessThanOrEqual(800 * 1.5);
+    expect(stripTop).toBeLessThan(800);
+    expect(stripTop).toBeLessThan(tabsTop);
+    expect(await top(page.locator('#main-content h1').first())).toBeLessThan(stripTop);
+
+    // Keyboard: I opens and closes the inspector; it is not modal, so the page behind stays usable.
+    await page.locator('body').press('i');
+    const inspector = page.getByRole('dialog', { name: 'Insights' });
+    await expect(inspector).toBeVisible();
+    await expect(inspector).toHaveAttribute('data-layout', 'side-panel');
+    await expect(inspector.getByRole('region', { name: 'Similar past incidents' })).toBeVisible();
+
+    // Timeline: intelligence events are rows of the core timeline, behind one toggle.
+    await page.getByRole('tab', { name: /^Timeline/ }).click();
+    await expect(inspector).toBeVisible();
+    const toggle = page.getByRole('checkbox', { name: /Show intelligence events/ });
+    await expect(toggle).toBeChecked();
+    const timeline = page.getByRole('tabpanel', { name: /^Timeline/ });
+    await expect(timeline.getByRole('link', { name: 'checkout v42 rollout' })).toBeVisible();
+    await timeline.getByRole('button', { name: 'Intelligence', exact: true }).click();
+    await expect(timeline.locator('[data-intelligence-kind]').first()).toBeVisible();
+    await toggle.uncheck();
+    await expect(timeline.locator('[data-intelligence-kind]')).toHaveCount(0);
+    await expect(timeline.getByRole('link', { name: 'checkout v42 rollout' })).toHaveCount(0);
+    await page.locator('body').press('i');
+    await expect(inspector).toBeHidden();
+
+    // Shareable link straight to a section.
+    await page.goto(`/incidents/${incidentId}?insights=why`);
+    await expect(
+      page
+        .getByRole('dialog', { name: 'Insights' })
+        .getByRole('region', { name: 'Possible causes' })
+    ).toBeVisible();
+    await expectAccessible(page, '[data-testid="insights-inspector"]');
+
+    // Dark mode keeps the strip and the inspector accessible.
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await expectAccessible(page, '[data-testid="insights-inspector"]');
+    await expectAccessible(page, '[data-testid="intelligence-strip"]');
+    await page.evaluate(() => document.documentElement.classList.remove('dark'));
+    await page.emulateMedia({ colorScheme: 'light' });
+  });
+
+  test('the shortcut for insights is listed with the other incident shortcuts', async ({
+    page,
+  }) => {
+    await page.goto('/shortcuts');
+    await expect(page.getByText('Open or close insights on an incident')).toBeVisible();
+  });
+
+  test('the assistant answers about one insight in basic mode', async ({ page }) => {
+    await page.goto(`/incidents/${incidentId}?insights=similar`);
     await assistantReady(page);
-    await page.getByRole('tab', { name: 'Ask Squire', exact: true }).click();
-    const panel = page.getByRole('region', { name: 'Ask Pip' });
-    await expect(panel).toBeVisible();
-    await panel.getByRole('button', { name: 'Have we seen this before?' }).click();
+    const inspector = page.getByRole('dialog', { name: 'Insights' });
+    const similar = inspector.getByRole('region', { name: 'Similar past incidents' });
+    // The standalone Ask Squire card is gone; every item asks about itself instead.
+    await similar.getByRole('button', { name: /^Ask Pip about .*last month/ }).click();
     const dialog = page.getByRole('dialog', { name: /Pip/ });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/last month/).first()).toBeVisible({ timeout: 30_000 });
-    await expect(dialog.getByText('Basic answer from your incident data')).toBeVisible();
+    await expect(dialog.getByText('Basic answer from your incident data')).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(
       dialog.locator(`a[href="/incidents/${precedentId}"]`, { hasText: 'View incident' }).first()
     ).toBeVisible();
+    // The inspector does not cover the assistant it opened.
+    await dialog.getByLabel('Message Pip').click({ trial: true });
     await expectAccessible(page, 'section[role="dialog"]');
-
-    await expectAccessible(page, 'section[aria-labelledby="ask-squire-heading"]');
   });
 
   test('the floating launcher is keyboard friendly and the search entry opens it', async ({
@@ -579,11 +659,45 @@ test.describe.serial('intelligence responder workflows', () => {
       await expect(page.locator('#main-content')).toBeVisible();
       await noHorizontalOverflow(page);
     }
-    const tabs = page.getByRole('tablist', { name: 'Incident intelligence' });
-    await tabs.getByRole('tab', { name: 'Similar', exact: true }).focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(tabs.getByRole('tab', { name: 'Related', exact: true })).toBeFocused();
-    await expectAccessible(page, 'section[aria-labelledby="incident-intelligence-heading"]');
+    // The strip is on screen without scrolling, scrolls sideways instead of wrapping, and opens the
+    // inspector as a bottom sheet.
+    const strip = page.getByTestId('intelligence-strip');
+    await expect(strip).toBeVisible();
+    const stripBox = (await strip.boundingBox())!;
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(stripBox.y + stripBox.height).toBeLessThanOrEqual(844);
+    expect(stripBox.height).toBeLessThanOrEqual(64);
+    const chip = strip.getByRole('link', { name: '1 similar', exact: true });
+    expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await chip.click();
+    const sheet = page.getByRole('dialog', { name: 'Insights' });
+    await expect(sheet).toHaveAttribute('data-layout', 'bottom-sheet');
+    await expect(sheet.getByRole('region', { name: 'Similar past incidents' })).toBeVisible();
+    const sheetBox = (await sheet.boundingBox())!;
+    expect(sheetBox.x).toBeGreaterThanOrEqual(0);
+    expect(sheetBox.x + sheetBox.width).toBeLessThanOrEqual(390);
+    await expectAccessible(page, '[data-testid="insights-inspector"]');
+    await noHorizontalOverflow(page);
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+
+    // The mobile route has the same strip and the same bottom sheet, and no separate intelligence card.
+    await page.goto(`/m/incidents/${incidentId}`);
+    const mobileStrip = page.getByTestId('intelligence-strip');
+    await expect(mobileStrip).toBeVisible();
+    const mobileBox = (await mobileStrip.boundingBox())!;
+    expect(mobileBox.y + mobileBox.height).toBeLessThanOrEqual(844);
+    await expect(page.getByTestId('mobile-intelligence')).toHaveCount(0);
+    await mobileStrip.getByRole('link', { name: '1 similar', exact: true }).click();
+    const mobileSheet = page.getByRole('dialog', { name: 'Insights' });
+    await expect(mobileSheet).toHaveAttribute('data-layout', 'bottom-sheet');
+    await expect(mobileSheet.getByRole('link', { name: /last month/ })).toHaveAttribute(
+      'href',
+      `/m/incidents/${precedentId}`
+    );
+    await noHorizontalOverflow(page);
+    await page.keyboard.press('Escape');
+    await page.goto(`/incidents/${incidentId}`);
     await assistantReady(page);
     await page.getByRole('button', { name: /Ask Pip/ }).click();
     const box = await page.getByRole('dialog', { name: /Pip/ }).boundingBox();
@@ -616,9 +730,25 @@ test.describe.serial('intelligence responder workflows', () => {
       data: { enabled: false },
     });
     try {
+      // Off means off: no strip, no chips, nothing in the main column or on the timeline.
       await page.goto(`/incidents/${incidentId}`);
-      await page.getByRole('tab', { name: 'Related', exact: true }).click();
-      const related = page.getByRole('region', { name: 'Related incidents' });
+      await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
+      await expect(page.getByTestId('intelligence-strip')).toHaveCount(0);
+      await expect(page.getByTestId('incident-group-line')).toHaveCount(0);
+      await page.getByRole('tab', { name: /^Timeline/ }).click();
+      await expect(page.getByRole('checkbox', { name: /Show intelligence events/ })).toHaveCount(0);
+      // An intelligence manager can still open the inspector: it says intelligence is off and keeps the
+      // links made before the switch-off, so a wrong automatic grouping can be undone. Waiting on the
+      // inspector itself (not on a tab that may not have hydrated yet) keeps this step deterministic.
+      await page.goto(`/incidents/${incidentId}?insights=related`);
+      const inspector = page.getByRole('dialog', { name: 'Insights' });
+      await expect(inspector.getByTestId('insights-off-hint')).toContainText(
+        'Intelligence is off for this service'
+      );
+      await expect(inspector.getByRole('region', { name: 'Similar past incidents' })).toHaveCount(
+        0
+      );
+      const related = inspector.getByRole('region', { name: 'Related incidents' });
       await expect(
         related.getByText('Automatically grouped after paging', { exact: false })
       ).toBeVisible();
@@ -894,15 +1024,23 @@ test.describe.serial('intelligence responder workflows', () => {
     // A web-only fixture can retain paging work from the earlier action cases. With the held
     // analysis lease, both waiting and deliberately yielding are valid unfinished states.
     // Completed, unavailable and failed analysis must still fail this assertion.
+    // Freshness is stated once, as the strip's dot; its message is announced without opening it.
     const freshness = page.getByRole('group', { name: 'Recommendation freshness' });
+    await expect(freshness).toHaveCount(1);
+    await expect(page.getByTestId('intelligence-strip')).toContainText(/Analysing|Paused/);
     await expect(freshness.getByRole('status')).toHaveText(
       /^(?:Waiting for recommendation analysis\. An empty panel does not mean analysis found no matches\.|Analysis is yielding to paging work\. Earlier suggestions have not been refreshed\.)$/
     );
+    const dot = freshness.getByRole('button', { name: /recommendation freshness details/ });
+    expect((await dot.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    // Opening the inspector does not repeat it.
+    await page.locator('body').press('i');
+    await expect(page.getByRole('dialog', { name: 'Insights' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(1);
-    await page.getByRole('tab', { name: 'Related', exact: true }).click();
-    await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(0);
-    await page.getByRole('tab', { name: 'Causes & runbooks', exact: true }).click();
-    await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Insights' })).toBeHidden();
+    await dot.click();
+    await expect(dot).toHaveAttribute('aria-expanded', 'true');
     const requested = page.waitForResponse(
       response =>
         response.url().endsWith(`/api/intelligence/incidents/${pending.id}/analysis`) &&

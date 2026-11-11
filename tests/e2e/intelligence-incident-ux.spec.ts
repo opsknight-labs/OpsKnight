@@ -2,11 +2,14 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { enableSuggestMode } from '../lib/intelligence-e2e-fixture';
 
 /**
- * Browser contracts for intelligence on the incident page and the incident list: the storm group view and
- * its "Ungroup and page" control (which re-ingests the alert so it pages), and the list's noise badges and
- * noise-decision filter. State is created directly and removed afterwards.
+ * Browser contracts for intelligence on the incident page and the incident list: the hero's one-line group
+ * state, the storm group view in the insights inspector with its "Ungroup and page" control (which
+ * re-ingests the alert so it pages), and the list's noise badges and noise-decision filter. State is created
+ * directly and removed afterwards. The group respects the service's intelligence mode, so the spec switches
+ * the engine to SUGGEST for its run and restores what it found.
  */
 const prisma = new PrismaClient();
 const email = 'e2e-intelligence-h2@example.com';
@@ -19,6 +22,7 @@ let childId = '';
 let suppressedId = '';
 let decisionId = '';
 let sessionCookies: Awaited<ReturnType<BrowserContext['cookies']>> = [];
+let restoreIntelligence: (() => Promise<void>) | null = null;
 
 const ref = (id: string) => `#${id.slice(-5).toUpperCase()}`;
 
@@ -32,11 +36,12 @@ async function cleanup() {
 async function seed() {
   const passwordHash = await bcrypt.hash(password, 12);
   await prisma.rateLimit.deleteMany({ where: { key: { contains: email } } });
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email },
     update: { passwordHash, role: 'ADMIN', status: 'ACTIVE' },
     create: { email, name: 'Intelligence H2 Admin', passwordHash, role: 'ADMIN', status: 'ACTIVE' },
   });
+  restoreIntelligence = await enableSuggestMode(prisma, admin.id);
   const service = await prisma.service.create({ data: { name: tag } });
   serviceId = service.id;
   const now = Date.now();
@@ -148,6 +153,7 @@ test.describe.serial('intelligence on incidents and incident lists', () => {
   });
 
   test.afterAll(async () => {
+    await restoreIntelligence?.();
     await cleanup();
     await prisma.$disconnect();
   });
@@ -176,21 +182,38 @@ test.describe.serial('intelligence on incidents and incident lists', () => {
     expect(suppressedId).toBeTruthy();
   });
 
-  test('a child links to its parent group', async ({ page }) => {
+  test('a child states its parent in one line under the title and opens the group on demand', async ({
+    page,
+  }) => {
     await page.goto(`/incidents/${childId}`);
-    const group = page.getByTestId('incident-group-view');
+    // The group is one slim line in the hero, not a card in the main column.
+    const line = page.getByTestId('incident-group-line');
+    await expect(line).toContainText('Grouped under');
+    await expect(
+      line.getByRole('link', { name: `${ref(parentId)} Storm parent: database cluster degraded` })
+    ).toHaveAttribute('href', `/incidents/${parentId}`);
+    await expect(page.getByTestId('incident-group-view')).toHaveCount(0);
+
+    await line.getByRole('link', { name: 'View group' }).click();
+    const inspector = page.getByRole('dialog', { name: 'Insights' });
+    const group = inspector.getByTestId('incident-group-view');
     await expect(group.getByRole('heading', { name: 'Part of a group' })).toBeVisible();
     await expect(
       group.getByRole('link', { name: `${ref(parentId)} Storm parent: database cluster degraded` })
     ).toHaveAttribute('href', `/incidents/${parentId}`);
     await expect(group.getByText(/\(this incident\)/)).toBeVisible();
+    await expect(page).toHaveURL(/[?&]insights=related/);
   });
 
   test('ungroup and page releases the grouped alert as its own paging incident', async ({
     page,
   }) => {
     await page.goto(`/incidents/${parentId}`);
-    const group = page.getByTestId('incident-group-view');
+    const line = page.getByTestId('incident-group-line');
+    await expect(line).toContainText('Parent of 1 grouped incident and 1 grouped alert');
+    await expectAccessible(page, '[data-testid="incident-group-line"]');
+    await line.getByRole('link', { name: 'View group' }).click();
+    const group = page.getByRole('dialog', { name: 'Insights' }).getByTestId('incident-group-view');
     await expect(group.getByRole('heading', { name: 'Grouped under this incident' })).toBeVisible();
     await expect(group.getByRole('img', { name: /Mini timeline/ })).toBeVisible();
     await expect(group.getByRole('link', { name: 'db-7 CPU saturated' })).toBeVisible();
