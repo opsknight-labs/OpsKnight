@@ -6,6 +6,7 @@ import { userIdentityStatus } from '@/lib/users/identity-status';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
+import NoiseSettings from '@/components/settings/NoiseSettings';
 import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
 import ProfileHeroBanner from '@/components/settings/ProfileHeroBanner';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
@@ -231,14 +232,17 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           </>
         }
         notificationsContent={
-          <NotificationPreferencesForm
-            emailEnabled={user?.emailNotificationsEnabled ?? false}
-            smsEnabled={user?.smsNotificationsEnabled ?? false}
-            voiceEnabled={user?.voiceNotificationsEnabled ?? false}
-            pushEnabled={user?.pushNotificationsEnabled ?? false}
-            whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
-            phoneNumber={user?.phoneNumber ?? null}
-          />
+          <>
+            <NotificationPreferencesForm
+              emailEnabled={user?.emailNotificationsEnabled ?? false}
+              smsEnabled={user?.smsNotificationsEnabled ?? false}
+              voiceEnabled={user?.voiceNotificationsEnabled ?? false}
+              pushEnabled={user?.pushNotificationsEnabled ?? false}
+              whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
+              phoneNumber={user?.phoneNumber ?? null}
+            />
+            {user?.id && <NoiseSettings viewer={{ id: user.id, role }} />}
+          </>
         }
         scheduleContent={
           <>

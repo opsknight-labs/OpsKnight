@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import MobileMoreContent from '@/components/mobile/MobileMoreContent';
+import NoiseSettings from '@/components/settings/NoiseSettings';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,9 @@ export default async function MobileMorePage() {
       role={user?.role || 'User'}
       gender={user?.gender}
       avatarUrl={user?.avatarUrl}
+      noise={
+        user ? <NoiseSettings viewer={{ id: user.id, role: user.role }} variant="mobile" /> : null
+      }
     />
   );
 }
