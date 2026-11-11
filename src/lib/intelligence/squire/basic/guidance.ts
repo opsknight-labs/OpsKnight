@@ -94,7 +94,7 @@ const GUIDES: ReadonlyArray<{ match: RegExp; title: string; answer: string }> = 
     match: /\b(squire|basic mode|without ai|non.?ai|ai|provider|quota|budget|language model)\b/,
     title: 'Basic mode and AI',
     answer:
-      'Basic mode uses fixed intent rules and fresh permission-checked OpsKnight reads. It can look up work, calculate bounded summaries and explain product workflows without a model. It cannot inspect external logs or metrics, invent a root cause or carry out actions. For AI, an administrator can use Settings → Intelligence → Assistant & AI, enable AI, and configure a provider and model eligible for the required data class. Rate limits and token budgets can make it fall back to basic mode. AI adds free-form reasoning and confirmed action proposals.',
+      'Basic mode uses fixed intent rules and fresh permission-checked OpsKnight reads. It can look up work, calculate bounded summaries and explain product workflows without a model. It cannot inspect external logs or metrics, invent a root cause or carry out actions. For AI, an administrator can use Settings → Intelligence → Assistant, enable AI, and configure a provider and model eligible for the required data class. Rate limits and token budgets can make it fall back to basic mode. AI adds free-form reasoning and confirmed action proposals.',
   },
   {
     match: /\b(api key|mcp|access token)\b/,
