@@ -56,6 +56,33 @@ export const CASES: readonly SquireEvalCase[] = [
     ideal: 'Lists the visible replica-lag incidents it found, or says there are none.',
   },
   {
+    id: 'alert-payload',
+    category: 'tool-choice',
+    question:
+      'Open the raw payload of the first alert on this incident and tell me which fields it has.',
+    expectedTool: 'Reading the alert payload',
+    ideal: 'Lists the alerts, reads one payload and reports its fields without inventing any.',
+  },
+  {
+    id: 'slo-status',
+    category: 'tool-choice',
+    question:
+      'Check the service objectives for the service behind this incident. Are we within them?',
+    expectedTool: 'Checking service objectives',
+    ideal:
+      'Reads the objectives for the incident service and reports attainment, or says plainly that none are defined.',
+  },
+  {
+    id: 'analytics',
+    category: 'tool-choice',
+    question:
+      'How many incidents did we have in the last week, and what was the mean time to acknowledge?',
+    expectedTool: 'Computing incident analytics',
+    mustNotContain: ['Restricted incident'],
+    ideal:
+      'Reports the computed totals and says when there are too few samples for a mean; never guesses numbers.',
+  },
+  {
     id: 'context',
     category: 'rca',
     question: 'Summarise the incident on screen and link to it.',

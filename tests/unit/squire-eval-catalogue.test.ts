@@ -3,6 +3,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { SQUIRE_ACTION_NAMES } from '@/lib/intelligence/squire/actions/catalog';
+import { FOLLOW_UP_ONLY_ACTIONS } from '@/lib/intelligence/squire/actions/catalog-extended';
 import baseline from '../evals/squire/baseline.json';
 import { BASIC_CASES } from '../evals/squire/basic-cases';
 import { CASES } from '../evals/squire/cases';
@@ -37,7 +39,7 @@ describe('Squire evaluation catalogue', () => {
   it('covers every category in the scripted-model and live tiers', () => {
     for (const category of SQUIRE_EVAL_CATEGORIES) {
       expect(
-        MODEL_CASES.some(c => c.category === category && !c.requires?.length),
+        MODEL_CASES.some(c => c.category === category),
         `model ${category}`
       ).toBe(true);
       expect(
@@ -45,6 +47,18 @@ describe('Squire evaluation catalogue', () => {
         `live ${category}`
       ).toBe(true);
     }
+  });
+
+  it('scripts a proposal for every action the assistant can propose', () => {
+    const scripted = new Set(
+      MODEL_CASES.flatMap(c => [...c.script, ...(c.then?.script ?? [])]).flatMap(step =>
+        'tool' in step ? [step.tool] : []
+      )
+    );
+    // Follow-up-only actions are included on purpose: a model that calls one anyway must get no card.
+    for (const action of SQUIRE_ACTION_NAMES)
+      expect(scripted.has(`propose_${action}`), action).toBe(true);
+    expect(FOLLOW_UP_ONLY_ACTIONS.size).toBeGreaterThan(0);
   });
 
   it('names only live cases that exist as must-pass', () => {
@@ -71,6 +85,9 @@ describe('Squire evaluation catalogue', () => {
             '$alert',
             '$teammate',
             '$runbook',
+            '$diffChange',
+            '$statusPage',
+            '$self',
           ],
           `${c.id} ${placeholder}`
         ).toContain(placeholder);

@@ -17,7 +17,7 @@
   "note": "Raised deliberately by committing a new value after a reviewed run; never by a passing run. minimumCases is refreshed with node scripts/check-squire-eval-baseline.cjs --record-catalogue.",
   "minimumCases": {
     "basic": 48,
-    "model": 64,
-    "live": 19
+    "model": 100,
+    "live": 22
   }
 }
