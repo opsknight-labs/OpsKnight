@@ -686,3 +686,36 @@ describe('intelligence data model contracts', () => {
     }
   });
 });
+
+describe('pre-paging lookups started early by ingestion', () => {
+  const events = readFileSync(join(root, 'src/lib/events.ts'), 'utf8');
+  const hook = readFileSync(join(intelligenceDir, 'noise-controls/ingest.ts'), 'utf8');
+
+  it('are sent after the dedup-key lock and the open-incident check, and before the hook reads them', () => {
+    const order = [
+      'await lockEventDedupKeys(tx,',
+      'await findOpenEventIncident(tx,',
+      'beginIngestNoiseLookups(',
+      'await evaluateIngestNoiseControls(',
+    ].map(marker => events.indexOf(marker, events.indexOf('async function applyEvent')));
+    expect(order.every(index => index > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(events.match(/beginIngestNoiseLookups\(/g)).toHaveLength(1);
+  });
+
+  it('never run on the event transaction and never refresh the snapshot', () => {
+    const body = hook.slice(
+      hook.indexOf('export function beginIngestNoiseLookups'),
+      hook.indexOf('function usablePrefetch')
+    );
+    expect(body.length).toBeGreaterThan(200);
+    expect(body).not.toMatch(/\btx\b/);
+    expect(body).not.toContain('getPrePagingSnapshot');
+    expect(body).toContain('peekPrePagingSnapshot()');
+    expect(body).toContain('getNoiseLookupClient(');
+  });
+
+  it('keep one deadline: the hook waits only for what is left of it', () => {
+    expect(hook).toContain('Math.max(0, deadlineMs - (performance.now() - prefetch.startedAt))');
+  });
+});
