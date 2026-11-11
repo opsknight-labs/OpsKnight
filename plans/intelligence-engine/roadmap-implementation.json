@@ -115,12 +115,15 @@
         "Change risk score on ChangeEvent from historical follow rate, dependency blast radius, timing and size labels, computed in the LATE_CHANGE handler",
         "Multi-window SLO burn (lib/slo/burn.ts) and SLO-aware urgency suggestion; rankByBurn exposed for parent selection",
         "Unified incident time axis (alerts, changes with risk, upstream incidents, noise decisions when present) with a Timeline tab",
-        "Runbook-ranking weight fitting (p1): bounded, policy-versioned weights (service-wide record, same-problem record, MTTR bonus, untried-binding prior) whose defaults reproduce the Wilson ranking; suggest-only offline fit from recommendation verdicts and first-run outcomes (40-label minimum, held-out improvement), published by a person as response.runbookWeights"
+        "Runbook-ranking weight fitting (p1): bounded, policy-versioned weights (service-wide record, same-problem record, MTTR bonus, untried-binding prior) whose defaults reproduce the Wilson ranking; suggest-only offline fit from recommendation verdicts and first-run outcomes (40-label minimum, held-out improvement), published by a person as response.runbookWeights",
+        "p2 metric anomaly evidence (default off): per-service metric templates evaluated by the lane job EVALUATE_METRIC_TEMPLATE (generation-fenced, withDbBudget, network outside transactions, fail to no evidence), same-time-of-week median/MAD detector, MetricAnomaly rows feeding METRIC_ANOMALY root-cause findings and the incident time axis, settings page, retention, privacy registry and inventory entries, architecture-boundary assertion keeping the module off ingestion; migration 20261111210000_metric_anomaly_evidence"
       ],
       "remaining": [
-        "Scheduled lane-only Prometheus/Datadog anomaly evidence using seasonal baseline/MAD (needs the observability connectors from phase 4; interface note: produce IntelligenceFinding kind evidence 'metric deviated at T' for the time axis)",
         "Runbook-ranking fit runs only when someone opens the insights page; nothing refits on a schedule",
-        "The 120-minute 'resolved after a run' window is a fixed constant (RUNBOOK_FIT_LIMITS.resolvedWithinMinutes), not a policy setting"
+        "The 120-minute 'resolved after a run' window is a fixed constant (RUNBOOK_FIT_LIMITS.resolvedWithinMinutes), not a policy setting",
+        "Metric anomalies are not exposed through a Squire tool, API v2 or MCP; they reach users only through root-cause findings, the incident time axis and the settings page",
+        "Metric anomaly baselines are recomputed from the connector on every evaluation (raw series are not stored), so a connector with short retention gives fewer baseline weeks and may report no data",
+        "MetricTemplateManager has no component test and the metric settings page has had no browser check"
       ],
       "wave": 3
     },
@@ -168,10 +171,10 @@
       "status": "in_progress",
       "remaining": [
         "Opt-in encrypted content audit",
-        "Approximately 80 structural/live-judge cases, baseline regression gate and labelled engine storm/RCA fixtures",
-        "PR mocked contracts and gated nightly live judge",
         "Refresh architecture and operator docs to match final implementation",
-        "Grow live-model cases toward ~80 with an LLM judge; token-to-cost price table and per-team budgets (deferred to the F/H workstreams)"
+        "Live evaluation tier has never run against a real model (needs SQUIRE_EVAL_API_KEY); the three newest live cases (alert payload, objectives, analytics) are unverified and count toward the 0.85 pass rate",
+        "Live tier is 22 cases, not the ~80 first planned; the breadth is in the 100-case scripted-model tier",
+        "No evaluation cases for the Slack, Teams and MCP surfaces; connector tools are exercised only through Prometheus, Loki, Tempo, Sentry and GitHub stand-ins (not Datadog, Elastic, CloudWatch, Grafana proxy or GitLab)"
       ],
       "wave": 6,
       "implemented": [
@@ -183,7 +186,8 @@
         "Answer feedback (thumbs + reason, no text stored) and Quality-page summary",
         "About 45 structural no-model evaluation cases on every PR (squire-evals-contract) and nightly live-model workflow with stored baseline gate",
         "Basic-mode 429 shows a truthful status instead of AI limit reached",
-        "Token-to-cost price table, per-team/per-capability limits, 80/100 percent alerts and usage breakdown (Workstream F6)"
+        "Token-to-cost price table, per-team/per-capability limits, 80/100 percent alerts and usage breakdown (Workstream F6)",
+        "p2 Squire evaluation: scripted-model tier of 100 cases on every pull request (real gateway, tools, proposal and citation code against the local fake model; fails when an offered tool or action has no case), nightly live tier of 22 cases with an LLM judge and per-case token ceiling, baseline gate that fails on a must-pass case that did not run, a judge regression or an empty run, labelled storm fixture (35 incidents into 12 clusters, false-group rate 0, pair recall 1) and root-cause fixture (top-1 8/8)"
       ]
     },
     {
@@ -196,13 +200,14 @@
         "Complete shared settings form primitives, toasts and remaining dark-mode fixes",
         "Citation layouts and breadcrumbs",
         "Complete browser coverage and incident bundle certification",
-        "Animation-frame streaming batches, aria-modal and focus trap, collapsible investigation and feedback",
         "Collapse preference for incident intelligence sections",
         "Maintenance calendar view (builders show upcoming occurrences only)",
         "Overview AI cost and one-click severity lowering for noisy alerts (today: link to service automation, Jira issue when configured)",
         "Remove legacy noise-control list components superseded by the builders",
         "Wallboard noise tile e2e (needs the kiosk token flow in the e2e seed) and browser dark-mode contrast check of the new intelligence surfaces",
-        "Browser coverage for the timeline Reverse action and the mobile 44 px assertion; CI run of the new intelligence e2e specs with the shared Playwright config"
+        "Browser coverage for the timeline Reverse action and the mobile 44 px assertion; CI run of the new intelligence e2e specs with the shared Playwright config",
+        "FAILING: tests/e2e/intelligence-ui.spec.ts 'an automatic relationship can be ungrouped after intelligence is switched off' times out waiting for the Related tab once intelligence is disabled (seen in the p2 chat-polish Chromium run); the describe block is serial so later tests in the spec are skipped. Needs a decision on whether the test or the panel is wrong",
+        "No clean serial run of the whole intelligence-ui e2e spec after the three Squire assertion fixes; only the three touched tests were re-run"
       ],
       "implemented": [
         "Memoized messages, stable ids, safe lazy markdown and code copying",
@@ -216,7 +221,8 @@
         "Incident group card and view with Ungroup and page; timeline noise/grouping/suggestion events with Why? and reversal; Post summary as note",
         "Incident-list noise-decision badges and filter; wallboard noise tile",
         "Maintenance, suppression, orchestration and heartbeat builders with seven-day previews",
-        "Mobile Intelligence sections and status-token analysis notices with 44 px touch targets"
+        "Mobile Intelligence sections and status-token analysis notices with 44 px touch targets",
+        "p2 Squire chat polish: text deltas applied once per animation frame, memoised message markdown, aria-modal dialog with a focus trap and focus restore, live-region announcements for lookups and investigation steps, separate rate-limited (Retry-After countdown), budget, AI-disabled and basic-mode states, additive limit: 'rate' | 'budget' on meta and error events; three stale e2e assertions corrected"
       ],
       "wave": 7
     },
