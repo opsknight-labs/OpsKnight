@@ -16,7 +16,8 @@ import IntelligenceSubNav, {
   isSectionActive,
 } from '@/components/settings/layout/IntelligenceSubNav';
 import SquireAvatar from '@/components/squire/SquireAvatar';
-import AskSquirePanel from '@/components/squire/AskSquirePanel';
+import AskSquireAbout from '@/components/incident/intelligence/AskSquireAbout';
+import { openSquire } from '@/components/squire/squire-bus';
 import AiUsageChart from '@/components/settings/AiUsageChart';
 
 describe('IntelligenceSubNav', () => {
@@ -66,17 +67,36 @@ describe('SquireAvatar', () => {
   });
 });
 
-describe('AskSquirePanel', () => {
-  it('opens the assistant with the chosen question', () => {
+describe('Ask Squire entry points', () => {
+  it('opens the assistant with the question and the item’s evidence handle', () => {
     const opened = vi.fn();
     window.addEventListener('squire:open', opened);
-    render(<AskSquirePanel name="Pip" avatar="KNIGHT" />);
-    expect(screen.getByRole('heading', { name: 'Ask Pip' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'What could have caused this?' }));
+    render(
+      <AskSquireAbout
+        assistantName="Pip"
+        subject="deploy api v9"
+        question="What could have caused this?"
+        evidence={{ kind: 'finding', id: 'f1', label: 'deploy api v9', href: '#finding-f1' }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Pip about deploy api v9' }));
     expect(opened).toHaveBeenCalledTimes(1);
     expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
       message: 'What could have caused this?',
+      evidence: { kind: 'finding', id: 'f1', label: 'deploy api v9', href: '#finding-f1' },
     });
+    window.removeEventListener('squire:open', opened);
+  });
+
+  it('keeps the bus backwards compatible: a plain question carries no evidence key', () => {
+    const opened = vi.fn();
+    window.addEventListener('squire:open', opened);
+    openSquire('What could have caused this?');
+    openSquire();
+    expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      message: 'What could have caused this?',
+    });
+    expect((opened.mock.calls[1][0] as CustomEvent).detail).toEqual({});
     window.removeEventListener('squire:open', opened);
   });
 });

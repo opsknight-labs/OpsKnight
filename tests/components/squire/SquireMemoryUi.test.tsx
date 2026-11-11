@@ -24,7 +24,7 @@ import {
   ProactivePolicyForm,
   RemoveFactButton,
 } from '@/components/settings/SquireMemoryForms';
-import { ProactiveNotes } from '@/components/incident/IncidentSquireProactiveCard';
+import { ProactiveNotes } from '@/components/incident/intelligence/ProactiveNotes';
 import type { ProactiveNotesView } from '@/lib/intelligence/memory/proactive-view';
 
 const formOf = (mock: { mock: { calls: unknown[][] } }) =>

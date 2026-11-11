@@ -1,11 +1,33 @@
 /** Small event bridge shared with callers without importing the assistant UI. */
-const OPEN_EVENT = 'squire:open';
-let queuedOpen: { message?: string } | null = null;
+export const SQUIRE_OPEN_EVENT = 'squire:open';
+const OPEN_EVENT = SQUIRE_OPEN_EVENT;
+
+/**
+ * What a question is about: one intelligence item on the page (a finding, a related link, a change, a runbook
+ * or a whole inspector section). `href` is the item's stable anchor (`#finding-<id>`), so a listener can cite
+ * or link back to it. Optional and additive: listeners that only read `message` keep working.
+ */
+export interface SquireEvidenceHandle {
+  kind: 'finding' | 'relationship' | 'section';
+  id: string;
+  label?: string;
+  href?: string;
+}
+
+export interface SquireOpenDetail {
+  message?: string;
+  evidence?: SquireEvidenceHandle;
+}
+
+let queuedOpen: SquireOpenDetail | null = null;
 let listeners = 0;
 
-export function openSquire(message?: string) {
+export function openSquire(message?: string, options: { evidence?: SquireEvidenceHandle } = {}) {
   if (typeof window === 'undefined') return;
-  const detail = message ? { message } : {};
+  const detail: SquireOpenDetail = {
+    ...(message ? { message } : {}),
+    ...(options.evidence ? { evidence: options.evidence } : {}),
+  };
   if (!listeners) queuedOpen = detail;
   window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail }));
 }

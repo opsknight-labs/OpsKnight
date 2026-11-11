@@ -41,9 +41,12 @@ const formatOffset = (ms: number) => {
 export default function IncidentGroupView({
   incidentId,
   group,
+  routePrefix = '',
 }: {
   incidentId: string;
   group: GroupView;
+  /** `/m` on the mobile route, so incident links stay in the mobile shell. */
+  routePrefix?: string;
 }) {
   if (group.parentHidden) {
     return (
@@ -51,9 +54,9 @@ export default function IncidentGroupView({
         aria-labelledby="incident-group-heading"
         className="rounded-xl border border-border bg-card p-3.5 text-sm"
       >
-        <h2 id="incident-group-heading" className="flex items-center gap-2 text-sm font-semibold">
+        <h3 id="incident-group-heading" className="flex items-center gap-2 text-sm font-semibold">
           <Layers className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> Grouped incident
-        </h2>
+        </h3>
         <p className="mt-1 text-xs text-muted-foreground">
           This incident is grouped under a parent incident you do not have access to.
         </p>
@@ -81,15 +84,15 @@ export default function IncidentGroupView({
       className="space-y-3 rounded-xl border border-border bg-card p-3.5"
     >
       <div className="space-y-1">
-        <h2 id="incident-group-heading" className="flex items-center gap-2 text-sm font-semibold">
+        <h3 id="incident-group-heading" className="flex items-center gap-2 text-sm font-semibold">
           <Layers className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           {group.role === 'PARENT' ? 'Grouped under this incident' : 'Part of a group'}
-        </h2>
+        </h3>
         {group.role === 'CHILD' && group.parent ? (
           <p className="text-xs text-muted-foreground">
             Grouped under parent{' '}
             <Link
-              href={`/incidents/${group.parent.id}`}
+              href={`${routePrefix}/incidents/${group.parent.id}`}
               className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:underline"
             >
               {group.parent.ref} {group.parent.title}
@@ -144,7 +147,10 @@ export default function IncidentGroupView({
                           {member.ref} {member.title} (this incident)
                         </span>
                       ) : (
-                        <Link href={`/incidents/${member.id}`} className="hover:underline">
+                        <Link
+                          href={`${routePrefix}/incidents/${member.id}`}
+                          className="hover:underline"
+                        >
                           {member.ref} {member.title}
                         </Link>
                       )}

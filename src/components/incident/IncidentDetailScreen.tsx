@@ -1,26 +1,19 @@
-import IncidentIntelligencePanel from './IncidentIntelligencePanel';
-import IncidentTriageCard from './IncidentTriageCard';
-import IncidentTimeAxisCard from './IncidentTimeAxisCard';
-import IncidentImpactCard from './IncidentImpactCard';
-import IncidentAnalysisStatus from './IncidentAnalysisStatus';
-import IntelligenceSkeleton from './IntelligenceSkeleton';
-import IncidentGroupCard from './intelligence/IncidentGroupCard';
-import MobileIncidentIntelligence from './mobile/MobileIncidentIntelligence';
+import IncidentInsights, {
+  IncidentGroupLine,
+  IncidentTimelineWithIntelligence,
+  SuggestedRunbooks,
+} from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { Suspense } from 'react';
 import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
-import IncidentIntelligenceCard from '@/components/incident/IncidentIntelligenceCard';
-import IncidentRelatedCard from '@/components/incident/IncidentRelatedCard';
-import IncidentResponseCard from '@/components/incident/IncidentResponseCard';
-import IncidentAskSquireCard from '@/components/squire/IncidentAskSquireCard';
-import IncidentAiSummaryCard from '@/components/incident/IncidentAiSummaryCard';
-import IncidentSquireProactiveCard from '@/components/incident/IncidentSquireProactiveCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { CAPABILITIES } from '@/lib/authorization';
 import { resolveEffectivePolicyForRequest } from '@/lib/intelligence/settings/service';
+import { getAiSettings } from '@/lib/intelligence/ai/settings';
+import { draftIncidentSummaryNoteAction } from '@/app/(app)/incidents/[id]/intelligence-actions';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
@@ -146,9 +139,17 @@ export default async function IncidentDetailScreen({
   const canReadIntelligence = permissions.capabilities.includes(
     CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ
   );
-  const showIntelligence =
-    canReadIntelligence &&
-    (await resolveEffectivePolicyForRequest(storedIncident.serviceId)).effectiveMode !== 'OFF';
+  // The service's mode decides every intelligence surface on this page. OFF renders nothing for responders;
+  // intelligence managers alone can still open the inspector, which then explains that it is off.
+  const intelligenceMode = canReadIntelligence
+    ? await resolveEffectivePolicyForRequest(storedIncident.serviceId)
+        .then(policy => policy.effectiveMode)
+        .catch(() => 'OFF' as const)
+    : ('OFF' as const);
+  const showIntelligence = canReadIntelligence && intelligenceMode !== 'OFF';
+  const showInsightsInspector =
+    showIntelligence ||
+    (canReadIntelligence && permissions.capabilities.includes(CAPABILITIES.INTELLIGENCE_MANAGE));
   const sensitive = permissions.capabilities.includes(CAPABILITIES.INCIDENT_SENSITIVE_READ);
   const sourceRestricted =
     (storedIncident.automationSourceRestricted ||
@@ -252,6 +253,14 @@ export default async function IncidentDetailScreen({
       ? 'from-slate-600 to-slate-500'
       : statusGradientClass('critical');
 
+  // "Insert summary" in the note composer: only where summaries exist and the viewer may post a note.
+  const canInsertSummary =
+    showIntelligence && (canManageIncident || canAddIncidentNote)
+      ? await getAiSettings()
+          .then(settings => settings.enabled)
+          .catch(() => false)
+      : false;
+
   const activityContent = (
     <IncidentNotes
       incidentId={id}
@@ -264,44 +273,52 @@ export default async function IncidentDetailScreen({
       canManage={canManageIncident || canAddIncidentNote}
       onAddNote={handleAddNote}
       totalNotesCount={totalNotesCount}
+      onDraftSummary={canInsertSummary ? draftIncidentSummaryNoteAction.bind(null, id) : undefined}
     />
   );
 
-  const timelineContent = (
-    <IncidentTimeline
-      incidentId={id}
-      events={incident.events.map(event => ({
-        id: event.id,
-        message: event.message,
-        type: event.type,
-        createdAt: event.createdAt,
-      }))}
-      notes={incident.notes.map(note => ({
-        id: note.id,
-        content: note.content,
-        user: note.user,
-        createdAt: note.createdAt,
-      }))}
-      notifications={incident.notifications.map(notif => ({
-        id: notif.id,
-        channel: notif.channel,
-        status: notif.status,
-        recipientDisplay: notif.recipientDisplay,
-        errorMsg: redactNotificationError(notif.errorMsg),
-        createdAt: notif.createdAt,
-        sentAt: notif.sentAt,
-        deliveredAt: notif.deliveredAt,
-        failedAt: notif.failedAt,
-        user: notif.user,
-      }))}
-      incidentCreatedAt={incident.createdAt}
-      incidentAcknowledgedAt={incident.acknowledgedAt}
-      incidentResolvedAt={incident.resolvedAt}
-      totalEventsCount={totalEventsCount}
-      totalNotesCount={totalNotesCount}
-      totalNotificationsCount={totalNotificationsCount}
-      totalActivityCount={totalActivityCount}
-    />
+  const timelineProps = {
+    incidentId: id,
+    events: incident.events.map(event => ({
+      id: event.id,
+      message: event.message,
+      type: event.type,
+      createdAt: event.createdAt,
+    })),
+    notes: incident.notes.map(note => ({
+      id: note.id,
+      content: note.content,
+      user: note.user,
+      createdAt: note.createdAt,
+    })),
+    notifications: incident.notifications.map(notif => ({
+      id: notif.id,
+      channel: notif.channel,
+      status: notif.status,
+      recipientDisplay: notif.recipientDisplay,
+      errorMsg: redactNotificationError(notif.errorMsg),
+      createdAt: notif.createdAt,
+      sentAt: notif.sentAt,
+      deliveredAt: notif.deliveredAt,
+      failedAt: notif.failedAt,
+      user: notif.user,
+    })),
+    incidentCreatedAt: incident.createdAt,
+    incidentAcknowledgedAt: incident.acknowledgedAt,
+    incidentResolvedAt: incident.resolvedAt,
+    totalEventsCount: totalEventsCount,
+    totalNotesCount: totalNotesCount,
+    totalNotificationsCount: totalNotificationsCount,
+    totalActivityCount: totalActivityCount,
+  };
+  // Intelligence events join the core timeline once read; until then (and on any failure) the core
+  // timeline renders on its own.
+  const timelineContent = showIntelligence ? (
+    <Suspense fallback={<IncidentTimeline {...timelineProps} />}>
+      <IncidentTimelineWithIntelligence {...timelineProps} />
+    </Suspense>
+  ) : (
+    <IncidentTimeline {...timelineProps} />
   );
 
   const responseContent = (
@@ -432,6 +449,11 @@ export default async function IncidentDetailScreen({
               <h1 className="mt-2 break-words text-base font-bold leading-snug tracking-tight text-foreground">
                 {incident.title}
               </h1>
+              {showIntelligence && (
+                <Suspense fallback={null}>
+                  <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
+                </Suspense>
+              )}
             </div>
           </div>
 
@@ -508,6 +530,11 @@ export default async function IncidentDetailScreen({
                     {incident.status}
                   </Badge>
                 </div>
+                {showIntelligence && (
+                  <Suspense fallback={null}>
+                    <IncidentGroupLine incidentId={incident.id} />
+                  </Suspense>
+                )}
                 <IncidentSLABadges sla={incidentSla} />
               </div>
             </div>
@@ -554,6 +581,13 @@ export default async function IncidentDetailScreen({
         }))}
         jiraCapability={incidentJiraCapability}
       />
+
+      {/* Intelligence: one row of chips, and the inspector they open. Silent when there is nothing to say. */}
+      {showInsightsInspector && (
+        <Suspense fallback={null}>
+          <IncidentInsights incidentId={incident.id} presentation={presentation} />
+        </Suspense>
+      )}
 
       {/* Escalation Execution Health: Compact status strip or alert banner */}
       <EscalationExecutionHealth health={escalationHealth} />
@@ -639,72 +673,6 @@ export default async function IncidentDetailScreen({
             />
           )}
 
-          {/* Proactive Squire (F4): renders only for services that opted in. */}
-          {showIntelligence && (
-            <Suspense fallback={null}>
-              <IncidentSquireProactiveCard incidentId={incident.id} />
-            </Suspense>
-          )}
-
-          {canReadIntelligence && (
-            <Suspense fallback={null}>
-              <IncidentGroupCard incidentId={incident.id} />
-            </Suspense>
-          )}
-
-          {presentation === 'mobile' && (
-            <MobileIncidentIntelligence incidentId={incident.id} enabled={showIntelligence} />
-          )}
-          {presentation !== 'mobile' && showIntelligence && (
-            <IncidentIntelligencePanel
-              analysisStatus={
-                <Suspense fallback={null}>
-                  <IncidentAnalysisStatus incidentId={incident.id} />
-                </Suspense>
-              }
-              similar={
-                <Suspense fallback={<IntelligenceSkeleton />}>
-                  <IncidentIntelligenceCard incidentId={incident.id} />
-                </Suspense>
-              }
-              related={
-                <Suspense fallback={<IntelligenceSkeleton />}>
-                  <IncidentRelatedCard incidentId={incident.id} />
-                </Suspense>
-              }
-              response={
-                <Suspense fallback={<IntelligenceSkeleton />}>
-                  <IncidentResponseCard incidentId={incident.id} />
-                </Suspense>
-              }
-              triage={
-                <Suspense fallback={null}>
-                  <IncidentTriageCard incidentId={incident.id} />
-                </Suspense>
-              }
-              timeline={
-                <Suspense fallback={<IntelligenceSkeleton />}>
-                  <IncidentTimeAxisCard incidentId={incident.id} />
-                </Suspense>
-              }
-              impact={
-                <Suspense fallback={<IntelligenceSkeleton />}>
-                  <IncidentImpactCard incidentId={incident.id} />
-                </Suspense>
-              }
-              summary={
-                <Suspense fallback={<IntelligenceSkeleton />}>
-                  <IncidentAiSummaryCard incidentId={incident.id} />
-                </Suspense>
-              }
-              assistant={
-                <Suspense fallback={<IntelligenceSkeleton />}>
-                  <IncidentAskSquireCard />
-                </Suspense>
-              }
-            />
-          )}
-
           <IncidentDetailTabs
             defaultTab={initialTab || 'overview'}
             eventCount={totalEventsCount}
@@ -714,7 +682,14 @@ export default async function IncidentDetailScreen({
             responseContent={responseContent}
             runbooksContent={
               canReadRunbooks ? (
-                <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
+                <>
+                  {showIntelligence && (
+                    <Suspense fallback={null}>
+                      <SuggestedRunbooks incidentId={incident.id} />
+                    </Suspense>
+                  )}
+                  <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
+                </>
               ) : null
             }
             timelineContent={timelineContent}

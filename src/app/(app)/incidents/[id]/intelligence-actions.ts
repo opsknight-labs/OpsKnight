@@ -8,6 +8,7 @@ import { revokeFeedback, submitFeedback } from '@/lib/intelligence/feedback/serv
 import { decideRelationship, linkIncidents } from '@/lib/intelligence/correlation/commands';
 import { summarizeIncident } from '@/lib/intelligence/drafts/service';
 import { DRAFT_FAILURE_MESSAGES, type IncidentSummary } from '@/lib/intelligence/drafts/schemas';
+import { formatSummaryAsNote } from '@/lib/intelligence/incident-ux/summary-note';
 
 export type SimilarFeedbackState = {
   ok: boolean;
@@ -138,6 +139,28 @@ export async function summarizeIncidentAction(incidentId: string): Promise<Incid
     });
     return { status: 'error', message: DRAFT_FAILURE_MESSAGES.UNAVAILABLE };
   }
+}
+
+export type IncidentSummaryDraftState = { ok: true; text: string } | { ok: false; message: string };
+
+/**
+ * "Insert summary" in the note composer: the same summary action as the inspector's Summary section, rendered
+ * with the same formatter as "Post summary as note". Returns text for the responder to edit; nothing is posted
+ * or stored until they press Post, which goes through the normal note command and its permission check.
+ */
+export async function draftIncidentSummaryNoteAction(
+  incidentId: string
+): Promise<IncidentSummaryDraftState> {
+  const result = await summarizeIncidentAction(incidentId);
+  if (result.status !== 'ok')
+    return {
+      ok: false,
+      message: result.status === 'error' ? result.message : DRAFT_FAILURE_MESSAGES.UNAVAILABLE,
+    };
+  return {
+    ok: true,
+    text: formatSummaryAsNote(result.summary, { kind: 'ai', model: result.model }),
+  };
 }
 
 /** Uses the same visibility and feedback permission checks as manual incident linking. */

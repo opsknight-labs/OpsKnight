@@ -1,39 +1,27 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
-import { logger } from '@/lib/logger';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
-import {
-  getProactiveNotesForActor,
-  type ProactiveNotesView,
-} from '@/lib/intelligence/memory/proactive-view';
-
-/**
- * Squire's proactive notes for one incident: a briefing, a stakeholder-update nudge and a postmortem draft, each
- * only when its service opted in. Advisory: renders nothing on any failure and never affects the incident page.
- */
-export default async function IncidentSquireProactiveCard({ incidentId }: { incidentId: string }) {
-  let notes: ProactiveNotesView | null;
-  try {
-    notes = await getProactiveNotesForActor(incidentId, await getCurrentAuthorizationActor());
-  } catch (error) {
-    logger.warn('[Squire] Proactive notes unavailable', {
-      incidentId,
-      error: error instanceof Error ? error.name : 'error',
-    });
-    return null;
-  }
-  if (!notes) return null;
-  return <ProactiveNotes incidentId={incidentId} notes={notes} />;
-}
+import type { ProactiveNotesView } from '@/lib/intelligence/memory/proactive-view';
 
 const modeLabel = (mode: 'BASIC' | 'AI') => (mode === 'AI' ? 'Written with AI' : 'Basic mode');
 
+/**
+ * Squire's proactive notes for one incident: a briefing, a stakeholder-update nudge and a postmortem draft,
+ * each only when its service opted in. Presentational: the inspector's Briefing section passes the notes the
+ * incident-insights loader already read for this viewer.
+ */
 export function ProactiveNotes({
   incidentId,
   notes,
+  routePrefix = '',
+  action,
 }: {
   incidentId: string;
   notes: ProactiveNotesView;
+  /** `/m` on the mobile route, so incident links stay in the mobile shell. */
+  routePrefix?: string;
+  /** Optional control shown beside the heading (the inspector's "Ask Squire"). */
+  action?: ReactNode;
 }) {
   const { briefing, nudge, postmortemDraft } = notes;
   return (
@@ -41,17 +29,20 @@ export function ProactiveNotes({
       aria-labelledby="squire-proactive-heading"
       className="space-y-4 rounded-lg border border-border bg-card p-4"
     >
-      <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <h2 id="squire-proactive-heading" className="text-sm font-semibold">
-          Squire
-        </h2>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <h3 id="squire-proactive-heading" className="text-sm font-semibold">
+            Squire
+          </h3>
+        </div>
+        {action}
       </div>
 
       {nudge && (
         <div
           role="status"
-          className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+          className="space-y-2 rounded-md border border-status-elevated/40 bg-status-elevated-soft p-3 text-sm dark:bg-status-elevated/10"
         >
           <p className="font-medium">
             No stakeholder update for {nudge.minutesSinceUpdate} minutes.
@@ -64,7 +55,7 @@ export function ProactiveNotes({
       {briefing && (
         <div className="space-y-2 text-sm">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="font-medium">Briefing</h3>
+            <h4 className="font-medium">Briefing</h4>
             <span className="text-xs text-muted-foreground">{modeLabel(briefing.mode)}</span>
           </div>
           <p>{briefing.ai?.headline ?? briefing.headline}</p>
@@ -90,7 +81,7 @@ export function ProactiveNotes({
               <ul className="space-y-1">
                 {briefing.refs.similar.map(item => (
                   <li key={item.id}>
-                    <Link href={`/incidents/${item.id}`} className="hover:underline">
+                    <Link href={`${routePrefix}/incidents/${item.id}`} className="hover:underline">
                       {item.label}
                     </Link>{' '}
                     <span className="text-xs text-muted-foreground">
@@ -146,7 +137,7 @@ export function ProactiveNotes({
             <p>
               Suggested runbook:{' '}
               <Link
-                href={`/incidents/${incidentId}?tab=runbooks`}
+                href={`${routePrefix}/incidents/${incidentId}?tab=runbooks`}
                 className="font-medium hover:underline"
               >
                 {briefing.refs.runbooks[0].label}

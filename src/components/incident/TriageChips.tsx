@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { decideTriage, type TriageActionState } from '@/app/(app)/incidents/[id]/triage-actions';
 import type { TriageSuggestionView } from '@/lib/intelligence/triage/view';
 import { Button } from '@/components/ui/shadcn/button';
+import AskSquireAbout from './intelligence/AskSquireAbout';
 
 const initial: TriageActionState = { ok: false, message: '', verdict: null };
 
@@ -43,10 +44,12 @@ function TriageChip({
   incidentId,
   suggestion,
   canAct,
+  assistantName,
 }: {
   incidentId: string;
   suggestion: TriageSuggestionView;
   canAct: boolean;
+  assistantName?: string;
 }) {
   const [state, action, pending] = useActionState(decideTriage.bind(null, incidentId), {
     ...initial,
@@ -56,7 +59,7 @@ function TriageChip({
   const decided = state.verdict;
   const informational = Boolean(suggestion.resolution);
   return (
-    <li className="space-y-1 py-2">
+    <li id={`finding-${suggestion.findingId}`} className="scroll-mt-4 space-y-1 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium">
@@ -123,6 +126,19 @@ function TriageChip({
           {state.message}
         </p>
       )}
+      {assistantName && (
+        <AskSquireAbout
+          assistantName={assistantName}
+          subject={title}
+          question={`Why is this triage suggestion being made: ${title}?`}
+          evidence={{
+            kind: 'finding',
+            id: suggestion.findingId,
+            label: title,
+            href: `#finding-${suggestion.findingId}`,
+          }}
+        />
+      )}
     </li>
   );
 }
@@ -131,10 +147,13 @@ export default function TriageChips({
   incidentId,
   suggestions,
   canAct,
+  assistantName,
 }: {
   incidentId: string;
   suggestions: TriageSuggestionView[];
   canAct: boolean;
+  /** Set when the assistant is available: adds "Ask <name>" to each suggestion. */
+  assistantName?: string;
 }) {
   return (
     <ul className="divide-y divide-border" aria-label="Triage suggestions">
@@ -144,6 +163,7 @@ export default function TriageChips({
           incidentId={incidentId}
           suggestion={suggestion}
           canAct={canAct}
+          assistantName={assistantName}
         />
       ))}
     </ul>

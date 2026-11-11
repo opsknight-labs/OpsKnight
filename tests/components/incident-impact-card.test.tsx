@@ -11,7 +11,7 @@ vi.mock('@/lib/intelligence/impact/view', async () => {
   return { ...actual, getIncidentImpactForActor: mocks.view };
 });
 
-import IncidentImpactCard, { ImpactCardBody } from '@/components/incident/IncidentImpactCard';
+import { ImpactCardBody } from '@/components/incident/IncidentImpactCard';
 
 const empty: IncidentImpactView = {
   serviceId: 'svc',
@@ -95,16 +95,11 @@ describe('IncidentImpactCard', () => {
     expect(html).not.toContain('Error budget at risk');
   });
 
-  it('loads the view for the current actor and renders nothing when it is unavailable or fails', async () => {
-    mocks.view.mockResolvedValueOnce(full);
-    const html = renderToStaticMarkup((await IncidentImpactCard({ incidentId: 'inc' }))!);
-    expect(mocks.view).toHaveBeenCalledWith('inc', { userId: 'u', role: 'RESPONDER' });
-    expect(html).toContain('Checkout API');
-
-    mocks.view.mockResolvedValueOnce(null);
-    expect(await IncidentImpactCard({ incidentId: 'inc' })).toBeNull();
-
-    mocks.view.mockRejectedValueOnce(new Error('db down'));
-    expect(await IncidentImpactCard({ incidentId: 'inc' })).toBeNull();
+  it('shows an optional action beside its heading (the inspector passes "Ask Squire")', () => {
+    const html = renderToStaticMarkup(
+      <ImpactCardBody view={full} action={<button type="button">Ask Pip</button>} />
+    );
+    expect(html).toContain('Ask Pip');
+    expect(html).toContain('<h3 id="incident-impact-heading"');
   });
 });

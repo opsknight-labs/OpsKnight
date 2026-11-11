@@ -6,7 +6,12 @@ export type KeyboardShortcutDefinition = {
   description: string;
   category: KeyboardShortcutCategory;
   scope: 'global' | 'incidents';
-  runtimeOwner: 'GlobalKeyboardHandler' | 'SidebarSearch' | 'IncidentsListTable' | 'SquireLauncher';
+  runtimeOwner:
+    | 'GlobalKeyboardHandler'
+    | 'SidebarSearch'
+    | 'IncidentsListTable'
+    | 'SquireLauncher'
+    | 'InsightsInspectorHost';
 };
 
 export const GLOBAL_NAVIGATION_SHORTCUTS = [
@@ -132,5 +137,13 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcutDefinition[] = [
     category: 'Incident Triage',
     scope: 'incidents',
     runtimeOwner: 'IncidentsListTable',
+  },
+  {
+    id: 'incident-insights',
+    keys: ['I'],
+    description: 'Open or close insights on an incident',
+    category: 'Incident Triage',
+    scope: 'incidents',
+    runtimeOwner: 'InsightsInspectorHost',
   },
 ];

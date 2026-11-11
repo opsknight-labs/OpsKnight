@@ -1,13 +1,8 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { Network } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
-import { logger } from '@/lib/logger';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
-import {
-  getIncidentImpactForActor,
-  isImpactEmpty,
-  type IncidentImpactView,
-} from '@/lib/intelligence/impact/view';
+import { isImpactEmpty, type IncidentImpactView } from '@/lib/intelligence/impact/view';
 
 const SERVICE_STATUS = new Map<string, { label: string; className: string }>(
   Object.entries({
@@ -41,8 +36,19 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-/** Presentational part, separate so it can be rendered and tested without data access. */
-export function ImpactCardBody({ view }: { view: IncidentImpactView }) {
+/**
+ * Estimated impact: dependent services, status-page components and error budget at risk. Presentational: the
+ * inspector's Impact section passes the view the incident-insights loader already read for this viewer, and
+ * leaves the section out entirely when the view is empty.
+ */
+export function ImpactCardBody({
+  view,
+  action,
+}: {
+  view: IncidentImpactView;
+  /** Optional control shown beside the heading (the inspector's "Ask Squire"). */
+  action?: ReactNode;
+}) {
   if (isImpactEmpty(view))
     return (
       <EmptyState
@@ -63,11 +69,14 @@ export function ImpactCardBody({ view }: { view: IncidentImpactView }) {
       className="space-y-4 rounded-lg border border-border bg-card p-4"
     >
       <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Network className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <h2 id="incident-impact-heading" className="text-sm font-semibold">
-            Estimated impact
-          </h2>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Network className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h3 id="incident-impact-heading" className="text-sm font-semibold">
+              Estimated impact
+            </h3>
+          </div>
+          {action}
         </div>
         <p className="text-xs text-muted-foreground">
           From the active dependency graph, linked status-page components and the service&apos;s
@@ -76,10 +85,10 @@ export function ImpactCardBody({ view }: { view: IncidentImpactView }) {
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Dependent services ({view.downstream.length}
           {view.downstreamTruncated ? '+' : ''})
-        </h3>
+        </h4>
         {view.downstream.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No services you can see depend on this one.
@@ -109,9 +118,9 @@ export function ImpactCardBody({ view }: { view: IncidentImpactView }) {
 
       {view.components.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Status-page components
-          </h3>
+          </h4>
           <ul className="space-y-1" aria-label="Status-page components">
             {view.components.map(component => (
               <li
@@ -136,9 +145,9 @@ export function ImpactCardBody({ view }: { view: IncidentImpactView }) {
 
       {view.slo.state === 'AVAILABLE' && (
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Error budget at risk
-          </h3>
+          </h4>
           <ul className="space-y-1" aria-label="Error budget at risk">
             {view.slo.objectives.map(objective => (
               <li key={objective.name} className="text-sm">
@@ -164,23 +173,4 @@ export function ImpactCardBody({ view }: { view: IncidentImpactView }) {
       )}
     </section>
   );
-}
-
-/**
- * Impact estimate for the incident page. A server component rendered lazily under Suspense; read-only, and
- * renders nothing at all on any failure so it can never break the incident page.
- */
-export default async function IncidentImpactCard({ incidentId }: { incidentId: string }) {
-  let view;
-  try {
-    view = await getIncidentImpactForActor(incidentId, await getCurrentAuthorizationActor());
-  } catch (error) {
-    logger.warn('[Intelligence] Incident impact unavailable', {
-      incidentId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-  if (!view) return null;
-  return <ImpactCardBody view={view} />;
 }

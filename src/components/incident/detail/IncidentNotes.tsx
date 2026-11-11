@@ -17,6 +17,7 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { loadOlderIncidentNotes } from './actions';
 import { NoteMarkdown } from './NoteMarkdown';
@@ -41,6 +42,11 @@ type IncidentNotesProps = {
   canManage: boolean;
   onAddNote: (formData: FormData) => Promise<void> | void;
   totalNotesCount?: number;
+  /**
+   * Present only when intelligence summaries are available to this viewer on this service: drafts a summary
+   * of the incident for the composer. The text is inserted for editing, never posted on its own.
+   */
+  onDraftSummary?: () => Promise<{ ok: true; text: string } | { ok: false; message: string }>;
 };
 
 export default function IncidentNotes({
@@ -49,7 +55,9 @@ export default function IncidentNotes({
   canManage,
   onAddNote,
   totalNotesCount,
+  onDraftSummary,
 }: IncidentNotesProps) {
+  const [isDraftingSummary, setIsDraftingSummary] = useState(false);
   const [loadedNotes, setLoadedNotes] = useState<Note[]>(notes);
   const [prevNotes, setPrevNotes] = useState<Note[]>(notes);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -153,6 +161,27 @@ export default function IncidentNotes({
     }
   };
 
+  const handleInsertSummary = async () => {
+    if (!onDraftSummary || isDraftingSummary) return;
+    setIsDraftingSummary(true);
+    setSubmitError(null);
+    try {
+      const draft = await onDraftSummary();
+      if (!draft.ok) {
+        setSubmitError(draft.message);
+        return;
+      }
+      setIsPreview(false);
+      // Appended, so a note the responder is already writing is never replaced.
+      setNoteContent(prev => (prev.trim() ? `${prev.trimEnd()}\n\n${draft.text}` : draft.text));
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    } catch {
+      setSubmitError('The summary could not be drafted. Try again.');
+    } finally {
+      setIsDraftingSummary(false);
+    }
+  };
+
   const handleSubmit = async (formData: FormData) => {
     const submittedText = noteContent.trim();
     if (!submittedText || isSubmitting) return;
@@ -236,6 +265,22 @@ export default function IncidentNotes({
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  {onDraftSummary && (
+                    <button
+                      type="button"
+                      onClick={() => void handleInsertSummary()}
+                      disabled={isDraftingSummary}
+                      title="Draft a summary of this incident into the note for you to edit"
+                      className="px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-60"
+                    >
+                      {isDraftingSummary ? (
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" aria-hidden="true" />
+                      )}
+                      <span>{isDraftingSummary ? 'Drafting…' : 'Insert summary'}</span>
+                    </button>
+                  )}
                   {/* Write vs Preview Toggle */}
                   <button
                     type="button"
