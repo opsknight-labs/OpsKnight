@@ -30,6 +30,7 @@ describe('metric anomalies on incident surfaces', () => {
     const axis: IncidentTimeAxis = {
       onset,
       truncated: false,
+      canReverse: false,
       entries: [
         {
           kind: 'METRIC_ANOMALY',
