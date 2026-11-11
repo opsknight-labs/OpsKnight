@@ -277,7 +277,7 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(page.getByRole('textbox', { name: 'Assistant name', exact: true })).toHaveValue(
       'Pip'
     );
-    await expect(page.getByRole('radio', { name: 'Knight' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Squire mascot' })).toBeChecked();
   });
 
   test('administrators can pause and adjust the background allocation through the settings form', async ({
@@ -359,10 +359,10 @@ test.describe.serial('intelligence responder workflows', () => {
     await panel.getByRole('button', { name: 'Have we seen this before?' }).click();
     const dialog = page.getByRole('dialog', { name: /Pip/ });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/last month/)).toBeVisible({ timeout: 30_000 });
+    await expect(dialog.getByText(/last month/).first()).toBeVisible({ timeout: 30_000 });
     await expect(dialog.getByText('Basic answer from your incident data')).toBeVisible();
     await expect(
-      dialog.getByRole('link', { name: `/incidents/${precedentId}` }).first()
+      dialog.locator(`a[href="/incidents/${precedentId}"]`, { hasText: 'View incident' }).first()
     ).toBeVisible();
     await expectAccessible(page, 'section[role="dialog"]');
 
