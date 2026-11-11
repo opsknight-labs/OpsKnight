@@ -166,6 +166,20 @@ Reading:
   **OPEN**: a burst arm whose storm threshold is above the burst size, and a pool sized to the event
   concurrency, to separate the hook's cost from the grouping work.
 
+### Lane in a worker thread (2026-11-10 onwards, CI shape 6 reps / 300 events / concurrency 16 / backlog 1500)
+
+<!-- thread-lane-tables -->
+
+Raw files, one per invocation (`aN` is the attempt number inside its campaign; `-discarded` marks a run
+the host check rejected, kept for the record and never averaged in):
+
+- `ingestion-ab-ci-shape-thread-before-yield-fix-2026-11-10-a*` and
+  `ingestion-ab-noise-on-thread-before-yield-fix-2026-11-10-a*`: thread lane at `30bb4d8aa`, before the
+  burst-start yield (`e2cf0ce5d`). `storm-20k-thread-2026-11-10-local.json` is the storm drain of that state.
+- `ingestion-ab-ci-shape-thread-yield-fix-2026-11-10-a*`, `ingestion-ab-noise-on-thread-yield-fix-2026-11-10-a*`
+  and `ingestion-ab-ci-shape-in-process-yield-fix-2026-11-10-a*`: at `7d95e616e`, with the burst-start
+  yield, judged by the benchmark's own host check.
+
 ## Query plans (`tests/load/intelligence-query-plans.ts`)
 
 `query-plans-2026-11-08-local.json` (21k history): **PASS**. Seven queries index-backed, including the
