@@ -410,6 +410,7 @@ const normalizePushPayload = raw => {
     supportedVersion,
     eventId: data.eventId || nested.eventId || null,
     deliveryId: data.deliveryId || nested.deliveryId || null,
+    notificationId: data.notificationId || nested.notificationId || null,
     eventType: data.eventType || nested.eventType || null,
     incidentId,
     status: data.status || nested.status || null,
@@ -503,7 +504,11 @@ const handleAcknowledgeAction = async notification => {
     try {
       response = await fetch(`/api/incidents/${encodeURIComponent(incidentId)}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+          ...(data.notificationId ? { 'X-OpsKnight-Notification-Id': String(data.notificationId) } : {}),
+        },
         body: JSON.stringify({ status: 'ACKNOWLEDGED', ...(expectedStatus ? { expectedStatus } : {}) }),
         credentials: 'include',
         cache: 'no-store',
@@ -560,6 +565,7 @@ self.addEventListener('push', event => {
       version: payload.version,
       eventId: payload.eventId,
       deliveryId: payload.deliveryId,
+      notificationId: payload.notificationId,
       eventType: payload.eventType,
       incidentId: payload.incidentId,
       status: payload.status,

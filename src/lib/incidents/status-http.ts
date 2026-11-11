@@ -96,20 +96,37 @@ export function createIncidentStatusRoute(
         );
       }
 
-      const result = await updateIncidentStatus(
-        id,
-        parsed.data.status,
-        parsed.data.expectedStatus,
-        source,
-        idempotencyKey
-          ? {
-              key: idempotencyKey,
-              // Preserve the existing principal identity so retries created before
-              // this transport consolidation remain replay-compatible.
-              principalId: session.user.email.toLowerCase(),
-            }
-          : undefined
-      );
+      // A push action names the page it was tapped on. It travels as a header so the body contract is
+      // unchanged for older service workers and servers.
+      const pushNotificationId = req.headers.get('x-opsknight-notification-id')?.trim();
+      const sessionUserId = (session.user as { id?: string }).id;
+
+      const idempotency = idempotencyKey
+        ? {
+            key: idempotencyKey,
+            // Preserve the existing principal identity so retries created before
+            // this transport consolidation remain replay-compatible.
+            principalId: session.user.email.toLowerCase(),
+          }
+        : undefined;
+      const result =
+        pushNotificationId && pushNotificationId.length <= 191 && sessionUserId
+          ? await updateIncidentStatus(
+              id,
+              parsed.data.status,
+              parsed.data.expectedStatus,
+              source,
+              idempotency,
+              undefined,
+              { id: pushNotificationId, via: 'PUSH', userId: sessionUserId }
+            )
+          : await updateIncidentStatus(
+              id,
+              parsed.data.status,
+              parsed.data.expectedStatus,
+              source,
+              idempotency
+            );
 
       return jsonOk(
         {

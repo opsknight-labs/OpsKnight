@@ -46,6 +46,12 @@ export interface IncidentLifecycleInput {
   snoozedUntil?: Date | null;
   snoozeReason?: string | null;
   eventMessage?: string;
+  /**
+   * The page this acknowledgement arrived through, when the transport can name it (voice key press, push
+   * action). Stamped on that one notification inside the acknowledgement transaction; `userId` keeps a
+   * caller from marking somebody else's page.
+   */
+  ackedNotification?: { id: string; via: 'VOICE' | 'PUSH' | 'SMS' | 'LINK'; userId?: string };
   /** Test seam. Production callers should use the server/DB clock. */
   now?: Date;
 }
@@ -627,6 +633,17 @@ export async function applyIncidentLifecycleCommand(
       events: { create: lifecycleEvent },
     },
   });
+  if (input.command === 'ACKNOWLEDGE' && input.ackedNotification) {
+    await tx.notification.updateMany({
+      where: {
+        id: input.ackedNotification.id,
+        incidentId: input.incidentId,
+        userId: input.ackedNotification.userId,
+        ackedAt: null,
+      },
+      data: { ackedAt: now, ackedVia: input.ackedNotification.via },
+    });
+  }
   if (targetStatus === 'RESOLVED') {
     await fenceAutomaticRemediation(
       tx,
