@@ -3,21 +3,36 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import SystemLogsPage from '@/app/(app)/system-logs/page';
 import SystemLogsError from '@/app/(app)/system-logs/error';
-import * as nextAuth from 'next-auth';
 import * as navigation from 'next/navigation';
+import * as rbac from '@/lib/rbac';
 import * as loggerModule from '@/lib/logger';
 
-vi.mock('next-auth', () => ({
-  getServerSession: vi.fn(),
+vi.mock('@/lib/rbac', () => ({
+  getUserPermissions: vi.fn(),
 }));
 
-vi.mock('@/lib/auth', () => ({
-  getAuthOptions: vi.fn().mockResolvedValue({}),
-}));
+vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
-  redirect: vi.fn(),
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
+  forbidden: vi.fn(() => {
+    throw new Error('NEXT_FORBIDDEN');
+  }),
 }));
+
+const permissions = (role: 'ADMIN' | 'RESPONDER' | null) =>
+  ({
+    id: role ? `${role.toLowerCase()}-1` : '',
+    authenticated: role !== null,
+    role,
+    capabilities: role === 'ADMIN' ? ['admin.manage'] : role ? ['operations.manage'] : [],
+    isAdmin: role === 'ADMIN',
+    isAuditor: false,
+    isAdminOrResponder: role !== null,
+    isResponderOrAbove: role !== null,
+  }) as unknown as Awaited<ReturnType<typeof rbac.getUserPermissions>>;
 
 vi.mock('@/lib/logger', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/logger')>();
@@ -49,30 +64,25 @@ describe('SystemLogsPage & SystemLogsError', () => {
     vi.clearAllMocks();
   });
 
-  it('redirects unauthenticated users to /login', async () => {
-    vi.mocked(nextAuth.getServerSession).mockResolvedValueOnce(null);
+  it('sends unauthenticated people to sign in and back', async () => {
+    vi.mocked(rbac.getUserPermissions).mockResolvedValueOnce(permissions(null));
 
-    await SystemLogsPage({ searchParams: Promise.resolve({}) });
-
-    expect(navigation.redirect).toHaveBeenCalledWith('/login');
+    await expect(SystemLogsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/login?callbackUrl=%2Fsystem-logs'
+    );
   });
 
-  it('redirects non-admin users to /', async () => {
-    vi.mocked(nextAuth.getServerSession).mockResolvedValueOnce({
-      user: { email: 'responder@example.com', role: 'RESPONDER' },
-      expires: '1h',
-    });
+  it('shows the Access denied page to non-admins instead of silently redirecting', async () => {
+    vi.mocked(rbac.getUserPermissions).mockResolvedValueOnce(permissions('RESPONDER'));
 
-    await SystemLogsPage({ searchParams: Promise.resolve({}) });
-
-    expect(navigation.redirect).toHaveBeenCalledWith('/');
+    await expect(SystemLogsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_FORBIDDEN'
+    );
+    expect(navigation.forbidden).toHaveBeenCalled();
   });
 
   it('renders log entries including fallback configs and missing fields safely', async () => {
-    vi.mocked(nextAuth.getServerSession).mockResolvedValueOnce({
-      user: { email: 'admin@example.com', role: 'ADMIN' },
-      expires: '1h',
-    });
+    vi.mocked(rbac.getUserPermissions).mockResolvedValueOnce(permissions('ADMIN'));
 
     const mockLogs: MockLogEntry[] = [
       {
@@ -110,10 +120,7 @@ describe('SystemLogsPage & SystemLogsError', () => {
   });
 
   it('filters by search keyword safely even when error message or component are missing', async () => {
-    vi.mocked(nextAuth.getServerSession).mockResolvedValueOnce({
-      user: { email: 'admin@example.com', role: 'ADMIN' },
-      expires: '1h',
-    });
+    vi.mocked(rbac.getUserPermissions).mockResolvedValueOnce(permissions('ADMIN'));
 
     const filterLogs: MockLogEntry[] = [
       {
@@ -160,14 +167,12 @@ describe('SystemLogsPage & SystemLogsError', () => {
     expect(resetMock).toHaveBeenCalledTimes(1);
   });
 
-  it('is exposed as an admin setting in settings navigation config', async () => {
+  it('is exposed as an admin-only setting in settings navigation config', async () => {
     const { SETTINGS_NAV_ITEMS } = await import('@/components/settings/navConfig');
+    const { resolvePageAccess } = await import('@/lib/access/pages');
     expect(SETTINGS_NAV_ITEMS).toContainEqual(
-      expect.objectContaining({
-        id: 'system-logs',
-        href: '/system-logs',
-        requiresAdmin: true,
-      })
+      expect.objectContaining({ id: 'system-logs', href: '/system-logs' })
     );
+    expect(resolvePageAccess('/system-logs')?.anyOf).toEqual(['admin.manage']);
   });
 });

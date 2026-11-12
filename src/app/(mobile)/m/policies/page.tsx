@@ -4,10 +4,12 @@ import { ChevronRight, ShieldCheck } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
 import { assertCanListPolicies } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobilePoliciesPage() {
+  await requirePageAccess('/m/policies');
   await assertCanListPolicies();
   const policies = await prisma.escalationPolicy.findMany({
     orderBy: { name: 'asc' },
@@ -42,9 +44,12 @@ export default async function MobilePoliciesPage() {
             >
               <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold text-foreground">{policy.name}</span>
+                <span className="block truncate text-[13px] font-semibold text-foreground">
+                  {policy.name}
+                </span>
                 <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-                  {policy.steps.length} {policy.steps.length === 1 ? 'step' : 'steps'} · {policy._count.services} {policy._count.services === 1 ? 'service' : 'services'}
+                  {policy.steps.length} {policy.steps.length === 1 ? 'step' : 'steps'} ·{' '}
+                  {policy._count.services} {policy._count.services === 1 ? 'service' : 'services'}
                 </span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

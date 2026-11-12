@@ -7,6 +7,7 @@ import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { assertCanViewTeam } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ type PageProps = {
 };
 
 export default async function MobileTeamDetailPage({ params }: PageProps) {
+  await requirePageAccess('/m/teams/[id]');
   const { id } = await params;
   await assertCanViewTeam(id);
 

@@ -4,12 +4,14 @@ import PolicyForm from '@/components/policies/PolicyForm';
 import { Button } from '@/components/ui/shadcn/button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const metadata = {
   title: 'Create Escalation Policy | OpsKnight',
 };
 
 export default async function CreatePolicyPage() {
+  await requirePageAccess('/policies/create');
   const permissions = await getUserPermissions();
 
   if (!permissions.isAdmin) {

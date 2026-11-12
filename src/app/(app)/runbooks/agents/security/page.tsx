@@ -22,10 +22,12 @@ import {
   SigningKeyList,
   ArtifactRetentionForm,
 } from '@/components/runbooks/agents/FleetSecurityControls';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 export default async function RunbookFleetSecurityPage() {
+  await requirePageAccess('/runbooks/agents/security');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const [permissions, user, navigation] = await Promise.all([
     getUserPermissions(),

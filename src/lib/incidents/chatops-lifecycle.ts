@@ -16,11 +16,12 @@ import {
   type IncidentLifecycleCommand,
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
-import {
-  enqueueIncidentUpdateSideEffects,
-  enqueueWarRoomSideEffects,
-} from '@/lib/event-outbox';
+import { enqueueIncidentUpdateSideEffects, enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { normalizeIncidentPriority } from '@/lib/incidents/priority';
+import { authorizationActorFromUser } from '@/lib/authorization-actors';
+import { effectiveAccessSelect } from '@/lib/access/effective';
+import { isPagedForIncident } from '@/lib/access/incident-relations';
+import { incidentOperatorRelation, isIncidentOperatorAction } from '@/lib/authorization-policy';
 
 export type ChatOpsLifecycleCommand = Extract<
   IncidentLifecycleCommand,
@@ -43,7 +44,26 @@ export type ChatOpsLifecycleInput = {
   idempotency?: IdempotencyContext;
 };
 
-export type ChatOpsIncidentAuthorizationAction = 'READ' | 'NOTE' | 'ACKNOWLEDGE' | 'MANAGE';
+/** Tells people in Slack/Teams what they can do and where to ask for more. */
+const CHATOPS_ACCESS_HINT =
+  'You can act on incidents assigned to you, that page you, or that belong to your teams. To get more access, open OpsKnight → Settings → My Access.';
+
+export type ChatOpsIncidentAuthorizationAction =
+  'READ' | 'NOTE' | 'ACKNOWLEDGE' | 'RESOLVE' | 'ESCALATE' | 'MANAGE';
+
+/** Adds on-call relation when cheaper relations do not already permit an operator action. */
+async function withOnCallRelation(
+  actor: AuthorizationActor,
+  action: (typeof AUTHORIZATION_ACTIONS)[keyof typeof AUTHORIZATION_ACTIONS],
+  resource: Extract<AuthorizationResource, { type: 'incident' }>,
+  escalationPolicyId: string | null
+) {
+  if (!isIncidentOperatorAction(action) || incidentOperatorRelation(actor, resource))
+    return resource;
+  return (await isPagedForIncident(actor, escalationPolicyId))
+    ? { ...resource, onCallUserIds: [actor.id] }
+    : resource;
+}
 
 /** Central authorization adapter for non-lifecycle ChatOps commands. */
 export async function authorizeChatOpsIncident(
@@ -71,6 +91,7 @@ export async function authorizeChatOpsIncidentInTransaction(
         role: true,
         status: true,
         teamMemberships: { select: { teamId: true } },
+        ...effectiveAccessSelect(),
       },
     }),
     tx.incident.findUnique({
@@ -80,7 +101,7 @@ export async function authorizeChatOpsIncidentInTransaction(
         teamId: true,
         visibility: true,
         watchers: { select: { userId: true } },
-        service: { select: { teamId: true } },
+        service: { select: { teamId: true, escalationPolicyId: true } },
       },
     }),
   ]);
@@ -97,21 +118,27 @@ export async function authorizeChatOpsIncidentInTransaction(
         ? AUTHORIZATION_ACTIONS.INCIDENT_NOTE
         : requested === 'ACKNOWLEDGE'
           ? AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE
-        : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
+          : requested === 'RESOLVE'
+            ? AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE
+            : requested === 'ESCALATE'
+              ? AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE
+              : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
+  const actor = authorizationActorFromUser(user);
+  if (!actor) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
   const decision = authorize({
-    actor: {
-      id: user.id,
-      role: user.role,
-      status: user.status,
-      teamIds: user.teamMemberships.map(item => item.teamId),
-    },
+    actor,
     action,
-    resource: incidentResource(incident),
+    resource: await withOnCallRelation(
+      actor,
+      action,
+      incidentResource(incident),
+      incident.service.escalationPolicyId
+    ),
   });
   if (!decision.allowed)
     throw new AppError({
       code: 'INCIDENT_ACCESS_DENIED',
-      userMessage: 'You do not have permission for this incident.',
+      userMessage: `You do not have permission for this incident. ${CHATOPS_ACCESS_HINT}`,
       details: { incidentId, requested, reason: decision.reason },
     });
 }
@@ -130,7 +157,10 @@ export async function executeChatOpsNote(input: {
 }): Promise<{ created: boolean }> {
   const trimmed = input.content.trim();
   if (!trimmed) {
-    throw new AppError({ code: 'INCIDENT_INVALID_ARGUMENT', userMessage: 'Note content is required.' });
+    throw new AppError({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+      userMessage: 'Note content is required.',
+    });
   }
   return runSerializableTransaction(async tx => {
     await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'NOTE');
@@ -223,19 +253,36 @@ export async function executeChatOpsPriority(input: {
   idempotency?: IdempotencyContext;
 }): Promise<{ changed: boolean }> {
   const priority = normalizeIncidentPriority(input.priority);
-  if (!priority) throw new AppError({ code: 'INCIDENT_INVALID_ARGUMENT', userMessage: 'Choose a valid incident priority.' });
+  if (!priority)
+    throw new AppError({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+      userMessage: 'Choose a valid incident priority.',
+    });
   return runSerializableTransaction(async tx => {
     await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'MANAGE');
-    const incident = await tx.incident.findUnique({ where: { id: input.incidentId }, select: { priority: true } });
-    if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND', userMessage: 'Incident not found.' });
+    const incident = await tx.incident.findUnique({
+      where: { id: input.incidentId },
+      select: { priority: true },
+    });
+    if (!incident)
+      throw new AppError({ code: 'INCIDENT_NOT_FOUND', userMessage: 'Incident not found.' });
     const execution = await executeIdempotentOperation(tx, {
-      scope: 'chatops-priority', context: input.idempotency,
+      scope: 'chatops-priority',
+      context: input.idempotency,
       payload: { incidentId: input.incidentId, priority },
       execute: async () => {
         if (incident.priority === priority) return { changed: false };
         await tx.incident.update({ where: { id: input.incidentId }, data: { priority } });
-        await tx.incidentEvent.create({ data: { incidentId: input.incidentId, type: 'STATUS_CHANGE', message: `Priority changed to ${priority} via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps by ${input.actor.name}` } });
-        await enqueueIncidentUpdateSideEffects(tx, input.incidentId, ['INCIDENT_UPDATE_SERVICE_NOTIFICATION']);
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: input.incidentId,
+            type: 'STATUS_CHANGE',
+            message: `Priority changed to ${priority} via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps by ${input.actor.name}`,
+          },
+        });
+        await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
+          'INCIDENT_UPDATE_SERVICE_NOTIFICATION',
+        ]);
         // P1-3: priority must durably refresh the war-room card
         await enqueueWarRoomSideEffects(tx, input.incidentId, [{ effect: 'WAR_ROOM_TOPIC' }]);
         return { changed: true };
@@ -254,20 +301,42 @@ export async function executeChatOpsJoinResponder(input: {
   return runSerializableTransaction(async tx => {
     await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'READ');
     const execution = await executeIdempotentOperation(tx, {
-      scope: 'chatops-join-responder', context: input.idempotency,
+      scope: 'chatops-join-responder',
+      context: input.idempotency,
       payload: { incidentId: input.incidentId, userId: input.actor.id },
       execute: async () => {
-        const existing = await tx.incidentWatcher.findUnique({ where: { incidentId_userId: { incidentId: input.incidentId, userId: input.actor.id } } });
+        const existing = await tx.incidentWatcher.findUnique({
+          where: { incidentId_userId: { incidentId: input.incidentId, userId: input.actor.id } },
+        });
         if (existing) return { changed: false };
-        await tx.incidentWatcher.create({ data: { incidentId: input.incidentId, userId: input.actor.id, role: 'FOLLOWER' } });
-        await tx.incidentEvent.create({ data: { incidentId: input.incidentId, type: 'COMMENT', message: `${input.actor.name} joined as a responder via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps` } });
-        await enqueueIncidentUpdateSideEffects(tx, input.incidentId, ['INCIDENT_UPDATE_SERVICE_NOTIFICATION']);
+        await tx.incidentWatcher.create({
+          data: { incidentId: input.incidentId, userId: input.actor.id, role: 'FOLLOWER' },
+        });
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: input.incidentId,
+            type: 'COMMENT',
+            message: `${input.actor.name} joined as a responder via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps`,
+          },
+        });
+        await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
+          'INCIDENT_UPDATE_SERVICE_NOTIFICATION',
+        ]);
         // P1-5: Join responder must feed the centralized participant engine
-        const warRooms = await tx.incidentWarRoom.findMany({ where: { incidentId: input.incidentId, state: 'READY' }, select: { id: true } });
+        const warRooms = await tx.incidentWarRoom.findMany({
+          where: { incidentId: input.incidentId, state: 'READY' },
+          select: { id: true },
+        });
         for (const wr of warRooms) {
           // Desired participant state is derived from assignee + watchers; the sync job recomputes it.
           await tx.backgroundJob.create({
-            data: { type: 'WAR_ROOM_PARTICIPANT_SYNC', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 5, payload: { warRoomId: wr.id } as unknown as never },
+            data: {
+              type: 'WAR_ROOM_PARTICIPANT_SYNC',
+              status: 'PENDING',
+              scheduledAt: new Date(),
+              maxAttempts: 5,
+              payload: { warRoomId: wr.id } as unknown as never,
+            },
           });
         }
         return { changed: true };
@@ -280,7 +349,9 @@ export async function executeChatOpsJoinResponder(input: {
 function actionForCommand(command: ChatOpsLifecycleCommand) {
   return command === 'ACKNOWLEDGE'
     ? AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE
-    : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
+    : command === 'RESOLVE'
+      ? AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE
+      : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
 }
 
 function incidentResource(incident: {
@@ -320,6 +391,7 @@ export async function executeChatOpsLifecycleCommand(
           role: true,
           status: true,
           teamMemberships: { select: { teamId: true } },
+          ...effectiveAccessSelect(),
         },
       }),
       tx.incident.findUnique({
@@ -329,7 +401,7 @@ export async function executeChatOpsLifecycleCommand(
           teamId: true,
           visibility: true,
           watchers: { select: { userId: true } },
-          service: { select: { teamId: true } },
+          service: { select: { teamId: true, escalationPolicyId: true } },
         },
       }),
     ]);
@@ -350,22 +422,29 @@ export async function executeChatOpsLifecycleCommand(
       });
     }
 
-    const actor: AuthorizationActor = {
-      id: user.id,
-      role: user.role,
-      status: user.status,
-      teamIds: user.teamMemberships.map(membership => membership.teamId),
-    };
+    const actor = authorizationActorFromUser(user);
+    if (!actor) {
+      throw new AppError({ code: 'AUTHORIZATION_DENIED' });
+    }
     const action = actionForCommand(input.command);
-    const decision = authorize({ actor, action, resource: incidentResource(incident) });
+    const decision = authorize({
+      actor,
+      action,
+      resource: await withOnCallRelation(
+        actor,
+        action,
+        incidentResource(incident),
+        incident.service.escalationPolicyId
+      ),
+    });
 
     if (!decision.allowed) {
       throw new AppError({
         code: input.command === 'ACKNOWLEDGE' ? 'INCIDENT_ACCESS_DENIED' : 'INCIDENT_MODIFY_DENIED',
         userMessage:
           input.command === 'ACKNOWLEDGE'
-            ? 'You do not have permission to acknowledge this incident.'
-            : 'You do not have permission to modify this incident.',
+            ? `You do not have permission to acknowledge this incident. ${CHATOPS_ACCESS_HINT}`
+            : `You do not have permission to modify this incident. ${CHATOPS_ACCESS_HINT}`,
         details: {
           incidentId: input.incidentId,
           userId: input.actor.id,

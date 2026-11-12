@@ -5,6 +5,7 @@ import MobileTeamsClient from '@/components/mobile/MobileTeamsClient';
 import { appRoutes } from '@/lib/app-routes';
 import { incidentReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,15 +14,14 @@ export default async function MobileTeamsPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  await requirePageAccess('/m/teams');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/teams'));
 
   const params = await searchParams;
   const query = params.q?.trim() || '';
   const incidentAccess = incidentReadWhere(context.actor);
-  const selectedWhere = query
-    ? { name: { contains: query, mode: 'insensitive' as const } }
-    : {};
+  const selectedWhere = query ? { name: { contains: query, mode: 'insensitive' as const } } : {};
 
   const teams = await prisma.team.findMany({
     where: { AND: [teamReadWhere(context.actor), selectedWhere] },

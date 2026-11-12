@@ -2,16 +2,21 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { SETTINGS_NAV_ITEMS } from '@/components/settings/navConfig';
+import { canAccessPath } from '@/lib/access/pages';
+import { getRoleCapabilities } from '@/lib/authorization';
 
 describe('compliance diagnostics navigation and language', () => {
-  it('exposes the dashboard only as an administrator setting', () => {
+  it('exposes the dashboard only to administrators and auditors', () => {
     expect(SETTINGS_NAV_ITEMS).toContainEqual(
       expect.objectContaining({
         id: 'security-compliance',
         href: '/settings/security-compliance',
-        requiresAdmin: true,
       })
     );
+    const visibleTo = (['USER', 'AUDITOR', 'RESPONDER', 'ADMIN'] as const).filter(role =>
+      canAccessPath('/settings/security-compliance', getRoleCapabilities(role))
+    );
+    expect(visibleTo).toEqual(['AUDITOR', 'ADMIN']);
   });
 
   it('uses readiness counts and avoids compliance-score claims', () => {

@@ -7,11 +7,13 @@ import { JiraLogo } from '@/components/common/BrandLogos';
 import { Shield, Globe, Mail, Lock, CheckCircle2, XCircle } from 'lucide-react';
 import JiraIntegrationPage from '@/components/settings/JiraIntegrationPage';
 import { getAppUrl } from '@/lib/app-url';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function GlobalJiraIntegrationPage() {
+  await requirePageAccess('/settings/integrations/jira');
   const permissions = await getUserPermissions();
   if (!permissions) redirect('/login');
   if (!permissions.isAdmin) redirect('/settings');

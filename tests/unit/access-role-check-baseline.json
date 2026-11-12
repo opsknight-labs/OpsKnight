@@ -1,0 +1,4 @@
+{
+  "count": 57,
+  "note": "Inline role comparisons in src/components and src/app. Lower as files migrate to capabilities; never raise."
+}

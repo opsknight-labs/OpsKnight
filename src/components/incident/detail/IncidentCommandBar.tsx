@@ -86,6 +86,8 @@ type IncidentCommandBarProps = {
   currentStatus: IncidentStatus;
   canManage: boolean;
   canAcknowledge: boolean;
+  /** Defaults to `canManage`. People paged for the incident may resolve without full manage. */
+  canResolve?: boolean;
   snoozedUntil: Date | null;
   onAcknowledge: () => void;
   onUnacknowledge: () => void;
@@ -123,6 +125,7 @@ export default function IncidentCommandBar({
   currentStatus,
   canManage,
   canAcknowledge,
+  canResolve = canManage,
   snoozedUntil,
   onAcknowledge,
   onUnacknowledge,
@@ -153,11 +156,11 @@ export default function IncidentCommandBar({
   const isSuppressed = currentStatus === 'SUPPRESSED';
   const isAcknowledged = currentStatus === 'ACKNOWLEDGED';
   const resumeText = isSnoozed ? formatResumeIn(snoozedUntil) : null;
-  const canAct = canManage || canAcknowledge;
+  const canAct = canManage || canAcknowledge || canResolve;
   const showAcknowledge =
     !isAcknowledged && canAcknowledge && ((!isSuppressed && !isSnoozed) || isSnoozed);
   const showUnsnooze = canManage && isSnoozed;
-  const showResolve = canManage && !isResolved;
+  const showResolve = canResolve && !isResolved;
 
   const hasVisibleWarRoom = Boolean(collaboration?.visible);
 
@@ -418,6 +421,15 @@ export default function IncidentCommandBar({
 
           <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
         </div>
+
+        {!canAct && !isResolved && (
+          <span
+            className="shrink-0 rounded-md border border-border/80 px-2.5 py-1 text-xs text-muted-foreground"
+            title="Responders and Admins can act on any incident. Others can act on incidents assigned to them, that page them, or that belong to their teams."
+          >
+            View only
+          </span>
+        )}
 
         {canAct && (
           <div className="flex items-center gap-2 shrink-0">

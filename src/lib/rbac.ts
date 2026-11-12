@@ -8,6 +8,7 @@ import { AppError } from '@/lib/errors';
 import {
   AuthorizationError,
   CAPABILITIES,
+  capabilitiesOf,
   getRoleCapabilities,
   hasCapability,
   isAppRole,
@@ -16,7 +17,15 @@ import {
 } from '@/lib/authorization';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { scheduleReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
-import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import {
+  AUTHORIZATION_ACTIONS,
+  authorize,
+  type AuthorizationAction,
+} from '@/lib/authorization-policy';
+import { effectiveAccessSelect, resolveEffectiveAccess } from '@/lib/access/effective';
+import { getAccessControlSettings } from '@/lib/access/settings';
+import { describeRequirement } from '@/lib/access/catalog';
+import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
 import {
   deriveScheduleUICapabilities,
   type ScheduleUICapabilities,
@@ -47,7 +56,8 @@ export async function getCurrentUser() {
   if (!session?.user?.id && !session?.user?.email) {
     throw appError('AUTHENTICATION_REQUIRED', 'Unauthorized');
   }
-  const user = await prisma.user.findUnique({
+  const settings = await getAccessControlSettings();
+  const record = await prisma.user.findUnique({
     where: session.user.id ? { id: session.user.id } : { email: session.user.email! },
     select: {
       id: true,
@@ -68,11 +78,26 @@ export async function getCurrentUser() {
       voiceNotificationsEnabled: true,
       pushNotificationsEnabled: true,
       whatsappNotificationsEnabled: true,
+      ...effectiveAccessSelect(),
     },
   });
-  if (!user) {
+  if (!record) {
     throw appError('AUTHENTICATION_REQUIRED', 'User not found');
   }
+  const { customRole, accessGrants, ...stored } = record;
+  const access = isAppRole(stored.role)
+    ? resolveEffectiveAccess({ role: stored.role, customRole, accessGrants }, settings)
+    : null;
+  // `role` is the effective role (base role raised by any active temporary grant) so every
+  // existing role check honours just-in-time access; `baseRole` is the assigned role.
+  const user = {
+    ...stored,
+    role: (access?.role ?? stored.role) as Role,
+    baseRole: stored.role,
+    capabilities: access ? [...access.capabilities] : ([] as Capability[]),
+    customRoleName: access?.customRole?.name ?? null,
+    elevatedIncidentIds: access?.elevatedIncidentIds ?? [],
+  };
   if (user.status === 'DISABLED') {
     throw appError('USER_DISABLED', 'Unauthorized. User is inactive or disabled.', {
       userId: user.id,
@@ -107,6 +132,8 @@ export async function getCurrentUser() {
   return user;
 }
 
+export { capabilitiesOf };
+
 export async function getCurrentAuthorizationActor() {
   const user = await getCurrentUser();
   const actor = await resolveUserActor(user.id);
@@ -129,13 +156,37 @@ export async function assertAdminOrResponder() {
 
 export async function assertCapability(capability: Capability, message?: string) {
   const user = await getCurrentUser();
-  if (!hasCapability(user.role as AppRole, capability)) {
+  if (!capabilitiesOf(user).includes(capability)) {
+    const requirement = describeRequirement(capability);
+    void recordActionDenial(user.id, [capability], 'MISSING_CAPABILITY');
     throw new AuthorizationError(
-      message ?? `Unauthorized. Missing required capability: ${capability}.`,
+      message ?? `You don't have permission to ${requirement.capabilityText.toLowerCase()}.`,
       capability
     );
   }
   return user;
+}
+
+/** Audits a denied server action/API call; deduplicated and never throws. */
+async function recordActionDenial(
+  userId: string,
+  requiredCapabilities: readonly Capability[],
+  reason: string,
+  resource?: { type: string; id?: string | null }
+) {
+  try {
+    const { recordAccessDenied, currentPathname } = await import('@/lib/access/server');
+    await recordAccessDenied({
+      userId,
+      path: await currentPathname(),
+      requiredCapabilities,
+      reason,
+      resource,
+      channel: 'ACTION',
+    });
+  } catch {
+    // Outside a request (scripts, workers): nothing to attribute the denial to.
+  }
 }
 
 export async function assertCanListUsers() {
@@ -160,33 +211,55 @@ export async function assertCanViewPolicy(_policyId: string) {
   return assertCanListPolicies();
 }
 
-export async function assertAdminOrTeamOwner(teamId: string) {
+/**
+ * Team management (members, settings, lead, services): organization admins, team owners and
+ * team admins. Changes that touch ownership are further limited to owners inside
+ * `@/lib/teams/administration`.
+ */
+export async function assertTeamManager(teamId: string) {
   const user = await getCurrentUser();
-  if (user.role === 'ADMIN') return user;
-  if (user.role === 'AUDITOR') {
-    throw appError('AUTHORIZATION_DENIED', 'Read-only users cannot administer teams.', {
+  if (capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE)) return user;
+  if (!capabilitiesOf(user).includes(CAPABILITIES.TEAM_ADMINISTER_SCOPED)) {
+    void recordActionDenial(user.id, [CAPABILITIES.TEAM_ADMINISTER_SCOPED], 'MISSING_CAPABILITY', {
+      type: 'team',
+      id: teamId,
+    });
+    throw appError('AUTHORIZATION_DENIED', 'Read-only users cannot manage teams.', {
       teamId,
       userId: user.id,
     });
   }
 
   const membership = await prisma.teamMember.findFirst({
-    where: { teamId, userId: user.id, role: 'OWNER' },
+    where: { teamId, userId: user.id, role: { in: ['OWNER', 'ADMIN'] } },
     select: { id: true },
   });
 
   if (!membership) {
-    throw appError('AUTHORIZATION_DENIED', 'Unauthorized. Admin or Team Owner access required.', {
-      teamId,
-      userId: user.id,
-    });
+    void recordActionDenial(
+      user.id,
+      [CAPABILITIES.TEAM_ADMINISTER_SCOPED],
+      'RESOURCE_OUT_OF_SCOPE',
+      {
+        type: 'team',
+        id: teamId,
+      }
+    );
+    throw appError(
+      'AUTHORIZATION_DENIED',
+      'Only team owners, team admins and organization admins can manage this team.',
+      { teamId, userId: user.id }
+    );
   }
   return user;
 }
 
+/** @deprecated Use `assertTeamManager`; team admins are now managers too. */
+export const assertAdminOrTeamOwner = assertTeamManager;
+
 export async function getViewableTeamWhere(): Promise<Prisma.TeamWhereInput> {
   const user = await getCurrentUser();
-  if (hasCapability(user.role as AppRole, CAPABILITIES.SERVICE_READ_ALL)) return {};
+  if (capabilitiesOf(user).includes(CAPABILITIES.SERVICE_READ_ALL)) return {};
   return { members: { some: { userId: user.id } } };
 }
 
@@ -234,7 +307,7 @@ export async function assertCanReadServiceMetrics(opts: {
   teamId?: string | string[] | null;
 }) {
   const user = await getCurrentUser();
-  if (hasCapability(user.role as AppRole, CAPABILITIES.METRICS_READ_ALL)) return user;
+  if (capabilitiesOf(user).includes(CAPABILITIES.METRICS_READ_ALL)) return user;
 
   const serviceIds = Array.isArray(opts.serviceId)
     ? opts.serviceId
@@ -308,54 +381,115 @@ export async function assertCanCreateIncidentForService(serviceId: string) {
 }
 
 export async function assertCanAcknowledgeIncident(incidentId: string) {
-  return assertIncidentOperator(incidentId, 'acknowledge');
+  return assertIncidentOperator(
+    incidentId,
+    'acknowledge',
+    AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE
+  );
 }
 
 export async function assertCanAddIncidentNote(incidentId: string) {
-  return assertIncidentOperator(incidentId, 'add notes to');
+  return assertIncidentOperator(incidentId, 'add notes to', AUTHORIZATION_ACTIONS.INCIDENT_NOTE);
 }
 
-async function assertIncidentOperator(incidentId: string, operation: string) {
-  const user = await assertCapability(
-    CAPABILITIES.OPERATIONS_MANAGE,
-    `Unauthorized. Only Responders and Admins may ${operation} incidents.`
-  );
-  const incident = await prisma.incident.findUnique({
-    where: { id: incidentId },
-    select: { id: true },
+type IncidentOperatorAction =
+  | typeof AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE
+  | typeof AUTHORIZATION_ACTIONS.INCIDENT_NOTE
+  | typeof AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE
+  | typeof AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE
+  | typeof AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
+
+/**
+ * Incident operations. Responders and Admins may operate any incident. Everyone else may
+ * acknowledge, add notes, escalate and resolve incidents they are assigned to, are paged for,
+ * or that belong to one of their teams. Other changes (urgency, reassignment, meetings, war
+ * rooms) stay with Responders and Admins.
+ */
+async function assertIncidentOperator(
+  incidentId: string,
+  operation: string,
+  action: IncidentOperatorAction = AUTHORIZATION_ACTIONS.INCIDENT_MANAGE
+) {
+  const user = await getCurrentUser();
+  const actor = await resolveUserActor(user.id);
+  const roleOnlyMessage = `Unauthorized. Only Responders and Admins may ${operation} incidents.`;
+  if (!actor) throw new AuthorizationError(roleOnlyMessage, CAPABILITIES.OPERATIONS_MANAGE);
+  // Decide on capability alone first, so people with no incident permissions never trigger an
+  // incident lookup (and cannot probe which incidents exist).
+  const preliminary = authorize({ actor, action });
+  if (!preliminary.allowed) {
+    void recordActionDenial(user.id, [preliminary.requiredCapability], preliminary.reason, {
+      type: 'incident',
+      id: incidentId,
+    });
+    throw new AuthorizationError(roleOnlyMessage, preliminary.requiredCapability);
+  }
+  const deniedMessage = `Unauthorized. You can ${operation} incidents assigned to you, that page you, or that belong to your teams. Responders and Admins can ${operation} any incident.`;
+  const resource = await resolveIncidentResourceForActor(actor, incidentId);
+  if (!resource) throw appError('INCIDENT_NOT_FOUND', 'Incident not found', { incidentId });
+  const decision = authorize({ actor, action, resource });
+  if (decision.allowed) return user;
+  void recordActionDenial(user.id, [decision.requiredCapability], decision.reason, {
+    type: 'incident',
+    id: incidentId,
   });
-  if (!incident) throw appError('INCIDENT_NOT_FOUND', 'Incident not found', { incidentId });
-  return user;
+  throw new AppError({
+    code: 'INCIDENT_MODIFY_DENIED',
+    userMessage: deniedMessage,
+    details: {
+      incidentId,
+      action,
+      reason: decision.reason,
+      capability: decision.requiredCapability,
+      requirement: describeRequirement(decision.requiredCapability).summary,
+    },
+  });
 }
 
 export const assertCanEscalateIncident = (incidentId: string) =>
-  assertIncidentOperator(incidentId, 'escalate');
+  assertIncidentOperator(incidentId, 'escalate', AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE);
 export const assertCanResolveIncident = (incidentId: string) =>
-  assertIncidentOperator(incidentId, 'resolve');
+  assertIncidentOperator(incidentId, 'resolve', AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE);
 export const assertCanManageIncidentMeeting = (incidentId: string) =>
   assertIncidentOperator(incidentId, 'manage meetings for');
 export const assertCanManageWarRoom = (incidentId: string) =>
   assertIncidentOperator(incidentId, 'manage war rooms for');
 
+/** Non-throwing variant for UI hints: which incident operations the current person may perform. */
+export async function getIncidentOperatorPermissions(incidentId: string) {
+  const user = await getCurrentUser();
+  const actor = await resolveUserActor(user.id);
+  const resource = actor ? await resolveIncidentResourceForActor(actor, incidentId) : null;
+  const can = (action: AuthorizationAction) =>
+    Boolean(actor && resource && authorize({ actor, action, resource }).allowed);
+  return {
+    canAcknowledge: can(AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE),
+    canAddNote: can(AUTHORIZATION_ACTIONS.INCIDENT_NOTE),
+    canEscalate: can(AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE),
+    canResolve: can(AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE),
+    canManage: can(AUTHORIZATION_ACTIONS.INCIDENT_MANAGE),
+  };
+}
+
 export async function getUserPermissions() {
   try {
     const user = await getCurrentUser();
-    const { logger } = await import('@/lib/logger');
-    logger.warn('[RBAC] Resolved user permissions', { id: user.id, role: user.role });
+    const capabilities: readonly Capability[] = capabilitiesOf(user);
+    const has = (capability: Capability) => capabilities.includes(capability);
     return {
       id: user.id,
       role: user.role as Role,
-      capabilities: getRoleCapabilities(user.role as AppRole),
+      capabilities,
       authenticated: true,
-      isAdmin: user.role === 'ADMIN',
+      isAdmin: has(CAPABILITIES.ADMIN_MANAGE),
       isAuditor: user.role === 'AUDITOR',
-      isAdminOrResponder: user.role === 'ADMIN' || user.role === 'RESPONDER',
-      isResponderOrAbove: user.role === 'ADMIN' || user.role === 'RESPONDER',
+      isAdminOrResponder: has(CAPABILITIES.OPERATIONS_MANAGE),
+      isResponderOrAbove: has(CAPABILITIES.OPERATIONS_MANAGE),
     };
   } catch {
     return {
       id: '',
-      role: 'VIEWER' as const,
+      role: null as Role | null,
       capabilities: [] as readonly Capability[],
       authenticated: false,
       isAdmin: false,
@@ -434,7 +568,7 @@ export async function assertCanModifyService(serviceId: string) {
   const user = await getCurrentUser();
   if (user.role === 'ADMIN') return user;
 
-  if (!hasCapability(user.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE)) {
+  if (!capabilitiesOf(user).includes(CAPABILITIES.OPERATIONS_MANAGE)) {
     throw appError(
       'SERVICE_ACCESS_DENIED',
       'Unauthorized. You do not have permission to modify this service.',
@@ -543,7 +677,7 @@ async function resolveScheduleUICapabilities(
   const isAssignedMember = schedule.layers.some(layer => layer.users.length > 0);
   const isOwningTeamLead = schedule.escalationRules.length > 0;
   return deriveScheduleUICapabilities({
-    capabilities: getRoleCapabilities(user.role as AppRole),
+    capabilities: capabilitiesOf(user),
     isAdmin: user.role === 'ADMIN',
     isAssignedMember,
     isOwningTeamLead,

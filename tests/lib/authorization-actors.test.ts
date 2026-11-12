@@ -17,7 +17,7 @@ describe('authorization actor adapters', () => {
       teamMemberships: [{ teamId: 'team-1' }],
     } as never);
 
-    await expect(resolveUserActor('user-1')).resolves.toEqual({
+    await expect(resolveUserActor('user-1')).resolves.toMatchObject({
       id: 'user-1',
       role: 'USER',
       status: 'ACTIVE',

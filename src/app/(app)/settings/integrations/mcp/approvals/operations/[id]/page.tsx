@@ -29,10 +29,12 @@ import {
   reviewBlockedReason,
   SelfApprovalConfirm,
 } from '../../review-gate';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 const heading = 'Review requested configuration change';
 export default async function OperationApproval({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/settings/integrations/mcp/approvals/operations/[id]');
   const permissions = await getUserPermissions();
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
   const [user, viewer] = await Promise.all([getCurrentUser(), loadMcpViewer(permissions)]);

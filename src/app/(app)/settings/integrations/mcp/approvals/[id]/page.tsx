@@ -31,9 +31,11 @@ import {
   reviewBlockedReason,
   SelfApprovalConfirm,
 } from '../review-gate';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export default async function RunbookApproval({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/settings/integrations/mcp/approvals/[id]');
   const heading = 'Review requested runbook execution';
   let loaded:
     | { own: NonNullable<Awaited<ReturnType<typeof loadMcpRunbookRequest>>> }

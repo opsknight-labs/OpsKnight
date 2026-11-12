@@ -7,12 +7,14 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { createTemplateAction } from '../../template-actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { LayoutTemplate, ArrowLeft, AlertCircle } from 'lucide-react';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function CreateTemplatePage({
   searchParams,
 }: {
   searchParams?: Promise<{ error?: string }>;
 }) {
+  await requirePageAccess('/incidents/templates/create');
   const permissions = await getUserPermissions();
   const canManageTemplates = permissions.isResponderOrAbove;
 

@@ -15,6 +15,7 @@ import { OpsPulsePanel } from '@/components/dashboard/live/ResponderRail';
 import DashboardHistorySection, {
   DashboardHistoryProvider,
 } from '@/components/dashboard/DashboardHistorySection';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -36,6 +37,7 @@ function toUrlParams(params: SearchParams): URLSearchParams {
  * for filters. Live data then reconciles through the shared SSE signal; history loads lazily.
  */
 export default async function Dashboard({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  await requirePageAccess('/');
   const urlParams = toUrlParams(await searchParams);
   const requestContext = await getRequestActorContext();
   if (!requestContext) redirect('/login?error=SessionExpired');

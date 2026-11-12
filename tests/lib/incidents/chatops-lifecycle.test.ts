@@ -89,6 +89,30 @@ describe('ChatOps lifecycle adapter', () => {
       service: { teamId: null },
     });
 
+    await executeChatOpsLifecycleCommand({
+      incidentId: 'inc-1',
+      command: 'ACKNOWLEDGE',
+      actor: { id: 'user-1', name: 'Alice' },
+    });
+
+    expect(applyIncidentLifecycleCommand).toHaveBeenCalled();
+  });
+
+  it('denies USER acknowledgement of an incident they have no relationship to', async () => {
+    mocks.tx.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      role: 'USER',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+    mocks.tx.incident.findUnique.mockResolvedValue({
+      assigneeId: 'someone-else',
+      teamId: null,
+      visibility: 'PUBLIC',
+      watchers: [{ userId: 'user-1' }],
+      service: { teamId: 'team-9', escalationPolicyId: null },
+    });
+
     await expect(
       executeChatOpsLifecycleCommand({
         incidentId: 'inc-1',
@@ -100,7 +124,7 @@ describe('ChatOps lifecycle adapter', () => {
     expect(applyIncidentLifecycleCommand).not.toHaveBeenCalled();
   });
 
-  it('requires manage permission for resolve even when the USER can access the incident', async () => {
+  it('lets an assigned USER resolve but not snooze (snooze needs manage permission)', async () => {
     mocks.tx.user.findUnique.mockResolvedValue({
       id: 'user-1',
       role: 'USER',
@@ -115,15 +139,21 @@ describe('ChatOps lifecycle adapter', () => {
       service: { teamId: null },
     });
 
+    await executeChatOpsLifecycleCommand({
+      incidentId: 'inc-1',
+      command: 'RESOLVE',
+      actor: { id: 'user-1', name: 'Alice' },
+    });
+    expect(applyIncidentLifecycleCommand).toHaveBeenCalledTimes(1);
+
     await expect(
       executeChatOpsLifecycleCommand({
         incidentId: 'inc-1',
-        command: 'RESOLVE',
+        command: 'SNOOZE',
         actor: { id: 'user-1', name: 'Alice' },
       })
     ).rejects.toMatchObject({ code: 'INCIDENT_MODIFY_DENIED' });
-
-    expect(applyIncidentLifecycleCommand).not.toHaveBeenCalled();
+    expect(applyIncidentLifecycleCommand).toHaveBeenCalledTimes(1);
   });
 
   it('rejects inactive or stale ChatOps identities before mutation', async () => {

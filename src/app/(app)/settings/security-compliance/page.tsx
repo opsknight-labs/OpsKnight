@@ -8,6 +8,7 @@ import {
 } from '@/lib/compliance/framework-mappings';
 import { getComplianceControlCenterData } from '@/lib/compliance/control-center';
 import { ComplianceControlCenter } from '@/components/settings/compliance/control-center';
+import { requirePageAccess } from '@/lib/access/server';
 
 const VALID_TABS = [
   'overview',
@@ -24,6 +25,7 @@ export default async function SecurityCompliancePage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
+  await requirePageAccess('/settings/security-compliance');
   // Read-only readiness diagnostics — not certification or legal conclusions
   const permissions = await getUserPermissions();
   if (!permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_READ)) {

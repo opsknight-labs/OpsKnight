@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import SettingsSearchTrigger from '@/components/settings/SettingsSearchTrigger';
+import { requirePageAccess } from '@/lib/access/server';
+import { canAccessPath } from '@/lib/access/pages';
 
 const sectionIcons: Record<string, LucideIcon | React.ComponentType<{ className?: string }>> = {
   account: User,
@@ -109,6 +111,7 @@ const itemThemes: Record<string, { bg: string; text: string }> = {
 };
 
 export default async function SettingsOverviewPage() {
+  await requirePageAccess('/settings');
   const permissions = await getUserPermissions();
 
   const now = new Date();
@@ -256,16 +259,7 @@ export default async function SettingsOverviewPage() {
     (chatOpsConfig?.enabled ? 1 : 0) +
     (teamsConfig?.enabled ? 1 : 0);
 
-  const canAccess = (item: {
-    requiresAdmin?: boolean;
-    requiresAdminOrAuditor?: boolean;
-    requiresResponder?: boolean;
-  }) => {
-    if (item.requiresAdmin && !permissions.isAdmin) return false;
-    if (item.requiresAdminOrAuditor && !permissions.isAdmin && !permissions.isAuditor) return false;
-    if (item.requiresResponder && !permissions.isResponderOrAbove) return false;
-    return true;
-  };
+  const canAccess = (item: { href: string }) => canAccessPath(item.href, permissions.capabilities);
 
   const sectionGroups = SETTINGS_NAV_SECTIONS.filter(section => section.id !== 'overview');
 

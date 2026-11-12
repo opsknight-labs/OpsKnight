@@ -14,8 +14,10 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import Link from 'next/link';
 import { ShieldCheck, KeyRound, Fingerprint, ExternalLink } from 'lucide-react';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function SecuritySettingsPage() {
+  await requirePageAccess('/settings/security');
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
 

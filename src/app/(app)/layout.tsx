@@ -32,6 +32,9 @@ import ContentScrollReset from '@/components/layout/ContentScrollReset';
 import { getAppShellContext, type AppShellContext } from '@/lib/app-shell-context';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import AuthenticatedClientProviders from '@/components/auth/AuthenticatedClientProviders';
+import { AccessProvider } from '@/components/access/AccessProvider';
+import ElevatedAccessBanner from '@/components/access/ElevatedAccessBanner';
+import { getAccessSnapshot } from '@/lib/access/server';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -99,91 +102,97 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const userGender = activeShell.user.gender;
   const userId = activeShell.user.id;
   const userTimeZone = activeShell.user.timeZone || 'UTC';
-  const canCreate = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
+  const access = await getAccessSnapshot();
+  const canCreate = access
+    ? access.capabilities.includes(CAPABILITIES.OPERATIONS_MANAGE)
+    : isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
 
   return (
     <AuthenticatedClientProviders initialSession={requestContext.session}>
-      <AppErrorBoundary>
-        <TimezoneProvider initialTimeZone={userTimeZone}>
-          <UserAvatarProvider
-            currentUserId={userId}
-            currentUserAvatar={userAvatar}
-            currentUserGender={userGender}
-            currentUserName={userName}
-          >
-            <SidebarProvider>
-              <IncidentCreationModalProvider>
-                <RouteAwareRealtimeProvider>
-                  <IncidentAlertProvider>
-                    <GlobalKeyboardHandlerWrapper />
-                    <SkipLinks />
-                    <div className="app-shell flex min-h-screen flex-col">
-                      <AppHeader>
-                        <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
-                          <BrandLockup variant="header" />
-                          <div className="mx-0.5 h-4 w-px bg-slate-800 sm:mx-1" />
-                          <SidebarTrigger />
-                          <div className="hidden sm:block">
-                            <OperationalStatus
-                              tone={activeShell.systemStatus}
-                              label={activeShell.statusLabel}
-                              detail={activeShell.statusDetail}
-                              criticalCount={activeShell.incidentCounts.high}
-                              mediumCount={activeShell.incidentCounts.medium}
-                              lowCount={activeShell.incidentCounts.low}
+      <AccessProvider snapshot={access}>
+        <AppErrorBoundary>
+          <TimezoneProvider initialTimeZone={userTimeZone}>
+            <UserAvatarProvider
+              currentUserId={userId}
+              currentUserAvatar={userAvatar}
+              currentUserGender={userGender}
+              currentUserName={userName}
+            >
+              <SidebarProvider>
+                <IncidentCreationModalProvider>
+                  <RouteAwareRealtimeProvider>
+                    <IncidentAlertProvider>
+                      <GlobalKeyboardHandlerWrapper />
+                      <SkipLinks />
+                      <div className="app-shell flex min-h-screen flex-col">
+                        <AppHeader>
+                          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+                            <BrandLockup variant="header" />
+                            <div className="mx-0.5 h-4 w-px bg-slate-800 sm:mx-1" />
+                            <SidebarTrigger />
+                            <div className="hidden sm:block">
+                              <OperationalStatus
+                                tone={activeShell.systemStatus}
+                                label={activeShell.statusLabel}
+                                detail={activeShell.statusDetail}
+                                criticalCount={activeShell.incidentCounts.high}
+                                mediumCount={activeShell.incidentCounts.medium}
+                                lowCount={activeShell.incidentCounts.low}
+                              />
+                            </div>
+                            <div className="hidden xl:block">
+                              <TopbarBreadcrumbs />
+                            </div>
+                          </div>
+                          <div className="mx-auto hidden max-w-md flex-1 items-center justify-center px-2 md:flex">
+                            <SidebarSearch />
+                          </div>
+                          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+                            <TopbarNotifications />
+                            <QuickActions canCreate={canCreate} />
+                            <TopbarUserMenu
+                              name={userName}
+                              email={userEmail}
+                              role={userRole}
+                              avatarUrl={userAvatar}
+                              gender={userGender}
+                              userId={userId}
+                              legalNotice={<LegalSourceNotice />}
                             />
                           </div>
-                          <div className="hidden xl:block">
-                            <TopbarBreadcrumbs />
+                        </AppHeader>
+                        <div className="relative flex min-h-0 flex-1 pt-14">
+                          <Sidebar
+                            userName={userName}
+                            userEmail={userEmail}
+                            userRole={userRole}
+                            userAvatar={userAvatar}
+                            userGender={userGender}
+                            userId={userId}
+                            initialActiveCount={activeShell.incidentCounts.active}
+                            initialStatusPages={activeShell.statusPages}
+                            initialIsStatusPageAdmin={activeShell.isStatusPageAdmin}
+                          />
+                          <div className="content-shell flex-1">
+                            <ContentScrollReset />
+                            <ElevatedAccessBanner />
+                            <GlobalIncidentBanner />
+                            <main id="main-content" className="page-shell">
+                              {children}
+                            </main>
                           </div>
                         </div>
-                        <div className="mx-auto hidden max-w-md flex-1 items-center justify-center px-2 md:flex">
-                          <SidebarSearch />
-                        </div>
-                        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-                          <TopbarNotifications />
-                          <QuickActions canCreate={canCreate} />
-                          <TopbarUserMenu
-                            name={userName}
-                            email={userEmail}
-                            role={userRole}
-                            avatarUrl={userAvatar}
-                            gender={userGender}
-                            userId={userId}
-                            legalNotice={<LegalSourceNotice />}
-                          />
-                        </div>
-                      </AppHeader>
-                      <div className="relative flex min-h-0 flex-1 pt-14">
-                        <Sidebar
-                          userName={userName}
-                          userEmail={userEmail}
-                          userRole={userRole}
-                          userAvatar={userAvatar}
-                          userGender={userGender}
-                          userId={userId}
-                          initialActiveCount={activeShell.incidentCounts.active}
-                          initialStatusPages={activeShell.statusPages}
-                          initialIsStatusPageAdmin={activeShell.isStatusPageAdmin}
-                        />
-                        <div className="content-shell flex-1">
-                          <ContentScrollReset />
-                          <GlobalIncidentBanner />
-                          <main id="main-content" className="page-shell">
-                            {children}
-                          </main>
-                        </div>
                       </div>
-                    </div>
-                    <CreateIncidentModal />
-                  </IncidentAlertProvider>
-                </RouteAwareRealtimeProvider>
-              </IncidentCreationModalProvider>
-            </SidebarProvider>
-          </UserAvatarProvider>
-        </TimezoneProvider>
-        <SessionTimeoutWarning warningMinutes={5} />
-      </AppErrorBoundary>
+                      <CreateIncidentModal />
+                    </IncidentAlertProvider>
+                  </RouteAwareRealtimeProvider>
+                </IncidentCreationModalProvider>
+              </SidebarProvider>
+            </UserAvatarProvider>
+          </TimezoneProvider>
+          <SessionTimeoutWarning warningMinutes={5} />
+        </AppErrorBoundary>
+      </AccessProvider>
     </AuthenticatedClientProviders>
   );
 }

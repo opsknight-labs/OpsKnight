@@ -2,11 +2,7 @@ import prisma from '@/lib/prisma';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import {
-  assertCanViewUser,
-  getCurrentAuthorizationActor,
-  getUserPermissions,
-} from '@/lib/rbac';
+import { assertCanViewUser, getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -24,6 +20,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import UserDetailTabs from '@/components/users/UserDetailTabs';
 import UserProfileHeaderActions from '@/components/users/UserProfileHeaderActions';
 import { deleteUser, updateUserProfile } from '../actions';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -47,6 +44,7 @@ function formatLocalTimeInTz(timeZone: string): string {
 }
 
 export default async function UserDetailPage({ params, searchParams }: UserDetailPageProps) {
+  await requirePageAccess('/users/[id]');
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const defaultTab = resolvedSearchParams?.tab || 'overview';

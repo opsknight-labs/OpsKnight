@@ -846,6 +846,8 @@ export default async function middleware(req: NextRequest) {
       : crypto.randomUUID();
   const forwardedHeaders = new Headers(req.headers);
   forwardedHeaders.set('x-request-id', requestId);
+  // Lets server components explain access decisions for the page being rendered (403 page).
+  forwardedHeaders.set('x-opsknight-pathname', pathname);
 
   let response = NextResponse.next({ request: { headers: forwardedHeaders } });
   response.headers.set('x-request-id', requestId);

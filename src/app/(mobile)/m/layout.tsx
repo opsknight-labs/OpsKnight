@@ -17,6 +17,8 @@ import MobileBiometricGuard from '@/components/mobile/MobileBiometricGuard';
 import { getAppShellContext } from '@/lib/app-shell-context';
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { AccessProvider } from '@/components/access/AccessProvider';
+import { getAccessSnapshot } from '@/lib/access/server';
 import { MOBILE_PRINCIPAL_MARKER_ID } from '@/lib/mobile-principal';
 import AuthenticatedClientProviders from '@/components/auth/AuthenticatedClientProviders';
 
@@ -33,48 +35,51 @@ export default async function MobileLayout({ children }: { children: React.React
   const authGeneration = String(shell.user.tokenVersion);
   const refreshEpoch = randomUUID();
 
+  const access = await getAccessSnapshot();
   return (
     <AuthenticatedClientProviders initialSession={requestContext.session}>
-      <TimezoneProvider initialTimeZone={shell.user.timeZone || 'UTC'}>
-        <UserAvatarProvider
-          currentUserId={shell.user.id}
-          currentUserAvatar={shell.user.avatarUrl}
-          currentUserGender={shell.user.gender}
-          currentUserName={shell.user.name || 'User'}
-        >
-          <RealtimeProvider>
-            <MobileRefreshEpochProvider epoch={refreshEpoch}>
-              <MobileBiometricGuard>
-                <div className="mobile-app" data-system-status={shell.systemStatus}>
-                  <div
-                    id={MOBILE_PRINCIPAL_MARKER_ID}
-                    data-principal-id={shell.user.id}
-                    data-auth-generation={authGeneration}
-                    hidden
-                    aria-hidden="true"
-                  />
-                  <MobileHeader
-                    systemStatus={shell.systemStatus}
-                    canCreateIncident={shell.accessContext.canOperate}
-                  />
-                  <main id="main-content" className="mobile-content">
-                    <MobileNetworkBanner />
-                    <MobileSwipeNavigator>
-                      <PullToRefresh>{children}</PullToRefresh>
-                    </MobileSwipeNavigator>
-                  </main>
-                  <MobileNav />
-                  <MobilePwaCoordinator
-                    principalId={shell.user.id}
-                    authGeneration={authGeneration}
-                  />
-                  <MobileRealtimeInvalidator />
-                </div>
-              </MobileBiometricGuard>
-            </MobileRefreshEpochProvider>
-          </RealtimeProvider>
-        </UserAvatarProvider>
-      </TimezoneProvider>
+      <AccessProvider snapshot={access}>
+        <TimezoneProvider initialTimeZone={shell.user.timeZone || 'UTC'}>
+          <UserAvatarProvider
+            currentUserId={shell.user.id}
+            currentUserAvatar={shell.user.avatarUrl}
+            currentUserGender={shell.user.gender}
+            currentUserName={shell.user.name || 'User'}
+          >
+            <RealtimeProvider>
+              <MobileRefreshEpochProvider epoch={refreshEpoch}>
+                <MobileBiometricGuard>
+                  <div className="mobile-app" data-system-status={shell.systemStatus}>
+                    <div
+                      id={MOBILE_PRINCIPAL_MARKER_ID}
+                      data-principal-id={shell.user.id}
+                      data-auth-generation={authGeneration}
+                      hidden
+                      aria-hidden="true"
+                    />
+                    <MobileHeader
+                      systemStatus={shell.systemStatus}
+                      canCreateIncident={shell.accessContext.canOperate}
+                    />
+                    <main id="main-content" className="mobile-content">
+                      <MobileNetworkBanner />
+                      <MobileSwipeNavigator>
+                        <PullToRefresh>{children}</PullToRefresh>
+                      </MobileSwipeNavigator>
+                    </main>
+                    <MobileNav />
+                    <MobilePwaCoordinator
+                      principalId={shell.user.id}
+                      authGeneration={authGeneration}
+                    />
+                    <MobileRealtimeInvalidator />
+                  </div>
+                </MobileBiometricGuard>
+              </MobileRefreshEpochProvider>
+            </RealtimeProvider>
+          </UserAvatarProvider>
+        </TimezoneProvider>
+      </AccessProvider>
     </AuthenticatedClientProviders>
   );
 }

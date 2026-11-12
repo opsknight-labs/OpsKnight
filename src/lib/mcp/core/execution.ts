@@ -500,7 +500,9 @@ async function executeMcpOperation(
                 ? AUTHORIZATION_ACTIONS.INCIDENT_NOTE
                 : operationId === 'escalateIncident'
                   ? AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE
-                  : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
+                  : operationId === 'resolveIncident'
+                    ? AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE
+                    : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
           enforceV2ResourceAuthorization(auth.actor, action, {
             type: 'incident',
             assigneeId: incident.assigneeId,

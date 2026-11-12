@@ -165,7 +165,7 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
-    "USER": "deny:MISSING_CAPABILITY"
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/alerts [incidents:read]": {
     "ADMIN": "allow:global",
@@ -207,7 +207,7 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
-    "USER": "deny:MISSING_CAPABILITY"
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/notes [incidents:read]": {
     "ADMIN": "allow:global",
@@ -219,7 +219,7 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
-    "USER": "deny:MISSING_CAPABILITY"
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/notification-attempts [incidents:read]": {
     "ADMIN": "allow:global",
@@ -243,7 +243,7 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
-    "USER": "deny:MISSING_CAPABILITY"
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/response-activity [incidents:read]": {
     "ADMIN": "allow:global",

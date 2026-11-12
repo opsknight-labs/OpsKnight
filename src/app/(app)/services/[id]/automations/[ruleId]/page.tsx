@@ -81,6 +81,7 @@ import {
 } from '../../runbook-actions';
 import { redactRunbookConfiguration } from '@/lib/runbooks/display-name';
 import { cn } from '@/lib/utils';
+import { requirePageAccess } from '@/lib/access/server';
 export const dynamic = 'force-dynamic';
 
 function timestamp(date: Date, timeZone: string) {
@@ -96,6 +97,7 @@ export default async function AutomationRulePage({
 }: {
   params: Promise<{ id: string; ruleId: string }>;
 }) {
+  await requirePageAccess('/services/[id]/automations/[ruleId]');
   const input = z.object({ id: z.string().cuid(), ruleId: z.string().cuid() }).parse(await params);
   const [user] = await Promise.all([
     getCurrentUser(),

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getUserPermissions } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,7 @@ export default async function CreateIncidentPage({
 }: {
   searchParams: Promise<{ template?: string; serviceId?: string }>;
 }) {
+  await requirePageAccess('/incidents/create');
   await getUserPermissions();
 
   const params = await searchParams;

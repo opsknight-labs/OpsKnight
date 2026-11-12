@@ -38,6 +38,8 @@ import {
   formatPaginationSummary,
   parseEnumValue,
 } from '@/lib/pagination-parser';
+import { requirePageAccess } from '@/lib/access/server';
+import { RestrictedAction } from '@/components/access/AccessProvider';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +56,7 @@ function buildPaginationUrl(baseParams: URLSearchParams, page: number): string {
 }
 
 export default async function UsersPage({ searchParams }: UsersPageProps) {
+  await requirePageAccess('/users');
   const awaitedSearchParams = await searchParams;
   const query = typeof awaitedSearchParams?.q === 'string' ? awaitedSearchParams.q.trim() : '';
   const statusFilter = parseEnumValue(
@@ -266,14 +269,14 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             </div>
             <div className="flex items-center gap-2.5">
               <UserSortDropdown />
-              {isAdmin && (
+              <RestrictedAction allowed={isAdmin} anyOf="admin.manage">
                 <InviteUserModal
                   action={addUser}
                   disabled={!isAdmin}
                   variant="topbar"
                   label="Invite User"
                 />
-              )}
+              </RestrictedAction>
             </div>
           </div>
         </CardHeader>

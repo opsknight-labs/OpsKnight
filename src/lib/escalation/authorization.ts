@@ -14,6 +14,7 @@ import { emitAuditEvent } from '../audit';
 import { AuthorizationError, CAPABILITIES } from '../authorization';
 import { resolveUserActor } from '../authorization-actors';
 import { AUTHORIZATION_ACTIONS, authorize } from '../authorization-policy';
+import { isPagedForIncident } from '../access/incident-relations';
 import { executeEscalation } from './index';
 import type { EscalationExecutionResult } from './types';
 import { createHash } from 'node:crypto';
@@ -56,7 +57,7 @@ export async function authorizeIncidentEscalation(input: {
         assigneeId: true,
         teamId: true,
         visibility: true,
-        service: { select: { teamId: true } },
+        service: { select: { teamId: true, escalationPolicyId: true } },
         watchers: { select: { userId: true } },
       },
     }),
@@ -68,18 +69,28 @@ export async function authorizeIncidentEscalation(input: {
     throw new AuthorizationError(denied, CAPABILITIES.OPERATIONS_MANAGE);
   }
 
-  const decision = authorize({
-    actor,
-    action: AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
-    resource: {
-      type: 'incident',
-      assigneeId: incident.assigneeId,
-      assignedTeamId: incident.teamId,
-      serviceTeamId: incident.service?.teamId ?? null,
-      visibility: incident.visibility,
-      watcherIds: incident.watchers.map(watcher => watcher.userId),
-    },
-  });
+  const resource = {
+    type: 'incident' as const,
+    id: input.incidentId,
+    assigneeId: incident.assigneeId,
+    assignedTeamId: incident.teamId,
+    serviceTeamId: incident.service?.teamId ?? null,
+    visibility: incident.visibility,
+    watcherIds: incident.watchers.map(watcher => watcher.userId),
+  };
+  let decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE, resource });
+  // Whoever this incident pages may escalate it too.
+  if (
+    !decision.allowed &&
+    decision.reason === 'RESOURCE_OUT_OF_SCOPE' &&
+    (await isPagedForIncident(actor, incident.service?.escalationPolicyId ?? null))
+  ) {
+    decision = authorize({
+      actor,
+      action: AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
+      resource: { ...resource, onCallUserIds: [actor.id] },
+    });
+  }
 
   if (!decision.allowed) {
     logger.warn('escalation.manual.denied', {

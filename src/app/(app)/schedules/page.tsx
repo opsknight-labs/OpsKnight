@@ -19,12 +19,14 @@ import Link from 'next/link';
 
 import { Prisma } from '@prisma/client';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function SchedulesPage({
   searchParams,
 }: {
   searchParams?: Promise<{ page?: string; q?: string; search?: string; status?: string }>;
 }) {
+  await requirePageAccess('/schedules');
   const params = await searchParams;
   const requestedPage = parsePageParam(params?.page);
   const searchQuery = (params?.q || params?.search || '').trim();
