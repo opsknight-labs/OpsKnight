@@ -139,6 +139,12 @@ export async function runMcpSetupCheck(fetcher: typeof fetch = fetch): Promise<M
       );
     else if (response.status === 503)
       add('authentication', 'fail', 'MCP is turned off or unavailable. Enable it and save.');
+    else if (response.status === 403)
+      add(
+        'authentication',
+        'fail',
+        'The MCP endpoint refused the request, usually because your reverse proxy changes the Host header. Make the proxy pass the original Host, or list the name it sends in MCP_ALLOWED_HOSTS.'
+      );
     else
       add(
         'authentication',
