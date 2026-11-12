@@ -4946,8 +4946,9 @@ model McpGrant {
   // Last tool call through this grant, written at most once a minute.
   lastCallAt DateTime?
   lastTool String?
-  // OAUTH (an assistant's consent) or PAT (a personal access token, which has one token and no
-  // refresh). A personal token's label is the name its owner gave it.
+  // OAUTH (an assistant's consent), PAT (a personal access token, which has one token and no
+  // refresh) or IDP (granted by the organization's identity provider, no refresh). A personal
+  // token's label is the name its owner gave it.
   kind String @default("OAUTH")
   label String?
   // Set once the owner of a personal token was told it expires within seven days.
