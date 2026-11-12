@@ -372,3 +372,51 @@ describe('incident_acknowledge_many', () => {
     expect(await statusOf(id)).toBe('OPEN');
   });
 });
+
+describe('attribution of changes made through an assistant', () => {
+  it('names the person and the assistant, and marks the rows with the channel', async () => {
+    const client = await db.mcpClient.findFirstOrThrow({ where: { name: 'Curated ADMIN' } });
+    const channel = `mcp:${client.id}`;
+    const label = `${admin.user.name} via Curated ADMIN (AI)`;
+    const id = await incident('OPEN');
+
+    const acknowledged = await call(admin.bearer, 'incident_acknowledge', {
+      path: { id },
+      body: {},
+      idempotencyKey: key(),
+    });
+    expect(acknowledged.isError, JSON.stringify(acknowledged)).not.toBe(true);
+    const noted = await call(admin.bearer, 'incident_add_note', {
+      path: { id },
+      body: { content: 'Restarted the worker pool.' },
+      idempotencyKey: key(),
+    });
+    expect(noted.isError, JSON.stringify(noted)).not.toBe(true);
+
+    const events = await db.incidentEvent.findMany({ where: { incidentId: id } });
+    const made = events.filter(event => /acknowledged|Note added/i.test(event.message));
+    expect(made).toHaveLength(2);
+    for (const event of made) {
+      expect(event.message).toContain(`by ${label}`);
+      expect(event.channel).toBe(channel);
+    }
+    const note = await db.incidentNote.findFirstOrThrow({ where: { incidentId: id } });
+    expect(note.channel).toBe(channel);
+    const audits = await db.auditLog.findMany({ where: { entityId: id } });
+    expect(audits.length).toBeGreaterThanOrEqual(2);
+    for (const audit of audits) expect(audit.channel).toBe(channel);
+
+    // A row written outside an assistant's transaction is never marked, even on a connection
+    // an assistant's transaction used before.
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const plain = await db.incidentEvent.create({ data: { incidentId: id, message: 'manual' } });
+      expect(plain.channel).toBeNull();
+    }
+  });
+
+  it('removes markup from a self-declared assistant name', async () => {
+    const { mcpActorLabel } = await import('@/lib/mcp/auth/principal');
+    expect(mcpActorLabel('Asha', '*@here* <b>Claude</b>')).toBe('Asha via here bClaude/b (AI)');
+    expect(mcpActorLabel(null, '***')).toBe('A user via an assistant (AI)');
+  });
+});

@@ -253,6 +253,7 @@ export default async function IncidentDetailScreen({
         message: event.message,
         type: event.type,
         createdAt: event.createdAt,
+        channel: event.channel,
       }))}
       notes={incident.notes.map(note => ({
         id: note.id,

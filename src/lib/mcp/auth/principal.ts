@@ -17,6 +17,8 @@ import {
 
 interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   clientId: string;
+  userName: string | null;
+  clientName: string | null;
   teamIds: string[];
   writesEnabled: boolean | null;
   sensitiveReadsEnabled: boolean | null;
@@ -80,7 +82,7 @@ export async function resolveMcpGrant(
 // The authority columns shared by both lookups. The access columns are the same ones the
 // settings lists read (effective-access.ts), so the admin page shows what is enforced here.
 const AUTHORITY_COLUMNS = Prisma.sql`
-  ${GRANT_ACCESS_COLUMNS}, g."clientId",
+  ${GRANT_ACCESS_COLUMNS}, g."clientId", u.name AS "userName", c.name AS "clientName",
   ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
@@ -114,6 +116,19 @@ export async function resolveMcpGrantWithPolicy(
   return authorityFrom(grant, now);
 }
 
+/**
+ * How a change made through an assistant is named on timelines, in Jira and in chat. The
+ * assistant name is self-declared at registration, so markup and mention characters are removed
+ * and it is kept short.
+ */
+export function mcpActorLabel(userName: string | null | undefined, clientName: string | null) {
+  const assistant = (clientName ?? '')
+    .replace(/[\p{Cc}*_~`<>@|[\]]/gu, '')
+    .trim()
+    .slice(0, 40);
+  return `${userName?.trim() || 'A user'} via ${assistant || 'an assistant'} (AI)`;
+}
+
 function authorityFrom(
   grant: GrantAuthoritySnapshot | undefined,
   now: Date
@@ -138,7 +153,7 @@ function authorityFrom(
       actor: { ...base, apiKey: { id, scopes } },
       apiKey: {
         id,
-        name: 'MCP',
+        name: mcpActorLabel(grant.userName, grant.clientName),
         prefix: 'mcp',
         tokenHash: '',
         userId: grant.userId,

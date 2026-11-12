@@ -511,7 +511,8 @@ async function executeMcpOperation(
           });
         }
       }
-    }
+    },
+    `mcp:${resolved.clientId}`
   );
   // A route that mutates without the shared idempotency path would skip the approval recheck.
   // A replayed receipt was checked in its own lookup; anything else must pass the mutation hook.
