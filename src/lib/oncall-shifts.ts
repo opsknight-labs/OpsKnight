@@ -15,6 +15,8 @@ export interface DynamicOnCallShift {
     emailNotificationsEnabled?: boolean;
   };
   scheduleId: string;
+  /** Winning layer of the effective block. Set by window reads only. */
+  layerId?: string;
   schedule: {
     id: string;
     name: string;
@@ -325,6 +327,7 @@ export async function getWindowOnCallShifts(
           emailNotificationsEnabled: block.userEmailNotificationsEnabled,
         },
         scheduleId: schedule.id,
+        layerId: block.layerId,
         schedule: {
           id: schedule.id,
           name: schedule.name,

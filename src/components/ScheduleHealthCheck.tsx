@@ -4,12 +4,7 @@ import { useMemo } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, CalendarX, Users, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import {
-  addDaysToDateKey,
-  formatDateKeyInTimeZone,
-  startOfDayFromDateKey,
-  startOfNextDayFromDateKey,
-} from '@/lib/timezone';
+import { findCoverageGapDays } from '@/lib/oncall-load/coverage';
 
 type ScheduleHealthCheckProps = {
   layers: Array<{
@@ -133,31 +128,7 @@ export default function ScheduleHealthCheck({
     }
 
     // Check 4: Coverage gaps in next 7 days
-    const todayKey = formatDateKeyInTimeZone(now, timeZone || 'UTC');
-    const hasGap = Array.from({ length: 7 }, (_, index) => addDaysToDateKey(todayKey, index)).some(
-      dateKey => {
-        const dayStart = startOfDayFromDateKey(dateKey, timeZone || 'UTC').getTime();
-        const dayEnd = startOfNextDayFromDateKey(dateKey, timeZone || 'UTC').getTime();
-        const intervals = shifts
-          .map(
-            shift =>
-              [
-                Math.max(new Date(shift.start).getTime(), dayStart),
-                Math.min(new Date(shift.end).getTime(), dayEnd),
-              ] as const
-          )
-          .filter(([start, end]) => start < end)
-          .sort((a, b) => a[0] - b[0]);
-
-        let coveredUntil = dayStart;
-        for (const [start, end] of intervals) {
-          if (start > coveredUntil) return true;
-          coveredUntil = Math.max(coveredUntil, end);
-          if (coveredUntil >= dayEnd) return false;
-        }
-        return coveredUntil < dayEnd;
-      }
-    );
+    const hasGap = findCoverageGapDays(shifts, timeZone, now, 7).length > 0;
 
     if (hasGap) {
       problems.push({
