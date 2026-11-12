@@ -60,6 +60,7 @@ import {
   registerMcpClient,
   restoreMcpClient,
   revokeAllMcpConnections,
+  revokeMyMcpConnections,
   revokeMcpAccess,
   testMcpConnection,
   updateMcpPolicy,
@@ -453,6 +454,7 @@ export default async function McpSettings({
             describeScope={describeMcpScope}
             revokeAction={revokeMcpAccess}
             revokeAllAction={revokeAllMcpConnections}
+            revokeMineAction={revokeMyMcpConnections}
             activityAction={loadMcpConnectionActivity}
           />
         );
