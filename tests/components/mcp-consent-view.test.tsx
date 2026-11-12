@@ -199,4 +199,22 @@ describe('assistant logos', () => {
     rerender(<AssistantIcon name="Anything" verifiedHost="claude.ai" />);
     expect(container.querySelector('[aria-label="Anthropic Claude logo"]')).toBeTruthy();
   });
+
+  it('shows the full return address and how long the connection lasts', () => {
+    render(
+      <ConsentView
+        {...base}
+        returnHost="localhost:51505"
+        returnAddress="http://localhost:51505/oauth/callback"
+        idleDays={30}
+        identity={{ kind: 'registered' }}
+      />
+    );
+    expect(screen.getByTestId('mcp-consent-identity')).toHaveTextContent(
+      'http://localhost:51505/oauth/callback'
+    );
+    expect(screen.getByTestId('mcp-consent-duration')).toHaveTextContent(
+      'goes unused for 30 days, or 90 days pass'
+    );
+  });
 });

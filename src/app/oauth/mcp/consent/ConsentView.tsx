@@ -1,3 +1,4 @@
+import { MCP_ABSOLUTE_SESSION_DAYS } from '@/lib/mcp/auth/session-lifetime';
 import AuthBrand from '@/components/auth/AuthBrand';
 import { AlertTriangle, BadgeCheck, Info, ShieldAlert } from 'lucide-react';
 import type { McpConsentGroup } from '@/lib/mcp/auth/consent-offer';
@@ -20,6 +21,10 @@ type Props = {
   hasUnavailable: boolean;
   /** Where the browser returns after a decision; null for a device sign-in, which has none. */
   returnHost: string | null;
+  /** The full address the browser returns to (no query), shown so the user can check it. */
+  returnAddress?: string | null;
+  /** Days without use after which the connection ends; shown with the fixed overall limit. */
+  idleDays?: number;
   /** How OpsKnight knows who this assistant is. */
   identity: McpConsentIdentity;
   /**
@@ -57,6 +62,8 @@ export default function ConsentView({
   groups,
   hasUnavailable,
   returnHost,
+  returnAddress = null,
+  idleDays,
   identity,
   redirectWarning,
   writesEnabled,
@@ -111,7 +118,7 @@ export default function ConsentView({
                 <span>
                   Returns to{' '}
                   <code className="rounded bg-slate-100 px-1 py-px font-mono text-[12px] [overflow-wrap:anywhere] text-slate-900 dark:bg-slate-800 dark:text-slate-100">
-                    {returnHost}
+                    {returnAddress ?? returnHost}
                   </code>
                 </span>
               ) : (
@@ -192,6 +199,15 @@ export default function ConsentView({
               <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{MCP_CONSENT_WRITES_OFF_NOTE}</span>
             </div>
+          )}
+          {idleDays !== undefined && (
+            <p
+              data-testid="mcp-consent-duration"
+              className="text-xs text-slate-500 dark:text-slate-400"
+            >
+              Stays connected until you disconnect it in Settings, it goes unused for {idleDays}{' '}
+              {idleDays === 1 ? 'day' : 'days'}, or {MCP_ABSOLUTE_SESSION_DAYS} days pass.
+            </p>
           )}
           {previousConnection && (
             <p className="text-xs text-slate-500 dark:text-slate-400">
