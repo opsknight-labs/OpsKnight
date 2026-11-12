@@ -6,6 +6,7 @@ import {
   RollbackForm,
 } from '@/components/settings/IntelligenceSettingsForms';
 import CorrelationRulesEditor from '@/components/settings/CorrelationRulesEditor';
+import OpsInsightsSettingsForm from '@/components/settings/OpsInsightsSettingsForm';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
@@ -139,6 +140,13 @@ export default async function IntelligenceSettingsPage() {
         description="Master switch, worker budgets and retention. Changes apply within seconds."
       >
         <IntelligenceSettingsForm settings={settings} canManage={canManage} />
+      </SettingsSection>
+
+      <SettingsSection
+        title="Operations insights"
+        description="Suggestions about service automation, escalation policies, on-call schedules, postmortems, runbooks and notifications. Off by default."
+      >
+        <OpsInsightsSettingsForm settings={settings} canManage={canManage} />
       </SettingsSection>
 
       <SettingsSection

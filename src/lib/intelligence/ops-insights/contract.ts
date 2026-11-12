@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- Keys are members of the fixed area map. */
 import { z } from 'zod/v4';
 
 /**

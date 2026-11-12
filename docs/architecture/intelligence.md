@@ -1039,3 +1039,152 @@ warnings distinguish actual pending work, exhausted allocations, failed sends an
 uncertain actions remain owner-only and are never automatically resumed or retried. Metric replica
 aggregation uses `max` because these are shared-database snapshots. Production alert calibration is
 still an external certification gate.
+
+## Operations insights
+
+Operations insights (Workstream J) are what deterministic code notices about one **scope**: a service, an
+escalation policy, an on-call schedule, a runbook, a person or a team. They are computed in the
+intelligence lane, stored, and only ever read by pages. They suggest; a person acts through the feature's
+own editor. Nothing here runs on `processEvent`, the escalation worker or notification dispatch, and no
+model is called (`tests/architecture/intelligence-boundaries.test.ts` asserts all three).
+
+Everything is off after upgrade. `IntelligenceSettings.opsInsightsEnabled` is the master switch and each
+area has its own (`opsInsightsAutomationEnabled`, `…EscalationEnabled`, `…OnCallEnabled`,
+`…PostmortemsEnabled`, `…RunbooksEnabled`, `…NotificationsEnabled`). They are saved through
+`updateOpsInsightSwitches`, which goes through `updateIntelligenceSettings` (revision check and audit).
+The general settings form does not carry these switches, and a save that omits them leaves them unchanged.
+The lane itself still needs Intelligence to be enabled.
+
+### Storage
+
+| Table | Purpose |
+| --- | --- |
+| `OpsInsight` | One insight. Unique on `(scopeType, scopeId, kind, key)`, so recomputation updates a row. Holds `area`, `severity` (`INFO` < `WARNING` < `CRITICAL`), `title`, `summary`, `evidence` (JSON, at most 4 KB: up to 12 facts, 5 examples, a window), optional `draftHref` (in-app path), `inputHash`, `status` (`OPEN`, `ACCEPTED`, `DISMISSED`, `RESOLVED`), `generation`, first/last seen, who decided. |
+| `OpsInsightScopeState` | Per scope: the hash of the producers' inputs and when the scope was last computed. |
+| `MetricRollup` (existing) | Daily operations rollups, with the new nullable `subjectKey` column and `idx_metric_rollup_subject (name, subjectKey, bucket)`. |
+
+Status rules (`ops-insights/store.ts`, `upsertInsights`): a produced insight keeps a person's decision
+(`ACCEPTED` and `DISMISSED` are sticky while it is still produced); an open or accepted insight that is no
+longer produced becomes `RESOLVED`; a resolved insight that comes back is `OPEN` again. Writes are fenced on
+the work item's generation. Retention (`purgeOpsInsights`, part of the intelligence retention sweep)
+removes resolved and dismissed insights older than the finding retention, and insights, scope state and
+per-person page counts whose scope row no longer exists.
+
+### Lane job
+
+`WORK_KINDS.OPS_INSIGHTS` (priority 60, the lowest) has one work item per scope, subject
+`SCOPE_TYPE:scopeId`. `runOpsInsights` runs every active producer of that scope in one `withDbBudget`
+transaction:
+
+1. confirm the scope row exists (otherwise delete its insights and state);
+2. call each producer's `loadInput`, hash all inputs with their kinds and versions;
+3. if the hash equals `OpsInsightScopeState.inputHash`, stamp `computedAt` and stop: nothing is derived or
+   written;
+4. otherwise call each `derive`, `upsertInsights` per kind, resolve kinds that are no longer active, and
+   store the new hash.
+
+Scheduling: once per lane cycle `scheduleOpsInsightsWork` returns immediately unless 15 minutes have
+passed; then, for each scope type that has an active producer, it reads up to 200 scopes that were never
+computed or were computed more than a day ago (`dueOpsInsightScopesSql`, a primary-key anti-join) and
+enqueues them at a random moment inside the next 15 minutes. That is about 19,000 scopes per type per day.
+`enqueueOpsInsights(scope)` enqueues a scope immediately after a relevant edit; it costs one settings read
+and one upsert, queues nothing while the feature is off, and must only be called from edit paths.
+
+### Producer contract
+
+A kind is one file under `src/lib/intelligence/ops-insights/producers/` exporting an
+`OpsInsightProducer`, plus one line in `producers/index.ts`:
+
+```ts
+export interface OpsInsightProducer<Input> {
+  kind: string; // stable and namespaced, e.g. 'integration.health'
+  version: number; // bump when derive changes its answer for the same input
+  area: OpsInsightArea; // which switch turns it on
+  scopeType: OpsInsightScopeType; // SERVICE | POLICY | SCHEDULE | RUNBOOK | USER | TEAM
+  loadInput(scope, ctx: { tx; now }): Promise<Input | null>;
+  derive(input: Input): OpsInsightItem[];
+}
+```
+
+Rules:
+
+- `loadInput` is the only half that touches the database. Use `ctx.tx` (statement and lock timeouts already
+  apply), a fixed number of statements, every one index-backed and capped by `LIMIT` or reading a rollup.
+  Never one query per row. Return a small JSON summary, or `null` when there is nothing to judge.
+- Everything `derive` depends on must be in that summary, including time. Express ages as coarse numbers
+  (whole hours or days, capped), because unchanged summaries are skipped.
+- `derive` is pure: no clock, no database, no model, no network. This is what the unit tests exercise.
+- Each item has a `key` (unique within the kind and scope), a severity, a title of at most 140 characters,
+  a summary of at most 400, and evidence. Items that break the contract are dropped, as are items beyond 25
+  per kind (highest severity kept).
+- `draftHref`, if set, is an in-app path to a pre-filled editor or draft. A producer never writes, publishes
+  or notifies.
+- Export the SQL as a function when it is not trivial, and add it to
+  `tests/load/intelligence-query-plans.ts`.
+
+#### Worked example: integration health
+
+`producers/integration-health.ts` (scope `SERVICE`, area `automation`) answers three questions from the
+alerts a service already stored:
+
+| Key | Fires when | Severity |
+| --- | --- | --- |
+| `silent` | The service sent at least 7 alerts in the week before its last one, and has now been quiet for a day or three of its usual gaps, whichever is longer. Stops after 30 days (probably retired). | `WARNING` |
+| `volume-step` | The last 24 hours hold at least 50 alerts and three times the daily average of the 7 days before (needs 35 alerts in that week), or a quarter of it or less (needs 140). Not judged when a count hit its 20,000 cap. | `WARNING` up, `INFO` down |
+| `missing-severity` | Half or more of the last 200 alerts (at least 20) have no severity. | `WARNING` at 90%, else `INFO` |
+
+`loadInput` is two statements, every arm on `idx_alert_by_service (serviceId, createdAt)` with a `LIMIT`, so
+a service with millions of alerts costs the same as a small one. It returns
+`{ silentDays, silentHours, weekBeforeLastAlert, last24h, priorWeek, capped, recentSampled,
+recentMissingSeverity }`; `silentHours` is exact for the first three days and whole days afterwards.
+`derive` turns that into the items above, each with its facts and a `draftHref` to the service's
+integrations page. Tests: `tests/lib/intelligence/ops-insights.test.ts` (pure half) and
+`tests/integration/intelligence/ops-insights.test.ts` (fixtures with known answers).
+
+### Reading and deciding
+
+`ops-insights/view.ts`:
+
+- `listInsightsForScope(actor, scope, { limit, includeDecided })`: one scope, most severe first, at most 50.
+- `countOpenInsightsForScopes(actor, type, ids)`: a list page's badges: one grouped query on the unique
+  index plus one primary-key visibility query, at most 200 ids, absent when zero.
+- `listInsightsInbox(actor, { limit, cursor })`: the cross-area inbox, keyset-paged on
+  `idx_ops_insight_inbox`, with the scope's name and link.
+
+Every reader returns nothing while the feature or the area is off, and filters through the product's own
+read filters (`serviceReadWhere`, `scheduleReadWhere`, `runbookReadWhere`, `teamReadWhere`, the escalation
+policy read rule). A `USER`-scoped insight is visible to that person, an owner of a team they belong to and
+administrators, and to nobody else.
+
+`decideInsight(actor, { id, decision })` records accept, dismiss or reopen. It needs
+`intelligence.feedback`, shares the feedback rate limit, reports an insight the actor cannot see as "not
+found", is a compare-and-set against the lane, and writes an audit entry
+(`intelligence.ops_insight.accept|dismiss|reopen`) in the same transaction. Accepting changes only the
+insight.
+
+### Rollups
+
+`src/lib/metric-rollup.ts` adds daily operations rollups in `MetricRollup`, run by the existing daily
+rollup step of the cron scheduler (`generateOpsRollups`; a no-op while operations insights are off):
+
+| Name | `subjectKey` | `tags` | `count` / `sum` | Driven by |
+| --- | --- | --- | --- | --- |
+| `ops.pages.user_hour` | user id | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents | `idx_notification_created_cursor` |
+| `ops.runbook.outcome` | runbook id | `status` | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new) |
+| `ops.automation.rule_match` | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode` | decisions / fallbacks | `IncidentAutomationDecision (serviceId, createdAt)` |
+| `ops.escalation.step_outcome` | policy id | `step`, `outcome` | attempts / seconds to acknowledge | Named and shaped only; its source arrives with the escalation capture slice. |
+
+Each rollup advances one complete UTC day per transaction from its own watermark row
+(`<name>.watermark`), deleting and rewriting the day with the watermark so a crash or a second scheduler
+cannot double-count. A first run starts 30 days back; at most 31 days are computed per run. Rows never set
+`serviceId`, because incident enrichment reads `MetricRollup` by service. `queryOpsRollup` is the bounded
+reader. Query plans are asserted in `tests/integration/intelligence/ops-rollups.test.ts` and recorded by
+the load gate `tests/load/intelligence-query-plans.ts`.
+
+### UI kit
+
+`src/components/intelligence/insights/`: `InsightBadge` (count and highest severity for a list row),
+`InsightStrip` (one line for a tab header), `InsightsPanel` (the list, with an evidence popover, accept and
+dismiss, an optional "Create draft" link and "Ask Squire about this", which only hands a question to the
+assistant) and `InsightsInboxSection` (the "Needs attention" section on `/intelligence`). All render
+nothing when there is nothing to say. Only `InsightActions` is client code.

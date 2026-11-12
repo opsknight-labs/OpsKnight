@@ -1220,6 +1220,7 @@ export async function generateOpsRollups(
   for (const [name, source] of Object.entries(OPS_ROLLUP_SOURCES) as Array<
     [OpsRollupName, OpsRollupSource]
   >) {
+    // eslint-disable-next-line security/detect-object-injection -- name is a key of the fixed rollup map
     done[name] = 0;
     for (let run = 0; run < maxDays; run += 1) {
       const advanced = await prisma.$transaction(
@@ -1263,6 +1264,7 @@ export async function generateOpsRollups(
         { maxWait: 10000, timeout: 30000 }
       );
       if (!advanced) break;
+      // eslint-disable-next-line security/detect-object-injection -- name is a key of the fixed rollup map
       done[name] = (done[name] ?? 0) + 1;
     }
   }

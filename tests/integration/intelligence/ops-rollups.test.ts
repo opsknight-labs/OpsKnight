@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection, security/detect-non-literal-regexp -- Rollup and table names are constants of this test. */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Prisma } from '@prisma/client';
 import {

@@ -1,4 +1,5 @@
 import 'server-only';
+/* eslint-disable security/detect-object-injection -- Indexes of a parallel array built in the same function. */
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { dbNow, withDbBudget } from '../jobs/db-budget';

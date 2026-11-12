@@ -257,6 +257,51 @@ describe('intelligence architecture boundaries', () => {
     ]);
   });
 
+  it('keeps operations insights suggest-only: producers only read, and the module writes only its own tables', () => {
+    const dir = join(intelligenceDir, 'ops-insights');
+    const files = sourceFiles(dir);
+    expect(files.length).toBeGreaterThan(0);
+    const delegates = files.flatMap(file =>
+      [
+        ...read(file).matchAll(
+          /\b(?:tx|prisma|client)\.(\w+)\s*\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+        ),
+      ].map(match => match[1])
+    );
+    expect([...new Set(delegates)].sort()).toEqual(['opsInsight', 'opsInsightScopeState']);
+    for (const file of files) {
+      const source = read(file);
+      const name = relative(root, file);
+      // No model, no network, no notification and no incident or timeline change from an insight.
+      expect(source, name).not.toMatch(
+        /\/ai\/gateway|\bfetch\(|notification-control-plane|sendNotification|@\/lib\/incidents\//
+      );
+      // Raw writes exist only in the store (its own tables and its own rollup rows).
+      if (!name.endsWith('ops-insights/store.ts')) expect(source, name).not.toMatch(/\$executeRaw/);
+    }
+    // A producer is a reader: bounded SELECTs and a pure derive.
+    for (const file of sourceFiles(join(dir, 'producers'))) {
+      const source = read(file);
+      expect(source, relative(root, file)).not.toMatch(
+        /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\b(?:INSERT|UPDATE|DELETE)\b/
+      );
+    }
+    // Ingestion, escalation and notification dispatch never reach into operations insights.
+    for (const hot of [
+      'src/lib/events.ts',
+      'src/lib/escalation',
+      'src/lib/notification-control-plane.ts',
+      'src/lib/notification-noise-controller.ts',
+    ]) {
+      const path = join(root, hot);
+      // Test-owned paths are rooted under this checkout.
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      const sources = hot.endsWith('.ts') ? (existsSync(path) ? [path] : []) : sourceFiles(path);
+      for (const file of sources)
+        expect(read(file), relative(root, file)).not.toMatch(/ops-insights|generateOpsRollups/);
+    }
+  });
+
   it('keeps Squire knowledge tools read-only and every outbound call on the gateway', () => {
     const tools = read(join(intelligenceDir, 'squire/tools-knowledge.ts'));
     expect(tools).not.toMatch(/PROPOSE_WRITE|fetch\(/);
@@ -566,7 +611,7 @@ describe('intelligence data model contracts', () => {
     const schema = read(join(root, 'prisma/schema.prisma'));
     const tables = [
       ...schema.matchAll(
-        /^model ((?:Intelligence|Correlation|IncidentFingerprint|AlertFingerprint|DependencyObservation|IncidentEmbedding|IncidentRelationship|ServiceDependency|ChangeEvent|Squire|Knowledge)\w*) \{/gm
+        /^model ((?:Intelligence|Correlation|IncidentFingerprint|AlertFingerprint|DependencyObservation|IncidentEmbedding|IncidentRelationship|ServiceDependency|ChangeEvent|Squire|Knowledge|OpsInsight)\w*) \{/gm
       ),
     ].map(match => match[1]);
     expect(tables.length).toBeGreaterThan(10);

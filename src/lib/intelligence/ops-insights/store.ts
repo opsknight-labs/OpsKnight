@@ -1,6 +1,8 @@
 import 'server-only';
+/* eslint-disable security/detect-object-injection -- Scope types are a closed union mapped to fixed table names. */
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { OPS_ROLLUPS } from '@/lib/metric-rollup';
 import { stableAnalysisHash } from '../jobs/input-hash';
 import {
   OPS_INSIGHT_LIMITS,
@@ -157,5 +159,12 @@ export async function purgeOpsInsights(
         SELECT orphan."scopeType", orphan."scopeId" FROM "OpsInsightScopeState" orphan
         WHERE orphan."scopeType" = ${type}::"OpsInsightScopeType" AND ${gone} LIMIT ${options.limit})`);
   }
+  // Page counts per person are personal data: they go with the person.
+  deleted += await client.$executeRaw(Prisma.sql`
+    DELETE FROM "MetricRollup" WHERE "id" IN (
+      SELECT rollup."id" FROM "MetricRollup" rollup
+      WHERE rollup."name" = ${OPS_ROLLUPS.pagesPerUserHour}
+        AND NOT EXISTS (SELECT 1 FROM "User" person WHERE person."id" = rollup."subjectKey")
+      LIMIT ${options.limit})`);
   return deleted;
 }

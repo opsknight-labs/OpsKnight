@@ -232,3 +232,35 @@ domains:
         current: cascades-with-source-incident-note-postmortem-runbook-or-service-approver-cleared-on-user-erasure,
         target: free-text-minimization,
       }
+
+  - domain: operations-insights
+    data:
+      [
+        derived-insights-about-services-policies-schedules-runbooks-teams-and-people,
+        short-evidence-facts-and-counts,
+        ids-of-people-who-accepted-or-dismissed-an-insight,
+        daily-page-counts-per-person-and-local-hour,
+        daily-runbook-outcome-and-automation-rule-match-counts,
+      ]
+    purpose:
+      [
+        suggestions-a-person-reviews-and-applies-through-the-existing-editors,
+        on-call-load-and-notification-noise-shown-to-the-person-their-team-lead-and-administrators,
+      ]
+    storage: [postgresql]
+    recipients:
+      [
+        authorized-workspace-users-limited-to-records-they-can-read,
+        person-scoped-insights-limited-to-the-person-their-team-owner-and-administrators,
+      ]
+    retention:
+      {
+        current: off-by-default-recomputed-daily-resolved-and-dismissed-follow-finding-retention-rollups-follow-metrics-retention,
+        target: erasure-in-the-same-transaction-as-the-user,
+      }
+    exportable: partial
+    deletion:
+      {
+        current: person-scoped-insights-and-page-counts-removed-by-the-bounded-retention-sweep-after-user-deletion-decider-cleared-on-user-erasure,
+        target: erasure-in-the-same-transaction-as-the-user,
+      }

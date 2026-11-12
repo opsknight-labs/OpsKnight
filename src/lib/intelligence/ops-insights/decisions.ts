@@ -1,4 +1,5 @@
 import 'server-only';
+/* eslint-disable security/detect-object-injection -- The decision is validated against the closed union first. */
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';

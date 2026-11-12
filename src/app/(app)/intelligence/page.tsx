@@ -10,6 +10,7 @@ import {
 } from '@/lib/intelligence/overview';
 import WindowSelector from '@/components/intelligence/overview/WindowSelector';
 import { FeatureOff, SectionSkeleton } from '@/components/intelligence/overview/primitives';
+import InsightsInboxSection from '@/components/intelligence/insights/InsightsInboxSection';
 import {
   ChangeSection,
   HealthSection,
@@ -75,6 +76,11 @@ export default async function IntelligenceOverviewPage({
           canManage={canManage}
         />
       )}
+
+      {/* Operations insights: renders nothing while the feature is off or there is nothing to say. */}
+      <Suspense fallback={null}>
+        <InsightsInboxSection actor={actor} />
+      </Suspense>
 
       <div className="grid gap-4 lg:grid-cols-2" key={range.key}>
         <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.noise} tiles={6} />}>

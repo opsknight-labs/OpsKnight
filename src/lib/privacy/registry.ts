@@ -474,4 +474,30 @@ export const personalDataRegistry = [
       'Search never decides visibility from the index: every passage is re-checked against its source (incident, postmortem, runbook or service) through the reader’s own permissions before it is shown or sent to a model. With an embedding provider configured (one allowed to receive Personal data), chunk text is sent to it and the vectors are stored with the chunk. Proactive AI text is generated under a background identity from the incident’s own facts and same-service references, and is shown only to viewers who may read every record the model saw.',
     ],
   },
+  {
+    domain: 'operations-insights',
+    models: ['OpsInsight', 'OpsInsightScopeState', 'MetricRollup'],
+    fields: [
+      'OpsInsight.scopeId',
+      'OpsInsight.evidence',
+      'OpsInsight.decidedById',
+      'MetricRollup.subjectKey',
+    ],
+    purpose: [
+      'Suggestions about service automation, escalation policies, on-call schedules, postmortems, runbooks and notifications, for a person to review',
+      'Daily page counts per person and local hour, so on-call load and notification noise can be shown to that person, their team lead and administrators',
+      'Recording who accepted or dismissed a suggestion',
+    ],
+    classifications: ['INTERNAL', 'PERSONAL'],
+    locations: ['DATABASE'],
+    retention: {
+      current:
+        'Off by default. Insights are derived counts and short facts, recomputed daily and never sent to an external provider. Resolved and dismissed insights follow the finding retention; insights about a person, and that person\'s daily page counts, are deleted in the bounded retention sweep once the person is deleted, and the decider is a foreign key cleared on user erasure. Daily rollups follow the metrics retention.',
+      target: 'Erasure of person-scoped insights and page counts in the same transaction as the user.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'An insight about a person (scope USER) is visible only to that person, an owner of a team they belong to, and administrators. Insights about services, schedules, runbooks, teams and policies follow the reader\'s existing read permissions for that record.',
+    ],
+  },
 ] as const satisfies readonly PersonalDataDomain[];
