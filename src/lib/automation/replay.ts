@@ -5,6 +5,7 @@ import { extractContextWithProvenance } from './context/extract';
 import { compareAutomationOutcomes } from './comparison';
 import { LIMITS, type CompiledSnapshot, type Route } from './contract';
 import { evaluateAutomation, type Evaluation } from './evaluator';
+import { evaluateConditions } from './evaluator/conditions';
 
 export const REPLAY_MAX_EVENTS = 20_000;
 export const REPLAY_MIN_DAYS = 7;
@@ -51,8 +52,17 @@ export type ReplaySummary = {
   unmappedFields: Record<string, number>;
   tagged: number;
   tags: Array<{ tag: string; count: number }>;
-  /** Every enabled rule in order; `matched: 0` is a rule that never matched. */
-  rules: Array<{ ruleId: string; name: string; phase: 'ENRICH' | 'ROUTE'; matched: number }>;
+  /**
+   * Every enabled rule in order; `matched: 0` is a rule that never matched. `shadowed` counts events a
+   * route rule's conditions held for but an earlier route rule had already decided.
+   */
+  rules: Array<{
+    ruleId: string;
+    name: string;
+    phase: 'ENRICH' | 'ROUTE';
+    matched: number;
+    shadowed: number;
+  }>;
   transitions: Array<{ from: Destination; to: Destination; count: number }>;
   priorityTransitions: Array<{ from: string | null; to: string | null; count: number }>;
   evaluationMs: { p50: number; p99: number; max: number };
@@ -132,7 +142,14 @@ export function createReplayAccumulator(
 ) {
   const rules = compiled.rules
     .filter(rule => rule.enabled)
-    .map(rule => ({ ruleId: rule.id, name: rule.name, phase: rule.phase, matched: 0 }));
+    .map(rule => ({
+      ruleId: rule.id,
+      name: rule.name,
+      phase: rule.phase,
+      matched: 0,
+      shadowed: 0,
+    }));
+  const routeRules = compiled.rules.filter(rule => rule.enabled && rule.phase === 'ROUTE');
   const ruleIndex = new Map(rules.map(rule => [rule.ruleId, rule]));
   const transitions = new Map<string, number>();
   const priorityTransitions = new Map<string, number>();
@@ -171,6 +188,15 @@ export function createReplayAccumulator(
           if (entry) entry.matched += 1;
         }
         if (!result.matchedRule) summary.defaultRouted += 1;
+        else {
+          // Routing stops at the first match, so later rules are checked here, outside the timed path.
+          const winner = routeRules.findIndex(rule => rule.id === result.matchedRule?.id);
+          for (const rule of routeRules.slice(winner + 1)) {
+            const entry = ruleIndex.get(rule.id);
+            if (entry && evaluateConditions(result.enrichedContext, rule).result === 'TRUE')
+              entry.shadowed += 1;
+          }
+        }
         if (result.tags.length) summary.tagged += 1;
         for (const tag of result.tags) bump(tags, tag);
       }

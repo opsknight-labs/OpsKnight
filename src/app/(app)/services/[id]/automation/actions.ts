@@ -28,6 +28,11 @@ import {
 } from '@/lib/automation/authoring';
 import { automationSimulationEventSchema as eventSchema } from '@/lib/automation/authoring-contract';
 import { readAutomationVersion } from '@/lib/automation/history';
+import {
+  automationReplayRequestSchema,
+  getAutomationReplay,
+  startAutomationReplay,
+} from '@/lib/automation/replay-run';
 import { hasCapability } from '@/lib/authorization';
 import { normalizeValue } from '@/lib/automation/context/normalize';
 const id = z.string().min(1).max(100);
@@ -91,6 +96,11 @@ const actionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('discover'), serviceId: id, sample: z.unknown() }).strict(),
   z.object({ action: z.literal('discoverRecent'), serviceId: id }).strict(),
   z
+    .object({ action: z.literal('replay'), serviceId: id })
+    .merge(automationReplayRequestSchema)
+    .strict(),
+  z.object({ action: z.literal('replayStatus'), serviceId: id, runId: id }).strict(),
+  z
     .object({
       action: z.literal('test'),
       serviceId: id,
@@ -129,6 +139,18 @@ export async function automationAction(raw: unknown) {
       return { ok: true as const, data: await discardCandidate({ ...input, actorId: user.id }) };
     if (input.action === 'mode')
       return { ok: true as const, data: await changeMode({ ...input, actorId: user.id }) };
+    if (input.action === 'replay')
+      return {
+        ok: true as const,
+        data: await prisma.$transaction(tx =>
+          startAutomationReplay(tx, { ...input, actorId: user.id })
+        ),
+      };
+    if (input.action === 'replayStatus') {
+      const replay = await getAutomationReplay(prisma, input.serviceId, input.runId);
+      if (!replay) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+      return { ok: true as const, data: replay };
+    }
     if (input.action === 'lint')
       return {
         ok: true as const,

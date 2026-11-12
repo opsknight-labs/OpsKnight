@@ -75,10 +75,16 @@ export const jobSchema = z.discriminatedUnion('task', [
   z
     .object({ task: z.literal('AUTOMATION_RETENTION'), cutoff: z.string().datetime().optional() })
     .strict(),
+  z.object({ task: z.literal('AUTOMATION_REPLAY'), runId: z.string().min(1).max(64) }).strict(),
 ]);
 export type ObservationJob = Extract<z.infer<typeof jobSchema>, { task: 'AUTOMATION_OBSERVE' }>;
 export async function processAutomationJob(payload: unknown, workerJobId?: string) {
   const job = jobSchema.parse(payload);
+  if (job.task === 'AUTOMATION_REPLAY') {
+    // Loaded on demand: the replay pulls in the evaluator and classification, which other tasks never need.
+    await (await import('./replay-run')).processAutomationReplay(job.runId);
+    return;
+  }
   if (job.task === 'AUTOMATION_PRIVACY_CLEANUP') {
     await processPrivacyCleanup(job, workerJobId);
     return;
