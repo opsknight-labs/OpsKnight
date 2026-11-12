@@ -332,8 +332,9 @@ function resourceIdFromPath(rulePattern: string, path: string): string | undefin
   return index >= 0 ? segments.at(index) : undefined;
 }
 
-export async function explainAccessForCurrentPath(): Promise<AccessExplanation> {
-  const path = await currentPathname();
+/** Explains access for `path` for the signed-in person (used by the 403 page). */
+export async function explainAccessForPath(rawPath: string): Promise<AccessExplanation> {
+  const path = rawPath.startsWith('/') && !rawPath.startsWith('//') ? rawPath.slice(0, 500) : '/';
   const snapshot = await getAccessSnapshot();
   const rule = resolvePageAccess(path);
   const pageAllowed = snapshot ? ruleAllows(rule, snapshot.capabilities) : false;

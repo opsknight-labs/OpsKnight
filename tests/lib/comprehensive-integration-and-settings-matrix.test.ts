@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- legacy cross-module matrix; mocks intentionally loosely typed */
 import { describe, it, expect } from 'vitest';
 import crypto from 'crypto';
 

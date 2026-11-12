@@ -34,7 +34,7 @@ verification:
     - src/lib/access/grants.ts
     - src/lib/access/admin.ts
     - src/lib/teams/administration.ts
-    - prisma/migrations/20261112000100_access_control_overhaul/migration.sql
+    - prisma/migrations/20261112000200_access_control_overhaul/migration.sql
 ---
 
 # Roles, permissions and access requests

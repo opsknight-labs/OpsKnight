@@ -5,6 +5,8 @@ import { isAppRole } from '@/lib/authorization';
 import {
   AUTHORIZATION_ACTIONS,
   authorize,
+  incidentOperatorRelation,
+  isIncidentOperatorAction,
   type AuthorizationActor,
   type AuthorizationResource,
 } from '@/lib/authorization-policy';
@@ -21,7 +23,6 @@ import { normalizeIncidentPriority } from '@/lib/incidents/priority';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { effectiveAccessSelect } from '@/lib/access/effective';
 import { isPagedForIncident } from '@/lib/access/incident-relations';
-import { incidentOperatorRelation, isIncidentOperatorAction } from '@/lib/authorization-policy';
 
 export type ChatOpsLifecycleCommand = Extract<
   IncidentLifecycleCommand,

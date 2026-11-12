@@ -9,10 +9,7 @@ import {
   AuthorizationError,
   CAPABILITIES,
   capabilitiesOf,
-  getRoleCapabilities,
-  hasCapability,
   isAppRole,
-  type AppRole,
   type Capability,
 } from '@/lib/authorization';
 import { resolveUserActor } from '@/lib/authorization-actors';
