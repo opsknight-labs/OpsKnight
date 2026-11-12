@@ -53,6 +53,7 @@ import {
   KNOWLEDGE_SOURCES,
   acknowledgeMcpIncidents,
   fetchMcpKnowledge,
+  fitKnowledgeResult,
   getMcpIncidentContext,
   getMcpOncallForService,
   getMcpServiceChanges,
@@ -220,6 +221,7 @@ const KNOWLEDGE_OUTPUT = {
         },
       },
       untrusted: { type: 'string' },
+      note: { type: 'string' },
     },
   }),
   fetch: fromJsonSchema({
@@ -1101,11 +1103,14 @@ export function createOpsKnightMcpServer(
     });
     const knowledgeTool = async (tool: string, callback: () => Promise<unknown>) => {
       try {
-        const result = knowledgeResult(await callback());
-        if (
-          Buffer.byteLength(JSON.stringify(result)) >
-          context.budget.maxBytes - RESULT_ENVELOPE_RESERVE
-        )
+        const fits = (value: unknown) =>
+          Buffer.byteLength(JSON.stringify(knowledgeResult(value))) <=
+          context.budget.maxBytes - RESULT_ENVELOPE_RESERVE;
+        const result = knowledgeResult(
+          fitKnowledgeResult((await callback()) as Record<string, unknown>, fits)
+        );
+        // Only something fitKnowledgeResult cannot shrink gets here.
+        if (!fits(result.structuredContent))
           throw new McpBoundaryError('MCP_RESULT_BUDGET_EXCEEDED', 413);
         return result;
       } catch (error) {
