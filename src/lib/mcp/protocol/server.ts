@@ -11,6 +11,7 @@ import {
   type StandardSchemaWithJSON,
 } from '@modelcontextprotocol/server';
 import { COMPLETION_SOURCES, completeAuthorizedIds, type CompletionSource } from './completion';
+import { listAuthorizedResources, oneLineLabel } from './resource-list';
 import { z } from 'zod/v4';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import {
@@ -688,6 +689,8 @@ export function createOpsKnightMcpServer(
       requestState: { verify: reviewState.verify },
       // Advertised because subscriptions/listen is served by the route with authorized URIs only.
       capabilities: {
+        // listChanged stays false: resources/list is a live recent-rows sample, re-read on demand;
+        // the stateless server keeps no session to announce a changed list to.
         resources: { subscribe: true, listChanged: false },
         tools: { listChanged: true },
         // Served by the route (tasks/get, tasks/update, tasks/cancel); used only when a request opts in.
@@ -1394,7 +1397,7 @@ export function createOpsKnightMcpServer(
     server.registerResource(
       domain,
       new ResourceTemplate(`opsknight://${domain}/{id}`, {
-        list: undefined,
+        list: canList(domain) ? () => listAuthorizedResources(context, domain) : undefined,
         complete: { id: completeIds(domain) },
       }),
       {
@@ -1675,8 +1678,7 @@ function listLinks(
     links.push({
       type: 'resource_link',
       uri: `${origin}${page}/${encodeURIComponent(id)}`,
-      // Stored text on one line: a link name is not a place for business text to add lines.
-      name: `Open ${label.replace(/[\p{Cc}\s]+/gu, ' ').slice(0, 80)} in OpsKnight`,
+      name: `Open ${oneLineLabel(label)} in OpsKnight`,
       mimeType: 'text/html',
       annotations: { audience: ['user'] },
     });

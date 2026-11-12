@@ -27,6 +27,8 @@ it.each([
   '/.well-known/openid-configuration/oauth/mcp',
   '/.well-known/oauth-authorization-server',
   '/.well-known/oauth-protected-resource/mcp',
+  '/.well-known/ai-catalog.json',
+  '/mcp/server-card',
 ])('does not send the unauthenticated discovery request %s to the sign-in page', async path => {
   // A client probing for OIDC metadata got the sign-in page with 200 HTML, which it cannot tell
   // from a document. These paths are public; an unknown one now falls through to a plain 404.

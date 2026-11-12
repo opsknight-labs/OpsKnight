@@ -18,6 +18,8 @@ import {
   GET as rootProtectedResource,
   OPTIONS as rootProtectedResourcePreflight,
 } from '@/app/.well-known/oauth-protected-resource/route';
+import { GET as serverCard, OPTIONS as serverCardPreflight } from '@/app/mcp/server-card/route';
+import { GET as aiCatalog } from '@/app/.well-known/ai-catalog.json/route';
 
 // Records what the route hands the SDK per request, then serves it unchanged.
 const sdkCalls = vi.hoisted(() => [] as { authInfo?: { scopes: string[]; clientId: string } }[]);
@@ -252,6 +254,78 @@ describe('INT-02: browser-hosted clients', () => {
     expect(rootPreflight.headers.get('access-control-allow-headers')).toContain(
       'Mcp-Protocol-Version'
     );
+  });
+});
+
+describe('Server Card and AI Catalog (SEP-2127)', () => {
+  const get = (headers: Record<string, string> = {}) =>
+    serverCard(new Request(`${origin}/mcp/server-card`, { headers }));
+
+  it('describes this installation without credentials, cacheable with an ETag', async () => {
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/mcp-server-card+json');
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(response.headers.get('access-control-expose-headers')).toBe('ETag');
+    expect(response.headers.get('access-control-allow-credentials')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
+    const card = await response.json();
+    expect(card).toMatchObject({
+      $schema: 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json',
+      name: 'localhost/opsknight',
+      title: 'OpsKnight',
+      icons: [{ src: `${origin}/icons/opsknight-192.png`, mimeType: 'image/png' }],
+      remotes: [{ type: 'streamable-http', url: `${origin}/mcp` }],
+      _meta: {
+        'com.opsknight/oauthProtectedResourceMetadata': `${origin}/.well-known/oauth-protected-resource/mcp`,
+      },
+    });
+    expect(card.name).toMatch(/^[a-zA-Z0-9.-]+\/[a-zA-Z0-9._-]+$/);
+    expect(card.description.length).toBeLessThanOrEqual(100);
+    expect(card.remotes[0].supportedProtocolVersions).toEqual(
+      expect.arrayContaining(['2026-07-28', '2025-06-18'])
+    );
+    const etag = response.headers.get('etag')!;
+    expect(etag).toMatch(/^".+"$/);
+    const revalidated = await get({ 'if-none-match': etag });
+    expect(revalidated.status).toBe(304);
+    expect(await revalidated.text()).toBe('');
+    const preflight = serverCardPreflight();
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-headers')).toContain('If-None-Match');
+  });
+
+  it('links the card from /.well-known/ai-catalog.json', async () => {
+    const response = await aiCatalog(new Request(`${origin}/.well-known/ai-catalog.json`));
+    expect(response.headers.get('content-type')).toBe('application/ai-catalog+json');
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(await response.json()).toEqual({
+      specVersion: '1.0',
+      entries: [
+        {
+          identifier: 'urn:air:localhost:mcp:opsknight',
+          type: 'application/mcp-server-card+json',
+          url: `${origin}/mcp/server-card`,
+        },
+      ],
+    });
+  });
+
+  it('answers 404 while MCP is off, so a disabled server is not advertised', async () => {
+    await db.mcpPolicy.update({ where: { id: 'default' }, data: { enabled: false } });
+    clearDiscoveryPolicyCache();
+    expect((await get()).status).toBe(404);
+    expect((await aiCatalog(new Request(`${origin}/.well-known/ai-catalog.json`))).status).toBe(
+      404
+    );
+    await db.mcpPolicy.update({ where: { id: 'default' }, data: { enabled: true } });
+    clearDiscoveryPolicyCache();
+    vi.stubEnv('MCP_FORCE_DISABLED', 'true');
+    try {
+      expect((await get()).status).toBe(404);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
