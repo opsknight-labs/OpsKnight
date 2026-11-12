@@ -1,0 +1,28 @@
+name: MCP tool-selection eval
+# Manual only: it calls the Claude Messages API and spends tokens. Without the secret it validates
+# the dataset against the current tool list (the same check runs in npm run test:mcp).
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Claude model id
+        required: false
+        default: claude-haiku-5-5
+permissions:
+  contents: read
+jobs:
+  tool-selection:
+    name: Tool-selection eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      - name: Run the eval
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MCP_EVAL_MODEL: ${{ inputs.model }}
+        run: npm run --silent mcp:eval
