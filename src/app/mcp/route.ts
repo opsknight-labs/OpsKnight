@@ -1,5 +1,5 @@
 import { mcpCompositeCost } from '@/lib/mcp/core/composites';
-import { endMcpSpan, startMcpSpan } from '@/lib/mcp/protocol/tracing';
+import { endMcpSpan, linkMcpTrace, startMcpSpan } from '@/lib/mcp/protocol/tracing';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -107,7 +107,7 @@ export const OPTIONS = browserPreflight;
 
 async function handlePost(request: Request, requestId: string, browserOrigin: string | null) {
   const started = performance.now();
-  const span = startMcpSpan(requestId);
+  const span = startMcpSpan(requestId, request.headers);
   let outcome: McpMetricOutcome = 'error';
   let tool = 'none';
   let method: string | undefined;
@@ -163,6 +163,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       );
     }
     method = body.method;
+    linkMcpTrace(span, body.params?._meta);
     tool = mcpMetricTool(body.method, body.params?.name);
     if (body.method === 'tools/call')
       operationId = mcpCallLogOperationId(tool, body.params?.arguments);

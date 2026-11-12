@@ -9,7 +9,7 @@ import {
   resetDatabase,
   testPrisma as db,
 } from '../helpers/test-db';
-import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
+import { digestMcpSecret, mcpOrigin, mcpResource } from '@/lib/mcp/auth/config';
 import { pollChanges, resetSubscriptionStateForTests } from '@/lib/mcp/protocol/subscriptions';
 import { POST } from '@/app/mcp/route';
 
@@ -170,6 +170,10 @@ describe('subscriptions/listen', () => {
     const discover = await (await call(admin.bearer, 'server/discover')).json();
     expect(discover.result.capabilities.resources).toMatchObject({ subscribe: true });
     expect(discover.result.capabilities.tools).toMatchObject({ listChanged: true });
+    // The icon is served by this installation, so a private deployment needs no outside host.
+    expect(discover.result._meta['io.modelcontextprotocol/serverInfo'].icons).toEqual([
+      { src: `${mcpOrigin()}/icons/opsknight-192.png`, mimeType: 'image/png', sizes: ['192x192'] },
+    ]);
   });
 
   it('refuses unreadable and nonexistent URIs identically and caps the subscription size', async () => {
