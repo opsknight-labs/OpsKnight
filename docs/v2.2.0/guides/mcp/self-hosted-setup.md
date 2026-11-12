@@ -170,6 +170,11 @@ The **Exposed capabilities** tab is a hard deny-list across all roles and consen
 - Disabled tools disappear from `tools/list`, `search_capabilities` and `describe_operation`, and any attempt to call them returns `MCP_CAPABILITY_DISABLED`, which is not retryable.
 - Turning everything off asks for confirmation. Concurrent edits are detected and refused. Each save is audited with what was added and removed.
 
+## Browsing and discovery
+
+- `resources/list` lets an assistant browse what the signed-in person can already read: up to 20 each of open incidents, services, schedules, runbooks, saved reports and postmortems (the first page of each list). Each entry is read through the same list operation as the tools, so scopes, disabled capabilities and team visibility apply; a domain the connection cannot read is left out. The list is not paged, and it counts as six requests against the per-minute limit. Open a full record with `resources/read` on its `opsknight://` URI.
+- A public [MCP Server Card](https://modelcontextprotocol.io/seps/2127-mcp-server-cards) at `/mcp/server-card` describes this installation (name, version, the `/mcp` URL, supported protocol revisions, icon, and the OAuth protected-resource metadata URL under `_meta`), and `/.well-known/ai-catalog.json` links to it, so a client pointed at your domain can find the server before signing in. Both hold no secrets, and both answer 404 while MCP is turned off or the App URL is not usable.
+
 ## Reviewed changes
 
 Changes are off by default. Turn them on with **Allow reviewed routine mutations and approved runbook executions** under **Access policy → Reviewed actions**. Then:
@@ -208,7 +213,7 @@ The server serves MCP revision **2026-07-28** natively and also accepts clients 
 
 ## Reverse proxies and private installations
 
-Route `/mcp`, `/oauth/mcp/*`, `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server/oauth/mcp` to the application. Native `/login`, `/api/auth/*` and the MCP settings, consent and review pages must stay available too.
+Route `/mcp`, `/mcp/server-card`, `/oauth/mcp/*`, `/.well-known/oauth-protected-resource/mcp`, `/.well-known/oauth-authorization-server/oauth/mcp` and `/.well-known/ai-catalog.json` to the application. Native `/login`, `/api/auth/*` and the MCP settings, consent and review pages must stay available too.
 
 Preserve the public Host, including a non-default port. Preserve Authorization, WWW-Authenticate and MCP protocol headers. Do not cache OAuth or consent responses or rewrite their issuer or resource URLs. Support streaming POST responses without proxy buffering; subscription streams last at most ten minutes. Trust forwarded client IPs only when your ingress removes spoofed forwarding headers. Unless `TRUST_PROXY_HEADERS` or `TRUSTED_PROXIES` is set, the application cannot tell clients apart by address, so the per-client limits on the sign-in endpoints (registration, device authorization, token and revoke) do not apply and one noisy client can exhaust the shared limits for everyone. Set one of them to match your ingress.
 
@@ -218,7 +223,7 @@ Examples, for an application listening on `opsknight:3000` and published as `htt
 
 ```nginx
 # nginx
-location ~ ^/(mcp|oauth/mcp/|\.well-known/oauth-) {
+location ~ ^/(mcp|oauth/mcp/|\.well-known/oauth-|\.well-known/ai-catalog\.json) {
   proxy_pass http://opsknight:3000;
   proxy_set_header Host $host;          # keep the public Host
   proxy_http_version 1.1;
