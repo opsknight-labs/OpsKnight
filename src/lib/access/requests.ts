@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { z } from 'zod/v3';
-import type { Prisma, TeamRole } from '@prisma/client';
+import type { AccessRequestStatus, Prisma, TeamRole } from '@prisma/client';
 
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
@@ -59,6 +59,24 @@ export const accessRequestInput = z.discriminatedUnion('kind', [
 
 export type AccessRequestInput = z.input<typeof accessRequestInput>;
 
+const ROLE_RANKS = new Map<string, number>([
+  ['USER', 0],
+  ['AUDITOR', 1],
+  ['RESPONDER', 2],
+  ['ADMIN', 3],
+]);
+const TEAM_ROLE_RANKS = new Map<string, number>([
+  ['MEMBER', 0],
+  ['ADMIN', 1],
+  ['OWNER', 2],
+]);
+function roleRank(role: string | null | undefined): number {
+  return ROLE_RANKS.get(role ?? '') ?? -1;
+}
+function teamRoleRank(role: string | null | undefined): number {
+  return TEAM_ROLE_RANKS.get(role ?? '') ?? -1;
+}
+
 function invalid(userMessage: string) {
   return new AppError({ code: 'VALIDATION_FAILED', userMessage });
 }
@@ -99,7 +117,12 @@ async function approverIdsFor(
     const roles: TeamRole[] =
       request.requestedTeamRole === 'OWNER' ? ['OWNER'] : ['OWNER', 'ADMIN'];
     const managers = await tx.teamMember.findMany({
-      where: { teamId: request.teamId, role: { in: roles }, user: { status: 'ACTIVE' } },
+      // Read-only Auditors cannot approve, so they are not asked to.
+      where: {
+        teamId: request.teamId,
+        role: { in: roles },
+        user: { status: 'ACTIVE', role: { not: 'AUDITOR' } },
+      },
       select: { userId: true },
       take: MAX_NOTIFIED_APPROVERS,
     });
@@ -139,15 +162,15 @@ export async function createAccessRequest(requesterId: string, input: AccessRequ
 
     let teamName: string | null = null;
     if (body.kind === 'ORG_ROLE') {
-      if (requester.roleSource !== 'MANUAL') {
+      if (requester.roleSource !== 'MANUAL' && body.durationMinutes === null) {
         throw new AppError({
           code: 'ACCESS_FEATURE_DISABLED',
           userMessage:
-            'Your role is managed by your identity provider. Ask your IT team to change your group membership.',
+            'Your role is managed by your identity provider. Ask for temporary access, or ask your IT team to change your group membership.',
         });
       }
-      if (requester.role === body.requestedRole && body.durationMinutes === null) {
-        throw invalid(`You already have the ${roleLabel(body.requestedRole)} role.`);
+      if (roleRank(requester.role) >= roleRank(body.requestedRole)) {
+        throw invalid(`You already have ${roleLabel(body.requestedRole)} access or more.`);
       }
     } else {
       const team = await tx.team.findUnique({
@@ -167,7 +190,7 @@ export async function createAccessRequest(requesterId: string, input: AccessRequ
       if (body.kind === 'TEAM_ROLE' && !current) {
         throw invalid(`Join ${team.name} before asking for a different team role.`);
       }
-      if (current === body.requestedTeamRole) {
+      if (current && teamRoleRank(current) >= teamRoleRank(body.requestedTeamRole)) {
         throw invalid(`You are already ${current.toLowerCase()} of ${team.name}.`);
       }
     }
@@ -239,7 +262,7 @@ export async function createAccessRequest(requesterId: string, input: AccessRequ
         userIds: await approverIdsFor(tx, request, requesterId),
         type: 'SECURITY',
         title: 'Access request',
-        message: `${who} asked for: ${what}. Reason: ${request.reason}`,
+        message: `${who} asked for: ${what}. Reason: ${request.reason}. Approve or decline it in Settings → Access Requests.`,
         entityType: 'ACCESS_REQUEST',
         entityId: request.id,
         dedupeKey: `access-request:${request.id}`,
@@ -276,6 +299,8 @@ export type ApproverContext = {
   isOrgAdmin: boolean;
   /** Signed in recently enough for sensitive changes. */
   recentlyAuthenticated: boolean;
+  /** May manage teams they own or administer (read-only Auditors may not). Defaults to true. */
+  canManageTeams?: boolean;
 };
 
 /** Whether `approver` may decide `request`, and why not. Pure apart from the team lookup. */
@@ -301,6 +326,13 @@ export async function approverCanDecide(
     };
   }
   if (approver.isOrgAdmin) return { allowed: true };
+  if (approver.canManageTeams === false) {
+    return {
+      allowed: false,
+      code: 'AUTHORIZATION_DENIED',
+      message: 'Read-only accounts cannot approve access requests.',
+    };
+  }
   if (request.kind === 'ORG_ROLE' || !request.teamId) {
     return {
       allowed: false,
@@ -346,12 +378,53 @@ export async function decideAccessRequest(
       });
     }
     if (request.expiresAt <= new Date()) {
+      // Committed (not thrown) so the request stops showing as pending.
       await tx.accessRequest.update({ where: { id: request.id }, data: { status: 'EXPIRED' } });
-      throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'This request has expired.' });
+      return { outcome: 'expired' as const };
     }
     const permitted = await approverCanDecide(tx, approver, request, settings.selfApprovalAllowed);
     if (!permitted.allowed) {
       throw new AppError({ code: permitted.code, userMessage: permitted.message });
+    }
+    // The person may have been given this access (or more) since asking. Approving would then
+    // change nothing at best and demote them at worst, so close the request instead.
+    if (decision.approve) {
+      let satisfied = false;
+      if (request.kind === 'ORG_ROLE') {
+        satisfied = roleRank(request.requester.role) >= roleRank(request.requestedRole);
+      } else if (request.teamId) {
+        const membership = await tx.teamMember.findUnique({
+          where: { userId_teamId: { userId: request.requesterId, teamId: request.teamId } },
+          select: { role: true },
+        });
+        satisfied = Boolean(
+          membership &&
+          (request.kind === 'TEAM_MEMBERSHIP' ||
+            teamRoleRank(membership.role) >= teamRoleRank(request.requestedTeamRole))
+        );
+      }
+      if (satisfied) {
+        const closed = await tx.accessRequest.update({
+          where: { id: request.id },
+          data: {
+            status: 'CANCELLED',
+            decidedById: approver.id,
+            decidedAt: new Date(),
+            decisionNote: 'Closed: they already have this access.',
+          },
+        });
+        await logAudit(
+          {
+            action: 'access.request.closed_already_satisfied',
+            entityType: 'ACCESS_REQUEST',
+            entityId: request.id,
+            actorId: approver.id,
+            details: { requesterId: request.requesterId, kind: request.kind },
+          },
+          tx
+        );
+        return { outcome: 'already_satisfied' as const, request: closed };
+      }
     }
     const team = request.teamId
       ? await tx.team.findUnique({ where: { id: request.teamId }, select: { name: true } })
@@ -490,54 +563,136 @@ export async function decideAccessRequest(
         message: decision.approve
           ? `Your request was approved: ${what}.${request.originPath ? ` Open ${request.originPath} to continue.` : ''}`
           : `Your request was declined: ${what}.${note ? ` Note: ${note}` : ''}`,
-        entityType: 'ACCESS_REQUEST',
+        entityType: 'ACCESS_REQUEST_DECIDED',
         entityId: request.id,
         dedupeKey: `access-request-decided:${request.id}`,
       },
       tx
     );
-    return { request: updated, userId: request.requesterId };
+    return { outcome: 'decided' as const, request: updated, userId: request.requesterId };
   });
+  if (result.outcome === 'expired') {
+    throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'This request has expired.' });
+  }
+  if (result.outcome === 'already_satisfied') {
+    throw new AppError({
+      code: 'RESOURCE_CONFLICT',
+      userMessage: 'They already have this access, so the request was closed without changes.',
+    });
+  }
   invalidateSessionSecurityProjection(result.userId);
   return result.request;
 }
 
-/** Requests the person may decide. Admins see everything; team managers see their teams. */
-export async function listDecidableAccessRequests(approver: { id: string; isOrgAdmin: boolean }) {
-  const where: Prisma.AccessRequestWhereInput = approver.isOrgAdmin
-    ? { status: 'PENDING' }
-    : {
-        status: 'PENDING',
-        kind: { in: ['TEAM_MEMBERSHIP', 'TEAM_ROLE'] },
-        teamId: {
-          in: (
-            await prisma.teamMember.findMany({
-              where: { userId: approver.id, role: { in: ['OWNER', 'ADMIN'] } },
-              select: { teamId: true },
-            })
-          ).map(membership => membership.teamId),
-        },
-      };
-  const requests = await prisma.accessRequest.findMany({
-    where: { ...where, expiresAt: { gt: new Date() } },
-    include: { requester: { select: { id: true, name: true, email: true, role: true } } },
-    orderBy: { createdAt: 'asc' },
-    take: 200,
+/** Requests a person may review: everything for org admins, their teams' requests otherwise. */
+async function reviewableWhere(approver: {
+  id: string;
+  isOrgAdmin: boolean;
+  canManageTeams?: boolean;
+}): Promise<Prisma.AccessRequestWhereInput> {
+  if (approver.isOrgAdmin) return {};
+  if (approver.canManageTeams === false) return { id: { in: [] } };
+  const managed = await prisma.teamMember.findMany({
+    where: { userId: approver.id, role: { in: ['OWNER', 'ADMIN'] } },
+    select: { teamId: true },
   });
+  return {
+    kind: { in: ['TEAM_MEMBERSHIP', 'TEAM_ROLE'] },
+    teamId: { in: managed.map(membership => membership.teamId) },
+  };
+}
+
+const reviewInclude = {
+  requester: { select: { id: true, name: true, email: true, role: true, roleSource: true } },
+} as const;
+
+async function withTeamsAndDeciders<
+  T extends { teamId: string | null; decidedById: string | null },
+>(requests: T[]) {
   const teamIds = [...new Set(requests.map(request => request.teamId).filter(Boolean))] as string[];
-  const teams = teamIds.length
-    ? await prisma.team.findMany({
-        where: { id: { in: teamIds } },
-        select: { id: true, name: true },
-      })
-    : [];
+  const deciderIds = [
+    ...new Set(requests.map(request => request.decidedById).filter(Boolean)),
+  ] as string[];
+  const [teams, deciders] = await Promise.all([
+    teamIds.length
+      ? prisma.team.findMany({ where: { id: { in: teamIds } }, select: { id: true, name: true } })
+      : [],
+    deciderIds.length
+      ? prisma.user.findMany({
+          where: { id: { in: deciderIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [],
+  ]);
   const teamNames = new Map(teams.map(team => [team.id, team.name]));
+  const deciderNames = new Map(deciders.map(user => [user.id, user.name ?? user.email]));
   return requests.map(request => ({
     ...request,
     team: request.teamId
       ? { id: request.teamId, name: teamNames.get(request.teamId) ?? 'Unknown team' }
       : null,
+    decidedByName: request.decidedById ? (deciderNames.get(request.decidedById) ?? null) : null,
   }));
+}
+
+/** Pending requests the person may decide. */
+export async function listDecidableAccessRequests(approver: {
+  id: string;
+  isOrgAdmin: boolean;
+  canManageTeams?: boolean;
+}) {
+  const requests = await prisma.accessRequest.findMany({
+    where: {
+      ...(await reviewableWhere(approver)),
+      status: 'PENDING',
+      expiresAt: { gt: new Date() },
+    },
+    include: reviewInclude,
+    orderBy: { createdAt: 'asc' },
+    take: 200,
+  });
+  return withTeamsAndDeciders(requests);
+}
+
+/** Recently decided, cancelled or expired requests the person may review, newest first. */
+export async function listRecentAccessRequestHistory(
+  approver: { id: string; isOrgAdmin: boolean; canManageTeams?: boolean },
+  days = 30
+) {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const requests = await prisma.accessRequest.findMany({
+    where: {
+      ...(await reviewableWhere(approver)),
+      updatedAt: { gte: since },
+      OR: [{ status: { not: 'PENDING' } }, { expiresAt: { lte: new Date() } }],
+    },
+    include: reviewInclude,
+    orderBy: { updatedAt: 'desc' },
+    take: 25,
+  });
+  return withTeamsAndDeciders(requests);
+}
+
+/**
+ * A single request for the review page (deep link from a notification). Returns null when the
+ * person may not review it, so the page can explain instead of showing someone else's request.
+ */
+export async function getReviewableAccessRequest(
+  approver: { id: string; isOrgAdmin: boolean; canManageTeams?: boolean },
+  requestId: string
+) {
+  const request = await prisma.accessRequest.findFirst({
+    where: {
+      AND: [
+        { id: requestId },
+        { OR: [await reviewableWhere(approver), { requesterId: approver.id }] },
+      ],
+    },
+    include: reviewInclude,
+  });
+  if (!request) return null;
+  const [withNames] = await withTeamsAndDeciders([request]);
+  return withNames;
 }
 
 export async function listMyAccessRequests(requesterId: string) {
@@ -546,20 +701,18 @@ export async function listMyAccessRequests(requesterId: string) {
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
-  const teamIds = [...new Set(requests.map(request => request.teamId).filter(Boolean))] as string[];
-  const teams = teamIds.length
-    ? await prisma.team.findMany({
-        where: { id: { in: teamIds } },
-        select: { id: true, name: true },
-      })
-    : [];
-  const teamNames = new Map(teams.map(team => [team.id, team.name]));
-  return requests.map(request => ({
-    ...request,
-    team: request.teamId
-      ? { id: request.teamId, name: teamNames.get(request.teamId) ?? 'Unknown team' }
-      : null,
-  }));
+  return withTeamsAndDeciders(requests);
+}
+
+/**
+ * Status to show people. A pending request past its expiry is expired even before the
+ * maintenance sweep records it, so nobody waits on (or acts on) a dead request.
+ */
+export function effectiveAccessRequestStatus(
+  request: { status: AccessRequestStatus; expiresAt: Date },
+  now: Date = new Date()
+): AccessRequestStatus {
+  return request.status === 'PENDING' && request.expiresAt <= now ? 'EXPIRED' : request.status;
 }
 
 export async function expireStaleAccessRequests(now: Date = new Date()) {

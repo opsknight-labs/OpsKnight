@@ -62,14 +62,23 @@ export function DecideRequestControls({
   requestId,
   requestedDuration,
   isOwnRequest,
+  requestKind = 'TEAM_MEMBERSHIP',
+  roleManagedExternally = false,
 }: {
   requestId: string;
   requestedDuration: number | null;
   isOwnRequest: boolean;
+  requestKind?: string;
+  /** The requester's role comes from SSO/SCIM: only temporary role grants are possible. */
+  roleManagedExternally?: boolean;
 }) {
+  const temporaryOnly = requestKind === 'ORG_ROLE' && roleManagedExternally;
+  const durationChoices = temporaryOnly
+    ? DURATION_OPTIONS.filter(option => option.value !== 'permanent')
+    : DURATION_OPTIONS;
   const router = useRouter();
   const [duration, setDuration] = useState(
-    requestedDuration ? String(requestedDuration) : 'permanent'
+    requestedDuration ? String(requestedDuration) : temporaryOnly ? '480' : 'permanent'
   );
   const [note, setNote] = useState('');
   const [error, setError] = useState<{ message: string; stepUp: boolean } | null>(null);
@@ -108,7 +117,7 @@ export function DecideRequestControls({
           onChange={event => setDuration(event.target.value)}
           className="h-8 rounded-md border border-input bg-background px-2 text-xs"
         >
-          {DURATION_OPTIONS.map(option => (
+          {durationChoices.map(option => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>

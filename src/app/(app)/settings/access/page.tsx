@@ -2,10 +2,13 @@ import Link from 'next/link';
 import { KeyRound, Mail } from 'lucide-react';
 
 import prisma from '@/lib/prisma';
-import { getViewableTeamWhere } from '@/lib/rbac';
 import { requirePageAccessSnapshot, findGrantors } from '@/lib/access/server';
 import { groupCapabilities } from '@/lib/access/catalog';
-import { listMyAccessRequests, describeAccessRequest } from '@/lib/access/requests';
+import {
+  describeAccessRequest,
+  effectiveAccessRequestStatus,
+  listMyAccessRequests,
+} from '@/lib/access/requests';
 import { ROLE_DESCRIPTIONS, roleLabel, type Capability } from '@/lib/authorization';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
@@ -23,13 +26,13 @@ const TEAM_ROLE_HELP: Record<string, string> = {
   MEMBER: 'Work this team’s incidents and see its services',
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  PENDING: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
-  APPROVED: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200',
-  DENIED: 'bg-rose-100 text-rose-900 dark:bg-rose-900/40 dark:text-rose-200',
-  CANCELLED: 'bg-muted text-muted-foreground',
-  EXPIRED: 'bg-muted text-muted-foreground',
-};
+const STATUS_STYLES = new Map<string, string>([
+  ['PENDING', 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200'],
+  ['APPROVED', 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200'],
+  ['DENIED', 'bg-rose-100 text-rose-900 dark:bg-rose-900/40 dark:text-rose-200'],
+  ['CANCELLED', 'bg-muted text-muted-foreground'],
+  ['EXPIRED', 'bg-muted text-muted-foreground'],
+]);
 
 function formatDate(value: Date | string) {
   return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -40,12 +43,10 @@ export default async function MyAccessPage() {
   const [requests, grantors, otherTeams] = await Promise.all([
     listMyAccessRequests(access.userId),
     findGrantors({ grantor: 'org_admin' }),
-    // Only teams this person may already see (the whole directory for Responders, Auditors and
-    // Admins; nothing extra for Users, who request team access from the Access denied page).
+    // Team names only (no members, services or incidents), so anyone can ask to join the
+    // team they need, including people who are not in any team yet.
     prisma.team.findMany({
-      where: {
-        AND: [await getViewableTeamWhere(), { members: { none: { userId: access.userId } } }],
-      },
+      where: { members: { none: { userId: access.userId } } },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
       take: 200,
@@ -181,23 +182,31 @@ export default async function MyAccessPage() {
       {requests.length > 0 && (
         <SettingsSection title="Your requests">
           <ul className="divide-y divide-border text-sm">
-            {requests.map(request => (
-              <li key={request.id} className="flex flex-wrap items-center gap-3 py-2">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLES[request.status]}`}
-                >
-                  {request.status.toLowerCase()}
-                </span>
-                <span className="flex-1">
-                  {describeAccessRequest(request)}
-                  <span className="block text-xs text-muted-foreground">
-                    {formatDate(request.createdAt)}
-                    {request.decisionNote ? ` · “${request.decisionNote}”` : ''}
+            {requests.map(request => {
+              const status = effectiveAccessRequestStatus(request);
+              return (
+                <li key={request.id} className="flex flex-wrap items-center gap-3 py-2">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLES.get(status) ?? ''}`}
+                  >
+                    {status.toLowerCase()}
                   </span>
-                </span>
-                {request.status === 'PENDING' && <CancelRequestButton requestId={request.id} />}
-              </li>
-            ))}
+                  <span className="flex-1">
+                    {describeAccessRequest(request)}
+                    <span className="block text-xs text-muted-foreground">
+                      Requested {formatDate(request.createdAt)}
+                      {status === 'PENDING'
+                        ? ' · waiting for an approver'
+                        : request.decidedByName && (status === 'APPROVED' || status === 'DENIED')
+                          ? ` · ${status === 'APPROVED' ? 'approved' : 'declined'} by ${request.decidedByName}`
+                          : ''}
+                      {request.decisionNote ? ` · “${request.decisionNote}”` : ''}
+                    </span>
+                  </span>
+                  {status === 'PENDING' && <CancelRequestButton requestId={request.id} />}
+                </li>
+              );
+            })}
           </ul>
         </SettingsSection>
       )}

@@ -25,6 +25,7 @@ import {
   recordFailedAuthAttempt,
   rememberVerifiedCredential,
 } from './rate-limit';
+import { getAccessControlSettings } from '@/lib/access/settings';
 
 export { hashTokenV2 } from '@/lib/api-keys';
 
@@ -271,6 +272,7 @@ async function verifyTokenAgainstDatabase(
   }
 
   const user = apiKeyRecord.user;
+  await getAccessControlSettings();
   const actor = authorizationActorFromUser(user);
   if (!actor) {
     forgetVerifiedCredential(v2Hash);

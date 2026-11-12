@@ -64,6 +64,7 @@ export async function decideAccessRequestAction(
       {
         id: user.id,
         isOrgAdmin: capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE),
+        canManageTeams: capabilitiesOf(user).includes(CAPABILITIES.TEAM_ADMINISTER_SCOPED),
         recentlyAuthenticated: await hasRecentAuthentication(),
       },
       requestId,

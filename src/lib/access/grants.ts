@@ -94,13 +94,30 @@ export async function createTeamGrant(
   }
 ) {
   const expiresAt = new Date(Date.now() + input.minutes * 60_000);
+  // Overlapping temporary grants on the same team share one "before" state, so whichever ends
+  // last restores what the person had before any temporary access.
+  const overlapping = await tx.accessGrant.findFirst({
+    where: {
+      userId: input.userId,
+      teamId: input.teamId,
+      revokedAt: null,
+      endProcessedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { previousTeamRole: true, createdMembership: true },
+  });
+  const previousTeamRole = overlapping ? overlapping.previousTeamRole : input.previousTeamRole;
+  const createdMembership = overlapping
+    ? overlapping.createdMembership
+    : input.previousTeamRole === null;
   const grant = await tx.accessGrant.create({
     data: {
       userId: input.userId,
       teamId: input.teamId,
       teamRole: input.teamRole,
-      previousTeamRole: input.previousTeamRole,
-      createdMembership: input.previousTeamRole === null,
+      previousTeamRole,
+      createdMembership,
       source: 'REQUEST',
       reason: input.reason,
       grantedById: input.grantedById,
@@ -306,7 +323,7 @@ export async function processEndedAccessGrants(now: Date = new Date(), onlyGrant
             message: grant.role
               ? `Your temporary ${roleLabel(grant.role as AppRole)} access has ended.`
               : 'Your temporary team access has ended.',
-            entityType: 'ACCESS_GRANT',
+            entityType: 'ACCESS_GRANT_ENDED',
             entityId: grant.id,
             dedupeKey: `access-grant-ended:${grant.id}`,
           },
@@ -328,6 +345,7 @@ export async function processEndedAccessGrants(now: Date = new Date(), onlyGrant
 async function revertTeamGrant(
   tx: Prisma.TransactionClient,
   grant: {
+    id: string;
     userId: string;
     teamId: string | null;
     teamRole: TeamRole | null;
@@ -336,6 +354,37 @@ async function revertTeamGrant(
   }
 ): Promise<string | null> {
   if (!grant.teamId) return null;
+  // Another temporary grant on this team is still active: it now owns the revert.
+  const stillActive = await tx.accessGrant.findFirst({
+    where: {
+      userId: grant.userId,
+      teamId: grant.teamId,
+      id: { not: grant.id },
+      revokedAt: null,
+      endProcessedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    select: { id: true, teamRole: true },
+  });
+  if (stillActive) {
+    const member = await tx.teamMember.findUnique({
+      where: { userId_teamId: { userId: grant.userId, teamId: grant.teamId } },
+    });
+    // Only step back from the ending grant's role; a later manual change wins.
+    if (
+      member &&
+      stillActive.teamRole &&
+      member.role === grant.teamRole &&
+      member.role !== stillActive.teamRole
+    ) {
+      await advanceUserSessionVersions(tx, [grant.userId]);
+      await tx.teamMember.update({
+        where: { id: member.id },
+        data: { role: stillActive.teamRole },
+      });
+    }
+    return 'kept: another temporary grant on this team is still active';
+  }
   const member = await tx.teamMember.findUnique({
     where: { userId_teamId: { userId: grant.userId, teamId: grant.teamId } },
   });

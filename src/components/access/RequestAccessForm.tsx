@@ -79,12 +79,18 @@ export default function RequestAccessForm({
 
   const canSubmit =
     reason.trim().length >= 10 && !pending && (kind === 'ORG_ROLE' || Boolean(selectedTeam));
-  const orgRoleBlocked = kind === 'ORG_ROLE' && !canRequestOrgRole;
+  // Identity-provider managed roles can still be raised temporarily; permanent changes belong
+  // in the identity provider.
+  const permanentRoleBlocked = kind === 'ORG_ROLE' && !canRequestOrgRole;
+  const durationChoices = permanentRoleBlocked
+    ? DURATION_OPTIONS.filter(option => option.value !== 'permanent')
+    : DURATION_OPTIONS;
+  const effectiveDuration = permanentRoleBlocked && duration === 'permanent' ? '480' : duration;
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    const durationMinutes = duration === 'permanent' ? null : Number(duration);
+    const durationMinutes = effectiveDuration === 'permanent' ? null : Number(effectiveDuration);
     startTransition(async () => {
       const result = await requestAccessAction(
         kind === 'ORG_ROLE'
@@ -169,7 +175,6 @@ export default function RequestAccessForm({
               className={selectClass}
               value={role}
               onChange={event => setRole(event.target.value as AppRole)}
-              disabled={orgRoleBlocked}
             >
               {roleChoices.map(choice => (
                 <option key={choice} value={choice}>
@@ -184,10 +189,10 @@ export default function RequestAccessForm({
           <select
             id="access-duration"
             className={selectClass}
-            value={duration}
+            value={effectiveDuration}
             onChange={event => setDuration(event.target.value)}
           >
-            {DURATION_OPTIONS.map(option => (
+            {durationChoices.map(option => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -196,12 +201,13 @@ export default function RequestAccessForm({
         </div>
       </div>
 
-      {orgRoleBlocked ? (
-        <p className="text-sm text-muted-foreground">
-          Your role is managed by your identity provider. Ask your IT team to add you to the right
-          group.
+      {permanentRoleBlocked && (
+        <p className="text-xs text-muted-foreground">
+          Your role comes from your identity provider, so you can ask for temporary access here. For
+          a permanent change, ask your IT team to add you to the right group.
         </p>
-      ) : (
+      )}
+      {
         <>
           <div className="space-y-1.5">
             <Label htmlFor="access-reason">Why do you need it?</Label>
@@ -228,7 +234,7 @@ export default function RequestAccessForm({
             {pending ? 'Sending…' : 'Send request'}
           </Button>
         </>
-      )}
+      }
     </form>
   );
 }

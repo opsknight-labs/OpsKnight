@@ -13,7 +13,6 @@ import {
   authorize,
   type AuthorizationResource,
 } from '@/lib/authorization-policy';
-import { incidentReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
@@ -28,8 +27,10 @@ export const GET = withV2Observability(async function GET(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_READ);
     const { id } = await params;
     if (!id || id.length > 100) throw new AppError({ code: 'VALIDATION_FAILED' });
-    const incident = await prisma.incident.findFirst({
-      where: { AND: [{ id }, incidentReadWhere(actor)] },
+    // Read access is decided with the full resource (assignee, team, watchers, on call), so
+    // people paged for an incident can see what they may do with it.
+    const incident = await prisma.incident.findUnique({
+      where: { id },
       select: {
         id: true,
         status: true,
@@ -42,7 +43,13 @@ export const GET = withV2Observability(async function GET(
       },
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
-    const resource: AuthorizationResource = (await resolveIncidentResourceForActor(actor, id)) ?? {
+    const resolved = await resolveIncidentResourceForActor(actor, id);
+    if (
+      !resolved ||
+      !authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ, resource: resolved }).allowed
+    )
+      throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
+    const resource: AuthorizationResource = resolved ?? {
       type: 'incident',
       assigneeId: incident.assigneeId,
       watcherIds: incident.watchers.map(watcher => watcher.userId),

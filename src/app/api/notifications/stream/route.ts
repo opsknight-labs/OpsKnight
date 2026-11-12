@@ -9,7 +9,7 @@ import { getNotificationUserChangeVersion } from '@/lib/notification-change-cloc
 import { isAppError } from '@/lib/errors';
 import { getRequestSessionJti } from '@/lib/realtime-stream-authorization';
 import { isSessionActive } from '@/lib/session-registry';
-import { inAppNotificationHref } from '@/lib/notification-links';
+import { inAppNotificationHref, inAppNotificationKind } from '@/lib/notification-links';
 
 /**
  * Server-Sent Events endpoint for real-time notification updates
@@ -166,15 +166,7 @@ export async function GET(req: NextRequest) {
                 const timeAgo = formatDateTime(notification.createdAt, userTimeZone, {
                   format: 'relative',
                 });
-                const typeKey = notification.type.toLowerCase();
-                let type: 'incident' | 'service' | 'schedule' | 'system' = 'incident';
-                if (typeKey === 'schedule') {
-                  type = 'schedule';
-                } else if (typeKey === 'service' || typeKey === 'team') {
-                  type = 'service';
-                } else if (typeKey === 'system') {
-                  type = 'system';
-                }
+                const type = inAppNotificationKind(notification.type);
                 const incidentId =
                   notification.entityType === 'INCIDENT' ? notification.entityId : null;
 
@@ -257,15 +249,7 @@ export async function GET(req: NextRequest) {
                 const timeAgo = formatDateTime(notification.createdAt, userTimeZone, {
                   format: 'relative',
                 });
-                const typeKey = notification.type.toLowerCase();
-                let type: 'incident' | 'service' | 'schedule' | 'system' = 'incident';
-                if (typeKey === 'schedule') {
-                  type = 'schedule';
-                } else if (typeKey === 'service' || typeKey === 'team') {
-                  type = 'service';
-                } else if (typeKey === 'system') {
-                  type = 'system';
-                }
+                const type = inAppNotificationKind(notification.type);
                 const incidentId =
                   notification.entityType === 'INCIDENT' ? notification.entityId : null;
 

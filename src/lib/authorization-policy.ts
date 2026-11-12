@@ -793,7 +793,12 @@ function isResourceInScope(actor: AuthorizationActor, resource: AuthorizationRes
       : Boolean(resource.teamId && teams.has(resource.teamId));
   if (resource.type === 'status_page') return true;
   if (resource.type === 'incident') {
-    if (resource.assigneeId === actor.id || resource.watcherIds?.includes(actor.id)) return true;
+    if (
+      resource.assigneeId === actor.id ||
+      resource.watcherIds?.includes(actor.id) ||
+      resource.onCallUserIds?.includes(actor.id)
+    )
+      return true;
     if (resource.visibility !== 'PUBLIC') return false;
     return Boolean(
       (resource.serviceTeamId && teams.has(resource.serviceTeamId)) ||

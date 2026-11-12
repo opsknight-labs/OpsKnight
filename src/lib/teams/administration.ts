@@ -13,6 +13,7 @@ import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
 import { CAPABILITIES } from '@/lib/authorization';
 import { effectiveAccessSelect } from '@/lib/access/effective';
+import { getAccessControlSettings } from '@/lib/access/settings';
 
 export const teamMemberInput = z
   .object({
@@ -35,6 +36,7 @@ export async function requireTeamAccess(
   write: boolean,
   administrativeRead = false
 ) {
+  await getAccessControlSettings();
   const [user, team] = await Promise.all([
     tx.user.findUnique({
       where: { id: source.id },
@@ -84,6 +86,7 @@ export async function teamActorAuthority(
   teamId: string,
   actorId: string
 ): Promise<{ isOrgAdmin: boolean; teamRole: 'OWNER' | 'ADMIN' | 'MEMBER' | null }> {
+  await getAccessControlSettings();
   const user = await tx.user.findUnique({
     where: { id: actorId },
     select: {

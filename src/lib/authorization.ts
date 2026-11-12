@@ -315,7 +315,6 @@ const ALL_CAPABILITIES: ReadonlySet<Capability> = new Set(Object.values(CAPABILI
  */
 export const NON_DELEGABLE_CAPABILITIES: ReadonlySet<Capability> = new Set([
   CAPABILITIES.ADMIN_MANAGE,
-  CAPABILITIES.ACCESS_REVIEW_MANAGE,
 ]);
 
 /**

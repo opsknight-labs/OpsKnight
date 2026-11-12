@@ -68,10 +68,11 @@ export default function BreakGlassButton({
           <DialogHeader>
             <DialogTitle>Use emergency access?</DialogTitle>
             <DialogDescription>
-              You get temporary Responder access
-              {incidentId ? ' for this incident' : ''}. Every administrator is notified right away,
-              and everything you do is recorded in the audit log. Use this only when an incident
-              can’t wait for an approver.
+              {incidentId
+                ? 'You can open this incident and acknowledge, add notes, escalate and resolve it for a short time.'
+                : 'You get temporary Responder access for a short time.'}{' '}
+              Every administrator is notified right away, and everything you do is recorded in the
+              audit log. Use this only when an incident can’t wait for an approver.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

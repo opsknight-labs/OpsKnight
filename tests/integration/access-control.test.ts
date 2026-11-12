@@ -15,6 +15,7 @@ import {
 import {
   archiveCustomRole,
   assignCustomRole,
+  cancelAccessReview,
   checkAccess,
   completeAccessReview,
   decideAccessReviewItem,
@@ -211,11 +212,23 @@ describe('organization role requests', () => {
     });
     expect((await resolveUserActor(user.id))!.role).toBe('USER');
 
+    // Asking for a role you already exceed is refused outright.
+    await expect(
+      createAccessRequest(otherAdmin.id, {
+        kind: 'ORG_ROLE',
+        requestedRole: 'AUDITOR',
+        reason: 'Need auditor view for a review',
+        durationMinutes: 60,
+      })
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+
     // An admin may not approve their own request while another admin exists.
+    const sodTeam = await db.team.create({ data: { name: 'SoD team' } });
     const own = await createAccessRequest(otherAdmin.id, {
-      kind: 'ORG_ROLE',
-      requestedRole: 'AUDITOR',
-      reason: 'Need auditor view for a review',
+      kind: 'TEAM_MEMBERSHIP',
+      teamId: sodTeam.id,
+      requestedTeamRole: 'MEMBER',
+      reason: 'Joining to help with the review',
       durationMinutes: 60,
     });
     await expect(
@@ -377,5 +390,209 @@ describe('access reviews', () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: responder.id } })).role).toBe('USER');
     expect(result.revoked).toBe(2);
     expect(await db.auditLog.count({ where: { action: 'access_review.completed' } })).toBe(1);
+  });
+});
+
+describe('audit fixes', () => {
+  it('links the approver notification to the request, and closes stale requests without demoting', async () => {
+    const { inAppNotificationHref } = await import('@/lib/notification-links');
+    const owner = await createTestUser();
+    const requester = await createTestUser();
+    const team = await db.team.create({ data: { name: 'Stale requests' } });
+    await db.teamMember.create({ data: { teamId: team.id, userId: owner.id, role: 'OWNER' } });
+    const request = await createAccessRequest(requester.id, {
+      kind: 'TEAM_MEMBERSHIP',
+      teamId: team.id,
+      requestedTeamRole: 'MEMBER',
+      reason: 'Need to see payments incidents',
+      durationMinutes: null,
+    });
+    const notification = await db.inAppNotification.findFirstOrThrow({
+      where: { userId: owner.id, entityId: request.id },
+    });
+    expect(inAppNotificationHref(notification)).toBe(
+      `/settings/access/requests?request=${request.id}#request-${request.id}`
+    );
+    // Meanwhile the owner adds them directly as a team admin.
+    await db.teamMember.create({ data: { teamId: team.id, userId: requester.id, role: 'ADMIN' } });
+    await expect(
+      decideAccessRequest(approver(owner.id, false), request.id, { approve: true })
+    ).rejects.toMatchObject({ code: 'RESOURCE_CONFLICT' });
+    expect(
+      await db.teamMember.findUniqueOrThrow({
+        where: { userId_teamId: { userId: requester.id, teamId: team.id } },
+      })
+    ).toMatchObject({ role: 'ADMIN' });
+    expect(await db.accessRequest.findUniqueOrThrow({ where: { id: request.id } })).toMatchObject({
+      status: 'CANCELLED',
+    });
+  });
+
+  it('records an expired request as expired when someone tries to decide it', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const user = await createTestUser();
+    const request = await createAccessRequest(user.id, {
+      kind: 'ORG_ROLE',
+      requestedRole: 'AUDITOR',
+      reason: 'Quarterly audit preparation',
+      durationMinutes: 60,
+    });
+    await db.accessRequest.update({
+      where: { id: request.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await expect(
+      decideAccessRequest(approver(admin.id, true), request.id, { approve: true })
+    ).rejects.toMatchObject({ code: 'RESOURCE_CONFLICT' });
+    expect((await db.accessRequest.findUniqueOrThrow({ where: { id: request.id } })).status).toBe(
+      'EXPIRED'
+    );
+  });
+
+  it('lets identity-provider managed users ask for temporary, not permanent, role access', async () => {
+    const user = await createTestUser({ roleSource: 'OIDC' });
+    await expect(
+      createAccessRequest(user.id, {
+        kind: 'ORG_ROLE',
+        requestedRole: 'RESPONDER',
+        reason: 'Covering the weekend rotation',
+        durationMinutes: null,
+      })
+    ).rejects.toMatchObject({ code: 'ACCESS_FEATURE_DISABLED' });
+    await expect(
+      createAccessRequest(user.id, {
+        kind: 'ORG_ROLE',
+        requestedRole: 'RESPONDER',
+        reason: 'Covering the weekend rotation',
+        durationMinutes: 480,
+      })
+    ).resolves.toMatchObject({ status: 'PENDING' });
+  });
+
+  it('does not route team requests to read-only owners', async () => {
+    const auditorOwner = await createTestUser({ role: 'AUDITOR' });
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const requester = await createTestUser();
+    const team = await db.team.create({ data: { name: 'Audited team' } });
+    await db.teamMember.create({
+      data: { teamId: team.id, userId: auditorOwner.id, role: 'OWNER' },
+    });
+    const request = await createAccessRequest(requester.id, {
+      kind: 'TEAM_MEMBERSHIP',
+      teamId: team.id,
+      requestedTeamRole: 'MEMBER',
+      reason: 'Joining to help with incidents',
+      durationMinutes: null,
+    });
+    expect(
+      await db.inAppNotification.count({ where: { userId: auditorOwner.id, entityId: request.id } })
+    ).toBe(0);
+    expect(
+      await db.inAppNotification.count({ where: { userId: admin.id, entityId: request.id } })
+    ).toBe(1);
+  });
+
+  it('restores the original team state when overlapping temporary grants end', async () => {
+    const owner = await createTestUser();
+    const user = await createTestUser();
+    const team = await db.team.create({ data: { name: 'Overlap' } });
+    await db.teamMember.create({ data: { teamId: team.id, userId: owner.id, role: 'OWNER' } });
+    const join = await createAccessRequest(user.id, {
+      kind: 'TEAM_MEMBERSHIP',
+      teamId: team.id,
+      requestedTeamRole: 'MEMBER',
+      reason: 'Short on-call cover for overlap',
+      durationMinutes: 60,
+    });
+    await decideAccessRequest(approver(owner.id, false), join.id, { approve: true });
+    const promote = await createAccessRequest(user.id, {
+      kind: 'TEAM_ROLE',
+      teamId: team.id,
+      requestedTeamRole: 'ADMIN',
+      reason: 'Need to add a teammate during cover',
+      durationMinutes: 480,
+    });
+    await decideAccessRequest(approver(owner.id, false), promote.id, { approve: true });
+    const [first, second] = await db.accessGrant.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(second).toMatchObject({ previousTeamRole: null, createdMembership: true });
+
+    await db.accessGrant.update({
+      where: { id: first.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await processEndedAccessGrants();
+    expect(
+      await db.teamMember.findUnique({
+        where: { userId_teamId: { userId: user.id, teamId: team.id } },
+      })
+    ).toMatchObject({ role: 'ADMIN' });
+
+    await db.accessGrant.update({
+      where: { id: second.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await processEndedAccessGrants();
+    expect(
+      await db.teamMember.findUnique({
+        where: { userId_teamId: { userId: user.id, teamId: team.id } },
+      })
+    ).toBeNull();
+  });
+
+  it('changes custom roles without signing people out', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const holder = await createTestUser();
+    const role = await saveCustomRole(admin.id, {
+      name: 'Runner',
+      capabilities: ['runbook.execute'],
+    });
+    const before = (await db.user.findUniqueOrThrow({ where: { id: holder.id } })).tokenVersion;
+    await assignCustomRole(admin.id, holder.id, role.id);
+    await saveCustomRole(admin.id, {
+      id: role.id,
+      name: 'Runner',
+      capabilities: ['runbook.read.all'],
+    });
+    await archiveCustomRole(admin.id, role.id);
+    expect((await db.user.findUniqueOrThrow({ where: { id: holder.id } })).tokenVersion).toBe(
+      before
+    );
+  });
+
+  it('lets a sole admin certify their own access, records what was not applied, and cancels', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const sso = await createTestUser({ role: 'RESPONDER', roleSource: 'OIDC' });
+    const review = await startAccessReview(admin.id, { name: 'Solo review' });
+    const items = await db.accessReviewItem.findMany({ where: { reviewId: review.id } });
+    await decideAccessReviewItem(
+      admin.id,
+      items.find(item => item.userId === admin.id)!.id,
+      'KEEP'
+    );
+    await decideAccessReviewItem(
+      admin.id,
+      items.find(item => item.userId === sso.id)!.id,
+      'REVOKE'
+    );
+    const result = await completeAccessReview(admin.id, review.id);
+    expect(result).toMatchObject({ revoked: 0, notApplied: 1 });
+    const ssoItem = await db.accessReviewItem.findFirstOrThrow({
+      where: { reviewId: review.id, userId: sso.id },
+    });
+    expect(ssoItem.appliedAt).toBeNull();
+    expect(ssoItem.note).toContain('identity provider');
+    const ownItem = await db.accessReviewItem.findFirstOrThrow({
+      where: { reviewId: review.id, userId: admin.id },
+    });
+    expect(ownItem.note).toContain('Self-certified');
+
+    const next = await startAccessReview(admin.id, { name: 'To cancel' });
+    await cancelAccessReview(admin.id, next.id);
+    expect((await db.accessReview.findUniqueOrThrow({ where: { id: next.id } })).status).toBe(
+      'CANCELLED'
+    );
   });
 });

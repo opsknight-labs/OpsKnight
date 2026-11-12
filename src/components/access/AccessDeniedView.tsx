@@ -40,9 +40,11 @@ export default function AccessDeniedView({
     : `You don’t have access to ${explanation.label}`;
 
   const reason = resourceDenied
-    ? owningTeam
-      ? `This ${noun ?? 'item'} belongs to the ${owningTeam.name} team. Members of that team, people assigned to it, and Responders and Admins can open it.`
-      : `It belongs to a team you are not part of. Members of that team, people assigned to it, and Responders and Admins can open it.`
+    ? explanation.alreadyInOwningTeam
+      ? `This ${noun ?? 'item'} is private. Even members of the ${owningTeam?.name ?? 'owning'} team need to be assigned to it, be paged for it, or be added as a watcher. Responders and Admins can open it.`
+      : owningTeam
+        ? `This ${noun ?? 'item'} belongs to the ${owningTeam.name} team. Members of that team, people assigned to it or paged for it, and Responders and Admins can open it.`
+        : `It belongs to a team you are not part of. Members of that team, people assigned to it or paged for it, and Responders and Admins can open it.`
     : requirement
       ? `${requirement.summary}. It lets people ${requirement.capabilityText.toLowerCase()}.`
       : 'Your account cannot open this page.';
@@ -159,7 +161,7 @@ export default function AccessDeniedView({
               requiredCapability={requirement?.anyOf[0]}
               currentRole={snapshot.role}
               suggestedRole={explanation.suggestedRole}
-              team={resourceDenied ? owningTeam : null}
+              team={resourceDenied && !explanation.alreadyInOwningTeam ? owningTeam : null}
               canRequestOrgRole={explanation.canRequestOrgRole}
             />
           </div>

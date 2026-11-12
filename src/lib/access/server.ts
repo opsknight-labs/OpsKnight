@@ -40,7 +40,12 @@ export type AccessSnapshot = {
     source: string;
     reason: string;
   }[];
-  settings: { requestsEnabled: boolean; breakGlassEnabled: boolean; breakGlassMaxMinutes: number };
+  settings: {
+    requestsEnabled: boolean;
+    breakGlassEnabled: boolean;
+    breakGlassMaxMinutes: number;
+    selfApprovalAllowed: boolean;
+  };
 };
 
 /** Request-scoped, always read from the database (never from the session token). */
@@ -106,6 +111,7 @@ export const getAccessSnapshot = cache(async (): Promise<AccessSnapshot | null> 
       requestsEnabled: settings.requestsEnabled,
       breakGlassEnabled: settings.breakGlassEnabled,
       breakGlassMaxMinutes: settings.breakGlassMaxMinutes,
+      selfApprovalAllowed: settings.selfApprovalAllowed,
     },
   };
 });
@@ -133,7 +139,11 @@ export async function findGrantors(opts: {
       select: {
         name: true,
         members: {
-          where: { role: { in: ['OWNER', 'ADMIN'] }, user: { status: 'ACTIVE' } },
+          // Read-only Auditors cannot manage teams even when they are team owners.
+          where: {
+            role: { in: ['OWNER', 'ADMIN'] },
+            user: { status: 'ACTIVE', role: { not: 'AUDITOR' } },
+          },
           select: { role: true, user: { select: { id: true, name: true, email: true } } },
           orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
           take: MAX_GRANTORS,
@@ -281,7 +291,10 @@ export type AccessExplanation = {
   owningTeam: { id: string; name: string } | null;
   grantors: Awaited<ReturnType<typeof findGrantors>>;
   snapshot: AccessSnapshot | null;
+  /** Permanent role changes are possible (role not managed by the identity provider). */
   canRequestOrgRole: boolean;
+  /** The person is already in the owning team, so joining it would not help (private item). */
+  alreadyInOwningTeam: boolean;
   suggestedRole: AppRole | null;
 };
 
@@ -350,8 +363,16 @@ export async function explainAccessForPath(rawPath: string): Promise<AccessExpla
     teamId: owningTeam?.id ?? null,
   });
   const currentRank = snapshot ? ROLE_ORDER.indexOf(snapshot.role) : -1;
-  const suggestedRole =
-    !resourceDenied && requirement
+  const alreadyInOwningTeam = Boolean(
+    owningTeam && snapshot?.teams.some(team => team.id === owningTeam.id)
+  );
+  // Item-level denials are lifted by organization-wide access (Responder) or by joining the
+  // owning team; page-level denials by the least privileged role that grants the page.
+  const suggestedRole = resourceDenied
+    ? currentRank < ROLE_ORDER.indexOf('RESPONDER')
+      ? ('RESPONDER' as const)
+      : null
+    : requirement
       ? (requirement.roles.find(role => ROLE_ORDER.indexOf(role) > currentRank) ??
         requirement.roles[0] ??
         null)
@@ -367,6 +388,7 @@ export async function explainAccessForPath(rawPath: string): Promise<AccessExpla
     grantors,
     snapshot,
     canRequestOrgRole: Boolean(snapshot && snapshot.roleSource === 'MANUAL'),
+    alreadyInOwningTeam,
     suggestedRole,
   };
 }

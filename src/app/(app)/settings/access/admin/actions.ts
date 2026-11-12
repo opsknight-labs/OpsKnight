@@ -9,6 +9,7 @@ import { hasRecentAuthentication } from '@/lib/access/step-up';
 import {
   archiveCustomRole,
   assignCustomRole,
+  cancelAccessReview,
   checkAccess,
   completeAccessReview,
   decideAccessReviewItem,
@@ -172,12 +173,31 @@ export async function decideAccessReviewItemAction(
   }
 }
 
+/** Applying removals changes roles, so it is reserved for administrators (with step-up). */
 export async function completeAccessReviewAction(reviewId: string): Promise<Result> {
   try {
-    const user = await requireAccessAdmin('reviewer', true);
+    const user = await requireAccessAdmin('admin', true);
     const result = await completeAccessReview(user.id, reviewId);
     revalidate();
-    return { ok: true, message: `Review completed. ${result.revoked} assignment(s) removed.` };
+    return {
+      ok: true,
+      message:
+        `Review completed. ${result.revoked} assignment(s) removed.` +
+        (result.notApplied
+          ? ` ${result.notApplied} could not be removed here; see the notes in the evidence.`
+          : ''),
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function cancelAccessReviewAction(reviewId: string): Promise<Result> {
+  try {
+    const user = await requireAccessAdmin('reviewer');
+    await cancelAccessReview(user.id, reviewId);
+    revalidate();
+    return { ok: true, message: 'Review cancelled. You can start a new one.' };
   } catch (error) {
     return failure(error);
   }

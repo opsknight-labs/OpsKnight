@@ -63,11 +63,17 @@ export async function getAccessControlSettings(force = false): Promise<AccessCon
   }
 }
 
-/** Synchronous view for pure actor mapping; refreshed by every async resolution. */
+/**
+ * Synchronous view for pure actor mapping. Callers that build actors should `await
+ * getAccessControlSettings()` first; a stale value also triggers a background refresh so
+ * long-lived API/ChatOps workers converge even without a page request.
+ */
 export function accessPolicySnapshot(): AccessPolicySettings {
+  if (!snapshot || Date.now() - snapshot.loadedAt >= TTL_MS) void getAccessControlSettings();
   return snapshot?.value ?? DEFAULT_ACCESS_POLICY_SETTINGS;
 }
 
+/** Forces the next read to reload, keeping the last known value until it does. */
 export function invalidateAccessControlSettings() {
-  snapshot = null;
+  if (snapshot) snapshot = { value: snapshot.value, loadedAt: 0 };
 }
