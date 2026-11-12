@@ -273,3 +273,58 @@ export function missingRunbookInsights(
     (a, b) => b.evidence.noteCount - a.evidence.noteCount || a.key.localeCompare(b.key)
   );
 }
+
+export interface RunbookDraft {
+  name: string;
+  /** Base for the slug; the caller makes it unique. */
+  slug: string;
+  description: string;
+  definition: {
+    steps: Array<{
+      key: string;
+      name: string;
+      type: 'MANUAL';
+      riskClass: 'READ_ONLY';
+      description: string;
+      config: Record<string, never>;
+    }>;
+  };
+}
+
+/**
+ * A draft runbook for a missing-runbook suggestion: one manual step per extracted action, nothing that
+ * can execute. It is only ever saved as a draft; a person edits and publishes it in the runbook editor.
+ */
+export function draftRunbookFromSuggestion(
+  evidence: Pick<MissingRunbookEvidence, 'template' | 'noteCount' | 'sampleNotes' | 'steps'>,
+  serviceName: string
+): RunbookDraft {
+  const name = (evidence.template.replace(/\s+/g, ' ').trim() || 'Suggested runbook').slice(0, 120);
+  const slug =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80)
+      .replace(/-+$/, '') || 'suggested-runbook';
+  return {
+    name,
+    slug,
+    description: [
+      `Drafted from ${evidence.noteCount} hand-written resolution notes on ${serviceName}. Review every step before publishing.`,
+      ...evidence.sampleNotes.map(note => `- ${note}`),
+    ]
+      .join('\n')
+      .slice(0, 5000),
+    definition: {
+      steps: evidence.steps.map((step, index) => ({
+        key: `step_${index + 1}`,
+        name: step.name,
+        type: 'MANUAL' as const,
+        riskClass: 'READ_ONLY' as const,
+        description: `Mentioned in ${step.support} of ${evidence.noteCount} resolution notes.`,
+        config: {},
+      })),
+    },
+  };
+}

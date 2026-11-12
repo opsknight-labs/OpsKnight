@@ -10,7 +10,9 @@ import {
   clusterNotes,
   extractImperativeSteps,
   missingRunbookInsights,
+  draftRunbookFromSuggestion,
 } from '@/lib/intelligence/runbook-health/notes';
+import { createRunbookSchema, runbookDefinitionSchema } from '@/lib/runbooks/schemas';
 
 const NOW = new Date('2026-11-12T00:00:00Z');
 const daysAgo = (days: number) => new Date(NOW.getTime() - days * 86_400_000);
@@ -312,5 +314,45 @@ describe('missingRunbookInsights', () => {
     );
     expect(items.map(item => item.key)).toEqual(['big', 'small']);
     expect(items[0].evidence.boundRunbooks).toBe(2);
+  });
+});
+
+describe('draftRunbookFromSuggestion', () => {
+  it('builds a manual-only draft the runbook editor accepts', () => {
+    const draft = draftRunbookFromSuggestion(
+      {
+        template: 'Queue depth high on <host>  ',
+        noteCount: 3,
+        sampleNotes: ['Restarted the api pods and cleared the redis cache'],
+        steps: [
+          { name: 'Restart the api pods', support: 3 },
+          { name: 'Clear the redis cache', support: 2 },
+        ],
+      },
+      'Checkout'
+    );
+    expect(draft.name).toBe('Queue depth high on <host>');
+    expect(draft.slug).toBe('queue-depth-high-on-host');
+    expect(draft.description).toContain('3 hand-written resolution notes on Checkout');
+    expect(draft.definition.steps.map(step => [step.key, step.type, step.name])).toEqual([
+      ['step_1', 'MANUAL', 'Restart the api pods'],
+      ['step_2', 'MANUAL', 'Clear the redis cache'],
+    ]);
+    expect(runbookDefinitionSchema.safeParse(draft.definition).success).toBe(true);
+    expect(createRunbookSchema.safeParse(draft).success).toBe(true);
+  });
+
+  it('falls back to a safe name and slug for an empty template', () => {
+    const draft = draftRunbookFromSuggestion(
+      {
+        template: ' ',
+        noteCount: 3,
+        sampleNotes: [],
+        steps: [{ name: 'Restart it now', support: 3 }],
+      },
+      'Checkout'
+    );
+    expect(draft.name).toBe('Suggested runbook');
+    expect(draft.slug).toBe('suggested-runbook');
   });
 });
