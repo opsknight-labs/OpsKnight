@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+// jsdom ships no type declarations and @types/jsdom is not installed.
+// @ts-expect-error -- untyped module
 import { JSDOM } from 'jsdom';
 import { MCP_APP_VIEWS, REVIEW_BASE_PLACEHOLDER } from '@/lib/mcp/protocol/app-widgets';
 
@@ -10,7 +12,7 @@ function mount(html: string) {
   const sent: Sent[] = [];
   const dom = new JSDOM(html, {
     runScripts: 'dangerously',
-    beforeParse(window) {
+    beforeParse(window: Window) {
       window.postMessage = ((message: Sent) => sent.push(message)) as typeof window.postMessage;
       Object.defineProperty(window, 'crypto', { value: globalThis.crypto });
     },

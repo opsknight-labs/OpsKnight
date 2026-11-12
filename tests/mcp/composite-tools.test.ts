@@ -153,7 +153,7 @@ describe('search and fetch', () => {
     );
     expect(fits(fetched)).toBe(true);
     expect(fetched.text).toMatch(/^x+\n\n\[Truncated to fit the response budget\./);
-    const searched = composites.fitKnowledgeResult(
+    const searched = composites.fitKnowledgeResult<{ results: unknown[]; note?: string }>(
       {
         results: Array.from({ length: 40 }, (_, i) => ({
           id: `incident:${i}`,
@@ -166,7 +166,7 @@ describe('search and fetch', () => {
     expect(fits(searched)).toBe(true);
     expect((searched.results as unknown[]).length).toBeGreaterThan(0);
     expect(searched.note).toMatch(/Showing the first \d+ of 40 results/);
-    const small = { results: [] };
+    const small: { results: unknown[]; note?: string } = { results: [] };
     expect(composites.fitKnowledgeResult(small, fits)).toBe(small);
   });
 

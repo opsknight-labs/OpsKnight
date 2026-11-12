@@ -362,6 +362,11 @@ export default function McpCapabilityControlsPanel({
             id: 'settings:mcp:capabilities',
             action: { label: 'Sign in again', onClick: signInAgainForMcp },
           });
+        } else if (result.code === 'MCP_CLIENT_NOT_FOUND') {
+          setStatus('error');
+          notify.error('This assistant no longer exists. Reload the page.', {
+            id: 'settings:mcp:capabilities',
+          });
         } else {
           setStatus('error');
           notify.error(

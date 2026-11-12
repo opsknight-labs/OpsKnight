@@ -206,7 +206,10 @@ describe('named tool results satisfy their advertised output schemas', () => {
       const schema = resultSchemas.get(name);
       if (!schema) continue;
       expect(result.structuredContent, name).toEqual(JSON.parse(result.content[0].text!));
-      expect(schema['~standard'].validate(result.structuredContent).issues, name).toBeUndefined();
+      expect(
+        (await schema['~standard'].validate(result.structuredContent)).issues,
+        name
+      ).toBeUndefined();
       checked.push(name);
     }
     // Most of the curated surface is covered, and every one of these has a result schema.
