@@ -49,6 +49,8 @@ export function formatDuration(minutes: number): string {
   return hours % 24 ? `${days} d ${hours % 24} h` : `${days} d`;
 }
 
+const formatMetric = (value: number) =>
+  Number.isFinite(value) ? String(Math.round(value * 1000) / 1000) : '—';
 const quote = (text: string) => `"${text.length > 120 ? `${text.slice(0, 119)}…` : text}"`;
 
 const ITEM_CLASS = 'scroll-mt-4 py-2 target:rounded-md target:bg-accent/60';
@@ -440,6 +442,32 @@ export default function InsightsSections({
                       item.title,
                       `Could the upstream incident ${quote(item.title)} on ${item.serviceName} be causing this one?`,
                       { kind: 'upstream', id: item.findingId, label: item.title }
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {insights.response.metricAnomalies && insights.response.metricAnomalies.length > 0 && (
+            <div className="space-y-1">
+              <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Metrics that moved
+              </h4>
+              <ul className="divide-y divide-border" aria-label="Metric anomalies">
+                {insights.response.metricAnomalies.map(item => (
+                  <li key={item.findingId} id={`finding-${item.findingId}`} className={ITEM_CLASS}>
+                    <p className="text-sm font-medium">{item.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.leadMinutes >= 0
+                        ? `${formatLead(item.leadMinutes)} onset`
+                        : `${-item.leadMinutes} min after onset`}{' '}
+                      · {RELATION_LABEL[item.relation]} ({item.serviceName}) ·{' '}
+                      {formatMetric(item.value)} vs usual {formatMetric(item.baselineMedian)}
+                    </p>
+                    {ask(
+                      item.title,
+                      `Could the metric change ${quote(item.title)} on ${item.serviceName} explain this incident?`,
+                      { kind: 'cause', id: item.findingId, label: item.title }
                     )}
                   </li>
                 ))}

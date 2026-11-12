@@ -51,8 +51,8 @@ export default async function MetricTemplatesPage() {
     <div className="space-y-6">
       <header className="space-y-1">
         <p className="text-xs text-muted-foreground">
-          <Link href="/settings/intelligence/response" className="hover:underline">
-            Dependencies &amp; changes
+          <Link href="/settings/intelligence/services#metric-evidence" className="hover:underline">
+            Services &amp; changes
           </Link>{' '}
           / Metric anomaly evidence
         </p>

@@ -65,6 +65,7 @@ export const INTELLIGENCE_SETTINGS_GROUPS = [
       { id: 'service-policies', label: 'Per-service policies' },
       { id: 'dependencies', label: 'Dependencies' },
       { id: 'topology-sources', label: 'Topology sources' },
+      { id: 'metric-evidence', label: 'Metric anomaly evidence' },
       { id: 'change-sources', label: 'Change sources' },
       { id: 'alert-quality', label: 'Alert quality' },
     ],

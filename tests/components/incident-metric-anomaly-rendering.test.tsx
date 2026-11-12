@@ -1,32 +1,44 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { IncidentTimeAxis } from '@/lib/intelligence/timeline/service';
 import type { ResponseIntelligenceView } from '@/lib/intelligence/response/view';
 
-const mocks = vi.hoisted(() => ({ axis: vi.fn(), response: vi.fn(), actor: vi.fn() }));
-vi.mock('@/lib/rbac', () => ({ getCurrentAuthorizationActor: mocks.actor }));
-vi.mock('@/lib/intelligence/timeline/service', () => ({
-  getIncidentTimeAxisForActor: mocks.axis,
+vi.mock('@/app/(app)/incidents/[id]/triage-actions', () => ({ decideTriage: vi.fn() }));
+vi.mock('@/app/(app)/incidents/[id]/intelligence-actions', () => ({
+  rateSimilarIncident: vi.fn(),
+  decideRelatedIncident: vi.fn(),
+  markIncidentRelated: vi.fn(),
+  summarizeIncidentAction: vi.fn(),
 }));
-vi.mock('@/lib/intelligence/response/view', () => ({
-  getResponseIntelligenceForActor: mocks.response,
+vi.mock('@/app/(app)/incidents/[id]/noise-actions', () => ({
+  reverseIncidentNoiseDecision: vi.fn(),
+  postSummaryAsNoteAction: vi.fn(),
 }));
 vi.mock('@/components/incident/runbooks/AdhocRunbookLauncher', () => ({ default: () => null }));
-vi.mock('@/components/incident/IntelligenceEmptyState', () => ({ default: () => null }));
 
-import IncidentTimeAxisCard from '@/components/incident/IncidentTimeAxisCard';
-import IncidentResponseCard from '@/components/incident/IncidentResponseCard';
+import InsightsSections from '@/components/incident/intelligence/InsightsSections';
+import { insightsSections } from '@/lib/intelligence/incident-ux/strip';
+import {
+  INTELLIGENCE_TIMELINE_KIND_LABEL,
+  formatOnsetOffset,
+  toIntelligenceTimelineEvents,
+} from '@/lib/intelligence/incident-ux/timeline-overlay';
+import { quietInsights } from '../helpers/incident-insights-fixture';
+
+// The response card and the time-axis card became the inspector's "Possible causes" section and rows of
+// the core timeline; these cases follow the facts to their one place.
+const causes = (response: ResponseIntelligenceView) => {
+  const insights = quietInsights({ response });
+  return renderToStaticMarkup(
+    <InsightsSections insights={insights} sections={insightsSections(insights)} />
+  );
+};
 
 const onset = new Date('2026-11-10T11:36:00Z');
 const anomalyAt = new Date('2026-11-10T11:30:00Z');
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.actor.mockResolvedValue({ id: 'u', role: 'ADMIN', teamIds: [], status: 'ACTIVE' });
-});
-
 describe('metric anomalies on incident surfaces', () => {
-  it('renders a metric anomaly on the time axis with its label, offset and detail', async () => {
+  it('puts a metric anomaly on the core timeline with its label, offset and detail', () => {
     const axis: IncidentTimeAxis = {
       onset,
       truncated: false,
@@ -50,16 +62,15 @@ describe('metric anomalies on incident surfaces', () => {
         },
       ],
     };
-    mocks.axis.mockResolvedValue(axis);
-    const html = renderToStaticMarkup(await IncidentTimeAxisCard({ incidentId: 'i' }));
-    expect(html).toContain('p99 latency deviated at 11:30 UTC by 7.3 MAD (rose)');
-    expect(html).toContain('Metric anomaly · 6 min before · Orders DB · 412 vs usual 120');
-    expect(html).toContain('bg-status-critical');
-    expect(html).toContain('metric anomalies');
-    expect(html.indexOf('deviated')).toBeLessThan(html.indexOf('Incident opened'));
+    const [row, ...rest] = toIntelligenceTimelineEvents(axis);
+    expect(rest).toEqual([]);
+    expect(row.title).toBe('p99 latency deviated at 11:30 UTC by 7.3 MAD (rose)');
+    expect(
+      `${INTELLIGENCE_TIMELINE_KIND_LABEL[row.kind]} · ${formatOnsetOffset(row.offsetMinutes)} · ${row.detail}`
+    ).toBe('Metric anomaly · 6 min before · Orders DB · 412 vs usual 120');
   });
 
-  it('lists metric anomalies among possible causes, including one just after onset', async () => {
+  it('lists metric anomalies among possible causes, including one just after onset', () => {
     const view: ResponseIntelligenceView = {
       changes: [],
       upstreamIncidents: [],
@@ -97,8 +108,7 @@ describe('metric anomalies on incident surfaces', () => {
         },
       ],
     };
-    mocks.response.mockResolvedValue(view);
-    const html = renderToStaticMarkup(await IncidentResponseCard({ incidentId: 'i' }));
+    const html = causes(view);
     expect(html).toContain('Metrics that moved');
     expect(html).toContain('p99 latency deviated at 11:30 UTC by 7.3 MAD (rose)');
     expect(html).toContain(
@@ -107,8 +117,8 @@ describe('metric anomalies on incident surfaces', () => {
     expect(html).toContain('2 min after onset · Same service (Web)');
   });
 
-  it('renders no metric section when the view has none (existing views are unchanged)', async () => {
-    mocks.response.mockResolvedValue({
+  it('renders no metric section when the view has none (existing views are unchanged)', () => {
+    const html = causes({
       changes: [],
       upstreamIncidents: [],
       runbooks: [
@@ -122,7 +132,6 @@ describe('metric anomalies on incident surfaces', () => {
         },
       ],
     } satisfies ResponseIntelligenceView);
-    const html = renderToStaticMarkup(await IncidentResponseCard({ incidentId: 'i' }));
     expect(html).not.toContain('Metrics that moved');
     expect(html).toContain('Restart');
   });

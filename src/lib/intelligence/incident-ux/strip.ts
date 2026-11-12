@@ -278,7 +278,14 @@ export function insightsSections(insights: IncidentInsights): InsightsSectionId[
     ['triage', Boolean(insights.triage?.suggestions.length)],
     ['similar', Boolean(insights.similar?.length)],
     ['related', Boolean(insights.related?.length || insights.group)],
-    ['why', Boolean(response?.changes.length || response?.upstreamIncidents.length)],
+    [
+      'why',
+      Boolean(
+        response?.changes.length ||
+        response?.upstreamIncidents.length ||
+        response?.metricAnomalies?.length
+      ),
+    ],
     ['runbooks', Boolean(response?.runbooks.length)],
     ['impact', Boolean(insights.impact && !isImpactEmpty(insights.impact))],
     ['summary', insights.mode !== 'OFF' && insights.ai.summaryEnabled],

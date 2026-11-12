@@ -276,7 +276,14 @@ test.describe.serial('intelligence responder workflows', () => {
         '/settings/intelligence/services',
         'Services & changes',
         /^Services & changes$/,
-        ['service-policies', 'dependencies', 'topology-sources', 'change-sources', 'alert-quality'],
+        [
+          'service-policies',
+          'dependencies',
+          'topology-sources',
+          'metric-evidence',
+          'change-sources',
+          'alert-quality',
+        ],
       ],
       [
         '/settings/intelligence/ai',

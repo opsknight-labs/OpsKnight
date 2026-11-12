@@ -113,7 +113,7 @@ redirects and the links other surfaces use all read it.
 | ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Engine             | `/settings/intelligence`                | `lane-health`, `general`, `global-policy`, `triage`, `correlation-rules`, `failed-work`                                  |
 | Noise controls     | `/settings/intelligence/noise-controls` | `policy`, `suppression-rules`, `maintenance-windows`, `policy-history`, `heartbeats`, `simulation`, `decisions`          |
-| Services & changes | `/settings/intelligence/services`       | `service-policies`, `dependencies`, `topology-sources`, `change-sources`, `alert-quality`                                |
+| Services & changes | `/settings/intelligence/services`       | `service-policies`, `dependencies`, `topology-sources`, `metric-evidence`, `change-sources`, `alert-quality`             |
 | Assistant          | `/settings/intelligence/ai`             | `assistant`, `providers`, `model-routing`, `prompts`, `checks`, `connections`, `knowledge-memory`, `proactive`           |
 | Evaluation & spend | `/settings/intelligence/evaluation`     | `grouping-quality`, `answer-feedback`, `insights`, `learned-weights`, `digest`, `usage`, `ai-spend` (and `model-prices`) |
 

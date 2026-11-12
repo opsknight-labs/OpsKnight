@@ -43,7 +43,7 @@ mutes or pages anything.
 
 ## Create a template
 
-1. Open **Settings → Intelligence → Dependencies & changes → Metric anomaly evidence → Manage metric templates**,
+1. Open **Settings → Intelligence → Services & changes → Metric anomaly evidence → Manage metric templates**,
    or go to `/settings/intelligence/response/metrics`.
 2. Choose the service and the connection, give the template a name (unique per service) and enter the
    query in the connection's own query language.
