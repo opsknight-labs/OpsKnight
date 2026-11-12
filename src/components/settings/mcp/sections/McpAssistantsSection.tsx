@@ -225,6 +225,15 @@ export default function McpAssistantsSection({
                       scopes={row.scopes.map(scope => ({ scope, label: describeScope(scope) }))}
                       usable={row.revokedAt ? undefined : row.effectiveScopes}
                     />
+                    {row.restrictedCapabilities > 0 && (
+                      <Link
+                        href={mcpHref({ tab: 'capabilities' })}
+                        className="mt-1 block text-xs font-medium text-primary underline-offset-2 hover:underline"
+                        aria-label={`${row.name} has its own capability restrictions`}
+                      >
+                        Own restrictions ({row.restrictedCapabilities})
+                      </Link>
+                    )}
                   </ResponsiveCell>
                   <ResponsiveCell label="Connections">
                     {row.activeConnections > 0 ? (

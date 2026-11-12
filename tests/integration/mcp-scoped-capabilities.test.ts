@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { randomBytes } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
@@ -11,6 +11,22 @@ import { lockMcpMutationAuthority } from '@/lib/mcp/core/mutation-authority';
 import { POST } from '@/app/mcp/route';
 import { commitApprovedMcpOperation, prepareMcpOperation } from '@/lib/mcp/approvals/operation';
 import { fixture } from '../helpers/mcp-approval';
+
+const admin = vi.hoisted(() => ({ id: '', tokenVersion: 0, fresh: true }));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('@/lib/mcp/auth/fresh-admin', () => ({
+  requireFreshMcpAdmin: vi.fn(async () => admin.fresh),
+}));
+vi.mock('@/lib/rbac', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/rbac')>()),
+  getUserPermissions: vi.fn(async () => ({
+    id: admin.id,
+    capabilities: ['admin.manage'],
+    isAdmin: true,
+    authenticated: true,
+  })),
+  getCurrentUser: vi.fn(async () => ({ id: admin.id, tokenVersion: admin.tokenVersion })),
+}));
 
 // Global, per-role and per-assistant restrictions combined (effective-capabilities.ts), checked
 // end to end: tools/list, execution and the under-lock recheck must always agree.
@@ -246,5 +262,126 @@ describe('per-role and per-assistant MCP capability restrictions', () => {
     // Another role's broken entry does not affect this one; unknown ids are ignored.
     await restrictRole({ RESPONDER: 'x', USER: ['removedLongAgo'], NOT_A_ROLE: ['listIncidents'] });
     expect(await refused(user.bearer)).toBe(false);
+  });
+});
+
+describe('updateMcpDisabledCapabilities scopes', () => {
+  const update = async (input: unknown) =>
+    (
+      await import('@/app/(app)/settings/integrations/mcp/capability-actions')
+    ).updateMcpDisabledCapabilities(input);
+  const policy = () => db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+
+  beforeEach(async () => {
+    const user = await createTestUser({ role: 'ADMIN' });
+    Object.assign(admin, { id: user.id, tokenVersion: user.tokenVersion, fresh: true });
+  });
+
+  it('saves a role list without touching the global list, and audits the scope', async () => {
+    const role = { kind: 'role', role: 'USER' };
+    expect(await update({ disabled: ['incident_search'], baseline: [], scope: role })).toEqual({
+      ok: true,
+      disabled: ['listIncidents'],
+      added: ['listIncidents'],
+      removed: [],
+    });
+    expect(await policy()).toMatchObject({
+      disabledCapabilities: [],
+      roleDisabledCapabilities: { USER: ['listIncidents'] },
+    });
+    // A stale editor of this scope is refused; the global list's baseline is independent.
+    expect(await update({ disabled: ['listTeams'], baseline: [], scope: role })).toEqual({
+      ok: false,
+      code: 'MCP_POLICY_CONFLICT',
+      disabled: ['listIncidents'],
+    });
+    expect(await update({ disabled: ['listTeams'], baseline: [] })).toMatchObject({ ok: true });
+    const [audit] = await db.auditLog.findMany({
+      where: { action: 'mcp.policy.capabilities_updated', actorId: admin.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(audit.details).toMatchObject({
+      metadata: { scope: 'role USER', added: ['listIncidents'] },
+      newValue: { scope: 'role USER', disabledCapabilities: ['listIncidents'] },
+    });
+    await expect(
+      update({ disabled: [], baseline: [], scope: { kind: 'role', role: 'ROOT' } })
+    ).rejects.toThrow();
+  });
+
+  it('removing a role or assistant restriction needs a fresh sign-in', async () => {
+    const role = { kind: 'role', role: 'RESPONDER' };
+    await update({ disabled: ['listTeams'], baseline: [], scope: role });
+    const client = await newClient();
+    const assistant = { kind: 'client', clientId: client.id };
+    await update({ disabled: ['listTeams'], baseline: [], scope: assistant });
+
+    admin.fresh = false;
+    for (const scope of [role, assistant])
+      expect(await update({ disabled: [], baseline: ['listTeams'], scope })).toEqual({
+        ok: false,
+        code: 'MCP_REAUTHENTICATION_REQUIRED',
+      });
+    // Narrowing further never needs one.
+    expect(
+      await update({ disabled: ['listTeams', 'getService'], baseline: ['listTeams'], scope: role })
+    ).toMatchObject({ ok: true });
+
+    admin.fresh = true;
+    await update({ disabled: [], baseline: ['getService', 'listTeams'], scope: role });
+    await update({ disabled: [], baseline: ['listTeams'], scope: assistant });
+    expect((await policy()).roleDisabledCapabilities).toBeNull();
+    expect(
+      (await db.mcpClient.findUniqueOrThrow({ where: { id: client.id } })).disabledCapabilities
+    ).toEqual([]);
+  });
+
+  it('saves an assistant list on that client only and refuses the personal-token client', async () => {
+    const client = await newClient('Audited assistant');
+    const other = await newClient();
+    const scope = { kind: 'client', clientId: client.id };
+    expect(await update({ disabled: ['domain:runbooks'], baseline: [], scope })).toMatchObject({
+      ok: true,
+    });
+    expect(await db.mcpClient.findUniqueOrThrow({ where: { id: client.id } })).toMatchObject({
+      disabledCapabilities: ['domain:runbooks'],
+    });
+    expect(
+      (await db.mcpClient.findUniqueOrThrow({ where: { id: other.id } })).disabledCapabilities
+    ).toEqual([]);
+    expect((await policy()).disabledCapabilities).toEqual([]);
+    const audit = await db.auditLog.findFirstOrThrow({ where: { entityId: client.id } });
+    expect(audit.details).toMatchObject({ metadata: { scope: 'assistant Audited assistant' } });
+
+    await db.mcpClient.upsert({
+      where: { id: 'okmcp-personal-access-tokens' },
+      create: { id: 'okmcp-personal-access-tokens', name: 'Personal tokens', redirectUris: [] },
+      update: {},
+    });
+    for (const clientId of ['okmcp-personal-access-tokens', 'missing'])
+      expect(
+        await update({ disabled: ['listTeams'], baseline: [], scope: { kind: 'client', clientId } })
+      ).toEqual({ ok: false, code: 'MCP_CLIENT_NOT_FOUND' });
+  });
+
+  it('keeps what a malformed role entry enforces when another role is saved', async () => {
+    await restrictRole({ USER: 'garbage', ADMIN: 7 });
+    expect(
+      await update({
+        disabled: ['listTeams'],
+        baseline: [],
+        scope: { kind: 'role', role: 'AUDITOR' },
+      })
+    ).toMatchObject({ ok: true });
+    const stored = (await policy()).roleDisabledCapabilities as Record<string, string[]>;
+    // USER stays fully restricted (what it enforced); ADMIN's unreadable entry enforced nothing.
+    expect(stored.AUDITOR).toEqual(['listTeams']);
+    expect(stored.USER.every(entry => entry.startsWith('domain:'))).toBe(true);
+    expect(stored.USER.length).toBeGreaterThan(5);
+    expect(stored).not.toHaveProperty('ADMIN');
+    // The broken USER entry is offered to the editor as what it enforces, so a save is consistent.
+    expect(
+      await update({ disabled: [], baseline: [], scope: { kind: 'role', role: 'USER' } })
+    ).toMatchObject({ ok: false, code: 'MCP_POLICY_CONFLICT' });
   });
 });

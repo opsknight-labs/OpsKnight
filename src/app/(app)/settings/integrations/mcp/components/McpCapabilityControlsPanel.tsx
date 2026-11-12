@@ -114,12 +114,18 @@ type Props = {
     disabled: string[];
     baseline: string[];
   }) => Promise<UpdateMcpCapabilitiesResult>;
+  /** Overrides the section description (the scope being edited, see McpCapabilityScopedControls). */
+  description?: string;
+  /** Reports unsaved edits so a scope switch can wait for a save or discard. */
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 export default function McpCapabilityControlsPanel({
   capabilities,
   initialDisabled,
   action,
+  description,
+  onDirtyChange,
 }: Props) {
   const idPrefix = useId();
   const [baseline, setBaseline] = useState<string[]>(initialDisabled);
@@ -184,6 +190,7 @@ export default function McpCapabilityControlsPanel({
       sortedEntries.some((entry, i) => entry !== baseline.at(i)),
     [sortedEntries, baseline]
   );
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const update = useCallback((mutate: (next: Set<string>) => void) => {
     setEntries(previous => {
@@ -398,7 +405,10 @@ export default function McpCapabilityControlsPanel({
       </AlertDialog>
       <SettingsSection
         title="Exposed capabilities"
-        description="Turn off anything assistants must never reach through MCP. This applies to every connection, whatever a user's role or consent allows, and takes effect on their next request."
+        description={
+          description ??
+          "Turn off anything assistants must never reach through MCP. This applies to every connection, whatever a user's role or consent allows, and takes effect on their next request."
+        }
         action={
           <p
             className={cn('text-sm tabular-nums text-muted-foreground', HEADING_FONT)}
