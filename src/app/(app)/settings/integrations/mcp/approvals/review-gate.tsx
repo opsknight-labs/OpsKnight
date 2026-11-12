@@ -6,6 +6,7 @@ import { formatDateTime } from '@/lib/timezone';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { Deadline } from '@/components/settings/mcp/McpListKit';
 import { mcpHref } from '../list-params';
+import ShareReviewLink from './ShareReviewLink';
 
 /** Shared definition-list styles for the review and status pages, readable in both themes. */
 export const DT_CLASS = 'text-xs uppercase tracking-wide text-muted-foreground';
@@ -34,6 +35,9 @@ export function ReviewIntro() {
       <p className="text-sm text-muted-foreground">
         Names and text below come from the assistant&apos;s request and may be inaccurate.
       </p>
+      <div className="pt-2">
+        <ShareReviewLink />
+      </div>
     </div>
   );
 }
