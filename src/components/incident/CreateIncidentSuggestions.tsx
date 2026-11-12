@@ -9,7 +9,7 @@ import type { DraftSuggestions } from '@/lib/intelligence/helpers/create-suggest
 const DEBOUNCE_MS = 500;
 const MIN_TITLE_CHARS = 8;
 const URGENCY_LABEL: Record<string, string> = { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low' };
-const CHIP_CLASS = 'min-h-11 rounded-xl px-3 text-xs sm:min-h-9';
+const CHIP_CLASS = 'min-h-11 rounded-xl px-3 text-xs';
 
 type Urgency = 'HIGH' | 'MEDIUM' | 'LOW';
 
@@ -91,7 +91,7 @@ export default function CreateIncidentSuggestions({
             href={`/incidents/${duplicate.incidentId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0"
+            className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2 hover:text-primary"
           >
             {duplicate.title}
           </Link>{' '}
