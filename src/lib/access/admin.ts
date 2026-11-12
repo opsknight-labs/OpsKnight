@@ -25,11 +25,15 @@ import { resolveUserActor } from '@/lib/authorization-actors';
 import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
 import { resolvePageAccess, ruleAllows } from '@/lib/access/pages';
 import { capabilityInfo, describeRequirement } from '@/lib/access/catalog';
-import { invalidateAccessControlSettings } from '@/lib/access/settings';
-import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
+import { getAccessControlSettings, invalidateAccessControlSettings } from '@/lib/access/settings';
+import {
+  invalidateSessionSecurityProjection,
+  invalidateSessionSecurityProjections,
+} from '@/lib/session-security-projection';
 import { runSerializableTransaction } from '@/lib/db-utils';
-import { advanceUserSessionVersions, updateUserSecurityState } from '@/lib/users/admin-invariants';
+import { updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { LastAdministratorError } from '@/lib/users/last-administrator-error';
+import { createInAppNotifications } from '@/lib/in-app-notifications';
 
 // ─── Access checker ─────────────────────────────────────────────────────────
 
@@ -294,6 +298,7 @@ export async function saveCustomRole(
   input: z.input<typeof customRoleInput> & { id?: string | null }
 ) {
   const body = customRoleInput.parse(input);
+  let holderIds: string[] = [];
   try {
     const saved = await prisma.$transaction(async tx => {
       const before = input.id ? await tx.customRole.findUnique({ where: { id: input.id } }) : null;
@@ -318,15 +323,13 @@ export async function saveCustomRole(
             },
           });
       if (before) {
-        // Holders' sessions pick up the new permission set on their next request.
+        // Permissions are read from the database on every request, so holders keep their
+        // sessions and get the new permission set immediately.
         const holders = await tx.user.findMany({
           where: { customRoleId: role.id },
           select: { id: true },
         });
-        await advanceUserSessionVersions(
-          tx,
-          holders.map(holder => holder.id)
-        );
+        holderIds = holders.map(holder => holder.id);
       }
       await logAudit(
         {
@@ -341,6 +344,7 @@ export async function saveCustomRole(
       );
       return role;
     });
+    invalidateSessionSecurityProjections(holderIds);
     return saved;
   } catch (error) {
     if ((error as { code?: string }).code === 'P2002') {
@@ -354,17 +358,13 @@ export async function saveCustomRole(
 }
 
 export async function archiveCustomRole(actorId: string, id: string) {
-  await prisma.$transaction(async tx => {
+  const holderIds = await prisma.$transaction(async tx => {
     const role = await tx.customRole.findUnique({ where: { id } });
     if (!role || role.archivedAt) {
       throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Custom role not found.' });
     }
     const holders = await tx.user.findMany({ where: { customRoleId: id }, select: { id: true } });
     await tx.user.updateMany({ where: { customRoleId: id }, data: { customRoleId: null } });
-    await advanceUserSessionVersions(
-      tx,
-      holders.map(holder => holder.id)
-    );
     await tx.customRole.update({ where: { id }, data: { archivedAt: new Date() } });
     await logAudit(
       {
@@ -376,7 +376,9 @@ export async function archiveCustomRole(actorId: string, id: string) {
       },
       tx
     );
+    return holders.map(holder => holder.id);
   });
+  invalidateSessionSecurityProjections(holderIds);
 }
 
 export async function assignCustomRole(
@@ -398,7 +400,6 @@ export async function assignCustomRole(
     }
     if (user.customRoleId === customRoleId) return user;
     await tx.user.update({ where: { id: userId }, data: { customRoleId } });
-    await advanceUserSessionVersions(tx, [userId]);
     await logAudit(
       {
         action: 'user.custom_role.updated',
@@ -469,7 +470,11 @@ export async function startAccessReview(
         userId: user.id,
         subjectType: 'ORG_ROLE',
         subjectId: user.role,
-        subjectLabel: `${user.name ?? user.email} · ${roleLabel(user.role as AppRole)}`,
+        subjectLabel: `${user.name ?? user.email} · ${roleLabel(user.role as AppRole)}${
+          user.roleSource !== 'MANUAL'
+            ? ` (from ${user.roleSource}; removing it must be done in your identity provider)`
+            : ''
+        }`,
         snapshot: {
           email: user.email,
           role: user.role,
@@ -527,10 +532,62 @@ export async function startAccessReview(
       },
       tx
     );
+    // Tell reviewers there is work to do (scheduled reviews start without anyone present).
+    const reviewers = await tx.user.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { role: 'ADMIN' },
+          {
+            customRole: {
+              archivedAt: null,
+              capabilities: { has: CAPABILITIES.ACCESS_REVIEW_MANAGE },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+      take: 50,
+    });
+    await createInAppNotifications(
+      {
+        userIds: reviewers.map(reviewer => reviewer.id).filter(id => id !== actorId),
+        type: 'SECURITY',
+        title: 'Access review started',
+        message: `${name}: ${items.length} assignment${items.length === 1 ? '' : 's'} to review${
+          input.dueAt ? ` by ${input.dueAt.toISOString().slice(0, 10)}` : ''
+        }.`,
+        entityType: 'ACCESS_REVIEW',
+        entityId: created.id,
+        dedupeKey: `access-review-started:${created.id}`,
+      },
+      tx
+    );
     return created;
   });
   invalidateAccessControlSettings();
   return review;
+}
+
+/** Whether anyone other than `reviewerId` could review: org admins or holders of the reviewer role. */
+async function hasOtherReviewer(reviewerId: string): Promise<boolean> {
+  const other = await prisma.user.findFirst({
+    where: {
+      id: { not: reviewerId },
+      status: 'ACTIVE',
+      OR: [
+        { role: 'ADMIN' },
+        {
+          customRole: {
+            archivedAt: null,
+            capabilities: { has: CAPABILITIES.ACCESS_REVIEW_MANAGE },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  });
+  return Boolean(other);
 }
 
 export async function decideAccessReviewItem(
@@ -546,19 +603,71 @@ export async function decideAccessReviewItem(
   if (!item || item.review.status !== 'OPEN') {
     throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'This review is closed.' });
   }
+  let selfCertification: string | null = null;
   if (item.userId === reviewerId) {
-    throw new AppError({
-      code: 'SEPARATION_OF_DUTIES',
-      userMessage: 'You cannot certify your own access. Another reviewer must decide this item.',
-    });
+    // Four-eyes whenever possible; the evidence records exactly why self-certification happened.
+    const otherReviewer = await hasOtherReviewer(reviewerId);
+    if (!otherReviewer) {
+      selfCertification = 'Self-certified: no other reviewer available.';
+    } else if ((await getAccessControlSettings(true)).selfApprovalAllowed) {
+      selfCertification = 'Self-certified: allowed by the organization access policy.';
+    } else {
+      throw new AppError({
+        code: 'SEPARATION_OF_DUTIES',
+        userMessage: 'You cannot certify your own access. Another reviewer must decide this item.',
+      });
+    }
   }
+  const trimmed = note?.trim().slice(0, 450) || null;
   await prisma.accessReviewItem.update({
     where: { id: itemId },
-    data: { decision, reviewerId, decidedAt: new Date(), note: note?.trim().slice(0, 500) || null },
+    data: {
+      decision,
+      reviewerId,
+      decidedAt: new Date(),
+      note: selfCertification ? [trimmed, selfCertification].filter(Boolean).join(' ') : trimmed,
+    },
   });
 }
 
-/** Applies every REVOKE decision and closes the review. Unreviewed items block completion. */
+/** Whether `reviewerId` may decide their own item (sole reviewer, or policy allows it). */
+export async function canSelfCertify(reviewerId: string): Promise<boolean> {
+  const settings = await getAccessControlSettings();
+  return settings.selfApprovalAllowed || !(await hasOtherReviewer(reviewerId));
+}
+
+/** Cancels an open review without applying anything, so a new one can be started. */
+export async function cancelAccessReview(actorId: string, reviewId: string, reason?: string) {
+  const updated = await prisma.$transaction(async tx => {
+    const result = await tx.accessReview.updateMany({
+      where: { id: reviewId, status: 'OPEN' },
+      data: { status: 'CANCELLED', completedAt: new Date() },
+    });
+    if (result.count === 0) return false;
+    await logAudit(
+      {
+        action: 'access_review.cancelled',
+        entityType: 'ACCESS_REVIEW',
+        entityId: reviewId,
+        actorId,
+        details: { reason: reason?.trim().slice(0, 500) || null },
+      },
+      tx
+    );
+    return true;
+  });
+  if (!updated) {
+    throw new AppError({
+      code: 'RESOURCE_CONFLICT',
+      userMessage: 'This review is already closed.',
+    });
+  }
+}
+
+/**
+ * Applies every REVOKE decision and closes the review. Unreviewed items block completion.
+ * Evidence only records a removal as applied when it actually happened; otherwise it records why.
+ */
 export async function completeAccessReview(actorId: string, reviewId: string) {
   const affected = new Set<string>();
   const result = await runSerializableTransaction(async tx => {
@@ -580,13 +689,19 @@ export async function completeAccessReview(actorId: string, reviewId: string) {
       });
     }
     let revoked = 0;
+    let notApplied = 0;
     for (const item of review.items.filter(entry => entry.decision === 'REVOKE')) {
+      let skipReason: string | null = null;
       if (item.subjectType === 'ORG_ROLE') {
         const user = await tx.user.findUnique({
           where: { id: item.userId },
           select: { role: true, roleSource: true },
         });
-        if (user && user.role === item.subjectId && user.roleSource === 'MANUAL') {
+        if (!user || user.role !== item.subjectId) {
+          skipReason = 'role already changed since the review started';
+        } else if (user.roleSource !== 'MANUAL') {
+          skipReason = `role is managed by the identity provider (${user.roleSource}); change the group there`;
+        } else {
           try {
             await updateUserSecurityState(
               item.userId,
@@ -597,33 +712,45 @@ export async function completeAccessReview(actorId: string, reviewId: string) {
               undefined,
               tx
             );
+            affected.add(item.userId);
           } catch (error) {
-            // The last active administrator is kept; the evidence records it was not applied.
-            if (error instanceof LastAdministratorError) continue;
-            throw error;
+            if (!(error instanceof LastAdministratorError)) throw error;
+            skipReason = 'kept: the organization must keep at least one administrator';
           }
-          affected.add(item.userId);
-          revoked += 1;
         }
       } else if (item.subjectType === 'CUSTOM_ROLE') {
         const updated = await tx.user.updateMany({
           where: { id: item.userId, customRoleId: item.subjectId },
           data: { customRoleId: null },
         });
-        if (updated.count) {
-          await advanceUserSessionVersions(tx, [item.userId]);
-          affected.add(item.userId);
-        }
-        revoked += updated.count;
+        if (updated.count) affected.add(item.userId);
+        else skipReason = 'custom role already removed';
       } else if (item.subjectType === 'ACCESS_GRANT' && item.subjectId) {
         const updated = await tx.accessGrant.updateMany({
-          where: { id: item.subjectId, revokedAt: null },
+          where: { id: item.subjectId, revokedAt: null, expiresAt: { gt: new Date() } },
           data: { revokedAt: new Date(), revokedById: actorId, revokeReason: 'Access review' },
         });
         if (updated.count) affected.add(item.userId);
-        revoked += updated.count;
+        else skipReason = 'temporary access had already ended';
       }
-      await tx.accessReviewItem.update({ where: { id: item.id }, data: { appliedAt: new Date() } });
+      if (skipReason) {
+        notApplied += 1;
+        await tx.accessReviewItem.update({
+          where: { id: item.id },
+          data: {
+            note: [item.note, `Not applied: ${skipReason}.`]
+              .filter(Boolean)
+              .join(' ')
+              .slice(0, 1000),
+          },
+        });
+      } else {
+        revoked += 1;
+        await tx.accessReviewItem.update({
+          where: { id: item.id },
+          data: { appliedAt: new Date() },
+        });
+      }
     }
     await tx.accessReview.update({
       where: { id: reviewId },
@@ -639,13 +766,14 @@ export async function completeAccessReview(actorId: string, reviewId: string) {
           items: review.items.length,
           kept: review.items.filter(item => item.decision === 'KEEP').length,
           revoked,
+          notApplied,
         },
       },
       tx
     );
-    return { revoked };
+    return { revoked, notApplied };
   });
-  for (const userId of affected) invalidateSessionSecurityProjection(userId);
+  invalidateSessionSecurityProjections([...affected]);
   return result;
 }
 

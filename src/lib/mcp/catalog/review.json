@@ -2588,7 +2588,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "incident_available_actions",
-    "routeSha256": "fe113c7e0be0c79844512d0a6d97f5989199a4ddc0eced90c150f104647ef6cc",
+    "routeSha256": "5f1f3a184403ab1b1d575386f6fba8078b96b1d16ea1e8133da1d89401c342fd",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-round5.test.ts",
     "contractSha256": "72a32b2d07116c4b4290fe2745db419a4e2ae8d139b4f6837b94703adbb1be30",

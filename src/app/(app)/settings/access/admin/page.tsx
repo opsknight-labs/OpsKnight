@@ -3,7 +3,7 @@ import { ShieldCheck } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccessSnapshot } from '@/lib/access/server';
 import { getAccessControlSettings } from '@/lib/access/settings';
-import { accessDenialInsights, listCustomRoles } from '@/lib/access/admin';
+import { accessDenialInsights, canSelfCertify, listCustomRoles } from '@/lib/access/admin';
 import { describeRequirement } from '@/lib/access/catalog';
 import { isCapability, roleLabel, type AppRole, type Capability } from '@/lib/authorization';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
@@ -108,6 +108,7 @@ export default async function AccessManagementPage() {
         <WhoHasAccess />
       </SettingsSection>
 
+      <div id="temporary-access" className="scroll-mt-24" />
       <SettingsSection
         title="Temporary and emergency access"
         description="Access that ends automatically. End any of it early if it is no longer needed."
@@ -139,6 +140,7 @@ export default async function AccessManagementPage() {
         )}
       </SettingsSection>
 
+      <div id="access-reviews" className="scroll-mt-24" />
       <SettingsSection
         title="Access reviews"
         description="Periodically confirm that everyone with elevated access still needs it. Completed reviews produce audit evidence (SOC 2 CC6.2/CC6.3, ISO 27001 A.5.18)."
@@ -153,6 +155,8 @@ export default async function AccessManagementPage() {
               <AccessReviewItems
                 reviewId={openReview.id}
                 currentUserId={access.userId}
+                canSelfCertify={await canSelfCertify(access.userId)}
+                canComplete={isAdmin}
                 items={openReview.items.map(item => ({
                   id: item.id,
                   userId: item.userId,

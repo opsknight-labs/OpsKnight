@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z, ZodError } from 'zod/v3';
 
 import { CAPABILITIES, isCapability, type Capability, capabilitiesOf } from '@/lib/authorization';
 import { getCurrentUser } from '@/lib/rbac';
@@ -9,6 +10,7 @@ import { hasRecentAuthentication } from '@/lib/access/step-up';
 import {
   archiveCustomRole,
   assignCustomRole,
+  cancelAccessReview,
   checkAccess,
   completeAccessReview,
   decideAccessReviewItem,
@@ -19,10 +21,32 @@ import {
   type AccessCheckResult,
 } from '@/lib/access/admin';
 
+/** Every client-supplied argument is parsed strictly before authorization and mutation. */
+const recordId = z.string().trim().min(1).max(64);
+const reviewStartInput = z
+  .object({
+    name: z.string().max(120),
+    dueInDays: z.number().int().min(1).max(90).nullable(),
+  })
+  .strict();
+const reviewDecisionInput = z
+  .object({
+    itemId: recordId,
+    decision: z.enum(['KEEP', 'REVOKE']),
+    note: z.string().max(500).optional(),
+  })
+  .strict();
+
 type Result<T = undefined> =
   { ok: true; data?: T; message?: string } | { ok: false; error: string; code?: string };
 
 function failure(error: unknown): { ok: false; error: string; code?: string } {
+  if (error instanceof ZodError)
+    return {
+      ok: false,
+      error: 'Please check your input and try again.',
+      code: 'VALIDATION_FAILED',
+    };
   const publicError = toPublicAppError(error);
   return { ok: false, error: publicError.message, code: publicError.code };
 }
@@ -115,8 +139,9 @@ export async function saveCustomRoleAction(input: {
 
 export async function archiveCustomRoleAction(id: string): Promise<Result> {
   try {
+    const roleId = recordId.parse(id);
     const user = await requireAccessAdmin('admin', true);
-    await archiveCustomRole(user.id, id);
+    await archiveCustomRole(user.id, roleId);
     revalidate();
     return { ok: true, message: 'Custom role removed.' };
   } catch (error) {
@@ -129,8 +154,10 @@ export async function assignCustomRoleAction(
   customRoleId: string | null
 ): Promise<Result> {
   try {
+    const target = recordId.parse(userId);
+    const role = recordId.nullable().parse(customRoleId);
     const user = await requireAccessAdmin('admin', true);
-    await assignCustomRole(user.id, userId, customRoleId);
+    await assignCustomRole(user.id, target, role);
     revalidate();
     revalidatePath('/users');
     return { ok: true, message: customRoleId ? 'Custom role assigned.' : 'Custom role removed.' };
@@ -144,12 +171,12 @@ export async function startAccessReviewAction(input: {
   dueInDays: number | null;
 }): Promise<Result> {
   try {
+    const body = reviewStartInput.parse(input);
     const user = await requireAccessAdmin('reviewer');
-    const dueAt =
-      input.dueInDays && input.dueInDays > 0
-        ? new Date(Date.now() + Math.min(input.dueInDays, 90) * 24 * 60 * 60 * 1000)
-        : null;
-    await startAccessReview(user.id, { name: input.name, dueAt });
+    const dueAt = body.dueInDays
+      ? new Date(Date.now() + body.dueInDays * 24 * 60 * 60 * 1000)
+      : null;
+    await startAccessReview(user.id, { name: body.name, dueAt });
     revalidate();
     return { ok: true, message: 'Access review started.' };
   } catch (error) {
@@ -163,8 +190,9 @@ export async function decideAccessReviewItemAction(
   note?: string
 ): Promise<Result> {
   try {
+    const body = reviewDecisionInput.parse({ itemId, decision, note });
     const user = await requireAccessAdmin('reviewer');
-    await decideAccessReviewItem(user.id, itemId, decision, note);
+    await decideAccessReviewItem(user.id, body.itemId, body.decision, body.note);
     revalidate();
     return { ok: true };
   } catch (error) {
@@ -172,12 +200,33 @@ export async function decideAccessReviewItemAction(
   }
 }
 
+/** Applying removals changes roles, so it is reserved for administrators (with step-up). */
 export async function completeAccessReviewAction(reviewId: string): Promise<Result> {
   try {
-    const user = await requireAccessAdmin('reviewer', true);
-    const result = await completeAccessReview(user.id, reviewId);
+    const id = recordId.parse(reviewId);
+    const user = await requireAccessAdmin('admin', true);
+    const result = await completeAccessReview(user.id, id);
     revalidate();
-    return { ok: true, message: `Review completed. ${result.revoked} assignment(s) removed.` };
+    return {
+      ok: true,
+      message:
+        `Review completed. ${result.revoked} assignment(s) removed.` +
+        (result.notApplied
+          ? ` ${result.notApplied} could not be removed here; see the notes in the evidence.`
+          : ''),
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function cancelAccessReviewAction(reviewId: string): Promise<Result> {
+  try {
+    const id = recordId.parse(reviewId);
+    const user = await requireAccessAdmin('reviewer');
+    await cancelAccessReview(user.id, id);
+    revalidate();
+    return { ok: true, message: 'Review cancelled. You can start a new one.' };
   } catch (error) {
     return failure(error);
   }

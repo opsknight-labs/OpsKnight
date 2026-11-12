@@ -50,7 +50,7 @@ Every page and action is checked on the server. When something is not allowed yo
 
 |                                                    | User                                                                    | Auditor                | Responder                           | Admin        |
 | -------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------- | ----------------------------------- | ------------ |
-| See incidents, services, schedules                 | Their teams, plus incidents assigned to or watched by them              | Everything (read-only) | Everything                          | Everything   |
+| See incidents, services, schedules                 | Their teams, plus incidents assigned to them, paging them, or watched   | Everything (read-only) | Everything                          | Everything   |
 | Acknowledge, add notes, escalate, resolve          | Incidents assigned to them, that page them, or on their teams' services | —                      | Any incident                        | Any incident |
 | Create incidents; change urgency, reassign, snooze | —                                                                       | —                      | ✓                                   | ✓            |
 | Run and approve runbooks                           | —                                                                       | —                      | ✓                                   | ✓            |
@@ -94,7 +94,11 @@ Choose how long you need it (1 hour to 7 days, or permanently) and say why.
   approve or decline, and add a note. You get a notification with a link back to where you were.
 - You cannot approve your own request unless an administrator has allowed it in the access policy.
 - Granting the Admin role requires the approver to have signed in within the last 15 minutes.
-- If your role comes from your identity provider, change it there instead (the form says so).
+- If your role comes from your identity provider, you can still ask for temporary access; permanent
+  changes are made in the identity provider.
+- You can ask to join any team by name, even if you are not in a team yet.
+- Approvers get a notification that opens the request directly. If you already received the access
+  some other way, approving closes the request without changing anything (it never demotes you).
 
 Temporary access ends automatically. A banner shows while you have it, and you can end it early.
 
@@ -115,12 +119,17 @@ everything done with it is in the audit log. Administrators can turn it off.
   temporary access.
 - **Temporary and emergency access** — see and end active grants.
 - **Access reviews** — certify that everyone with Admin, Responder, Auditor, a custom role, or
-  long temporary access still needs it. Completing a review removes what you marked, and the
+  long temporary access still needs it. Reviewers are notified when a review starts. Nobody
+  certifies their own access unless they are the only reviewer (this is recorded). Reviews can be
+  cancelled without changes, and only Admins complete a review and apply removals. Roles that come
+  from your identity provider must be removed there; the evidence says so instead of marking them
+  removed. Completing a review removes what you marked, and the
   evidence can be downloaded for SOC 2 (CC6.2/CC6.3) or ISO 27001 (A.5.18) audits. Reviews can
   start automatically every month, quarter, half-year or year.
 - **Custom roles** — add specific permissions to specific people without promoting them, for
-  example letting an Auditor run runbooks. Organization administration can only be given with the
-  Admin role.
+  example letting an Auditor run runbooks, or making someone an access reviewer. Organization
+  administration can only be given with the Admin role. Changes take effect immediately and do
+  not sign anyone out.
 - **Most denied** — the pages and actions people were blocked from most in the last 7 days, a
   quick way to spot someone who needs a team or role.
 - **Access policy** — turn incident work for Users, access requests, and emergency access on or

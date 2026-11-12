@@ -2,7 +2,9 @@ import 'server-only';
 
 import prisma from '@/lib/prisma';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
+import { CAPABILITIES } from '@/lib/authorization';
 import {
+  actorHasCapability,
   incidentOperatorRelation,
   type AuthorizationActor,
   type AuthorizationResource,
@@ -74,6 +76,12 @@ export async function resolveIncidentResourceForActor(
   if (!loaded) return null;
   const { escalationPolicyId, ...resource } = loaded;
   if (incidentOperatorRelation(actor, resource)) return resource;
+  // Organization-wide access needs no relationship; skip the on-call lookup.
+  if (
+    actorHasCapability(actor, CAPABILITIES.OPERATIONS_MANAGE) &&
+    actorHasCapability(actor, CAPABILITIES.INCIDENT_READ_ALL)
+  )
+    return resource;
   if (await isPagedForIncident(actor, escalationPolicyId)) {
     return { ...resource, onCallUserIds: [actor.id] };
   }

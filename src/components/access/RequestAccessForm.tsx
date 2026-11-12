@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
 import { requestAccessAction } from '@/app/(app)/settings/access/actions';
-import { roleLabel, type AppRole } from '@/lib/authorization';
+import { roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
 
 export const DURATION_OPTIONS: { value: string; label: string }[] = [
   { value: '60', label: '1 hour' },
@@ -49,12 +49,18 @@ export default function RequestAccessForm({
   onDone,
   compact,
 }: Props) {
-  const roleChoices = useMemo(() => ROLE_ORDER.filter(role => role !== currentRole), [currentRole]);
+  // Only roles that would add something: built-in roles are not a strict ladder.
+  const roleChoices = useMemo(
+    () => ROLE_ORDER.filter(role => !roleCovers(currentRole, role)),
+    [currentRole]
+  );
   const [kind, setKind] = useState<'ORG_ROLE' | 'TEAM_MEMBERSHIP'>(
     team ? 'TEAM_MEMBERSHIP' : 'ORG_ROLE'
   );
   const [role, setRole] = useState<AppRole>(
-    suggestedRole && suggestedRole !== currentRole ? suggestedRole : (roleChoices[0] ?? 'RESPONDER')
+    suggestedRole && roleChoices.includes(suggestedRole)
+      ? suggestedRole
+      : (roleChoices[0] ?? 'RESPONDER')
   );
   const [duration, setDuration] = useState('480');
   const [chosenTeamId, setChosenTeamId] = useState(team?.id ?? teamChoices?.[0]?.id ?? '');
@@ -77,14 +83,24 @@ export default function RequestAccessForm({
     );
   }
 
+  const noRoleToAsk = kind === 'ORG_ROLE' && roleChoices.length === 0;
   const canSubmit =
-    reason.trim().length >= 10 && !pending && (kind === 'ORG_ROLE' || Boolean(selectedTeam));
-  const orgRoleBlocked = kind === 'ORG_ROLE' && !canRequestOrgRole;
+    reason.trim().length >= 10 &&
+    !pending &&
+    !noRoleToAsk &&
+    (kind === 'ORG_ROLE' || Boolean(selectedTeam));
+  // Identity-provider managed roles can still be raised temporarily; permanent changes belong
+  // in the identity provider.
+  const permanentRoleBlocked = kind === 'ORG_ROLE' && !canRequestOrgRole;
+  const durationChoices = permanentRoleBlocked
+    ? DURATION_OPTIONS.filter(option => option.value !== 'permanent')
+    : DURATION_OPTIONS;
+  const effectiveDuration = permanentRoleBlocked && duration === 'permanent' ? '480' : duration;
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    const durationMinutes = duration === 'permanent' ? null : Number(duration);
+    const durationMinutes = effectiveDuration === 'permanent' ? null : Number(effectiveDuration);
     startTransition(async () => {
       const result = await requestAccessAction(
         kind === 'ORG_ROLE'
@@ -169,7 +185,6 @@ export default function RequestAccessForm({
               className={selectClass}
               value={role}
               onChange={event => setRole(event.target.value as AppRole)}
-              disabled={orgRoleBlocked}
             >
               {roleChoices.map(choice => (
                 <option key={choice} value={choice}>
@@ -184,10 +199,10 @@ export default function RequestAccessForm({
           <select
             id="access-duration"
             className={selectClass}
-            value={duration}
+            value={effectiveDuration}
             onChange={event => setDuration(event.target.value)}
           >
-            {DURATION_OPTIONS.map(option => (
+            {durationChoices.map(option => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -196,12 +211,19 @@ export default function RequestAccessForm({
         </div>
       </div>
 
-      {orgRoleBlocked ? (
+      {noRoleToAsk && (
         <p className="text-sm text-muted-foreground">
-          Your role is managed by your identity provider. Ask your IT team to add you to the right
-          group.
+          Your role already includes everything the other roles allow.
+          {offersTeam ? ' You can still ask to join a team.' : ''}
         </p>
-      ) : (
+      )}
+      {permanentRoleBlocked && (
+        <p className="text-xs text-muted-foreground">
+          Your role comes from your identity provider, so you can ask for temporary access here. For
+          a permanent change, ask your IT team to add you to the right group.
+        </p>
+      )}
+      {
         <>
           <div className="space-y-1.5">
             <Label htmlFor="access-reason">Why do you need it?</Label>
@@ -228,7 +250,7 @@ export default function RequestAccessForm({
             {pending ? 'Sending…' : 'Send request'}
           </Button>
         </>
-      )}
+      }
     </form>
   );
 }

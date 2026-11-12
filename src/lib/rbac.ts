@@ -413,8 +413,10 @@ async function assertIncidentOperator(
   if (!actor) throw new AuthorizationError(roleOnlyMessage, CAPABILITIES.OPERATIONS_MANAGE);
   // Decide on capability alone first, so people with no incident permissions never trigger an
   // incident lookup (and cannot probe which incidents exist).
+  // Emergency access scoped to this incident is only visible once the incident is known.
+  const elevatedHere = actor.elevatedIncidentIds?.includes(incidentId) ?? false;
   const preliminary = authorize({ actor, action });
-  if (!preliminary.allowed) {
+  if (!preliminary.allowed && !elevatedHere) {
     void recordActionDenial(user.id, [preliminary.requiredCapability], preliminary.reason, {
       type: 'incident',
       id: incidentId,
@@ -526,36 +528,18 @@ async function assertIncidentPolicy(
   if (!actor) {
     throw new AuthorizationError(deniedMessage, capability);
   }
+  const elevatedHere = actor.elevatedIncidentIds?.includes(incidentId) ?? false;
   const preliminaryDecision = authorize({ actor, action });
-  if (!preliminaryDecision.allowed) {
+  if (!preliminaryDecision.allowed && !elevatedHere) {
     throw new AuthorizationError(deniedMessage, capability);
   }
-  const incident = await prisma.incident.findUnique({
-    where: { id: incidentId },
-    select: {
-      assigneeId: true,
-      teamId: true,
-      visibility: true,
-      watchers: { select: { userId: true } },
-      service: { select: { teamId: true } },
-    },
-  });
-
-  if (!incident) {
+  // Includes the incident id (for incident-scoped emergency access) and whether this incident
+  // currently pages the person (on-call responders may open what they are paged for).
+  const resource = await resolveIncidentResourceForActor(actor, incidentId);
+  if (!resource) {
     throw appError('INCIDENT_NOT_FOUND', 'Incident not found', { incidentId });
   }
-  const decision = authorize({
-    actor,
-    action,
-    resource: {
-      type: 'incident',
-      assigneeId: incident.assigneeId,
-      assignedTeamId: incident.teamId,
-      visibility: incident.visibility,
-      watcherIds: incident.watchers.map(watcher => watcher.userId),
-      serviceTeamId: incident.service.teamId,
-    },
-  });
+  const decision = authorize({ actor, action, resource });
   if (decision.allowed) return user;
 
   throw appError('INCIDENT_ACCESS_DENIED', deniedMessage, { incidentId, userId: user.id, action });

@@ -294,6 +294,20 @@ export function hasCapability(role: AppRole, capability: Capability): boolean {
   return ROLE_CAPABILITIES.get(role)?.has(capability) ?? false;
 }
 
+/**
+ * Whether `current` already includes every permission of `requested`. Built-in roles are not a
+ * strict ladder (Auditors hold audit and compliance permissions Responders lack), so compare
+ * permission sets rather than rank.
+ */
+export function roleCovers(
+  current: string | null | undefined,
+  requested: string | null | undefined
+): boolean {
+  if (!isAppRole(current) || !isAppRole(requested)) return false;
+  const held = new Set(getRoleCapabilities(current));
+  return getRoleCapabilities(requested).every(capability => held.has(capability));
+}
+
 /** Effective permissions of a resolved user; falls back to the built-in role's permissions. */
 export function capabilitiesOf(user: {
   role: string;
@@ -315,7 +329,6 @@ const ALL_CAPABILITIES: ReadonlySet<Capability> = new Set(Object.values(CAPABILI
  */
 export const NON_DELEGABLE_CAPABILITIES: ReadonlySet<Capability> = new Set([
   CAPABILITIES.ADMIN_MANAGE,
-  CAPABILITIES.ACCESS_REVIEW_MANAGE,
 ]);
 
 /**

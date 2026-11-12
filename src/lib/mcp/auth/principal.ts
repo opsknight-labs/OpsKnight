@@ -14,10 +14,18 @@ import {
   mcpGrantBlockError,
   type GrantAccessSnapshot,
 } from './effective-access';
+import { getAccessControlSettings } from '@/lib/access/settings';
 
 interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   clientId: string;
   teamIds: string[];
+  /** Active custom role, so assistants act with the person's effective access. */
+  customRoleId: string | null;
+  customRoleName: string | null;
+  customRoleCapabilities: string[] | null;
+  /** Active temporary/emergency grants as JSON rows. */
+  accessGrants:
+    { id: string; role: string | null; incidentId: string | null; expiresAt: string }[] | null;
   writesEnabled: boolean | null;
   sensitiveReadsEnabled: boolean | null;
   maxInFlight: number | null;
@@ -82,6 +90,11 @@ export async function resolveMcpGrant(
 const AUTHORITY_COLUMNS = Prisma.sql`
   ${GRANT_ACCESS_COLUMNS}, g."clientId",
   ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
+  cr.id AS "customRoleId", cr.name AS "customRoleName", cr.capabilities AS "customRoleCapabilities",
+  (SELECT COALESCE(json_agg(json_build_object(
+      'id', ag.id, 'role', ag.role, 'incidentId', ag."incidentId", 'expiresAt', ag."expiresAt")), '[]'::json)
+    FROM "AccessGrant" ag
+    WHERE ag."userId" = u.id AND ag."revokedAt" IS NULL AND ag."expiresAt" > NOW()) AS "accessGrants",
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
   p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities",
@@ -97,6 +110,7 @@ export async function resolveMcpGrantWithPolicy(
   credentialId?: string,
   db: Prisma.TransactionClient = prisma
 ): Promise<{ auth: V2AuthContext; policy: McpRuntimePolicy | null; clientId: string }> {
+  await getAccessControlSettings();
   const now = new Date();
   // One current-statement snapshot avoids four ORM round trips per domain step.
   // No values are interpolated into SQL syntax and no authority is cached.
@@ -104,6 +118,7 @@ export async function resolveMcpGrantWithPolicy(
     SELECT ${AUTHORITY_COLUMNS}
     FROM "McpGrant" g JOIN "McpClient" c ON c.id = g."clientId"
     LEFT JOIN "User" u ON u.id = g."userId"
+    LEFT JOIN "CustomRole" cr ON cr.id = u."customRoleId" AND cr."archivedAt" IS NULL
     LEFT JOIN "McpPolicy" p ON p.id = 'default'
     WHERE g.id = ${grantId}
       AND (${credentialId ?? null}::text IS NULL OR EXISTS (
@@ -129,6 +144,20 @@ function authorityFrom(
     role: grant.role ?? '',
     status: grant.status ?? '',
     teamMemberships: grant.teamIds.map(teamId => ({ teamId })),
+    customRole: grant.customRoleId
+      ? {
+          id: grant.customRoleId,
+          name: grant.customRoleName ?? '',
+          capabilities: grant.customRoleCapabilities ?? [],
+          archivedAt: null,
+        }
+      : null,
+    accessGrants: (grant.accessGrants ?? []).map(accessGrant => ({
+      id: accessGrant.id,
+      role: accessGrant.role,
+      incidentId: accessGrant.incidentId,
+      expiresAt: new Date(accessGrant.expiresAt),
+    })),
   });
   requireMcp(base, 'MCP_INACTIVE_PRINCIPAL', 401);
   const id = `mcp:${grant.grantId}`;
@@ -187,6 +216,7 @@ async function resolveBearer(accessHash: string) {
     LEFT JOIN "McpGrant" g ON g.id = t."grantId"
     LEFT JOIN "McpClient" c ON c.id = g."clientId"
     LEFT JOIN "User" u ON u.id = g."userId"
+    LEFT JOIN "CustomRole" cr ON cr.id = u."customRoleId" AND cr."archivedAt" IS NULL
     LEFT JOIN "McpPolicy" p ON p.id = 'default'
     WHERE t."accessHash" = ${accessHash}
   `;
@@ -222,7 +252,10 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     requireMcp(header.trim() !== '', 'MCP_TOKEN_REQUIRED', 401);
     // The scheme name is case-insensitive (RFC 9110 section 11.1); the token itself is not.
     requireMcp(/^bearer [A-Za-z0-9_-]{32,256}$/i.test(header), 'MCP_INVALID_TOKEN', 401);
-    const row = await resolveBearer(digestMcpSecret(header.slice(7)));
+    const [row] = await Promise.all([
+      resolveBearer(digestMcpSecret(header.slice(7))),
+      getAccessControlSettings(),
+    ]);
     unknownCredential = !row;
     const now = new Date();
     requireMcp(row && !row.rotatedAt && row.accessExpiresAt > now, 'MCP_INVALID_TOKEN', 401);

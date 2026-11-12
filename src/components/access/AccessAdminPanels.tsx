@@ -20,6 +20,7 @@ import {
   archiveCustomRoleAction,
   assignCustomRoleAction,
   checkAccessAction,
+  cancelAccessReviewAction,
   completeAccessReviewAction,
   decideAccessReviewItemAction,
   saveCustomRoleAction,
@@ -461,9 +462,7 @@ type CustomRoleView = {
   holders: number;
 };
 
-const DELEGABLE = ALL_CATALOGUED_CAPABILITIES.filter(
-  capability => capability !== 'admin.manage' && capability !== 'access.review.manage'
-);
+const DELEGABLE = ALL_CATALOGUED_CAPABILITIES.filter(capability => capability !== 'admin.manage');
 
 export function CustomRolesManager({
   roles,
@@ -758,15 +757,22 @@ export function AccessReviewItems({
   reviewId,
   items,
   currentUserId,
+  canSelfCertify,
+  canComplete,
 }: {
   reviewId: string;
   items: ReviewItemView[];
   currentUserId: string;
+  /** Sole reviewer (or policy allows): own items can be decided and are flagged as such. */
+  canSelfCertify: boolean;
+  /** Applying removals changes roles, so only administrators complete reviews. */
+  canComplete: boolean;
 }) {
   const router = useRouter();
   const [result, setResult] = useState<Parameters<typeof Feedback>[0]['result']>(null);
   const [pending, startTransition] = useTransition();
   const remaining = items.filter(item => item.decision === 'PENDING').length;
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const decide = (itemId: string, decision: 'KEEP' | 'REVOKE') =>
     startTransition(async () => {
@@ -786,7 +792,7 @@ export function AccessReviewItems({
                 {item.subjectType.replace('_', ' ').toLowerCase()}
               </span>
             </span>
-            {item.userId === currentUserId ? (
+            {item.userId === currentUserId && !canSelfCertify ? (
               <span className="text-xs text-muted-foreground">Another reviewer must decide</span>
             ) : (
               <>
@@ -812,17 +818,42 @@ export function AccessReviewItems({
         ))}
       </ul>
       <div className="flex flex-wrap items-center gap-3">
+        {canComplete ? (
+          <Button
+            disabled={pending || remaining > 0}
+            onClick={() =>
+              startTransition(async () => {
+                const outcome = await completeAccessReviewAction(reviewId);
+                setResult(outcome);
+                if (outcome.ok) router.refresh();
+              })
+            }
+          >
+            Complete review and apply removals
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            An administrator completes the review and applies removals.
+          </span>
+        )}
         <Button
-          disabled={pending || remaining > 0}
-          onClick={() =>
+          variant={confirmCancel ? 'destructive' : 'ghost'}
+          disabled={pending}
+          onClick={() => {
+            if (!confirmCancel) {
+              setConfirmCancel(true);
+              return;
+            }
             startTransition(async () => {
-              const outcome = await completeAccessReviewAction(reviewId);
+              const outcome = await cancelAccessReviewAction(reviewId);
+              setConfirmCancel(false);
               setResult(outcome);
               if (outcome.ok) router.refresh();
-            })
-          }
+            });
+          }}
+          onBlur={() => setConfirmCancel(false)}
         >
-          Complete review and apply removals
+          {confirmCancel ? 'Confirm: cancel without changes' : 'Cancel review'}
         </Button>
         <span className="text-xs text-muted-foreground">
           {remaining > 0 ? `${remaining} still need a decision` : 'All items decided'}

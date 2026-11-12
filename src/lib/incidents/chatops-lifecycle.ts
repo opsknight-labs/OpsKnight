@@ -23,6 +23,7 @@ import { normalizeIncidentPriority } from '@/lib/incidents/priority';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { effectiveAccessSelect } from '@/lib/access/effective';
 import { isPagedForIncident } from '@/lib/access/incident-relations';
+import { getAccessControlSettings } from '@/lib/access/settings';
 
 export type ChatOpsLifecycleCommand = Extract<
   IncidentLifecycleCommand,
@@ -59,8 +60,9 @@ async function withOnCallRelation(
   resource: Extract<AuthorizationResource, { type: 'incident' }>,
   escalationPolicyId: string | null
 ) {
-  if (!isIncidentOperatorAction(action) || incidentOperatorRelation(actor, resource))
-    return resource;
+  const needsRelation =
+    isIncidentOperatorAction(action) || action === AUTHORIZATION_ACTIONS.INCIDENT_READ;
+  if (!needsRelation || incidentOperatorRelation(actor, resource)) return resource;
   return (await isPagedForIncident(actor, escalationPolicyId))
     ? { ...resource, onCallUserIds: [actor.id] }
     : resource;
@@ -98,6 +100,7 @@ export async function authorizeChatOpsIncidentInTransaction(
     tx.incident.findUnique({
       where: { id: incidentId },
       select: {
+        id: true,
         assigneeId: true,
         teamId: true,
         visibility: true,
@@ -124,6 +127,7 @@ export async function authorizeChatOpsIncidentInTransaction(
             : requested === 'ESCALATE'
               ? AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE
               : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
+  await getAccessControlSettings();
   const actor = authorizationActorFromUser(user);
   if (!actor) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
   const decision = authorize({
@@ -356,6 +360,7 @@ function actionForCommand(command: ChatOpsLifecycleCommand) {
 }
 
 function incidentResource(incident: {
+  id: string;
   assigneeId: string | null;
   teamId: string | null;
   visibility: 'PUBLIC' | 'PRIVATE';
@@ -364,6 +369,7 @@ function incidentResource(incident: {
 }): Extract<AuthorizationResource, { type: 'incident' }> {
   return {
     type: 'incident',
+    id: incident.id,
     assigneeId: incident.assigneeId,
     assignedTeamId: incident.teamId,
     visibility: incident.visibility,
@@ -398,6 +404,7 @@ export async function executeChatOpsLifecycleCommand(
       tx.incident.findUnique({
         where: { id: input.incidentId },
         select: {
+          id: true,
           assigneeId: true,
           teamId: true,
           visibility: true,
@@ -423,6 +430,7 @@ export async function executeChatOpsLifecycleCommand(
       });
     }
 
+    await getAccessControlSettings();
     const actor = authorizationActorFromUser(user);
     if (!actor) {
       throw new AppError({ code: 'AUTHORIZATION_DENIED' });

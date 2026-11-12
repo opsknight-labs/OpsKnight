@@ -138,3 +138,94 @@ describe('access request helpers', () => {
     expect(isRecentAuthentication(now + 10 * 60_000, 15 * 60_000, now)).toBe(false);
   });
 });
+
+describe('access notifications open the right page', () => {
+  it('sends approvers to the request and holders to their own access page', async () => {
+    const { inAppNotificationHref, inAppNotificationKind } =
+      await import('@/lib/notification-links');
+    expect(inAppNotificationHref({ entityType: 'ACCESS_REQUEST', entityId: 'req_1' })).toBe(
+      '/settings/access/requests?request=req_1#request-req_1'
+    );
+    expect(inAppNotificationHref({ entityType: 'ACCESS_REQUEST_DECIDED', entityId: 'req_1' })).toBe(
+      '/settings/access'
+    );
+    expect(inAppNotificationHref({ entityType: 'ACCESS_GRANT_ENDED', entityId: 'g' })).toBe(
+      '/settings/access'
+    );
+    expect(inAppNotificationHref({ entityType: 'ACCESS_GRANT', entityId: 'g' })).toBe(
+      '/settings/access/admin#temporary-access'
+    );
+    expect(inAppNotificationHref({ entityType: 'ACCESS_REVIEW', entityId: 'r' })).toBe(
+      '/settings/access/admin#access-reviews'
+    );
+    // Security notices are never shown as incidents.
+    expect(inAppNotificationKind('SECURITY')).toBe('system');
+    expect(inAppNotificationKind('INCIDENT')).toBe('incident');
+    expect(inAppNotificationKind('SOMETHING_NEW')).toBe('system');
+  });
+});
+
+describe('read-only approvers', () => {
+  it('does not let read-only team owners approve', async () => {
+    const tx = {
+      teamMember: { findUnique: vi.fn(async () => ({ role: 'OWNER' })) },
+    } as never;
+    await expect(
+      approverCanDecide(
+        tx,
+        { id: 'auditor', isOrgAdmin: false, recentlyAuthenticated: true, canManageTeams: false },
+        { requesterId: 'req', kind: 'TEAM_MEMBERSHIP', teamId: 't', requestedTeamRole: 'MEMBER' },
+        false
+      )
+    ).resolves.toMatchObject({ allowed: false, code: 'AUTHORIZATION_DENIED' });
+  });
+});
+
+describe('on-call responders and emergency access', () => {
+  it('lets the person an incident pages open it, and honours incident-scoped emergency access', async () => {
+    const { authorize, AUTHORIZATION_ACTIONS } = await import('@/lib/authorization-policy');
+    const actor = { id: 'u', role: 'USER' as const, status: 'ACTIVE' as const, teamIds: [] };
+    const base = {
+      type: 'incident' as const,
+      id: 'inc',
+      visibility: 'PUBLIC' as const,
+      serviceTeamId: 'other',
+    };
+    expect(
+      authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ, resource: base }).allowed
+    ).toBe(false);
+    expect(
+      authorize({
+        actor,
+        action: AUTHORIZATION_ACTIONS.INCIDENT_READ,
+        resource: { ...base, onCallUserIds: ['u'] },
+      }).allowed
+    ).toBe(true);
+    const elevated = { ...actor, elevatedIncidentIds: ['inc'] };
+    expect(
+      authorize({ actor: elevated, action: AUTHORIZATION_ACTIONS.INCIDENT_READ, resource: base })
+        .allowed
+    ).toBe(true);
+    expect(
+      authorize({
+        actor: elevated,
+        action: AUTHORIZATION_ACTIONS.INCIDENT_READ,
+        resource: { ...base, id: 'other' },
+      }).allowed
+    ).toBe(false);
+  });
+});
+
+describe('role coverage', () => {
+  it('compares permission sets, not rank', async () => {
+    const { roleCovers } = await import('@/lib/authorization');
+    expect(roleCovers('ADMIN', 'AUDITOR')).toBe(true);
+    expect(roleCovers('ADMIN', 'RESPONDER')).toBe(true);
+    // Responders lack Auditor-only audit/compliance permissions, and vice versa.
+    expect(roleCovers('RESPONDER', 'AUDITOR')).toBe(false);
+    expect(roleCovers('AUDITOR', 'RESPONDER')).toBe(false);
+    expect(roleCovers('USER', 'USER')).toBe(true);
+    expect(roleCovers('USER', 'RESPONDER')).toBe(false);
+    expect(roleCovers('nonsense', 'USER')).toBe(false);
+  });
+});
