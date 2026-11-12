@@ -34,6 +34,7 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
+import PaletteKnowledgeResults from '@/components/search/PaletteKnowledgeResults';
 
 type SearchResult = {
   type: 'incident' | 'service' | 'team' | 'user' | 'policy' | 'postmortem';
@@ -743,6 +744,10 @@ export default function SidebarSearch() {
                       </CommandGroup>
                     );
                   })}
+                <PaletteKnowledgeResults
+                  query={query}
+                  onOpen={href => handleSelect('', { href })}
+                />
               </>
             )}
           </CommandList>
