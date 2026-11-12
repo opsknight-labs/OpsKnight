@@ -532,6 +532,10 @@ test.describe.serial('intelligence responder workflows', () => {
     await similar.getByRole('button', { name: /^Ask Pip about .*last month/ }).click();
     const dialog = page.getByRole('dialog', { name: /Pip/ });
     await expect(dialog).toBeVisible();
+    // The question is written into the composer for the person to confirm, not sent for them.
+    const composer = dialog.getByLabel('Message Pip');
+    await expect(composer).toHaveValue(/last month/);
+    await composer.press('Enter');
     await expect(dialog.getByText('Basic answer from your incident data')).toBeVisible({
       timeout: 30_000,
     });
