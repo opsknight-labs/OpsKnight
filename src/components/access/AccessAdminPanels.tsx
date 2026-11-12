@@ -106,7 +106,7 @@ export function AccessPolicyForm({ initial }: { initial: AccessPolicyValues }) {
     {
       key: 'selfApprovalAllowed',
       label: 'Allow approving your own requests',
-      help: 'Applies to access requests and runbook approvals. When off, someone else must approve whenever another eligible approver exists (separation of duties). AI assistant (MCP) changes use their own “Require a different reviewer” setting.',
+      help: 'When off, nobody can approve their own access request (separation of duties). Turn on only if you have a single administrator. Runbook approvals and AI assistant changes follow their own review rules.',
     },
   ];
 

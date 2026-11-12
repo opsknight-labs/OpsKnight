@@ -22,6 +22,7 @@ export default function DashboardCockpit({ feed, rail }: { feed: ReactNode; rail
     currentUserId,
     currentUserName,
     canAcknowledge,
+    canAcknowledgeIncident,
     canAssignSelf,
     busyMap,
     acknowledgeIncident,
@@ -55,7 +56,7 @@ export default function DashboardCockpit({ feed, rail }: { feed: ReactNode; rail
             now={now}
             currentUserId={currentUserId}
             currentUserName={currentUserName}
-            canAcknowledge={canAcknowledge}
+            canAcknowledge={canAcknowledge && canAcknowledgeIncident(selectedIncident)}
             canAssignSelf={canAssignSelf}
             busy={busyMap[selectedIncident.id] ?? null}
             onAcknowledge={acknowledgeIncident}

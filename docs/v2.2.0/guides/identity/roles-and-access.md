@@ -92,7 +92,7 @@ Choose how long you need it (1 hour to 7 days, or permanently) and say why.
 - Team requests go to that team's owners and admins; role requests go to administrators.
 - Approvers review requests in **Settings → Access Requests**. They can change the duration,
   approve or decline, and add a note. You get a notification with a link back to where you were.
-- You cannot approve your own request while someone else could.
+- You cannot approve your own request unless an administrator has allowed it in the access policy.
 - Granting the Admin role requires the approver to have signed in within the last 15 minutes.
 - If your role comes from your identity provider, change it there instead (the form says so).
 
@@ -125,9 +125,8 @@ everything done with it is in the audit log. Administrators can turn it off.
   quick way to spot someone who needs a team or role.
 - **Access policy** — turn incident work for Users, access requests, and emergency access on or
   off, set the emergency access limit, and decide whether people may approve their own access
-  requests and runbook runs. By default someone else must approve whenever another eligible
-  approver exists; with a single administrator, self-approval stays possible and is flagged in the
-  audit log. AI assistant changes keep their own **Require a different reviewer** setting.
+  requests (only useful with a single administrator). Access reviews never let anyone certify
+  their own access.
 
 Changes to roles, custom roles and the access policy require a recent sign-in. Every grant,
 request, decision, denial and review is recorded in the audit log.

@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { actorHasCapability } from '@/lib/authorization-policy';
 import { getRealtimeChangeGeneration } from '@/lib/realtime-change-control-plane';
 import { getLiveDashboardSnapshot } from '@/lib/dashboard/live-incidents';
 import { liveQueryFromParams, parseHistoryRange } from '@/lib/dashboard/live-incidents-shared';
@@ -79,10 +80,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       : ('NONE' as const);
   const timeZone = user.timeZone || 'UTC';
 
+  const canManageIncidents = actorHasCapability(actor, CAPABILITIES.OPERATIONS_MANAGE);
   const canAcknowledge =
-    hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) ||
-    hasCapability(actor.role, CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED);
-  const canAssignSelf = hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE);
+    canManageIncidents || actorHasCapability(actor, CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED);
+  // Scoped users only see Acknowledge on incidents they are assigned to or that their teams own.
+  const acknowledgeScope = canManageIncidents ? null : { teamIds: actor.teamIds };
+  const canAssignSelf = canManageIncidents;
   const currentUserName = user.name || user.email;
 
   return (
@@ -92,6 +95,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         currentUserId={user.id}
         currentUserName={currentUserName}
         canAcknowledge={canAcknowledge}
+        acknowledgeScope={acknowledgeScope}
         canAssignSelf={canAssignSelf}
       >
         <div className="w-full space-y-4 px-3 py-3 sm:px-4 md:px-6 lg:px-6">

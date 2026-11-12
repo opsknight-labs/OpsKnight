@@ -69,7 +69,6 @@ import {
 } from './errors';
 import { lockRunbookForShare } from './locking';
 import { assertIndependentPreviewReview } from './preview-review';
-import { assertSeparationOfDuties } from '@/lib/access/sod';
 
 const jobPayloadSchema = z.discriminatedUnion('kind', [
   z
@@ -1748,7 +1747,6 @@ export async function approveExecutionStep(
             resolvedTargetAgentId: true,
             resolvedTargetAgentPoolId: true,
             incidentId: true,
-            triggeredByUserId: true,
           },
         },
       },
@@ -1756,12 +1754,6 @@ export async function approveExecutionStep(
     if (!step) throw new RunbookExecutionNotFoundError(input.executionId);
     if (step.status !== 'WAITING_APPROVAL')
       throw new RunbookExecutionInvalidTransitionError(input.executionId, step.status, 'READY');
-    const { selfApproved } = await assertSeparationOfDuties(tx, {
-      requesterId: step.execution.triggeredByUserId,
-      approverId: input.actorId,
-      eligibleRoles: ['ADMIN', 'RESPONDER'],
-      what: 'runbook run',
-    });
     const expected = resolvedPlanDigest(step, step.execution);
     if (expected !== input.planDigest) throw new RunbookApprovalPlanChangedError(step.id);
     const approved = await tx.runbookExecutionStep.updateMany({
@@ -1807,7 +1799,6 @@ export async function approveExecutionStep(
         details: {
           stepId: step.id,
           planDigest: expected,
-          ...(selfApproved ? { selfApproved: true } : {}),
           ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
         },
       },

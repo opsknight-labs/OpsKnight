@@ -529,7 +529,11 @@ export function OpsPulsePanel() {
           ) : (
             <ul className="flex flex-wrap items-center gap-2" aria-label="Responders on call now">
               {shifts.slice(0, 8).map(shift => (
-                <li key={shift.id} title={`${shift.user.name} · ${shift.scheduleName}`} className="group relative">
+                <li
+                  key={shift.id}
+                  title={`${shift.user.name} · ${shift.scheduleName}`}
+                  className="group relative"
+                >
                   <UserAvatar
                     userId={shift.user.id ?? ''}
                     name={shift.user.name}

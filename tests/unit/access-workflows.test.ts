@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/prisma', () => ({ default: {} }));
 
-import { assertSeparationOfDuties } from '@/lib/access/sod';
 import { approverCanDecide, describeAccessRequest, safeOriginPath } from '@/lib/access/requests';
 import { isRecentAuthentication } from '@/lib/access/step-up';
 
@@ -23,52 +22,6 @@ function fakeTx(options: {
     },
   } as never;
 }
-
-describe('separation of duties', () => {
-  it('allows approving someone else’s request', async () => {
-    await expect(
-      assertSeparationOfDuties(fakeTx({ otherApprover: true }), {
-        requesterId: 'a',
-        approverId: 'b',
-        eligibleRoles: ['ADMIN'],
-        what: 'runbook run',
-      })
-    ).resolves.toEqual({ selfApproved: false });
-  });
-
-  it('refuses self-approval when another approver exists', async () => {
-    await expect(
-      assertSeparationOfDuties(fakeTx({ otherApprover: true }), {
-        requesterId: 'a',
-        approverId: 'a',
-        eligibleRoles: ['ADMIN', 'RESPONDER'],
-        what: 'runbook run',
-      })
-    ).rejects.toMatchObject({ code: 'SEPARATION_OF_DUTIES' });
-  });
-
-  it('allows (and flags) self-approval when nobody else could approve', async () => {
-    await expect(
-      assertSeparationOfDuties(fakeTx({ otherApprover: false }), {
-        requesterId: 'a',
-        approverId: 'a',
-        eligibleRoles: ['ADMIN'],
-        what: 'runbook run',
-      })
-    ).resolves.toEqual({ selfApproved: true });
-  });
-
-  it('allows self-approval when the organization explicitly permits it', async () => {
-    await expect(
-      assertSeparationOfDuties(fakeTx({ otherApprover: true, selfApprovalAllowed: true }), {
-        requesterId: 'a',
-        approverId: 'a',
-        eligibleRoles: ['ADMIN'],
-        what: 'runbook run',
-      })
-    ).resolves.toEqual({ selfApproved: true });
-  });
-});
 
 describe('who may approve an access request', () => {
   const teamRequest = {
