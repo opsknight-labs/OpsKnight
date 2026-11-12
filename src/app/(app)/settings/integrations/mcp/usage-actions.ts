@@ -9,6 +9,15 @@ const exportInput = z
   .object({
     window: z.enum(USAGE_WINDOW_KEYS),
     q: z.string().max(100).optional(),
+    // Calendar dates; the range itself is judged by usage-range.ts against the log's retention.
+    from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     format: z.enum(['csv', 'json']),
   })
   .strict();
@@ -29,8 +38,10 @@ export type McpUsageExportResult = {
 export async function exportMcpUsage(input: unknown): Promise<McpUsageExportResult> {
   const parsed = exportInput.parse(input);
   const viewer = await loadMcpViewer();
-  const { rows, truncated } = await getMcpUsageExportRows(viewer, {
+  const { rows, truncated, range } = await getMcpUsageExportRows(viewer, {
     window: parsed.window,
+    from: parsed.from,
+    to: parsed.to,
     q: parsed.q,
   });
   await logAudit({
@@ -38,11 +49,17 @@ export async function exportMcpUsage(input: unknown): Promise<McpUsageExportResu
     action: 'mcp.usage.exported',
     entityType: 'SYSTEM_CONFIG',
     actorId: viewer.id,
-    details: { window: parsed.window, filtered: Boolean(parsed.q), rows: rows.length, truncated },
+    details: {
+      window: range ? 'custom' : parsed.window,
+      ...(range ?? {}),
+      filtered: Boolean(parsed.q),
+      rows: rows.length,
+      truncated,
+    },
   });
   const stamp = new Date().toISOString().slice(0, 10);
   return {
-    filename: `opsknight-mcp-usage-${parsed.window}-${stamp}.${parsed.format}`,
+    filename: `opsknight-mcp-usage-${range ? `${range.from}_to_${range.to}` : parsed.window}-${stamp}.${parsed.format}`,
     mimeType: parsed.format === 'csv' ? 'text/csv' : 'application/json',
     content: parsed.format === 'csv' ? usageToCsv(rows) : JSON.stringify(rows, null, 2),
     rows: rows.length,

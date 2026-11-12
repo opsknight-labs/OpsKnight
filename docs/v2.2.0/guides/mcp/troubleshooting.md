@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 106 MCP codes and 24 log events found in the source.
+This page lists 107 MCP codes and 24 log events found in the source.
 
 ## Connecting and signing in
 
