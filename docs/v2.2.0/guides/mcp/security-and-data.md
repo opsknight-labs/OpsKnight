@@ -38,7 +38,7 @@ At most what the signed-in person can see, and usually less. On every request:
 visible = the person's current role and team membership
         ∩ the scopes they approved for this connection
         ∩ the administrator's ceiling
-        − capabilities turned off under Exposed capabilities
+        − capabilities turned off under Exposed capabilities (all roles, their role, this assistant)
         (sensitive reads only while an administrator allows them)
 ```
 
@@ -72,7 +72,21 @@ The only outbound request OpsKnight makes for MCP is fetching an assistant's cli
 - **Enable MCP** (Access policy) turns every MCP surface off at once; `MCP_FORCE_DISABLED=true` does the same from the deployment, whatever the stored policy says.
 - **Allow reviewed sensitive configuration reads** is off by default.
 - **Changes** are off by default; configuration changes and runbook runs always wait for a person to approve them in OpsKnight, and an assistant can never approve.
-- **Exposed capabilities** turns off individual tools, operations or whole areas.
+- **Exposed capabilities** turns off individual tools, operations or whole areas, for everyone, for one role or for one assistant (see below).
 - **Revoke** one connection on the Connections tab, or **Revoke all active connections** (Connections tab, Credential security) in an emergency.
+
+### Restrictions for all roles, one role or one assistant
+
+**Exposed capabilities** has a **Restrictions for** selector with three kinds of list:
+
+- **All roles** applies to every connection.
+- **Role: User**, **Admin**, **Responder** or **Auditor** applies to people whose current role is that role. A role change takes effect on their next request.
+- **An assistant** (a registered client) applies to everyone who connects through it. Personal access tokens are not an assistant and use the role and global lists only. The **Assistants** tab marks assistants that have their own restrictions.
+
+The lists only add up: a capability is unavailable when any list that applies turns it off, and no list can turn back on what another turned off. The combined list hides the capability from `tools/list` and search, and it is checked again when the call runs, inside the same database transaction as any change it makes, so a restriction saved between listing and running still stops the call.
+
+Removing an entry from any list widens access, so it needs the same recent sign-in as the global list. Each save is written to the audit log with the scope (`all roles`, `role USER`, `assistant <name>`) and the exact entries added and removed.
+
+If the stored role list was edited by hand and cannot be read, OpsKnight turns everything off for the affected role (for every role when the whole value is unreadable), except Admin, so a damaged row cannot quietly widen access or lock administrators out. The settings page shows that role as fully restricted; saving any role rewrites the value in its correct form.
 
 See also the [architecture and threat model](../../operate/mcp/architecture.md).
