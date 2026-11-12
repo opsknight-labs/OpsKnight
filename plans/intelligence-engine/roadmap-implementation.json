@@ -269,6 +269,39 @@
         "Replica-level chaos (two lane processes racing on one incident) in CI",
         "Shared replica breaker state for AI providers (tracked in phase 5)"
       ]
+    },
+    {
+      "id": 9,
+      "wave": 8,
+      "name": "Part 2: operations intelligence",
+      "status": "in_progress",
+      "implemented": [
+        "J0 operations insight store (default off): OpsInsight and OpsInsightScopeState tables, generation-fenced OPS_INSIGHTS lane job under withDbBudget scheduled once per runner cycle, producer interface (kind, version, area, scopeType, loadInput, derive) that skips derive while a scope's input is unchanged, first producer for integration health, retention through purgeOpsInsights",
+        "J0 daily operations rollups: generateOpsRollups runs after the incident rollups in its own try/catch with per-rollup watermarks; queryOpsRollup reads them; MetricRollup subject index and RunbookExecution completed index (one CREATE INDEX CONCURRENTLY per migration); query-plan assertions in tests/load/intelligence-query-plans.ts",
+        "J0 scoped reads and decisions: listInsightsForScope, countOpenInsightsForScopes, keyset listInsightsInbox, readableOpsInsightScopes; accept/dismiss through decideInsight with audit; suggest-only, nothing publishes",
+        "J0 UI kit and switches: InsightsPanel, InsightBadge, InsightStrip, InsightsInboxSection on the Intelligence overview; one master and six per-area switches in IntelligenceSettings (revision CAS and audit)",
+        "J0 boundaries: events.ts, the escalation path and notification dispatch may never import ops-insights or generateOpsRollups (tests/architecture/intelligence-boundaries.test.ts extended)",
+        "K AI result cache (opt-in, AiSettings.resultCacheEnabled): AiResultCache table, cachedGenerate and cachedGenerateStructured keyed by prompt id/version, scope and input hash, expired rows swept by retention; handoff ages kept as coarse bands so an unchanged shift reuses its narrative; the conversation summariser caches per person",
+        "K call-site gate: AiRequestContext.callSite is required and the gateway refuses untagged calls (CALL_SITE_REFUSED); list, badge, wallboard and overview loaders run under deterministicOnly(); architecture test forbids list and badge loaders importing the gateway",
+        "K shared incident brief builder (incidentBrief, renderBrief, BRIEF_BUDGETS) and one output-token table (AI_OUTPUT_TOKENS, outputTokensFor); no numeric maxOutputTokens literal outside src/lib/intelligence/ai",
+        "K cache-aware accounting: cache-read and cache-write tokens, result-cache hits, saved tokens and saved cost on AiUsageBreakdownDay and in the AI spend panel",
+        "Migrations 20261111210050_ops_insights, 20261111210100_metric_rollup_subject_index, 20261111210200_runbook_execution_completed_index and 20261111230000_ai_result_cache (expand-only); new tables registered in the privacy registry and the data-processing inventory; User.opsInsightDecisions is SET_NULL on delete"
+      ],
+      "remaining": [
+        "Escalation step outcome rollup: name and shape are defined; J2 adds its source to OPS_ROLLUP_SOURCES once the per-step attempt table exists",
+        "Weight-fitting feedback loop from insight decisions: accept/dismiss decisions are stored and audited but nothing consumes them yet",
+        "AI phrasing of insights: none added; insights are deterministic only",
+        "No edit path calls enqueueOpsInsights yet; each area slice adds its own call (policy edited, runbook published)",
+        "Move InsightsInboxSection into Workstream I's inbox and drop the Suspense block from the overview page once that inbox is the home for it",
+        "Insight inbox visibility is filtered after reading (at most 5 rounds of 100 rows), so a viewer who can read very little of a very large estate may get a short page with a cursor (shortcut comment in ops-insights/view.ts)",
+        "No Playwright e2e or browser check of the insight UI kit",
+        "POLICY insight scope uses the ESCALATION_POLICY_READ authorization check rather than a ReadWhere helper, because none exists for policies",
+        "Squire chat keeps the deterministic conversation digest; a model-written summary would add a call, a rate-limit slot and a round trip to every long-conversation turn, so the summariser cache is exercised only by tests",
+        "Routing the briefing through the shared brief builder: the builder serves the summary, postmortem draft, proactive notes and handoff; a separate briefing caller was not confirmed",
+        "Non-Claude model families are charged the full input rate for cache-read and cache-write tokens; per-family cache rates were not added",
+        "Area slices J1 to J7 (automation, escalation, on-call, postmortems, runbooks, notifications, helpers) and Workstream L surfaces are not part of this integration"
+      ],
+      "verification": "2026-11-12 on 20970a78f + wave 1: unit suite 1159 files / 12486 passed, 7 skipped; tests/integration/intelligence 72 files / 901 passed; performance budgets passed; prisma validate and migrate deploy on a fresh pgvector pg16 database clean; two type errors from combining the call-site tag with phase 2 fixed before push; pre-push typecheck, unit suite and build are the final gate"
     }
   ],
   "verification": {

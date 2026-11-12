@@ -159,7 +159,7 @@ describe('AiSpendPanel', () => {
           byTeam: [],
           byCapability: [],
           byModel: [],
-          total: { requests: 0, tokens: 0, costMicros: 0, unpricedRequests: 0 },
+          total: { ...breakdown.total, requests: 0, tokens: 0, costMicros: 0, unpricedRequests: 0 },
         }}
         statuses={[]}
       />
