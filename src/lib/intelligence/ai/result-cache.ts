@@ -261,19 +261,6 @@ export function cachedGenerateStructured<T>(
   );
 }
 
-/** The same port with `generate` and `generateStructured` going through the result cache. */
-export function withResultCache(
-  port: LanguageModelPort,
-  options: ResultCacheOptions = {}
-): LanguageModelPort {
-  return {
-    model: port.model,
-    generate: request => cachedGenerate(port, request, options),
-    generateStructured: request => cachedGenerateStructured(port, request, options),
-    stream: request => port.stream(request),
-  };
-}
-
 /** Retention: expired answers go in bounded batches. Returns the number removed. */
 export async function purgeExpiredAiResults(
   tx: Pick<typeof prisma, '$executeRaw'>,

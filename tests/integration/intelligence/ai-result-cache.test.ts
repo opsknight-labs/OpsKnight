@@ -13,11 +13,7 @@ import {
   resolveGatewayPort,
 } from '@/lib/intelligence/ai/gateway';
 import type { AiGenerateRequest, LanguageModelPort } from '@/lib/intelligence/ai/port';
-import {
-  cachedGenerate,
-  purgeExpiredAiResults,
-  withResultCache,
-} from '@/lib/intelligence/ai/result-cache';
+import { cachedGenerate, purgeExpiredAiResults } from '@/lib/intelligence/ai/result-cache';
 import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import {
   DEFAULT_POLICY_DEFINITION,
@@ -26,10 +22,7 @@ import {
 import { summarizeIncident } from '@/lib/intelligence/drafts/service';
 import { handoffBrief, type HandoffSummary } from '@/lib/intelligence/handoff/summary';
 import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
-import {
-  CONTEXT_SUMMARY_PROMPT,
-  summarizeOlderTurns,
-} from '@/lib/intelligence/squire/context-summary';
+import { summarizeOlderTurns } from '@/lib/intelligence/squire/context-summary';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import {
   createTestIncident,
@@ -363,20 +356,25 @@ describe('result cache', () => {
     expect(model.requests).toHaveLength(2);
   });
 
-  it('caches the conversation summary when its resolver wraps the port', async () => {
+  it('caches the conversation summary per person', async () => {
     const { admin, port } = await setup();
     model.script.push({ content: '- asked about the disk' });
     const turns = [
       { role: 'user' as const, content: 'Why is the disk full?', dataClass: 'PERSONAL' as const },
       { role: 'assistant' as const, content: 'Logs grew.', dataClass: 'PERSONAL' as const },
     ];
-    const resolve = async () =>
-      withResultCache(port, { prompt: CONTEXT_SUMMARY_PROMPT, scope: `user:${admin.id}` });
+    const resolve = async () => port;
     const first = await summarizeOlderTurns(turns, { actorId: admin.id, resolve });
     const second = await summarizeOlderTurns(turns, { actorId: admin.id, resolve });
     expect(first?.content).toContain('asked about the disk');
     expect(second?.content).toBe(first?.content);
     expect(model.requests).toHaveLength(1);
+    // Another person with the same transcript never gets this person's cached summary.
+    const other = await createTestUser({ role: 'RESPONDER' });
+    model.script.push({ content: '- a different summary' });
+    const theirs = await summarizeOlderTurns(turns, { actorId: other.id, resolve });
+    expect(theirs?.content).toContain('a different summary');
+    expect(model.requests).toHaveLength(2);
   });
 });
 

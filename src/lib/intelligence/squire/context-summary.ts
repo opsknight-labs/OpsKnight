@@ -1,11 +1,13 @@
 import {
   highestDataClass,
   type AiDataClass,
+  type AiGenerateRequest,
   type AiMessage,
   type LanguageModelPort,
 } from '../ai/port';
 import { outputTokensFor } from '../ai/output-limits';
 import { redactSecrets } from '../ai/redact';
+import { cachedGenerate } from '../ai/result-cache';
 
 /**
  * Earlier turns beyond the replay window are summarised instead of silently dropped. With AI on, the
@@ -69,11 +71,7 @@ export function digestTurns(turns: readonly OlderTurn[]): string {
   ].join('\n');
 }
 
-/**
- * Result-cache identity of the summariser prompt below; bump the version when its instruction changes. A
- * resolver that wants repeats for free returns `withResultCache(port, { prompt: CONTEXT_SUMMARY_PROMPT,
- * scope: 'user:<id>' })`.
- */
+/** Result-cache identity of the summariser prompt below; bump the version when its instruction changes. */
 export const CONTEXT_SUMMARY_PROMPT = { id: 'squire.context-summary', version: 1 } as const;
 
 /**
@@ -96,7 +94,7 @@ export async function summarizeOlderTurns(
   const port = options.resolve ? await options.resolve(dataClass).catch(() => null) : null;
   if (port && !options.signal?.aborted) {
     try {
-      const result = await port.generate({
+      const request = {
         context: {
           actorId: options.actorId,
           capability: 'SUMMARIZE',
@@ -124,6 +122,11 @@ export async function summarizeOlderTurns(
           },
         ],
         maxOutputTokens: outputTokensFor('squire.context-summary'),
+      } satisfies AiGenerateRequest;
+      // A conversation is personal: the cached summary is only ever served back to the same person.
+      const result = await cachedGenerate(port, request, {
+        prompt: CONTEXT_SUMMARY_PROMPT,
+        scope: `user:${options.actorId}`,
       });
       const text = result.text.trim();
       if (text) summary = redactSecrets(text).slice(0, CONTEXT_SUMMARY_LIMITS.summaryChars);
