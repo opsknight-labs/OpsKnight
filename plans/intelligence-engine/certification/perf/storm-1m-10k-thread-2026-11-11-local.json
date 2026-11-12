@@ -1,0 +1,68 @@
+{
+  "measuredAt": "2026-11-11T14:07:38.857Z",
+  "node": "v20.20.2",
+  "engineVersion": "1.5.0",
+  "options": {
+    "history": 1000000,
+    "burst": 10000,
+    "services": 50,
+    "batchSize": 50,
+    "concurrency": 8,
+    "reuseHistory": false,
+    "maxDrainSeconds": 600,
+    "maxKindP99Ms": 10000,
+    "gate": true,
+    "output": "/private/tmp/claude-501/-Users-dushyantrahangdale-Desktop-Projects/320ca8a9-b6ca-4d2d-a846-6b75432ba1ce/scratchpad/runs-v6/storm-1m-10k.json",
+    "laneMode": "thread"
+  },
+  "host": {
+    "cpus": 12,
+    "loadAverageAtStart": [4.6201171875, 3.517578125, 4.37451171875],
+    "loadAverageAtEnd": [14.216796875, 8.671875, 6.1669921875]
+  },
+  "seedSeconds": 183,
+  "drainSeconds": 274.5,
+  "incidentsPerSecond": 36.4,
+  "cycles": 801,
+  "averageCycleMs": 343,
+  "handlerBusyFraction": 0.839,
+  "failedItems": 0,
+  "deadLetters": 0,
+  "activeFindings": 100000,
+  "correlationGroups": 9219,
+  "perKind": {
+    "INDEX_INCIDENT": {
+      "count": 10000,
+      "p50Ms": 16.1,
+      "p95Ms": 20.2,
+      "p99Ms": 23.5
+    },
+    "ANALYZE_INCIDENT": {
+      "count": 10000,
+      "p50Ms": 41.6,
+      "p95Ms": 66.7,
+      "p99Ms": 78.1
+    },
+    "CORRELATE_INCIDENT": {
+      "count": 10000,
+      "p50Ms": 11.3,
+      "p95Ms": 51.7,
+      "p99Ms": 63.2
+    },
+    "ANALYZE_RESPONSE": {
+      "count": 10000,
+      "p50Ms": 102.8,
+      "p95Ms": 129.8,
+      "p99Ms": 158.5
+    }
+  },
+  "gate": {
+    "contract": {
+      "maxDrainSeconds": 600,
+      "maxKindP99Ms": 10000
+    },
+    "breaches": [],
+    "passed": true
+  },
+  "note": "Single process, local PostgreSQL. Indicative only; certification needs dedicated hardware."
+}
