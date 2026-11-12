@@ -312,6 +312,8 @@ export interface ExecutionContext {
    * appears, so links are left out for it. Later revisions get them.
    */
   omitResourceLinks?: boolean;
+  /** `domain:<name>` entries this connection hid with X-OpsKnight-Toolsets; they only hide. */
+  hiddenCapabilities?: readonly string[];
 }
 
 export function callMcpOperation(context: ExecutionContext, operationId: string, rawArgs: unknown) {
@@ -366,6 +368,12 @@ async function executeMcpOperation(
     };
   const mode: ExecutionMode = guard ? 'approved' : (previewMode ?? 'generic');
   requireMcp(operation && availableIn(mode, operation), 'MCP_OPERATION_UNAVAILABLE', 403);
+  requireMcp(
+    mode === 'preview' || !isMcpCapabilityDisabled(context.hiddenCapabilities, operationId),
+    'MCP_OPERATION_UNAVAILABLE',
+    403,
+    'This connection hides this operation with its X-OpsKnight-Toolsets header; ask the person to add its domain there.'
+  );
   // With the switch off a direct change is refused as unavailable, like any other gated
   // operation, before its arguments are looked at; so they are validated after that check.
   const earlyArgs = direct ? undefined : validateOperationArgs(operationId, rawArgs, mode);

@@ -62,7 +62,7 @@ import {
   mcpToolErrored,
   type McpMetricOutcome,
 } from '@/lib/mcp/protocol/metrics';
-import { isMcpCapabilityDisabled } from '@/lib/mcp/catalog/capabilities';
+import { isMcpCapabilityDisabled, mcpToolsetExclusions } from '@/lib/mcp/catalog/capabilities';
 import { stepUpScopes } from '@/lib/mcp/auth/step-up';
 
 export const runtime = 'nodejs';
@@ -244,6 +244,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       requestId,
       budget,
       omitResourceLinks: !request.headers.has('mcp-protocol-version'),
+      hiddenCapabilities: mcpToolsetExclusions(request.headers.get('x-opsknight-toolsets')),
     };
     if (taskMethod) {
       // The SDK has no handlers for the 2026-07-28 Tasks extension; the route serves it directly
@@ -324,7 +325,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
           identity.auth.actor,
           identity.policy.writesEnabled,
           identity.policy.sensitiveReadsEnabled,
-          identity.policy.disabledCapabilities,
+          [...identity.policy.disabledCapabilities, ...context.hiddenCapabilities],
           identity.policy.responderDirectWritesEnabled
         ),
       {
@@ -520,7 +521,7 @@ async function openListenStream(
         identity.auth.actor,
         identity.policy.writesEnabled,
         identity.policy.sensitiveReadsEnabled,
-        identity.policy.disabledCapabilities,
+        [...identity.policy.disabledCapabilities, ...(context.hiddenCapabilities ?? [])],
         identity.policy.responderDirectWritesEnabled
       ),
     {
