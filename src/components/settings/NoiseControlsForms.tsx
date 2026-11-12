@@ -145,7 +145,7 @@ export function KpiTiles({ kpis }: { kpis: NoiseControlKpis }) {
         <div key={tile.label} className="rounded-lg border border-border bg-card p-3">
           <dt className="text-xs text-muted-foreground">{tile.label}</dt>
           <dd className="text-xl font-semibold">{tile.value}</dd>
-          {tile.hint && <p className="text-xs text-muted-foreground">{tile.hint}</p>}
+          {tile.hint && <dd className="text-xs text-muted-foreground">{tile.hint}</dd>}
         </div>
       ))}
     </dl>
