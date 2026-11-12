@@ -45,10 +45,15 @@ export function mcpSetupCommands(endpoint: string, version: string) {
     doctorDocker: `docker exec <opsknight-container> node scripts/mcp/doctor.cjs ${quote(endpoint)}`,
     /** Kubernetes: inside the running deployment. */
     doctorKubernetes: `kubectl exec deploy/<opsknight> -- node scripts/mcp/doctor.cjs ${quote(endpoint)}`,
-    /** One-click installs: Cursor takes base64 JSON config, VS Code URL-encoded JSON. */
+    /**
+     * One-click installs, in the vendors' documented formats: Cursor takes base64 JSON config
+     * (cursor.com/docs/mcp/install-links), VS Code URL-encoded JSON
+     * (code.visualstudio.com/api/extension-guides/ai/mcp, "Create an MCP installation URL").
+     */
     cursorInstall: `cursor://anysphere.cursor-deeplink/mcp/install?name=opsknight&config=${encodeURIComponent(
       base64(JSON.stringify({ url: endpoint }))
     )}`,
     vscodeInstall: `vscode:mcp/install?${encodeURIComponent(JSON.stringify(vscodeServer))}`,
+    vscodeInsidersInstall: `vscode-insiders:mcp/install?${encodeURIComponent(JSON.stringify(vscodeServer))}`,
   };
 }

@@ -7,6 +7,8 @@ import type { McpUsageExportResult } from '@/app/(app)/settings/integrations/mcp
 
 type Props = {
   window: string;
+  /** A custom date range in force; exported instead of the window. */
+  range?: { from: string; to: string } | null;
   q: string;
   exportAction: (input: unknown) => Promise<McpUsageExportResult>;
 };
@@ -23,7 +25,7 @@ function download(result: McpUsageExportResult) {
 }
 
 /** Downloads the rows behind the current Usage view. The server checks the caller is an administrator. */
-export default function McpUsageExport({ window: range, q, exportAction }: Props) {
+export default function McpUsageExport({ window: range, range: custom, q, exportAction }: Props) {
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -31,7 +33,12 @@ export default function McpUsageExport({ window: range, q, exportAction }: Props
     start(async () => {
       setMessage(null);
       try {
-        const result = await exportAction({ window: range, ...(q ? { q } : {}), format });
+        const result = await exportAction({
+          window: range,
+          ...(custom ? { from: custom.from, to: custom.to } : {}),
+          ...(q ? { q } : {}),
+          format,
+        });
         download(result);
         setMessage(
           result.truncated

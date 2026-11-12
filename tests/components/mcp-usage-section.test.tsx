@@ -26,8 +26,21 @@ const usage = (overrides: Partial<McpUsage> = {}): McpUsage => ({
   page: 1,
   groupCount: 2,
   retentionDays: 30,
+  until: '2026-11-06T00:00:00.000Z',
+  range: null,
+  rangeError: null,
+  bucket: 'hour',
+  series: [
+    { at: '2026-11-05T00:00:00.000Z', calls: 1000, failed: 4 },
+    { at: '2026-11-05T01:00:00.000Z', calls: 240, failed: 10 },
+  ],
+  errorCodes: [
+    { code: 'RATE_LIMITED', outcome: 'rate_limited', count: 9 },
+    { code: null, outcome: 'tool_error', count: 5 },
+  ],
   ...overrides,
 });
+const now = new Date('2026-11-06T12:00:00.000Z');
 const exportAction = vi.fn();
 
 describe('Usage tab', () => {
@@ -110,6 +123,97 @@ describe('Usage tab', () => {
     ).not.toMatch(/page=/);
     expect(within(nav).getByRole('link', { name: /Next/ }).getAttribute('href')).toContain(
       'page=3'
+    );
+  });
+
+  it('draws calls and failures over time with a text summary', () => {
+    render(<McpUsageSection usage={usage()} q="" exportAction={exportAction} now={now} />);
+    const chart = screen.getByRole('figure', { name: 'Calls over time' });
+    expect(chart.querySelectorAll('path').length).toBeGreaterThan(0);
+    expect(chart.textContent).toMatch(/1,240 calls and 14 failed per hour/);
+    expect(chart.textContent).toMatch(/Busiest hour: Nov 5, 00:00 with 1,000 calls/);
+  });
+
+  it('breaks failures down by error code', () => {
+    render(<McpUsageSection usage={usage()} q="" exportAction={exportAction} now={now} />);
+    const list = screen.getByRole('region', { name: 'Failures by error code' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items[0].textContent).toMatch(/RATE_LIMITED.*Rate limited.*9/);
+    expect(items[1].textContent).toMatch(/No error code.*Tool error.*5/);
+  });
+
+  it('offers a custom range bounded by retention, and keeps it in other links', () => {
+    render(
+      <McpUsageSection
+        usage={usage({ range: { from: '2026-11-01', to: '2026-11-03' }, by: 'client' })}
+        q=""
+        exportAction={exportAction}
+        now={now}
+      />
+    );
+    const from = screen.getByLabelText('From (UTC)') as HTMLInputElement;
+    const to = screen.getByLabelText('To (UTC, included)') as HTMLInputElement;
+    expect([from.value, to.value]).toEqual(['2026-11-01', '2026-11-03']);
+    expect([from.min, from.max]).toEqual(['2026-10-07', '2026-11-06']);
+    const windowNav = screen.getByRole('navigation', { name: 'Time window' });
+    // No preset is current while a custom range is shown, and picking one leaves the range.
+    expect(within(windowNav).queryByRole('link', { current: true })).toBeNull();
+    expect(within(windowNav).getByRole('link', { name: 'Last 7 days' }).getAttribute('href')).toBe(
+      '/settings/integrations/mcp?tab=usage&window=7d&by=client'
+    );
+    const groupNav = screen.getByRole('navigation', { name: 'Group usage by' });
+    expect(within(groupNav).getByRole('link', { name: 'By tool' }).getAttribute('href')).toBe(
+      '/settings/integrations/mcp?tab=usage&from=2026-11-01&to=2026-11-03'
+    );
+    expect(screen.getByRole('link', { name: 'Clear range' }).getAttribute('href')).toBe(
+      '/settings/integrations/mcp?tab=usage&by=client'
+    );
+  });
+
+  it('says why a range was refused, keeping what was typed', () => {
+    render(
+      <McpUsageSection
+        usage={usage({ rangeError: 'The start date must be before the end date.' })}
+        requestedRange={{ from: '2026-11-04', to: '2026-11-02' }}
+        q=""
+        exportAction={exportAction}
+        now={now}
+      />
+    );
+    expect(screen.getByRole('alert').textContent).toMatch(
+      /before the end date\. Showing last 24 hours instead/
+    );
+    const from = screen.getByLabelText('From (UTC)') as HTMLInputElement;
+    expect(from.value).toBe('2026-11-04');
+    expect(from.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('exports the custom range when one is shown', async () => {
+    exportAction.mockResolvedValue({
+      filename: 'x.json',
+      mimeType: 'application/json',
+      content: '[]',
+      rows: 0,
+      truncated: false,
+    });
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    render(
+      <McpUsageSection
+        usage={usage({ range: { from: '2026-11-01', to: '2026-11-03' } })}
+        q=""
+        exportAction={exportAction}
+        now={now}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Export JSON/ }));
+    await waitFor(() =>
+      expect(exportAction).toHaveBeenCalledWith({
+        window: '24h',
+        from: '2026-11-01',
+        to: '2026-11-03',
+        format: 'json',
+      })
     );
   });
 

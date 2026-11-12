@@ -27,7 +27,7 @@ function Buttons({
   const { pending, data } = useFormStatus();
   const choice = pending ? data?.get('decision') : null;
   return (
-    <div className="flex flex-wrap gap-4" aria-busy={pending}>
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4" aria-busy={pending}>
       <Button
         type="submit"
         name="decision"
@@ -36,6 +36,7 @@ function Buttons({
         disabled={pending}
         variant="outline"
         size="lg"
+        className="w-full sm:w-auto"
       >
         {choice === 'reject' ? 'Rejecting…' : rejectLabel}
       </Button>
@@ -44,6 +45,7 @@ function Buttons({
         <Button
           type="button"
           size="lg"
+          className="w-full sm:w-auto"
           disabled={pending}
           onClick={() =>
             signOut({ callbackUrl: `/login?callbackUrl=${encodeURIComponent(reviewPath)}` })
@@ -57,6 +59,7 @@ function Buttons({
           name="decision"
           value="approve"
           size="lg"
+          className="w-full sm:w-auto"
           disabled={pending}
           aria-label={`${approveLabel} (${noun})`}
         >
@@ -109,7 +112,7 @@ export default function ReviewForm({
         </p>
         <Link
           href={mcpHref({ tab: 'approvals' })}
-          className="mt-2 inline-block text-sm font-medium underline underline-offset-4"
+          className="mt-2 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
         >
           Back to approvals
         </Link>

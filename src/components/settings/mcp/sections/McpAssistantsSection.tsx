@@ -194,7 +194,12 @@ export default function McpAssistantsSection({
                         {getAssistantIcon(row.name, 'h-4 w-4', row.metadataHost)}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{row.name}</p>
+                        <Link
+                          href={`/settings/integrations/mcp/assistants/${encodeURIComponent(row.id)}`}
+                          className="block truncate font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                        >
+                          {row.name}
+                        </Link>
                         <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                           <span className="shrink-0">ID</span>
                           <code

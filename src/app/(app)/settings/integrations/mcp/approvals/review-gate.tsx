@@ -10,14 +10,14 @@ import ShareReviewLink from './ShareReviewLink';
 
 /** Shared definition-list styles for the review and status pages, readable in both themes. */
 export const DT_CLASS = 'text-xs uppercase tracking-wide text-muted-foreground';
-export const DD_CLASS = 'text-foreground';
+export const DD_CLASS = 'min-w-0 text-foreground [overflow-wrap:anywhere]';
 
 /** Back to the approvals queue, on every review and status page. */
 export function BackToApprovals() {
   return (
     <Link
       href={mcpHref({ tab: 'approvals' })}
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
+      className="-my-2 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
     >
       <ArrowLeft className="h-4 w-4" aria-hidden="true" />
       Back to approvals
@@ -115,9 +115,11 @@ const COPY = new Map<Blocked, { title: string; body: string }>(
 export function ReviewUnavailable({ reason, heading }: { reason: Blocked; heading: string }) {
   const copy = COPY.get(reason)!;
   return (
-    <div className="max-w-3xl space-y-4 rounded-lg border p-6">
+    <div className="min-w-0 max-w-3xl space-y-4 rounded-lg border p-4 sm:p-6">
       <BackToApprovals />
-      <h1 className="text-2xl font-semibold">{heading}</h1>
+      <h1 className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">
+        {heading}
+      </h1>
       <InlineNotice tone="warning" role="status" title={copy.title}>
         <p className="text-sm">{copy.body}</p>
       </InlineNotice>
@@ -136,8 +138,14 @@ export function SelfApprovalConfirm() {
         As an administrator you can approve it yourself. It will run once, exactly as shown above,
         and the audit log records it as self-approved.
       </p>
-      <label className="mt-3 flex items-start gap-2 text-sm">
-        <input type="checkbox" name="confirmSelfApproval" value="yes" required className="mt-1" />
+      <label className="mt-3 flex min-h-11 items-start gap-3 py-1 text-sm">
+        <input
+          type="checkbox"
+          name="confirmSelfApproval"
+          value="yes"
+          required
+          className="mt-0.5 h-5 w-5 shrink-0"
+        />
         <span>I have reviewed this change and I am sure I want to apply it.</span>
       </label>
     </InlineNotice>
@@ -164,7 +172,7 @@ export function RequestedBy({
   timeZone?: string;
 }) {
   return (
-    <p className="text-sm text-muted-foreground">
+    <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
       Requested by <span className="font-medium text-foreground">{personText(person)}</span>
       {person.name && person.email ? ` (${person.email})` : ''}
       {assistant ? (
@@ -238,15 +246,17 @@ export function RequesterStatus({
   const copy = STATUS_COPY.get(status) ?? { label: status, body: '' };
   const open = status === 'PENDING' || status === 'APPROVED';
   return (
-    <div className="max-w-3xl space-y-4 rounded-lg border p-6">
+    <div className="min-w-0 max-w-3xl space-y-4 rounded-lg border p-4 sm:p-6">
       <BackToApprovals />
-      <h1 className="text-2xl font-semibold">{heading}</h1>
+      <h1 className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">
+        {heading}
+      </h1>
       {children}
       <div role="status" className="rounded border p-4">
         <p className="font-medium">Status: {copy.label}</p>
         <p className="mt-1 text-sm">{copy.body}</p>
       </div>
-      <dl className="grid gap-2 sm:grid-cols-2 break-words">
+      <dl className="grid gap-2 break-words sm:grid-cols-2">
         {open && (
           <>
             <dt className={DT_CLASS}>{status === 'APPROVED' ? 'Apply before' : 'Review before'}</dt>

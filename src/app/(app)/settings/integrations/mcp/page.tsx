@@ -554,13 +554,27 @@ export default async function McpSettings({
           />
         );
       case 'usage': {
-        const usage = await getMcpUsage(viewer, {
-          window: params.usageWindow,
-          by: params.usageBy,
-          q: params.q,
-          page: params.page,
-        });
-        return <McpUsageSection usage={usage} q={params.q} exportAction={exportMcpUsage} />;
+        const usage = await getMcpUsage(
+          viewer,
+          {
+            window: params.usageWindow,
+            from: params.usageFrom,
+            to: params.usageTo,
+            by: params.usageBy,
+            q: params.q,
+            page: params.page,
+          },
+          now
+        );
+        return (
+          <McpUsageSection
+            usage={usage}
+            q={params.q}
+            exportAction={exportMcpUsage}
+            requestedRange={{ from: params.usageFrom, to: params.usageTo }}
+            now={now}
+          />
+        );
       }
       case 'capabilities':
         return (
