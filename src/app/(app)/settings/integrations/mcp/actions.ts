@@ -30,6 +30,8 @@ import { supersededUnusedMcpGrantsWhere } from '@/lib/mcp/auth/consent';
 import { MCP_MAX_OPERATIONS } from '@/lib/mcp/core/budget';
 import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
 import { clearDiscoveryPolicyCache } from '@/lib/mcp/auth/discovery-policy';
+import { MCP_IDP_GRANT_KIND } from '@/lib/mcp/auth/enterprise-grant';
+import { getOidcConfig } from '@/lib/oidc-config';
 import { requireFreshMcpAdmin } from '@/lib/mcp/auth/fresh-admin';
 import { MCP_REAUTHENTICATION_REQUIRED, mcpPolicyWidening } from '@/lib/mcp/auth/policy-widening';
 import { isMcpViewScope } from '@/lib/mcp/auth/consent-offer';
@@ -183,7 +185,7 @@ export async function checkMcpConnection(): Promise<McpConnectionCheck> {
     where: {
       userId: user.id,
       // An assistant's sign-in, not a personal access token the viewer created.
-      kind: 'OAUTH',
+      kind: { in: ['OAUTH', MCP_IDP_GRANT_KIND] },
       revokedAt: null,
       expiresAt: { gt: new Date(now) },
       createdAt: { gte: new Date(now - CONNECTION_CHECK_WINDOW_MS) },
@@ -281,6 +283,7 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       callLogRetentionDays: z.coerce.number().int().min(7).max(365).optional(),
       requireDistinctReviewer: z.boolean().optional(),
       responderDirectWritesEnabled: z.boolean().optional(),
+      enterpriseManagedAuthEnabled: z.boolean().optional(),
       // Empty means no cap; absent keeps the stored value.
       perUserRequestsPerMinute: z
         .union([z.literal(''), z.coerce.number().int().min(1).max(6000)])
@@ -332,6 +335,9 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
         ? form.get('responderDirectWritesEnabled') === 'on'
         : undefined,
       perUserRequestsPerMinute: form.get('perUserRequestsPerMinute') ?? undefined,
+      enterpriseManagedAuthEnabled: form.has('enterpriseControls')
+        ? form.get('enterpriseManagedAuthEnabled') === 'on'
+        : undefined,
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -435,6 +441,8 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       requireDistinctReviewer: input.requireDistinctReviewer ?? existing.requireDistinctReviewer,
       responderDirectWritesEnabled:
         input.responderDirectWritesEnabled ?? existing.responderDirectWritesEnabled,
+      enterpriseManagedAuthEnabled:
+        input.enterpriseManagedAuthEnabled ?? existing.enterpriseManagedAuthEnabled,
       perUserRequestsPerMinute:
         input.perUserRequestsPerMinute === undefined
           ? existing.perUserRequestsPerMinute
@@ -442,6 +450,13 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
             ? null
             : input.perUserRequestsPerMinute,
     };
+    // The identity provider that would grant access is the single sign-on provider.
+    requireMcp(
+      !policy.enterpriseManagedAuthEnabled ||
+        existing.enterpriseManagedAuthEnabled ||
+        (await getOidcConfig()),
+      'MCP_SSO_REQUIRED'
+    );
     // Widening access needs a recent sign-in; it is judged against the locked row and refused
     // before the write, so the revision does not move. Narrowing is always allowed.
     if (mcpPolicyWidening(existing, policy).length && !(await requireFreshMcpAdmin(actor.id)))

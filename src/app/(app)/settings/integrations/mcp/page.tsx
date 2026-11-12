@@ -84,6 +84,7 @@ import {
   loadMcpPagePermissions,
   loadMcpViewer,
 } from './queries';
+import { getOidcConfig } from '@/lib/oidc-config';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -540,6 +541,7 @@ export default async function McpSettings({
               requireDistinctReviewer: policy?.requireDistinctReviewer ?? false,
               responderDirectWritesEnabled: policy?.responderDirectWritesEnabled ?? false,
               perUserRequestsPerMinute: policy?.perUserRequestsPerMinute ?? null,
+              enterpriseManagedAuthEnabled: policy?.enterpriseManagedAuthEnabled ?? false,
             }}
             revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}
@@ -548,6 +550,7 @@ export default async function McpSettings({
             activeAdminCount={await prisma.user.count({
               where: { role: 'ADMIN', status: 'ACTIVE' },
             })}
+            ssoConfigured={Boolean(await getOidcConfig())}
           />
         );
       case 'usage': {

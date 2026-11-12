@@ -328,7 +328,11 @@ export default function McpConnectionsSection({
                           </p>
                           <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                             <StatusPill tone={row.kind === 'pat' ? 'warning' : 'neutral'}>
-                              {row.kind === 'pat' ? 'Personal token' : 'OAuth'}
+                              {row.kind === 'pat'
+                                ? 'Personal token'
+                                : row.idpGranted
+                                  ? 'Granted by your identity provider'
+                                  : 'OAuth'}
                             </StatusPill>
                             {row.kind === 'oauth' && CLIENT_TYPE_LABEL[row.client.type]}
                             {row.kind === 'oauth' && row.client.revoked && ' · assistant revoked'}

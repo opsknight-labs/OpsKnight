@@ -38,6 +38,8 @@ export type McpPolicyValues = {
   responderDirectWritesEnabled?: boolean;
   /** Optional cap on one person's requests per minute across all their connections. Null is off. */
   perUserRequestsPerMinute?: number | null;
+  /** Assistants may be granted access by the organization's identity provider (ID-JAG). */
+  enterpriseManagedAuthEnabled?: boolean;
 };
 
 /** Never offered for a personal token, whatever is ticked (effective-access.ts). */
@@ -84,18 +86,21 @@ function CheckRow({
   label,
   description,
   defaultChecked,
+  disabled,
 }: {
   name: string;
   label: string;
   description: string;
   defaultChecked: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/[0.03]">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/[0.03] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
       <input
         type="checkbox"
         name={name}
         defaultChecked={defaultChecked}
+        disabled={disabled}
         className={checkboxClass}
       />
       <span className="space-y-1">
@@ -113,6 +118,7 @@ export default function McpPolicySection({
   selectedScopes,
   action,
   activeAdminCount,
+  ssoConfigured,
 }: {
   policy: McpPolicyValues;
   /** The policyRevision this page was rendered from; a stale save is refused. */
@@ -122,6 +128,8 @@ export default function McpPolicySection({
   action: McpPolicyAction;
   /** Active administrators, to warn that strict review needs a second one. */
   activeAdminCount?: number;
+  /** Single sign-on is configured and enabled; the identity-provider grant needs it. */
+  ssoConfigured?: boolean;
 }) {
   return (
     <McpPolicyForm action={action} revision={revision}>
@@ -376,7 +384,7 @@ export default function McpPolicySection({
           <span className="flex flex-col">
             <span>Advanced</span>
             <span className="text-xs font-normal text-muted-foreground">
-              Trusted hosts, browser clients and workload limits
+              Trusted hosts, browser clients, identity provider access and workload limits
             </span>
           </span>
           <ChevronDown
@@ -441,6 +449,24 @@ export default function McpPolicySection({
               label="Let assistants ask for a missing permission in place"
               description="When a call needs a permission the connection lacks but could be granted, answer with an upgrade request (HTTP 403 insufficient_scope) so assistants that support it re-open sign-in for just that permission. Off: the call returns a tool error and the person reconnects."
               defaultChecked={policy.scopeStepUpEnabled}
+            />
+          </PolicyGroup>
+          <PolicyGroup
+            title="Identity provider access"
+            description="Off by default. Lets your organization's identity provider grant its people's assistants access, without each person approving a permissions screen. The identity provider decides who may use which assistant; OpsKnight still limits access to the assistant's permissions and the person's role."
+          >
+            {/* Without single sign-on the box cannot be submitted, so the stored value is kept. */}
+            {ssoConfigured && <input type="hidden" name="enterpriseControls" value="1" />}
+            <CheckRow
+              name="enterpriseManagedAuthEnabled"
+              label="Allow access granted by your identity provider"
+              description={
+                ssoConfigured
+                  ? 'Assistants present a short-lived grant from your single sign-on provider (Enterprise-Managed Authorization) and get a five-minute access token for the person it names. Only people who already signed in to OpsKnight with single sign-on are recognised. Turning this on needs a recent sign-in.'
+                  : 'Requires single sign-on. Configure and enable single sign-on first.'
+              }
+              defaultChecked={policy.enterpriseManagedAuthEnabled ?? false}
+              disabled={!ssoConfigured}
             />
           </PolicyGroup>
           <PolicyGroup
