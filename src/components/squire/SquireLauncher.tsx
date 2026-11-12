@@ -875,12 +875,13 @@ export default function SquireLauncher({
           ref={dialogRef}
           id={panelId}
           role="dialog"
-          aria-modal="true"
+          // Docked, the panel sits beside a page that stays usable, so it is not modal and Tab may leave it.
+          aria-modal={dock.docked ? undefined : 'true'}
           aria-label={`${name}, your incident assistant`}
           tabIndex={-1}
           onKeyDown={event => {
             if (event.key === 'Escape') close();
-            else if (dialogRef.current) trapTabKey(event, dialogRef.current);
+            else if (dialogRef.current && !dock.docked) trapTabKey(event, dialogRef.current);
           }}
           className={
             fullscreen
