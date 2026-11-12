@@ -1,0 +1,12 @@
+{
+  "name": "ask_squire",
+  "title": "Ask Squire",
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  },
+  "inputSchemaSha256": "85ec21cbc08fbd45287b7fe47d710516e9b0bd7566e4c5c35c02a78d855ed51c",
+  "descriptionSha256": "3284b139ec1325faceccea6cc204efb476af23a695863fd88c3a1e6db159ae04"
+}

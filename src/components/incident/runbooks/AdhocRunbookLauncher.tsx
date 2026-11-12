@@ -51,7 +51,15 @@ function planFields(form: HTMLFormElement | null) {
     .map(([key, value]) => [key, String(value)] as [string, string]);
 }
 
-export default function AdhocRunbookLauncher({ incidentId }: { incidentId: string }) {
+export default function AdhocRunbookLauncher({
+  incidentId,
+  initialRunbookId,
+  label = 'Run another runbook',
+}: {
+  incidentId: string;
+  initialRunbookId?: string;
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<RunbookOption[]>([]);
@@ -100,10 +108,13 @@ export default function AdhocRunbookLauncher({ incidentId }: { incidentId: strin
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button
+          onClick={() => {
+            if (initialRunbookId) choose(initialRunbookId);
+          }}
           size="sm"
           className="gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium shadow-xs h-8 text-xs shrink-0"
         >
-          <Play className="h-3.5 w-3.5 fill-current" aria-hidden /> Run another runbook
+          <Play className="h-3.5 w-3.5 fill-current" aria-hidden /> {label}
         </Button>
       </SheetTrigger>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">

@@ -1,0 +1,62 @@
+{
+  "measuredAt": "2026-11-08T03:01:48.526Z",
+  "node": "v20.20.2",
+  "engineVersion": "1.4.0",
+  "options": {
+    "history": 100000,
+    "burst": 500,
+    "services": 50,
+    "batchSize": 50,
+    "concurrency": 8,
+    "reuseHistory": true,
+    "maxDrainSeconds": 600,
+    "maxKindP99Ms": 10000,
+    "gate": false,
+    "output": "/tmp/b-storm-100k-probe2.json"
+  },
+  "seedSeconds": 5,
+  "drainSeconds": 16.2,
+  "incidentsPerSecond": 30.8,
+  "cycles": 41,
+  "averageCycleMs": 396,
+  "handlerBusyFraction": 0.816,
+  "failedItems": 0,
+  "deadLetters": 0,
+  "activeFindings": 87000,
+  "correlationGroups": 500,
+  "perKind": {
+    "INDEX_INCIDENT": {
+      "count": 500,
+      "p50Ms": 33.1,
+      "p95Ms": 66.9,
+      "p99Ms": 119.6
+    },
+    "ANALYZE_INCIDENT": {
+      "count": 500,
+      "p50Ms": 76.6,
+      "p95Ms": 260,
+      "p99Ms": 304.2
+    },
+    "CORRELATE_INCIDENT": {
+      "count": 500,
+      "p50Ms": 20,
+      "p95Ms": 34.7,
+      "p99Ms": 49.6
+    },
+    "ANALYZE_RESPONSE": {
+      "count": 500,
+      "p50Ms": 47.9,
+      "p95Ms": 107.2,
+      "p99Ms": 181
+    }
+  },
+  "gate": {
+    "contract": {
+      "maxDrainSeconds": 600,
+      "maxKindP99Ms": 10000
+    },
+    "breaches": [],
+    "passed": true
+  },
+  "note": "Single process, local PostgreSQL. Indicative only; certification needs dedicated hardware."
+}

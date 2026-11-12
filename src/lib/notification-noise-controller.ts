@@ -15,14 +15,30 @@ export type NoiseControlInput = {
   eventType: string;
   trafficClass: NotificationTrafficClass;
   priority: number;
+  /**
+   * Set for a pre-paging storm child: the notification is keyed on the parent incident's source, so the
+   * parent's own post (or the first child's grouped post) counts as related and the rest roll up.
+   */
+  rollUpParentId?: string | null;
 };
 
-/** Critical and transactional pages are deliberately outside noise control. */
+/**
+ * Critical and transactional pages are deliberately outside noise control, except a storm child's: its
+ * parent already paged, so the child is grouped once per recipient and window and suppressed after that.
+ */
 export function decideNotificationNoise(
   input: NoiseControlInput,
   relatedCount: number,
   now: Date = new Date()
 ): NoiseDecision {
+  if (input.rollUpParentId) {
+    const groupKey = [input.recipientId, input.sourceType, input.sourceId, input.eventType].join(
+      ':'
+    );
+    return relatedCount > 0
+      ? { action: 'SUPPRESS', reason: `Rolled up under parent incident ${input.rollUpParentId}` }
+      : { action: 'GROUP', groupKey };
+  }
   if (input.trafficClass === 'CRITICAL' || input.trafficClass === 'TRANSACTIONAL') {
     return { action: 'DELIVER' };
   }
@@ -40,7 +56,10 @@ export async function notificationNoiseDecision(
   input: NoiseControlInput,
   now: Date = new Date()
 ): Promise<NoiseDecision> {
-  if (input.trafficClass === 'CRITICAL' || input.trafficClass === 'TRANSACTIONAL') {
+  if (
+    !input.rollUpParentId &&
+    (input.trafficClass === 'CRITICAL' || input.trafficClass === 'TRANSACTIONAL')
+  ) {
     return { action: 'DELIVER' };
   }
   const relatedCount = await countRelatedNotifications(store, input, now);

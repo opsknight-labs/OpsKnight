@@ -21,6 +21,13 @@ spec:
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
+metadata: { name: opsknight-intelligence-worker-pdb, namespace: opsknight }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: intelligence-worker } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata: { name: opsknight-critical-worker-pdb, namespace: opsknight }
 spec:
   minAvailable: 1

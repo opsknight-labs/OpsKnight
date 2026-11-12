@@ -44,6 +44,7 @@
     "test:ci": "npx vitest run --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit.xml",
     "test:unit": "vitest run -c vitest.unit.config.ts",
     "test:int": "vitest run -c vitest.int.config.ts --no-file-parallelism",
+    "test:squire:eval": "vitest run -c vitest.squire-eval.config.ts",
     "test:ci:unit": "npx vitest run -c vitest.unit.config.ts --reporter=default --reporter=junit --outputFile=reports/junit-unit.xml",
     "test:ci:db": "npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit-db.xml",
     "test:authorization": "vitest run -c vitest.unit.config.ts tests/lib/rbac-read-guards.test.ts tests/architecture/rbac-page-guards.test.ts",
@@ -64,7 +65,9 @@
     "integrations:encrypt-legacy-keys": "ts-node -r tsconfig-paths/register --project tsconfig.script.json scripts/integrations/encrypt-legacy-routing-keys.ts --apply",
     "prisma:health": "node scripts/check-migration-health.cjs",
     "prisma:auto-recover": "node --loader ts-node/esm scripts/auto-recover-migrations.ts",
-    "prisma:migrate:safe": "npm run prisma:validate && npm run prisma:health && npx prisma migrate deploy && npm run prisma:indexes:status-platform && npm run prisma:indexes:sla-scheduler && npm run prisma:indexes:voice-attempts && npm run prisma:backfill:automation-source && node scripts/prepare-authentication-diagnostics.cjs",
+    "prisma:migrate:safe": "npm run prisma:validate && npm run prisma:health && npx prisma migrate deploy && npm run prisma:indexes:status-platform && npm run prisma:indexes:sla-scheduler && npm run prisma:indexes:voice-attempts && npm run prisma:indexes:repair-invalid && (npm run prisma:indexes:squire-search || true) && npm run prisma:backfill:automation-source && node scripts/prepare-authentication-diagnostics.cjs",
+    "prisma:indexes:repair-invalid": "node scripts/repair-invalid-indexes.cjs",
+    "prisma:indexes:squire-search": "node scripts/create-squire-search-indexes.cjs",
     "prisma:backfill:automation-source": "node scripts/backfill-automation-source-classification.cjs",
     "prisma:indexes:status-platform": "node scripts/create-status-platform-online-indexes.cjs",
     "prisma:indexes:sla-scheduler": "node scripts/create-sla-scheduler-online-index.cjs",
@@ -141,9 +144,19 @@
     "certify:ingestion:upgrade": "node scripts/ingestion/certify-upgrade.cjs",
     "certify:ingestion:outage": "node scripts/ingestion/certify-outage.cjs",
     "certify:ingestion:http": "node scripts/ingestion/certify-http.cjs",
-    "certify:ingestion:docker": "node scripts/ingestion/certify-docker.cjs"
+    "certify:ingestion:docker": "node scripts/ingestion/certify-docker.cjs",
+    "alerts:backfill": "TS_NODE_PROJECT=tsconfig.script.json node --conditions=react-server -r dotenv/config -r ts-node/register -r tsconfig-paths/register scripts/backfill-alert-shape.ts"
   },
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.204",
+    "@ai-sdk/anthropic": "^3.0.135",
+    "@ai-sdk/azure": "^3.0.145",
+    "@ai-sdk/google": "^3.0.139",
+    "@ai-sdk/google-vertex": "^4.0.222",
+    "@ai-sdk/groq": "^3.0.79",
+    "@ai-sdk/mistral": "^3.0.77",
+    "@ai-sdk/openai": "^3.0.132",
+    "@ai-sdk/openai-compatible": "^2.0.87",
     "@aws-sdk/client-ses": "^3.1149.0",
     "@dicebear/collection": "^9.4.2",
     "@dicebear/core": "^9.4.3",
@@ -177,6 +190,7 @@
     "@simplewebauthn/server": "13.3.2",
     "@types/web-push": "^3.6.4",
     "@vvo/tzdb": "^6.201.1",
+    "ai": "^6.0.316",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "boring-avatars": "^2.0.4",
@@ -196,10 +210,14 @@
     "next-themes": "^0.4.6",
     "node-cron": "^4.6.0",
     "openid-client": "5.7.1",
+    "pg": "^8.23.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-hook-form": "^7.90.0",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.10.1",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",
     "source-map-js": "^1.2.2",
     "tailwind-merge": "^3.7.0",
@@ -229,6 +247,7 @@
     "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
     "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
@@ -276,7 +295,19 @@
     "uuid": "^11.1.1",
     "eslint": "$eslint",
     "fast-uri": "^3.1.9",
-    "vite": "^7.3.7"
+    "vite": "^7.3.7",
+    "follow-redirects": "^1.16.2",
+    "glob": "^14.0.3",
+    "readdir-glob": {
+      "minimatch": "^11.0.1"
+    },
+    "workbox-build": "^7.4.1",
+    "workbox-webpack-plugin": "^7.4.1",
+    "archiver": "^7.0.1",
+    "unzipper": "^0.12.3",
+    "filelist": {
+      "minimatch": "^11.0.1"
+    }
   },
   "engines": {
     "node": ">=20 <21"

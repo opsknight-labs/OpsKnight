@@ -1101,3 +1101,62 @@ export async function listMicrosoftTeamsChannelsForDiscovery(
   }
   return { channels };
 }
+
+// ---------------------------------------------------------------------------
+// Threaded reply to a verified activity (Squire answers in war rooms)
+// ---------------------------------------------------------------------------
+
+/**
+ * Reply in the thread of a message the bot received. The service URL comes from a JWT-verified
+ * activity and must still be one of Microsoft's trusted Bot Connector hosts before it receives a
+ * token. Single attempt: creating an activity is not idempotent.
+ */
+export async function replyToMicrosoftTeamsActivity(args: {
+  tenantId: string;
+  serviceUrl: string;
+  conversationId: string;
+  replyToId: string;
+  card: Record<string, unknown>;
+}): Promise<TeamsDeliveryResult> {
+  const resolved = await getMicrosoftTeamsConfig();
+  if (!resolved)
+    return {
+      success: false,
+      error: 'Microsoft Teams is not configured',
+      errorCode: 'NOT_CONFIGURED',
+    };
+  const serviceUrl = normalizeTrustedMicrosoftTeamsServiceUrl(args.serviceUrl);
+  if (!serviceUrl)
+    return { success: false, error: 'Untrusted Teams service URL', errorCode: 'APP_NOT_INSTALLED' };
+  let token: string | null = null;
+  try {
+    token = await botToken(resolved.config.clientId, resolved.clientSecret, args.tenantId);
+  } catch {}
+  if (!token)
+    return {
+      success: false,
+      error: 'Failed to acquire Bot Framework token',
+      errorCode: 'GRAPH_TOKEN_FAILED',
+    };
+  const endpoint = `${serviceUrl}/v3/conversations/${encodeURIComponent(args.conversationId)}/activities/${encodeURIComponent(args.replyToId)}`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'message',
+      replyToId: args.replyToId,
+      attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: args.card }],
+      channelData: { tenant: { id: args.tenantId } },
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok)
+    return {
+      success: false,
+      error: `Teams reply failed (HTTP ${response.status})`,
+      errorCode: `http_${response.status}`,
+      statusCode: response.status,
+    };
+  const body = (await response.json().catch(() => null)) as { id?: string } | null;
+  return { success: true, ...(body?.id ? { providerMessageId: body.id } : {}) };
+}

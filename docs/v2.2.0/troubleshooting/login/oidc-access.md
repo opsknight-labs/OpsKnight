@@ -184,16 +184,16 @@ Code `SSO_INTERNAL_ERROR`. OpsKnight could not finish your sign-in. Nothing abou
 
 When a session ends, the sign-in page says why:
 
-| Reason | Message | Detail |
-| --- | --- | --- |
-| `SESSION_REVOKED_BY_POLICY` | Your organization changed how you sign in | Your administrator changed the sign-in policy, which ended earlier sessions. |
-| `AUTHENTICATION_POLICY_DENIED` | Your organization changed how you sign in | This sign-in method is no longer allowed for your session. |
-| `OIDC_SESSION_IDLE_TIMEOUT` | You were signed out after a period of inactivity | Your organization signs people out when they have been idle for a while. |
-| `OIDC_SESSION_RENEWAL_REQUIRED` | Please confirm your sign-in | Your organization asks you to sign in with your identity provider periodically. |
-| `OIDC_CONFIGURATION_CHANGED` | Single sign-on settings were updated | An administrator updated single sign-on, which signs everyone in again. |
-| `SESSION_EXPIRED` | Your session has expired | You were signed out for your security. |
-| `SESSION_REVOKED` | You were signed out | Your session ended because your account or access changed. |
-| `USER_DISABLED` | Your OpsKnight account is disabled | An administrator or your company directory has deactivated this account. |
+| Reason                          | Message                                          | Detail                                                                          |
+| ------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `SESSION_REVOKED_BY_POLICY`     | Your organization changed how you sign in        | Your administrator changed the sign-in policy, which ended earlier sessions.    |
+| `AUTHENTICATION_POLICY_DENIED`  | Your organization changed how you sign in        | This sign-in method is no longer allowed for your session.                      |
+| `OIDC_SESSION_IDLE_TIMEOUT`     | You were signed out after a period of inactivity | Your organization signs people out when they have been idle for a while.        |
+| `OIDC_SESSION_RENEWAL_REQUIRED` | Please confirm your sign-in                      | Your organization asks you to sign in with your identity provider periodically. |
+| `OIDC_CONFIGURATION_CHANGED`    | Single sign-on settings were updated             | An administrator updated single sign-on, which signs everyone in again.         |
+| `SESSION_EXPIRED`               | Your session has expired                         | You were signed out for your security.                                          |
+| `SESSION_REVOKED`               | You were signed out                              | Your session ended because your account or access changed.                      |
+| `USER_DISABLED`                 | Your OpsKnight account is disabled               | An administrator or your company directory has deactivated this account.        |
 
 ## Password sign-in
 

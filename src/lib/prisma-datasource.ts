@@ -95,3 +95,16 @@ export function configurePrismaDatasource(
     return rawUrl;
   }
 }
+
+/**
+ * Route for the pre-paging noise-control lookup pool. Its per-connection statement timeout is a startup
+ * option, which transaction poolers may discard, so like MCP it prefers the direct route.
+ */
+export function selectPrePagingLookupDatasourceUrl(
+  env: { DIRECT_DATABASE_URL?: string; DATABASE_URL?: string } = {
+    DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
+    DATABASE_URL: process.env.DATABASE_URL,
+  }
+): string | undefined {
+  return env.DIRECT_DATABASE_URL ?? env.DATABASE_URL;
+}

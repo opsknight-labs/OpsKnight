@@ -35,4 +35,21 @@ describe('notification noise controller', () => {
       reason: 'Grouped under responder-1:SERVICE:payments:incident-updated',
     });
   });
+
+  it.each(['CRITICAL', 'TRANSACTIONAL', 'BULK'] as const)(
+    'rolls a storm child up under its parent whatever the traffic class (%s)',
+    trafficClass => {
+      const child = { ...base, trafficClass, rollUpParentId: 'parent-1' };
+      // Nothing posted for the parent recently: one grouped post for the storm.
+      expect(decideNotificationNoise(child, 0)).toEqual({
+        action: 'GROUP',
+        groupKey: 'responder-1:SERVICE:payments:incident-updated',
+      });
+      // The parent (or an earlier child) already posted: the child is suppressed.
+      expect(decideNotificationNoise(child, 1)).toEqual({
+        action: 'SUPPRESS',
+        reason: 'Rolled up under parent incident parent-1',
+      });
+    }
+  );
 });

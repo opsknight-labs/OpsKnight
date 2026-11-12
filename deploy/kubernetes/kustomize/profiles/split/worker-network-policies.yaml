@@ -11,7 +11,8 @@ spec:
     - to: [{ namespaceSelector: {} }]
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
     - to: []
-      ports: [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
+      ports:
+        [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -26,7 +27,25 @@ spec:
     - to: [{ namespaceSelector: {} }]
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
     - to: []
-      ports: [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
+      ports:
+        [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
+---
+# The intelligence worker reaches only the database, DNS and (when AI is enabled) HTTPS providers.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: opsknight-intelligence-worker-network-policy, namespace: opsknight }
+spec:
+  podSelector: { matchLabels: { app: opsknight-app, opsknight-role: intelligence-worker } }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: []
+      ports: [{ protocol: TCP, port: 5432 }]
+    - to: [{ namespaceSelector: {} }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: []
+      ports:
+        [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -41,7 +60,8 @@ spec:
     - to: [{ namespaceSelector: {} }]
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
     - to: []
-      ports: [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
+      ports:
+        [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -56,7 +76,8 @@ spec:
     - to: [{ namespaceSelector: {} }]
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
     - to: []
-      ports: [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
+      ports:
+        [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -71,7 +92,8 @@ spec:
     - to: [{ namespaceSelector: {} }]
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
     - to: []
-      ports: [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
+      ports:
+        [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -86,4 +108,5 @@ spec:
     - to: [{ namespaceSelector: {} }]
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
     - to: []
-      ports: [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]
+      ports:
+        [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 25 }]

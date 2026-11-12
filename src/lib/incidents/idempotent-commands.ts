@@ -79,7 +79,8 @@ export type IdempotentCommandInTx<T> = (tx: Prisma.TransactionClient, value: T) 
 export async function executeIdempotentIncidentLifecycleCommand(
   input: IncidentLifecycleInput,
   context?: IdempotencyContext,
-  inTx?: IdempotentCommandInTx<IncidentLifecycleResult>
+  inTx?: IdempotentCommandInTx<IncidentLifecycleResult>,
+  beforeTx?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<IdempotentExecution<IncidentLifecycleResult>> {
   return runSerializableTransaction(tx =>
     executeIdempotentOperation(tx, {
@@ -87,6 +88,7 @@ export async function executeIdempotentIncidentLifecycleCommand(
       context,
       payload: lifecyclePayload(input),
       execute: async () => {
+        if (beforeTx) await beforeTx(tx);
         const result = await applyIncidentLifecycleCommand(tx, input);
         if (inTx) await inTx(tx, result);
         return result;
@@ -97,14 +99,21 @@ export async function executeIdempotentIncidentLifecycleCommand(
 
 export async function transitionIncidentToStatusIdempotent(
   input: Omit<IncidentLifecycleInput, 'command'> & { status: IncidentStatus },
-  context?: IdempotencyContext
+  context?: IdempotencyContext,
+  inTx?: IdempotentCommandInTx<IncidentLifecycleResult>,
+  beforeTx?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<IdempotentExecution<IncidentLifecycleResult>> {
   return runSerializableTransaction(tx =>
     executeIdempotentOperation(tx, {
       scope: 'INCIDENT_LIFECYCLE_TARGET',
       context,
       payload: targetPayload(input),
-      execute: () => applyIncidentLifecycleTargetStatus(tx, input),
+      execute: async () => {
+        if (beforeTx) await beforeTx(tx);
+        const result = await applyIncidentLifecycleTargetStatus(tx, input);
+        if (inTx) await inTx(tx, result);
+        return result;
+      },
     })
   );
 }

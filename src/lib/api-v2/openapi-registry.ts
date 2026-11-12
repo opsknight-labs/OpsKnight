@@ -1725,6 +1725,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/incidents/{id}/intelligence',
+    'getIncidentIntelligence',
+    'incidents:read',
+    'item',
+    'IncidentIntelligence'
+  ),
+  op(
+    'get',
     '/operational-events',
     'listOperationalEvents',
     'incidents:read',

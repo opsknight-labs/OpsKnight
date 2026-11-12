@@ -6,13 +6,13 @@ This document establishes the machine-readable inventory and classification of O
 
 ## 1. Test Layer Classification (L0 – Certification)
 
-| Layer | Classification | Scope & Characteristics | Target Duration | Environment / DB |
-| :--- | :--- | :--- | :--- | :--- |
-| **L0** | **Static / Instant** | TypeScript check (`tsc --noEmit` - blocking), ESLint (`npm run lint:check` - visible/diagnostic pending lint debt cleanup), schema validation | < 1–2 min | None (pure static analysis) |
-| **L1** | **Unit** | Pure application logic: state machines, SLA calculators, deduplication, router, utilities, UI component tests | < 2 min | Mocked DB (memory-only Prisma mock) |
-| **L2** | **Integration** | Real persistence: Postgres migrations, relational integrity, advisory locks, queue semantics, webhooks | 2–5 min | Single PostgreSQL instance |
-| **L3** | **End-to-End (E2E)** | User and browser flows: auth lifecycle, host proxy routing, mobile PWA, incident management | ~3–12 min per suite (main or `ci:full`) | Pre-built application + PostgreSQL + Playwright |
-| **Cert** | **Certification / Resilience** | Multi-replica failover (3 web + 3 workers), k6 retry storm, chaos drills, backup/restore, cross-platform packaging | 15–35 min (Nightly / Release) | Multi-container Docker Compose / k6 |
+| Layer    | Classification                 | Scope & Characteristics                                                                                                                       | Target Duration                         | Environment / DB                                |
+| :------- | :----------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :---------------------------------------------- |
+| **L0**   | **Static / Instant**           | TypeScript check (`tsc --noEmit` - blocking), ESLint (`npm run lint:check` - visible/diagnostic pending lint debt cleanup), schema validation | < 1–2 min                               | None (pure static analysis)                     |
+| **L1**   | **Unit**                       | Pure application logic: state machines, SLA calculators, deduplication, router, utilities, UI component tests                                 | < 2 min                                 | Mocked DB (memory-only Prisma mock)             |
+| **L2**   | **Integration**                | Real persistence: Postgres migrations, relational integrity, advisory locks, queue semantics, webhooks                                        | 2–5 min                                 | Single PostgreSQL instance                      |
+| **L3**   | **End-to-End (E2E)**           | User and browser flows: auth lifecycle, host proxy routing, mobile PWA, incident management                                                   | ~3–12 min per suite (main or `ci:full`) | Pre-built application + PostgreSQL + Playwright |
+| **Cert** | **Certification / Resilience** | Multi-replica failover (3 web + 3 workers), k6 retry storm, chaos drills, backup/restore, cross-platform packaging                            | 15–35 min (Nightly / Release)           | Multi-container Docker Compose / k6             |
 
 ---
 
@@ -53,27 +53,34 @@ Pull requests run a light required gate. Heavy suites run on `main` (and tags or
 
 ## 3. Shared Composite Actions (`.github/actions/`)
 
+The optional `intelligence-performance.yml` workflow runs nightly at 02:00 UTC, on
+relevant `main` changes, manually, and on relevant PRs carrying `ci:full`. Its
+isolated pgvector database measures incremental indexing of a 5,000-alert incident
+over one million historical incidents, enforces the 200 ms incremental p99 target,
+and uploads raw timings and `EXPLAIN ANALYZE` plans. It is outside the fast required
+PR gate. This foundation check is separate from full noise-layer ingestion certification.
+
 Standardizes setup for workflows using the shared CI actions:
 
 1. [`.github/actions/setup-node`](../.github/actions/setup-node/action.yml)
-   * Standardizes Node 20.x setup.
-   * Leverages GitHub `npm` cache (`~/.npm`).
-   * Executes deterministic `npm ci --legacy-peer-deps` with `HUSKY=0`.
-   * Optionally executes `npx prisma generate` with cached client.
+   - Standardizes Node 20.x setup.
+   - Leverages GitHub `npm` cache (`~/.npm`).
+   - Executes deterministic `npm ci --legacy-peer-deps` with `HUSKY=0`.
+   - Optionally executes `npx prisma generate` with cached client.
 
 2. [`.github/actions/setup-test-db`](../.github/actions/setup-test-db/action.yml)
-   * Deploys Prisma migrations sequentially via `npx prisma migrate deploy`.
-   * Enforces status platform indexes (`npm run prisma:indexes:status-platform`).
-   * Runs the post-migration database smoke check (`scripts/ci-db-smoke.cjs`).
-   * Validates migration health and schema invariants.
+   - Deploys Prisma migrations sequentially via `npx prisma migrate deploy`.
+   - Enforces status platform indexes (`npm run prisma:indexes:status-platform`).
+   - Runs the post-migration database smoke check (`scripts/ci-db-smoke.cjs`).
+   - Validates migration health and schema invariants.
 
 3. [`.github/actions/build-app`](../.github/actions/build-app/action.yml)
-   * Executes the canonical `npm run build` with deterministic E2E build-time environment.
-   * Validates performance architecture budgets (`npm run perf:budgets`).
-   * Packages `.next/`, `public/`, and manifests as an artifact with `include-hidden-files: true` for downstream E2E consumers.
+   - Executes the canonical `npm run build` with deterministic E2E build-time environment.
+   - Validates performance architecture budgets (`npm run perf:budgets`).
+   - Packages `.next/`, `public/`, and manifests as an artifact with `include-hidden-files: true` for downstream E2E consumers.
 
 4. [`.github/actions/restore-build`](../.github/actions/restore-build/action.yml)
-   * Restores compiled application artifacts for downstream Playwright runs, completely eliminating re-compilation.
+   - Restores compiled application artifacts for downstream Playwright runs, completely eliminating re-compilation.
 
 ---
 

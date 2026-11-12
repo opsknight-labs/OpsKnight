@@ -76,6 +76,17 @@ describe('runtime process roles', () => {
     });
   });
 
+  it('gives the intelligence worker no paging responsibilities', () => {
+    expect(getOpsKnightProcessRole('intelligence-worker')).toBe('intelligence-worker');
+    expect(getRuntimeResponsibilities('intelligence-worker')).toEqual({
+      startScheduler: false,
+      startJobWorker: false,
+      schedulerProfile: null,
+      workerLane: null,
+      startIsolatedRunbookWorker: false,
+    });
+  });
+
   it('fails closed for an unknown role', () => {
     expect(() => getOpsKnightProcessRole('wrkerr')).toThrow(/Invalid OPSKNIGHT_PROCESS_ROLE/);
   });

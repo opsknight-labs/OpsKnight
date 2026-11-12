@@ -80,10 +80,155 @@ domains:
     deletion: { current: configuration-dependent, target: phase-2-or-3 }
 
   - domain: service-automation
-    data: [context-values, normalization, enrichment-writes, responder-policy-snapshots, observation-previews]
+    data:
+      [
+        context-values,
+        normalization,
+        enrichment-writes,
+        responder-policy-snapshots,
+        observation-previews,
+      ]
     purpose: [incident-routing-evidence, diagnostics, context-discovery]
     storage: [postgresql]
     recipients: [authorized-automation-readers-with-sensitive-context-permission]
-    retention: { current: incident-lifetime-for-decisions-and-ui-configured-retention-for-diagnostics, target: approved-minimization-with-routing-integrity-and-retention-holds }
+    retention:
+      {
+        current: incident-lifetime-for-decisions-and-ui-configured-retention-for-diagnostics,
+        target: approved-minimization-with-routing-integrity-and-retention-holds,
+      }
     exportable: manual-review-no-verified-subject-relation
-    deletion: { current: manual-review-preserve-immutable-routing-evidence, target: approved-subject-attribution-and-minimization }
+    deletion:
+      {
+        current: manual-review-preserve-immutable-routing-evidence,
+        target: approved-subject-attribution-and-minimization,
+      }
+
+  - domain: intelligence
+    data:
+      [
+        masked-incident-titles,
+        masked-title-embedding-vectors,
+        content-tokens,
+        credential-filtered-labels,
+        per-alert-fingerprints,
+        service-time-observation-buckets,
+        numeric-match-evidence,
+        incident-source-version-timestamps,
+        recommendation-success-markers,
+        feedback-notes,
+        feedback-and-policy-authorship,
+        work-item-errors,
+        service-dependency-graph,
+        operator-supplied-change-summaries,
+        digest-recipient-ids,
+        pre-paging-decision-evidence,
+        maintenance-and-suppression-authorship,
+        noise-control-policy-versions-and-publisher-ids,
+        heartbeat-token-hashes,
+        metric-template-queries-and-authorship,
+        numeric-metric-anomaly-evidence-and-series-labels,
+      ]
+    purpose:
+      [
+        similar-incident-suggestions,
+        recommendation-freshness,
+        optional-semantic-search,
+        optional-weekly-digest-email,
+        correlation-and-noise-analysis,
+        suggestion-feedback,
+        policy-history,
+        probable-cause-and-runbook-recommendations,
+        pre-paging-noise-controls-and-heartbeat-monitoring,
+        optional-metric-anomaly-evidence-from-administrator-configured-connectors,
+      ]
+    storage: [postgresql]
+    recipients:
+      [
+        authorized-workspace-users-limited-to-incidents-they-can-read,
+        administrator-configured-embedding-provider-when-semantic-search-is-on,
+      ]
+    retention:
+      {
+        current: ui-configured-per-entity-with-incident-cascade-and-sweep-while-disabled,
+        target: retention-holds-honoured-and-free-text-minimization,
+      }
+    exportable: partial
+    deletion:
+      {
+        current: authorship-cleared-on-user-erasure-and-rows-deleted-with-incident,
+        target: free-text-feedback-manual-review,
+      }
+
+  - domain: ai-assistant
+    data:
+      [
+        user-questions,
+        recent-conversation-turns,
+        opt-in-saved-conversations,
+        incident-titles-and-lookup-results,
+        incident-timelines-and-responder-notes-for-summaries-and-drafts,
+        provider-credentials,
+        token-usage-counters,
+        short-lived-actor-token-reservations,
+        single-use-confirmed-action-receipts,
+        observability-connector-credentials,
+        summarised-metrics-logs-traces-errors-and-diffs-from-opt-in-connectors,
+        aggregate-spend-by-day-team-capability-and-model,
+        model-price-overrides-and-team-or-capability-budgets,
+      ]
+    purpose:
+      [
+        answering-questions-about-incidents-the-user-can-read,
+        optional-read-only-observability-lookups-during-ai-answers,
+        incident-summaries-and-postmortem-drafts-for-review,
+        token-budget-accounting,
+        ai-cost-accounting-and-optional-team-and-capability-budgets,
+      ]
+    storage: [postgresql, administrator-configured-language-model-provider]
+    recipients: [administrator-configured-language-model-provider]
+    retention:
+      {
+        current: conversations-browser-only-unless-opt-in-history-encrypted-owner-only-ui-configured-retention-purged-when-disabled,
+        target: audit-retention-policy,
+      }
+    exportable: partial
+    deletion:
+      {
+        current: saved-conversations-deleted-by-owner-retention-or-user-erasure-audit-entries-follow-audit-retention,
+        target: audit-retention-policy,
+      }
+
+  - domain: squire-memory
+    data:
+      [
+        redacted-postmortem-and-note-passages,
+        published-runbook-step-names-and-descriptions,
+        person-confirmed-service-facts,
+        fact-approver-ids,
+        optional-passage-embedding-vectors,
+        proactive-briefings-nudges-and-postmortem-drafts,
+      ]
+    purpose:
+      [
+        assistant-knowledge-search-limited-to-what-the-reader-can-read,
+        reuse-of-person-confirmed-service-facts,
+        opt-in-proactive-incident-briefings-nudges-and-drafts,
+      ]
+    storage: [postgresql]
+    recipients:
+      [
+        authorized-workspace-users-limited-to-sources-they-can-read,
+        administrator-configured-embedding-provider-when-semantic-search-is-on,
+        administrator-configured-language-model-provider-when-ai-is-on,
+      ]
+    retention:
+      {
+        current: off-by-default-incident-linked-passages-follow-fingerprint-retention-derived-index-removed-when-disabled-facts-until-removed-notes-follow-finding-retention,
+        target: free-text-minimization,
+      }
+    exportable: partial
+    deletion:
+      {
+        current: cascades-with-source-incident-note-postmortem-runbook-or-service-approver-cleared-on-user-erasure,
+        target: free-text-minimization,
+      }

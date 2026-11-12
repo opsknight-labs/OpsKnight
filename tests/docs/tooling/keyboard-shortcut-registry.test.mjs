@@ -15,7 +15,7 @@ test('runtime, popup, and shortcut page share the canonical registry', () => {
   assert.ok(!page.includes("'Global',"), 'shortcut page must not hardcode a stale Global category');
   assert.ok(!page.includes("'Settings',"), 'shortcut page must not hardcode a stale Settings category');
   assert.match(registry, /GLOBAL_NAVIGATION_SHORTCUTS\.map[\s\S]*runtimeOwner: 'GlobalKeyboardHandler'/);
-  assert.equal((registry.match(/runtimeOwner:/g) ?? []).length, 14, 'explicit entries and the generated navigation group need runtime ownership');
+  assert.equal((registry.match(/runtimeOwner:/g) ?? []).length, 15, 'explicit entries and the generated navigation group need runtime ownership');
   for (const unsupported of ['Save current form', 'Go to Workspace', 'Export CSV report']) {
     assert.ok(!registry.includes(unsupported), `canonical registry advertises unsupported action: ${unsupported}`);
   }

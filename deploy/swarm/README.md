@@ -34,6 +34,7 @@ OpsKnight on Docker Swarm maps identical runtime contracts from Kubernetes and D
 ```
 
 ### Connection Routing Model
+
 - **`opsknight-web`**: Routes requests through PgBouncer (`:6432`) when enabled, or directly to PostgreSQL (`:5432`).
 - **`opsknight-scheduler` & Background Workers**: Always connect **directly to PostgreSQL** (`:5432`). They bypass PgBouncer to preserve transactional semantics and maintain strict connection budget isolation.
 - **Prisma Migrations (`migrate.sh`)**: Runs ephemeral migration tasks that connect **directly to PostgreSQL** (`:5432`).
@@ -41,6 +42,7 @@ OpsKnight on Docker Swarm maps identical runtime contracts from Kubernetes and D
 ### Supported Runtime Topologies
 
 OpsKnight on Swarm supports two deployment topologies selectable via `SWARM_RUNTIME_MODE`:
+
 1. **Split Runtime (`SWARM_RUNTIME_MODE=split`, Default)**: Enterprise architecture with separate process containers for HTTP web serving, maintenance scheduling, and dedicated worker lanes (`general`, `critical`, `bulk`, `runbook`).
 2. **Integrated Runtime (`SWARM_RUNTIME_MODE=integrated`)**: Single-container deployment (`opsknight-app`) running web, workers, and schedulers for small-to-medium teams.
 
@@ -48,21 +50,23 @@ Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict
 
 ### Logical Role Breakdown (Split Topology)
 
-| Role | Default Replicas | Placement Strategy | Update Strategy | Purpose & Isolation |
-| :--- | :--- | :--- | :--- | :--- |
-| **`opsknight-web`** | 2 (Scalable) | Spread across nodes (`node.id`) | `start-first` | Serves UI & API traffic, health checks, authentication. |
-| **`opsknight-scheduler`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Maintenance cron jobs, SLA recalculation. Fenced by DB lease. |
-| **`opsknight-general-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Standard background queues, webhooks, non-urgent syncs. |
-| **`opsknight-critical-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | High-priority alerting, SMS, Twilio, push notifications. |
-| **`opsknight-bulk-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Heavy digest emails, compliance rollups, audit purging. |
-| **`opsknight-runbook-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Isolated runbook execution, retries, and reconciliation. |
-| **`opsknight-status-projector`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Real-time incident timeline projection and public status sync. |
-| **`opsknight-pgbouncer`** *(Optional)* | 2 | Spread across nodes (`node.id`) | `start-first` | Transaction connection pooler offloading PostgreSQL backend. |
-| **`opsknight-db`** *(Bundled)* | 1 | Pinned: `opsknight.database == true` | `stop-first` | Single-node PostgreSQL persistence (dev/simple deploys). |
-| **`opsknight-agent`** *(Optional overlay)* | 1 | Operator selected | `stop-first` | Outbound, policy-constrained execution with persistent identity and result spool. |
+| Role                                       | Default Replicas | Placement Strategy                   | Update Strategy | Purpose & Isolation                                                                                                                                 |
+| :----------------------------------------- | :--------------- | :----------------------------------- | :-------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`opsknight-web`**                        | 2 (Scalable)     | Spread across nodes (`node.id`)      | `start-first`   | Serves UI & API traffic, health checks, authentication.                                                                                             |
+| **`opsknight-scheduler`**                  | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Maintenance cron jobs, SLA recalculation. Fenced by DB lease.                                                                                       |
+| **`opsknight-general-worker`**             | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Standard background queues, webhooks, non-urgent syncs.                                                                                             |
+| **`opsknight-intelligence-worker`**        | 1                | Spread across nodes (`node.id`)      | `stop-first`    | Advisory analysis (similar incidents, correlation, root cause, runbook ranking) apart from paging; scale with `SWARM_REPLICAS_INTELLIGENCE_WORKER`. |
+| **`opsknight-critical-worker`**            | 2                | Spread across nodes (`node.id`)      | `stop-first`    | High-priority alerting, SMS, Twilio, push notifications.                                                                                            |
+| **`opsknight-bulk-worker`**                | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Heavy digest emails, compliance rollups, audit purging.                                                                                             |
+| **`opsknight-runbook-worker`**             | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Isolated runbook execution, retries, and reconciliation.                                                                                            |
+| **`opsknight-status-projector`**           | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Real-time incident timeline projection and public status sync.                                                                                      |
+| **`opsknight-pgbouncer`** _(Optional)_     | 2                | Spread across nodes (`node.id`)      | `start-first`   | Transaction connection pooler offloading PostgreSQL backend.                                                                                        |
+| **`opsknight-db`** _(Bundled)_             | 1                | Pinned: `opsknight.database == true` | `stop-first`    | Single-node PostgreSQL persistence (dev/simple deploys).                                                                                            |
+| **`opsknight-agent`** _(Optional overlay)_ | 1                | Operator selected                    | `stop-first`    | Outbound, policy-constrained execution with persistent identity and result spool.                                                                   |
 
 > [!IMPORTANT]
 > **Database HA Architecture Distinction**:
+>
 > - **Bundled PostgreSQL**: Provides **single-node persistence locality**, pinned to a labeled cluster node via `node.labels.opsknight.database == true`. Intended for single-node development, staging, or simple internal deployments.
 > - **Managed / External PostgreSQL**: For true enterprise multi-node High Availability (automatic failover, multi-AZ replication, continuous WAL archiving), connect OpsKnight to an external HA database cluster (AWS Aurora/RDS, GCP Cloud SQL, Azure Database, or Patroni HA) using `docker-stack.external-db.yml`.
 
@@ -87,12 +91,12 @@ for the pinned patch and the original 29.4.1 remount fix.
 
 Ensure the following ports are open between nodes in your Docker Swarm cluster:
 
-| Port / Protocol | Direction | Purpose | Notes |
-| :--- | :--- | :--- | :--- |
-| **`2377/tcp`** | Inbound / Intra-cluster | Swarm Cluster Management | Required for manager-to-manager and worker-to-manager communication. |
-| **`7946/tcp + udp`** | Intra-cluster | Node Discovery & Gossip | Used by Swarm control plane for member discovery and health monitoring. |
-| **`4789/udp`** | Intra-cluster | Overlay Network Data Plane | VXLAN encapsulation for cross-host overlay communication. |
-| **`3000/tcp`** | Inbound from Clients / LB | OpsKnight Web Ingress | Published on the Swarm routing mesh to reach web replicas. |
+| Port / Protocol      | Direction                 | Purpose                    | Notes                                                                   |
+| :------------------- | :------------------------ | :------------------------- | :---------------------------------------------------------------------- |
+| **`2377/tcp`**       | Inbound / Intra-cluster   | Swarm Cluster Management   | Required for manager-to-manager and worker-to-manager communication.    |
+| **`7946/tcp + udp`** | Intra-cluster             | Node Discovery & Gossip    | Used by Swarm control plane for member discovery and health monitoring. |
+| **`4789/udp`**       | Intra-cluster             | Overlay Network Data Plane | VXLAN encapsulation for cross-host overlay communication.               |
+| **`3000/tcp`**       | Inbound from Clients / LB | OpsKnight Web Ingress      | Published on the Swarm routing mesh to reach web replicas.              |
 
 > [!NOTE]
 > Database (`5432`), PgBouncer (`6432`), and worker ports are attached strictly to the private external Swarm overlay network (`opsknight_network`) and **never exposed externally**.
@@ -103,21 +107,23 @@ Ensure the following ports are open between nodes in your Docker Swarm cluster:
 
 OpsKnight natively supports Docker Swarm Raft-encrypted secrets via the `*_FILE` convention in `docker-entrypoint.sh`. Production secrets are mounted into `/run/secrets/` as in-memory files rather than passed as cleartext environment variables:
 
-| Secret Name | Container Secret Path | Environment File Variable |
-| :--- | :--- | :--- |
-| `<stack>_database_url_<hash>` | `/run/secrets/opsknight_database_url` | `DATABASE_URL_FILE` |
+| Secret Name                          | Container Secret Path                        | Environment File Variable  |
+| :----------------------------------- | :------------------------------------------- | :------------------------- |
+| `<stack>_database_url_<hash>`        | `/run/secrets/opsknight_database_url`        | `DATABASE_URL_FILE`        |
 | `<stack>_direct_database_url_<hash>` | `/run/secrets/opsknight_direct_database_url` | `DIRECT_DATABASE_URL_FILE` |
-| `<stack>_nextauth_secret_<hash>` | `/run/secrets/opsknight_nextauth_secret` | `NEXTAUTH_SECRET_FILE` |
-| `<stack>_api_key_secret_<hash>` | `/run/secrets/opsknight_api_key_secret` | `API_KEY_SECRET_FILE` |
-| `<stack>_encryption_key_<hash>` | `/run/secrets/opsknight_encryption_key` | `ENCRYPTION_KEY_FILE` |
-| `<stack>_encryption_keys_<hash>` | `/run/secrets/opsknight_encryption_keys` | `ENCRYPTION_KEYS_FILE` |
-| `<stack>_web_database_url_<hash>` | `/run/secrets/opsknight_web_database_url` | `WEB_DATABASE_URL_FILE` |
-| `<stack>_pgbouncer_userlist_<hash>` | `/run/secrets/pgbouncer_userlist` | `PGBOUNCER_AUTH_FILE` |
+| `<stack>_nextauth_secret_<hash>`     | `/run/secrets/opsknight_nextauth_secret`     | `NEXTAUTH_SECRET_FILE`     |
+| `<stack>_api_key_secret_<hash>`      | `/run/secrets/opsknight_api_key_secret`      | `API_KEY_SECRET_FILE`      |
+| `<stack>_encryption_key_<hash>`      | `/run/secrets/opsknight_encryption_key`      | `ENCRYPTION_KEY_FILE`      |
+| `<stack>_encryption_keys_<hash>`     | `/run/secrets/opsknight_encryption_keys`     | `ENCRYPTION_KEYS_FILE`     |
+| `<stack>_web_database_url_<hash>`    | `/run/secrets/opsknight_web_database_url`    | `WEB_DATABASE_URL_FILE`    |
+| `<stack>_pgbouncer_userlist_<hash>`  | `/run/secrets/pgbouncer_userlist`            | `PGBOUNCER_AUTH_FILE`      |
 
 ### Automatic Secret Rotation
+
 `deploy.sh` automatically creates content-hashed secrets (`<stack>_<secret>_<sha256>`). When you rotate a database password, certificate, or encryption key, `deploy.sh` provisions the new versioned Raft secret and triggers a zero-downtime rolling update across your Swarm services.
 
 ### Fail-Closed Security Posture
+
 In production (`ENVIRONMENT=production`, default), `deploy.sh` enforces `STRICT_SECRETS=true` and immediately aborts if placeholder passwords or default encryption keys are detected. For local development or quick testing, explicitly pass `ALLOW_INSECURE_SECRETS=true`.
 
 Provide `ENCRYPTION_KEYS` as `id:64-hex-key` entries for rotation (for example `k2:<new-64-hex>,k1:<old-64-hex>`). When only `ENCRYPTION_KEY` is supplied, `deploy.sh` publishes the same key as a one-entry `k1:` keyring so every Swarm role receives the versioned keyring contract without changing the historical key ID used by existing `v3:k1:*` ciphertext.
@@ -142,6 +148,7 @@ Docker Swarm lacks Compose's `depends_on: { condition: service_completed_success
 6. **Convergence & Health**: Awaits replica convergence (fails closed on timeout) and verifies cluster nodes, task states, and HTTP readiness.
 
 ### Quick Start Deployment:
+
 ```bash
 # Split runtime requires an explicit immutable image tag or digest:
 export OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight@sha256:<tested-manifest-digest>"
@@ -156,18 +163,21 @@ SWARM_RUNTIME_MODE=integrated ./deploy/swarm/scripts/deploy.sh
 ## 5. Deployment Flavors & Overlays
 
 ### A. Core Split Stack (Bundled PostgreSQL)
+
 ```bash
 export OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight@sha256:<tested-manifest-digest>"
 ./deploy/swarm/scripts/deploy.sh
 ```
 
 ### B. Core Split Stack + High-Availability PgBouncer
+
 ```bash
 export OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight@sha256:<tested-manifest-digest>"
 PGBOUNCER_ENABLED=true ./deploy/swarm/scripts/deploy.sh
 ```
 
 ### C. External Managed PostgreSQL (RDS / Cloud SQL) + PgBouncer
+
 ```bash
 export EXTERNAL_DB="true"
 export EXTERNAL_DB_HOST="postgres.production.internal"
@@ -182,6 +192,7 @@ export PGBOUNCER_ENABLED="true"
 ```
 
 ### D. External PostgreSQL with Enterprise Private CA
+
 ```bash
 export EXTERNAL_DB="true"
 export EXTERNAL_DB_HOST="postgres.production.internal"
@@ -209,6 +220,7 @@ In single-node dev environments, `deploy.sh` automatically labels the active man
 ## 7. Operational Runbook
 
 ### Service Inspection
+
 ```bash
 # Inspect all stack services and replica states
 docker stack services opsknight
@@ -218,6 +230,7 @@ docker stack ps opsknight --no-trunc
 ```
 
 ### Zero-Downtime Rolling Update
+
 ```bash
 # Update web tier image with automated rollback on failure
 docker service update \
@@ -229,12 +242,14 @@ docker service update \
 ```
 
 ### Topology-Aware Service Rollback
+
 ```bash
 # Automatically rolls back split or integrated services
 ./deploy/swarm/scripts/rollback.sh
 ```
 
 ### Tear Down Stack
+
 ```bash
 # Remove application and database services cleanly
 docker stack rm opsknight

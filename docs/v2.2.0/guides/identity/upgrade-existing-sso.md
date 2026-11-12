@@ -23,8 +23,8 @@ they did; these are the differences you may notice.
 **Kept exactly as before**
 
 - Existing role rules keep matching case-sensitively, and are still checked top to bottom
-  (*Use the first matching rule*). New rules ignore letter case; you can switch to
-  *Give the highest role* in **3 · Roles & teams**.
+  (_Use the first matching rule_). New rules ignore letter case; you can switch to
+  _Give the highest role_ in **3 · Roles & teams**.
 
 **Behaviour changes**
 
@@ -44,20 +44,19 @@ they did; these are the differences you may notice.
 - **Changing session limits keeps your administrator test.** Only settings that affect who signs
   in, or with which role, need a new test.
 - **Sign-in errors are specific.** People see what went wrong and a reference ID instead of
-  *Access denied*.
+  _Access denied_.
 
 **New**
 
 - [Group-to-team rules](./map-roles-and-teams/#teams), a default role, and the option to refuse
   people no rule matches.
 - [Bulk approval, access requests and automatic connection for verified company emails](./link-existing-accounts/).
-- A guided four-step console. The old *Identity Provider*, *Access & provisioning* and
-  *Sessions & Policies* tabs are now *Connect provider*, *Who can sign in*, *Roles & teams* and
-  *Test & activate*.
+- A guided four-step console. The old _Identity Provider_, _Access & provisioning_ and
+  _Sessions & Policies_ tabs are now _Connect provider_, _Who can sign in_, _Roles & teams_ and
+  _Test & activate_.
 
 The database migrations add the new settings and record existing rules as case-sensitive,
 first-match rules. No action is needed.
-
 
 2.1 retains the established OIDC callback, provider configuration and issuer/subject
 identity bindings. A policy import reads the existing local-login flags and provider

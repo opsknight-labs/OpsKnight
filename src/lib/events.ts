@@ -10,6 +10,13 @@ import type { ProcessingLease } from './ingestion/contract';
 import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { logger } from './logger';
+import {
+  evaluateIngestNoiseControls,
+  linkStormChild,
+  recordIngestNoiseDecision,
+  signalIntelligenceIncident,
+  type IngestNoiseDecision,
+} from './intelligence/ingest-hooks';
 import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import {
@@ -23,6 +30,7 @@ import {
   enqueueEventSideEffects,
   enqueueLifecycleSideEffects,
   enqueueIncidentCreatedRunbookEvaluation,
+  enqueueStormChildSideEffects,
 } from './event-outbox';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { readPublishedIncidentPolicies } from './incident-policies/published';
@@ -37,6 +45,8 @@ import { checkAlertFlapping } from './flapping';
 import { initializeEscalationExecution } from './escalation/repository';
 import { buildResponderRoutingFromAutomation } from './escalation/routing';
 import { captureResponderSnapshot } from './escalation/automation-snapshot';
+import { normalizeAlertShape } from './alerts/normalization';
+import { normalizeSeverity } from './integrations/normalization';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -87,10 +97,10 @@ function truncateString(str: string, maxLength: number): string {
   return chars.slice(0, maxLength - 3).join('') + '...';
 }
 
-function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJsonValue {
+function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJsonObject {
   const serialized = JSON.stringify(eventData);
   if (Buffer.byteLength(serialized, 'utf8') <= MAX_STORED_ALERT_PAYLOAD_BYTES) {
-    return eventData as Prisma.InputJsonValue;
+    return eventData as Prisma.InputJsonObject;
   }
 
   const detailsPreview = eventData.custom_details
@@ -104,6 +114,49 @@ function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJs
     _truncated: true,
     _originalBytes: Buffer.byteLength(serialized, 'utf8'),
   };
+}
+
+const NOISE_TARGET_STATUSES = {
+  APPEND: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'],
+  GROUP_CHILD: ['OPEN', 'ACKNOWLEDGED'],
+} as const;
+
+/** Timeline lines that explain an applied pre-paging decision on the incident it produced. */
+function noiseDecisionMessages(
+  decision: IngestNoiseDecision,
+  classifiedUrgency: IncidentUrgency,
+  effectiveUrgency: IncidentUrgency,
+  holdUntil: Date | null
+): string[] {
+  const control = decision.control ?? 'NOISE';
+  const messages: string[] = [];
+  const transform = decision.transform;
+  if (transform) {
+    const parts = [
+      transform.severity ? `severity ${transform.severity}` : null,
+      transform.urgency ? `urgency ${transform.urgency}` : null,
+      transform.labels ? `labels ${Object.keys(transform.labels).join(', ')}` : null,
+    ].filter(Boolean);
+    if (parts.length) messages.push(`Orchestration rules set ${parts.join('; ')}.`);
+    const deferred = [
+      transform.serviceId ? `reroute to service ${transform.serviceId}` : null,
+      transform.runbookIds?.length ? `attach runbook ${transform.runbookIds.join(', ')}` : null,
+    ].filter(Boolean);
+    if (deferred.length)
+      messages.push(
+        `Orchestration also asked to ${deferred.join(' and ')}; not applied at ingestion.`
+      );
+    for (const note of transform.notes ?? []) messages.push(`Orchestration note: ${note}`);
+  }
+  if (effectiveUrgency !== classifiedUrgency && decision.action === 'DOWNGRADE')
+    messages.push(
+      `Urgency lowered from ${classifiedUrgency} to ${effectiveUrgency} by noise control (${control}): ${decision.reason}. Reverse the decision under Settings → Intelligence → Noise controls to restore it.`
+    );
+  if (holdUntil)
+    messages.push(
+      `Paging held until ${holdUntil.toISOString()} by noise control (${control}): ${decision.reason}. Reverse the decision to page now.`
+    );
+  return messages.map(message => truncateString(message, 1_000));
 }
 
 async function reloadIncident(tx: Prisma.TransactionClient, incidentId: string) {
@@ -160,6 +213,13 @@ export async function processEvent(
   const truncatedDescription = rawDescription
     ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
     : null;
+
+  const storedAlertPayload = boundedAlertPayload(eventData);
+  const alertShape = normalizeAlertShape({
+    summary: eventData.summary,
+    severity: eventData.severity,
+    custom_details: storedAlertPayload.custom_details,
+  });
 
   const transactionStarted = performance.now();
   const execute = async (tx: Prisma.TransactionClient) => {
@@ -235,10 +295,14 @@ export async function processEvent(
     // Persist the final link on insertion instead of rewriting every alert.
     // New incidents are created first so the foreign key remains immediate;
     // alert, incident, Automation and receipt still share this transaction.
+    // Orchestration transforms (pre-paging noise controls, ON only) may restate severity and labels.
+    let alertShapeOverride: Partial<Pick<typeof alertShape, 'severity' | 'labels'>> = {};
     const alertData = () => ({
+      ...alertShape,
+      ...alertShapeOverride,
       dedupKey: dedup_key,
       status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
-      payload: boundedAlertPayload(eventData),
+      payload: storedAlertPayload,
       serviceId,
       createdAt: processingLease ? envelope.receivedAt : undefined,
     });
@@ -456,6 +520,135 @@ export async function processEvent(
         };
       }
 
+      // Pre-paging noise controls (per-service, default OFF). OFF is one in-process map lookup; SHADOW
+      // and ON make at most a few index-backed reads under one shared deadline and fail open on any
+      // error, timeout or cold cache. Only ON decisions change what happens below.
+      let noise = isFlapping
+        ? null
+        : await evaluateIngestNoiseControls(
+            tx,
+            {
+              serviceId,
+              source: normalizedSource,
+              summary: sanitizedTitle,
+              severity: alertShape.severity,
+              urgency,
+              labels: alertShape.labels,
+              resourceKey: alertShape.resourceKey,
+              fingerprintHash: alertShape.fingerprintHash,
+              dedupKey: dedup_key,
+              receivedAt: processingLease ? envelope.receivedAt : new Date(),
+            },
+            { integrationId }
+          );
+      let applied = noise?.apply ? noise : null;
+      if (applied?.transform && applied.action !== 'DROP') {
+        const { severity, labels } = applied.transform;
+        alertShapeOverride = {
+          ...(severity ? { severity: normalizeSeverity(severity, alertShape.severity) } : {}),
+          ...(labels ? { labels: { ...alertShape.labels, ...labels } } : {}),
+        };
+      }
+
+      if (applied?.action === 'DROP') {
+        // Dropped alerts are still stored (unlinked) so the decision can be reviewed and reversed.
+        const alert = await persistAlert();
+        await recordIngestNoiseDecision(tx, applied, {
+          serviceId,
+          alertId: alert.id,
+          incidentId: null,
+        });
+        logger.info('event.dropped_by_noise_control', {
+          dedupKey: dedup_key,
+          serviceId,
+          source: normalizedSource,
+          alertId: alert.id,
+          sourceId: applied.sourceId,
+        });
+        return { action: 'dropped' as const, reason: applied.reason, dedupKey: dedup_key };
+      }
+
+      const noiseTarget =
+        (applied?.action === 'APPEND' || applied?.action === 'GROUP_CHILD') &&
+        applied.targetIncidentId
+          ? await tx.incident.findFirst({
+              where: {
+                id: applied.targetIncidentId,
+                status: { in: [...NOISE_TARGET_STATUSES[applied.action]] },
+              },
+            })
+          : null;
+      if ((applied?.action === 'APPEND' || applied?.action === 'GROUP_CHILD') && !noiseTarget) {
+        // The open incident it pointed at closed in the meantime: page normally, as if no control matched.
+        logger.info('event.noise_control_target_gone', {
+          dedupKey: dedup_key,
+          serviceId,
+          action: applied.action,
+          targetIncidentId: applied.targetIncidentId,
+        });
+        applied = null;
+        noise = null;
+      }
+
+      if (applied?.action === 'APPEND' && noiseTarget) {
+        // Content dedup: the same problem is already open. Append like a re-trigger and never lower urgency.
+        const alert = await persistAlert(noiseTarget.id);
+        const raisedUrgency = maxUrgency(
+          noiseTarget.urgency,
+          applied.transform?.urgency ?? urgency
+        );
+        const urgencyRaised = raisedUrgency !== noiseTarget.urgency;
+        let releasedDeferral = false;
+        if (urgencyRaised) {
+          const previousUrgency = noiseTarget.urgency;
+          await tx.incident.update({
+            where: { id: noiseTarget.id },
+            data: { urgency: raisedUrgency },
+          });
+          noiseTarget.urgency = raisedUrgency;
+          releasedDeferral = (
+            await reconcileIncidentEngagementAfterUrgencyChange(tx, {
+              incidentId: noiseTarget.id,
+              previousUrgency,
+              urgency: raisedUrgency,
+            })
+          ).released;
+        }
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: noiseTarget.id,
+            message: truncateString(
+              `Alert from ${normalizedSource} appended by noise control (${applied.control}): ${applied.reason}. Summary: ${sanitizedTitle}.${urgencyRaised ? ` Urgency raised to ${raisedUrgency}.` : ''}${releasedDeferral ? ' Support-hours engagement deferral released.' : ''} Reverse the decision to page it as its own incident.`,
+              1_000
+            ),
+          },
+        });
+        await recordIngestNoiseDecision(tx, applied, {
+          serviceId,
+          alertId: alert.id,
+          incidentId: noiseTarget.id,
+        });
+        logger.info('event.appended_by_noise_control', {
+          incidentId: noiseTarget.id,
+          dedupKey: dedup_key,
+          source: normalizedSource,
+        });
+        return { action: 'deduplicated' as const, incident: noiseTarget };
+      }
+
+      const effectiveUrgency: IncidentUrgency =
+        applied?.action === 'DOWNGRADE' && applied.urgency
+          ? applied.urgency
+          : (applied?.transform?.urgency ?? urgency);
+      const noiseSuppressed = applied?.action === 'SUPPRESS';
+      const suppressed = isFlapping || noiseSuppressed;
+      const stormParent = applied?.action === 'GROUP_CHILD' ? noiseTarget : null;
+      // Holds are bounded (≤ 60 s) and never delay HIGH urgency, whatever the policy says.
+      const holdUntil =
+        applied?.action === 'HOLD' && applied.holdUntil && effectiveUrgency !== 'HIGH'
+          ? applied.holdUntil
+          : null;
+
       // Initial OPEN/SUPPRESSED state is creation policy, not a transition of an
       // existing incident, so it intentionally remains in the ingestion path.
       const incidentCreatedAt = new Date();
@@ -469,7 +662,7 @@ export async function processEvent(
         publishedPolicies.sla
       );
       const engagement = resolveIncidentEngagement({
-        urgency,
+        urgency: effectiveUrgency,
         supportHours: await resolveSupportHours(
           tx,
           { serviceId, at: incidentCreatedAt },
@@ -477,13 +670,28 @@ export async function processEvent(
         ),
         now: incidentCreatedAt,
       });
+      const deliveryNotBefore =
+        holdUntil && holdUntil > engagement.earliestDeliveryAt
+          ? holdUntil
+          : engagement.earliestDeliveryAt;
+      const creationMessage = isFlapping
+        ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
+        : noiseSuppressed
+          ? `Incident created in SUPPRESSED state by noise control (${applied!.control}) from ${normalizedSource}: ${applied!.reason}. It does not page; reverse the decision under Settings → Intelligence → Noise controls to page it.`
+          : stormParent
+            ? `Incident triggered via API from ${normalizedSource} and grouped under storm parent "${truncateString(stormParent.title, 200)}" (${stormParent.id}) by noise control (STORM): ${applied!.reason}. Paging rolls up to the parent; reverse the decision to page it on its own.`
+            : `Incident triggered via API from ${normalizedSource}`;
+      const creationMessages = [
+        truncateString(creationMessage, 1_000),
+        ...(applied ? noiseDecisionMessages(applied, urgency, effectiveUrgency, holdUntil) : []),
+      ];
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
           automationSourceRestricted: !!automation,
           description: truncatedDescription,
-          status: isFlapping ? 'SUPPRESSED' : 'OPEN',
-          urgency,
+          status: suppressed ? 'SUPPRESSED' : 'OPEN',
+          urgency: effectiveUrgency,
           priority: finalPriority,
           dedupKey: dedupKeys.primary,
           serviceId,
@@ -516,37 +724,48 @@ export async function processEvent(
           createdAt: incidentCreatedAt,
           alerts: { create: alertData() },
           events: {
-            create: {
-              message: isFlapping
-                ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
-                : `Incident triggered via API from ${normalizedSource}`,
-            },
+            create:
+              creationMessages.length === 1
+                ? { message: creationMessages[0] }
+                : creationMessages.map(message => ({ message })),
           },
-          ...(isFlapping
+          ...(suppressed
             ? {
                 escalationStatus: 'COMPLETED',
                 nextEscalationAt: null,
                 slaPauseStartedAt: incidentCreatedAt,
                 slaPauses: {
                   create: {
-                    reason: 'flapping-suppression',
+                    reason: isFlapping ? 'flapping-suppression' : 'noise-control-suppression',
                     startedAt: incidentCreatedAt,
                   },
                 },
               }
-            : {}),
+            : stormParent
+              ? // A storm child is visible and actionable but does not start its own escalation.
+                { escalationStatus: 'COMPLETED', nextEscalationAt: null }
+              : {}),
         },
       });
 
       logger.info(
-        isFlapping ? 'event.incident_created_suppressed_flapping' : 'event.incident_created',
+        isFlapping
+          ? 'event.incident_created_suppressed_flapping'
+          : noiseSuppressed
+            ? 'event.incident_created_suppressed_noise_control'
+            : stormParent
+              ? 'event.incident_created_storm_child'
+              : 'event.incident_created',
         {
           incidentId: newIncident.id,
           dedupKey: dedup_key,
           source: normalizedSource,
           severity: eventData.severity,
-          urgency,
+          urgency: effectiveUrgency,
           isFlapping,
+          ...(noise
+            ? { noiseControl: noise.control, noiseAction: noise.action, noiseApplied: noise.apply }
+            : {}),
         }
       );
 
@@ -555,11 +774,33 @@ export async function processEvent(
         newIncident.id,
         envelope,
         automation,
-        !isFlapping,
+        !suppressed && !stormParent,
         service.escalationPolicyId
       );
 
-      if (!isFlapping) {
+      if (stormParent) {
+        await linkStormChild(tx, {
+          parentIncidentId: stormParent.id,
+          childIncidentId: newIncident.id,
+          evidence: applied!.evidence,
+        });
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: stormParent.id,
+            message: truncateString(
+              `Storm child grouped under this incident: "${sanitizedTitle}" (${newIncident.id}) from ${normalizedSource}. ${applied!.reason}.`,
+              1_000
+            ),
+          },
+        });
+        // Only the service-channel post is queued, and it rolls up under the parent's notification.
+        await enqueueStormChildSideEffects(tx, newIncident.id, {
+          escalationGeneration: newIncident.escalationGeneration ?? 0,
+          status: newIncident.status,
+        });
+      }
+
+      if (!suppressed && !stormParent) {
         // Escalation state and its first due job commit with the incident, so
         // an OPEN incident with a policy is never left with nothing scheduled.
         let inMemoryRouting = automation ? buildResponderRoutingFromAutomation(automation) : null;
@@ -604,7 +845,7 @@ export async function processEvent(
           incidentId: newIncident.id,
           serviceId,
           now: incidentCreatedAt,
-          notBefore: engagement.earliestDeliveryAt,
+          notBefore: deliveryNotBefore,
           generation: newIncident.escalationGeneration ?? 0,
           routing: inMemoryRouting,
         });
@@ -612,7 +853,7 @@ export async function processEvent(
           tx,
           'triggered',
           newIncident.id,
-          engagement.earliestDeliveryAt,
+          deliveryNotBefore,
           {
             escalationGeneration: newIncident.escalationGeneration ?? 0,
             status: newIncident.status,
@@ -632,8 +873,25 @@ export async function processEvent(
         source: 'MONITORING',
       });
 
+      if (noise) {
+        // SHADOW and ON decisions are both recorded against the alert they were made for.
+        const alert = await tx.alert.findFirst({
+          where: { incidentId: newIncident.id },
+          select: { id: true },
+        });
+        await recordIngestNoiseDecision(tx, noise, {
+          serviceId,
+          alertId: alert?.id ?? null,
+          incidentId: newIncident.id,
+        });
+      }
+
       return {
-        action: isFlapping ? ('suppressed' as const) : ('triggered' as const),
+        action: suppressed
+          ? ('suppressed' as const)
+          : stormParent
+            ? ('grouped' as const)
+            : ('triggered' as const),
         incident: newIncident,
         automationTelemetry: automation,
         telemetry: {
@@ -719,6 +977,9 @@ export async function processEvent(
     performance.now() - transactionStarted,
     { action: result.action }
   );
+
+  // The paging transaction is already durable. A lost hint only delays optional analysis.
+  if ('incident' in result && result.incident?.id) signalIntelligenceIncident(result.incident.id);
 
   const telemetry = 'telemetry' in result ? result.telemetry : undefined;
   if (telemetry) {

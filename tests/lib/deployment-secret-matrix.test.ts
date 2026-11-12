@@ -182,6 +182,7 @@ describe('deployment secret matrix', () => {
       'opsknight-migration',
       'opsknight-web',
       'opsknight-scheduler',
+      'opsknight-intelligence-worker',
       'opsknight-general-worker',
       'opsknight-critical-worker',
       'opsknight-bulk-worker',
@@ -205,6 +206,7 @@ describe('deployment secret matrix', () => {
     for (const role of [
       'opsknight-web',
       'opsknight-scheduler',
+      'opsknight-intelligence-worker',
       'opsknight-general-worker',
       'opsknight-critical-worker',
       'opsknight-bulk-worker',

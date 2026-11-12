@@ -265,16 +265,14 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
     ).toBeVisible();
     // Saved revision selection must load its own sanitized configuration, not production.
     const saved = await context.request.get(`${origin}/api/auth/control?section=connection`);
+    expect(saved.ok()).toBe(true);
     const dashboard = (await saved.json()).data;
+    // The disposable fixture seeds two inert provider drafts; selection must run.
+    expect(dashboard.revisions.length).toBeGreaterThanOrEqual(2);
     await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
-    // Saved configurations are offered only once there are some; a fresh install asks for a
-    // provider first instead of showing an empty selector.
-    if (dashboard.revisions.length === 0)
-      await expect(page.getByText('Choose your provider above to continue.')).toBeVisible();
-    else
-      await expect(
-        page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
-      ).toBeEnabled();
+    await expect(
+      page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
+    ).toBeEnabled();
     for (const revision of dashboard.revisions.slice(0, 2)) {
       await page
         .getByRole('combobox', { name: 'Saved provider configuration', exact: true })
@@ -425,6 +423,13 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await page.getByRole('button', { name: 'Save changes', exact: true }).click();
       await expect(
         page.getByRole('alert').filter({ hasText: 'Fix these fields before saving' })
+      ).toBeVisible();
+      await expect(client).toHaveAttribute('aria-invalid', 'true');
+      await expect(
+        page.getByRole('alert').getByRole('button', {
+          name: 'Enter the application Client ID.',
+          exact: true,
+        })
       ).toBeVisible();
     }
   } finally {

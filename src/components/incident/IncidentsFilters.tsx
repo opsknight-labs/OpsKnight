@@ -43,6 +43,7 @@ import {
   Server,
   Check,
   ChevronsUpDown,
+  Layers,
 } from 'lucide-react';
 
 type IncidentsFiltersProps = {
@@ -56,6 +57,9 @@ type IncidentsFiltersProps = {
   teams?: Array<{ id: string; name: string }>;
   services?: Array<{ id: string; name: string }>;
   canCreateIncident?: boolean;
+  /** Noise-decision filter; shown only when the viewer may read intelligence. */
+  showNoiseFilter?: boolean;
+  currentNoise?: string;
 };
 
 export default function IncidentsFilters({
@@ -69,6 +73,8 @@ export default function IncidentsFilters({
   teams = [],
   services = [],
   canCreateIncident = false,
+  showNoiseFilter = false,
+  currentNoise = 'all',
 }: IncidentsFiltersProps) {
   const router = useRouter();
   const { openCreateIncident } = useCreateIncidentModal();
@@ -120,6 +126,7 @@ export default function IncidentsFilters({
     currentSort !== 'newest' ||
     currentFilter !== 'all' ||
     currentTeamId !== 'all' ||
+    currentNoise !== 'all' ||
     (currentServiceId !== 'all' && currentServiceId !== '');
 
   return (
@@ -589,6 +596,34 @@ export default function IncidentsFilters({
               </SelectContent>
             </Select>
           </div>
+
+          {showNoiseFilter && (
+            <div className="space-y-1.5">
+              <Label
+                id="incident-noise-filter-label"
+                className="text-[11px] font-semibold uppercase text-muted-foreground"
+              >
+                Noise decisions
+              </Label>
+              <Select value={currentNoise} onValueChange={val => updateParams({ noise: val })}>
+                <SelectTrigger
+                  aria-labelledby="incident-noise-filter-label"
+                  className="h-9 bg-muted/30 focus:bg-background transition-colors text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    <SelectValue placeholder="Any" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any</SelectItem>
+                  <SelectItem value="grouped">Grouped</SelectItem>
+                  <SelectItem value="suppressed">Suppressed by a rule</SelectItem>
+                  <SelectItem value="maintenance">In maintenance</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {isPending && (

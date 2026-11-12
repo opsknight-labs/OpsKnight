@@ -69,7 +69,7 @@ const ConditionRow = memo(function ConditionRow({
     >
       <span
         aria-hidden="true"
-        className="flex items-center justify-center rounded bg-muted/60 px-1 py-0.5 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-muted-foreground select-none"
+        className="flex items-center justify-center rounded bg-muted/60 px-1 py-0.5 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-foreground/80 select-none"
       >
         {index === 0 ? 'When' : 'and'}
       </span>

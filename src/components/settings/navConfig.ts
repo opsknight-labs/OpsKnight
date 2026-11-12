@@ -7,6 +7,8 @@ export type SettingsNavItem = {
   keywords?: string[];
   requiresAdmin?: boolean;
   requiresAdminOrAuditor?: boolean;
+  /** Admins, auditors and responders: everyone who may view a read-only settings area. */
+  requiresResponderOrAuditor?: boolean;
   requiresResponder?: boolean;
   badge?: string;
 };
@@ -98,6 +100,30 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         href: '/settings/service-objectives',
         icon: 'activity',
         keywords: ['slo', 'objectives', 'uptime', 'availability', 'mtta', 'mttr'],
+      },
+      {
+        id: 'intelligence',
+        label: 'Intelligence',
+        description:
+          'Similar incidents, correlation, possible causes, insights and the AI assistant. Off by default and never on the paging path',
+        href: '/settings/intelligence',
+        icon: 'activity',
+        // Matches the pages: anyone with intelligence.read may view them; only admins change anything.
+        requiresResponderOrAuditor: true,
+        keywords: [
+          'aiops',
+          'intelligence',
+          'similar incidents',
+          'correlation',
+          'noise',
+          'ai',
+          'assistant',
+          'squire',
+          'llm',
+          'insights',
+          'dependencies',
+          'root cause',
+        ],
       },
       {
         id: 'custom-fields',

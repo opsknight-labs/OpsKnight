@@ -112,6 +112,45 @@ export async function emitAuditEvent(
   });
 }
 
+/** Versioned system events, written in a single transaction-local batch with no actor lookup. */
+export async function emitSystemAuditEvents(
+  inputs: ReadonlyArray<Omit<AuditEventInput, 'actor'>>,
+  client: AuditClient = prisma
+): Promise<void> {
+  if (inputs.length === 0) return;
+  if (inputs.length > 500) throw new RangeError('System audit batch exceeds 500 events.');
+  const data: Prisma.AuditLogCreateManyInput[] = inputs.map(input => {
+    const occurredAt = input.occurredAt ?? new Date();
+    if (!Number.isFinite(occurredAt.getTime())) throw new RangeError('Invalid audit timestamp.');
+    const targetEmail = input.targetEmail?.toLowerCase().trim() || null;
+    const ip = input.ip || null;
+    return {
+      action: input.action,
+      entityType: input.target.type,
+      entityId: input.target.id || null,
+      actorId: null,
+      actorEmail: null,
+      actorName: null,
+      targetEmail,
+      ip,
+      details: {
+        contractVersion: 1,
+        source: input.source,
+        requestId: resolveRequestId(input.requestId),
+        occurredAt: occurredAt.toISOString(),
+        actor: { type: 'SYSTEM', id: null, email: null, name: null },
+        target: { type: input.target.type, id: input.target.id ?? null },
+        oldValue: jsonValue(input.oldValue),
+        newValue: jsonValue(input.newValue),
+        metadata: jsonValue(input.metadata),
+        ...(targetEmail ? { targetEmail } : {}),
+        ...(ip ? { ip } : {}),
+      },
+    };
+  });
+  await client.auditLog.createMany({ data });
+}
+
 /** @deprecated Pass the authenticated actor explicitly for user-initiated actions. */
 export async function getDefaultActorId() {
   return null;

@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -107,14 +108,18 @@ export async function getCurrentUser() {
   return user;
 }
 
-export async function getCurrentAuthorizationActor() {
+/**
+ * Deduplicated per server render: a page made of several independently loading server components (the
+ * incident page and its intelligence cards, for example) resolves the session and actor once.
+ */
+export const getCurrentAuthorizationActor = cache(async function getCurrentAuthorizationActor() {
   const user = await getCurrentUser();
   const actor = await resolveUserActor(user.id);
   if (!actor || !isAppRole(user.role) || actor.status !== 'ACTIVE') {
     throw appError('AUTHORIZATION_DENIED', 'Unauthorized. Invalid application role.');
   }
   return actor;
-}
+});
 
 export async function assertAdmin() {
   return assertCapability(CAPABILITIES.ADMIN_MANAGE, 'Unauthorized. Admin access required.');

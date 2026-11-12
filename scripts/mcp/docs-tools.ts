@@ -10,6 +10,7 @@ import { CostBudget } from '../../src/lib/mcp/core/budget';
 import { supportedMcpScopes } from '../../src/lib/mcp/auth/scopes';
 import { MCP_CATALOG, isMcpApprovalGated } from '../../src/lib/mcp/catalog';
 import { MCP_CAPABILITIES } from '../../src/lib/mcp/catalog/capabilities';
+import { ASK_SQUIRE_SCOPES } from '../../src/lib/mcp/core/ask-squire-contract';
 import type { AuthorizationActor } from '../../src/lib/authorization-policy';
 
 export const MCP_TOOLS_PAGE = 'docs/v2.2.0/reference/mcp/tools.md';
@@ -54,7 +55,9 @@ async function list<T>(method: 'tools/list' | 'prompts/list', writes: boolean, s
         actor,
         writes,
         sensitive,
-        []
+        [],
+        // Opt-in tools are documented too; their descriptions say what turns them on.
+        { squire: true }
       ),
     { legacy: 'stateless', responseMode: 'json', maxSubscriptions: 0 }
   );
@@ -161,7 +164,13 @@ export async function renderTools(verifiedAt: string) {
         (operation && isMcpApprovalGated(operation)) || capability.get(tool.name)?.approval
           ? 'Approval'
           : null,
+        tool.name === 'ask_squire' ? 'Squire for MCP (AI settings)' : null,
       ].filter(Boolean);
+      const scopes: readonly string[] = operation?.requiredScopes.length
+        ? operation.requiredScopes
+        : tool.name === 'ask_squire'
+          ? ASK_SQUIRE_SCOPES
+          : [];
       lines.push(
         `### \`${tool.name}\``,
         '',
@@ -169,8 +178,8 @@ export async function renderTools(verifiedAt: string) {
         `| Read only | Destructive | Idempotent | Scopes | Requires |`,
         '| --- | --- | --- | --- | --- |',
         `| ${hint(tool.annotations?.readOnlyHint)} | ${hint(tool.annotations?.destructiveHint)} | ${hint(tool.annotations?.idempotentHint)} | ${
-          operation?.requiredScopes.length
-            ? operation.requiredScopes.map(scope => `\`${scope}\``).join(', ')
+          scopes.length
+            ? scopes.map(scope => `\`${scope}\``).join(', ')
             : 'none of its own (an operation it reads or runs needs its scopes)'
         } | ${needs.join(', ') || '—'} |`,
         ''

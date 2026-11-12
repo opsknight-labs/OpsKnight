@@ -26,7 +26,11 @@ export type ChatOpsIntentInput = {
   providerObjectId?: string;
 };
 
-function deliveryHash(provider: ChatProvider, kind: ChatOpsIntentInput['kind'], signature: string): string {
+function deliveryHash(
+  provider: ChatProvider,
+  kind: ChatOpsIntentInput['kind'],
+  signature: string
+): string {
   return crypto.createHash('sha256').update(`${provider}:${kind}:${signature}`).digest('hex');
 }
 
@@ -45,7 +49,10 @@ function resolveProvider(input: ChatOpsIntentInput): ChatProvider {
   return input.provider ?? 'SLACK';
 }
 
-function resolveResponseMode(input: ChatOpsIntentInput, provider: ChatProvider): 'INLINE' | 'DEFERRED' {
+function resolveResponseMode(
+  input: ChatOpsIntentInput,
+  provider: ChatProvider
+): 'INLINE' | 'DEFERRED' {
   if (input.responseMode) return input.responseMode;
   return provider === 'MICROSOFT_TEAMS' ? 'INLINE' : 'DEFERRED';
 }
@@ -61,7 +68,7 @@ type ExistingIntent = { id: string; payloadDigest: string | null };
 async function returnDuplicateIntent(
   existing: ExistingIntent,
   payloadDigest: string,
-  responseMode: 'INLINE' | 'DEFERRED',
+  responseMode: 'INLINE' | 'DEFERRED'
 ): Promise<{ id: string; duplicate: true }> {
   if (existing.payloadDigest && existing.payloadDigest !== payloadDigest) {
     throw new Error('ChatOps delivery identity was reused with a different payload');
@@ -69,31 +76,59 @@ async function returnDuplicateIntent(
   // A prior crash or an old partially-deployed release could leave an intent
   // without a runnable executor. Repair that invariant without duplicating a
   // leased executor.
-  if (responseMode === 'DEFERRED') await prisma.$transaction(async tx => {
-    const runnable = await tx.backgroundJob.findFirst({
-      where: { type: 'CHATOPS_INTENT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['intentId'], equals: existing.id } },
-      select: { id: true },
-    });
-    const intent = await tx.chatOpsIntent.findUnique({ where: { id: existing.id }, select: { status: true } });
-    if (!runnable && intent && ['PENDING', 'FAILED', 'EFFECT_COMPLETED', 'RESPONSE_PENDING'].includes(intent.status)) {
-      await tx.backgroundJob.create({
-        data: { type: 'CHATOPS_INTENT', status: 'PENDING', scheduledAt: new Date(), payload: { intentId: existing.id }, maxAttempts: 8 },
+  if (responseMode === 'DEFERRED')
+    await prisma.$transaction(async tx => {
+      const runnable = await tx.backgroundJob.findFirst({
+        where: {
+          type: 'CHATOPS_INTENT',
+          status: { in: ['PENDING', 'PROCESSING'] },
+          payload: { path: ['intentId'], equals: existing.id },
+        },
+        select: { id: true },
       });
-    }
-  });
+      const intent = await tx.chatOpsIntent.findUnique({
+        where: { id: existing.id },
+        select: { status: true },
+      });
+      if (
+        !runnable &&
+        intent &&
+        ['PENDING', 'FAILED', 'EFFECT_COMPLETED', 'RESPONSE_PENDING'].includes(intent.status)
+      ) {
+        await tx.backgroundJob.create({
+          data: {
+            type: 'CHATOPS_INTENT',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            payload: { intentId: existing.id },
+            maxAttempts: 8,
+          },
+        });
+      }
+    });
   return { id: existing.id, duplicate: true };
 }
 
-async function findLegacySlackIntent(kind: ChatOpsIntentInput['kind'], signature: string): Promise<ExistingIntent | null> {
+async function findLegacySlackIntent(
+  kind: ChatOpsIntentInput['kind'],
+  signature: string
+): Promise<ExistingIntent | null> {
   const legacyHash = legacyDeliveryHash(kind, signature);
-  let existing = await prisma.chatOpsIntent.findUnique({
-    where: { provider_kind_deliveryHash: { provider: 'SLACK', kind, deliveryHash: legacyHash } } as unknown as Prisma.ChatOpsIntentWhereUniqueInput,
+  let existing = (await prisma.chatOpsIntent.findUnique({
+    where: {
+      provider_kind_deliveryHash: { provider: 'SLACK', kind, deliveryHash: legacyHash },
+    } as unknown as Prisma.ChatOpsIntentWhereUniqueInput,
     select: { id: true, payloadDigest: true },
-  }) as ExistingIntent | null;
+  })) as ExistingIntent | null;
   if (!existing) {
     try {
-      existing = await (prisma.chatOpsIntent.findUnique as unknown as (args: unknown) => Promise<ExistingIntent | null>)({
-        where: { kind_deliveryHash: { kind, deliveryHash: legacyHash } }, select: { id: true, payloadDigest: true },
+      existing = await (
+        prisma.chatOpsIntent.findUnique as unknown as (
+          args: unknown
+        ) => Promise<ExistingIntent | null>
+      )({
+        where: { kind_deliveryHash: { kind, deliveryHash: legacyHash } },
+        select: { id: true, payloadDigest: true },
       });
     } catch {
       // A migrated client no longer exposes the legacy compound key.
@@ -108,7 +143,9 @@ async function findLegacySlackIntent(kind: ChatOpsIntentInput['kind'], signature
  * encrypted at rest because it can contain response URLs and user content.
  * Generic for Slack (DEFERRED response_url) and Teams (INLINE invoke response).
  */
-export async function enqueueChatOpsIntent(input: ChatOpsIntentInput): Promise<{ id: string; duplicate: boolean }> {
+export async function enqueueChatOpsIntent(
+  input: ChatOpsIntentInput
+): Promise<{ id: string; duplicate: boolean }> {
   const provider = resolveProvider(input);
   const responseMode = resolveResponseMode(input, provider);
   const payloadDigest = input.payloadDigest ?? payloadDigestFromPayload(input.payload);
@@ -147,8 +184,11 @@ export async function enqueueChatOpsIntent(input: ChatOpsIntentInput): Promise<{
       if (responseMode === 'DEFERRED') {
         await tx.backgroundJob.create({
           data: {
-            type: 'CHATOPS_INTENT', status: 'PENDING', scheduledAt: new Date(),
-            payload: { intentId: created.id }, maxAttempts: 8,
+            type: 'CHATOPS_INTENT',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            payload: { intentId: created.id },
+            maxAttempts: 8,
           },
         });
       }
@@ -160,10 +200,12 @@ export async function enqueueChatOpsIntent(input: ChatOpsIntentInput): Promise<{
       throw error;
     }
     // Provider-scoped lookup (new constraint)
-    let existing = await prisma.chatOpsIntent.findUnique({
-      where: { provider_kind_deliveryHash: { provider, kind: input.kind, deliveryHash: hash } } as unknown as Prisma.ChatOpsIntentWhereUniqueInput,
+    let existing = (await prisma.chatOpsIntent.findUnique({
+      where: {
+        provider_kind_deliveryHash: { provider, kind: input.kind, deliveryHash: hash },
+      } as unknown as Prisma.ChatOpsIntentWhereUniqueInput,
       select: { id: true, payloadDigest: true },
-    }) as ExistingIntent | null;
+    })) as ExistingIntent | null;
     // Rolling-deploy compat: pre-generic Slack rows have deliveryHash = sha256(kind:signature) without provider prefix.
     // A retry arriving with new code would otherwise miss the dedup row and duplicate the mutation.
     if (!existing && provider === 'SLACK') {
@@ -177,18 +219,25 @@ export async function enqueueChatOpsIntent(input: ChatOpsIntentInput): Promise<{
 /** Execute and durably replay an INLINE provider request (Teams invoke). */
 export async function processInlineChatOpsIntent(
   intentId: string,
-  execute: (input: { intentId: string; payload: Record<string, unknown> }) => Promise<Prisma.InputJsonValue>,
+  execute: (input: {
+    intentId: string;
+    payload: Record<string, unknown>;
+  }) => Promise<Prisma.InputJsonValue>
 ): Promise<Prisma.JsonValue> {
   const completed = await prisma.chatOpsIntent.findUnique({
     where: { id: intentId },
     select: { status: true, responsePayload: true, responseMode: true },
   });
-  if (completed?.status === 'COMPLETED' && completed.responsePayload !== null) return completed.responsePayload;
+  if (completed?.status === 'COMPLETED' && completed.responsePayload !== null)
+    return completed.responsePayload;
   if (completed?.responseMode !== 'INLINE') throw new Error('ChatOps intent is not inline');
 
   const claim = await claimEffect(intentId);
   if (!claim) {
-    const replay = await prisma.chatOpsIntent.findUnique({ where: { id: intentId }, select: { responsePayload: true } });
+    const replay = await prisma.chatOpsIntent.findUnique({
+      where: { id: intentId },
+      select: { responsePayload: true },
+    });
     if (replay?.responsePayload !== null && replay?.responsePayload !== undefined) {
       // A process can crash after committing the mutation response but before
       // advancing RESPONSE_PENDING to COMPLETED. The persisted response is the
@@ -244,11 +293,29 @@ async function claimEffect(id: string): Promise<ClaimedIntent | null> {
     },
   });
   if (claimed.count !== 1) return null;
-  const intent = await (prisma as unknown as {
-    chatOpsIntent: { findUnique: (a: unknown) => Promise<{ id: string; encryptedPayload: string; responsePayload: Prisma.JsonValue | null; provider?: ChatProvider; responseMode?: string } | null> };
-  }).chatOpsIntent.findUnique({
+  const intent = await (
+    prisma as unknown as {
+      chatOpsIntent: {
+        findUnique: (
+          a: unknown
+        ) => Promise<{
+          id: string;
+          encryptedPayload: string;
+          responsePayload: Prisma.JsonValue | null;
+          provider?: ChatProvider;
+          responseMode?: string;
+        } | null>;
+      };
+    }
+  ).chatOpsIntent.findUnique({
     where: { id },
-    select: { id: true, encryptedPayload: true, responsePayload: true, provider: true, responseMode: true },
+    select: {
+      id: true,
+      encryptedPayload: true,
+      responsePayload: true,
+      provider: true,
+      responseMode: true,
+    },
   });
   if (!intent) return null;
   return {
@@ -257,11 +324,14 @@ async function claimEffect(id: string): Promise<ClaimedIntent | null> {
     encryptedPayload: intent.encryptedPayload,
     responsePayload: intent.responsePayload,
     provider: (intent.provider as ChatProvider) ?? 'SLACK',
-    responseMode: ((intent.responseMode as string) as 'INLINE' | 'DEFERRED') ?? 'DEFERRED',
+    responseMode: (intent.responseMode as string as 'INLINE' | 'DEFERRED') ?? 'DEFERRED',
   };
 }
 
-async function recordEffect(claim: ClaimedIntent, responsePayload: Prisma.InputJsonValue): Promise<void> {
+async function recordEffect(
+  claim: ClaimedIntent,
+  responsePayload: Prisma.InputJsonValue
+): Promise<void> {
   const result = await prisma.chatOpsIntent.updateMany({
     where: { id: claim.id, status: 'EFFECT_PROCESSING', leaseToken: claim.leaseToken },
     data: {
@@ -293,20 +363,40 @@ async function claimResponse(id: string): Promise<ClaimedIntent | null> {
     },
   });
   if (claimed.count !== 1) return null;
-  const intent = await (prisma as unknown as {
-    chatOpsIntent: { findUnique: (a: unknown) => Promise<{ id: string; encryptedPayload: string; responsePayload: Prisma.JsonValue | null; provider?: ChatProvider; responseMode?: string } | null> };
-  }).chatOpsIntent.findUnique({
+  const intent = await (
+    prisma as unknown as {
+      chatOpsIntent: {
+        findUnique: (
+          a: unknown
+        ) => Promise<{
+          id: string;
+          encryptedPayload: string;
+          responsePayload: Prisma.JsonValue | null;
+          provider?: ChatProvider;
+          responseMode?: string;
+        } | null>;
+      };
+    }
+  ).chatOpsIntent.findUnique({
     where: { id },
-    select: { id: true, encryptedPayload: true, responsePayload: true, provider: true, responseMode: true },
+    select: {
+      id: true,
+      encryptedPayload: true,
+      responsePayload: true,
+      provider: true,
+      responseMode: true,
+    },
   });
-  return intent ? {
-    id: intent.id,
-    leaseToken,
-    encryptedPayload: intent.encryptedPayload,
-    responsePayload: intent.responsePayload,
-    provider: (intent.provider as ChatProvider) ?? 'SLACK',
-    responseMode: ((intent.responseMode as string) as 'INLINE' | 'DEFERRED') ?? 'DEFERRED',
-  } : null;
+  return intent
+    ? {
+        id: intent.id,
+        leaseToken,
+        encryptedPayload: intent.encryptedPayload,
+        responsePayload: intent.responsePayload,
+        provider: (intent.provider as ChatProvider) ?? 'SLACK',
+        responseMode: (intent.responseMode as string as 'INLINE' | 'DEFERRED') ?? 'DEFERRED',
+      }
+    : null;
 }
 
 async function completeResponse(claim: ClaimedIntent): Promise<void> {
@@ -327,7 +417,8 @@ async function failEffect(claim: ClaimedIntent, error: unknown): Promise<void> {
     where: { id: claim.id, status: 'EFFECT_PROCESSING', leaseToken: claim.leaseToken },
     data: {
       status: 'FAILED',
-      lastError: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+      lastError:
+        error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
       leaseToken: null,
       leaseExpiresAt: null,
     },
@@ -339,14 +430,18 @@ async function deferResponse(claim: ClaimedIntent, error: unknown): Promise<void
     where: { id: claim.id, status: 'RESPONSE_PROCESSING', leaseToken: claim.leaseToken },
     data: {
       status: 'RESPONSE_PENDING',
-      lastError: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+      lastError:
+        error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
       leaseToken: null,
       leaseExpiresAt: null,
     },
   });
 }
 
-async function sendSlackResponse(payload: Record<string, unknown>, response: Prisma.JsonValue | null): Promise<void> {
+async function sendSlackResponse(
+  payload: Record<string, unknown>,
+  response: Prisma.JsonValue | null
+): Promise<void> {
   const responseUrl = toSlackResponseUrl(payload.response_url);
   if (!responseUrl || response === null) return;
   const request = await fetch(responseUrl, {
@@ -358,11 +453,21 @@ async function sendSlackResponse(payload: Record<string, unknown>, response: Pri
   if (!request.ok) throw new Error(`Slack response delivery failed (${request.status})`);
 }
 
-async function deliverResponse(claim: ClaimedIntent, payload: Record<string, unknown>, response: Prisma.JsonValue | null): Promise<void> {
+async function deliverResponse(
+  claim: ClaimedIntent,
+  payload: Record<string, unknown>,
+  response: Prisma.JsonValue | null
+): Promise<void> {
   // INLINE (Teams) is answered synchronously by the Bot Framework invoke handler; the background worker must not
   // attempt a Slack-style response_url POST. Persisting RESPONSE_PENDING→COMPLETED is still the durability signal,
   // but no transport delivery is required here.
   if (claim.responseMode === 'INLINE') return;
+  // Squire mentions reply in the thread through the provider's own API (no response_url).
+  if (payload.__kind === 'SQUIRE_MENTION') {
+    const { deliverSquireMention } = await import('@/lib/chatops/squire/intents');
+    await deliverSquireMention(claim.provider, payload, response);
+    return;
+  }
   if (claim.provider === 'MICROSOFT_TEAMS') return;
   await sendSlackResponse(payload, response);
 }
@@ -378,7 +483,13 @@ export async function processChatOpsIntent(intentId: string): Promise<void> {
         __opsknightIntentId: effectClaim.id,
       };
       let response: Prisma.JsonValue;
-      if (payload.__kind === 'SLASH_COMMAND') {
+      if (payload.__kind === 'SQUIRE_MENTION') {
+        const { processSquireMention } = await import('@/lib/chatops/squire/intents');
+        response = (await processSquireMention(
+          effectClaim.provider,
+          payload
+        )) as unknown as Prisma.JsonValue;
+      } else if (payload.__kind === 'SLASH_COMMAND') {
         const { handleSlashCommand } = await import('@/lib/chatops/slash-commands');
         response = (await handleSlashCommand(
           payload as unknown as Parameters<typeof handleSlashCommand>[0]

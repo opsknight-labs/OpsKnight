@@ -23,6 +23,9 @@ on:
       - 'prisma/**'
       - 'tests/**/scim*'
       - '.github/workflows/scim-certification.yml'
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   certify:
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')

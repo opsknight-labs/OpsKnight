@@ -178,6 +178,7 @@ const decisions: readonly ApiCapability[] = [
       'listIncidentNotificationAttempts',
       'getIncidentAvailableActions',
       'listRelatedIncidents',
+      'getIncidentIntelligence',
       'listRunbookExecutions',
       'listNotificationAttempts',
       'getNotificationFeedback',

@@ -108,6 +108,12 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         return NextResponse.json({ error: 'No action found' }, { status: 400 });
       }
 
+      // Squire suggestion buttons carry a sealed proposal, not an incident action.
+      const squire = await import('@/lib/chatops/squire/slack');
+      if (squire.isSlackSquireAction(action.action_id)) {
+        return NextResponse.json(await squire.handleSlackSquireButton(payload));
+      }
+
       const actionValue = JSON.parse(action.value || '{}');
       const { action: actionType, incidentId } = actionValue;
       const slackUserId = payload.user?.id;
@@ -343,10 +349,10 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('[Slack] Actions API error', {
-      error: error.message,
-      stack: error.stack,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

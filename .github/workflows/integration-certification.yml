@@ -40,6 +40,9 @@ permissions:
 concurrency:
   group: integration-certification-${{ github.ref }}
   cancel-in-progress: false
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   multi-replica-failover-load:
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
