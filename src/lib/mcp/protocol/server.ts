@@ -338,26 +338,6 @@ export function clampPageSize(
     },
   };
 }
-/** A named tool's advertised result is left off past this size; tools/list stays small. */
-export const MCP_OUTPUT_SCHEMA_MAX_BYTES = 8192;
-const outputSchemas = new WeakMap<object, ReturnType<typeof fromJsonSchema> | null>();
-/**
- * The projected result schema a named tool advertises (see projectedOutputSchema), or null when
- * it would be too large to list. The SDK validates every result against it, so it describes
- * exactly what projection and compaction deliver.
- */
-export function catalogOutputSchema(operation: (typeof MCP_CATALOG)[number]) {
-  let schema = outputSchemas.get(operation);
-  if (schema === undefined) {
-    const projected = projectedOutputSchema(mcpResponseSchema(operation));
-    schema =
-      Buffer.byteLength(JSON.stringify(projected)) <= MCP_OUTPUT_SCHEMA_MAX_BYTES
-        ? fromJsonSchema(projected as JsonSchemaType)
-        : null;
-    outputSchemas.set(operation, schema);
-  }
-  return schema ?? undefined;
-}
 function catalogToolSchema(operation: (typeof MCP_CATALOG)[number]) {
   let schema = catalogSchemas.get(operation);
   if (!schema) {
@@ -987,8 +967,8 @@ export function createOpsKnightMcpServer(
       {
         title: operation.title ?? operation.tool!,
         description: catalogToolDescription(operation),
+        // No outputSchema: it doubled tools/list. describe_operation returns it on demand.
         inputSchema: catalogToolSchema(operation),
-        ...(catalogOutputSchema(operation) ? { outputSchema: catalogOutputSchema(operation) } : {}),
         annotations: {
           readOnlyHint: read,
           destructiveHint: !read,

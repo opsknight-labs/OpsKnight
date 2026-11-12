@@ -5,12 +5,7 @@ import {
   fromJsonSchema,
   type McpHttpHandler,
 } from '@modelcontextprotocol/server';
-import {
-  MCP_OUTPUT_SCHEMA_MAX_BYTES,
-  MCP_SERVER_INSTRUCTIONS,
-  catalogOutputSchema,
-  createOpsKnightMcpServer,
-} from '@/lib/mcp/protocol/server';
+import { MCP_SERVER_INSTRUCTIONS, createOpsKnightMcpServer } from '@/lib/mcp/protocol/server';
 import { compactResult, projectedOutputSchema } from '@/lib/mcp/protocol/wire';
 import {
   MCP_PROJECTION_DEPTH,
@@ -674,24 +669,10 @@ describe('D1: projected output schemas', () => {
     expect(validate(projectedOutputSchema(nested), delivered('deep', value))).toBeUndefined();
   });
 
-  it('are advertised by the named tools within the size cap, and by describe_operation', async () => {
+  it('are left off named tools to keep tools/list small, and returned by describe_operation', async () => {
     const tools = await listTools();
-    const named = MCP_CATALOG.filter(operation => operation.tool && isMcpExecutable(operation));
-    let advertised = 0;
-    for (const operation of named) {
-      const tool = toolNamed(tools, operation.tool!);
-      const schema = catalogOutputSchema(operation);
-      if (!schema) {
-        expect(tool.outputSchema, operation.tool!).toBeUndefined();
-        continue;
-      }
-      advertised++;
-      expect(tool.outputSchema, operation.tool!).toMatchObject({ required: ['evidence', 'data'] });
-      expect(Buffer.byteLength(JSON.stringify(tool.outputSchema))).toBeLessThanOrEqual(
-        MCP_OUTPUT_SCHEMA_MAX_BYTES
-      );
-    }
-    expect(advertised).toBeGreaterThan(named.length / 2);
+    for (const operation of MCP_CATALOG.filter(item => item.tool && isMcpExecutable(item)))
+      expect(toolNamed(tools, operation.tool!).outputSchema, operation.tool!).toBeUndefined();
     const described = await rpc('tools/call', {
       name: 'describe_operation',
       arguments: { operationId: 'getIncident' },
