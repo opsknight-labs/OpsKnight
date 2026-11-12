@@ -2698,6 +2698,18 @@
     "actions": ["postmortem.read"],
     "additionalScopes": ["incidents:read"]
   },
+  "listActionItems": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "06fc1cc67dd76fb168410d3dcc8276d7df4414c19d2f3bc087bbffdbd2c7c686",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-best-in-class-protocol.test.ts",
+    "contractSha256": "48a5064fc2efb5fba2a59694e9bd3f83df83da08e76786364bc3e9157ca203da",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
+  },
   "replacePostmortemActionItems": {
     "status": "APPROVAL_REQUIRED",
     "risk": "R2",

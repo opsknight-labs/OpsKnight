@@ -1832,6 +1832,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('delete', '/postmortems/{id}', 'deletePostmortem', 'postmortems:write', 'none', ''),
   op('get', '/postmortems', 'listPostmortems', 'postmortems:read', 'list', 'Postmortem'),
   op('post', '/postmortems', 'createPostmortem', 'postmortems:write', 'item', 'Postmortem'),
+  op('get', '/action-items', 'listActionItems', 'postmortems:read', 'list', 'ActionItemSummary'),
   op('get', '/reports/metrics', 'getMetricsReport', 'reports:read', 'item', 'MetricsReport'),
   op('get', '/reports/catalog', 'getReportCatalog', 'reports:read', 'item', 'ReportCatalog'),
   op('post', '/reports/query', 'queryReportMetrics', 'reports:read', 'item', 'ReportQueryResult'),

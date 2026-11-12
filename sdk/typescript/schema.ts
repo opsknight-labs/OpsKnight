@@ -160,6 +160,7 @@ export type PostmortemActionItemCollection = { "postmortemId": string; "revision
 export type PostmortemActionItem = { "id": string; "title": string; "description": string; "owner"?: string; "dueDate"?: string; "status": "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority": "HIGH" | "MEDIUM" | "LOW"; "completedAt"?: string | null; "externalIssue"?: Record<string, unknown>; "postmortemId": string; "revision": number } & Record<string, unknown>;
 export type PostmortemActionItemChange = { "postmortemId": string; "revision": number; "item": Record<string, unknown> } & Record<string, unknown>;
 export type PostmortemActionItemDeletion = { "postmortemId": string; "revision": number; "deletedId": string } & Record<string, unknown>;
+export type ActionItemSummary = { "id": string; "postmortemId": string; "incidentId": string; "title": string; "description": string | null; "ownerId": string | null; "owner": { "id": string; "name": string } & Record<string, unknown> | null; "dueDate": string | null; "status": "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority": "HIGH" | "MEDIUM" | "LOW"; "source": "POSTMORTEM" | "MANUAL"; "createdAt": string; "updatedAt": string; "completedAt": string | null; "incident": { "id": string; "title": string } & Record<string, unknown> } & Record<string, unknown>;
 export type ServiceHealthSummary = { "service": { "id": string; "name": string; "status": string; "escalationPolicyId": string | null } & Record<string, unknown>; "observedAt": string; "activeIncidentCount": number; "recentIncidents": Array<{ "id": string; "title": string; "status": string; "createdAt": string } & Record<string, unknown>>; "last24Hours": { "linkedAlertCount": number; "failedNotificationCount": number } & Record<string, unknown>; "onCallCoverage": { "state": string; "eligibleResponderCount": number | null; "basis": string } & Record<string, unknown>; "objectives": Array<{ "id": string; "name": string; "metricType": string; "target": number; "latestSnapshot": { "periodEnd": string; "value": number | null; "breached": boolean | null; "dataState": string } & Record<string, unknown> | null } & Record<string, unknown>>; "truncated": { "objectives": boolean; "recentIncidents": boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type EscalationPolicyPreview = { "policyId": string; "policyRevision": number; "incidentId": string; "evaluatedAt": string; "supportHoursState": string; "steps": Array<{ "stepId": string; "stepOrder": number; "delayMinutes": number; "targetType": string; "applicable": boolean; "outcome": string; "recipientUserIds": Array<string> } & Record<string, unknown>>; "truncated": boolean; "timingAssumption": string; "advisory": boolean } & Record<string, unknown>;
 export type ServiceChangeEvent = { "id": string; "action": string; "entityId": string | null; "createdAt": string; "source": "AUDIT_LOG" } & Record<string, unknown>;
@@ -453,6 +454,7 @@ export interface OperationRequests {
   deletePostmortem: { "params": { "id": string }; "headers"?: { "If-Match"?: string } };
   listPostmortems: { "query"?: { "limit"?: number; "cursor"?: string; "incidentId"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: "true" | "false"; "search"?: string } };
   createPostmortem: { "headers"?: { "Idempotency-Key"?: string }; "body": { "incidentId": string; "title"?: string; "summary": string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "impact"?: PostmortemImpact; "timeline"?: PostmortemTimeline; "contributingFactors"?: PostmortemFactors; "fiveWhys"?: PostmortemFiveWhys; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED"; "isPublic"?: boolean } & Record<string, unknown> };
+  listActionItems: { "query"?: { "limit"?: number; "cursor"?: string; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW"; "ownerId"?: string; "incidentId"?: string; "postmortemId"?: string; "overdue"?: "true" | "false" } };
   getMetricsReport: { "query"?: { "serviceId"?: string; "days"?: number } };
   getReportCatalog: Record<string, never>;
   queryReportMetrics: { "body": { "metrics": Array<string>; "windowDays"?: number; "serviceId"?: string } };
@@ -780,6 +782,7 @@ export interface OperationResponses {
   deletePostmortem: null;
   listPostmortems: { "data": Array<Postmortem>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createPostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listActionItems: { "data": Array<ActionItemSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getMetricsReport: { "data"?: MetricsReport } & Record<string, unknown>;
   getReportCatalog: { "data": ReportCatalog; "requestId": string; "timestamp": string } & Record<string, unknown>;
   queryReportMetrics: { "data": ReportQueryResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -3126,6 +3129,14 @@ export const OPERATIONS = {
     "idempotency": "supported",
     "requiredHeaders": [],
     "bodyRequired": true
+  },
+  "listActionItems": {
+    "method": "GET",
+    "path": "/action-items",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "getMetricsReport": {
     "method": "GET",

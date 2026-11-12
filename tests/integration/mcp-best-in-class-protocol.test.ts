@@ -17,6 +17,8 @@ import {
   runtimeOperationalMetrics,
 } from '@/lib/metrics/operational/registry';
 import { DELETE, GET, POST } from '@/app/mcp/route';
+import { GET as listActionItems } from '@/app/api/v2/action-items/route';
+import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL ?? '');
@@ -40,8 +42,8 @@ beforeEach(async () => {
 });
 afterEach(() => resetSubscriptionStateForTests());
 
-const scopes = ['incidents:read', 'incidents:write', 'services:read', 'schedules:read'];
-async function principal(role: 'ADMIN' | 'USER' = 'ADMIN') {
+const defaultScopes = ['incidents:read', 'incidents:write', 'services:read', 'schedules:read'];
+async function principal(role: 'ADMIN' | 'USER' = 'ADMIN', scopes = defaultScopes) {
   const user = await createTestUser({ role, name: 'Grace Hopper' });
   const client = await db.mcpClient.create({
     data: { name: 'Best in class', scopes, redirectUris: ['http://localhost/callback'] },
@@ -286,6 +288,56 @@ describe('A3: read_operation and the call_operation deprecation', () => {
     expect(legacyRead.result.structuredContent.evidence.warnings).toContain(
       'Reads through call_operation are deprecated and will be removed in v2.3.0; use read_operation, which never changes anything.'
     );
+  });
+});
+
+describe('listActionItems through read_operation', () => {
+  it('returns what REST returns for the same user and needs postmortems:read', async () => {
+    const { user, bearer } = await principal('USER', ['incidents:read', 'postmortems:read']);
+    const mine = await createTestTeam('Action items mine');
+    await db.teamMember.create({ data: { teamId: mine.id, userId: user.id } });
+    const items: string[] = [];
+    for (const [title, teamId] of [
+      ['Readable', mine.id],
+      ['Restricted', (await createTestTeam('Action items theirs')).id],
+    ] as const) {
+      const service = await createTestService(title, teamId);
+      const incident = await createTestIncident(title, service.id, { status: 'RESOLVED' });
+      const postmortem = await db.postmortem.create({
+        data: { incidentId: incident.id, title, summary: title },
+      });
+      const item = await db.actionItem.create({
+        data: { postmortemId: postmortem.id, incidentId: incident.id, title, ownerId: user.id },
+      });
+      items.push(item.id);
+    }
+
+    const rest = await createV2Credential(['incidents:read', 'postmortems:read'], 'USER');
+    await db.apiKey.update({ where: { id: rest.key.id }, data: { userId: user.id } });
+    const expected = (
+      await (
+        await invokeV2(listActionItems, rest.token, 'GET', '/action-items?ownerId=me', {})
+      ).json()
+    ).data;
+    expect(expected.map((row: { id: string }) => row.id)).toEqual([items[0]]);
+
+    const { result } = await tool(bearer, 'read_operation', {
+      operationId: 'listActionItems',
+      args: { query: { ownerId: 'me' } },
+    });
+    expect(result.isError, JSON.stringify(result)).not.toBe(true);
+    // The MCP projection omits null fields; everything else is the REST row.
+    expect(result.structuredContent.data.data).toEqual(
+      JSON.parse(JSON.stringify(expected, (_key, value) => (value === null ? undefined : value)))
+    );
+
+    const unscoped = await principal('USER', ['incidents:read']);
+    const refused = await tool(unscoped.bearer, 'read_operation', {
+      operationId: 'listActionItems',
+      args: { query: {} },
+    });
+    expect(refused.result.isError).toBe(true);
+    expect(JSON.stringify(refused.result)).not.toContain('Readable');
   });
 });
 
