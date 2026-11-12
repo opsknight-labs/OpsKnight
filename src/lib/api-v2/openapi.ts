@@ -2452,6 +2452,45 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/action-items': {
+        get: {
+          tags: ['Postmortems'],
+          summary: 'List action items across readable postmortems with cursor pagination',
+          parameters: [
+            { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+            { name: 'cursor', in: 'query', schema: { type: 'string' } },
+            {
+              name: 'status',
+              in: 'query',
+              schema: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
+            },
+            {
+              name: 'priority',
+              in: 'query',
+              schema: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+            },
+            {
+              name: 'ownerId',
+              in: 'query',
+              description: 'A user ID, or `me` for the caller.',
+              schema: { type: 'string' },
+            },
+            { name: 'incidentId', in: 'query', schema: { type: 'string' } },
+            { name: 'postmortemId', in: 'query', schema: { type: 'string' } },
+            {
+              name: 'overdue',
+              in: 'query',
+              description: 'true: due date passed and not COMPLETED. false: everything else.',
+              schema: { type: 'string', enum: ['true', 'false'] },
+            },
+          ],
+          responses: {
+            '200': { description: 'Paginated action item collection' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
       '/postmortems/{id}': {
         get: {
           tags: ['Postmortems'],

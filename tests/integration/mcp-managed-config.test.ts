@@ -118,6 +118,42 @@ describe('MCP configuration without MCP environment variables', () => {
     expect(() => digestMcpSecret('token')).toThrow('MCP_HASH_SECRET_UNAVAILABLE');
   });
 
+  it('lets anyone disconnect all of their own assistants and nobody else\'s', async () => {
+    const { revokeMyMcpConnections } =
+      await import('@/app/(app)/settings/integrations/mcp/actions');
+    const member = await createTestUser({ role: 'USER' });
+    const other = await createTestUser({ role: 'USER' });
+    const client = await db.mcpClient.create({
+      data: { name: 'Mine', scopes: ['incidents:read'], redirectUris: ['http://localhost/cb'] },
+    });
+    for (const user of [member, member, other])
+      await db.mcpGrant.create({
+        data: {
+          clientId: client.id,
+          userId: user.id,
+          userTokenVersion: user.tokenVersion,
+          scopes: ['incidents:read'],
+          resource: 'https://ops.example.com/mcp',
+          expiresAt: new Date(Date.now() + 3600000),
+        },
+      });
+    actor.id = member.id;
+    actor.capabilities = [];
+    await expect(revokeMyMcpConnections(new FormData())).rejects.toThrow(
+      'MCP_CONFIRMATION_REQUIRED'
+    );
+    const confirmed = new FormData();
+    confirmed.set('confirm', 'on');
+    await revokeMyMcpConnections(confirmed);
+    const active = (userId: string) => db.mcpGrant.count({ where: { userId, revokedAt: null } });
+    expect(await active(member.id)).toBe(0);
+    expect(await active(other.id)).toBe(1);
+    const audit = await db.auditLog.findFirstOrThrow({
+      where: { action: 'mcp.grants.revoked_own', actorId: member.id },
+    });
+    expect(audit.details).toMatchObject({ metadata: { revokedGrants: 2 } });
+  });
+
   it('lets an administrator revoke every MCP connection at once, with an audit record', async () => {
     const { revokeAllMcpConnections } =
       await import('@/app/(app)/settings/integrations/mcp/actions');

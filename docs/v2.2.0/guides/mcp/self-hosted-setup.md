@@ -212,6 +212,45 @@ Route `/mcp`, `/oauth/mcp/*`, `/.well-known/oauth-protected-resource/mcp` and `/
 
 Preserve the public Host, including a non-default port. Preserve Authorization, WWW-Authenticate and MCP protocol headers. Do not cache OAuth or consent responses or rewrite their issuer or resource URLs. Support streaming POST responses without proxy buffering; subscription streams last at most ten minutes. Trust forwarded client IPs only when your ingress removes spoofed forwarding headers. Unless `TRUST_PROXY_HEADERS` or `TRUSTED_PROXIES` is set, the application cannot tell clients apart by address, so the per-client limits on the sign-in endpoints (registration, device authorization, token and revoke) do not apply and one noisy client can exhaust the shared limits for everyone. Set one of them to match your ingress.
 
+If your proxy cannot preserve the public Host (for example it always sends an internal service name), set `MCP_ALLOWED_HOSTS` to the exact value it sends, such as `MCP_ALLOWED_HOSTS=opsknight.internal:3000`. Several values are comma separated. Tokens, discovery documents and the browser-origin check stay tied to the public App URL, and `X-Forwarded-Host` is never trusted. Without this setting such a proxy gets `MCP_INVALID_HOST`.
+
+Examples, for an application listening on `opsknight:3000` and published as `https://ops.example.com`:
+
+```nginx
+# nginx
+location ~ ^/(mcp|oauth/mcp/|\.well-known/oauth-) {
+  proxy_pass http://opsknight:3000;
+  proxy_set_header Host $host;          # keep the public Host
+  proxy_http_version 1.1;
+  proxy_buffering off;                  # streamed responses
+  proxy_read_timeout 660s;              # subscription streams last up to ten minutes
+}
+```
+
+```caddyfile
+# Caddy: the public Host is preserved by default
+ops.example.com {
+  reverse_proxy opsknight:3000 {
+    flush_interval -1
+  }
+}
+```
+
+```yaml
+# Traefik (Docker labels): the public Host is preserved by default
+labels:
+  - traefik.http.routers.opsknight.rule=Host(`ops.example.com`)
+  - traefik.http.services.opsknight.loadbalancer.server.port=3000
+```
+
+```yaml
+# Kubernetes ingress-nginx annotations
+nginx.ingress.kubernetes.io/proxy-buffering: "off"
+nginx.ingress.kubernetes.io/proxy-read-timeout: "660"
+```
+
+With more than one replica, the per-minute request limit is shared through the database, while the concurrency limit (**Workload limits**) and the bad-token limit apply per process, so the effective ceiling is the configured value times the number of replicas.
+
 On a production installation, also list the hosts you trust under **Trusted assistant hosts** (Access policy, Advanced). An empty list allows any public HTTPS host to identify an assistant with a client metadata document.
 
 A private installation serves clients that can reach its network. Cloud-hosted assistants need their own network path to it; browser access from your laptop does not prove that. Keep TLS verification on; for a private CA configure the client's CA trust instead of disabling checks.

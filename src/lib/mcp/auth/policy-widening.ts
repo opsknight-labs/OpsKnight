@@ -31,6 +31,8 @@ export interface McpPolicyAccess {
   deviceFlowEnabled: boolean;
   /** Strict four-eyes for approvals; turning it off lets administrators approve their own requests. */
   requireDistinctReviewer?: boolean;
+  /** Routine responder changes run without a review; turning it on widens what assistants can do. */
+  responderDirectWritesEnabled?: boolean;
   /** Optional cap on one person's requests per minute across connections; null or unset is off. */
   perUserRequestsPerMinute?: number | null;
 }
@@ -49,6 +51,7 @@ const SWITCHES: [string, (policy: Access) => boolean][] = [
   ['requireReadOnlyConnections', policy => !policy.requireReadOnlyConnections],
   // Lifting strict four-eyes lets an administrator approve what their own assistant prepared.
   ['requireDistinctReviewer', policy => !policy.requireDistinctReviewer],
+  ['responderDirectWritesEnabled', policy => policy.responderDirectWritesEnabled === true],
 ];
 const LIMITS: [string, (policy: Access) => number][] = [
   ['requestsPerMinute', policy => policy.requestsPerMinute],

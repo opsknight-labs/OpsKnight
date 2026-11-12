@@ -28,6 +28,10 @@ export async function lockMcpMutationAuthority(
     await tx.$queryRaw`
     SELECT id FROM "McpToken" WHERE id = ${context.credentialId} FOR SHARE`;
   await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
+  // Rows this transaction writes are marked as made through this assistant (the "channel"
+  // column default reads the setting). Transaction-local, so a pooled connection never keeps it.
+  await tx.$queryRaw`SELECT set_config('opsknight.channel', 'mcp:' || "clientId", true)
+    FROM "McpGrant" WHERE id = ${context.grantId}`;
   const auth = await resolveMcpGrant(context.grantId, context.credentialId, tx);
   if (expected)
     requireMcp(

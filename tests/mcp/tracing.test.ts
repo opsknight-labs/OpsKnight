@@ -1,9 +1,12 @@
-import { SpanStatusCode, trace } from '@opentelemetry/api';
+import { SpanStatusCode, propagation, trace } from '@opentelemetry/api';
 import { afterEach, describe, expect, it } from 'vitest';
-import { endMcpSpan, startMcpSpan } from '@/lib/mcp/protocol/tracing';
+import { endMcpSpan, linkMcpTrace, startMcpSpan } from '@/lib/mcp/protocol/tracing';
 import { recordSpans } from '../helpers/fake-tracer';
 
-afterEach(() => trace.disable());
+afterEach(() => {
+  trace.disable();
+  propagation.disable();
+});
 
 describe('MCP request spans', () => {
   it('start with the request id and finish with bounded labels, once', () => {
@@ -63,5 +66,35 @@ describe('MCP request spans', () => {
     expect(() =>
       endMcpSpan(startMcpSpan('req-none'), { tool: 'none', outcome: 'error', durationMs: 0 })
     ).not.toThrow();
+  });
+
+  it("joins the caller's trace from HTTP headers and links one sent in _meta", () => {
+    const traceId = (value: unknown) =>
+      typeof value === 'string' ? value.split('-')[1] : undefined;
+    // What an operator's W3C propagator does: read `traceparent` from the carrier.
+    propagation.setGlobalPropagator({
+      inject: () => undefined,
+      fields: () => ['traceparent'],
+      extract: (context, carrier, getter) => {
+        const id = traceId(getter.get(carrier, 'traceparent'));
+        return id
+          ? trace.setSpanContext(context, { traceId: id, spanId: 'b'.repeat(16), traceFlags: 1 })
+          : context;
+      },
+    });
+    const { spans } = recordSpans();
+    const fromHeader = 'a'.repeat(32);
+    const fromMeta = 'c'.repeat(32);
+    const span = startMcpSpan(
+      'req-1',
+      new Headers({ traceparent: `00-${fromHeader}-${'b'.repeat(16)}-01` })
+    );
+    linkMcpTrace(span, { traceparent: `00-${fromMeta}-${'b'.repeat(16)}-01` });
+    linkMcpTrace(span, { traceparent: 42 });
+    linkMcpTrace(span, undefined);
+    expect(spans[0]).toMatchObject({ parentTraceId: fromHeader, links: [fromMeta] });
+    // Without trace headers the span starts a new trace.
+    startMcpSpan('req-2', new Headers());
+    expect(spans[1]!.parentTraceId).toBeUndefined();
   });
 });

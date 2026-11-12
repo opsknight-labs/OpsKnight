@@ -1866,6 +1866,7 @@
   },
   "snoozeIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -1878,6 +1879,7 @@
   },
   "unacknowledgeIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -2295,6 +2297,7 @@
   },
   "updateIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -2695,6 +2698,18 @@
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "e6be5016f9bb607eb22a0cbf4e07b339b6e533f8af13e5798155fb53ed053b5e",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
+  },
+  "listActionItems": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "06fc1cc67dd76fb168410d3dcc8276d7df4414c19d2f3bc087bbffdbd2c7c686",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-best-in-class-protocol.test.ts",
+    "contractSha256": "48a5064fc2efb5fba2a59694e9bd3f83df83da08e76786364bc3e9157ca203da",
     "actions": ["postmortem.read"],
     "additionalScopes": ["incidents:read"]
   },
@@ -3201,6 +3216,7 @@
   },
   "createScheduleOverride": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,

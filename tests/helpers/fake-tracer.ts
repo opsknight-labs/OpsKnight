@@ -1,4 +1,4 @@
-import { trace, type TracerProvider } from '@opentelemetry/api';
+import { trace, type Context, type TracerProvider } from '@opentelemetry/api';
 
 export type RecordedSpan = {
   name: string;
@@ -6,6 +6,10 @@ export type RecordedSpan = {
   attributes: Record<string, unknown>;
   status?: { code: number; message?: string };
   ended: number;
+  /** Trace id of the parent context the span was started under, if any. */
+  parentTraceId?: string;
+  /** Trace ids attached as links. */
+  links: string[];
 };
 
 /** Registers an in-memory tracer provider; call the returned function to remove it. */
@@ -13,12 +17,18 @@ export function recordSpans() {
   const spans: RecordedSpan[] = [];
   const provider = {
     getTracer: () => ({
-      startSpan: (name: string, options?: { attributes?: Record<string, unknown> }) => {
+      startSpan: (
+        name: string,
+        options?: { attributes?: Record<string, unknown> },
+        parent?: Context
+      ) => {
         const recorded: RecordedSpan = {
           name,
           startAttributes: { ...(options?.attributes ?? {}) },
           attributes: {},
           ended: 0,
+          parentTraceId: parent ? trace.getSpanContext(parent)?.traceId : undefined,
+          links: [],
         };
         spans.push(recorded);
         return {
@@ -28,6 +38,10 @@ export function recordSpans() {
           },
           setStatus(status: { code: number; message?: string }) {
             recorded.status = status;
+            return this;
+          },
+          addLink(link: { context: { traceId: string } }) {
+            recorded.links.push(link.context.traceId);
             return this;
           },
           end() {

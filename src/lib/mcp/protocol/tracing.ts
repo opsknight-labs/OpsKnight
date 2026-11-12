@@ -1,4 +1,4 @@
-import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
+import { ROOT_CONTEXT, SpanStatusCode, propagation, trace, type Span } from '@opentelemetry/api';
 
 /**
  * One OpenTelemetry span per /mcp request. It costs nothing until an operator registers a tracer
@@ -11,10 +11,40 @@ export const MCP_TRACER_NAME = 'opsknight-mcp';
 /** Outcomes that mean the server failed, not that the caller asked for something refused. */
 const SERVER_FAILURES: ReadonlySet<string> = new Set(['error', 'unavailable']);
 
-export function startMcpSpan(requestId: string): Span {
-  return trace.getTracer(MCP_TRACER_NAME).startSpan('mcp.request', {
-    attributes: { 'mcp.request_id': requestId },
-  });
+const headerGetter = {
+  get: (headers: Headers, key: string) => headers.get(key) ?? undefined,
+  keys: (headers: Headers) => [...headers.keys()],
+};
+
+/**
+ * Starts the request span as a child of the caller's trace when the HTTP request carries W3C
+ * trace headers and the operator registered a propagator; otherwise as a new trace.
+ */
+export function startMcpSpan(requestId: string, headers?: Headers): Span {
+  return trace
+    .getTracer(MCP_TRACER_NAME)
+    .startSpan(
+      'mcp.request',
+      { attributes: { 'mcp.request_id': requestId } },
+      headers ? propagation.extract(ROOT_CONTEXT, headers, headerGetter) : undefined
+    );
+}
+
+/**
+ * The 2026-07-28 revision carries trace context in the request's `_meta` rather than in HTTP
+ * headers. The body is parsed after the span starts, so that trace is attached as a link.
+ */
+export function linkMcpTrace(span: Span, meta: unknown) {
+  if (!meta || typeof meta !== 'object') return;
+  const { traceparent, tracestate } = meta as Record<string, unknown>;
+  if (typeof traceparent !== 'string') return;
+  const context = trace.getSpanContext(
+    propagation.extract(ROOT_CONTEXT, {
+      traceparent,
+      ...(typeof tracestate === 'string' ? { tracestate } : {}),
+    })
+  );
+  if (context) span.addLink({ context });
 }
 
 export function endMcpSpan(

@@ -1,3 +1,4 @@
+import { MCP_DEFAULT_IDLE_DAYS } from '@/lib/mcp/auth/session-lifetime';
 import { redirect } from 'next/navigation';
 import { AppError } from '@/lib/errors';
 import { getCurrentUser } from '@/lib/rbac';
@@ -60,7 +61,12 @@ export default async function McpConsent({
   const [policy, previous] = await Promise.all([
     prisma.mcpPolicy.findUnique({
       where: { id: 'default' },
-      select: { writesEnabled: true, cimdAllowedHosts: true, requireReadOnlyConnections: true },
+      select: {
+        writesEnabled: true,
+        cimdAllowedHosts: true,
+        requireReadOnlyConnections: true,
+        sessionIdleDays: true,
+      },
     }),
     // The latest live connection for this assistant; its permissions start selected again.
     prisma.mcpGrant.findFirst({
@@ -88,6 +94,8 @@ export default async function McpConsent({
       groups={offer.groups}
       hasUnavailable={offer.unavailable.length > 0}
       returnHost={returnTo.host}
+      returnAddress={returnTo.address}
+      idleDays={policy?.sessionIdleDays ?? MCP_DEFAULT_IDLE_DAYS}
       identity={identity}
       redirectWarning={consentRedirectWarning(identity, request.redirectUri)}
       writesEnabled={policy?.writesEnabled ?? false}

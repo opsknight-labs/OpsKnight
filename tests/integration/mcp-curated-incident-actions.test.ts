@@ -372,3 +372,130 @@ describe('incident_acknowledge_many', () => {
     expect(await statusOf(id)).toBe('OPEN');
   });
 });
+
+describe('attribution of changes made through an assistant', () => {
+  it('names the person and the assistant, and marks the rows with the channel', async () => {
+    const client = await db.mcpClient.findFirstOrThrow({ where: { name: 'Curated ADMIN' } });
+    const channel = `mcp:${client.id}`;
+    const label = `${admin.user.name} via Curated ADMIN (AI)`;
+    const id = await incident('OPEN');
+
+    const acknowledged = await call(admin.bearer, 'incident_acknowledge', {
+      path: { id },
+      body: {},
+      idempotencyKey: key(),
+    });
+    expect(acknowledged.isError, JSON.stringify(acknowledged)).not.toBe(true);
+    const noted = await call(admin.bearer, 'incident_add_note', {
+      path: { id },
+      body: { content: 'Restarted the worker pool.' },
+      idempotencyKey: key(),
+    });
+    expect(noted.isError, JSON.stringify(noted)).not.toBe(true);
+
+    const events = await db.incidentEvent.findMany({ where: { incidentId: id } });
+    const made = events.filter(event => /acknowledged|Note added/i.test(event.message));
+    expect(made).toHaveLength(2);
+    for (const event of made) {
+      expect(event.message).toContain(`by ${label}`);
+      expect(event.channel).toBe(channel);
+    }
+    const note = await db.incidentNote.findFirstOrThrow({ where: { incidentId: id } });
+    expect(note.channel).toBe(channel);
+    const audits = await db.auditLog.findMany({ where: { entityId: id } });
+    expect(audits.length).toBeGreaterThanOrEqual(2);
+    for (const audit of audits) expect(audit.channel).toBe(channel);
+
+    // A row written outside an assistant's transaction is never marked, even on a connection
+    // an assistant's transaction used before.
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const plain = await db.incidentEvent.create({ data: { incidentId: id, message: 'manual' } });
+      expect(plain.channel).toBeNull();
+    }
+  });
+
+  it('removes markup from a self-declared assistant name', async () => {
+    const { mcpActorLabel } = await import('@/lib/mcp/auth/principal');
+    expect(mcpActorLabel('Asha', '*@here* <b>Claude</b>')).toBe('Asha via here bClaude/b (AI)');
+    expect(mcpActorLabel(null, '***')).toBe('A user via an assistant (AI)');
+  });
+});
+
+describe('routine responder changes without a review (administrator switch)', () => {
+  const snooze = (id: string) =>
+    call(admin.bearer, 'call_operation', {
+      operationId: 'snoozeIncident',
+      args: {
+        path: { id },
+        body: {
+          expectedStatus: 'OPEN',
+          snoozedUntil: new Date(Date.now() + 3600000).toISOString(),
+        },
+        idempotencyKey: key(),
+      },
+    });
+  const direct = (on: boolean) =>
+    db.mcpPolicy.update({
+      where: { id: 'default' },
+      data: { responderDirectWritesEnabled: on },
+    });
+  const workflow = async (operationId: string) => {
+    const found = await call(admin.bearer, 'describe_operation', { operationId });
+    return JSON.stringify(found.structuredContent);
+  };
+
+  it('is off by default: snooze still goes through review', async () => {
+    const id = await incident('OPEN');
+    const refused = await snooze(id);
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused)).toContain('MCP_OPERATION_UNAVAILABLE');
+    expect(await statusOf(id)).toBe('OPEN');
+    expect(await workflow('snoozeIncident')).toContain('operation_prepare');
+  });
+
+  it('when on, runs the marked changes directly, attributed, and nothing else', async () => {
+    await direct(true);
+    const id = await incident('OPEN');
+    const done = await snooze(id);
+    expect(done.isError, JSON.stringify(done)).not.toBe(true);
+    expect(await statusOf(id)).toBe('SNOOZED');
+    expect(await workflow('snoozeIncident')).toContain('call_operation');
+    const client = await db.mcpClient.findFirstOrThrow({ where: { name: 'Curated ADMIN' } });
+    const audits = await db.auditLog.findMany({ where: { entityId: id } });
+    expect(audits.length).toBeGreaterThan(0);
+    for (const audit of audits) expect(audit.channel).toBe(`mcp:${client.id}`);
+
+    // A change that is not marked keeps its review, even for an administrator.
+    const other = await incident('OPEN');
+    const suppressed = await call(admin.bearer, 'call_operation', {
+      operationId: 'suppressIncident',
+      args: { path: { id: other }, body: { expectedStatus: 'OPEN' }, idempotencyKey: key() },
+    });
+    expect(suppressed.isError).toBe(true);
+    expect(await statusOf(other)).toBe('OPEN');
+
+    // The role check is unchanged: someone who cannot touch the incident is still refused.
+    const hidden = await incident('OPEN', teamServiceId);
+    const outside = await call(outsider.bearer, 'call_operation', {
+      operationId: 'snoozeIncident',
+      args: {
+        path: { id: hidden },
+        body: {
+          expectedStatus: 'OPEN',
+          snoozedUntil: new Date(Date.now() + 3600000).toISOString(),
+        },
+        idempotencyKey: key(),
+      },
+    });
+    // Refused either as a tool error or before the tool runs; never applied.
+    expect(outside?.isError ?? true).toBe(true);
+    expect(await statusOf(hidden)).toBe('OPEN');
+
+    // Turning changes off turns this off too.
+    await db.mcpPolicy.update({ where: { id: 'default' }, data: { writesEnabled: false } });
+    const readOnly = await incident('OPEN');
+    expect((await snooze(readOnly))?.isError ?? true).toBe(true);
+    expect(await statusOf(readOnly)).toBe('OPEN');
+    await direct(false);
+  });
+});

@@ -9,6 +9,8 @@ export type ReviewResult =
 export const REVIEW_MESSAGES: Readonly<Record<string, string>> = {
   MCP_RATE_LIMITED: 'Too many review decisions in the last minute. Wait a moment and try again.',
   MCP_APPROVAL_UNAVAILABLE: 'This request no longer exists or is not available to you.',
+  REVIEW_BULK_HIGH_RISK:
+    'High-risk changes cannot be approved together. Open each one, read it and approve it there.',
   MCP_APPROVAL_EXPIRED:
     'This request is no longer open: it expired or someone else already decided it. Reload the page to see its status.',
   PREVIEW_REVIEW_EXPIRED:

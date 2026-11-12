@@ -273,6 +273,14 @@ export function isMcpExecutable(operation: (typeof MCP_CATALOG)[number]) {
   );
 }
 
+/**
+ * A routine responder change that runs without a review while the administrator switch
+ * (McpPolicy.responderDirectWritesEnabled) is on, and through the review workflow otherwise.
+ */
+export function isMcpResponderDirect(operation: (typeof MCP_CATALOG)[number]) {
+  return operation.responderDirect === true && isMcpApprovalGated(operation);
+}
+
 /** Callable only through the frozen prepare, native review and commit workflow. */
 export function isMcpApprovalGated(operation: (typeof MCP_CATALOG)[number]) {
   return (

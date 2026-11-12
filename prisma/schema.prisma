@@ -1677,6 +1677,10 @@ model IncidentEvent {
   message    String
   type       IncidentEventType?
   createdAt  DateTime           @default(now())
+  // Which channel wrote the row, e.g. "mcp:<clientId>" for an AI assistant; NULL for everything
+  // else. Filled by the database from a transaction-local setting (mutation-authority.ts), so no
+  // write site has to pass it.
+  channel    String?  @default(dbgenerated("NULLIF(current_setting('opsknight.channel'::text, true), ''::text)"))
   incident   Incident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@index([incidentId, createdAt])
@@ -1692,6 +1696,10 @@ model IncidentNote {
   userId     String?
   content    String
   createdAt  DateTime @default(now())
+  // Which channel wrote the row, e.g. "mcp:<clientId>" for an AI assistant; NULL for everything
+  // else. Filled by the database from a transaction-local setting (mutation-authority.ts), so no
+  // write site has to pass it.
+  channel    String?  @default(dbgenerated("NULLIF(current_setting('opsknight.channel'::text, true), ''::text)"))
   incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -2156,8 +2164,11 @@ model AuditLog {
   targetEmail String?
   ip          String?
   createdAt   DateTime        @default(now())
+  // "mcp:<clientId>" when an AI assistant made the change; NULL otherwise.
+  channel     String?
   actor       User?           @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
+  @@index([channel, createdAt])
   @@index([entityType, entityId])
   @@index([entityType, entityId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_service_change_cursor")
   @@index([actorId, createdAt])
@@ -4880,6 +4891,9 @@ model McpPolicy {
   callLogRetentionDays Int @default(30)
   // Strict four-eyes: nobody, administrators included, approves their own prepared change.
   requireDistinctReviewer Boolean @default(false)
+  // Lets the routine responder changes marked "responderDirect" in the catalog review (snooze,
+  // un-acknowledge, edit an incident, add a schedule override) run without a review. Off by default.
+  responderDirectWritesEnabled Boolean @default(false)
   // Optional cap on one person's requests per minute across all their connections (null = off).
   perUserRequestsPerMinute Int?
   // Optimistic concurrency for policy saves.

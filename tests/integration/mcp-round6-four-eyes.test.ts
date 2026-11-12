@@ -130,3 +130,64 @@ describe('strict four-eyes ("Require a different reviewer")', () => {
     ).toMatchObject({ status: 'APPROVED', selfApproved: true });
   });
 });
+
+describe('deciding several requests at once', () => {
+  it('runs every check per request and approves only medium-risk changes together', async () => {
+    const { decideMcpOperationReviewsInBulk } = await import('@/lib/mcp/approvals/bulk-review');
+    const f = await fixture();
+    const prepare = async (title: string) =>
+      (await prepareMcpOperation(f.ctx(), f.announcementArgs(title))).approvalId;
+    const [first, second, own] = [
+      await prepare('One'),
+      await prepare('Two'),
+      await prepare('Four'),
+    ];
+    // Deleting a team is in the high risk class.
+    const risky = (
+      await prepareMcpOperation(f.ctx(), {
+        operationId: 'deleteTeam',
+        args: { path: { id: f.team.id } },
+        idempotencyKey: `prepare-bulk-${randomBytes(8).toString('hex')}`,
+      })
+    ).approvalId;
+    const reviewer = {
+      id: f.reviewer.id,
+      tokenVersion: f.reviewer.tokenVersion,
+      authenticatedAt: Date.now() - 60_000,
+    };
+    const statusOf = async (id: string) =>
+      (await db.mcpOperationApproval.findUniqueOrThrow({ where: { id } })).status;
+
+    const approved = await decideMcpOperationReviewsInBulk(
+      [first, second, risky, 'cmissing0000000000000000'],
+      'approve',
+      reviewer
+    );
+    expect(approved.done).toBe(2);
+    expect(approved.skipped).toEqual([
+      { id: risky, code: 'REVIEW_BULK_HIGH_RISK' },
+      { id: 'cmissing0000000000000000', code: 'MCP_APPROVAL_UNAVAILABLE' },
+    ]);
+    expect(await statusOf(first)).toBe('APPROVED');
+    expect(await statusOf(risky)).toBe('PENDING');
+
+    // The requester cannot wave their own request through in bulk.
+    const self = await decideMcpOperationReviewsInBulk([own], 'approve', {
+      id: f.user.id,
+      tokenVersion: f.user.tokenVersion,
+      authenticatedAt: Date.now() - 60_000,
+    });
+    expect(self).toMatchObject({
+      done: 0,
+      skipped: [{ id: own, code: 'MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED' }],
+    });
+    expect(await statusOf(own)).toBe('PENDING');
+
+    // Rejecting has no risk limit, and an already-decided request is skipped, not re-decided.
+    const rejected = await decideMcpOperationReviewsInBulk([risky, first], 'reject', reviewer);
+    expect(rejected.done).toBe(1);
+    expect(rejected.skipped).toEqual([{ id: first, code: 'MCP_APPROVAL_EXPIRED' }]);
+    expect(await statusOf(risky)).toBe('REJECTED');
+    expect(await statusOf(first)).toBe('APPROVED');
+  });
+});

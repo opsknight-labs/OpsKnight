@@ -35,6 +35,7 @@ export type McpPolicyValues = {
   callLogRetentionDays?: number;
   /** Strict four-eyes: nobody approves their own request. Absent means off. */
   requireDistinctReviewer?: boolean;
+  responderDirectWritesEnabled?: boolean;
   /** Optional cap on one person's requests per minute across all their connections. Null is off. */
   perUserRequestsPerMinute?: number | null;
 };
@@ -264,6 +265,12 @@ export default function McpPolicySection({
           label="Require a different reviewer"
           description="Nobody, administrators included, can approve a change or runbook run that they or their own assistant requested. A second administrator must review it."
           defaultChecked={policy.requireDistinctReviewer ?? false}
+        />
+        <CheckRow
+          name="responderDirectWritesEnabled"
+          label="Let routine responder actions run without review"
+          description="Snoozing or un-acknowledging an incident, editing an incident and adding a schedule override run as soon as an assistant asks, for people whose role already allows them. Each one is still recorded with the person and assistant. Everything else keeps its review. Applies only while reviewed actions are allowed."
+          defaultChecked={policy.responderDirectWritesEnabled ?? false}
         />
         {activeAdminCount !== undefined && activeAdminCount < 2 && (
           <p

@@ -71,7 +71,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 23 | 12 | 2 | 16 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 24 | 12 | 2 | 16 |
 | `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 11 | 10 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
@@ -79,7 +79,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `integrations:write` | Change integrations (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `notifications:read` | View notifications | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 2 | 4 | 0 | 0 |
 | `notifications:write` | Change notifications (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 1 |
-| `postmortems:read` | View postmortems | Incidents | View | ✓ | ✓ | ✓ | ✓ | 6 | 0 | 0 | 2 |
+| `postmortems:read` | View postmortems | Incidents | View | ✓ | ✓ | ✓ | ✓ | 7 | 0 | 0 | 2 |
 | `postmortems:write` | Change postmortems (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 8 |
 | `reports:read` | View reports and analytics | Reports and audit | View | ✓ | ✓ | ✓ | ✓ | 3 | 6 | 0 | 2 |
 | `reports:write` | Change reports and analytics (higher-risk changes wait for approval) | Reports and audit | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 8 |
@@ -121,6 +121,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Area | Operations | Direct | With approval | Not available |
 | --- | --: | --: | --: | --: |
+| action-items | 1 | 1 | 0 | 0 |
 | audit-exports | 3 | 0 | 0 | 3 |
 | audit-logs | 1 | 1 | 0 | 0 |
 | custom-fields | 5 | 2 | 3 | 0 |
@@ -142,10 +143,16 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 325 | 147 | 106 | 72 |
+| **All** | 326 | 148 | 106 | 72 |
 
 <details>
 <summary>Operations by area</summary>
+
+### action-items
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `listActionItems` | `read_operation` |
 
 ### audit-exports
 

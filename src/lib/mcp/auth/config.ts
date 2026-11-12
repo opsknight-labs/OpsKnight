@@ -64,6 +64,18 @@ export function validateMcpOrigin(
   return url.origin;
 }
 
+/**
+ * Extra Host header values accepted beside the public one, for a reverse proxy that rewrites
+ * Host (for example to an internal service name). Exact `host[:port]` entries, comma separated;
+ * anything that is not a plain host is ignored.
+ */
+export function mcpAllowedHosts(env: NodeJS.ProcessEnv = process.env): string[] {
+  return (env.MCP_ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map(entry => entry.trim().toLowerCase())
+    .filter(entry => /^[a-z0-9.:[\]-]{1,260}$/.test(entry));
+}
+
 /** Picks and validates the public origin; exported for unit tests of the precedence rules. */
 export function resolveMcpOrigin(appUrl: string | null | undefined, env: NodeJS.ProcessEnv) {
   const production = env.NODE_ENV === 'production';
