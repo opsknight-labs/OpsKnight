@@ -19,6 +19,7 @@ OpsKnight includes a Model Context Protocol (MCP) server. Each person connects t
 
 - [Self-hosted setup](self-hosted-setup.md): turn it on, connect assistants, manage connections, exposed capabilities, reviewed changes and client compatibility.
 - [API-hosted and headless agents](api-agents.md): Anthropic and OpenAI API agents with an OAuth refresh loop, and personal access tokens for CI, n8n and other fixed-header clients.
+- [stdio bridge](stdio-bridge.md): `opsknight-mcp`, a local stdio server for clients that cannot connect to a remote server or sign in with OAuth, with a personal token or device sign-in.
 - [Troubleshooting](troubleshooting.md): every error code and server log event, with fixes. Generated from the code.
 - [What to ask](what-to-ask.md): example requests by role, with the built-in prompt or tool and the permission each needs, and three annotated sessions.
 - [Build an agent](build-an-agent.md): connect your own code with the MCP SDK, page through results, retry safely and drive the approval loop.
