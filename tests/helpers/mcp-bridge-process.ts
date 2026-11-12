@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { resolve } from 'node:path';
 
 export const BRIDGE_BIN = resolve(process.cwd(), 'sdk/mcp-bridge/bin/opsknight-mcp.js');
@@ -14,8 +14,15 @@ export type BridgeMessage = {
 
 /** The bridge as a child process: write JSON-RPC lines, wait for stdout messages. */
 export function startBridge(args: string[], env: Record<string, string | undefined>) {
-  const child = spawn(process.execPath, [BRIDGE_BIN, ...args], {
-    env: { PATH: process.env.PATH, ...env },
+  const child: ChildProcessWithoutNullStreams = spawn(process.execPath, [BRIDGE_BIN, ...args], {
+    // The developer's own OpsKnight credentials and config never leak into a test.
+    env: {
+      ...process.env,
+      OPSKNIGHT_TOKEN: undefined,
+      OPSKNIGHT_URL: undefined,
+      XDG_CONFIG_HOME: '/nonexistent-opsknight-test-config',
+      ...env,
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   const received: BridgeMessage[] = [];
