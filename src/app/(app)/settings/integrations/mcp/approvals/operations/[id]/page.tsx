@@ -80,11 +80,13 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
   const changed = summary.diff.filter(row => row.status !== 'unchanged');
   const unchanged = summary.diff.filter(row => row.status === 'unchanged');
   return (
-    <div className="max-w-3xl space-y-6 rounded-lg border p-6">
+    <div className="min-w-0 max-w-3xl space-y-6 rounded-lg border p-4 sm:p-6">
       <BackToApprovals />
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">{heading}</h1>
-        <p className="text-base">{summary.description}</p>
+        <h1 className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">
+          {heading}
+        </h1>
+        <p className="text-base [overflow-wrap:anywhere]">{summary.description}</p>
         <RequestedBy
           person={requester.person}
           assistant={requester.assistant}
@@ -121,12 +123,12 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
       <DecisionReason reason={approval.decisionReason} />
       {summary.query.length > 0 && (
         <>
-          <h2 className="text-lg font-semibold">Query parameters</h2>
+          <h2 className="font-display text-lg font-semibold">Query parameters</h2>
           <dl className="space-y-2 break-words">
             {summary.query.map(([name, value]) => (
               <div key={name} className="rounded border p-3">
-                <dt className="font-medium">{name}</dt>
-                <dd className="whitespace-pre-wrap">{value}</dd>
+                <dt className="font-medium [overflow-wrap:anywhere]">{name}</dt>
+                <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
               </div>
             ))}
           </dl>
@@ -134,7 +136,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
       )}
       {summary.diff.length > 0 ? (
         <>
-          <h2 className="text-lg font-semibold">What changes</h2>
+          <h2 className="font-display text-lg font-semibold">What changes</h2>
           <p className="text-sm text-muted-foreground">
             Compared with the target when the request was made. Display only: the approval binds the
             new values, not this comparison.
@@ -142,7 +144,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           <DiffTable rows={changed} caption="Changed fields, before and after" />
           {unchanged.length > 0 && (
             <details className="rounded border p-3">
-              <summary className="cursor-pointer text-sm font-medium">
+              <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
                 {unchanged.length} unchanged {unchanged.length === 1 ? 'field' : 'fields'}
               </summary>
               <div className="pt-3">
@@ -153,13 +155,13 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
         </>
       ) : (
         <>
-          <h2 className="text-lg font-semibold">Frozen changes</h2>
+          <h2 className="font-display text-lg font-semibold">Frozen changes</h2>
           {summary.changes.length ? (
             <dl className="space-y-2 break-words">
               {summary.changes.map(([field, value]) => (
                 <div key={field} className="rounded border p-3">
-                  <dt className="font-medium">{field}</dt>
-                  <dd className="whitespace-pre-wrap">{value}</dd>
+                  <dt className="font-medium [overflow-wrap:anywhere]">{field}</dt>
+                  <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -176,15 +178,19 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
             review, and the result is verified afterwards.
           </p>
           <details className="rounded border p-3">
-            <summary className="cursor-pointer text-sm font-medium">Full current state</summary>
-            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-sm">
+            <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
+              Full current state
+            </summary>
+            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">
               {summary.preview}
             </pre>
           </details>
         </>
       )}
       <details className="rounded border p-3">
-        <summary className="cursor-pointer text-sm font-medium">Verification details</summary>
+        <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
+          Verification details
+        </summary>
         <dl className="grid gap-x-4 gap-y-3 break-all pt-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
           <dt className={DT_CLASS}>Operation id</dt>
           <dd className={DD_CLASS}>{summary.operationId}</dd>

@@ -17,7 +17,7 @@ export default function ShareReviewLink() {
         type="button"
         variant="outline"
         size="sm"
-        className="h-8 gap-1.5"
+        className="h-11 gap-1.5 sm:h-8"
         onClick={async () =>
           setStatus((await copyAuthenticationText(window.location.href)) ? 'copied' : 'failed')
         }
