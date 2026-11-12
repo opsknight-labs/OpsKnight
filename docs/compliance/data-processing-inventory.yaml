@@ -38,7 +38,7 @@ domains:
     exportable: partial
     deletion: { current: partial, target: phase-3 }
   - domain: on-call-scheduling
-    data: [assignment, replacement, shift-start, shift-end]
+    data: [assignment, replacement, shift-start, shift-end, daily-coverage-seconds]
     purpose: [routing, coverage, schedule-history]
     storage: [postgresql]
     recipients: [authorized-workspace-users, configured-notification-providers]
