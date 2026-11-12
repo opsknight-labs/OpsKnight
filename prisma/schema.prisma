@@ -4894,6 +4894,12 @@ model McpPolicy {
   // Lets the routine responder changes marked "responderDirect" in the catalog review (snooze,
   // un-acknowledge, edit an incident, add a schedule override) run without a review. Off by default.
   responderDirectWritesEnabled Boolean @default(false)
+  // Per-role narrowing of what assistants may use, on top of disabledCapabilities:
+  // {"USER": ["domain:schedules", "incident_snooze"]}. Null is none.
+  roleDisabledCapabilities Json?
+  // Lets an organization's identity provider issue MCP access for its users (an ID-JAG
+  // JWT-bearer grant). Needs SSO; refused while SSO is not configured. Off by default.
+  enterpriseManagedAuthEnabled Boolean @default(false)
   // Optional cap on one person's requests per minute across all their connections (null = off).
   perUserRequestsPerMinute Int?
   // Optimistic concurrency for policy saves.
@@ -4907,6 +4913,8 @@ model McpClient {
   redirectUris String[]
   scopes String[]
   revokedAt DateTime?
+  // Capabilities this assistant may not use for anyone, on top of the policy (same id format).
+  disabledCapabilities String[] @default([])
   // Set only for clients identified by an HTTPS metadata document URL (their id).
   metadataUrl String?
   metadataFetchedAt DateTime?
