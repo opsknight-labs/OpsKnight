@@ -280,6 +280,7 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       deviceFlowEnabled: z.boolean().optional(),
       callLogRetentionDays: z.coerce.number().int().min(7).max(365).optional(),
       requireDistinctReviewer: z.boolean().optional(),
+      responderDirectWritesEnabled: z.boolean().optional(),
       // Empty means no cap; absent keeps the stored value.
       perUserRequestsPerMinute: z
         .union([z.literal(''), z.coerce.number().int().min(1).max(6000)])
@@ -326,6 +327,9 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       // The review controls send a marker, because an unticked checkbox cannot say "off".
       requireDistinctReviewer: form.has('reviewControls')
         ? form.get('requireDistinctReviewer') === 'on'
+        : undefined,
+      responderDirectWritesEnabled: form.has('reviewControls')
+        ? form.get('responderDirectWritesEnabled') === 'on'
         : undefined,
       perUserRequestsPerMinute: form.get('perUserRequestsPerMinute') ?? undefined,
     });
@@ -429,6 +433,8 @@ async function saveMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
       deviceFlowEnabled: input.deviceFlowEnabled ?? existing.deviceFlowEnabled,
       callLogRetentionDays: input.callLogRetentionDays ?? existing.callLogRetentionDays,
       requireDistinctReviewer: input.requireDistinctReviewer ?? existing.requireDistinctReviewer,
+      responderDirectWritesEnabled:
+        input.responderDirectWritesEnabled ?? existing.responderDirectWritesEnabled,
       perUserRequestsPerMinute:
         input.perUserRequestsPerMinute === undefined
           ? existing.perUserRequestsPerMinute

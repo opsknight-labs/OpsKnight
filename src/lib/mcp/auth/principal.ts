@@ -28,6 +28,7 @@ interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   disabledCapabilities: string[] | null;
   scopeStepUpEnabled: boolean | null;
   perUserRequestsPerMinute: number | null;
+  responderDirectWritesEnabled: boolean | null;
 }
 
 /** OAUTH: an assistant's consent. PAT: a personal access token (one token, never refreshed). */
@@ -46,6 +47,8 @@ export interface McpRuntimePolicy {
   scopeStepUpEnabled: boolean;
   /** Optional cap on one person's requests per minute across all their connections; null is off. */
   perUserRequestsPerMinute: number | null;
+  /** Routine responder changes may run without a review (catalog "responderDirect"). */
+  responderDirectWritesEnabled: boolean;
 }
 
 const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
@@ -62,6 +65,7 @@ const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
         disabledCapabilities: true,
         scopeStepUpEnabled: true,
         perUserRequestsPerMinute: true,
+        responderDirectWritesEnabled: true,
       },
     })
   );
@@ -87,7 +91,7 @@ const AUTHORITY_COLUMNS = Prisma.sql`
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
   p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities",
-  p."scopeStepUpEnabled", p."perUserRequestsPerMinute"`;
+  p."scopeStepUpEnabled", p."perUserRequestsPerMinute", p."responderDirectWritesEnabled"`;
 
 /**
  * The grant's current authority and the MCP policy as of the same statement. The policy is null
@@ -174,6 +178,7 @@ function authorityFrom(
             disabledCapabilities: grant.disabledCapabilities ?? [],
             scopeStepUpEnabled: grant.scopeStepUpEnabled ?? false,
             perUserRequestsPerMinute: grant.perUserRequestsPerMinute ?? null,
+            responderDirectWritesEnabled: grant.responderDirectWritesEnabled ?? false,
           },
   };
 }

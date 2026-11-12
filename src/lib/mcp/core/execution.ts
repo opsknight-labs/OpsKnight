@@ -18,6 +18,7 @@ import {
   MCP_OPERATION_MAP,
   isMcpApprovalGated,
   isMcpExecutable,
+  isMcpResponderDirect,
   isMcpSensitiveRead,
 } from '../catalog';
 import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS, MCP_PREVIEW_HANDLERS } from '../operations/handlers';
@@ -349,11 +350,25 @@ async function executeMcpOperation(
   guard?: ApprovedCommitGuard,
   previewMode?: 'preview'
 ) {
-  const mode: ExecutionMode = guard ? 'approved' : (previewMode ?? 'generic');
   context.budget.consumeOperation();
   const operation = MCP_OPERATION_MAP.get(operationId);
+  // A routine responder change called directly: it runs like an approved commit (same handler,
+  // same mutation hook), with the administrator switch as its guard instead of a review. The
+  // switch is rechecked under the policy row lock, in the transaction that applies the change.
+  const direct = !guard && !previewMode && Boolean(operation && isMcpResponderDirect(operation));
+  if (direct)
+    guard = async tx => {
+      const policy = await tx.mcpPolicy.findUnique({
+        where: { id: 'default' },
+        select: { responderDirectWritesEnabled: true },
+      });
+      requireMcp(policy?.responderDirectWritesEnabled, 'MCP_OPERATION_UNAVAILABLE', 403);
+    };
+  const mode: ExecutionMode = guard ? 'approved' : (previewMode ?? 'generic');
   requireMcp(operation && availableIn(mode, operation), 'MCP_OPERATION_UNAVAILABLE', 403);
-  const args = validateOperationArgs(operationId, rawArgs, mode);
+  // With the switch off a direct change is refused as unavailable, like any other gated
+  // operation, before its arguments are looked at; so they are validated after that check.
+  const earlyArgs = direct ? undefined : validateOperationArgs(operationId, rawArgs, mode);
   // Administrator capability controls, judged by the same policy snapshot at every step whatever
   // surface invoked it. Approval previews are internal reads; their gated operation is checked.
   const exposed = (policy: McpRuntimePolicy | null) =>
@@ -377,6 +392,13 @@ async function executeMcpOperation(
   }
   requireMcp(exposed(resolved.policy), 'MCP_CAPABILITY_DISABLED', 403);
   requireMcp(permitted(resolved.policy), 'MCP_OPERATION_DISABLED', 403);
+  // Switch off: the change exists only behind operation_prepare and a review.
+  requireMcp(
+    !direct || resolved.policy?.responderDirectWritesEnabled,
+    'MCP_OPERATION_UNAVAILABLE',
+    403
+  );
+  const args = earlyArgs ?? validateOperationArgs(operationId, rawArgs, mode);
   const { auth } = resolved;
   auth.apiKey.scopes = auth.apiKey.scopes.filter(scope => context.tokenScopes.includes(scope));
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: auth.apiKey.scopes };
@@ -428,7 +450,7 @@ async function executeMcpOperation(
       operation.method === 'get'
         ? undefined
         : JSON.stringify(
-            (mode === 'generic'
+            (mode === 'generic' || direct
               ? resolveMeInBody(
                   operationId,
                   args.body as Record<string, unknown> | undefined,

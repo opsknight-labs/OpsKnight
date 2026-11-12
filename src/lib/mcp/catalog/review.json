@@ -1866,6 +1866,7 @@
   },
   "snoozeIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -1878,6 +1879,7 @@
   },
   "unacknowledgeIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -2295,6 +2297,7 @@
   },
   "updateIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -3213,6 +3216,7 @@
   },
   "createScheduleOverride": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,

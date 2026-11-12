@@ -538,6 +538,7 @@ export default async function McpSettings({
               deviceFlowEnabled: policy?.deviceFlowEnabled ?? false,
               callLogRetentionDays: policy?.callLogRetentionDays ?? 30,
               requireDistinctReviewer: policy?.requireDistinctReviewer ?? false,
+              responderDirectWritesEnabled: policy?.responderDirectWritesEnabled ?? false,
               perUserRequestsPerMinute: policy?.perUserRequestsPerMinute ?? null,
             }}
             revision={policy?.policyRevision ?? 0}

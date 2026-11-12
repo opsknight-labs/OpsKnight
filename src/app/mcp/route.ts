@@ -324,7 +324,8 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
           identity.auth.actor,
           identity.policy.writesEnabled,
           identity.policy.sensitiveReadsEnabled,
-          identity.policy.disabledCapabilities
+          identity.policy.disabledCapabilities,
+          identity.policy.responderDirectWritesEnabled
         ),
       {
         // Pre-2026 clients: one fresh server per request, no session.
@@ -519,7 +520,8 @@ async function openListenStream(
         identity.auth.actor,
         identity.policy.writesEnabled,
         identity.policy.sensitiveReadsEnabled,
-        identity.policy.disabledCapabilities
+        identity.policy.disabledCapabilities,
+        identity.policy.responderDirectWritesEnabled
       ),
     {
       legacy: 'reject',

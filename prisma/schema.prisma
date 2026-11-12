@@ -4891,6 +4891,9 @@ model McpPolicy {
   callLogRetentionDays Int @default(30)
   // Strict four-eyes: nobody, administrators included, approves their own prepared change.
   requireDistinctReviewer Boolean @default(false)
+  // Lets the routine responder changes marked "responderDirect" in the catalog review (snooze,
+  // un-acknowledge, edit an incident, add a schedule override) run without a review. Off by default.
+  responderDirectWritesEnabled Boolean @default(false)
   // Optional cap on one person's requests per minute across all their connections (null = off).
   perUserRequestsPerMinute Int?
   // Optimistic concurrency for policy saves.

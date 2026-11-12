@@ -43,6 +43,9 @@ export const operationReviewSchema = z
       .string()
       .regex(/^[a-z][A-Za-z0-9]{2,80}$/)
       .optional(),
+    // A routine, reversible responder change that an administrator may let assistants run without
+    // a review (McpPolicy.responderDirectWritesEnabled). Never a destructive (R3) operation.
+    responderDirect: z.literal(true).optional(),
     // A reviewed non-GET read (validation or bounded query) that never writes, audits or reserves a key.
     sideEffectFree: z.literal(true).optional(),
     // Present only after a named person reviewed this specific exclusion; never inferred.
@@ -83,6 +86,11 @@ export const operationReviewSchema = z
     // A reviewed configuration read: generic and read-only, behind an administrator opt-in.
     if (review.status === 'SENSITIVE_READ' && (review.risk !== 'R2' || review.tool !== null))
       ctx.addIssue({ code: 'custom', message: 'Sensitive reads are untooled R2 reads.' });
+    if (review.responderDirect && (review.status !== 'APPROVAL_REQUIRED' || review.risk !== 'R2'))
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Only sensitive (R2) approval-gated operations may be marked responderDirect.',
+      });
     if (review.sideEffectFree && review.status !== 'SENSITIVE_READ')
       ctx.addIssue({
         code: 'custom',

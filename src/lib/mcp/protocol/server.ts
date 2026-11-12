@@ -18,6 +18,7 @@ import {
   MCP_OPERATION_MAP,
   isMcpApprovalGated,
   isMcpExecutable,
+  isMcpResponderDirect,
   isMcpSensitiveRead,
   mcpResponseSchema,
 } from '../catalog';
@@ -655,7 +656,9 @@ export function createOpsKnightMcpServer(
   writesEnabled: boolean,
   sensitiveReadsEnabled = false,
   /** McpPolicy.disabledCapabilities as stored; unknown entries are ignored. */
-  disabledCapabilities: readonly string[] = []
+  disabledCapabilities: readonly string[] = [],
+  /** McpPolicy.responderDirectWritesEnabled: routine responder changes run without a review. */
+  responderDirectWrites = false
 ) {
   // Administrator controls apply to every session whatever its role or consent; execution rechecks.
   const disabled = resolveDisabledMcpCapabilities(disabledCapabilities);
@@ -808,13 +811,20 @@ export function createOpsKnightMcpServer(
         })
     );
   }
+  // Routine responder changes the administrator lets run without a review; execution rechecks.
+  const runsDirect = (operation: (typeof MCP_CATALOG)[number]) =>
+    responderDirectWrites &&
+    writesEnabled &&
+    isMcpResponderDirect(operation) &&
+    hasOperationAuthority(actor, operation);
   const visible = MCP_CATALOG.filter(
     operation =>
       !disabled.has(operation.operationId) &&
-      canDiscover(actor, operation) &&
-      (isMcpSensitiveRead(operation)
-        ? sensitiveReadsEnabled
-        : operation.risk === 'R0' || writesEnabled)
+      (runsDirect(operation) ||
+        (canDiscover(actor, operation) &&
+          (isMcpSensitiveRead(operation)
+            ? sensitiveReadsEnabled
+            : operation.risk === 'R0' || writesEnabled)))
   );
   // Discovery only; every prepare and commit rechecks authority and the native review.
   const approvalGated = writesEnabled
@@ -822,6 +832,7 @@ export function createOpsKnightMcpServer(
         operation =>
           !disabled.has(operation.operationId) &&
           isMcpApprovalGated(operation) &&
+          !runsDirect(operation) &&
           hasOperationAuthority(actor, operation)
       )
     : [];
@@ -846,6 +857,7 @@ export function createOpsKnightMcpServer(
   const namedTool = (operation: (typeof MCP_CATALOG)[number]) =>
     operation.tool && registered.tools.has(operation.tool) ? operation.tool : null;
   const workflowOf = (operation: (typeof MCP_CATALOG)[number]) => {
+    if (runsDirect(operation)) return 'call_operation';
     if (operation.status === 'APPROVAL_REQUIRED')
       return 'operation_prepare with args (omit idempotencyKey), native approval, operation_commit_approved';
     const tool = namedTool(operation);
