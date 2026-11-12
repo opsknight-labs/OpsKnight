@@ -302,6 +302,26 @@
         "Area slices J1 to J7 (automation, escalation, on-call, postmortems, runbooks, notifications, helpers) and Workstream L surfaces are not part of this integration"
       ],
       "verification": "2026-11-12 on 20970a78f + wave 1: unit suite 1159 files / 12486 passed, 7 skipped; tests/integration/intelligence 72 files / 901 passed; performance budgets passed; prisma validate and migrate deploy on a fresh pgvector pg16 database clean; two type errors from combining the call-site tag with phase 2 fixed before push; pre-push typecheck, unit suite and build are the final gate"
+    },
+    {
+      "id": 10,
+      "wave": 1,
+      "name": "Workstream I: intelligence placement",
+      "status": "implemented_pending_full_ci",
+      "implemented": [
+        "I1 incident: one IntelligenceStrip under the command bar (chips only with content, single FreshnessDot) and the Insights inspector (Sheet, shortcut I, bottom sheet on mobile; Briefing, Triage, Similar, Related, Why, Runbooks, Impact, Summary) replace the seven-tab panel, IncidentGroupCard, MobileIncidentIntelligence and the proactive card; intelligence time axis is an overlay on the Timeline tab; OFF mode renders nothing for responders; loaders in src/lib/intelligence/incident-ux/{strip,strip-contract}.ts, bounded, scoped and fail-soft",
+        "I2 service/team/dashboard: /services/[id]/intelligence tab (SLO burn, dependency graph SVG with suggested edges and admin approve/reject, alert quality with one-click fixes, recent changes with risk, noise controls), service list badges, team AI usage and noise load tiles, dashboard AIOps pulse tile and wallboard largest open group",
+        "I2 lists: /alerts and /changes lists with a shared filter bar and keyset pagination, Needs attention inbox on the AIOps overview, AIOps entry in mobile navigation",
+        "I3 settings: Intelligence tab in the settings top nav; five pages (Engine, Noise controls, Services & changes, Assistant, Evaluation & spend) with anchored sections; old addresses redirect; server-action files stay at their old route folders",
+        "I4 Squire: docked display at lg and up (--squire-dock-width, squire-docked class, app shell pads the content row), pinned incident briefing view and API, hand-off contract openSquire({ question, evidence, incidentId }), ?squire=open&q= deep link (question placed in the composer, never auto-submitted), 44 px targets",
+        "Integration: inspector Ask Squire uses the bus evidence kinds (one shape, tested); inspector is offset by --squire-dock-width beside a docked assistant; inbox, service tab and team tile link to the regrouped settings anchors; one noise-decision vocabulary (kinds, labels, status tones) in incident-ux/explain.ts shared by strip, lists and service badges",
+        "No schema change"
+      ],
+      "remaining": [
+        "Evals/baseline has no anchor of its own on Evaluation & spend (content sits inside the grouping-evaluation and insights sections); add a section id to routes.ts if a separate anchor is wanted",
+        "Relocating the settings server-action files to the new route folders (kept in place so imports stayed stable across slices)",
+        "Squire focus trap in docked mode to be re-checked when the concurrent SquireLauncher streaming/focus work lands (docked panel is deliberately not a modal)"
+      ]
     }
   ],
   "verification": {
@@ -367,7 +387,10 @@
   "mascot_integration": {
     "source": "User-supplied Downloads/OpsKnightSquire.tsx and opsknight-squire.svg (2026-11-06 11:47)",
     "states": 9,
-    "variants": ["full", "avatar"],
+    "variants": [
+      "full",
+      "avatar"
+    ],
     "verified": [
       "54 focused component tests passed",
       "Browser: desktop, 390px mobile, dark mode, basic-mode history",
@@ -449,7 +472,10 @@
   "local_runtime_recovery": {
     "verified_at": "2026-11-06",
     "restart": "User explicitly approved Docker Desktop restart; hung Docker app processes restarted without deleting containers or volumes.",
-    "restored_containers": ["opsknight-intel-dev", "opsknight-intel-roadmap-test"],
+    "restored_containers": [
+      "opsknight-intel-dev",
+      "opsknight-intel-roadmap-test"
+    ],
     "other_containers": "Other containers, including mcp939-testdb, were not individually operated and remain stopped after the engine restart.",
     "demo_url": "http://localhost:3100",
     "login": "HTTP 200; root redirects to the local login path with callbackUrl.",
