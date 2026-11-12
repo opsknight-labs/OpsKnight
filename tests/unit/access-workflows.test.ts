@@ -215,3 +215,17 @@ describe('on-call responders and emergency access', () => {
     ).toBe(false);
   });
 });
+
+describe('role coverage', () => {
+  it('compares permission sets, not rank', async () => {
+    const { roleCovers } = await import('@/lib/authorization');
+    expect(roleCovers('ADMIN', 'AUDITOR')).toBe(true);
+    expect(roleCovers('ADMIN', 'RESPONDER')).toBe(true);
+    // Responders lack Auditor-only audit/compliance permissions, and vice versa.
+    expect(roleCovers('RESPONDER', 'AUDITOR')).toBe(false);
+    expect(roleCovers('AUDITOR', 'RESPONDER')).toBe(false);
+    expect(roleCovers('USER', 'USER')).toBe(true);
+    expect(roleCovers('USER', 'RESPONDER')).toBe(false);
+    expect(roleCovers('nonsense', 'USER')).toBe(false);
+  });
+});

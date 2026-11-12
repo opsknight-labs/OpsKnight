@@ -212,7 +212,18 @@ describe('organization role requests', () => {
     });
     expect((await resolveUserActor(user.id))!.role).toBe('USER');
 
-    // Asking for a role you already exceed is refused outright.
+    // Roles are not a ladder: a Responder may ask for Auditor-only permissions.
+    const responder = await createTestUser({ role: 'RESPONDER' });
+    await expect(
+      createAccessRequest(responder.id, {
+        kind: 'ORG_ROLE',
+        requestedRole: 'AUDITOR',
+        reason: 'Need audit log access for an investigation',
+        durationMinutes: 60,
+      })
+    ).resolves.toMatchObject({ status: 'PENDING' });
+
+    // Asking for a role you already fully include is refused outright.
     await expect(
       createAccessRequest(otherAdmin.id, {
         kind: 'ORG_ROLE',
@@ -588,6 +599,26 @@ describe('audit fixes', () => {
       where: { reviewId: review.id, userId: admin.id },
     });
     expect(ownItem.note).toContain('Self-certified');
+
+    // With another reviewer, self-certification needs the policy, and the evidence says so.
+    const otherAdmin = await createTestUser({ role: 'ADMIN' });
+    const policyReview = await startAccessReview(admin.id, { name: 'Policy review' });
+    const ownPolicyItem = await db.accessReviewItem.findFirstOrThrow({
+      where: { reviewId: policyReview.id, userId: admin.id },
+    });
+    await expect(decideAccessReviewItem(admin.id, ownPolicyItem.id, 'KEEP')).rejects.toMatchObject({
+      code: 'SEPARATION_OF_DUTIES',
+    });
+    await db.systemSettings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', accessSelfApprovalAllowed: true },
+      update: { accessSelfApprovalAllowed: true },
+    });
+    await decideAccessReviewItem(admin.id, ownPolicyItem.id, 'KEEP');
+    expect(
+      (await db.accessReviewItem.findUniqueOrThrow({ where: { id: ownPolicyItem.id } })).note
+    ).toContain('allowed by the organization access policy');
+    await cancelAccessReview(otherAdmin.id, policyReview.id);
 
     const next = await startAccessReview(admin.id, { name: 'To cancel' });
     await cancelAccessReview(admin.id, next.id);

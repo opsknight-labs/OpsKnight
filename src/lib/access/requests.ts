@@ -6,7 +6,7 @@ import type { AccessRequestStatus, Prisma, TeamRole } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
-import { roleLabel, type AppRole } from '@/lib/authorization';
+import { roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
@@ -59,20 +59,11 @@ export const accessRequestInput = z.discriminatedUnion('kind', [
 
 export type AccessRequestInput = z.input<typeof accessRequestInput>;
 
-const ROLE_RANKS = new Map<string, number>([
-  ['USER', 0],
-  ['AUDITOR', 1],
-  ['RESPONDER', 2],
-  ['ADMIN', 3],
-]);
 const TEAM_ROLE_RANKS = new Map<string, number>([
   ['MEMBER', 0],
   ['ADMIN', 1],
   ['OWNER', 2],
 ]);
-function roleRank(role: string | null | undefined): number {
-  return ROLE_RANKS.get(role ?? '') ?? -1;
-}
 function teamRoleRank(role: string | null | undefined): number {
   return TEAM_ROLE_RANKS.get(role ?? '') ?? -1;
 }
@@ -169,8 +160,10 @@ export async function createAccessRequest(requesterId: string, input: AccessRequ
             'Your role is managed by your identity provider. Ask for temporary access, or ask your IT team to change your group membership.',
         });
       }
-      if (roleRank(requester.role) >= roleRank(body.requestedRole)) {
-        throw invalid(`You already have ${roleLabel(body.requestedRole)} access or more.`);
+      if (roleCovers(requester.role, body.requestedRole)) {
+        throw invalid(
+          `You already have everything the ${roleLabel(body.requestedRole)} role allows.`
+        );
       }
     } else {
       const team = await tx.team.findUnique({
@@ -391,7 +384,7 @@ export async function decideAccessRequest(
     if (decision.approve) {
       let satisfied = false;
       if (request.kind === 'ORG_ROLE') {
-        satisfied = roleRank(request.requester.role) >= roleRank(request.requestedRole);
+        satisfied = roleCovers(request.requester.role, request.requestedRole);
       } else if (request.teamId) {
         const membership = await tx.teamMember.findUnique({
           where: { userId_teamId: { userId: request.requesterId, teamId: request.teamId } },

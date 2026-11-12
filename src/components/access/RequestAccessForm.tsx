@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
 import { requestAccessAction } from '@/app/(app)/settings/access/actions';
-import { roleLabel, type AppRole } from '@/lib/authorization';
+import { roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
 
 export const DURATION_OPTIONS: { value: string; label: string }[] = [
   { value: '60', label: '1 hour' },
@@ -49,12 +49,18 @@ export default function RequestAccessForm({
   onDone,
   compact,
 }: Props) {
-  const roleChoices = useMemo(() => ROLE_ORDER.filter(role => role !== currentRole), [currentRole]);
+  // Only roles that would add something: built-in roles are not a strict ladder.
+  const roleChoices = useMemo(
+    () => ROLE_ORDER.filter(role => !roleCovers(currentRole, role)),
+    [currentRole]
+  );
   const [kind, setKind] = useState<'ORG_ROLE' | 'TEAM_MEMBERSHIP'>(
     team ? 'TEAM_MEMBERSHIP' : 'ORG_ROLE'
   );
   const [role, setRole] = useState<AppRole>(
-    suggestedRole && suggestedRole !== currentRole ? suggestedRole : (roleChoices[0] ?? 'RESPONDER')
+    suggestedRole && roleChoices.includes(suggestedRole)
+      ? suggestedRole
+      : (roleChoices[0] ?? 'RESPONDER')
   );
   const [duration, setDuration] = useState('480');
   const [chosenTeamId, setChosenTeamId] = useState(team?.id ?? teamChoices?.[0]?.id ?? '');
@@ -77,8 +83,12 @@ export default function RequestAccessForm({
     );
   }
 
+  const noRoleToAsk = kind === 'ORG_ROLE' && roleChoices.length === 0;
   const canSubmit =
-    reason.trim().length >= 10 && !pending && (kind === 'ORG_ROLE' || Boolean(selectedTeam));
+    reason.trim().length >= 10 &&
+    !pending &&
+    !noRoleToAsk &&
+    (kind === 'ORG_ROLE' || Boolean(selectedTeam));
   // Identity-provider managed roles can still be raised temporarily; permanent changes belong
   // in the identity provider.
   const permanentRoleBlocked = kind === 'ORG_ROLE' && !canRequestOrgRole;
@@ -201,6 +211,12 @@ export default function RequestAccessForm({
         </div>
       </div>
 
+      {noRoleToAsk && (
+        <p className="text-sm text-muted-foreground">
+          Your role already includes everything the other roles allow.
+          {offersTeam ? ' You can still ask to join a team.' : ''}
+        </p>
+      )}
       {permanentRoleBlocked && (
         <p className="text-xs text-muted-foreground">
           Your role comes from your identity provider, so you can ask for temporary access here. For

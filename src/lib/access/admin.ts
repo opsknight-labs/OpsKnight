@@ -603,17 +603,20 @@ export async function decideAccessReviewItem(
   if (!item || item.review.status !== 'OPEN') {
     throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'This review is closed.' });
   }
-  let selfCertified = false;
+  let selfCertification: string | null = null;
   if (item.userId === reviewerId) {
-    // Four-eyes whenever possible; a sole reviewer may certify their own access (recorded).
-    const settings = await getAccessControlSettings(true);
-    if (!settings.selfApprovalAllowed && (await hasOtherReviewer(reviewerId))) {
+    // Four-eyes whenever possible; the evidence records exactly why self-certification happened.
+    const otherReviewer = await hasOtherReviewer(reviewerId);
+    if (!otherReviewer) {
+      selfCertification = 'Self-certified: no other reviewer available.';
+    } else if ((await getAccessControlSettings(true)).selfApprovalAllowed) {
+      selfCertification = 'Self-certified: allowed by the organization access policy.';
+    } else {
       throw new AppError({
         code: 'SEPARATION_OF_DUTIES',
         userMessage: 'You cannot certify your own access. Another reviewer must decide this item.',
       });
     }
-    selfCertified = true;
   }
   const trimmed = note?.trim().slice(0, 450) || null;
   await prisma.accessReviewItem.update({
@@ -622,9 +625,7 @@ export async function decideAccessReviewItem(
       decision,
       reviewerId,
       decidedAt: new Date(),
-      note: selfCertified
-        ? [trimmed, 'Self-certified: no other reviewer available.'].filter(Boolean).join(' ')
-        : trimmed,
+      note: selfCertification ? [trimmed, selfCertification].filter(Boolean).join(' ') : trimmed,
     },
   });
 }
