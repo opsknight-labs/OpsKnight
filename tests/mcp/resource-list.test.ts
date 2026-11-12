@@ -3,9 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const callMcpOperation = vi.fn();
 vi.mock('@/lib/mcp/core/execution', () => ({ callMcpOperation }));
 
-const { listAuthorizedResources, RESOURCE_LIST_LIMIT } = await import(
-  '@/lib/mcp/protocol/resource-list'
-);
+const { listAuthorizedResources, RESOURCE_LIST_LIMIT } =
+  await import('@/lib/mcp/protocol/resource-list');
 const context = {} as Parameters<typeof listAuthorizedResources>[0];
 
 beforeEach(() => {

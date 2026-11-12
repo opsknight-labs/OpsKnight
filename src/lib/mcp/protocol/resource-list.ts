@@ -43,7 +43,11 @@ export async function listAuthorizedResources(
     const rows = (result.data as { data?: unknown } | undefined)?.data;
     return {
       resources: (Array.isArray(rows) ? rows : []).slice(0, RESOURCE_LIST_LIMIT).flatMap(row => {
-        const { id, title, name } = (row ?? {}) as { id?: unknown; title?: unknown; name?: unknown };
+        const { id, title, name } = (row ?? {}) as {
+          id?: unknown;
+          title?: unknown;
+          name?: unknown;
+        };
         if (typeof id !== 'string' || !RESOURCE_ID.test(id)) return [];
         const label = typeof title === 'string' ? title : typeof name === 'string' ? name : id;
         return [
