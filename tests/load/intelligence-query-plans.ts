@@ -24,6 +24,10 @@ import { claimWorkItemsSql } from '../../src/lib/intelligence/jobs/work-queue';
 import { INTELLIGENCE_ENGINE_VERSION } from '../../src/lib/intelligence/contract';
 import { dueOpsInsightScopesSql } from '../../src/lib/intelligence/ops-insights/handlers';
 import { integrationHealthSql } from '../../src/lib/intelligence/ops-insights/producers/integration-health';
+import {
+  repeatCauseOverdueSql,
+  repeatCauseProblemsSql,
+} from '../../src/lib/intelligence/ops-insights/producers/postmortem-repeat-cause';
 import { OPS_ROLLUP_SOURCES, OPS_ROLLUPS } from '../../src/lib/metric-rollup';
 
 /** Any one of the listed indexes satisfies the query; alternatives cover optional extensions. */
@@ -215,6 +219,14 @@ async function main() {
     opsIntegrationHealth: {
       analyze: true,
       sql: integrationHealthSql(source.serviceId, new Date()),
+    },
+    opsRepeatCauseProblems: {
+      analyze: true,
+      sql: repeatCauseProblemsSql(source.serviceId, new Date()),
+    },
+    opsRepeatCauseOverdue: {
+      analyze: true,
+      sql: repeatCauseOverdueSql(source.serviceId, [source.template], new Date()),
     },
     opsDueScopes: { analyze: true, sql: dueOpsInsightScopesSql('SERVICE', 200) },
   };

@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { withDbBudget, dbNow } from '../jobs/db-budget';
 import { getIntelligenceSettings, resolveEffectivePolicy } from '../settings/service';
+import { enabledOpsInsightAreas } from '../ops-insights/contract';
 import { registerAiGateway, AiGatewayError } from '../ai/gateway';
 import { BACKGROUND_EMBEDDING_ACTOR } from '../ai/contract';
 import { resolveEmbeddingModel } from '../ai/port';
@@ -283,7 +284,9 @@ function withActionItemRecords<T extends { actionItems?: unknown; actionItemReco
 
 const LOADERS: Record<DerivedKnowledgeKind, Loader> = {
   POSTMORTEM: async (tx, cursor, upper, batch) => {
-    const structured = (await getIntelligenceSettings(tx)).opsInsightsPostmortemsEnabled;
+    const structured = enabledOpsInsightAreas(await getIntelligenceSettings(tx)).includes(
+      'postmortems'
+    );
     const rows = await tx.postmortem.findMany({
       where: after<Prisma.PostmortemWhereInput>('updatedAt', cursor, upper),
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],

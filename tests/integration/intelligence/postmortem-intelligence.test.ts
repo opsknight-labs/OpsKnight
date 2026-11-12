@@ -6,13 +6,18 @@ import {
 } from '@/lib/intelligence/contract';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import { applyEvidenceToDraft } from '@/lib/intelligence/postmortems/evidence-draft';
+import { runOpsInsights } from '@/lib/intelligence/ops-insights/handlers';
+import {
+  REPEAT_CAUSE_KIND,
+  repeatCauseOverdueSql,
+  repeatCauseProblemsSql,
+} from '@/lib/intelligence/ops-insights/producers/postmortem-repeat-cause';
 import {
   getPostmortemAssistForActor,
   getPostmortemRecurrenceForActor,
-  loadRepeatCauseInput,
 } from '@/lib/intelligence/postmortems/loaders';
-import { deriveRepeatCauseInsights } from '@/lib/intelligence/postmortems/recurrence';
-import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
+import { getIntelligenceSettings, publishPolicyVersion } from '@/lib/intelligence/settings/service';
+import { Prisma } from '@prisma/client';
 import {
   createTestIncident,
   createTestService,
@@ -42,9 +47,10 @@ const enable = (on = true) =>
       id: 'default',
       ...INTELLIGENCE_SETTINGS_DEFAULTS,
       enabled: true,
+      opsInsightsEnabled: true,
       opsInsightsPostmortemsEnabled: on,
     },
-    update: { opsInsightsPostmortemsEnabled: on },
+    update: { opsInsightsEnabled: true, opsInsightsPostmortemsEnabled: on },
   });
 
 async function indexed(title: string, serviceId: string, daysAgo: number, resolved = true) {
@@ -255,12 +261,19 @@ describe('postmortem assist', () => {
   });
 });
 
-describe('repeat cause with an overdue action item (loader + pure insight)', () => {
-  it('yields one insight for the recurring problem whose follow-up is overdue', async () => {
+describe('repeat cause with an overdue action item (lane producer)', () => {
+  const run = async (serviceId: string) =>
+    runOpsInsights(
+      { subjectKey: `SERVICE:${serviceId}`, generation: 1, force: false },
+      await getIntelligenceSettings()
+    );
+
+  it('stores one insight for the recurring problem whose follow-up is overdue, with no free text', async () => {
+    await enable();
     const service = await createTestService('API');
     const first = await indexed('Disk full on host-1', service.id, 30);
     await indexed('Disk full on host-2', service.id, 12);
-    await indexed('Disk full on host-3', service.id, 2);
+    const latest = await indexed('Disk full on host-3', service.id, 2);
     const fine = await indexed('Queue stuck on worker-1', service.id, 9);
     await indexed('Queue stuck on worker-2', service.id, 3);
     await postmortemWithItems(first.id, 'Disk full', [
@@ -269,18 +282,71 @@ describe('repeat cause with an overdue action item (loader + pure insight)', () 
     ]);
     await postmortemWithItems(fine.id, 'Queue stuck', [{ title: 'Tune consumers', dueInDays: 10 }]);
 
-    const input = await loadRepeatCauseInput(service.id, { client: db });
-    expect(input.problems.map(problem => [problem.template, problem.occurrences])).toEqual([
-      ['disk full on host-<num>', 3],
-      ['queue stuck on worker-<num>', 2],
+    expect(await run(service.id)).toBe('computed');
+    const rows = await db.opsInsight.findMany({ where: { kind: REPEAT_CAUSE_KIND } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      scopeType: 'SERVICE',
+      scopeId: service.id,
+      area: 'postmortems',
+      severity: 'CRITICAL', // high priority, seen three times
+      status: 'OPEN',
+      title: 'Repeat problem, seen 3 times, has 1 overdue action item',
+      draftHref: `/postmortems/${first.id}`,
+    });
+    expect(rows[0].evidence).toMatchObject({
+      facts: expect.arrayContaining([{ label: 'Longest overdue', value: '45 days' }]),
+      examples: [
+        {
+          label: expect.stringMatching(/^High-priority action item due \d{4}-\d{2}-\d{2}$/),
+          href: `/postmortems/${first.id}`,
+        },
+        { label: 'Latest occurrence', href: `/incidents/${latest.id}` },
+      ],
+    });
+    // Evidence holds ids, counts and days only: no incident, template or action-item text.
+    expect(JSON.stringify(rows[0])).not.toMatch(/disk|rotation|host-/i);
+
+    // Unchanged input: skipped. Completing the follow-up resolves the insight.
+    expect(await run(service.id)).toBe('unchanged');
+    await db.actionItem.updateMany({
+      where: { incidentId: first.id },
+      data: { status: 'COMPLETED' },
+    });
+    await run(service.id);
+    expect(await db.opsInsight.findFirstOrThrow({ where: { id: rows[0].id } })).toMatchObject({
+      status: 'RESOLVED',
+    });
+  });
+
+  it('computes nothing while the postmortems area is off', async () => {
+    const service = await createTestService('API');
+    const first = await indexed('Disk full on host-1', service.id, 30);
+    await indexed('Disk full on host-2', service.id, 12);
+    await postmortemWithItems(first.id, 'Disk full', [
+      { title: 'Add log rotation', dueInDays: -5 },
     ]);
-    const insights = deriveRepeatCauseInsights(input);
-    expect(insights).toHaveLength(1);
-    expect(insights[0]).toMatchObject({ severity: 'CRITICAL', key: input.problems[0].key });
-    expect(insights[0].title).toContain('disk full on host-<num>');
-    expect(insights[0].evidence.examples[0]).toMatchObject({ href: `/postmortems/${first.id}` });
-    expect(
-      (await loadRepeatCauseInput((await createTestService('Quiet')).id, { client: db })).problems
-    ).toEqual([]);
+    await enable(false);
+    await run(service.id);
+    expect(await db.opsInsight.count({ where: { kind: REPEAT_CAUSE_KIND } })).toBe(0);
+  });
+
+  it('reads through the fingerprint and action-item indexes, never a sequential scan', async () => {
+    const service = await createTestService('API');
+    const now = new Date();
+    for (const sql of [
+      repeatCauseProblemsSql(service.id, now),
+      repeatCauseOverdueSql(service.id, ['disk full on host-<num>'], now),
+    ]) {
+      const plan = await db.$transaction(async tx => {
+        await tx.$executeRaw`SET LOCAL enable_seqscan = off`;
+        return tx.$queryRaw<Array<{ 'QUERY PLAN': unknown }>>(
+          Prisma.sql`EXPLAIN (FORMAT JSON) ${sql}`
+        );
+      });
+      const text = JSON.stringify(plan);
+      expect(text).toMatch(/idx_incident_fingerprint_(service_recent|problem)/);
+      expect(text).not.toMatch(/"Node Type":\s*"Seq Scan"/);
+    }
   });
 });

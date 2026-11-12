@@ -1,5 +1,4 @@
 import 'server-only';
-import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
@@ -9,6 +8,7 @@ import {
 } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getResponseIntelligenceForActor } from '../response/view';
+import { enabledOpsInsightAreas } from '../ops-insights/contract';
 import { getIntelligenceSettings } from '../settings/service';
 import { getSimilarIncidentsForActor } from '../similarity/view';
 import { getIncidentTimeAxisForActor } from '../timeline/service';
@@ -24,7 +24,6 @@ import {
   RECURRENCE_WINDOW_DAYS,
   type PostmortemRecurrence,
   type RecurrenceActionItem,
-  type RepeatCauseInput,
 } from './recurrence';
 
 /**
@@ -38,6 +37,14 @@ const DAY_MS = 86_400_000;
 const MAX_RUNBOOK_RUNS = 20;
 const MAX_OWN_ACTION_ITEMS = 50;
 type Client = typeof prisma;
+/** A read filter, or null when the actor has no read rule for that kind (then nothing of it is shown). */
+const readWhere = <T>(build: () => T): T | null => {
+  try {
+    return build();
+  } catch {
+    return null;
+  }
+};
 
 interface Options {
   client?: Client;
@@ -46,13 +53,11 @@ interface Options {
 
 async function visibleIncident(incidentId: string, actor: AuthorizationActor, client: Client) {
   if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)) return null;
-  if (!(await getIntelligenceSettings(client)).opsInsightsPostmortemsEnabled) return null;
-  let readable: Prisma.IncidentWhereInput;
-  try {
-    readable = incidentReadWhere(actor);
-  } catch {
+  // The postmortem area switch, under the operations-insights master switch.
+  if (!enabledOpsInsightAreas(await getIntelligenceSettings(client)).includes('postmortems'))
     return null;
-  }
+  const readable = readWhere(() => incidentReadWhere(actor));
+  if (!readable) return null;
   const incident = await client.incident.findFirst({
     where: { AND: [{ id: incidentId }, readable] },
     select: {
@@ -91,12 +96,7 @@ async function recurrenceFor(
   if (earlier.length === 0) return null;
 
   const incidentIds = earlier.map(row => row.incidentId);
-  let postmortems: Prisma.PostmortemWhereInput | null;
-  try {
-    postmortems = postmortemReadWhere(actor);
-  } catch {
-    postmortems = null;
-  }
+  const postmortems = readWhere(() => postmortemReadWhere(actor));
   const [lastPostmortem, items] = postmortems
     ? await Promise.all([
         client.postmortem.findFirst({
@@ -111,7 +111,7 @@ async function recurrenceFor(
             postmortem: postmortems,
           },
           orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
-          take: RECURRENCE_LIMITS.overdueItems,
+          take: RECURRENCE_LIMITS.openItems,
           select: {
             id: true,
             title: true,
@@ -178,12 +178,8 @@ export async function getPostmortemAssistForActor(
 ): Promise<PostmortemAssist | null> {
   const visible = await visibleIncident(incidentId, actor, client);
   if (!visible) return null;
-  let runbooks: Prisma.RunbookWhereInput | null;
-  try {
-    runbooks = runbookReadWhere(actor);
-  } catch {
-    runbooks = null;
-  }
+  const runbooks = readWhere(() => runbookReadWhere(actor));
+  const postmortems = readWhere(() => postmortemReadWhere(actor));
   const [recurrence, axis, response, similar, runs, own] = await Promise.all([
     recurrenceFor(visible, actor, client, now),
     getIncidentTimeAxisForActor(incidentId, actor, client),
@@ -204,12 +200,14 @@ export async function getPostmortemAssistForActor(
           },
         })
       : [],
-    client.actionItem.findMany({
-      where: { incidentId, status: { not: 'COMPLETED' } },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: MAX_OWN_ACTION_ITEMS,
-      select: { id: true, title: true },
-    }),
+    postmortems
+      ? client.actionItem.findMany({
+          where: { incidentId, status: { not: 'COMPLETED' }, postmortem: postmortems },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: MAX_OWN_ACTION_ITEMS,
+          select: { id: true, title: true },
+        })
+      : [],
   ]);
 
   // A cause is confirmed when any responder marked its suggestion helpful or correct.
@@ -281,84 +279,5 @@ export async function getPostmortemAssistForActor(
     recurrence,
     evidence,
     suggestions: suggestActionItems(evidence, existing),
-  };
-}
-
-/**
- * Input of `deriveRepeatCauseInsights` for one service: its recurring problems in the window and the
- * overdue action items written for any occurrence of each. Unscoped (a lane producer runs it as the system;
- * the insight store applies read rules) and bounded: two queries, on idx_incident_fingerprint_service_recent
- * and idx_incident_fingerprint_problem. The caller supplies the database budget.
- */
-export async function loadRepeatCauseInput(
-  serviceId: string,
-  {
-    client = prisma,
-    now = new Date(),
-  }: { client?: Prisma.TransactionClient | Client; now?: Date } = {}
-): Promise<RepeatCauseInput> {
-  const since = new Date(now.getTime() - RECURRENCE_WINDOW_DAYS * DAY_MS);
-  const rows = await client.$queryRaw<
-    Array<{ key: string; template: string; occurrences: number; lastSeen: Date; latest: string }>
-  >(Prisma.sql`
-    SELECT coalesce(max("templateHash"), md5("template")) AS key, "template",
-           count(*)::int AS occurrences,
-           max("incidentCreatedAt") AS "lastSeen",
-           (array_agg("incidentId" ORDER BY "incidentCreatedAt" DESC))[1] AS latest
-    FROM "IncidentFingerprint"
-    WHERE "serviceId" = ${serviceId} AND "incidentCreatedAt" >= ${since} AND "template" <> ''
-    GROUP BY "template"
-    HAVING count(*) >= 2
-    ORDER BY count(*) DESC, max("incidentCreatedAt") DESC
-    LIMIT ${RECURRENCE_LIMITS.problems}
-  `);
-  const items =
-    rows.length === 0
-      ? []
-      : await client.actionItem.findMany({
-          where: {
-            status: { not: 'COMPLETED' },
-            dueDate: { lt: now },
-            incident: {
-              intelligenceFingerprint: {
-                serviceId,
-                template: { in: rows.map(row => row.template) },
-              },
-            },
-          },
-          orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
-          take: RECURRENCE_LIMITS.overdueItems,
-          select: {
-            id: true,
-            title: true,
-            priority: true,
-            dueDate: true,
-            incidentId: true,
-            incident: { select: { intelligenceFingerprint: { select: { template: true } } } },
-          },
-        });
-  return {
-    now,
-    windowDays: RECURRENCE_WINDOW_DAYS,
-    problems: rows.map(row => ({
-      key: row.key,
-      template: row.template,
-      occurrences: row.occurrences,
-      lastSeenAt: row.lastSeen,
-      latestIncidentId: row.latest,
-      overdueActionItems: items.flatMap(item =>
-        item.dueDate && item.incident.intelligenceFingerprint?.template === row.template
-          ? [
-              {
-                id: item.id,
-                title: item.title,
-                priority: item.priority,
-                dueDate: item.dueDate,
-                incidentId: item.incidentId,
-              },
-            ]
-          : []
-      ),
-    })),
   };
 }
