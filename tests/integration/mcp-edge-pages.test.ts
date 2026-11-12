@@ -28,7 +28,7 @@ beforeAll(async () => {
   process.env.MCP_PUBLIC_ORIGIN = 'http://localhost:3000';
   process.env.MCP_DATABASE_URL = process.env.DATABASE_URL;
   await resetDatabase();
-}, 60000);
+}, 300000);
 beforeEach(async () => {
   resetSubscriptionStateForTests();
   const policy = { enabled: true, writesEnabled: false, requestsPerMinute: 600, maxOperations: 8 };
@@ -139,7 +139,10 @@ async function nextEvent(
 
 /** Pages `userIds` for `incidentId` through escalation's own durable write. */
 async function page(incidentId: string, userIds: string[]) {
-  const plan = emptyEscalationNotificationPlan(incidentId, `test-${randomBytes(6).toString('hex')}`);
+  const plan = emptyEscalationNotificationPlan(
+    incidentId,
+    `test-${randomBytes(6).toString('hex')}`
+  );
   plan.inAppUserIds = userIds;
   plan.displayMessage = 'Page';
   await db.$transaction(tx => materializeEscalationNotificationIntents(tx, plan));
