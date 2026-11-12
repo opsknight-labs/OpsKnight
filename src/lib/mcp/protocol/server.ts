@@ -660,14 +660,13 @@ export function createOpsKnightMcpServer(
   // Administrator controls apply to every session whatever its role or consent; execution rechecks.
   const disabled = resolveDisabledMcpCapabilities(disabledCapabilities);
   const reviewState = reviewStateCodec(context.grantId, actor.id);
+  // The running release, as /api/health reports it, so a bug report names its contract.
+  const MCP_SERVER_IDENTITY = { name: 'opsknight', title: 'OpsKnight', version: APP_VERSION };
   const iconOrigin = mcpWebOrigin();
   const server = new McpServer(
-    // The running release, as /api/health reports it, so a bug report names its contract.
+    // Served by this installation, so a private deployment needs no outside host for the icon.
     {
-      name: 'opsknight',
-      title: 'OpsKnight',
-      version: APP_VERSION,
-      // Served by this installation, so a private deployment needs no outside host for it.
+      ...MCP_SERVER_IDENTITY,
       ...(iconOrigin
         ? {
             icons: [

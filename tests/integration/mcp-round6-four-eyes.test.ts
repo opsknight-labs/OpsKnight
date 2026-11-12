@@ -165,7 +165,7 @@ describe('deciding several requests at once', () => {
     );
     expect(approved.done).toBe(2);
     expect(approved.skipped).toEqual([
-      { id: risky, code: 'MCP_BULK_APPROVE_RISK' },
+      { id: risky, code: 'REVIEW_BULK_HIGH_RISK' },
       { id: 'cmissing0000000000000000', code: 'MCP_APPROVAL_UNAVAILABLE' },
     ]);
     expect(await statusOf(first)).toBe('APPROVED');

@@ -29,7 +29,7 @@ export async function decideMcpOperationReviewsInBulk(
     const approval = approvals.find(row => row.id === id);
     if (!approval) result.skipped.push({ id, code: 'MCP_APPROVAL_UNAVAILABLE' });
     else if (decision === 'approve' && approval.riskClass !== 'R2')
-      result.skipped.push({ id, code: 'MCP_BULK_APPROVE_RISK' });
+      result.skipped.push({ id, code: 'REVIEW_BULK_HIGH_RISK' });
     else
       try {
         await decideMcpOperationReview(
