@@ -10,6 +10,7 @@ import { serializeSlaMetrics } from '@/lib/sla';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
 import DashboardViewer from '../DashboardViewer';
+import { denyResourceAccess, requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,7 @@ type PageProps = {
 };
 
 export default async function SavedDashboardPage({ params, searchParams }: PageProps) {
+  await requirePageAccess('/reports/executive/[id]');
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
     redirect('/login?callbackUrl=/reports');
@@ -53,12 +55,14 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
 
   // Check access — mirror the API's authorization logic
   const isOwner = dashboard.userId === user.id;
-  const isTeamMember = !!(dashboard.teamId &&
-    user.teamMemberships.some((m: { teamId: string }) => m.teamId === dashboard.teamId));
+  const isTeamMember = !!(
+    dashboard.teamId &&
+    user.teamMemberships.some((m: { teamId: string }) => m.teamId === dashboard.teamId)
+  );
   const isPublicOrTemplate = dashboard.visibility === 'PUBLIC' || dashboard.isTemplate;
 
   if (!isOwner && !isTeamMember && !isPublicOrTemplate) {
-    notFound();
+    await denyResourceAccess({ resource: 'report', id });
   }
 
   const userTimeZone = getUserTimeZone(user);

@@ -29,6 +29,8 @@ import { buildRunbookLibraryWhere } from '@/lib/runbooks/lifecycle';
 import { isValidRunbookTag } from '@/lib/runbooks/metadata-form';
 import { getUserTimeZone } from '@/lib/timezone';
 import { z } from 'zod/v3';
+import { requirePageAccess } from '@/lib/access/server';
+import { RestrictedAction } from '@/components/access/AccessProvider';
 
 export const revalidate = 0;
 
@@ -52,6 +54,7 @@ export default async function RunbooksPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/runbooks');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const user = await getCurrentUser();
   const userTimeZone = getUserTimeZone(user);
@@ -172,12 +175,12 @@ export default async function RunbooksPage({
               <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
               {userTimeZone}
             </span>
-            {canManage && (
+            <RestrictedAction allowed={canManage} anyOf="runbook.manage">
               <div className="flex items-center gap-2">
                 <ImportRunbookDialog />
                 <CreateRunbookDialog teams={teams} />
               </div>
-            )}
+            </RestrictedAction>
           </div>
         }
         statsPlacement="bottom"

@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -52,6 +53,7 @@ export default async function PolicyDetailPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ error?: string; tab?: string; depPage?: string }>;
 }) {
+  await requirePageAccess('/policies/[id]');
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
 
@@ -388,7 +390,7 @@ export default async function PolicyDetailPage({
             page={Number((await searchParams)?.depPage ?? 1)}
             policyId={id}
             archived={!!policy.archivedAt}
-            canManage={permissions.role === 'ADMIN'}
+            canManage={permissions.isAdmin}
           />
         }
       />

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,7 @@ export default async function LegacyMcpConsent({
 }: {
   searchParams: Promise<{ id?: string }>;
 }) {
+  await requirePageAccess('/settings/integrations/mcp/consent');
   const { id } = await searchParams;
   redirect(`/oauth/mcp/consent${id && /^[A-Za-z0-9_-]{1,128}$/.test(id) ? `?id=${id}` : ''}`);
 }

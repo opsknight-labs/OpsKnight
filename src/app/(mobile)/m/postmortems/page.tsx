@@ -9,10 +9,12 @@ import MobileTime from '@/components/mobile/MobileTime';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { getUserPermissions } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobilePostmortemsPage() {
+  await requirePageAccess('/m/postmortems');
   const [context, permissions] = await Promise.all([
     getRequestActorContext(),
     getUserPermissions(),
@@ -80,10 +82,14 @@ export default async function MobilePostmortemsPage() {
                     {postmortem.incident.title}
                   </h2>
                   <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                    {postmortem.incident.service.name} · {postmortem.createdBy?.name || postmortem.createdBy?.email || 'Deleted user'}
+                    {postmortem.incident.service.name} ·{' '}
+                    {postmortem.createdBy?.name || postmortem.createdBy?.email || 'Deleted user'}
                   </p>
                 </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </div>
             </Link>
           ))}

@@ -16,6 +16,7 @@ import {
 import { SLACK_REQUIRED_BOT_SCOPES } from '@/lib/slack/app-manifest';
 import SlackIntegrationPage from '@/components/settings/SlackIntegrationPage';
 import { getAppUrl } from '@/lib/app-url';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -23,6 +24,7 @@ export const revalidate = 0;
 export default async function GlobalSlackIntegrationPage(props: {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  await requirePageAccess('/settings/integrations/slack');
   const search = (await props.searchParams) || {};
   const oauthError = typeof search.error === 'string' ? search.error : null;
   const oauthMessage = typeof search.message === 'string' ? search.message : null;

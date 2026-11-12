@@ -11,12 +11,14 @@ import { Users, Shield, ArrowUpRight, Sparkles, UserCheck } from 'lucide-react';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 import { Prisma } from '@prisma/client';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function TeamsPage({
   searchParams,
 }: {
   searchParams?: Promise<{ page?: string; q?: string; search?: string; status?: string }>;
 }) {
+  await requirePageAccess('/teams');
   const params = await searchParams;
   const requestedPage = parsePageParam(params?.page);
   const searchQuery = (params?.q || params?.search || '').trim();

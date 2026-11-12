@@ -7,7 +7,12 @@ import { visibleIncidentSource } from '@/lib/automation/presentation/source-visi
 import { CAPABILITIES } from '@/lib/authorization';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
+import {
+  assertCanViewIncident,
+  getIncidentOperatorPermissions,
+  getUserPermissions,
+} from '@/lib/rbac';
+import { denyResourceAccess } from '@/lib/access/server';
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
 import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
@@ -71,7 +76,13 @@ export default async function IncidentDetailScreen({
   presentation = 'desktop',
   initialTab,
 }: IncidentDetailScreenProps) {
-  const user = await assertCanViewIncident(id);
+  const user = await assertCanViewIncident(id).catch(async (error: unknown) => {
+    const code = (error as { code?: string } | null)?.code;
+    if (code === 'INCIDENT_NOT_FOUND') notFound();
+    if (code === 'INCIDENT_ACCESS_DENIED' || code === 'AUTHORIZATION_DENIED')
+      return denyResourceAccess({ resource: 'incident', id });
+    throw error;
+  });
   const appUrl = await getAppUrl();
   const storedIncident = await prisma.incident.findUnique({
     where: { id },
@@ -153,8 +164,10 @@ export default async function IncidentDetailScreen({
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL) ||
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED);
   const canManageIncident = permissions.isResponderOrAbove;
-  const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
-  const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
+  const operator = await getIncidentOperatorPermissions(id);
+  const canAcknowledgeIncident = operator.canAcknowledge;
+  const canAddIncidentNote = operator.canAddNote;
+  const canResolveIncident = operator.canResolve;
   const canReadAutomation =
     permissions.capabilities.includes(CAPABILITIES.AUTOMATION_READ) &&
     !!storedIncident.automationDecision;
@@ -499,6 +512,7 @@ export default async function IncidentDetailScreen({
         currentStatus={incident.status}
         canManage={canManageIncident}
         canAcknowledge={canManageIncident || canAcknowledgeIncident}
+        canResolve={canManageIncident || canResolveIncident}
         snoozedUntil={incident.snoozedUntil}
         onAcknowledge={handleAcknowledge}
         onUnacknowledge={handleReopen}

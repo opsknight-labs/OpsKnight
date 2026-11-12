@@ -18,6 +18,7 @@ import {
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
@@ -58,7 +59,9 @@ export const GET = withV2Observability(async function GET(
     // Bounded and cursor-paginated: an incident can accumulate thousands of notes.
     const { limit, cursor } = parsePaginationParams(new URL(req.url).searchParams);
     const notes = await prisma.incidentNote.findMany({
-      where: { AND: [{ incidentId: id }, buildCursorWhere(cursor) as Prisma.IncidentNoteWhereInput] },
+      where: {
+        AND: [{ incidentId: id }, buildCursorWhere(cursor) as Prisma.IncidentNoteWhereInput],
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       select: {
@@ -114,14 +117,18 @@ export const POST = withV2Observability(async function POST(
           });
         }
 
-        enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_NOTE, {
-          type: 'incident',
-          assigneeId: incident.assigneeId,
-          watcherIds: incident.watchers.map((w: { userId: string }) => w.userId),
-          visibility: incident.visibility,
-          serviceTeamId: incident.service.teamId,
-          assignedTeamId: incident.teamId,
-        });
+        enforceV2Authorization(
+          actor,
+          AUTHORIZATION_ACTIONS.INCIDENT_NOTE,
+          (await resolveIncidentResourceForActor(actor, id)) ?? {
+            type: 'incident',
+            assigneeId: incident.assigneeId,
+            watcherIds: incident.watchers.map((w: { userId: string }) => w.userId),
+            visibility: incident.visibility,
+            serviceTeamId: incident.service.teamId,
+            assignedTeamId: incident.teamId,
+          }
+        );
 
         const note = await addIncidentNoteDomainCommand(
           {

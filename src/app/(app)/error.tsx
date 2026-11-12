@@ -4,7 +4,8 @@ import { useEffect } from 'react';
 import { logger } from '@/lib/logger';
 import { toUserFacingError, isChunkLoadError } from '@/lib/user-facing-error';
 import { purgeCachesAndReload } from '@/components/ChunkLoadErrorHandler';
-import { AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
+import Link from 'next/link';
+import { AlertCircle, Lock, RefreshCw, RotateCcw } from 'lucide-react';
 
 export default function AppRootError({
   error,
@@ -24,6 +25,39 @@ export default function AppRootError({
 
   const userFacing = toUserFacingError(error);
   const isChunk = isChunkLoadError(error);
+
+  if (!isChunk && userFacing.category === 'authorization') {
+    return (
+      <div className="w-full px-4 py-12 flex justify-center">
+        <div
+          role="alert"
+          className="max-w-lg w-full rounded-xl border border-amber-200 bg-amber-50/60 p-6 text-center space-y-4 dark:border-amber-900/50 dark:bg-amber-950/20"
+        >
+          <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center dark:bg-amber-900/40">
+            <Lock className="w-6 h-6 text-amber-700 dark:text-amber-300" aria-hidden />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              {userFacing.title}
+            </h2>
+            {userFacing.description && (
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                {userFacing.description}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center justify-center gap-3">
+            <Link
+              href="/settings/access"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 transition"
+            >
+              See your access and request more
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full px-4 py-12 flex justify-center">

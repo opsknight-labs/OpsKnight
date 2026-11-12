@@ -64,6 +64,11 @@ enum AuditEntityType {
   RUNBOOK_AGENT
   RUNBOOK_AGENT_POOL
   RUNBOOK_SECRET
+  ACCESS_REQUEST
+  ACCESS_GRANT
+  ACCESS_DECISION
+  CUSTOM_ROLE
+  ACCESS_REVIEW
 }
 
 // Data subject a privacy request concerns. USER supports automated fulfilment
@@ -497,6 +502,10 @@ model User {
   invitationGeneration         Int        @default(0)
   role                         Role       @default(USER)
   roleSource                   RoleSource @default(MANUAL)
+  customRoleId                 String?
+  customRole                   CustomRole?     @relation("UserCustomRole", fields: [customRoleId], references: [id], onDelete: SetNull)
+  accessGrants                 AccessGrant[]   @relation("AccessGrantUser")
+  accessRequests               AccessRequest[] @relation("AccessRequestRequester")
   scimExternalId               String?    @unique
   status                       UserStatus @default(INVITED)
   passwordHash                 String?
@@ -2796,6 +2805,15 @@ model SystemSettings {
   updatedAt                            DateTime @updatedAt
   automationStoreObservationPreviews Boolean @default(false)
   automationReadinessPolicy Json @default("{\"minimumEvaluations\":100,\"maximumEvidenceAgeHours\":48,\"maximumPendingObservations\":0,\"maximumErrorRate\":0}")
+  // Access control
+  accessUserIncidentActionsEnabled Boolean   @default(true)
+  accessRequestsEnabled            Boolean   @default(true)
+  accessBreakGlassEnabled          Boolean   @default(true)
+  accessBreakGlassMaxMinutes       Int       @default(60)
+  /// Separation of duties: when false, nobody may approve a request they raised.
+  accessSelfApprovalAllowed        Boolean   @default(false)
+  accessReviewIntervalDays         Int?
+  accessReviewLastStartedAt        DateTime?
 }
 
 model IncidentMetricRollup {
@@ -5091,4 +5109,141 @@ model McpConsentRequest {
   expiresAt DateTime
   consumedAt DateTime?
   @@index([expiresAt])
+}
+
+// ─── Access control ────────────────────────────────────────────────────────────
+
+/// Additional permission set layered on top of a person's built-in role.
+model CustomRole {
+  id           String    @id @default(cuid())
+  name         String    @unique
+  description  String?
+  capabilities String[]
+  createdById  String?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  users        User[]    @relation("UserCustomRole")
+}
+
+enum AccessGrantSource {
+  REQUEST
+  BREAK_GLASS
+  ADMIN
+}
+
+/// Time-bound access. Enforcement always checks `expiresAt`/`revokedAt` at request time;
+/// the maintenance sweep only reverts side effects (team membership) and notifies.
+model AccessGrant {
+  id                String            @id @default(cuid())
+  userId            String
+  user              User              @relation("AccessGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  source            AccessGrantSource
+  role              Role?
+  teamId            String?
+  teamRole          TeamRole?
+  previousTeamRole  TeamRole?
+  createdMembership Boolean           @default(false)
+  incidentId        String?
+  reason            String
+  grantedById       String?
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  revokedById       String?
+  revokeReason      String?
+  endProcessedAt    DateTime?
+  createdAt         DateTime          @default(now())
+  request           AccessRequest?
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([endProcessedAt, expiresAt])
+  @@index([source, createdAt])
+}
+
+enum AccessRequestKind {
+  ORG_ROLE
+  TEAM_MEMBERSHIP
+  TEAM_ROLE
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+  EXPIRED
+}
+
+model AccessRequest {
+  id                 String              @id @default(cuid())
+  requesterId        String
+  requester          User                @relation("AccessRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  kind               AccessRequestKind
+  requestedRole      Role?
+  teamId             String?
+  requestedTeamRole  TeamRole?
+  reason             String
+  /// Requested duration; null asks for permanent access.
+  durationMinutes    Int?
+  originPath         String?
+  requiredCapability String?
+  status             AccessRequestStatus @default(PENDING)
+  decidedById        String?
+  decidedAt          DateTime?
+  decisionNote       String?
+  grantId            String?             @unique
+  grant              AccessGrant?        @relation(fields: [grantId], references: [id], onDelete: SetNull)
+  expiresAt          DateTime
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@index([requesterId, status])
+  @@index([teamId, status])
+}
+
+enum AccessReviewStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum AccessReviewDecision {
+  PENDING
+  KEEP
+  REVOKE
+}
+
+/// Periodic certification of privileged access (SOC 2 CC6.2 / ISO 27001 A.5.18).
+model AccessReview {
+  id          String             @id @default(cuid())
+  name        String
+  status      AccessReviewStatus @default(OPEN)
+  dueAt       DateTime?
+  createdById String?
+  completedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  items       AccessReviewItem[]
+
+  @@index([status, createdAt])
+}
+
+model AccessReviewItem {
+  id           String               @id @default(cuid())
+  reviewId     String
+  review       AccessReview         @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId       String
+  subjectType  String
+  subjectId    String?
+  subjectLabel String
+  snapshot     Json
+  decision     AccessReviewDecision @default(PENDING)
+  reviewerId   String?
+  decidedAt    DateTime?
+  note         String?
+  appliedAt    DateTime?
+
+  @@index([reviewId, decision])
+  @@index([userId])
 }

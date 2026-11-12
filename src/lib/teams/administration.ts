@@ -11,6 +11,8 @@ import { logAudit } from '@/lib/audit';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
+import { CAPABILITIES } from '@/lib/authorization';
+import { effectiveAccessSelect } from '@/lib/access/effective';
 
 export const teamMemberInput = z
   .object({
@@ -41,6 +43,7 @@ export async function requireTeamAccess(
         role: true,
         status: true,
         teamMemberships: { where: { teamId }, select: { teamId: true } },
+        ...effectiveAccessSelect(),
       },
     }),
     tx.team.findUnique({ where: { id: teamId } }),
@@ -48,8 +51,10 @@ export async function requireTeamAccess(
   const identity = user ? authorizationActorFromUser(user) : null;
   if (!identity) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
   if (!team) throw missing();
-  const owner = await tx.teamMember.findFirst({
-    where: { teamId, userId: source.id, role: 'OWNER' },
+  // Team owners and team admins both manage the team; owner-only limits are applied by
+  // `assertTeamAdminLimits` for changes that touch ownership.
+  const manager = await tx.teamMember.findFirst({
+    where: { teamId, userId: source.id, role: { in: ['OWNER', 'ADMIN'] } },
     select: { userId: true },
   });
   const actor: AuthorizationActor = {
@@ -66,13 +71,56 @@ export async function requireTeamAccess(
     {
       type: 'team',
       teamId,
-      ...(write || administrativeRead ? { ownerIds: owner ? [owner.userId] : [] } : {}),
+      ...(write || administrativeRead ? { ownerIds: manager ? [manager.userId] : [] } : {}),
     }
   );
   // Directory ownership is represented by explicit group bindings and grants.
   // Legacy external IDs do not remove local owner/administrator authority.
   return team;
 }
+/** The actor's authority over a team: organization admin, or their role within the team. */
+export async function teamActorAuthority(
+  tx: Prisma.TransactionClient,
+  teamId: string,
+  actorId: string
+): Promise<{ isOrgAdmin: boolean; teamRole: 'OWNER' | 'ADMIN' | 'MEMBER' | null }> {
+  const user = await tx.user.findUnique({
+    where: { id: actorId },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+      teamMemberships: { where: { teamId }, select: { teamId: true, role: true } },
+      ...effectiveAccessSelect(),
+    },
+  });
+  const identity = user ? authorizationActorFromUser(user) : null;
+  return {
+    isOrgAdmin: Boolean(identity?.capabilities?.has(CAPABILITIES.ADMIN_MANAGE)),
+    teamRole: user?.teamMemberships[0]?.role ?? null,
+  };
+}
+
+/**
+ * Team admins manage members and settings, but ownership stays with owners: they cannot make
+ * someone an owner, or change or remove an existing owner.
+ */
+export async function assertTeamAdminLimits(
+  tx: Prisma.TransactionClient,
+  teamId: string,
+  actorId: string,
+  change: { nextRole?: string | null; currentRole?: string | null }
+) {
+  if (change.nextRole !== 'OWNER' && change.currentRole !== 'OWNER') return;
+  const authority = await teamActorAuthority(tx, teamId, actorId);
+  if (authority.isOrgAdmin || authority.teamRole === 'OWNER') return;
+  throw new AppError({
+    code: 'AUTHORIZATION_DENIED',
+    userMessage: 'Team admins cannot add, change or remove team owners. Ask a team owner.',
+    details: { teamId, requires: 'team owner' },
+  });
+}
+
 async function retainActiveOwner(
   tx: Prisma.TransactionClient,
   member: { id: string; teamId: string; role: string }
@@ -152,6 +200,11 @@ export async function setTeamMembership(
       body.receiveTeamNotifications ?? previous?.receiveTeamNotifications ?? true;
     if (previous?.role === body.role && previous.receiveTeamNotifications === notifications)
       return { teamId, userId, revision: team.revision, membership: previous };
+    if (previous?.role !== body.role)
+      await assertTeamAdminLimits(tx, teamId, actor.id, {
+        nextRole: body.role,
+        currentRole: previous?.role,
+      });
     if (previous && body.role !== 'OWNER') await retainActiveOwner(tx, previous);
     // User before Team matches lifecycle writers. Serializable snapshots fence owner races.
     if (!previous || previous.role !== body.role)
@@ -204,6 +257,7 @@ export async function deleteTeamMembership(
     checkRevision(team.revision, options);
     const member = await tx.teamMember.findUnique({ where: { userId_teamId: { userId, teamId } } });
     if (!member) return { teamId, userId, revision: team.revision, membership: null };
+    await assertTeamAdminLimits(tx, teamId, actor.id, { currentRole: member.role });
     await retainActiveOwner(tx, member);
     await tx.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } });
     await tx.teamMember.delete({ where: { id: member.id } });

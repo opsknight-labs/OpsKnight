@@ -18,12 +18,14 @@ import { getUserTimeZone } from '@/lib/timezone';
 
 import PostmortemsFilters from '@/components/postmortem/PostmortemsFilters';
 import { parsePageParam, parseEnumValue } from '@/lib/pagination-parser';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function PostmortemsPage({
   searchParams,
 }: {
   searchParams: Promise<{ status?: string; search?: string; serviceId?: string; page?: string }>;
 }) {
+  await requirePageAccess('/postmortems');
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
     redirect('/login');

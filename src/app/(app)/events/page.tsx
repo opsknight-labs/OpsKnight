@@ -11,6 +11,7 @@ import { assertAdmin } from '@/lib/rbac';
 
 import EventsListTable from '@/components/events/EventsListTable';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,7 @@ type EventLogsPageProps = {
 };
 
 export default async function EventLogsPage({ searchParams }: EventLogsPageProps) {
+  await requirePageAccess('/events');
   await assertAdmin();
   const params = await searchParams;
   const requestedPage = parsePageParam(params?.page);

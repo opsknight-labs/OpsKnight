@@ -30,12 +30,14 @@ vi.mock('@/lib/event-outbox', () => ({
 vi.mock('@/lib/rbac', () => ({
   assertCanModifyIncident: mocks.assertCanModifyIncident,
   assertCanAcknowledgeIncident: mocks.assertCanAcknowledgeIncident,
+  assertCanResolveIncident: vi.fn(),
   assertResponderOrAbove: vi.fn(),
   getCurrentUser: mocks.getCurrentUser,
 }));
 
 vi.mock('@/lib/user-friendly-errors', () => ({
-  getUserFriendlyError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  getUserFriendlyError: (error: unknown) =>
+    error instanceof Error ? error.message : String(error),
 }));
 
 vi.mock('@/lib/logger', () => ({

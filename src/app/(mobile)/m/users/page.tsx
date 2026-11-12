@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/shadcn/card';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { assertCanListUsers } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ export default async function MobileUsersPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  await requirePageAccess('/m/users');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/users'));
   await assertCanListUsers();
@@ -47,7 +49,9 @@ export default async function MobileUsersPage({
   return (
     <div className="responsive-page space-y-4">
       <div className="flex items-center justify-between gap-3 px-0.5 text-[11px] text-muted-foreground">
-        <span>{users.length} {users.length === 1 ? 'member' : 'members'}</span>
+        <span>
+          {users.length} {users.length === 1 ? 'member' : 'members'}
+        </span>
       </div>
 
       <MobileSearchWithParams placeholder="Search users" />
@@ -56,7 +60,11 @@ export default async function MobileUsersPage({
         <EmptyState
           icon={<Users aria-hidden="true" />}
           title={query ? 'No matching users' : 'No users available'}
-          description={query ? `Nothing matches “${query}”.` : 'Users will appear here when they are available.'}
+          description={
+            query
+              ? `Nothing matches “${query}”.`
+              : 'Users will appear here when they are available.'
+          }
           size="sm"
         />
       ) : (
@@ -78,7 +86,9 @@ export default async function MobileUsersPage({
                 <span className="block truncate text-[13px] font-semibold text-foreground">
                   {user.name || 'Unknown'}
                 </span>
-                <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{user.email}</span>
+                <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                  {user.email}
+                </span>
               </span>
               <span
                 className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${

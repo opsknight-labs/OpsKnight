@@ -5,10 +5,12 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import TemplatesListClient from '@/components/incident/TemplatesListClient';
 import { Button } from '@/components/ui/shadcn/button';
 import { LayoutTemplate, Plus } from 'lucide-react';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 export default async function TemplatesPage() {
+  await requirePageAccess('/incidents/templates');
   const permissions = await getUserPermissions();
   const canManageTemplates = permissions.isResponderOrAbove;
 

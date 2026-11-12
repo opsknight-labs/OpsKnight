@@ -15,6 +15,8 @@ import {
   Workflow,
   LucideIcon,
 } from 'lucide-react';
+import { getRoleCapabilities, isAppRole, type Capability } from '@/lib/authorization';
+import { canAccessPath } from '@/lib/access/pages';
 
 export type NavSectionKey = 'MAIN' | 'RELIABILITY' | 'ON_CALL' | 'ANALYTICS' | 'GOVERNANCE';
 
@@ -76,7 +78,6 @@ export interface NavItemConfig {
   label: string;
   icon: LucideIcon;
   section: NavSectionKey;
-  requiresRole?: string[];
   shortcut?: string;
   badgeKey?: 'incidents';
   releaseStage?: 'Beta';
@@ -109,7 +110,6 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     releaseStage: 'Beta',
     icon: Workflow,
     section: 'MAIN',
-    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
 
   // ── RELIABILITY ───────────────────────────────────────────────────────────
@@ -139,7 +139,6 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Escalation Policies',
     icon: ShieldAlert,
     section: 'ON_CALL',
-    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
   {
     href: '/teams',
@@ -152,7 +151,6 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Users',
     icon: User,
     section: 'ON_CALL',
-    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
 
   // ── ANALYTICS ─────────────────────────────────────────────────────────────
@@ -175,26 +173,27 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Audit Log',
     icon: ClipboardList,
     section: 'GOVERNANCE',
-    requiresRole: ['ADMIN', 'AUDITOR'],
   },
   {
     href: '/events',
     label: 'Event Logs',
     icon: FileClock,
     section: 'GOVERNANCE',
-    requiresRole: ['ADMIN'],
   },
 ] as const;
 
 /**
- * Filter navigation items safely according to the user's role.
+ * Items the person may open. Visibility comes from the shared page access registry, so the
+ * menu always matches what the server enforces. Accepts effective capabilities (preferred) or a
+ * built-in role.
  */
-export function getAuthorizedNavItems(userRole?: string | null): NavItemConfig[] {
-  return NAVIGATION_ITEMS.filter(item => {
-    if (!item.requiresRole || item.requiresRole.length === 0) return true;
-    if (!userRole) return false;
-    return item.requiresRole.includes(userRole);
-  });
+export function getAuthorizedNavItems(
+  access?: readonly Capability[] | string | null
+): NavItemConfig[] {
+  if (!access) return [];
+  const capabilities =
+    typeof access === 'string' ? (isAppRole(access) ? getRoleCapabilities(access) : []) : access;
+  return NAVIGATION_ITEMS.filter(item => canAccessPath(item.href, capabilities));
 }
 
 /**

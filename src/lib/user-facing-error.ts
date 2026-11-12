@@ -13,6 +13,8 @@ export type UserFacingError = {
   action?: string;
   retryable?: boolean;
   fields?: ErrorField[];
+  /** Lets boundaries render a dedicated access-denied card for authorization failures. */
+  category?: ErrorDefinition['category'];
 };
 
 const TECHNICAL_ERROR_PATTERNS = [
@@ -66,6 +68,8 @@ const GENERIC_AUTHORIZATION_CODES = new Set<AppErrorCode>([
   'SERVICE_ACCESS_DENIED',
   'SCHEDULE_ACCESS_DENIED',
   'SCHEDULE_OVERRIDE_ACCESS_DENIED',
+  'SEPARATION_OF_DUTIES',
+  'ACCESS_FEATURE_DISABLED',
 ]);
 
 function isTechnicalMessage(message: string): boolean {
@@ -119,6 +123,15 @@ function typedUserFacingError(error: unknown, fallback: string): UserFacingError
     };
   }
 
+  if (structured.code === 'STEP_UP_REQUIRED') {
+    return {
+      title: 'Please sign in again',
+      description: message || action,
+      category: 'authorization',
+      ...metadata,
+    };
+  }
+
   if (definition.category === 'authorization' && GENERIC_AUTHORIZATION_CODES.has(structured.code)) {
     return {
       title: 'You do not have permission to do that',
@@ -126,6 +139,7 @@ function typedUserFacingError(error: unknown, fallback: string): UserFacingError
         action ||
         message ||
         'Ask an administrator for access, or sign in with an account that has permission.',
+      category: 'authorization',
       ...metadata,
     };
   }

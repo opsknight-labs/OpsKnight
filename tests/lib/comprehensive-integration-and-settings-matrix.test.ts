@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- legacy cross-module matrix; mocks intentionally loosely typed */
 import { describe, it, expect } from 'vitest';
 import crypto from 'crypto';
 
@@ -743,9 +744,11 @@ describe('🚀 Comprehensive 28-Integration & Settings Matrix Verification', () 
       expect(v1Hash).not.toBe(v2Hash);
     });
 
-    it('25. RBAC: Unauthenticated requests fall back safely to VIEWER with empty ID', async () => {
+    it('25. RBAC: Unauthenticated requests fall back safely to no role and no permissions', async () => {
       const perms = await getUserPermissions();
-      expect(perms.role).toBe('VIEWER');
+      expect(perms.role).toBeNull();
+      expect(perms.capabilities).toEqual([]);
+      expect(perms.authenticated).toBe(false);
       expect(perms.id).toBe('');
     });
 

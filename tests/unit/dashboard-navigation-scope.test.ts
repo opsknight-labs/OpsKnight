@@ -62,7 +62,7 @@ describe('dashboard navigation and capability contract', () => {
     expect(href).not.toContain('teamId=');
   });
 
-  it('permits responders and admins to acknowledge incidents while restricting auditors and users', () => {
+  it('permits responders, admins and (for their own incidents) users to acknowledge, never auditors', () => {
     const canAck = (role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER') =>
       hasCapability(role, CAPABILITIES.OPERATIONS_MANAGE) ||
       hasCapability(role, CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED);
@@ -70,6 +70,6 @@ describe('dashboard navigation and capability contract', () => {
     expect(canAck('ADMIN')).toBe(true);
     expect(canAck('RESPONDER')).toBe(true);
     expect(canAck('AUDITOR')).toBe(false);
-    expect(canAck('USER')).toBe(false);
+    expect(canAck('USER')).toBe(true);
   });
 });

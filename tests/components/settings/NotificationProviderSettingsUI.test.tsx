@@ -8,7 +8,12 @@ import type { ProviderRecord } from '@/types/notification-types';
 
 const testProviderMock = vi.fn();
 const updateProviderMock = vi.fn();
-const mockPermissions = { isAdmin: true };
+const mockPermissions = {
+  id: 'admin-1',
+  authenticated: true,
+  isAdmin: true,
+  capabilities: ['admin.manage'],
+};
 
 vi.mock('@/contexts/TimezoneContext', () => ({
   useTimezone: () => ({ userTimeZone: 'UTC' }),

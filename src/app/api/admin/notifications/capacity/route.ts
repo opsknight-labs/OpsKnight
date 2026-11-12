@@ -12,6 +12,7 @@ import {
   runtimeSettingsInputSchema,
 } from '@/lib/notification-capacity/schema';
 import { HARD_LIMITS } from '@/lib/notification-capacity/hard-limits';
+import { CAPABILITIES } from '@/lib/authorization';
 
 const bulkPausedSchema = z.object({ bulkPaused: z.boolean() }).strict();
 
@@ -24,7 +25,10 @@ export async function GET() {
     !permissions.capabilities.includes('audit.read' as never)
   ) {
     // Fall back to role check so AUDITOR can read
-    if (permissions.role !== 'AUDITOR' && permissions.role !== 'ADMIN') {
+    if (
+      !permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE) &&
+      !permissions.capabilities.includes(CAPABILITIES.AUDIT_READ)
+    ) {
       return jsonError('Admin access required', 403);
     }
   }

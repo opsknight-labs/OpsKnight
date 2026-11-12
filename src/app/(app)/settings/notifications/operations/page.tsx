@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { getCurrentUser } from '@/lib/rbac';
+import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import { Activity, BellRing, Radio } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
@@ -10,8 +11,10 @@ import { Prisma } from '@prisma/client';
 import { getEffectiveCapacity, getEffectiveWatermarks } from '@/lib/notification-capacity/resolver';
 import { getBulkQueueHealth } from '@/lib/notification-fanout';
 import NotificationOperationsPage from '@/components/settings/notifications/NotificationOperationsPage';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function NotificationOperationsRoute() {
+  await requirePageAccess('/settings/notifications/operations');
   let user: Awaited<ReturnType<typeof getCurrentUser>>;
   try {
     user = await getCurrentUser();
@@ -19,9 +22,8 @@ export default async function NotificationOperationsRoute() {
     redirect('/login');
   }
 
-  if (user.role !== 'ADMIN' && user.role !== 'AUDITOR') {
-    redirect('/settings');
-  }
+  // Admins manage; auditors (audit.read) get a read-only view. Enforced by the page rule above.
+  const canManageOperations = capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE);
 
   const channels = ['EMAIL', 'SMS', 'VOICE', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
   const [
@@ -168,13 +170,13 @@ export default async function NotificationOperationsRoute() {
               variant="outline"
               className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-xs font-semibold"
             >
-              {user.role === 'ADMIN' ? 'Admin Full Control' : 'Auditor Read-Only'}
+              {canManageOperations ? 'Admin Full Control' : 'Auditor Read-Only'}
             </Badge>
           </div>
         }
         actions={
           <div className="flex items-center gap-2">
-            {user.role === 'ADMIN' && (
+            {canManageOperations && (
               <Button
                 variant="outline"
                 size="sm"
@@ -208,7 +210,7 @@ export default async function NotificationOperationsRoute() {
         workerCount={leases}
         campaigns={campaigns}
         initialPaused={controlValue.bulkPaused === true}
-        canManage={user.role === 'ADMIN'}
+        canManage={canManageOperations}
         watermarks={watermarks}
         queueHealth={queueHealth}
         runtime={
@@ -225,7 +227,7 @@ export default async function NotificationOperationsRoute() {
         }
         subscriptionStates={subscriptionStates}
         feedbackTypes={feedbackTypes}
-        userRole={user.role as 'ADMIN' | 'AUDITOR'}
+        userRole={canManageOperations ? 'ADMIN' : 'AUDITOR'}
       />
     </div>
   );

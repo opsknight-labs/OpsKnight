@@ -2196,7 +2196,7 @@
     "annotations": {
       "openWorldHint": true
     },
-    "routeSha256": "0136347684635ea5c34b8901bbdf70dad0dfeca3c2e20a1cbc7c3bd3579acee3",
+    "routeSha256": "5988b8392d578e8b8b856e8f1d137e835e76debd08f8d7775ce0030248bbf65e",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "a7b470f689fc3d8f3368d136997bfb73e5a27ad3991129895a9e5e1767e1415f",
@@ -2240,7 +2240,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "incident_list_notes",
-    "routeSha256": "d108aa673779ef1c370c96980d7ce3c2d55176f27568416c2a5c95b5e9740156",
+    "routeSha256": "558a55d473a241f42dc7d75c85ef1763686932730a6b998643b7760cfe28e6a9",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-round5.test.ts",
     "contractSha256": "609f25b7976a3b847bf09ac0c2e5a07817d7408e498caaa03715aca4033844ea",
@@ -2258,7 +2258,7 @@
     "annotations": {
       "destructiveHint": false
     },
-    "routeSha256": "d108aa673779ef1c370c96980d7ce3c2d55176f27568416c2a5c95b5e9740156",
+    "routeSha256": "558a55d473a241f42dc7d75c85ef1763686932730a6b998643b7760cfe28e6a9",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "e74454a3d3f54c7e54ae44333857c57a728550d0fb068dd3adb4c1c36edd2acf",
@@ -2274,11 +2274,11 @@
     "annotations": {
       "openWorldHint": true
     },
-    "routeSha256": "9038dc371295907e26fd194d23e02ec8f93481f76fc58f63fa0ad5cf44833694",
+    "routeSha256": "4b5db305d9c2bcd00bb0cc39b372e6efb29b38d8f61d05d204654ffde5f2b183",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "9e8db219b89d221ec8a5a8d7cafea8f55916607c9cae2eaaaf4383cd75220b03",
-    "actions": ["incident.manage"]
+    "contractSha256": "5d77838b1a1de3eca19562f78a11d7dbcedaebe2bbee066056ad98525bb7ab2d",
+    "actions": ["incident.resolve"]
   },
   "getIncident": {
     "status": "CURATED",
@@ -2588,7 +2588,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "incident_available_actions",
-    "routeSha256": "6b7694d7faf4cc2d1eb0f03346105385845a8e47224c5e44c4f33165834f4d05",
+    "routeSha256": "fe113c7e0be0c79844512d0a6d97f5989199a4ddc0eced90c150f104647ef6cc",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-round5.test.ts",
     "contractSha256": "72a32b2d07116c4b4290fe2745db419a4e2ae8d139b4f6837b94703adbb1be30",

@@ -6,8 +6,10 @@ import { getUserPermissions } from '@/lib/rbac';
 import { listPrivacyRequests } from '@/lib/privacy/requests';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import PrivacyRequestsBoard from '@/components/settings/privacy/PrivacyRequestsBoard';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function PrivacyRequestsPage() {
+  await requirePageAccess('/settings/privacy-requests');
   const permissions = await getUserPermissions();
   if (!permissions.capabilities.includes(CAPABILITIES.PRIVACY_READ)) {
     redirect('/settings');

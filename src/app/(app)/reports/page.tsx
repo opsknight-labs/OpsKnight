@@ -29,6 +29,7 @@ import {
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import DashboardCard from '@/components/reports/DashboardCard';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,7 @@ const TEMPLATE_ICONS: Record<string, LucideIcon> = {
 };
 
 export default async function ReportsPage() {
+  await requirePageAccess('/reports');
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
     redirect('/login?callbackUrl=/reports');
@@ -252,7 +254,9 @@ export default async function ReportsPage() {
               <Users className="h-5 w-5 text-blue-500" />
               <h2 className="text-lg font-bold text-foreground">Team & Shared Dashboards</h2>
             </div>
-            <span className="text-xs text-muted-foreground">Dashboards shared with your team or organization</span>
+            <span className="text-xs text-muted-foreground">
+              Dashboards shared with your team or organization
+            </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

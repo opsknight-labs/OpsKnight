@@ -15,10 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import PriorityBadge from '@/components/incident/PriorityBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
-import {
-  formatIncidentAge,
-  type LiveIncident,
-} from '@/lib/dashboard/live-incidents-shared';
+import { formatIncidentAge, type LiveIncident } from '@/lib/dashboard/live-incidents-shared';
 import { SlaChip } from './LiveIncidentRow';
 
 export function IncidentInspector({
@@ -85,8 +82,7 @@ export function IncidentInspector({
       nextActionText =
         'SLA deadline breached. Mitigate service disruption and update incident timeline.';
     } else if (incident.sla?.warning === 'APPROACHING') {
-      nextActionText =
-        'SLA deadline approaching. Continue active investigation and remediation.';
+      nextActionText = 'SLA deadline approaching. Continue active investigation and remediation.';
     } else {
       nextActionText =
         'Incident acknowledged. Coordinate investigation and resolve once service is restored.';
@@ -131,7 +127,10 @@ export function IncidentInspector({
               )}
             >
               <span
-                className={cn('h-1.5 w-1.5 rounded-full', isTriggered ? 'bg-rose-500' : 'bg-amber-500')}
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  isTriggered ? 'bg-rose-500' : 'bg-amber-500'
+                )}
                 aria-hidden
               />
               {isTriggered ? 'Triggered' : 'Acknowledged'}
@@ -302,9 +301,12 @@ export function IncidentInspector({
                   <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-medium truncate max-w-[65%]">
                     <ShieldAlert className="h-3 w-3 shrink-0" aria-hidden />
                     {incident.latestRunbook.name}: Failed
-                    {incident.latestRunbook.failureCode ? ` (${incident.latestRunbook.failureCode})` : ''}
+                    {incident.latestRunbook.failureCode
+                      ? ` (${incident.latestRunbook.failureCode})`
+                      : ''}
                   </span>
-                ) : incident.latestRunbook.status === 'RUNNING' || incident.latestRunbook.status === 'QUEUED' ? (
+                ) : incident.latestRunbook.status === 'RUNNING' ||
+                  incident.latestRunbook.status === 'QUEUED' ? (
                   <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium truncate max-w-[65%]">
                     <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
                     {incident.latestRunbook.name}: In progress

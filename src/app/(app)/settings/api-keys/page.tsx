@@ -46,6 +46,7 @@ import {
   encodeActivityCursor,
   parseApiActivityFilters,
 } from '@/lib/api-v2/activity-query';
+import { requirePageAccess } from '@/lib/access/server';
 
 /** Required scope for an operation, from the same registry that drives the OpenAPI document. */
 function getEndpointScope(method: string, path: string): string {
@@ -179,6 +180,7 @@ export default async function ApiKeysSettingsPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/settings/api-keys');
   const query = (await searchParams) ?? {};
   const rawTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
   const activeTab = normalizeWorkspaceTab(rawTab) ?? 'api-keys';
@@ -224,7 +226,11 @@ export default async function ApiKeysSettingsPage({
 
   let rawKeys: Array<
     Awaited<
-      ReturnType<typeof prisma.apiKey.findMany<{ include: { user: { select: { email: true, name: true } } } }>>
+      ReturnType<
+        typeof prisma.apiKey.findMany<{
+          include: { user: { select: { email: true; name: true } } };
+        }>
+      >
     >[number]
   > = [];
   let nextKeyCursor: string | null = null;
@@ -289,14 +295,7 @@ export default async function ApiKeysSettingsPage({
   let matchingActivity: number | undefined;
 
   if (isAdmin) {
-    const [
-      saCounts,
-      accounts,
-      teamsRes,
-      matches,
-      auditRes,
-      auditMatches,
-    ] = await Promise.all([
+    const [saCounts, accounts, teamsRes, matches, auditRes, auditMatches] = await Promise.all([
       Promise.all([
         prisma.user.count({
           where: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },

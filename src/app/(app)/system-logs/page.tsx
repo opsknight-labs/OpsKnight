@@ -1,9 +1,7 @@
 import { getLogBuffer } from '@/lib/logger';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,20 +12,9 @@ export default async function SystemLogsPage({
 }: {
   searchParams: Promise<{ level?: string; search?: string; component?: string }>;
 }) {
+  // Admin-only; checked against the database role (not the session token) by the page rule.
+  await requirePageAccess('/system-logs');
   const params = await searchParams;
-  const session = await getServerSession(await getAuthOptions());
-
-  if (!session?.user?.email) {
-    redirect('/login');
-    return null;
-  }
-
-  // Only admins can view logs
-  const user = session.user as { email: string; role?: string };
-  if (user.role !== 'ADMIN') {
-    redirect('/');
-    return null;
-  }
 
   // Get all logs from buffer (newest first)
   const allLogs = (getLogBuffer(500) || []).reverse();

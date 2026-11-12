@@ -2,10 +2,12 @@ import { Suspense } from 'react';
 import { getIncidentCreationContext } from '@/app/(app)/incidents/actions';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileCreateIncidentClient from './client';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobileCreateIncidentPage() {
+  await requirePageAccess('/m/incidents/create');
   const context = await getIncidentCreationContext();
 
   if (!context.canCreateIncident) {

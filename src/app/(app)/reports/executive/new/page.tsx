@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
 import CreateBlankDashboardButton from './CreateBlankDashboardButton';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,7 @@ const TEMPLATE_ICONS: Record<string, LucideIcon> = {
 };
 
 export default async function NewDashboardPage() {
+  await requirePageAccess('/reports/executive/new');
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
     redirect('/login?callbackUrl=/reports/executive/new');

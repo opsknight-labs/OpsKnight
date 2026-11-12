@@ -80,7 +80,7 @@ describe('ingestion operator authorization', () => {
     vi.mocked(getUserPermissions).mockResolvedValue({
       id: '',
       authenticated: false,
-      role: 'VIEWER',
+      role: null,
       capabilities: [],
       isAdmin: false,
       isAuditor: false,

@@ -51,6 +51,7 @@ describe('toUserFacingError', () => {
       action: 'Ask your team administrator for access.',
       retryable: false,
       fields: undefined,
+      category: 'authorization',
     });
   });
 

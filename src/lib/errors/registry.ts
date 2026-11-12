@@ -180,6 +180,37 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  STEP_UP_REQUIRED: {
+    status: 403,
+    category: 'authorization',
+    userMessage: 'For your security, please sign in again before doing this.',
+    action: 'Sign in again, then retry.',
+    retryable: false,
+    exposure: 'public',
+  },
+  ACCESS_FEATURE_DISABLED: {
+    status: 403,
+    category: 'authorization',
+    userMessage: 'Your organization has turned this access feature off.',
+    action: 'Contact an administrator.',
+    retryable: false,
+    exposure: 'public',
+  },
+  ACCESS_REQUEST_LIMITED: {
+    status: 429,
+    category: 'rate_limit',
+    userMessage: 'You have too many open access requests.',
+    action: 'Wait for your open requests to be reviewed, or cancel one.',
+    retryable: false,
+    exposure: 'public',
+  },
+  SEPARATION_OF_DUTIES: {
+    status: 403,
+    category: 'authorization',
+    userMessage: 'You cannot approve your own request. Someone else must review it.',
+    retryable: false,
+    exposure: 'public',
+  },
   RESOURCE_NOT_FOUND: {
     status: 404,
     category: 'not_found',
@@ -417,8 +448,10 @@ export const ERROR_REGISTRY = {
   ESCALATION_POLICY_IN_USE: {
     status: 409,
     category: 'conflict',
-    userMessage: 'Cannot delete escalation policy while it is referenced by services or automation history.',
-    action: 'Reassign linked services and retire historical automation references before deleting this policy.',
+    userMessage:
+      'Cannot delete escalation policy while it is referenced by services or automation history.',
+    action:
+      'Reassign linked services and retire historical automation references before deleting this policy.',
     retryable: false,
     exposure: 'public',
   },

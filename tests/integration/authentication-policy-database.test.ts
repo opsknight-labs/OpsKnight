@@ -1,3 +1,4 @@
+import { getRoleCapabilities, type AppRole } from '@/lib/authorization';
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
@@ -220,7 +221,13 @@ integration('authoritative authentication policy in PostgreSQL', () => {
   });
   it('does not let an in-flight password change overwrite a concurrent administrator reset', async () => {
     const snapshot = await prisma.user.findUniqueOrThrow({ where: { id: actorId } });
-    vi.mocked(getCurrentUser).mockResolvedValueOnce(snapshot);
+    vi.mocked(getCurrentUser).mockResolvedValueOnce({
+      ...snapshot,
+      baseRole: snapshot.role,
+      capabilities: [...getRoleCapabilities(snapshot.role as AppRole)],
+      customRoleName: null,
+      elevatedIncidentIds: [],
+    });
     let hashing!: () => void;
     let release!: () => void;
     const entered = new Promise<void>(resolve => {

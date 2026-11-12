@@ -25,6 +25,7 @@ import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -48,6 +49,7 @@ export default async function IncidentsPage({
     createdBefore?: string;
   }>;
 }) {
+  await requirePageAccess('/incidents');
   const params = await searchParams;
   const currentFilter = normalizeIncidentFilter(params.filter);
   const currentSearch = params.search || '';

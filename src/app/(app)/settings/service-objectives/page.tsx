@@ -6,6 +6,7 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import { SERVICE_OBJECTIVE_CONTRACT } from '@/lib/slo/contract';
 import { ServiceObjectiveForm } from '@/components/settings/ServiceObjectiveForm';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 export default async function ServiceObjectivesPage({
@@ -13,6 +14,7 @@ export default async function ServiceObjectivesPage({
 }: {
   searchParams: Promise<{ after?: string }>;
 }) {
+  await requirePageAccess('/settings/service-objectives');
   const actor = await getCurrentAuthorizationActor();
   const query = z
     .object({

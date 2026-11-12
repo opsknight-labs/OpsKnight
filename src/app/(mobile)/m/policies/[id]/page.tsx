@@ -5,6 +5,7 @@ import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
 import { assertCanViewPolicy, getUserPermissions } from '@/lib/rbac';
 import PolicyDependencies from '@/components/policies/PolicyDependencies';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ type PageProps = {
 };
 
 export default async function MobilePolicyDetailPage({ params, searchParams }: PageProps) {
+  await requirePageAccess('/m/policies/[id]');
   const { id } = await params;
   await assertCanViewPolicy(id);
   const permissions = await getUserPermissions();
@@ -75,7 +77,7 @@ export default async function MobilePolicyDetailPage({ params, searchParams }: P
         page={Number((await searchParams)?.depPage ?? 1)}
         policyId={id}
         archived={!!policy.archivedAt}
-        canManage={permissions.role === 'ADMIN'}
+        canManage={permissions.isAdmin}
         mobile
       />
 

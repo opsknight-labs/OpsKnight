@@ -5,10 +5,14 @@ import { appRoutes } from '@/lib/app-routes';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileTime from '@/components/mobile/MobileTime';
-import { IncidentStatusBadge, IncidentUrgencyBadge } from '@/components/incident/IncidentSemanticBadge';
+import {
+  IncidentStatusBadge,
+  IncidentUrgencyBadge,
+} from '@/components/incident/IncidentSemanticBadge';
 import { logger } from '@/lib/logger';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { getResponderAnalyticsSnapshot } from '@/lib/dashboard/responder-analytics-snapshot';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +34,13 @@ function formatPercent(value: number | null | undefined) {
   return `${Math.round(value)}%`;
 }
 
-function ProgressLine({ value, tone = 'slate' }: { value: number; tone?: 'slate' | 'emerald' | 'amber' | 'rose' | 'blue' }) {
+function ProgressLine({
+  value,
+  tone = 'slate',
+}: {
+  value: number;
+  tone?: 'slate' | 'emerald' | 'amber' | 'rose' | 'blue';
+}) {
   const width = Math.max(0, Math.min(100, value));
   const toneClass =
     tone === 'emerald'
@@ -54,6 +64,7 @@ export default async function MobileAnalyticsPage({
 }: {
   searchParams?: Promise<{ range?: string }>;
 }) {
+  await requirePageAccess('/m/analytics');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/analytics'));
 
@@ -80,7 +91,10 @@ export default async function MobileAnalyticsPage({
             Unknown metrics are hidden instead of being presented as zero.
           </p>
         </div>
-        <Link href="/m/incidents" className="inline-flex min-h-11 items-center text-sm font-semibold text-foreground">
+        <Link
+          href="/m/incidents"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-foreground"
+        >
           View incidents <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
         </Link>
       </div>
@@ -132,34 +146,53 @@ export default async function MobileAnalyticsPage({
       )}
 
       <section aria-labelledby="analytics-overview-heading" className="space-y-2">
-        <h2 id="analytics-overview-heading" className="px-0.5 text-sm font-bold text-foreground">Response overview</h2>
+        <h2 id="analytics-overview-heading" className="px-0.5 text-sm font-bold text-foreground">
+          Response overview
+        </h2>
         <Card className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-xl border-border bg-card shadow-none">
-          <Link href="/m/incidents?filter=all_open" className="p-3.5 transition-colors hover:bg-accent/40">
-            <span className="block text-lg font-bold tabular-nums text-foreground">{metrics.activeIncidents}</span>
+          <Link
+            href="/m/incidents?filter=all_open"
+            className="p-3.5 transition-colors hover:bg-accent/40"
+          >
+            <span className="block text-lg font-bold tabular-nums text-foreground">
+              {metrics.activeIncidents}
+            </span>
             <span className="mt-0.5 block text-[10px] text-muted-foreground">Active now</span>
           </Link>
           <div className="p-3.5">
-            <span className="block text-lg font-bold tabular-nums text-foreground">{metrics.totalIncidents}</span>
-            <span className="mt-0.5 block text-[10px] text-muted-foreground">New in {displayRange}d</span>
+            <span className="block text-lg font-bold tabular-nums text-foreground">
+              {metrics.totalIncidents}
+            </span>
+            <span className="mt-0.5 block text-[10px] text-muted-foreground">
+              New in {displayRange}d
+            </span>
           </div>
           <div className="p-3.5">
-            <span className="block text-lg font-bold tabular-nums text-foreground">{formatDuration(metrics.mttd)}</span>
+            <span className="block text-lg font-bold tabular-nums text-foreground">
+              {formatDuration(metrics.mttd)}
+            </span>
             <span className="mt-0.5 block text-[10px] text-muted-foreground">MTTA</span>
           </div>
           <div className="p-3.5">
-            <span className="block text-lg font-bold tabular-nums text-foreground">{formatDuration(metrics.mttr)}</span>
+            <span className="block text-lg font-bold tabular-nums text-foreground">
+              {formatDuration(metrics.mttr)}
+            </span>
             <span className="mt-0.5 block text-[10px] text-muted-foreground">MTTR</span>
           </div>
         </Card>
       </section>
 
       <section aria-labelledby="analytics-sla-heading" className="space-y-2">
-        <h2 id="analytics-sla-heading" className="px-0.5 text-sm font-bold text-foreground">SLA compliance</h2>
+        <h2 id="analytics-sla-heading" className="px-0.5 text-sm font-bold text-foreground">
+          SLA compliance
+        </h2>
         <Card className="space-y-4 rounded-xl border-border bg-card p-3.5 shadow-none">
           <div>
             <div className="flex items-center justify-between gap-3 text-xs">
               <span className="font-semibold text-foreground">Acknowledge</span>
-              <span className="font-bold tabular-nums text-foreground">{formatPercent(metrics.ackCompliance)}</span>
+              <span className="font-bold tabular-nums text-foreground">
+                {formatPercent(metrics.ackCompliance)}
+              </span>
             </div>
             <ProgressLine value={metrics.ackCompliance ?? 0} tone="blue" />
             <p className="mt-1 text-[10px] text-muted-foreground">{metrics.ackBreaches} breaches</p>
@@ -167,16 +200,22 @@ export default async function MobileAnalyticsPage({
           <div>
             <div className="flex items-center justify-between gap-3 text-xs">
               <span className="font-semibold text-foreground">Resolve</span>
-              <span className="font-bold tabular-nums text-foreground">{formatPercent(metrics.resolveCompliance)}</span>
+              <span className="font-bold tabular-nums text-foreground">
+                {formatPercent(metrics.resolveCompliance)}
+              </span>
             </div>
             <ProgressLine value={metrics.resolveCompliance ?? 0} tone="emerald" />
-            <p className="mt-1 text-[10px] text-muted-foreground">{metrics.resolveBreaches} breaches</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {metrics.resolveBreaches} breaches
+            </p>
           </div>
         </Card>
       </section>
 
       <section aria-labelledby="analytics-trend-heading" className="space-y-2">
-        <h2 id="analytics-trend-heading" className="px-0.5 text-sm font-bold text-foreground">Incident trend</h2>
+        <h2 id="analytics-trend-heading" className="px-0.5 text-sm font-bold text-foreground">
+          Incident trend
+        </h2>
         <Card className="space-y-3 rounded-xl border-border bg-card p-3.5 shadow-none">
           {trendSeries.length === 0 ? (
             <p className="text-xs text-muted-foreground">No trend data in this period.</p>
@@ -195,12 +234,16 @@ export default async function MobileAnalyticsPage({
       </section>
 
       <section aria-labelledby="analytics-breakdown-heading" className="space-y-2">
-        <h2 id="analytics-breakdown-heading" className="px-0.5 text-sm font-bold text-foreground">Breakdown</h2>
+        <h2 id="analytics-breakdown-heading" className="px-0.5 text-sm font-bold text-foreground">
+          Breakdown
+        </h2>
         <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
           <details open className="group border-b border-border/70">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3.5 text-xs font-semibold text-foreground [&::-webkit-details-marker]:hidden">
               Urgency
-              <span className="text-[10px] font-medium text-muted-foreground">{metrics.totalIncidents} incidents</span>
+              <span className="text-[10px] font-medium text-muted-foreground">
+                {metrics.totalIncidents} incidents
+              </span>
             </summary>
             <div className="grid grid-cols-3 border-t border-border/70 bg-muted/15">
               {[
@@ -209,7 +252,9 @@ export default async function MobileAnalyticsPage({
                 ['Low', metrics.lowUrgencyCount, 'text-blue-600 dark:text-blue-300'],
               ].map(([label, value, tone]) => (
                 <div key={String(label)} className="px-2 py-3 text-center">
-                  <strong className={`block text-base font-bold tabular-nums ${tone}`}>{String(value)}</strong>
+                  <strong className={`block text-base font-bold tabular-nums ${tone}`}>
+                    {String(value)}
+                  </strong>
                   <span className="text-[10px] text-muted-foreground">{String(label)}</span>
                 </div>
               ))}
@@ -219,14 +264,19 @@ export default async function MobileAnalyticsPage({
           <details className="group border-b border-border/70">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3.5 text-xs font-semibold text-foreground [&::-webkit-details-marker]:hidden">
               Services
-              <span className="text-[10px] font-medium text-muted-foreground">Top {topServices.length}</span>
+              <span className="text-[10px] font-medium text-muted-foreground">
+                Top {topServices.length}
+              </span>
             </summary>
             <div className="space-y-2 border-t border-border/70 px-3.5 py-3">
               {topServices.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">No service data yet.</p>
               ) : (
                 topServices.map(service => (
-                  <div key={service.id} className="flex items-center justify-between gap-3 text-[11px]">
+                  <div
+                    key={service.id}
+                    className="flex items-center justify-between gap-3 text-[11px]"
+                  >
                     <span className="truncate text-muted-foreground">{service.name}</span>
                     <strong className="tabular-nums text-foreground">{service.count}</strong>
                   </div>
@@ -245,7 +295,10 @@ export default async function MobileAnalyticsPage({
                 <p className="text-[11px] text-muted-foreground">No assignee data yet.</p>
               ) : (
                 assigneeLoad.map(item => (
-                  <div key={item.id} className="flex items-center justify-between gap-3 text-[11px]">
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 text-[11px]"
+                  >
                     <span className="truncate text-muted-foreground">{item.name}</span>
                     <strong className="tabular-nums text-foreground">{item.count}</strong>
                   </div>
@@ -258,8 +311,15 @@ export default async function MobileAnalyticsPage({
 
       <section aria-labelledby="analytics-recent-heading" className="space-y-2">
         <div className="flex items-center justify-between gap-3 px-0.5">
-          <h2 id="analytics-recent-heading" className="text-sm font-bold text-foreground">Recent incidents</h2>
-          <Link href="/m/incidents" className="text-[11px] font-semibold text-muted-foreground hover:text-foreground">View all</Link>
+          <h2 id="analytics-recent-heading" className="text-sm font-bold text-foreground">
+            Recent incidents
+          </h2>
+          <Link
+            href="/m/incidents"
+            className="text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+          >
+            View all
+          </Link>
         </div>
         {recentIncidents.length === 0 ? (
           <EmptyState
@@ -279,10 +339,17 @@ export default async function MobileAnalyticsPage({
                 <div className="flex min-w-0 items-center gap-1.5">
                   <IncidentStatusBadge status={incident.status} />
                   <IncidentUrgencyBadge urgency={incident.urgency} />
-                  <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <ArrowRight
+                    className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </div>
-                <p className="mt-1.5 line-clamp-2 text-[12px] font-semibold leading-snug text-foreground">{incident.title}</p>
-                <p className="mt-1 truncate text-[10px] text-muted-foreground">{incident.service.name}</p>
+                <p className="mt-1.5 line-clamp-2 text-[12px] font-semibold leading-snug text-foreground">
+                  {incident.title}
+                </p>
+                <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                  {incident.service.name}
+                </p>
               </Link>
             ))}
           </Card>

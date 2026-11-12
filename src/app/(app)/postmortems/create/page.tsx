@@ -12,8 +12,10 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function CreatePostmortemPage() {
+  await requirePageAccess('/postmortems/create');
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
     redirect('/login');

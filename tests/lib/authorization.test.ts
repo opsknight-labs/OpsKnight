@@ -42,12 +42,14 @@ describe('central authorization contract', () => {
     expect(hasCapability('AUDITOR', CAPABILITIES.ADMIN_MANAGE)).toBe(false);
   });
 
-  it('keeps User access scoped and read-only', () => {
+  it('keeps User access scoped: work their own incidents, never manage', () => {
     expect(hasCapability('USER', CAPABILITIES.INCIDENT_CREATE_SCOPED)).toBe(false);
     expect(hasCapability('USER', CAPABILITIES.INCIDENT_CREATE_ALL)).toBe(false);
-    expect(hasCapability('USER', CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED)).toBe(false);
-    expect(hasCapability('USER', CAPABILITIES.INCIDENT_ESCALATE_SCOPED)).toBe(false);
-    expect(hasCapability('USER', CAPABILITIES.INCIDENT_NOTE_SCOPED)).toBe(false);
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_ESCALATE_SCOPED)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_NOTE_SCOPED)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_RESOLVE_SCOPED)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.OPERATIONS_MANAGE)).toBe(false);
     expect(hasCapability('AUDITOR', CAPABILITIES.INCIDENT_NOTE_SCOPED)).toBe(false);
     expect(hasCapability('USER', CAPABILITIES.INCIDENT_READ_SCOPED)).toBe(true);
     expect(hasCapability('USER', CAPABILITIES.SERVICE_READ_SCOPED)).toBe(true);

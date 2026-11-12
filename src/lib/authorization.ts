@@ -22,6 +22,7 @@ export const CAPABILITIES = {
   INCIDENT_ACKNOWLEDGE_SCOPED: 'incident.acknowledge.scoped',
   INCIDENT_ESCALATE_SCOPED: 'incident.escalate.scoped',
   INCIDENT_NOTE_SCOPED: 'incident.note.scoped',
+  INCIDENT_RESOLVE_SCOPED: 'incident.resolve.scoped',
   INCIDENT_READ_ALL: 'incident.read.all',
   INCIDENT_READ_SCOPED: 'incident.read.scoped',
   INCIDENT_EXPORT: 'incident.export',
@@ -55,6 +56,7 @@ export const CAPABILITIES = {
   COMPLIANCE_EVIDENCE_READ: 'compliance.evidence.read',
   COMPLIANCE_EXPORT: 'compliance.export',
   COMPLIANCE_DRIFT_MANAGE: 'compliance.drift.manage',
+  ACCESS_REVIEW_MANAGE: 'access.review.manage',
 
   // Runbooks
   RUNBOOK_READ_ALL: 'runbook.read.all',
@@ -209,7 +211,8 @@ const ADMIN_CAPABILITIES = new Set<Capability>(Object.values(CAPABILITIES));
 const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
   CAPABILITIES.TEAM_ADMINISTER_SCOPED,
-  CAPABILITIES.AUTOMATION_READ, CAPABILITIES.AUTOMATION_EDIT,
+  CAPABILITIES.AUTOMATION_READ,
+  CAPABILITIES.AUTOMATION_EDIT,
   CAPABILITIES.OPERATIONS_MANAGE,
   CAPABILITIES.INCIDENT_CREATE_ALL,
   CAPABILITIES.INCIDENT_READ_ALL,
@@ -260,6 +263,12 @@ const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
   CAPABILITIES.TEAM_ADMINISTER_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
+  // Whoever is paged must be able to work the incident: acknowledge, add notes, escalate and
+  // resolve incidents assigned to them, on their teams' services, or where they are on call.
+  CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
+  CAPABILITIES.INCIDENT_NOTE_SCOPED,
+  CAPABILITIES.INCIDENT_ESCALATE_SCOPED,
+  CAPABILITIES.INCIDENT_RESOLVE_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,
   CAPABILITIES.METRICS_READ_SCOPED,
   CAPABILITIES.SCHEDULE_READ_SCOPED,
@@ -285,6 +294,49 @@ export function hasCapability(role: AppRole, capability: Capability): boolean {
   return ROLE_CAPABILITIES.get(role)?.has(capability) ?? false;
 }
 
+/** Effective permissions of a resolved user; falls back to the built-in role's permissions. */
+export function capabilitiesOf(user: {
+  role: string;
+  capabilities?: readonly Capability[];
+}): readonly Capability[] {
+  if (user.capabilities) return user.capabilities;
+  return isAppRole(user.role) ? getRoleCapabilities(user.role) : [];
+}
+
+export function isCapability(value: unknown): value is Capability {
+  return typeof value === 'string' && ALL_CAPABILITIES.has(value as Capability);
+}
+
+const ALL_CAPABILITIES: ReadonlySet<Capability> = new Set(Object.values(CAPABILITIES));
+
+/**
+ * Capabilities that are never granted through custom roles or temporary grants: they are the
+ * definition of the Admin role and must stay tied to an explicit, audited role assignment.
+ */
+export const NON_DELEGABLE_CAPABILITIES: ReadonlySet<Capability> = new Set([
+  CAPABILITIES.ADMIN_MANAGE,
+  CAPABILITIES.ACCESS_REVIEW_MANAGE,
+]);
+
+/**
+ * The effective permission set of a person: their base role, plus any custom role and
+ * active temporary grants layered on top. Additional sets can only add permissions.
+ */
+export function effectiveCapabilities(
+  role: AppRole,
+  ...additional: readonly (readonly Capability[] | undefined | null)[]
+): ReadonlySet<Capability> {
+  const set = new Set<Capability>(ROLE_CAPABILITIES.get(role) ?? []);
+  for (const extra of additional) {
+    for (const capability of extra ?? []) {
+      if (isCapability(capability) && !NON_DELEGABLE_CAPABILITIES.has(capability)) {
+        set.add(capability);
+      }
+    }
+  }
+  return set;
+}
+
 export function roleLabel(role: AppRole): string {
   if (role === 'ADMIN') return 'Admin';
   if (role === 'RESPONDER') return 'Responder';
@@ -301,7 +353,7 @@ export const ROLE_DESCRIPTIONS = new Map<AppRole, string>([
   ],
   [
     'USER',
-    'Access to incidents and services in your teams, plus incidents assigned to or watched by you. Team owners can administer their own teams.',
+    'Access to incidents and services in your teams, plus incidents assigned to or watched by you. Can acknowledge, update, escalate and resolve those incidents. Team owners and team admins can manage their own teams.',
   ],
 ]);
 

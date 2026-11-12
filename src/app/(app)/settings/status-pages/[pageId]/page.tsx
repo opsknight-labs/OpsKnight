@@ -11,6 +11,7 @@ import { Globe, Layers, Users, Megaphone, Key, ExternalLink } from 'lucide-react
 import StatusPageWorkspace from '@/components/status-page/StatusPageWorkspace';
 import { getStatusPageSnapshot, buildStatusPageSnapshot } from '@/lib/status-pages/snapshot';
 import type { StatusAnnouncementType } from '@/lib/validation';
+import { requirePageAccess } from '@/lib/access/server';
 
 function normalizeAnnouncementType(value: string): StatusAnnouncementType {
   switch (value) {
@@ -30,6 +31,7 @@ export default async function StatusPageWorkspacePage({
 }: {
   params: Promise<{ pageId: string }>;
 }) {
+  await requirePageAccess('/settings/status-pages/[pageId]');
   const session = await getServerSession(await getAuthOptions());
   if (!session) redirect('/login');
   try {

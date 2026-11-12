@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/shadcn/command';
 import { SETTINGS_NAV_SECTIONS, SettingsNavItem } from '@/components/settings/navConfig';
 import { Settings, ArrowRight } from 'lucide-react';
+import { useEffectiveCapabilities } from '@/components/access/AccessProvider';
+import { canAccessPath } from '@/lib/access/pages';
 
 type Props = {
   isAdmin?: boolean;
@@ -36,12 +38,8 @@ export function CommandPalette({ isAdmin, isResponderOrAbove, isAuditor }: Props
     return () => document.removeEventListener('keydown', down);
   }, []);
 
-  const canAccess = (item: SettingsNavItem) => {
-    if (item.requiresAdmin && !isAdmin) return false;
-    if (item.requiresAdminOrAuditor && !isAdmin && !isAuditor) return false;
-    if (item.requiresResponder && !isResponderOrAbove) return false;
-    return true;
-  };
+  const capabilities = useEffectiveCapabilities({ isAdmin, isAuditor, isResponderOrAbove });
+  const canAccess = (item: SettingsNavItem) => canAccessPath(item.href, capabilities);
 
   const runCommand = React.useCallback(
     (href: string) => {
