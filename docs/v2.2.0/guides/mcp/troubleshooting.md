@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 106 MCP codes and 24 log events found in the source.
+This page lists 106 MCP codes and 25 log events found in the source.
 
 ## Connecting and signing in
 
@@ -230,6 +230,7 @@ Search the application log for these event names. Entries never contain tokens, 
 | <a id="mcp.sensitive_read.audit_failed"></a>`mcp.sensitive_read.audit_failed` | warn | Writing the audit row for a sensitive read failed; the read itself was still served. `operationId` and `errorName` only. | `src/lib/mcp/core/execution.ts` |
 | <a id="mcp.subscription.access_lost"></a>`mcp.subscription.access_lost` | info | A listen stream was closed because the person lost access to a subscribed resource, or their role or teams changed. Clients re-read on reconnect. | `src/app/mcp/route.ts` |
 | <a id="mcp.subscription.listener_failed"></a>`mcp.subscription.listener_failed` | warn | A subscription stream failed while delivering a change. | `src/lib/mcp/protocol/subscriptions.ts` |
+| <a id="mcp.subscription.page_withheld"></a>`mcp.subscription.page_withheld` | info |  | `src/lib/mcp/protocol/page-push.ts` |
 | <a id="mcp.subscription.poll_failed"></a>`mcp.subscription.poll_failed` | warn | The subscription change poll failed; the stream retries. | `src/lib/mcp/protocol/subscriptions.ts` |
 | <a id="mcp.token.grace_reissued"></a>`mcp.token.grace_reissued` | warn | A rotated refresh token was replayed inside the grace window and a new token issued (`grantId`, `replacedId`, `revokedSuccessorId`). Occasional lines are lost responses; many for one grant suggest a stolen token racing the real client. | `src/lib/mcp/auth/oauth-model.ts` |
 | <a id="mcp.token.refresh_reuse_revoked"></a>`mcp.token.refresh_reuse_revoked` | warn | A rotated refresh token was reused outside the grace window; the whole grant was revoked (`grantId`). The audit log has mcp.grant.reuse_detected with the user and client. | `src/app/oauth/mcp/token/route.ts` |
