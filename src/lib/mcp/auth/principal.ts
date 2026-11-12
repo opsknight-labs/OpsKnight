@@ -14,6 +14,7 @@ import {
   mcpGrantBlockError,
   type GrantAccessSnapshot,
 } from './effective-access';
+import { effectiveDisabledMcpCapabilities } from './effective-capabilities';
 
 interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   clientId: string;
@@ -26,6 +27,8 @@ interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   maxOperations: number | null;
   requestsPerMinute: number | null;
   disabledCapabilities: string[] | null;
+  roleDisabledCapabilities: unknown;
+  clientDisabledCapabilities: string[] | null;
   scopeStepUpEnabled: boolean | null;
   perUserRequestsPerMinute: number | null;
   responderDirectWritesEnabled: boolean | null;
@@ -42,6 +45,7 @@ export interface McpRuntimePolicy {
   maxInFlight: number;
   maxOperations: number;
   requestsPerMinute: number;
+  /** Effective for the principal (effective-capabilities.ts); the stored global list on failure paths. */
   disabledCapabilities: string[];
   /** Answer a grantable missing permission with 403 insufficient_scope (step-up.ts). */
   scopeStepUpEnabled: boolean;
@@ -91,7 +95,8 @@ const AUTHORITY_COLUMNS = Prisma.sql`
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
   p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities",
-  p."scopeStepUpEnabled", p."perUserRequestsPerMinute", p."responderDirectWritesEnabled"`;
+  p."scopeStepUpEnabled", p."perUserRequestsPerMinute", p."responderDirectWritesEnabled",
+  p."roleDisabledCapabilities", c."disabledCapabilities" AS "clientDisabledCapabilities"`;
 
 /**
  * The grant's current authority and the MCP policy as of the same statement. The policy is null
@@ -175,7 +180,8 @@ function authorityFrom(
             maxInFlight: grant.maxInFlight!,
             maxOperations: grant.maxOperations!,
             requestsPerMinute: grant.requestsPerMinute!,
-            disabledCapabilities: grant.disabledCapabilities ?? [],
+            // Global, the actor's role and this assistant: one list for listing and execution.
+            disabledCapabilities: effectiveDisabledMcpCapabilities(grant, grant.role),
             scopeStepUpEnabled: grant.scopeStepUpEnabled ?? false,
             perUserRequestsPerMinute: grant.perUserRequestsPerMinute ?? null,
             responderDirectWritesEnabled: grant.responderDirectWritesEnabled ?? false,

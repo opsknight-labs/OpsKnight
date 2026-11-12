@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import type { AuthorizationAction, AuthorizationActor } from '@/lib/authorization-policy';
 import { enforceV2Authorization } from '@/lib/api-v2/rbac';
-import { resolveMcpGrant } from '../auth/principal';
+import { resolveMcpGrantWithPolicy } from '../auth/principal';
 import { requireMcp } from './errors';
 import { mcpPolicyInForce } from './kill-switch';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
@@ -32,7 +32,12 @@ export async function lockMcpMutationAuthority(
   // column default reads the setting). Transaction-local, so a pooled connection never keeps it.
   await tx.$queryRaw`SELECT set_config('opsknight.channel', 'mcp:' || "clientId", true)
     FROM "McpGrant" WHERE id = ${context.grantId}`;
-  const auth = await resolveMcpGrant(context.grantId, context.credentialId, tx);
+  // The snapshot's disabled list is effective for this actor's role and client, read under the locks.
+  const { auth, policy: runtime } = await resolveMcpGrantWithPolicy(
+    context.grantId,
+    context.credentialId,
+    tx
+  );
   if (expected)
     requireMcp(
       auth.actor.id === expected.id &&
@@ -67,7 +72,7 @@ export async function lockMcpMutationAuthority(
     403
   );
   requireMcp(
-    !isMcpCapabilityDisabled(policy.disabledCapabilities, ...capabilities),
+    !isMcpCapabilityDisabled(runtime?.disabledCapabilities, ...capabilities),
     'MCP_CAPABILITY_DISABLED',
     403
   );
