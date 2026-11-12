@@ -2,6 +2,7 @@ import 'server-only';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
+import { INTELLIGENCE_SETTINGS_BOUNDS } from '../contract';
 import {
   getIntelligenceSettings,
   updateIntelligenceSettings,
@@ -18,6 +19,12 @@ const switchesSchema = z
     opsInsightsPostmortemsEnabled: z.boolean(),
     opsInsightsRunbooksEnabled: z.boolean(),
     opsInsightsNotificationsEnabled: z.boolean(),
+    runbookFixWindowMinutes: z
+      .number()
+      .int()
+      .min(INTELLIGENCE_SETTINGS_BOUNDS.runbookFixWindowMinutes.min)
+      .max(INTELLIGENCE_SETTINGS_BOUNDS.runbookFixWindowMinutes.max)
+      .optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();

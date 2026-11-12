@@ -78,6 +78,8 @@ export type IntelligenceSettingsView = {
   opsInsightsPostmortemsEnabled: boolean;
   opsInsightsRunbooksEnabled: boolean;
   opsInsightsNotificationsEnabled: boolean;
+  /** A run fixed its incident when the incident resolved within this long after the run finished. */
+  runbookFixWindowMinutes: number;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -103,6 +105,7 @@ const SETTINGS_SELECT = {
   opsInsightsPostmortemsEnabled: true,
   opsInsightsRunbooksEnabled: true,
   opsInsightsNotificationsEnabled: true,
+  runbookFixWindowMinutes: true,
   revision: true,
 } as const;
 
