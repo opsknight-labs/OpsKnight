@@ -1,4 +1,5 @@
 import { mcpCompositeCost } from '@/lib/mcp/core/composites';
+import { RESOURCE_LIST_COST } from '@/lib/mcp/protocol/resource-list';
 import { endMcpSpan, linkMcpTrace, startMcpSpan } from '@/lib/mcp/protocol/tracing';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
@@ -224,7 +225,9 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
         ? Math.max(1, steps.length)
         : body.method === 'tools/call'
           ? (mcpCompositeCost(body.params?.name, body.params?.arguments) ?? 1)
-          : 1;
+          : body.method === 'resources/list'
+            ? RESOURCE_LIST_COST
+            : 1;
     requireMcp(cost <= MCP_MAX_OPERATIONS, 'MCP_OPERATION_BUDGET_EXCEEDED');
     await chargeMcpRequest(
       { grantId: identity.grantId, userId: identity.auth.actor.id, policy: identity.policy },

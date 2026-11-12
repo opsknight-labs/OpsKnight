@@ -164,12 +164,64 @@ describe('completions over the authenticated wire', () => {
   });
 });
 
+describe('resources/list', () => {
+  it('lists only what the principal can read, sanitized, open incidents only', async () => {
+    const admin = await principal('ADMIN');
+    const outsider = await principal('USER');
+    const team = await createTestTeam('Listing team');
+    const service = await createTestService('Listing service', team.id);
+    const open = await createTestIncident('Disk\nfull\u0007 on db', service.id, {
+      visibility: 'PUBLIC',
+    });
+    const hidden = await createTestIncident('Hidden', service.id, {
+      visibility: 'PRIVATE',
+      teamId: team.id,
+    });
+    const resolved = await createTestIncident('Done', service.id, {
+      visibility: 'PUBLIC',
+      status: 'RESOLVED',
+    });
+    const list = async (bearer: string) =>
+      (await (await call(bearer, 'resources/list')).json()).result.resources as {
+        uri: string;
+        name: string;
+        mimeType: string;
+      }[];
+    const adminUris = (await list(admin.bearer)).map(resource => resource.uri);
+    expect(adminUris).toEqual(
+      expect.arrayContaining([
+        `opsknight://incidents/${open.id}`,
+        `opsknight://incidents/${hidden.id}`,
+        `opsknight://services/${service.id}`,
+      ])
+    );
+    expect(adminUris).not.toContain(`opsknight://incidents/${resolved.id}`);
+    // Only domains this token's scopes can read are browsed.
+    expect(adminUris.every(uri => /^opsknight:\/\/(incidents|services)\//.test(uri))).toBe(true);
+    const named = (await list(admin.bearer)).find(r => r.uri.endsWith(open.id));
+    expect(named).toMatchObject({ name: 'Disk full on db', mimeType: 'application/json' });
+    const outsiderUris = (await list(outsider.bearer)).map(resource => resource.uri);
+    // The list operation's own row authorization decides; a private team incident never leaks.
+    expect(outsiderUris).not.toContain(`opsknight://incidents/${hidden.id}`);
+  });
+
+  it('charges one request per browsed domain against the rate limit', async () => {
+    await db.mcpPolicy.update({ where: { id: 'default' }, data: { requestsPerMinute: 5 } });
+    const admin = await principal('ADMIN');
+    expect((await call(admin.bearer, 'resources/templates/list')).status).toBe(200);
+    expect((await call(admin.bearer, 'resources/list')).status).toBe(429);
+  });
+});
+
 describe('subscriptions/listen', () => {
   it('advertises subscribe capability honestly', async () => {
     const admin = await principal();
     const discover = await (await call(admin.bearer, 'server/discover')).json();
     expect(discover.result.capabilities.resources).toMatchObject({ subscribe: true });
     expect(discover.result.capabilities.tools).toMatchObject({ listChanged: true });
+    // Template ids and prompt arguments have completers, so completion/complete is advertised.
+    expect(discover.result.capabilities.completions).toEqual({});
+    expect(discover.result.capabilities.resources).toMatchObject({ listChanged: false });
     // The icon is served by this installation, so a private deployment needs no outside host.
     expect(discover.result._meta['io.modelcontextprotocol/serverInfo'].icons).toEqual([
       { src: `${mcpOrigin()}/icons/opsknight-192.png`, mimeType: 'image/png', sizes: ['192x192'] },
