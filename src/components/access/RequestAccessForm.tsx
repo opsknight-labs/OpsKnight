@@ -1,11 +1,19 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { CheckCircle2, Send } from 'lucide-react';
+import { CheckCircle2, Send, ShieldPlus, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/shadcn/select';
+import { cn } from '@/lib/utils';
 import { requestAccessAction } from '@/app/(app)/settings/access/actions';
 import { roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
 
@@ -35,8 +43,51 @@ type Props = {
   compact?: boolean;
 };
 
-const selectClass =
-  'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+function KindOption({
+  checked,
+  onSelect,
+  icon,
+  title,
+  description,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <label
+      className={cn(
+        'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors focus-within:ring-2 focus-within:ring-ring',
+        checked
+          ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30'
+          : 'border-border bg-background hover:bg-muted/40'
+      )}
+    >
+      <input
+        type="radio"
+        name="access-request-kind"
+        checked={checked}
+        onChange={onSelect}
+        className="sr-only"
+      />
+      <span
+        className={cn(
+          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+          checked ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+        )}
+        aria-hidden
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-foreground">{title}</span>
+        <span className="block text-xs text-muted-foreground">{description}</span>
+      </span>
+    </label>
+  );
+}
 
 export default function RequestAccessForm({
   originPath,
@@ -75,10 +126,13 @@ export default function RequestAccessForm({
     return (
       <div
         role="status"
-        className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200"
+        className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200"
       >
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        <span>{sent}</span>
+        <div className="space-y-0.5">
+          <p className="font-semibold">Request sent</p>
+          <p>{sent}</p>
+        </div>
       </div>
     );
   }
@@ -132,125 +186,123 @@ export default function RequestAccessForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 text-left" aria-label="Request access">
+    <form onSubmit={submit} className="space-y-5 text-left" aria-label="Request access">
       {offersTeam && (
-        <fieldset className="space-y-1.5">
-          <legend className="text-xs font-medium text-muted-foreground">What do you need?</legend>
-          <div className="flex flex-wrap gap-2">
-            <label className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
-              <input
-                type="radio"
-                name="kind"
-                checked={kind === 'TEAM_MEMBERSHIP'}
-                onChange={() => setKind('TEAM_MEMBERSHIP')}
-              />
-              {team ? `Join ${team.name}` : 'Join a team'}
-            </label>
-            <label className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
-              <input
-                type="radio"
-                name="kind"
-                checked={kind === 'ORG_ROLE'}
-                onChange={() => setKind('ORG_ROLE')}
-              />
-              A different role
-            </label>
+        <fieldset className="space-y-2">
+          <legend className="mb-2 text-sm font-medium text-foreground">What do you need?</legend>
+          <div className={cn('grid gap-3', !compact && 'sm:grid-cols-2')}>
+            <KindOption
+              checked={kind === 'TEAM_MEMBERSHIP'}
+              onSelect={() => setKind('TEAM_MEMBERSHIP')}
+              icon={<Users className="h-4 w-4" />}
+              title={team ? `Join ${team.name}` : 'Join a team'}
+              description="See and work the team’s services and incidents."
+            />
+            <KindOption
+              checked={kind === 'ORG_ROLE'}
+              onSelect={() => setKind('ORG_ROLE')}
+              icon={<ShieldPlus className="h-4 w-4" />}
+              title="A different role"
+              description="Change what you can do across OpsKnight."
+            />
           </div>
         </fieldset>
       )}
 
-      <div className={compact ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-2'}>
+      <div className={cn('grid gap-4', !compact && 'sm:grid-cols-2')}>
         {kind === 'TEAM_MEMBERSHIP' && !team && teamChoices && (
           <div className="space-y-1.5">
             <Label htmlFor="access-team">Team</Label>
-            <select
-              id="access-team"
-              className={selectClass}
-              value={chosenTeamId}
-              onChange={event => setChosenTeamId(event.target.value)}
-            >
-              {teamChoices.map(choice => (
-                <option key={choice.id} value={choice.id}>
-                  {choice.name}
-                </option>
-              ))}
-            </select>
+            <Select value={chosenTeamId} onValueChange={setChosenTeamId}>
+              <SelectTrigger id="access-team">
+                <SelectValue placeholder="Choose a team" />
+              </SelectTrigger>
+              <SelectContent>
+                {teamChoices.map(choice => (
+                  <SelectItem key={choice.id} value={choice.id}>
+                    {choice.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
-        {kind === 'ORG_ROLE' && (
+        {kind === 'ORG_ROLE' && roleChoices.length > 0 && (
           <div className="space-y-1.5">
             <Label htmlFor="access-role">Role</Label>
-            <select
-              id="access-role"
-              className={selectClass}
-              value={role}
-              onChange={event => setRole(event.target.value as AppRole)}
-            >
-              {roleChoices.map(choice => (
-                <option key={choice} value={choice}>
-                  {roleLabel(choice)}
-                </option>
-              ))}
-            </select>
+            <Select value={role} onValueChange={value => setRole(value as AppRole)}>
+              <SelectTrigger id="access-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {roleChoices.map(choice => (
+                  <SelectItem key={choice} value={choice}>
+                    {roleLabel(choice)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
         <div className="space-y-1.5">
           <Label htmlFor="access-duration">For how long?</Label>
-          <select
-            id="access-duration"
-            className={selectClass}
-            value={effectiveDuration}
-            onChange={event => setDuration(event.target.value)}
-          >
-            {durationChoices.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <Select value={effectiveDuration} onValueChange={setDuration}>
+            <SelectTrigger id="access-duration">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {durationChoices.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {noRoleToAsk && (
-        <p className="text-sm text-muted-foreground">
+        <p className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           Your role already includes everything the other roles allow.
           {offersTeam ? ' You can still ask to join a team.' : ''}
         </p>
       )}
       {permanentRoleBlocked && (
-        <p className="text-xs text-muted-foreground">
+        <p className="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
           Your role comes from your identity provider, so you can ask for temporary access here. For
           a permanent change, ask your IT team to add you to the right group.
         </p>
       )}
-      {
-        <>
-          <div className="space-y-1.5">
-            <Label htmlFor="access-reason">Why do you need it?</Label>
-            <Textarea
-              id="access-reason"
-              value={reason}
-              onChange={event => setReason(event.target.value)}
-              placeholder="For example: I'm on call this week and need to acknowledge payments incidents."
-              rows={3}
-              maxLength={1000}
-              aria-describedby="access-reason-hint"
-            />
-            <p id="access-reason-hint" className="text-xs text-muted-foreground">
-              At least 10 characters. Approvers see this.
-            </p>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
-              {error}
-            </p>
-          )}
-          <Button type="submit" size="sm" disabled={!canSubmit} className="gap-1.5">
-            <Send className="h-3.5 w-3.5" aria-hidden />
-            {pending ? 'Sending…' : 'Send request'}
-          </Button>
-        </>
-      }
+      <div className="space-y-1.5">
+        <Label htmlFor="access-reason">Why do you need it?</Label>
+        <Textarea
+          id="access-reason"
+          value={reason}
+          onChange={event => setReason(event.target.value)}
+          placeholder="For example: I'm on call this week and need to acknowledge payments incidents."
+          rows={3}
+          maxLength={1000}
+          aria-describedby="access-reason-hint"
+        />
+        <p
+          id="access-reason-hint"
+          className="flex justify-between gap-2 text-xs text-muted-foreground"
+        >
+          <span>At least 10 characters. Approvers see this.</span>
+          <span className="tabular-nums">{reason.length}/1000</span>
+        </p>
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+          {error}
+        </p>
+      )}
+      <div className="flex justify-end border-t border-border pt-4">
+        <Button type="submit" disabled={!canSubmit} className="gap-1.5">
+          <Send className="h-4 w-4" aria-hidden />
+          {pending ? 'Sending…' : 'Send request'}
+        </Button>
+      </div>
     </form>
   );
 }

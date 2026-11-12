@@ -2,12 +2,29 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, CircleSlash, Info, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  CircleSlash,
+  ClipboardCheck,
+  Download,
+  Info,
+  Pencil,
+  Plus,
+  Search,
+  ShieldPlus,
+  Trash2,
+  UserSearch,
+  XCircle,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/shadcn/button';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Switch } from '@/components/ui/shadcn/switch';
+import { ListEmpty, StatusPill } from '@/components/settings/mcp/McpListKit';
+import { PersonCell } from '@/components/access/AccessUi';
+import SimpleSelect from '@/components/access/SimpleSelect';
 import { cn } from '@/lib/utils';
 import {
   ALL_CATALOGUED_CAPABILITIES,
@@ -32,8 +49,27 @@ import type { AccessCheckResult } from '@/lib/access/admin';
 import { signInAgain } from '@/components/access/SignInAgainButton';
 
 const RETURN_PATH = '/settings/access/admin';
-const selectClass =
-  'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/** Bottom bar for a form inside a settings section: feedback on the left, actions on the right. */
+function FormFooter({
+  children,
+  feedback,
+}: {
+  children: React.ReactNode;
+  feedback?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">{feedback}</div>
+      <div className="flex flex-wrap items-center justify-end gap-2">{children}</div>
+    </div>
+  );
+}
+
+const CAPABILITY_OPTIONS = ALL_CATALOGUED_CAPABILITIES.map(option => ({
+  value: option,
+  label: capabilityInfo(option).label,
+}));
 
 type UserOption = { id: string; name: string | null; email: string; role: string };
 
@@ -45,7 +81,11 @@ function Feedback({
   if (!result) return null;
   if (result.ok) {
     return result.message ? (
-      <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">
+      <p
+        role="status"
+        className="flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-400"
+      >
+        <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
         {result.message}
       </p>
     ) : null;
@@ -55,6 +95,7 @@ function Feedback({
       role="alert"
       className="flex flex-wrap items-center gap-2 text-sm text-rose-600 dark:text-rose-400"
     >
+      <XCircle className="h-4 w-4 shrink-0" aria-hidden />
       <span>{result.error}</span>
       {result.code === 'STEP_UP_REQUIRED' && (
         <Button size="sm" variant="outline" onClick={() => signInAgain(RETURN_PATH)}>
@@ -79,6 +120,20 @@ export type AccessPolicyValues = {
   selfApprovalAllowed: boolean;
   reviewIntervalDays: number | null;
 };
+
+const REVIEW_INTERVAL_LABELS = new Map([
+  [30, 'Monthly'],
+  [90, 'Quarterly'],
+  [180, 'Twice a year'],
+  [365, 'Yearly'],
+]);
+
+/** Presets plus a saved value that isn't one of them, so the select never shows blank. */
+function withCurrent(presets: number[], current: number | null) {
+  return current && !presets.includes(current)
+    ? [...presets, current].sort((a, b) => a - b)
+    : presets;
+}
 
 export function AccessPolicyForm({ initial }: { initial: AccessPolicyValues }) {
   const router = useRouter();
@@ -112,59 +167,66 @@ export function AccessPolicyForm({ initial }: { initial: AccessPolicyValues }) {
   ];
 
   return (
-    <div className="space-y-4">
-      {toggles.map(toggle => (
-        <div key={toggle.key} className="flex items-start justify-between gap-4">
-          <div>
-            <Label htmlFor={`policy-${toggle.key}`} className="font-medium">
-              {toggle.label}
-            </Label>
-            <p className="text-xs text-muted-foreground">{toggle.help}</p>
+    <div className="space-y-5">
+      <div className="divide-y divide-border rounded-lg border border-border">
+        {toggles.map(toggle => (
+          <div key={toggle.key} className="flex items-start justify-between gap-6 p-4">
+            <div className="space-y-1">
+              <Label htmlFor={`policy-${toggle.key}`} className="text-sm font-medium">
+                {toggle.label}
+              </Label>
+              <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                {toggle.help}
+              </p>
+            </div>
+            <Switch
+              id={`policy-${toggle.key}`}
+              checked={Boolean(values[toggle.key])}
+              onCheckedChange={checked => set(toggle.key, checked as never)}
+              className="mt-0.5 shrink-0"
+            />
           </div>
-          <Switch
-            id={`policy-${toggle.key}`}
-            checked={Boolean(values[toggle.key])}
-            onCheckedChange={checked => set(toggle.key, checked as never)}
-          />
-        </div>
-      ))}
-      <div className="grid gap-3 sm:grid-cols-2">
+        ))}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="policy-break-glass-max">Longest emergency access</Label>
-          <select
+          <SimpleSelect
             id="policy-break-glass-max"
-            className={selectClass}
-            value={values.breakGlassMaxMinutes}
-            onChange={event => set('breakGlassMaxMinutes', Number(event.target.value))}
-          >
-            {[15, 30, 60, 120, 240].map(minutes => (
-              <option key={minutes} value={minutes}>
-                {minutes < 60
-                  ? `${minutes} minutes`
-                  : `${minutes / 60} hour${minutes === 60 ? '' : 's'}`}
-              </option>
-            ))}
-          </select>
+            value={String(values.breakGlassMaxMinutes)}
+            onValueChange={value => set('breakGlassMaxMinutes', Number(value))}
+            options={withCurrent([15, 30, 60, 120, 240], initial.breakGlassMaxMinutes).map(
+              minutes => ({
+                value: String(minutes),
+                label:
+                  minutes < 60
+                    ? `${minutes} minutes`
+                    : `${minutes / 60} hour${minutes === 60 ? '' : 's'}`,
+              })
+            )}
+          />
+          <p className="text-xs text-muted-foreground">The most anyone can choose at once.</p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="policy-review-interval">Automatic access reviews</Label>
-          <select
+          <SimpleSelect
             id="policy-review-interval"
-            className={selectClass}
-            value={values.reviewIntervalDays ?? ''}
-            onChange={event =>
-              set('reviewIntervalDays', event.target.value ? Number(event.target.value) : null)
+            value={values.reviewIntervalDays ? String(values.reviewIntervalDays) : 'off'}
+            onValueChange={value =>
+              set('reviewIntervalDays', value === 'off' ? null : Number(value))
             }
-          >
-            <option value="">Off</option>
-            <option value="30">Monthly</option>
-            <option value="90">Quarterly</option>
-            <option value="180">Twice a year</option>
-            <option value="365">Yearly</option>
-          </select>
+            options={[
+              { value: 'off', label: 'Off' },
+              ...withCurrent([30, 90, 180, 365], initial.reviewIntervalDays).map(days => ({
+                value: String(days),
+                label: REVIEW_INTERVAL_LABELS.get(days) ?? `Every ${days} days`,
+              })),
+            ]}
+          />
+          <p className="text-xs text-muted-foreground">Starts a review on this schedule.</p>
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      <FormFooter feedback={<Feedback result={result} />}>
         <Button
           disabled={pending}
           onClick={() =>
@@ -177,8 +239,7 @@ export function AccessPolicyForm({ initial }: { initial: AccessPolicyValues }) {
         >
           {pending ? 'Saving…' : 'Save policy'}
         </Button>
-        <Feedback result={result} />
-      </div>
+      </FormFooter>
     </div>
   );
 }
@@ -222,35 +283,30 @@ export function AccessChecker({ users }: { users: UserOption[] }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-3">
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="check-user">Person</Label>
-          <select
+          <SimpleSelect
             id="check-user"
-            className={selectClass}
             value={userId}
-            onChange={event => setUserId(event.target.value)}
-          >
-            {users.map(user => (
-              <option key={user.id} value={user.id}>
-                {userLabel(user)}
-              </option>
-            ))}
-          </select>
+            onValueChange={setUserId}
+            placeholder="Choose a person"
+            options={users.map(user => ({ value: user.id, label: userLabel(user) }))}
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="check-kind">Check</Label>
-          <select
+          <SimpleSelect
             id="check-kind"
-            className={selectClass}
             value={kind}
-            onChange={event => setKind(event.target.value as typeof kind)}
-          >
-            <option value="page">Opening a page</option>
-            <option value="incident">An action on an incident</option>
-            <option value="capability">A permission</option>
-          </select>
+            onValueChange={value => setKind(value as typeof kind)}
+            options={[
+              { value: 'page', label: 'Opening a page' },
+              { value: 'incident', label: 'An action on an incident' },
+              { value: 'capability', label: 'A permission' },
+            ]}
+          />
         </div>
         {kind === 'page' && (
           <div className="space-y-1.5">
@@ -260,103 +316,110 @@ export function AccessChecker({ users }: { users: UserOption[] }) {
               value={path}
               onChange={event => setPath(event.target.value)}
               placeholder="/runbooks"
+              className="font-mono text-sm"
             />
           </div>
         )}
         {kind === 'capability' && (
           <div className="space-y-1.5">
             <Label htmlFor="check-capability">Permission</Label>
-            <select
+            <SimpleSelect
               id="check-capability"
-              className={selectClass}
               value={capability}
-              onChange={event => setCapability(event.target.value as Capability)}
-            >
-              {ALL_CATALOGUED_CAPABILITIES.map(option => (
-                <option key={option} value={option}>
-                  {capabilityInfo(option).label}
-                </option>
-              ))}
-            </select>
+              onValueChange={value => setCapability(value as Capability)}
+              options={CAPABILITY_OPTIONS}
+            />
+          </div>
+        )}
+        {kind === 'incident' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="check-action">Action</Label>
+            <SimpleSelect
+              id="check-action"
+              value={action}
+              onValueChange={value => setAction(value as typeof action)}
+              options={[
+                { value: 'view', label: 'View' },
+                { value: 'acknowledge', label: 'Acknowledge' },
+                { value: 'note', label: 'Add a note' },
+                { value: 'escalate', label: 'Escalate' },
+                { value: 'resolve', label: 'Resolve' },
+                { value: 'manage', label: 'Change urgency, reassign, snooze…' },
+              ]}
+            />
           </div>
         )}
       </div>
       {kind === 'incident' && (
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="check-incident">Incident ID or link</Label>
-            <Input
-              id="check-incident"
-              value={incidentId}
-              onChange={event => setIncidentId(event.target.value)}
-              placeholder="https://…/incidents/clx…"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="check-action">Action</Label>
-            <select
-              id="check-action"
-              className={selectClass}
-              value={action}
-              onChange={event => setAction(event.target.value as typeof action)}
-            >
-              <option value="view">View</option>
-              <option value="acknowledge">Acknowledge</option>
-              <option value="note">Add a note</option>
-              <option value="escalate">Escalate</option>
-              <option value="resolve">Resolve</option>
-              <option value="manage">Change urgency, reassign, snooze…</option>
-            </select>
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="check-incident">Incident ID or link</Label>
+          <Input
+            id="check-incident"
+            value={incidentId}
+            onChange={event => setIncidentId(event.target.value)}
+            placeholder="https://…/incidents/clx…"
+            className="font-mono text-sm"
+          />
         </div>
       )}
-      <Button onClick={run} disabled={pending || !userId}>
-        {pending ? 'Checking…' : 'Check access'}
-      </Button>
-      {error && (
-        <p role="alert" className="text-sm text-rose-600">
-          {error}
-        </p>
-      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={run} disabled={pending || !userId} className="gap-1.5">
+          <Search className="h-4 w-4" aria-hidden />
+          {pending ? 'Checking…' : 'Check access'}
+        </Button>
+        {error && (
+          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+            {error}
+          </p>
+        )}
+      </div>
       {result && (
         <div
           role="status"
           className={cn(
-            'rounded-lg border p-4',
+            'overflow-hidden rounded-lg border',
             result.allowed
-              ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
-              : 'border-rose-200 bg-rose-50/60 dark:border-rose-900/50 dark:bg-rose-950/20'
+              ? 'border-emerald-200 dark:border-emerald-900/50'
+              : 'border-rose-200 dark:border-rose-900/50'
           )}
         >
-          <p className="mb-3 flex items-center gap-2 font-semibold">
+          <p
+            className={cn(
+              'flex items-center gap-2 px-4 py-3 text-sm font-semibold',
+              result.allowed
+                ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
+                : 'bg-rose-50 text-rose-900 dark:bg-rose-950/30 dark:text-rose-200'
+            )}
+          >
             {result.allowed ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
             ) : (
-              <XCircle className="h-4 w-4 text-rose-600" aria-hidden />
+              <XCircle className="h-4 w-4 shrink-0" aria-hidden />
             )}
             {result.summary}
           </p>
-          <ol className="space-y-1.5 text-sm">
+          <ol className="divide-y divide-border bg-card">
             {result.steps.map((step, index) => (
-              <li key={index} className="flex gap-2">
+              <li key={index} className="flex gap-3 px-4 py-2.5 text-sm">
                 {step.outcome === 'pass' ? (
                   <CheckCircle2
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
                     aria-label="Pass"
                   />
                 ) : step.outcome === 'fail' ? (
                   <CircleSlash
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400"
                     aria-label="Fail"
                   />
                 ) : (
                   <Info
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
                     aria-label="Info"
                   />
                 )}
-                <span>
-                  <strong>{step.label}:</strong> {step.detail}
+                <span className="min-w-0">
+                  <span className="font-medium text-foreground">{step.label}</span>
+                  <span className="block text-muted-foreground">{step.detail}</span>
                 </span>
               </li>
             ))}
@@ -376,26 +439,22 @@ export function WhoHasAccess() {
   const [data, setData] = useState<WhoHasData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const total = data ? data.byRole.length + data.byCustomRole.length + data.byGrant.length : 0;
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-[16rem] flex-1 space-y-1.5">
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div className="space-y-1.5">
           <Label htmlFor="who-capability">Permission</Label>
-          <select
+          <SimpleSelect
             id="who-capability"
-            className={selectClass}
             value={capability}
-            onChange={event => setCapability(event.target.value as Capability)}
-          >
-            {ALL_CATALOGUED_CAPABILITIES.map(option => (
-              <option key={option} value={option}>
-                {capabilityInfo(option).label}
-              </option>
-            ))}
-          </select>
+            onValueChange={value => setCapability(value as Capability)}
+            options={CAPABILITY_OPTIONS}
+          />
         </div>
         <Button
           disabled={pending}
+          className="gap-1.5"
           onClick={() =>
             startTransition(async () => {
               const outcome = await whoHasCapabilityAction(capability);
@@ -406,46 +465,73 @@ export function WhoHasAccess() {
             })
           }
         >
+          <UserSearch className="h-4 w-4" aria-hidden />
           {pending ? 'Looking…' : 'Show people'}
         </Button>
       </div>
-      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+          {error}
+        </p>
+      )}
       {data && (
-        <div className="space-y-2 text-sm">
-          <p className="text-muted-foreground">
-            Built-in roles with this permission:{' '}
-            {data.roles.length ? data.roles.map(role => roleLabel(role)).join(', ') : 'none'}.
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {total} {total === 1 ? 'person' : 'people'}
+            </span>{' '}
+            · built-in roles with this permission:{' '}
+            {data.roles.length ? data.roles.map(role => roleLabel(role)).join(', ') : 'none'}
           </p>
-          <ul className="divide-y divide-border rounded-lg border border-border">
-            {data.byRole.map(user => (
-              <li key={`r-${user.id}`} className="flex justify-between gap-2 px-3 py-1.5">
-                <span>{user.name ?? user.email}</span>
-                <span className="text-xs text-muted-foreground">
-                  role: {roleLabel(user.role as AppRole)}
-                </span>
-              </li>
-            ))}
-            {data.byCustomRole.map(user => (
-              <li key={`c-${user.id}`} className="flex justify-between gap-2 px-3 py-1.5">
-                <span>{user.name ?? user.email}</span>
-                <span className="text-xs text-muted-foreground">
-                  custom role: {user.customRole}
-                </span>
-              </li>
-            ))}
-            {data.byGrant.map(grant => (
-              <li key={`g-${grant.id}`} className="flex justify-between gap-2 px-3 py-1.5">
-                <span>{grant.user.name ?? grant.user.email}</span>
-                <span className="text-xs text-muted-foreground">
-                  temporary {roleLabel(grant.role as AppRole)} until{' '}
-                  {new Date(grant.expiresAt).toLocaleString()}
-                </span>
-              </li>
-            ))}
-            {data.byRole.length + data.byCustomRole.length + data.byGrant.length === 0 && (
-              <li className="px-3 py-2 text-muted-foreground">Nobody.</li>
-            )}
-          </ul>
+          {total === 0 ? (
+            <div className="rounded-lg border border-dashed border-border">
+              <ListEmpty
+                icon={<UserSearch className="h-5 w-5" aria-hidden />}
+                title="Nobody has this permission"
+              >
+                Assign a role or a custom role that includes it.
+              </ListEmpty>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {data.byRole.map(user => (
+                <li
+                  key={`r-${user.id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <PersonCell name={user.name} email={user.email} />
+                  <StatusPill tone="neutral">{roleLabel(user.role as AppRole)} role</StatusPill>
+                </li>
+              ))}
+              {data.byCustomRole.map(user => (
+                <li
+                  key={`c-${user.id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <PersonCell name={user.name} email={user.email} />
+                  <StatusPill tone="violet">Custom: {user.customRole}</StatusPill>
+                </li>
+              ))}
+              {data.byGrant.map(grant => (
+                <li
+                  key={`g-${grant.id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <PersonCell
+                    name={grant.user.name}
+                    email={grant.user.email}
+                    meta={`Until ${new Date(grant.expiresAt).toLocaleString(undefined, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}`}
+                  />
+                  <StatusPill tone={grant.source === 'BREAK_GLASS' ? 'warning' : 'info'}>
+                    Temporary {roleLabel(grant.role as AppRole)}
+                  </StatusPill>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
@@ -504,50 +590,101 @@ export function CustomRolesManager({
   const assignedRoleFor = (userId: string) =>
     assignments.find(assignment => assignment.userId === userId)?.customRoleId ?? null;
 
+  const assignedName = (userId: string) => {
+    const roleId = assignedRoleFor(userId);
+    return roleId ? (roles.find(role => role.id === roleId)?.name ?? 'a custom role') : null;
+  };
+
   return (
     <div className="space-y-5">
-      <ul className="divide-y divide-border rounded-lg border border-border text-sm">
-        {roles.length === 0 && (
-          <li className="px-3 py-3 text-muted-foreground">
-            No custom roles yet. Create one to give specific people extra permissions without making
-            them Responders or Admins.
-          </li>
-        )}
-        {roles.map(role => (
-          <li key={role.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
-            <span className="flex-1">
-              <strong>{role.name}</strong>
-              <span className="block text-xs text-muted-foreground">
-                {role.capabilities.length} permission{role.capabilities.length === 1 ? '' : 's'} ·{' '}
-                {role.holders} {role.holders === 1 ? 'person' : 'people'}
-                {role.description ? ` · ${role.description}` : ''}
-              </span>
-            </span>
-            <Button size="sm" variant="outline" onClick={() => edit(role)}>
-              Edit
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  const outcome = await archiveCustomRoleAction(role.id);
-                  setResult(outcome);
-                  if (outcome.ok) router.refresh();
-                })
-              }
+      {roles.length === 0 && !editing ? (
+        <div className="rounded-lg border border-dashed border-border">
+          <ListEmpty
+            icon={<ShieldPlus className="h-5 w-5" aria-hidden />}
+            title="No custom roles yet"
+            action={
+              <Button onClick={() => edit(null)} className="gap-1.5">
+                <Plus className="h-4 w-4" aria-hidden />
+                New custom role
+              </Button>
+            }
+          >
+            Give specific people extra permissions without making them Responders or Admins.
+          </ListEmpty>
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {roles.map(role => (
+            <div
+              key={role.id}
+              className={cn(
+                'flex flex-col gap-3 rounded-lg border bg-card p-4',
+                editing?.id === role.id
+                  ? 'border-primary/50 ring-2 ring-primary/20'
+                  : 'border-border'
+              )}
             >
-              Remove
-            </Button>
-          </li>
-        ))}
-      </ul>
-      {!editing && <Button onClick={() => edit(null)}>New custom role</Button>}
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-semibold text-foreground">{role.name}</p>
+                {role.description && (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {role.description}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <StatusPill tone="info">
+                  {role.capabilities.length} permission{role.capabilities.length === 1 ? '' : 's'}
+                </StatusPill>
+                <StatusPill tone="neutral">
+                  {role.holders} {role.holders === 1 ? 'person' : 'people'}
+                </StatusPill>
+              </div>
+              <div className="mt-auto flex justify-end gap-2 border-t border-border pt-3">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={pending}
+                  className="gap-1.5 text-muted-foreground hover:text-destructive"
+                  onClick={() =>
+                    startTransition(async () => {
+                      const outcome = await archiveCustomRoleAction(role.id);
+                      setResult(outcome);
+                      if (outcome.ok) router.refresh();
+                    })
+                  }
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                  Remove
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => edit(role)}>
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  Edit
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {!editing && roles.length > 0 && (
+        <Button variant="outline" onClick={() => edit(null)} className="gap-1.5">
+          <Plus className="h-4 w-4" aria-hidden />
+          New custom role
+        </Button>
+      )}
 
       {editing && (
-        <div className="space-y-3 rounded-lg border border-border p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-5 rounded-lg border border-border bg-muted/20 p-4 md:p-5">
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold text-foreground">
+              {editing.id ? `Edit ${editing.name}` : 'New custom role'}
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              These permissions are added on top of each holder’s built-in role. Organization
+              administration can only be granted with the Admin role.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="custom-role-name">Name</Label>
               <Input
@@ -556,6 +693,7 @@ export function CustomRolesManager({
                 maxLength={60}
                 onChange={event => setName(event.target.value)}
                 placeholder="Runbook operator"
+                className="bg-background"
               />
             </div>
             <div className="space-y-1.5">
@@ -565,45 +703,66 @@ export function CustomRolesManager({
                 value={description}
                 maxLength={300}
                 onChange={event => setDescription(event.target.value)}
+                placeholder="What this role is for"
+                className="bg-background"
               />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            These permissions are added on top of each holder’s built-in role. Organization
-            administration can only be granted with the Admin role.
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {grouped.map(group => (
-              <fieldset key={group.group}>
-                <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <fieldset
+                key={group.group}
+                className="space-y-2 rounded-lg border border-border bg-background p-3"
+              >
+                <legend className="sr-only">{group.label}</legend>
+                <p
+                  aria-hidden
+                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                >
                   {group.label}
-                </legend>
-                {group.items.map(capability => (
-                  <label key={capability} className="flex items-center gap-2 py-0.5 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(capability)}
-                      onChange={event =>
-                        setSelected(current => {
-                          const next = new Set(current);
-                          if (event.target.checked) next.add(capability);
-                          else next.delete(capability);
-                          return next;
-                        })
-                      }
-                    />
-                    <span className="flex-1">{capabilityInfo(capability).label}</span>
-                    {capabilityInfo(capability).risk === 'high' && (
-                      <span className="rounded bg-rose-100 px-1.5 text-[10px] font-semibold uppercase text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">
-                        High risk
-                      </span>
-                    )}
-                  </label>
-                ))}
+                </p>
+                {group.items.map(capability => {
+                  const checkboxId = `custom-role-cap-${capability}`;
+                  return (
+                    <div key={capability} className="flex items-start gap-2.5">
+                      <Checkbox
+                        id={checkboxId}
+                        className="mt-0.5"
+                        checked={selected.has(capability)}
+                        onCheckedChange={checked =>
+                          setSelected(current => {
+                            const next = new Set(current);
+                            if (checked === true) next.add(capability);
+                            else next.delete(capability);
+                            return next;
+                          })
+                        }
+                      />
+                      <label
+                        htmlFor={checkboxId}
+                        className="flex flex-1 cursor-pointer flex-wrap items-center gap-1.5 text-sm leading-snug text-foreground"
+                      >
+                        {capabilityInfo(capability).label}
+                        {capabilityInfo(capability).risk === 'high' && (
+                          <StatusPill tone="danger">High risk</StatusPill>
+                        )}
+                      </label>
+                    </div>
+                  );
+                })}
               </fieldset>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <FormFooter
+            feedback={
+              <span className="text-xs text-muted-foreground">
+                {selected.size} permission{selected.size === 1 ? '' : 's'} selected
+              </span>
+            }
+          >
+            <Button variant="ghost" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
             <Button
               disabled={pending || name.trim().length < 2 || selected.size === 0}
               onClick={() =>
@@ -624,69 +783,69 @@ export function CustomRolesManager({
             >
               {pending ? 'Saving…' : 'Save role'}
             </Button>
-            <Button variant="ghost" onClick={() => setEditing(null)}>
-              Cancel
-            </Button>
-          </div>
+          </FormFooter>
         </div>
       )}
 
       {roles.length > 0 && (
-        <div className="space-y-2 rounded-lg border border-border p-4">
-          <h4 className="text-sm font-semibold">Assign a custom role</h4>
-          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
-            <select
-              aria-label="Person"
-              className={selectClass}
-              value={assignUser}
-              onChange={event => setAssignUser(event.target.value)}
-            >
-              {users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {userLabel(user)}
-                  {assignedRoleFor(user.id)
-                    ? ` (has ${roles.find(role => role.id === assignedRoleFor(user.id))?.name ?? 'a custom role'})`
-                    : ''}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Custom role"
-              className={selectClass}
-              value={assignRole}
-              onChange={event => setAssignRole(event.target.value)}
-            >
-              {roles.map(role => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
-            <Button
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  const outcome = await assignCustomRoleAction(assignUser, assignRole);
-                  setResult(outcome);
-                  if (outcome.ok) router.refresh();
-                })
-              }
-            >
-              Assign
-            </Button>
-            <Button
-              variant="outline"
-              disabled={pending || !assignedRoleFor(assignUser)}
-              onClick={() =>
-                startTransition(async () => {
-                  const outcome = await assignCustomRoleAction(assignUser, null);
-                  setResult(outcome);
-                  if (outcome.ok) router.refresh();
-                })
-              }
-            >
-              Remove from person
-            </Button>
+        <div className="space-y-4 rounded-lg border border-border p-4 md:p-5">
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold text-foreground">Assign a custom role</h4>
+            <p className="text-xs text-muted-foreground">
+              Each person can hold one custom role. Assigning replaces their current one.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="assign-person">Person</Label>
+              <SimpleSelect
+                id="assign-person"
+                value={assignUser}
+                onValueChange={setAssignUser}
+                options={users.map(user => ({
+                  value: user.id,
+                  label: `${userLabel(user)}${
+                    assignedName(user.id) ? ` (has ${assignedName(user.id)})` : ''
+                  }`,
+                }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="assign-role">Custom role</Label>
+              <SimpleSelect
+                id="assign-role"
+                value={assignRole}
+                onValueChange={setAssignRole}
+                options={roles.map(role => ({ value: role.id, label: role.name }))}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={pending || !assignedRoleFor(assignUser)}
+                onClick={() =>
+                  startTransition(async () => {
+                    const outcome = await assignCustomRoleAction(assignUser, null);
+                    setResult(outcome);
+                    if (outcome.ok) router.refresh();
+                  })
+                }
+              >
+                Remove from person
+              </Button>
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const outcome = await assignCustomRoleAction(assignUser, assignRole);
+                    setResult(outcome);
+                    if (outcome.ok) router.refresh();
+                  })
+                }
+              >
+                Assign
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -713,41 +872,55 @@ export function StartAccessReviewForm() {
   const [result, setResult] = useState<Parameters<typeof Feedback>[0]['result']>(null);
   const [pending, startTransition] = useTransition();
   return (
-    <div className="flex flex-wrap items-end gap-2">
-      <div className="min-w-[14rem] flex-1 space-y-1.5">
-        <Label htmlFor="review-name">Review name</Label>
-        <Input
-          id="review-name"
-          value={name}
-          maxLength={120}
-          onChange={event => setName(event.target.value)}
-        />
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 rounded-lg border border-dashed border-border p-4">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <ClipboardCheck className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="space-y-0.5">
+          <p className="text-sm font-semibold text-foreground">No review in progress</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Starting a review lists everyone with elevated access. Reviewers keep or remove each
+            one, and an administrator applies the removals.
+          </p>
+        </div>
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="review-due">Due in</Label>
-        <select
-          id="review-due"
-          className={selectClass}
-          value={due}
-          onChange={event => setDue(event.target.value)}
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
+        <div className="space-y-1.5">
+          <Label htmlFor="review-name">Review name</Label>
+          <Input
+            id="review-name"
+            value={name}
+            maxLength={120}
+            onChange={event => setName(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="review-due">Due in</Label>
+          <SimpleSelect
+            id="review-due"
+            value={due}
+            onValueChange={setDue}
+            options={[
+              { value: '7', label: '7 days' },
+              { value: '14', label: '14 days' },
+              { value: '30', label: '30 days' },
+            ]}
+          />
+        </div>
+        <Button
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              const outcome = await startAccessReviewAction({ name, dueInDays: Number(due) });
+              setResult(outcome);
+              if (outcome.ok) router.refresh();
+            })
+          }
         >
-          <option value="7">7 days</option>
-          <option value="14">14 days</option>
-          <option value="30">30 days</option>
-        </select>
+          {pending ? 'Starting…' : 'Start review'}
+        </Button>
       </div>
-      <Button
-        disabled={pending}
-        onClick={() =>
-          startTransition(async () => {
-            const outcome = await startAccessReviewAction({ name, dueInDays: Number(due) });
-            setResult(outcome);
-            if (outcome.ok) router.refresh();
-          })
-        }
-      >
-        {pending ? 'Starting…' : 'Start review'}
-      </Button>
       <Feedback result={result} />
     </div>
   );
@@ -781,61 +954,93 @@ export function AccessReviewItems({
       router.refresh();
     });
 
+  const decided = items.length - remaining;
+  const percent = items.length === 0 ? 100 : Math.round((decided / items.length) * 100);
+
   return (
-    <div className="space-y-3">
-      <ul className="divide-y divide-border rounded-lg border border-border text-sm">
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            <span className="font-semibold text-foreground">{decided}</span> of {items.length}{' '}
+            decided
+          </span>
+          <span>{remaining > 0 ? `${remaining} still need a decision` : 'All items decided'}</span>
+        </div>
+        <div
+          role="progressbar"
+          aria-label="Review progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+          className="h-1.5 overflow-hidden rounded-full bg-muted"
+        >
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+      </div>
+      <ul className="divide-y divide-border rounded-lg border border-border">
         {items.map(item => (
-          <li key={item.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
-            <span className="flex-1">
-              {item.subjectLabel}
-              <span className="block text-[11px] uppercase text-muted-foreground">
-                {item.subjectType.replace('_', ' ').toLowerCase()}
-              </span>
-            </span>
+          <li
+            key={item.id}
+            className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium text-foreground">{item.subjectLabel}</p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <StatusPill tone="neutral">
+                  {item.subjectType.replace('_', ' ').toLowerCase()}
+                </StatusPill>
+                {item.decision === 'KEEP' && <StatusPill tone="success">Keep</StatusPill>}
+                {item.decision === 'REVOKE' && <StatusPill tone="danger">Remove</StatusPill>}
+              </div>
+            </div>
             {item.userId === currentUserId && !canSelfCertify ? (
               <span className="text-xs text-muted-foreground">Another reviewer must decide</span>
             ) : (
-              <>
+              <div
+                role="group"
+                aria-label={`Decision for ${item.subjectLabel}`}
+                className="inline-flex shrink-0 rounded-md border border-border p-0.5"
+              >
                 <Button
                   size="sm"
-                  variant={item.decision === 'KEEP' ? 'default' : 'outline'}
+                  variant={item.decision === 'KEEP' ? 'default' : 'ghost'}
+                  aria-pressed={item.decision === 'KEEP'}
                   disabled={pending}
+                  className="h-7"
                   onClick={() => decide(item.id, 'KEEP')}
                 >
                   Keep
                 </Button>
                 <Button
                   size="sm"
-                  variant={item.decision === 'REVOKE' ? 'destructive' : 'outline'}
+                  variant={item.decision === 'REVOKE' ? 'destructive' : 'ghost'}
+                  aria-pressed={item.decision === 'REVOKE'}
                   disabled={pending}
+                  className="h-7"
                   onClick={() => decide(item.id, 'REVOKE')}
                 >
                   Remove
                 </Button>
-              </>
+              </div>
             )}
           </li>
         ))}
       </ul>
-      <div className="flex flex-wrap items-center gap-3">
-        {canComplete ? (
-          <Button
-            disabled={pending || remaining > 0}
-            onClick={() =>
-              startTransition(async () => {
-                const outcome = await completeAccessReviewAction(reviewId);
-                setResult(outcome);
-                if (outcome.ok) router.refresh();
-              })
-            }
+      <FormFooter
+        feedback={
+          <a
+            href={`/api/access/reviews/${reviewId}/export`}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
           >
-            Complete review and apply removals
-          </Button>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            An administrator completes the review and applies removals.
-          </span>
-        )}
+            <Download className="h-3.5 w-3.5" aria-hidden />
+            Download evidence (JSON)
+          </a>
+        }
+      >
         <Button
           variant={confirmCancel ? 'destructive' : 'ghost'}
           disabled={pending}
@@ -855,16 +1060,25 @@ export function AccessReviewItems({
         >
           {confirmCancel ? 'Confirm: cancel without changes' : 'Cancel review'}
         </Button>
-        <span className="text-xs text-muted-foreground">
-          {remaining > 0 ? `${remaining} still need a decision` : 'All items decided'}
-        </span>
-        <a
-          href={`/api/access/reviews/${reviewId}/export`}
-          className="text-sm text-primary hover:underline"
-        >
-          Download evidence (JSON)
-        </a>
-      </div>
+        {canComplete ? (
+          <Button
+            disabled={pending || remaining > 0}
+            onClick={() =>
+              startTransition(async () => {
+                const outcome = await completeAccessReviewAction(reviewId);
+                setResult(outcome);
+                if (outcome.ok) router.refresh();
+              })
+            }
+          >
+            Complete review and apply removals
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            An administrator completes the review and applies removals.
+          </span>
+        )}
+      </FormFooter>
       <Feedback result={result} />
     </div>
   );
