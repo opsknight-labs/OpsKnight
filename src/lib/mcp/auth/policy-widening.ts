@@ -35,6 +35,8 @@ export interface McpPolicyAccess {
   responderDirectWritesEnabled?: boolean;
   /** Optional cap on one person's requests per minute across connections; null or unset is off. */
   perUserRequestsPerMinute?: number | null;
+  /** The organization's identity provider may grant assistants access without a consent click. */
+  enterpriseManagedAuthEnabled?: boolean;
 }
 
 type Access = McpPolicyAccess;
@@ -52,6 +54,7 @@ const SWITCHES: [string, (policy: Access) => boolean][] = [
   // Lifting strict four-eyes lets an administrator approve what their own assistant prepared.
   ['requireDistinctReviewer', policy => !policy.requireDistinctReviewer],
   ['responderDirectWritesEnabled', policy => policy.responderDirectWritesEnabled === true],
+  ['enterpriseManagedAuthEnabled', policy => policy.enterpriseManagedAuthEnabled === true],
 ];
 const LIMITS: [string, (policy: Access) => number][] = [
   ['requestsPerMinute', policy => policy.requestsPerMinute],

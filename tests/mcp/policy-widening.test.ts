@@ -90,6 +90,12 @@ describe('mcpPolicyWidening', () => {
     expect(mcpPolicyWidening({ ...base, deviceFlowEnabled: true }, base)).toEqual([]);
   });
 
+  it('treats letting the identity provider grant access as widening', () => {
+    const on = { ...base, enterpriseManagedAuthEnabled: true };
+    expect(mcpPolicyWidening(base, on)).toEqual(['enterpriseManagedAuthEnabled']);
+    expect(mcpPolicyWidening(on, base)).toEqual([]);
+  });
+
   it('treats turning personal tokens on, raising their limits or lifting view-only as widening', () => {
     expect(mcpPolicyWidening(base, { ...base, patEnabled: true })).toEqual(['patEnabled']);
     const pat = { ...base, patEnabled: true };

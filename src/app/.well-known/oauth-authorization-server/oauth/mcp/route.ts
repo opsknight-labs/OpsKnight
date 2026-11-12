@@ -4,6 +4,11 @@ import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
 import { loadDiscoveryPolicy } from '@/lib/mcp/auth/discovery-policy';
 import { PUBLIC_METADATA_CORS, publicMetadataPreflight } from '@/lib/mcp/auth/cors';
 import { MCP_DEVICE_CODE_GRANT } from '@/lib/mcp/auth/device-flow';
+import {
+  MCP_ID_JAG_PROFILE,
+  MCP_JWT_BEARER_GRANT,
+  mcpEnterpriseGrantIssuer,
+} from '@/lib/mcp/auth/enterprise-grant';
 
 export function GET() {
   return withMcpDatabase(async () => {
@@ -15,6 +20,8 @@ export function GET() {
     const cimd = Boolean(enabled && policy?.cimdEnabled && policy.cimdScopes.length);
     // The device flow (RFC 8628) is advertised only while an administrator has it turned on.
     const device = Boolean(enabled && policy?.deviceFlowEnabled);
+    // Enterprise-managed authorization: only while switched on and single sign-on is configured.
+    const idJag = Boolean(enabled && (await mcpEnterpriseGrantIssuer(policy)));
     const scopes =
       enabled && policy
         ? [
@@ -37,7 +44,9 @@ export function GET() {
           'authorization_code',
           'refresh_token',
           ...(device ? [MCP_DEVICE_CODE_GRANT] : []),
+          ...(idJag ? [MCP_JWT_BEARER_GRANT] : []),
         ],
+        ...(idJag ? { authorization_grant_profiles_supported: [MCP_ID_JAG_PROFILE] } : {}),
         ...(device ? { device_authorization_endpoint: `${issuer}/device_authorization` } : {}),
         token_endpoint_auth_methods_supported: ['none'],
         code_challenge_methods_supported: ['S256'],

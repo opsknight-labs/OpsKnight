@@ -1,4 +1,5 @@
 import 'server-only';
+import { MCP_IDP_GRANT_KIND } from '@/lib/mcp/auth/enterprise-grant';
 import { cache } from 'react';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -200,6 +201,8 @@ export type McpGrantRow = {
   id: string;
   /** oauth: an assistant's consent. pat: a personal access token. */
   kind: 'oauth' | 'pat';
+  /** Granted by the organization's identity provider (ID-JAG), not by a consent click. */
+  idpGranted?: boolean;
   /** The name a personal token's owner gave it; null for OAuth connections. */
   label: string | null;
   /** What the person approved. */
@@ -333,6 +336,7 @@ export async function listMcpGrants(
       return {
         id: row.grantId,
         kind: row.grantKind === 'PAT' ? 'pat' : 'oauth',
+        idpGranted: row.grantKind === MCP_IDP_GRANT_KIND,
         label: row.label,
         scopes: row.grantScopes,
         effectiveScopes: access.effectiveScopes,
