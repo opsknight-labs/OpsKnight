@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 106 MCP codes and 24 log events found in the source.
+This page lists 107 MCP codes and 24 log events found in the source.
 
 ## Connecting and signing in
 
@@ -98,6 +98,7 @@ This page lists 106 MCP codes and 24 log events found in the source.
 | <a id="MCP_SUBSCRIPTIONS_BUSY"></a>`MCP_SUBSCRIPTIONS_BUSY` | The process already holds 32 subscription streams. | Retry later. |
 | <a id="MCP_CONTENTION"></a>`MCP_CONTENTION` | Another request changed the same record at the same moment and the database turned this one back after its own retries. | Read the current state, then try again. Reuse the same idempotencyKey for a change so a replay never applies it twice. |
 | <a id="MCP_NOT_A_READ"></a>`MCP_NOT_A_READ` | read_operation was called with an operation that changes something. | Use call_operation for routine changes or operation_prepare for reviewed ones. |
+| <a id="MCP_NOT_A_CHANGE"></a>`MCP_NOT_A_CHANGE` | call_operation was called with an operation that only reads. | Use read_operation with the same operationId and args. |
 | <a id="MCP_SUBSCRIPTIONS_LIMIT"></a>`MCP_SUBSCRIPTIONS_LIMIT` | This connection already holds two subscription streams. | Close a stream first. |
 
 ## Reviewed changes

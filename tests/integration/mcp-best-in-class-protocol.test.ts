@@ -271,8 +271,8 @@ describe('A2: whoami and "me"', () => {
   });
 });
 
-describe('A3: read_operation and the call_operation deprecation', () => {
-  it('serves a read without changes and tells call_operation readers where to go', async () => {
+describe('A3: read_operation serves reads, call_operation refuses them', () => {
+  it('serves a read without changes and sends call_operation readers to read_operation', async () => {
     const { bearer } = await principal();
     const { result } = await tool(bearer, 'read_operation', {
       operationId: 'listServices',
@@ -284,9 +284,9 @@ describe('A3: read_operation and the call_operation deprecation', () => {
       operationId: 'listServices',
       args: { query: { limit: 5 } },
     });
-    expect(legacyRead.result.isError).not.toBe(true);
-    expect(legacyRead.result.structuredContent.evidence.warnings).toContain(
-      'Reads through call_operation are deprecated and will be removed in v2.3.0; use read_operation, which never changes anything.'
+    expect(legacyRead.result.isError).toBe(true);
+    expect(legacyRead.result.content[0].text).toMatch(
+      /^MCP_NOT_A_CHANGE: This operation only reads; use read_operation with the same operationId and args\. \(Reference: /
     );
   });
 });

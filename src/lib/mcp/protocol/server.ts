@@ -1298,18 +1298,15 @@ export function createOpsKnightMcpServer(
           context,
           'call_operation',
           async () => {
-            const result = await callMcpOperation(context, input.operationId, input.args);
             const operation = MCP_OPERATION_MAP.get(input.operationId);
-            // Still served for this release; the assistant learns the confirmation-free path.
-            return operation && isRead(operation)
-              ? {
-                  ...result,
-                  evidence: {
-                    ...result.evidence,
-                    warnings: [...result.evidence.warnings, READ_THROUGH_CALL_DEPRECATED],
-                  },
-                }
-              : result;
+            // One tool never mixes safe and unsafe work; unknown ids fall through to execution.
+            requireMcp(
+              !operation || !isRead(operation),
+              'MCP_NOT_A_CHANGE',
+              400,
+              'This operation only reads; use read_operation with the same operationId and args.'
+            );
+            return callMcpOperation(context, input.operationId, input.args);
           },
           linksFor(input.operationId, input.args)
         );
@@ -1592,10 +1589,6 @@ export function createOpsKnightMcpServer(
   // No Tasks/App capability is advertised until its durable/client gates pass.
   return server;
 }
-
-/** The release that stops serving reads through call_operation (also in CHANGELOG and catalog). */
-export const CALL_OPERATION_READS_REMOVED_IN = 'v2.3.0';
-const READ_THROUGH_CALL_DEPRECATED = `Reads through call_operation are deprecated and will be removed in ${CALL_OPERATION_READS_REMOVED_IN}; use read_operation, which never changes anything.`;
 
 /** The resource template each resource kind is read through. */
 const RESOURCE_OPERATIONS = new Map<CompletionSource, string>([

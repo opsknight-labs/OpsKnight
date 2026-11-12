@@ -462,6 +462,11 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'The settings or review page needs a signed-in user.',
     fix: 'Sign in.',
   },
+  MCP_NOT_A_CHANGE: {
+    area: 'tools',
+    meaning: 'call_operation was called with an operation that only reads.',
+    fix: 'Use read_operation with the same operationId and args.',
+  },
   MCP_NOT_A_READ: {
     area: 'tools',
     meaning: 'read_operation was called with an operation that changes something.',

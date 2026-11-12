@@ -47,10 +47,6 @@ External-secrets support is an **implementation candidate, not certified support
 - SCIM opens a real connection by default, uses in-app confirmations, describes activity in sentences and flags offboarding that leaves on-call gaps. Profile fields managed by the directory are read-only.
 - The sign-in page reflects SSO being turned on immediately; deployment address problems are shown to administrators as a specific fix.
 
-### Deprecated
-
-- MCP: reads through `call_operation` are deprecated; use `read_operation`. Removal is planned in v2.3.0, and the runtime warning names that release.
-
 ### Fixed
 
 - The administrator who turned on SSO appeared as "not linked to the current provider".
