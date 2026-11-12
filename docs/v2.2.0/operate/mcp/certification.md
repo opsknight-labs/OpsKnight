@@ -11,6 +11,8 @@ verification:
   evidence:
     - .github/workflows/mcp-certification.yml
     - scripts/mcp/certify.cjs
+    - scripts/mcp/conformance.ts
+    - scripts/mcp/certify-replicas.ts
     - tests/e2e/mcp-lifecycle.spec.ts
 ---
 
@@ -57,6 +59,20 @@ Source: `main` at `f934c9907` plus the follow-up fixes branch. Evidence (JSON re
 - **Performance (local production build, one process, default 4 slots):** a single call takes 11 to 22 ms (p50); throughput saturates near 138 requests per second; above the concurrency cap the server answers 503 with `Retry-After`; memory stayed at 300 to 400 MB. Hosted calls from a remote machine take about 400 ms (network included).
 - **Not tested:** writes and approvals on the hosted site (it has live Slack and Microsoft Teams integrations), the real Cursor, ChatGPT, VS Code, Codex and Gemini applications, client metadata documents other than Claude's, long soak and multi-replica failover.
 
+## Official conformance suite
+
+`npm run mcp:conformance -- --url=http://localhost:3042` runs the official [MCP conformance suite](https://github.com/modelcontextprotocol/conformance) (`@modelcontextprotocol/conformance`, pinned in `scripts/mcp/conformance.ts`) in server mode against a running OpsKnight on a local `*_test` database, and MCP PR validation runs it against the production build. The suite has no way to authenticate in server mode, so the harness turns MCP and personal access tokens on in that disposable database, mints a one-day personal token for the first active administrator through the production token code, and puts a local proxy in front of `/mcp` that adds the bearer header to requests carrying none. The proxy rewrites Host only when it names the proxy, so the suite's DNS-rebinding probes reach the server unchanged. The token is revoked when the run ends. The suite needs Node 22 or later.
+
+Known failures belong in `scripts/mcp/conformance-baseline.yml` (passed with `--expected-failures` when present), one entry per scenario or `scenario:check-id` with the reason; the suite then fails the run on any new failure and on a baselined check that starts passing. No baseline is committed yet: the suite has not been run against this branch, so the first run on a quiet machine records it. Many server scenarios call fixture tools, prompts and resources that only the suite's reference server has (for example `test_simple_text`); OpsKnight is a domain server and does not ship them, so those failures say nothing about protocol conformance. The `conformance` gate in the release manifest links that run's evidence.
+
+## Two-replica check
+
+`npm run mcp:certify:replicas -- --a=http://localhost:3042 --b=http://localhost:3043` runs against two production replicas on one freshly seeded local database (`scripts/mcp/seed-local.cjs`), started with `MCP_ALLOWED_HOSTS=localhost:3043` so replica B accepts its own Host. It checks that an OAuth token minted through replica A (registration, browser consent, code exchange) works on B; that a change prepared through A is approved on B's review page and committed through B; that a `subscriptions/listen` stream on B sees a change made through A; and that the per-minute quota is one shared window (once A refuses a connection over its quota, B refuses it too). It uses Playwright's Chromium for the two browser steps.
+
+## Client-profile emulation
+
+The client matrix run of 8 November 2026 used a harness that was never committed. Only its transcripts survive (outside the repository); the code that emulated each client's registration, redirect form and protocol revision is gone, so there was nothing to port. `npm run mcp:conformance`, the browser suite and the client guides under `guides/mcp/clients/` cover part of that ground; rebuilding per-client profiles is open work.
+
 ## Running the release-only gate
 
 1. In repository branch protection/rulesets, require the **`MCP PR validation`** check for merging. Configure a GitHub environment named `mcp-release-certification` with required human reviewers and restrict deployments to the protected `main` branch. The workflow runs on pushes to `main` and on pull requests only when they carry the `ci:full` label; once it runs, it skips the expensive MCP suite successfully when no MCP-related files changed. Two nightly workflows, `mcp-cimd-drift.yml` (checks the metadata documents real assistants publish against the test fixtures and opens an issue on drift; `npm run mcp:cimd-check` runs it by hand) and `mcp-mixed-load.yml` (mixed ingestion and MCP load evidence), also run on demand and never on pull requests. Repository branch-protection/environment settings are not managed by these workflow files.
@@ -64,7 +80,7 @@ Source: `main` at `f934c9907` plus the follow-up fixes branch. Evidence (JSON re
 3. Dispatch **Enterprise MCP release certification** from `main`, supplying that release tag. The workflow checks the tag, validates the manifest, exposes the manifest as an Actions artifact for review, waits for environment approval, then checks the same manifest again against the exact checked-out source SHA.
 4. Do not dispatch the release workflow as a substitute for missing implementation or live test evidence. A manifest marked `passed` is a human assertion backed by the linked artifacts, not proof generated by the validator.
 
-The manifest is JSON with `schemaVersion: 1`, a 40-character `sourceRevision`, `imageDigest` in `sha256:<64 lowercase hex characters>` form, an `imageSourceRevision` equal to the same source SHA, an HTTPS `imageProvenanceUrl`, and a `review` object containing `reviewedBy` (GitHub username), UTC `reviewedAt`, and HTTPS `referenceUrl`. The `gates` object must contain exactly these required gate names: `architecture`, `protocol`, `oauth`, `rbac`, `workflowParity`, `approvals`, `durableTasks`, `mixedLoad`, `faultTolerance`, `clients`, `deployment`, `migrationUpgrade`, `security`, and `documentation`. Every row needs `status: "passed"`, the same `sourceRevision`, and one to twenty unique, syntactically valid HTTPS `artifactUrls`. URLs with credentials, fragments, IP literals, local hostnames, or non-default ports are rejected.
+The manifest is JSON with `schemaVersion: 1`, a 40-character `sourceRevision`, `imageDigest` in `sha256:<64 lowercase hex characters>` form, an `imageSourceRevision` equal to the same source SHA, an HTTPS `imageProvenanceUrl`, and a `review` object containing `reviewedBy` (GitHub username), UTC `reviewedAt`, and HTTPS `referenceUrl`. The `gates` object must contain exactly these required gate names: `architecture`, `protocol`, `oauth`, `rbac`, `workflowParity`, `approvals`, `durableTasks`, `mixedLoad`, `faultTolerance`, `clients`, `deployment`, `migrationUpgrade`, `security`, `documentation`, and `conformance` (the pinned official conformance suite run, see [Official conformance suite](#official-conformance-suite)). Every row needs `status: "passed"`, the same `sourceRevision`, and one to twenty unique, syntactically valid HTTPS `artifactUrls`. URLs with credentials, fragments, IP literals, local hostnames, or non-default ports are rejected.
 
 No example manifest in this document is intended to pass. The evidence asset must be prepared from real results for the release SHA and image digest; do not mark pending work as passed.
 

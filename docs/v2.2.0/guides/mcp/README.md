@@ -18,6 +18,7 @@ verification:
 OpsKnight includes a Model Context Protocol (MCP) server. Each person connects their own assistant, signs in with their OpsKnight account and approves what it may do. Assistants act with that person's current permissions, never more. Changes are off until an administrator allows them, and configuration changes and runbook runs wait for human review.
 
 - [Self-hosted setup](self-hosted-setup.md): turn it on, connect assistants, manage connections, exposed capabilities, reviewed changes and client compatibility.
+- [Client setup guides](clients/README.md): exact steps, limits and troubleshooting for Claude, Claude Code, ChatGPT, Cursor, VS Code, Codex CLI, Gemini CLI and Windsurf.
 - [API-hosted and headless agents](api-agents.md): Anthropic and OpenAI API agents with an OAuth refresh loop, and personal access tokens for CI, n8n and other fixed-header clients.
 - [stdio bridge](stdio-bridge.md): `opsknight-mcp`, a local stdio server for clients that cannot connect to a remote server or sign in with OAuth, with a personal token or device sign-in.
 - [Troubleshooting](troubleshooting.md): every error code and server log event, with fixes. Generated from the code.

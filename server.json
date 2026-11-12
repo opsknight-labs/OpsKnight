@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.opsknight-labs/opsknight",
+  "title": "OpsKnight",
+  "description": "Self-hosted incident management: incidents, on-call, services, runbooks, reviewed changes.",
+  "version": "2.1.2",
+  "websiteUrl": "https://opsknight.com/docs",
+  "repository": {
+    "url": "https://github.com/opsknight-labs/opsknight",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{host}/mcp",
+      "variables": {
+        "host": {
+          "description": "Host name of your own OpsKnight installation (its App URL without https://), for example opsknight.example.com. Sign in with OAuth when your assistant asks.",
+          "isRequired": true,
+          "placeholder": "opsknight.example.com"
+        }
+      },
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Optional. Leave empty to sign in with OAuth. For agents without OAuth: Bearer followed by a personal access token created under Settings > Integrations > MCP > Connections (when your administrator allows them).",
+          "isRequired": false,
+          "isSecret": true,
+          "placeholder": "Bearer okmcp_pat_..."
+        }
+      ]
+    }
+  ]
+}
