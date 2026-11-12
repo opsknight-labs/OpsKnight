@@ -66,6 +66,7 @@ import {
 import { isMcpCapabilityDisabled } from '@/lib/mcp/catalog/capabilities';
 import { stepUpScopes } from '@/lib/mcp/auth/step-up';
 import { myPagesBus } from '@/lib/mcp/protocol/page-push';
+import { mcpClientExtensions } from '@/lib/mcp/protocol/skills';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -246,6 +247,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       requestId,
       budget,
       omitResourceLinks: !request.headers.has('mcp-protocol-version'),
+      clientExtensions: modern ? mcpClientExtensions(body.params) : {},
     };
     if (taskMethod) {
       // The SDK has no handlers for the 2026-07-28 Tasks extension; the route serves it directly
