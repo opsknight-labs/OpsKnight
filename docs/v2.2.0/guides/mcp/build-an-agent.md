@@ -127,7 +127,7 @@ do {
 } while (cursor);
 ```
 
-`query.limit` is 1 to 50 (each list operation advertises its default in `describe_operation`, commonly 25). `execute_plan` runs up to eight reads as one request.
+`query.limit` is 1 to 50 (each list operation advertises its default in `describe_operation`, commonly 25). `execute_plan` runs up to eight reads as one request. A step can use an earlier result: list the earlier step in `dependsOn` and pass `{"$from": "services", "pointer": "/data/0/id"}` as an argument value, for example as `path.id`.
 
 ## Change something safely
 

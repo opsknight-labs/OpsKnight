@@ -462,6 +462,11 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'The settings or review page needs a signed-in user.',
     fix: 'Sign in.',
   },
+  MCP_NOT_A_CHANGE: {
+    area: 'tools',
+    meaning: 'call_operation was called with an operation that only reads.',
+    fix: 'Use read_operation with the same operationId and args.',
+  },
   MCP_NOT_A_READ: {
     area: 'tools',
     meaning: 'read_operation was called with an operation that changes something.',
@@ -491,6 +496,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     area: 'server',
     meaning: 'No App URL is configured.',
     fix: 'Set the App URL in Settings → System.',
+  },
+  MCP_PLAN_REFERENCE: {
+    area: 'tools',
+    meaning:
+      "An execute_plan step has a $from reference that names no dependency, or whose pointer finds nothing usable in that step's result.data.",
+    fix: 'List the step in dependsOn and point at a value that exists, for example /data/0/id.',
   },
   MCP_PLAN_READS_ONLY: {
     area: 'tools',

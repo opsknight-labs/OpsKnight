@@ -56,6 +56,7 @@ import {
   KNOWLEDGE_SOURCES,
   acknowledgeMcpIncidents,
   fetchMcpKnowledge,
+  fitKnowledgeResult,
   getMcpIncidentContext,
   getMcpOncallForService,
   getMcpServiceChanges,
@@ -185,7 +186,11 @@ const SCHEMAS = {
           properties: {
             id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,40}$' },
             operationId: { type: 'string', maxLength: 128 },
-            args: { type: 'object' },
+            args: {
+              type: 'object',
+              description:
+                'Canonical args. Any value may be {"$from": "<stepId>", "pointer": "/data/0/id"}: the value at that JSON Pointer in result.data of a step listed in dependsOn.',
+            },
             dependsOn: {
               type: 'array',
               items: { type: 'string', maxLength: 40 },
@@ -219,6 +224,7 @@ const KNOWLEDGE_OUTPUT = {
         },
       },
       untrusted: { type: 'string' },
+      note: { type: 'string' },
     },
   }),
   fetch: fromJsonSchema({
@@ -340,26 +346,6 @@ export function clampPageSize(
       },
     },
   };
-}
-/** A named tool's advertised result is left off past this size; tools/list stays small. */
-export const MCP_OUTPUT_SCHEMA_MAX_BYTES = 8192;
-const outputSchemas = new WeakMap<object, ReturnType<typeof fromJsonSchema> | null>();
-/**
- * The projected result schema a named tool advertises (see projectedOutputSchema), or null when
- * it would be too large to list. The SDK validates every result against it, so it describes
- * exactly what projection and compaction deliver.
- */
-export function catalogOutputSchema(operation: (typeof MCP_CATALOG)[number]) {
-  let schema = outputSchemas.get(operation);
-  if (schema === undefined) {
-    const projected = projectedOutputSchema(mcpResponseSchema(operation));
-    schema =
-      Buffer.byteLength(JSON.stringify(projected)) <= MCP_OUTPUT_SCHEMA_MAX_BYTES
-        ? fromJsonSchema(projected as JsonSchemaType)
-        : null;
-    outputSchemas.set(operation, schema);
-  }
-  return schema ?? undefined;
 }
 function catalogToolSchema(operation: (typeof MCP_CATALOG)[number]) {
   let schema = catalogSchemas.get(operation);
@@ -995,8 +981,8 @@ export function createOpsKnightMcpServer(
       {
         title: operation.title ?? operation.tool!,
         description: catalogToolDescription(operation),
+        // No outputSchema: it doubled tools/list. describe_operation returns it on demand.
         inputSchema: catalogToolSchema(operation),
-        ...(catalogOutputSchema(operation) ? { outputSchema: catalogOutputSchema(operation) } : {}),
         annotations: {
           readOnlyHint: read,
           destructiveHint: !read,
@@ -1125,11 +1111,14 @@ export function createOpsKnightMcpServer(
     });
     const knowledgeTool = async (tool: string, callback: () => Promise<unknown>) => {
       try {
-        const result = knowledgeResult(await callback());
-        if (
-          Buffer.byteLength(JSON.stringify(result)) >
-          context.budget.maxBytes - RESULT_ENVELOPE_RESERVE
-        )
+        const fits = (value: unknown) =>
+          Buffer.byteLength(JSON.stringify(knowledgeResult(value))) <=
+          context.budget.maxBytes - RESULT_ENVELOPE_RESERVE;
+        const result = knowledgeResult(
+          fitKnowledgeResult((await callback()) as Record<string, unknown>, fits)
+        );
+        // Only something fitKnowledgeResult cannot shrink gets here.
+        if (!fits(result.structuredContent))
           throw new McpBoundaryError('MCP_RESULT_BUDGET_EXCEEDED', 413);
         return result;
       } catch (error) {
@@ -1306,18 +1295,15 @@ export function createOpsKnightMcpServer(
           context,
           'call_operation',
           async () => {
-            const result = await callMcpOperation(context, input.operationId, input.args);
             const operation = MCP_OPERATION_MAP.get(input.operationId);
-            // Still served for this release; the assistant learns the confirmation-free path.
-            return operation && isRead(operation)
-              ? {
-                  ...result,
-                  evidence: {
-                    ...result.evidence,
-                    warnings: [...result.evidence.warnings, READ_THROUGH_CALL_DEPRECATED],
-                  },
-                }
-              : result;
+            // One tool never mixes safe and unsafe work; unknown ids fall through to execution.
+            requireMcp(
+              !operation || !isRead(operation),
+              'MCP_NOT_A_CHANGE',
+              400,
+              'This operation only reads; use read_operation with the same operationId and args.'
+            );
+            return callMcpOperation(context, input.operationId, input.args);
           },
           linksFor(input.operationId, input.args)
         );
@@ -1328,7 +1314,7 @@ export function createOpsKnightMcpServer(
     {
       title: 'Run several reads',
       description:
-        'Run at most eight independent authorized reads in one call (a single read is fine). dependsOn orders steps and skips a step whose dependency failed; results are not passed between steps. Partial results; no transaction or changes.',
+        'Run at most eight authorized reads in one call (a single read is fine). dependsOn orders steps and skips a step whose dependency failed. A later step can use an earlier result: put {"$from": "<stepId>", "pointer": "/data/0/id"} in its args (a JSON Pointer into that step\'s result.data; list the step in dependsOn). Partial results; no transaction or changes.',
       inputSchema: SCHEMAS.executePlan,
       annotations: {
         readOnlyHint: true,
@@ -1600,10 +1586,6 @@ export function createOpsKnightMcpServer(
   // No Tasks/App capability is advertised until its durable/client gates pass.
   return server;
 }
-
-/** The release that stops serving reads through call_operation (also in CHANGELOG and catalog). */
-export const CALL_OPERATION_READS_REMOVED_IN = 'v2.3.0';
-const READ_THROUGH_CALL_DEPRECATED = `Reads through call_operation are deprecated and will be removed in ${CALL_OPERATION_READS_REMOVED_IN}; use read_operation, which never changes anything.`;
 
 /** The resource template each resource kind is read through. */
 const RESOURCE_OPERATIONS = new Map<CompletionSource, string>([

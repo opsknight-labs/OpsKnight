@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 106 MCP codes and 25 log events found in the source.
+This page lists 108 MCP codes and 25 log events found in the source.
 
 ## Connecting and signing in
 
@@ -92,12 +92,14 @@ This page lists 106 MCP codes and 25 log events found in the source.
 | <a id="MCP_INVALID_DEPENDENCY"></a>`MCP_INVALID_DEPENDENCY` | An execute_plan step depends on a step id that does not exist. | Correct dependsOn. |
 | <a id="MCP_CYCLIC_PLAN"></a>`MCP_CYCLIC_PLAN` | execute_plan steps depend on each other in a cycle. | Remove the circular dependsOn. |
 | <a id="MCP_DEPENDENCY_FAILED"></a>`MCP_DEPENDENCY_FAILED` | An execute_plan step was skipped because a step it depends on failed. | Fix the failed step first. |
+| <a id="MCP_PLAN_REFERENCE"></a>`MCP_PLAN_REFERENCE` | An execute_plan step has a $from reference that names no dependency, or whose pointer finds nothing usable in that step's result.data. | List the step in dependsOn and point at a value that exists, for example /data/0/id. |
 | <a id="MCP_DUPLICATE_OR_UNSAFE_KEY"></a>`MCP_DUPLICATE_OR_UNSAFE_KEY` | The JSON body repeats a key or uses a reserved key such as __proto__. | Send plain JSON with unique keys. |
 | <a id="MCP_JSON_DEPTH"></a>`MCP_JSON_DEPTH` | The JSON body is nested deeper than 24 levels. | Flatten the arguments. |
 | <a id="MCP_CONTENT_TYPE"></a>`MCP_CONTENT_TYPE` | The POST did not send Content-Type: application/json. | Use an MCP client or the official SDK. |
 | <a id="MCP_SUBSCRIPTIONS_BUSY"></a>`MCP_SUBSCRIPTIONS_BUSY` | The process already holds 32 subscription streams. | Retry later. |
 | <a id="MCP_CONTENTION"></a>`MCP_CONTENTION` | Another request changed the same record at the same moment and the database turned this one back after its own retries. | Read the current state, then try again. Reuse the same idempotencyKey for a change so a replay never applies it twice. |
 | <a id="MCP_NOT_A_READ"></a>`MCP_NOT_A_READ` | read_operation was called with an operation that changes something. | Use call_operation for routine changes or operation_prepare for reviewed ones. |
+| <a id="MCP_NOT_A_CHANGE"></a>`MCP_NOT_A_CHANGE` | call_operation was called with an operation that only reads. | Use read_operation with the same operationId and args. |
 | <a id="MCP_SUBSCRIPTIONS_LIMIT"></a>`MCP_SUBSCRIPTIONS_LIMIT` | This connection already holds two subscription streams. | Close a stream first. |
 
 ## Reviewed changes

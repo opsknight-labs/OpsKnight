@@ -20,8 +20,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "54fbc0051c2ed391180225536f20a3562af6ca96b83411e185d225021ca3087b",
-    "descriptionSha256": "b01de9dc14e9bcb23302a2401c1361a78d1bcebc02b3b623b61a1e5e5ea79278"
+    "inputSchemaSha256": "077c6906d91c23ef9a3827c1492d3bc988ab0bbd5460c6f5d609ede2c894438f",
+    "descriptionSha256": "3fc4ac0bc8fe5968aada7538697a2b4f553b0ef097757206a5521936df926d3c"
   },
   {
     "name": "fetch",

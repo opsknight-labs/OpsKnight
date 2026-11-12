@@ -15,14 +15,23 @@ import {
 } from '../helpers/test-db';
 import { createRunbook, publishDraftVersion } from '@/lib/runbooks/versioning';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
-import { MCP_CATALOG } from '@/lib/mcp/catalog';
+import { fromJsonSchema } from '@modelcontextprotocol/server';
+import { MCP_CATALOG, mcpResponseSchema } from '@/lib/mcp/catalog';
+import { projectedOutputSchema } from '@/lib/mcp/protocol/wire';
 import { POST } from '@/app/mcp/route';
 
 /**
- * D1: a named tool that advertises an outputSchema has every result validated against it by the
- * SDK, and a mismatch turns a completed call (a write included) into a tool error. These calls
- * run the real routes, so a contract that drifted from what a route returns fails here.
+ * D1: a named tool's result matches the output schema describe_operation returns for it. Named
+ * tools no longer list that schema (it doubled tools/list), so the SDK no longer checks it; this
+ * test does, with the SDK's own validator. These calls run the real routes, so a contract that
+ * drifted from what a route returns fails here.
  */
+const resultSchemas = new Map(
+  MCP_CATALOG.filter(operation => operation.tool).map(operation => [
+    operation.tool!,
+    fromJsonSchema(projectedOutputSchema(mcpResponseSchema(operation)) as never),
+  ])
+);
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL ?? '');
@@ -148,9 +157,8 @@ describe('named tool results satisfy their advertised output schemas', () => {
     await publishDraftVersion(runbook.draftVersionId!, user.id);
 
     const listed = (await rpc(bearer, 'tools/list')).result.tools!;
-    const advertised = new Set(
-      listed.filter(tool => tool.outputSchema).map(tool => String(tool.name))
-    );
+    // A client that never sees an outputSchema must still get a plain JSON object to use.
+    expect(listed.filter(tool => resultSchemas.has(tool.name) && tool.outputSchema)).toEqual([]);
     const calls: [string, Record<string, unknown>][] = [
       ['incident_search', { query: { limit: 5 } }],
       ['incident_get', { path: { id: incident.id } }],
@@ -195,9 +203,13 @@ describe('named tool results satisfy their advertised output schemas', () => {
       const text = result.content.map(part => part.text ?? '').join(' ');
       expect(text, name).not.toContain('Output validation error');
       expect(result.isError, `${name}: ${text.slice(0, 400)}`).toBeFalsy();
-      if (advertised.has(name)) checked.push(name);
+      const schema = resultSchemas.get(name);
+      if (!schema) continue;
+      expect(result.structuredContent, name).toEqual(JSON.parse(result.content[0].text!));
+      expect(schema['~standard'].validate(result.structuredContent).issues, name).toBeUndefined();
+      checked.push(name);
     }
-    // Most of the curated surface is covered, and every one of these advertises a schema.
+    // Most of the curated surface is covered, and every one of these has a result schema.
     expect(checked.length).toBeGreaterThanOrEqual(12);
     expect(checked).toContain('oncall_my_shifts');
     expect(checked).toContain('oncall_catch_up');

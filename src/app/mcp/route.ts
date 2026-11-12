@@ -64,7 +64,7 @@ import {
   mcpToolErrored,
   type McpMetricOutcome,
 } from '@/lib/mcp/protocol/metrics';
-import { isMcpCapabilityDisabled } from '@/lib/mcp/catalog/capabilities';
+import { isMcpCapabilityDisabled, mcpToolsetExclusions } from '@/lib/mcp/catalog/capabilities';
 import { stepUpScopes } from '@/lib/mcp/auth/step-up';
 import { myPagesBus } from '@/lib/mcp/protocol/page-push';
 import { mcpClientExtensions } from '@/lib/mcp/protocol/skills';
@@ -251,6 +251,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       budget,
       omitResourceLinks: !request.headers.has('mcp-protocol-version'),
       clientExtensions: modern ? mcpClientExtensions(body.params) : {},
+      hiddenCapabilities: mcpToolsetExclusions(request.headers.get('x-opsknight-toolsets')),
     };
     if (taskMethod) {
       // The SDK has no handlers for the 2026-07-28 Tasks extension; the route serves it directly
@@ -331,7 +332,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
           identity.auth.actor,
           identity.policy.writesEnabled,
           identity.policy.sensitiveReadsEnabled,
-          identity.policy.disabledCapabilities,
+          [...identity.policy.disabledCapabilities, ...context.hiddenCapabilities],
           identity.policy.responderDirectWritesEnabled
         ),
       {
@@ -527,7 +528,7 @@ async function openListenStream(
         identity.auth.actor,
         identity.policy.writesEnabled,
         identity.policy.sensitiveReadsEnabled,
-        identity.policy.disabledCapabilities,
+        [...identity.policy.disabledCapabilities, ...(context.hiddenCapabilities ?? [])],
         identity.policy.responderDirectWritesEnabled
       ),
     {

@@ -121,6 +121,39 @@ describe('MCP page size evidence', () => {
   });
 });
 
+describe('execute_plan references', () => {
+  it('passes a value from one read into the next through the real route', async () => {
+    const result = await call('execute_plan', {
+      steps: [
+        { id: 'list', operationId: 'listIncidents', args: { query: { limit: 1 } } },
+        {
+          id: 'get',
+          operationId: 'getIncident',
+          dependsOn: ['list'],
+          args: { path: { id: { $from: 'list', pointer: '/data/0/id' } } },
+        },
+        {
+          id: 'typo',
+          operationId: 'getIncident',
+          dependsOn: ['list'],
+          args: { path: { id: { $from: 'list', pointer: '/data/0' } } },
+        },
+      ],
+    });
+    expect(result.isError, JSON.stringify(result)).not.toBe(true);
+    const steps = result.structuredContent!.steps as {
+      id: string;
+      status: string;
+      error?: string;
+      result?: { data: { data: { id: string } } };
+    }[];
+    const listed = steps[0].result as unknown as { data: { data: { id: string }[] } };
+    expect(steps[1].status).toBe('completed');
+    expect(steps[1].result!.data.data.id).toBe(listed.data.data[0].id);
+    expect(steps[2]).toMatchObject({ status: 'failed', error: 'MCP_PLAN_REFERENCE' });
+  });
+});
+
 describe('incident_get_context', () => {
   it('returns the incident, timeline and related incidents read concurrently', async () => {
     const result = await call('incident_get_context', { id: incidentId });
