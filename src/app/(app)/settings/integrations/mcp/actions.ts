@@ -640,6 +640,39 @@ export async function revokeAllMcpConnections(form: FormData) {
   revalidatePath(settingsPath);
 }
 
+/** An administrator disconnects every assistant and personal token of one person. */
+export async function revokeMcpConnectionsForUser(form: FormData) {
+  const actor = await admin();
+  const entries = Array.from(form.entries()).filter(([key]) => !key.startsWith('$ACTION_'));
+  const input = z
+    .object({ userId: z.string().min(1).max(64), confirm: z.literal('on') })
+    .strict()
+    .safeParse(Object.fromEntries(entries));
+  // Object.fromEntries collapses duplicate keys, so require exactly these two entries too.
+  requireMcp(input.success && entries.length === 2, 'MCP_CONFIRMATION_REQUIRED');
+  const { userId } = input.data;
+  await prisma.$transaction(async tx => {
+    await assertCurrentAdmin(tx, actor);
+    const revoked = await tx.mcpGrant.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await logAudit(
+      {
+        source: 'UI',
+        action: 'mcp.grants.revoked_for_user',
+        entityType: 'USER',
+        entityId: userId,
+        actorId: actor.id,
+        details: { revokedGrants: revoked.count },
+      },
+      tx
+    );
+  });
+  revalidatePath(settingsPath);
+  revalidatePath(`/users/${userId}`);
+}
+
 /** Disconnects every assistant and personal token of the signed-in user, and nobody else's. */
 export async function revokeMyMcpConnections(form: FormData) {
   const actor = await getCurrentUser();

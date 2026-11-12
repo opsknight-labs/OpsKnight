@@ -2,11 +2,7 @@ import prisma from '@/lib/prisma';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import {
-  assertCanViewUser,
-  getCurrentAuthorizationActor,
-  getUserPermissions,
-} from '@/lib/rbac';
+import { assertCanViewUser, getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -24,6 +20,14 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import UserDetailTabs from '@/components/users/UserDetailTabs';
 import UserProfileHeaderActions from '@/components/users/UserProfileHeaderActions';
 import { deleteUser, updateUserProfile } from '../actions';
+import McpUserPanel from '@/components/settings/mcp/McpUserPanel';
+import { describeMcpScope } from '@/lib/mcp/auth/scopes';
+import { listMcpGrants, loadMcpViewer } from '@/app/(app)/settings/integrations/mcp/queries';
+import {
+  revokeMcpAccess,
+  revokeMcpConnectionsForUser,
+} from '@/app/(app)/settings/integrations/mcp/actions';
+import { loadMcpConnectionActivity } from '@/app/(app)/settings/integrations/mcp/activity-actions';
 
 export const revalidate = 0;
 
@@ -140,6 +144,17 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
   const totalPolicies = user.escalationRules.length;
 
   const localTimeStr = formatLocalTimeInTz(user.timeZone);
+
+  // Administrators only: this person's MCP connections, from the same query as the settings list.
+  const mcpViewer = permissions.isAdmin ? await loadMcpViewer(permissions) : null;
+  const mcpNow = new Date();
+  const mcpGrants = mcpViewer
+    ? await listMcpGrants(
+        mcpViewer,
+        { status: 'all', q: '', clientId: null, userId: user.id, page: 1 },
+        mcpNow
+      )
+    : null;
 
   // Transform auditLogs.details to match UserDetailProfile type
   const transformedUser = {
@@ -314,6 +329,22 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
 
       {/* 4-Tab Full-Width Profile Workspace */}
       <UserDetailTabs user={transformedUser} canManage={canManage} defaultTab={defaultTab} />
+
+      {mcpViewer && mcpGrants && (
+        <McpUserPanel
+          userId={user.id}
+          name={user.name}
+          rows={mcpGrants.rows}
+          total={mcpGrants.counts.all}
+          active={mcpGrants.counts.active + mcpGrants.counts.expired}
+          now={mcpNow}
+          timeZone={mcpViewer.timeZone}
+          describeScope={describeMcpScope}
+          revokeAction={revokeMcpAccess}
+          revokeAllAction={revokeMcpConnectionsForUser}
+          activityAction={loadMcpConnectionActivity}
+        />
+      )}
     </main>
   );
 }
