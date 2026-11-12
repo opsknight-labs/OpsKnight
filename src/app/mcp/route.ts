@@ -29,6 +29,7 @@ import { boundMcpResponse } from '@/lib/mcp/core/response';
 import { callMcpOperation } from '@/lib/mcp/core/execution';
 import {
   MAX_RESOURCE_SUBSCRIPTIONS,
+  MY_PAGES_URI,
   STREAM_LIFETIME_MS,
   acquireStreamSlot,
   mcpEventBus,
@@ -65,6 +66,8 @@ import {
 } from '@/lib/mcp/protocol/metrics';
 import { isMcpCapabilityDisabled } from '@/lib/mcp/catalog/capabilities';
 import { stepUpScopes } from '@/lib/mcp/auth/step-up';
+import { myPagesBus } from '@/lib/mcp/protocol/page-push';
+import { mcpClientExtensions } from '@/lib/mcp/protocol/skills';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -247,6 +250,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       requestId,
       budget,
       omitResourceLinks: !request.headers.has('mcp-protocol-version'),
+      clientExtensions: modern ? mcpClientExtensions(body.params) : {},
     };
     if (taskMethod) {
       // The SDK has no handlers for the 2026-07-28 Tasks extension; the route serves it directly
@@ -287,9 +291,9 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     if (listening) {
       // Authorize every URI now; a notification must never reveal a resource the caller cannot read.
       for (const uri of subscribedUris) {
-        const { readOperation, id } = parseSubscriptionUri(uri);
+        const { readOperation, args } = parseSubscriptionUri(uri);
         try {
-          await callMcpOperation(context, readOperation, { path: { id } });
+          await callMcpOperation(context, readOperation, args);
         } catch {
           outcome = 'subscription_rejected';
           return rpcError(rpcId, -32602, 'Invalid params: resource unavailable');
@@ -531,7 +535,9 @@ async function openListenStream(
       responseMode: 'auto',
       maxRequestBodySize: 65536,
       maxSubscriptions: 1,
-      bus: mcpEventBus,
+      bus: uris.includes(MY_PAGES_URI)
+        ? myPagesBus(mcpEventBus, context, identity.auth.actor.id)
+        : mcpEventBus,
       keepAliveMs: 15000,
     }
   );
@@ -587,8 +593,8 @@ async function openListenStream(
       // Re-read each subscribed resource with fresh authority under a small budget.
       const recheck = new CostBudget(MAX_RESOURCE_SUBSCRIPTIONS, 262144);
       try {
-        for (const { readOperation, id } of subscriptions)
-          await callMcpOperation({ ...context, budget: recheck }, readOperation, { path: { id } });
+        for (const { readOperation, args } of subscriptions)
+          await callMcpOperation({ ...context, budget: recheck }, readOperation, args);
       } finally {
         await recheck.drain();
       }
