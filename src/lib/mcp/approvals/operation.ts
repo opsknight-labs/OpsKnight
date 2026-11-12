@@ -26,6 +26,7 @@ import {
 } from '../core/execution';
 import { lockMcpMutationAuthority } from '../core/mutation-authority';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
+import { loadEffectiveDisabledMcpCapabilities } from '../auth/effective-capabilities';
 import { projectMcpData } from '../core/projection';
 import {
   commitDeadline,
@@ -723,13 +724,9 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
         // An operation disabled after it was prepared must not run. The approval is left as it is,
         // so it can still be committed before it expires if an administrator re-enables it.
         await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
-        const policy = await tx.mcpPolicy.findUnique({
-          where: { id: 'default' },
-          select: { disabledCapabilities: true },
-        });
         requireMcp(
           !isMcpCapabilityDisabled(
-            policy?.disabledCapabilities,
+            await loadEffectiveDisabledMcpCapabilities(context.grantId, tx),
             approval.operationId,
             'operation_commit_approved'
           ),

@@ -426,6 +426,8 @@ export type McpClientRow = {
   activeConnections: number;
   lastUsedAt: Date | null;
   lastCallAt: Date | null;
+  /** Entries in this assistant's own capability restrictions (on top of global and role lists). */
+  restrictedCapabilities: number;
 };
 
 export async function listMcpClients(
@@ -460,6 +462,7 @@ export async function listMcpClients(
         dynamicRegistration: true,
         createdAt: true,
         revokedAt: true,
+        disabledCapabilities: true,
         _count: { select: { grants: { where: activeGrantWhere(now) } } },
       },
     }),
@@ -518,6 +521,7 @@ export async function listMcpClients(
         activeConnections: row._count.grants,
         lastUsedAt: lastUsed.get(row.id)?.lastUsedAt ?? null,
         lastCallAt: lastUsed.get(row.id)?.lastCallAt ?? null,
+        restrictedCapabilities: row.disabledCapabilities.length,
       };
     }),
     counts: statusCounts,

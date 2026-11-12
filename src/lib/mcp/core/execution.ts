@@ -34,6 +34,7 @@ import { lockMcpMutationAuthority } from './mutation-authority';
 import { allowMcpFields, projectMcpData, summarizeRedactions } from './projection';
 import { mcpListWebUrlTemplate } from './web-links';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
+import { loadEffectiveDisabledMcpCapabilities } from '../auth/effective-capabilities';
 import { ERROR_REGISTRY } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
@@ -393,7 +394,11 @@ async function executeMcpOperation(
   try {
     resolved = await resolveMcpGrantWithPolicy(context.grantId, context.credentialId);
   } catch (error) {
-    const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
+    const stored = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
+    const policy = stored && {
+      ...stored,
+      disabledCapabilities: await loadEffectiveDisabledMcpCapabilities(context.grantId),
+    };
     requireMcp(exposed(policy), 'MCP_CAPABILITY_DISABLED', 403);
     requireMcp(permitted(policy), 'MCP_OPERATION_DISABLED', 403);
     throw error;

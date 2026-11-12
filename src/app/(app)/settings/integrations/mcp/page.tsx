@@ -569,6 +569,7 @@ export default async function McpSettings({
             <McpCapabilityControls
               isAdmin={isAdmin}
               disabledCapabilities={policy?.disabledCapabilities ?? []}
+              roleDisabledCapabilities={policy?.roleDisabledCapabilities}
             />
           </div>
         );
