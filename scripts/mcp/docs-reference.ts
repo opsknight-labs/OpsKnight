@@ -681,6 +681,8 @@ export const MCP_LOG_GUIDE: Record<string, string> = {
   'mcp.subscription.poll_failed': 'The subscription change poll failed; the stream retries.',
   'mcp.subscription.access_lost':
     'A listen stream was closed because the person lost access to a subscribed resource, or their role or teams changed. Clients re-read on reconnect.',
+  'mcp.subscription.page_withheld':
+    'A page for opsknight://oncall/me/pages was not sent because the person can no longer read that incident (`incidentId` only).',
   'mcp.token.grace_reissued':
     'A rotated refresh token was replayed inside the grace window and a new token issued (`grantId`, `replacedId`, `revokedSuccessorId`). Occasional lines are lost responses; many for one grant suggest a stolen token racing the real client.',
   'mcp.token.refresh_reuse_revoked':
