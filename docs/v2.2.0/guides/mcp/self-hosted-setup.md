@@ -151,6 +151,30 @@ Then:
 
 Codes last ten minutes and work once. The connection is the same as any other: same permissions (your choice, within the ceiling and your role), same five-minute access tokens with refresh, same session lifetime, and it is listed and revoked under **Connections**. After five wrong codes, code entry pauses for 15 minutes for you and for your network address.
 
+### Access granted by your identity provider (Enterprise-Managed Authorization)
+
+Optional, off by default, and only available with single sign-on. It lets your organization's identity provider (IdP) give its people's assistants access to OpsKnight without each person approving a permissions screen, following the [MCP Enterprise-Managed Authorization extension](https://modelcontextprotocol.io/extensions/auth/enterprise-managed-authorization).
+
+How it works: the assistant signs the person in to the IdP, asks the IdP for an Identity Assertion JWT Authorization Grant (ID-JAG) for OpsKnight, and exchanges it at `<App URL>/oauth/mcp/token` with `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`. OpsKnight checks the grant and returns a five-minute access token. There is no refresh token: when it expires the assistant asks the IdP again, so the IdP stays in control.
+
+To set it up:
+
+1. Configure and enable single sign-on (OIDC) in OpsKnight. The IdP that issues grants is the SSO provider; nothing else is trusted.
+2. In the IdP, register OpsKnight as a resource application that accepts ID-JAGs, with:
+   - audience: `<App URL>/oauth/mcp` (OpsKnight's authorization server issuer);
+   - resource: `<App URL>/mcp`;
+   - signing algorithm RS256 with the same keys as SSO sign-in;
+   - client id: the assistant's OpsKnight client id (from **Assistants**, or its metadata-document URL);
+   - scopes: the OpsKnight scopes each group may get, for example `incidents:read services:read`.
+3. Make sure the assistant is known to OpsKnight: register it on the **Assistants** tab, or let it connect through Automatic connections.
+4. In **Settings → Integrations → MCP → Access policy → Advanced**, tick **Allow access granted by your identity provider** and save. This needs a recent sign-in. Without single sign-on the box is disabled with "Requires single sign-on".
+
+What a grant can do is the IdP's scopes, limited by the assistant's ceiling and by the person's role, exactly like a consented connection. Only people who already signed in to OpsKnight with single sign-on are recognised: the grant's subject must match an existing SSO link, and no account is created. The connection appears under **Connections** as **Granted by your identity provider**.
+
+With single sign-on off or the switch off, nothing changes: the grant type is not advertised in `/.well-known/oauth-authorization-server/oauth/mcp` and the token endpoint answers `unsupported_grant_type`. Turning it off stops new tokens at once; tokens already issued end within five minutes. To remove one person's access, remove it at the IdP or disable the person in OpsKnight; revoking the connection alone is undone by the next grant the IdP issues.
+
+Refusals return `invalid_grant`, `invalid_client` or `invalid_scope` without detail; the server log entry `mcp.token.id_jag_refused` names the check that failed (for example `client_mismatch`, `replayed`, `subject_not_active`, `verification_failed`). See the [threat model](../../../security/mcp-threat-model.md#enterprise-managed-authorization-identity-provider-grants) for every check.
+
 ## Manage connections
 
 - **Your connections** (everyone): each assistant you connected and each personal access token you created, with an **OAuth** or **Personal token** badge, its usable permissions, when it last made a call and with which tool, when it expires, and **Revoke**. When the policy allows personal tokens, **Personal access tokens** here creates one: it needs a recent sign-in and is shown once.
@@ -245,8 +269,8 @@ labels:
 
 ```yaml
 # Kubernetes ingress-nginx annotations
-nginx.ingress.kubernetes.io/proxy-buffering: "off"
-nginx.ingress.kubernetes.io/proxy-read-timeout: "660"
+nginx.ingress.kubernetes.io/proxy-buffering: 'off'
+nginx.ingress.kubernetes.io/proxy-read-timeout: '660'
 ```
 
 With more than one replica, the per-minute request limit is shared through the database, while the concurrency limit (**Workload limits**) and the bad-token limit apply per process, so the effective ceiling is the configured value times the number of replicas.

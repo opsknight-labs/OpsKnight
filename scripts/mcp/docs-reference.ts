@@ -287,6 +287,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
       'MCP was switched on in settings while the deployment sets MCP_FORCE_DISABLED=true, which overrides the stored policy.',
     fix: 'Ask the operator to remove MCP_FORCE_DISABLED from the environment and restart OpsKnight, then turn MCP on again.',
   },
+  MCP_SSO_REQUIRED: {
+    area: 'settings',
+    meaning:
+      'Access granted by your identity provider was switched on while single sign-on is not configured and enabled.',
+    fix: 'Configure and enable single sign-on (OIDC) first, then turn on Allow access granted by your identity provider.',
+  },
   MCP_DISTINCT_REVIEWER_REQUIRED: {
     area: 'approvals',
     meaning:
@@ -683,6 +689,8 @@ export const MCP_LOG_GUIDE: Record<string, string> = {
     'A listen stream was closed because the person lost access to a subscribed resource, or their role or teams changed. Clients re-read on reconnect.',
   'mcp.token.grace_reissued':
     'A rotated refresh token was replayed inside the grace window and a new token issued (`grantId`, `replacedId`, `revokedSuccessorId`). Occasional lines are lost responses; many for one grant suggest a stolen token racing the real client.',
+  'mcp.token.id_jag_refused':
+    'An identity-provider grant (ID-JAG) was refused at the token endpoint. `reason` names the failed check (for example `verification_failed`, `client_mismatch`, `replayed`, `subject_not_active`, `resource_mismatch`); the client only saw the OAuth error code.',
   'mcp.token.refresh_reuse_revoked':
     'A rotated refresh token was reused outside the grace window; the whole grant was revoked (`grantId`). The audit log has mcp.grant.reuse_detected with the user and client.',
   'mcp.token.transient':

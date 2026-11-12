@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 106 MCP codes and 24 log events found in the source.
+This page lists 107 MCP codes and 25 log events found in the source.
 
 ## Connecting and signing in
 
@@ -132,6 +132,7 @@ This page lists 106 MCP codes and 24 log events found in the source.
 | <a id="MCP_INVALID_CIMD_HOST"></a>`MCP_INVALID_CIMD_HOST` | A trusted assistant host is not a plain DNS name. | Enter one host name per line, without scheme, port or path. |
 | <a id="MCP_INVALID_BROWSER_ORIGIN"></a>`MCP_INVALID_BROWSER_ORIGIN` | An Allowed browser origins entry is not an exact origin (scheme, host and optional port), uses plain http off loopback, or the list has more than 10 entries. | Enter origins such as https://inspector.example.com or http://localhost:6274, one per line. |
 | <a id="MCP_DCR_REQUIRES_SCOPES"></a>`MCP_DCR_REQUIRES_SCOPES` | Automatic connections was turned on with no permissions ticked. | Tick at least one permission under What assistants may do. |
+| <a id="MCP_SSO_REQUIRED"></a>`MCP_SSO_REQUIRED` | Access granted by your identity provider was switched on while single sign-on is not configured and enabled. | Configure and enable single sign-on (OIDC) first, then turn on Allow access granted by your identity provider. |
 | <a id="MCP_INVALID_NAME"></a>`MCP_INVALID_NAME` | A manually registered assistant needs a name. | Enter a name. |
 | <a id="MCP_INVALID_REDIRECT"></a>`MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS, loopback HTTP or a native app scheme (a reverse-DNS scheme, or cursor, vscode, vscode-insiders or windsurf). | Enter the exact callback the assistant uses. |
 | <a id="MCP_CONFIRMATION_REQUIRED"></a>`MCP_CONFIRMATION_REQUIRED` | "Revoke all active connections" was submitted without ticking the confirmation box. | Tick the box in the dialog, then confirm. |
@@ -232,6 +233,7 @@ Search the application log for these event names. Entries never contain tokens, 
 | <a id="mcp.subscription.listener_failed"></a>`mcp.subscription.listener_failed` | warn | A subscription stream failed while delivering a change. | `src/lib/mcp/protocol/subscriptions.ts` |
 | <a id="mcp.subscription.poll_failed"></a>`mcp.subscription.poll_failed` | warn | The subscription change poll failed; the stream retries. | `src/lib/mcp/protocol/subscriptions.ts` |
 | <a id="mcp.token.grace_reissued"></a>`mcp.token.grace_reissued` | warn | A rotated refresh token was replayed inside the grace window and a new token issued (`grantId`, `replacedId`, `revokedSuccessorId`). Occasional lines are lost responses; many for one grant suggest a stolen token racing the real client. | `src/lib/mcp/auth/oauth-model.ts` |
+| <a id="mcp.token.id_jag_refused"></a>`mcp.token.id_jag_refused` | warn | An identity-provider grant (ID-JAG) was refused at the token endpoint. `reason` names the failed check (for example `verification_failed`, `client_mismatch`, `replayed`, `subject_not_active`, `resource_mismatch`); the client only saw the OAuth error code. | `src/lib/mcp/auth/enterprise-grant.ts` |
 | <a id="mcp.token.refresh_reuse_revoked"></a>`mcp.token.refresh_reuse_revoked` | warn | A rotated refresh token was reused outside the grace window; the whole grant was revoked (`grantId`). The audit log has mcp.grant.reuse_detected with the user and client. | `src/app/oauth/mcp/token/route.ts` |
 | <a id="mcp.token.transient"></a>`mcp.token.transient` | warn | A token request hit a passing database problem and was answered temporarily_unavailable. `prismaCode` and `state` only. | `src/app/oauth/mcp/token/route.ts` |
 | <a id="mcp.token.unexpected_error"></a>`mcp.token.unexpected_error` | error | An unexpected error on the token endpoint, answered server_error. `name` and `prismaCode` only; never form values, codes or tokens. | `src/app/oauth/mcp/token/route.ts` |
