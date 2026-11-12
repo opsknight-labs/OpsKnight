@@ -1,11 +1,12 @@
 import Link from 'next/link';
-import { Lock, Mail, ShieldQuestion, Users } from 'lucide-react';
+import { ArrowRight, Lock, ShieldQuestion, Users } from 'lucide-react';
 
 import type { AccessExplanation } from '@/lib/access/server';
 import { roleLabel } from '@/lib/authorization';
 import RequestAccessForm from '@/components/access/RequestAccessForm';
 import BreakGlassButton from '@/components/access/BreakGlassButton';
 import { BackButton, CopyDetailsButton } from '@/components/access/AccessDeniedActions';
+import { ContactChip, Fact } from '@/components/access/AccessUi';
 
 const RESOURCE_NOUNS = new Map<string, string>([
   ['incident', 'incident'],
@@ -74,106 +75,108 @@ export default function AccessDeniedView({
     >
       <section
         aria-labelledby="access-denied-title"
-        className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-sm sm:p-8"
+        className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
       >
-        <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
-            <Lock className="h-5 w-5 text-amber-700 dark:text-amber-300" aria-hidden />
+        <div className="space-y-6 p-6 sm:p-8">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/40">
+              <Lock className="h-5 w-5 text-amber-700 dark:text-amber-300" aria-hidden />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Access denied · 403
+              </p>
+              <h1
+                id="access-denied-title"
+                className="text-xl font-bold tracking-tight text-foreground sm:text-2xl"
+              >
+                {title}
+              </h1>
+              <p className="text-sm leading-relaxed text-muted-foreground">{reason}</p>
+            </div>
           </div>
-          <div className="min-w-0 space-y-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Access denied · 403
-            </p>
-            <h1 id="access-denied-title" className="text-xl font-semibold text-foreground">
-              {title}
-            </h1>
-            <p className="text-sm text-muted-foreground">{reason}</p>
-          </div>
-        </div>
 
-        {snapshot && (
-          <dl className="mt-6 grid gap-4 rounded-lg bg-muted/40 p-4 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-xs text-muted-foreground">Your role</dt>
-              <dd className="font-medium text-foreground">
-                {roleLabel(snapshot.role)}
-                {snapshot.customRole ? ` + ${snapshot.customRole.name}` : ''}
+          {snapshot && (
+            <dl className="grid gap-4 rounded-lg border border-border bg-muted/30 p-4 sm:grid-cols-2">
+              <Fact label="Your role">
+                <span className="font-medium">
+                  {roleLabel(snapshot.role)}
+                  {snapshot.customRole ? ` + ${snapshot.customRole.name}` : ''}
+                </span>
                 {snapshot.roleSource !== 'MANUAL' && (
-                  <span className="ml-1 text-xs font-normal text-muted-foreground">
-                    (managed by your identity provider)
+                  <span className="block text-xs text-muted-foreground">
+                    Managed by your identity provider
                   </span>
                 )}
-              </dd>
-            </div>
-            {requirement && !resourceDenied && (
-              <div>
-                <dt className="text-xs text-muted-foreground">Needed</dt>
-                <dd className="font-medium text-foreground">{requirement.rolesText}</dd>
-              </div>
-            )}
-            <div className="sm:col-span-2">
-              <dt className="text-xs text-muted-foreground">Your teams</dt>
-              <dd className="text-foreground">
-                {snapshot.teams.length > 0
-                  ? snapshot.teams.map(team => team.name).join(', ')
-                  : 'You are not in any team yet'}
-              </dd>
-            </div>
-          </dl>
-        )}
+              </Fact>
+              {requirement && !resourceDenied && (
+                <Fact label="Needed">
+                  <span className="font-medium">{requirement.rolesText}</span>
+                </Fact>
+              )}
+              <Fact label="Your teams" className="sm:col-span-2">
+                {snapshot.teams.length > 0 ? (
+                  snapshot.teams.map(team => team.name).join(', ')
+                ) : (
+                  <span className="text-muted-foreground">You are not in any team yet</span>
+                )}
+              </Fact>
+            </dl>
+          )}
 
-        <div className="mt-6 space-y-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Users className="h-4 w-4" aria-hidden />
-            {grantors.kind === 'team_owner'
-              ? `Who can add you to ${grantors.teamName ?? 'the team'}`
-              : 'Who can give you access'}
-          </h2>
-          {grantors.people.length > 0 ? (
-            <ul className="flex flex-wrap gap-2">
-              {grantors.people.map(person => (
-                <li key={person.id}>
-                  <a
-                    href={`mailto:${person.email}?subject=${encodeURIComponent(`OpsKnight access: ${explanation.label}`)}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs text-foreground hover:bg-muted"
-                  >
-                    <Mail className="h-3 w-3" aria-hidden />
-                    {person.name ?? person.email}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No administrator is available. Contact your OpsKnight owner.
-            </p>
+          <div className="space-y-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Users className="h-4 w-4 text-muted-foreground" aria-hidden />
+              {grantors.kind === 'team_owner'
+                ? `Who can add you to ${grantors.teamName ?? 'the team'}`
+                : 'Who can give you access'}
+            </h2>
+            {grantors.people.length > 0 ? (
+              <ul className="flex flex-wrap gap-2">
+                {grantors.people.map(person => (
+                  <li key={person.id} className="p-0">
+                    <ContactChip
+                      name={person.name}
+                      email={person.email}
+                      subject={`OpsKnight access: ${explanation.label}`}
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No administrator is available. Contact your OpsKnight owner.
+              </p>
+            )}
+          </div>
+
+          {snapshot && snapshot.settings.requestsEnabled && (
+            <div className="space-y-4 border-t border-border pt-6">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <ShieldQuestion className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Request access
+              </h2>
+              <RequestAccessForm
+                originPath={explanation.path}
+                requiredCapability={requirement?.anyOf[0]}
+                currentRole={snapshot.role}
+                suggestedRole={explanation.suggestedRole}
+                team={resourceDenied && !explanation.alreadyInOwningTeam ? owningTeam : null}
+                canRequestOrgRole={explanation.canRequestOrgRole}
+                compact={variant === 'mobile'}
+              />
+            </div>
           )}
         </div>
 
-        {snapshot && snapshot.settings.requestsEnabled && (
-          <div className="mt-6 border-t border-border pt-6">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-              <ShieldQuestion className="h-4 w-4" aria-hidden />
-              Request access
-            </h2>
-            <RequestAccessForm
-              originPath={explanation.path}
-              requiredCapability={requirement?.anyOf[0]}
-              currentRole={snapshot.role}
-              suggestedRole={explanation.suggestedRole}
-              team={resourceDenied && !explanation.alreadyInOwningTeam ? owningTeam : null}
-              canRequestOrgRole={explanation.canRequestOrgRole}
-            />
-          </div>
-        )}
-
-        <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-border pt-6">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border bg-muted/30 px-6 py-4 sm:px-8">
           <BackButton />
           <Link
             href="/settings/access"
-            className="inline-flex h-8 items-center rounded-md px-3 text-sm text-primary hover:underline"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-primary hover:bg-primary/5"
           >
             See what you can access
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
           {showBreakGlass && snapshot && (
             <BreakGlassButton

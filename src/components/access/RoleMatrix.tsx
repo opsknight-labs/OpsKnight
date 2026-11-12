@@ -51,7 +51,10 @@ export default function RoleMatrix({
         <caption className="sr-only">What each role can do</caption>
         <thead>
           <tr className="bg-muted/50">
-            <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
+            <th
+              scope="col"
+              className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+            >
               Permission
             </th>
             {ROLES.map(role => (
@@ -59,13 +62,18 @@ export default function RoleMatrix({
                 key={role}
                 scope="col"
                 className={cn(
-                  'px-3 py-2 text-center font-semibold text-foreground',
-                  highlight === role && 'bg-primary/10'
+                  'px-4 py-3 text-center font-semibold text-foreground',
+                  (highlight === role || current === role) && 'bg-primary/10'
                 )}
               >
-                <div>{roleLabel(role)}</div>
+                {/* Inner spans set case and size: a global `table th` rule uppercases headers. */}
+                <span className="block text-sm font-semibold normal-case tracking-normal">
+                  {roleLabel(role)}
+                </span>
                 {current === role && (
-                  <div className="text-[10px] font-normal uppercase text-muted-foreground">You</div>
+                  <span className="mt-1 inline-block rounded-full bg-primary px-2 py-px text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
+                    You
+                  </span>
                 )}
               </th>
             ))}
@@ -77,8 +85,8 @@ export default function RoleMatrix({
                 <td
                   key={role}
                   className={cn(
-                    'px-3 pb-2 text-center align-top text-[11px] text-muted-foreground',
-                    highlight === role && 'bg-primary/10'
+                    'px-4 pb-3 text-center align-top text-[11px] leading-relaxed text-muted-foreground',
+                    (highlight === role || current === role) && 'bg-primary/10'
                   )}
                 >
                   {ROLE_DESCRIPTIONS.get(role)}
@@ -93,15 +101,20 @@ export default function RoleMatrix({
               <th
                 scope="rowgroup"
                 colSpan={ROLES.length + 1}
-                className="px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
               >
                 {group.label}
               </th>
             </tr>
             {group.capabilities.map(capability => (
-              <tr key={capability} className="border-t border-border/60">
-                <th scope="row" className="px-3 py-1.5 text-left font-normal text-foreground">
-                  {capabilityInfo(capability).label}
+              <tr
+                key={capability}
+                className="border-t border-border/60 transition-colors hover:bg-muted/30"
+              >
+                <th scope="row" className="px-4 py-2 text-left">
+                  <span className="text-sm font-normal normal-case tracking-normal text-foreground">
+                    {capabilityInfo(capability).label}
+                  </span>
                 </th>
                 {ROLES.map(role => {
                   const has = roleCaps.get(role)!.has(capability);
@@ -109,12 +122,15 @@ export default function RoleMatrix({
                     <td
                       key={role}
                       className={cn(
-                        'px-3 py-1.5 text-center',
-                        highlight === role && 'bg-primary/10'
+                        'px-4 py-2 text-center',
+                        (highlight === role || current === role) && 'bg-primary/5'
                       )}
                     >
                       {has ? (
-                        <Check className="mx-auto h-4 w-4 text-emerald-600" aria-label="Yes" />
+                        <Check
+                          className="mx-auto h-4 w-4 text-emerald-600 dark:text-emerald-400"
+                          aria-label="Yes"
+                        />
                       ) : (
                         <Minus
                           className="mx-auto h-4 w-4 text-muted-foreground/40"
