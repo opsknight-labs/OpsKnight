@@ -23,12 +23,18 @@ import type {
   NotificationEventType,
 } from './notification-delivery';
 import { notificationEventKey } from './notification-identity';
+
 import { syncUserNotificationEndpoint } from './user-notification-endpoints';
 
+/**
+ * Titles of the in-app records written when someone is paged or assigned an incident. MCP page
+ * push (mcp/protocol/page-push.ts) recognizes pages by them, so change them only together.
+ */
+export const PAGE_NOTIFICATION_TITLE = 'Action Required';
+export const ASSIGNED_NOTIFICATION_TITLE = 'Incident Assigned to You';
+
 export type IncidentNotificationIntent =
-  | 'INCIDENT_UPDATED'
-  | 'ASSIGNED_TO_USER'
-  | 'ASSIGNED_TO_TEAM';
+  'INCIDENT_UPDATED' | 'ASSIGNED_TO_USER' | 'ASSIGNED_TO_TEAM';
 
 export type SendIncidentNotificationOptions = {
   intent?: IncidentNotificationIntent;
@@ -280,7 +286,7 @@ export async function sendUserNotification(
       await createInAppNotifications({
         userIds: [userId],
         type: 'INCIDENT',
-        title: 'Action Required',
+        title: PAGE_NOTIFICATION_TITLE,
         message,
         entityType: 'INCIDENT',
         entityId: incidentId,
@@ -481,7 +487,7 @@ export async function sendIncidentNotifications(
     );
     const eventTitle =
       intent === 'ASSIGNED_TO_USER'
-        ? 'Incident Assigned to You'
+        ? ASSIGNED_NOTIFICATION_TITLE
         : intent === 'ASSIGNED_TO_TEAM'
           ? 'Incident Assigned to Your Team'
           : eventType === 'triggered'

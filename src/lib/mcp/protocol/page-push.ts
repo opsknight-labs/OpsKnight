@@ -2,6 +2,7 @@ import 'server-only';
 import type { ServerEvent, ServerEventBus } from '@modelcontextprotocol/server';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { ASSIGNED_NOTIFICATION_TITLE, PAGE_NOTIFICATION_TITLE } from '@/lib/user-notifications';
 import { CostBudget } from '../core/budget';
 import { callMcpOperation, type ExecutionContext } from '../core/execution';
 
@@ -15,7 +16,7 @@ export const PAGE_META_KEY = 'com.opsknight/page';
  * (escalation/notification-intents.ts and user-notifications.ts). Reading them reuses those
  * decisions instead of re-deriving who was paged.
  */
-const PAGE_TITLES = ['Action Required', 'Incident Assigned to You'];
+const PAGE_TITLES = [PAGE_NOTIFICATION_TITLE, ASSIGNED_NOTIFICATION_TITLE];
 // shortcut: a page whose transaction commits more than this after its createdAt is missed; widen if seen.
 const LOOKBACK_MS = 60_000;
 const PAGE_ROW_LIMIT = 200;
