@@ -182,7 +182,11 @@ const SCHEMAS = {
           properties: {
             id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,40}$' },
             operationId: { type: 'string', maxLength: 128 },
-            args: { type: 'object' },
+            args: {
+              type: 'object',
+              description:
+                'Canonical args. Any value may be {"$from": "<stepId>", "pointer": "/data/0/id"}: the value at that JSON Pointer in result.data of a step listed in dependsOn.',
+            },
             dependsOn: {
               type: 'array',
               items: { type: 'string', maxLength: 40 },
@@ -1297,7 +1301,7 @@ export function createOpsKnightMcpServer(
     {
       title: 'Run several reads',
       description:
-        'Run at most eight independent authorized reads in one call (a single read is fine). dependsOn orders steps and skips a step whose dependency failed; results are not passed between steps. Partial results; no transaction or changes.',
+        'Run at most eight authorized reads in one call (a single read is fine). dependsOn orders steps and skips a step whose dependency failed. A later step can use an earlier result: put {"$from": "<stepId>", "pointer": "/data/0/id"} in its args (a JSON Pointer into that step\'s result.data; list the step in dependsOn). Partial results; no transaction or changes.',
       inputSchema: SCHEMAS.executePlan,
       annotations: {
         readOnlyHint: true,

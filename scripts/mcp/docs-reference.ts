@@ -497,6 +497,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'No App URL is configured.',
     fix: 'Set the App URL in Settings → System.',
   },
+  MCP_PLAN_REFERENCE: {
+    area: 'tools',
+    meaning:
+      'An execute_plan step has a $from reference that names no dependency, or whose pointer finds nothing usable in that step\'s result.data.',
+    fix: 'List the step in dependsOn and point at a value that exists, for example /data/0/id.',
+  },
   MCP_PLAN_READS_ONLY: {
     area: 'tools',
     meaning: 'execute_plan accepts reads only.',
