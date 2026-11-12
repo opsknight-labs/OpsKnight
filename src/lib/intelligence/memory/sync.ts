@@ -14,6 +14,7 @@ import {
   INCIDENT_KNOWLEDGE_KINDS,
   KNOWLEDGE_LIMITS,
   postmortemKnowledgeBody,
+  POSTMORTEM_KNOWLEDGE_LIMITS,
   readRunbookSteps,
   runbookStepChunks,
   type DerivedKnowledgeKind,
@@ -273,8 +274,16 @@ const INCIDENT_SELECT = {
   service: { select: { teamId: true } },
 } as const;
 
+/** Action items live in `ActionItem` rows; the JSON column is only the pre-migration copy. */
+function withActionItemRecords<T extends { actionItems?: unknown; actionItemRecords?: unknown[] }>(
+  row: T
+): T {
+  return row.actionItemRecords?.length ? { ...row, actionItems: row.actionItemRecords } : row;
+}
+
 const LOADERS: Record<DerivedKnowledgeKind, Loader> = {
   POSTMORTEM: async (tx, cursor, upper, batch) => {
+    const structured = (await getIntelligenceSettings(tx)).opsInsightsPostmortemsEnabled;
     const rows = await tx.postmortem.findMany({
       where: after<Prisma.PostmortemWhereInput>('updatedAt', cursor, upper),
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
@@ -288,6 +297,19 @@ const LOADERS: Record<DerivedKnowledgeKind, Loader> = {
         lessons: true,
         updatedAt: true,
         incident: { select: INCIDENT_SELECT },
+        // Structured sections join the searchable text only while postmortem intelligence is on.
+        ...(structured
+          ? {
+              timeline: true,
+              fiveWhys: true,
+              actionItems: true,
+              actionItemRecords: {
+                orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+                take: POSTMORTEM_KNOWLEDGE_LIMITS.actionItems,
+                select: { title: true, status: true },
+              },
+            }
+          : {}),
       },
     });
     const last = rows.at(-1);
@@ -301,7 +323,7 @@ const LOADERS: Record<DerivedKnowledgeKind, Loader> = {
           postmortemId: row.id,
           sourceUpdatedAt: row.updatedAt,
         },
-        chunks: buildChunks(row.title, postmortemKnowledgeBody(row)),
+        chunks: buildChunks(row.title, postmortemKnowledgeBody(withActionItemRecords(row))),
       })),
     };
   },
