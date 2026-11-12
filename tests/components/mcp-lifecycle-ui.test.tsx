@@ -64,6 +64,7 @@ function client(overrides: Partial<McpClientRow> = {}): McpClientRow {
     activeConnections: 1,
     lastUsedAt: null,
     lastCallAt: null,
+    restrictedCapabilities: 0,
     ...overrides,
   };
 }
@@ -100,8 +101,6 @@ function detail(overrides: Partial<Parameters<typeof McpAssistantDetail>[0]> = {
           durationMs: 12,
           requestId: 'r1',
           errorCode: 'RATE_LIMITED',
-          grantId: 'g1',
-          userId: 'u1',
           person: 'Jane',
         },
       ]}

@@ -16,6 +16,7 @@ import { sendNotification, type NotificationChannel } from './notifications';
 import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
 import { logger } from './logger';
+import { ASSIGNED_NOTIFICATION_TITLE, PAGE_NOTIFICATION_TITLE } from './notification-titles';
 import { filterChannelsForQuietHours } from './quiet-hours';
 import type {
   NotificationDeliveryOutcome,
@@ -25,13 +26,6 @@ import type {
 import { notificationEventKey } from './notification-identity';
 
 import { syncUserNotificationEndpoint } from './user-notification-endpoints';
-
-/**
- * Titles of the in-app records written when someone is paged or assigned an incident. MCP page
- * push (mcp/protocol/page-push.ts) recognizes pages by them, so change them only together.
- */
-export const PAGE_NOTIFICATION_TITLE = 'Action Required';
-export const ASSIGNED_NOTIFICATION_TITLE = 'Incident Assigned to You';
 
 export type IncidentNotificationIntent =
   'INCIDENT_UPDATED' | 'ASSIGNED_TO_USER' | 'ASSIGNED_TO_TEAM';

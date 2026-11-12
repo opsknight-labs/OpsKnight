@@ -2,7 +2,7 @@ import 'server-only';
 import type { ServerEvent, ServerEventBus } from '@modelcontextprotocol/server';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { ASSIGNED_NOTIFICATION_TITLE, PAGE_NOTIFICATION_TITLE } from '@/lib/user-notifications';
+import { ASSIGNED_NOTIFICATION_TITLE, PAGE_NOTIFICATION_TITLE } from '@/lib/notification-titles';
 import { CostBudget } from '../core/budget';
 import { callMcpOperation, type ExecutionContext } from '../core/execution';
 

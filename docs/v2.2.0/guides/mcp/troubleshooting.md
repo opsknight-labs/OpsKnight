@@ -141,6 +141,7 @@ This page lists 110 MCP codes and 26 log events found in the source.
 | <a id="MCP_PAT_INVALID_EXPIRY"></a>`MCP_PAT_INVALID_EXPIRY` | The chosen expiry is outside 1 day to the policy maximum (at most 90 days). | Choose one of the offered expiry options. |
 | <a id="MCP_LOGIN_REQUIRED"></a>`MCP_LOGIN_REQUIRED` | The settings or review page needs a signed-in user. | Sign in. |
 | <a id="MCP_INVALID_CAPABILITY"></a>`MCP_INVALID_CAPABILITY` | Exposed capabilities was saved with a name that is not a tool, operation or domain. | Reload the tab and choose from the list. |
+| <a id="MCP_INVALID_USAGE_RANGE"></a>`MCP_INVALID_USAGE_RANGE` | The usage date range is not valid: the start is after the end, it starts before the request log retention, or it spans more than 365 days. | Pick a start before the end, within the retention period and at most 365 days long. |
 | <a id="MCP_PAT_DISABLED"></a>`MCP_PAT_DISABLED` | A personal access token was requested while personal access tokens are off in the access policy. Turning them off revokes every token; a revoked token gets MCP_INVALID_GRANT. | Ask an administrator to allow personal access tokens, then create a new token. |
 | <a id="MCP_PAT_LIMIT_REACHED"></a>`MCP_PAT_LIMIT_REACHED` | The person already holds 20 active personal access tokens. | Revoke a token that is no longer used under Connections, then create the new one. |
 

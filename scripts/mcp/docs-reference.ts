@@ -361,6 +361,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'Exposed capabilities was saved with a name that is not a tool, operation or domain.',
     fix: 'Reload the tab and choose from the list.',
   },
+  MCP_INVALID_USAGE_RANGE: {
+    area: 'settings',
+    meaning:
+      'The usage date range is not valid: the start is after the end, it starts before the request log retention, or it spans more than 365 days.',
+    fix: 'Pick a start before the end, within the retention period and at most 365 days long.',
+  },
   MCP_INVALID_CIMD_HOST: {
     area: 'settings',
     meaning: 'A trusted assistant host is not a plain DNS name.',
