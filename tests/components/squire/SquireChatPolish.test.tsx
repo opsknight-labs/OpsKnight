@@ -350,6 +350,8 @@ describe('availability states', () => {
       expect(retry).toBeDisabled();
       expect(screen.getByText('Rate limited')).toBeInTheDocument();
 
+      // Let the countdown's effect start its interval before the clock moves (it can lag the paint under load).
+      await act(async () => {});
       await act(async () => {
         vi.advanceTimersByTime(3_100);
       });
