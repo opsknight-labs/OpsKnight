@@ -48,6 +48,7 @@ import { withMcpDatabase } from '@/lib/database-workload';
 import { mcpApprovalPollGuidance } from '../approvals/timing';
 import { projectMcpData } from '../core/projection';
 import { attachMcpSkills } from './skills';
+import { attachMcpApps } from './apps';
 import { MCP_WEB_PAGES, mcpWebOrigin } from '../core/web-links';
 import {
   BULK_ACKNOWLEDGE_LIMIT,
@@ -699,8 +700,9 @@ export function createOpsKnightMcpServer(
   // Identity is never withheld: without it an assistant cannot resolve "me" or explain access.
   const registerAlwaysOn = server.registerTool.bind(server);
   withholdDisabledRegistrations(server, disabled);
-  // Inert unless this request declared the extension.
+  // Inert unless this request declared the extension (skills, MCP Apps).
   attachMcpSkills(server, context, actor);
+  attachMcpApps(server, context);
   const registered = recordRegistrations(server);
   // A personal access token never approves its own request, even an administrator's; the review
   // itself refuses it too (approvals/operation.ts).
