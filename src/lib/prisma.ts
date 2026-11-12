@@ -97,7 +97,8 @@ const prismaClientSingleton = (workload: 'primary' | 'mcp' | 'intelligence' = 'p
       JSON.stringify({
         level: 'warn',
         event: 'prisma.slow_query',
-        workload,
+        // The lane thread's process client is the lane pool, so its slow queries are not ingestion's.
+        workload: laneWorkload ? 'intelligence' : workload,
         durationMs: event.duration,
         target: event.target,
         timestamp: new Date().toISOString(),
