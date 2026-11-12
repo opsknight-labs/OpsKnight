@@ -984,8 +984,13 @@ changed) against everything OFF; results are under `plans/intelligence-engine/ce
 evaluations failing open. Every control ON together with the busy lane **fails** on p50 (+4.45 ms; the
 lane alone measured +1.61 and +2.41 ms), and the 10k burst over 1M history fails (+12.56 ms p50 /
 +17.45 ms p99, 28% fail-open at concurrency 16 on two lookup connections). No ingestion event failed in
-any run. Keep ON to services where the noise justifies it until the lane's in-process cost is reduced
-and the burst gate passes.
+any run.
+**Local status (2026-11-11, lane in its worker thread, lookups started early, host check with the peak
+rule):** every control ON with the busy lane **passes**, 3 of 3 valid invocations (p50 / p99 -0.08 /
+-17.62, +0.64 / -13.42, -0.29 / -10.20 ms), and so does the CI shape (3 of 3). The in-process fallback
+is outside the contract (it meets the latency limits only because the lane stops during a burst). The
+10k burst over 1M history was not re-measured, so keep ON to services where the noise justifies it
+until that burst gate passes.
 
 ## Triage, change risk, topology and SLO burn (deterministic)
 
