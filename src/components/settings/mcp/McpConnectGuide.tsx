@@ -308,7 +308,10 @@ export default function McpConnectGuide({
           <Steps>
             <Step>
               <p>Install with one click (VS Code asks you to confirm):</p>
-              <InstallLink href={commands.vscodeInstall} label="Add to VS Code" />
+              <div className="flex flex-wrap gap-2">
+                <InstallLink href={commands.vscodeInstall} label="Add to VS Code" />
+                <InstallLink href={commands.vscodeInsidersInstall} label="Add to VS Code Insiders" />
+              </div>
             </Step>
             <Step>
               <p>Or run this in your terminal:</p>
