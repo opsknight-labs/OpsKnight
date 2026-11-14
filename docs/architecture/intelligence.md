@@ -635,7 +635,8 @@ Everything below is off by default and lives in `src/lib/intelligence/memory/`. 
 `docs/v2.2.0/operate/intelligence/squire-memory.md`.
 
 **Knowledge index.** `KnowledgeChunk` holds bounded (800 characters, at most 6 per source), secret-redacted
-passages from postmortems, resolution notes (the resolve message), incident notes (20+ characters), the
+passages from postmortems (narrative plus, after it, a timeline summary of at most 12 entries, up to 5
+five-whys and up to 10 action items, each line cut at 160 characters: `POSTMORTEM_KNOWLEDGE_LIMITS`), resolution notes (the resolve message), incident notes (20+ characters), the
 step names and descriptions of published runbook versions (never step configuration), and person-confirmed
 service facts. `searchVector` is a database-generated `tsvector` (like `IncidentFingerprint.searchVector`);
 a trigram index is added when `pg_trgm` is installed; `embedding` is optional. `contentHash` (sha256 of title
@@ -1090,11 +1091,11 @@ The lane itself still needs Intelligence to be enabled.
 
 ### Storage
 
-| Table | Purpose |
-| --- | --- |
-| `OpsInsight` | One insight. Unique on `(scopeType, scopeId, kind, key)`, so recomputation updates a row. Holds `area`, `severity` (`INFO` < `WARNING` < `CRITICAL`), `title`, `summary`, `evidence` (JSON, at most 4 KB: up to 12 facts, 5 examples, a window), optional `draftHref` (in-app path), `inputHash`, `status` (`OPEN`, `ACCEPTED`, `DISMISSED`, `RESOLVED`), `generation`, first/last seen, who decided. |
-| `OpsInsightScopeState` | Per scope: the hash of the producers' inputs and when the scope was last computed. |
-| `MetricRollup` (existing) | Daily operations rollups, with the new nullable `subjectKey` column and `idx_metric_rollup_subject (name, subjectKey, bucket)`. |
+| Table                     | Purpose                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OpsInsight`              | One insight. Unique on `(scopeType, scopeId, kind, key)`, so recomputation updates a row. Holds `area`, `severity` (`INFO` < `WARNING` < `CRITICAL`), `title`, `summary`, `evidence` (JSON, at most 4 KB: up to 12 facts, 5 examples, a window), optional `draftHref` (in-app path), `inputHash`, `status` (`OPEN`, `ACCEPTED`, `DISMISSED`, `RESOLVED`), `generation`, first/last seen, who decided. |
+| `OpsInsightScopeState`    | Per scope: the hash of the producers' inputs and when the scope was last computed.                                                                                                                                                                                                                                                                                                                    |
+| `MetricRollup` (existing) | Daily operations rollups, with the new nullable `subjectKey` column and `idx_metric_rollup_subject (name, subjectKey, bucket)`.                                                                                                                                                                                                                                                                       |
 
 Status rules (`ops-insights/store.ts`, `upsertInsights`): a produced insight keeps a person's decision
 (`ACCEPTED` and `DISMISSED` are sticky while it is still produced); an open or accepted insight that is no
@@ -1160,11 +1161,11 @@ Rules:
 `producers/integration-health.ts` (scope `SERVICE`, area `automation`) answers three questions from the
 alerts a service already stored:
 
-| Key | Fires when | Severity |
-| --- | --- | --- |
-| `silent` | The service sent at least 7 alerts in the week before its last one, and has now been quiet for a day or three of its usual gaps, whichever is longer. Stops after 30 days (probably retired). | `WARNING` |
-| `volume-step` | The last 24 hours hold at least 50 alerts and three times the daily average of the 7 days before (needs 35 alerts in that week), or a quarter of it or less (needs 140). Not judged when a count hit its 20,000 cap. | `WARNING` up, `INFO` down |
-| `missing-severity` | Half or more of the last 200 alerts (at least 20) have no severity. | `WARNING` at 90%, else `INFO` |
+| Key                | Fires when                                                                                                                                                                                                           | Severity                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `silent`           | The service sent at least 7 alerts in the week before its last one, and has now been quiet for a day or three of its usual gaps, whichever is longer. Stops after 30 days (probably retired).                        | `WARNING`                     |
+| `volume-step`      | The last 24 hours hold at least 50 alerts and three times the daily average of the 7 days before (needs 35 alerts in that week), or a quarter of it or less (needs 140). Not judged when a count hit its 20,000 cap. | `WARNING` up, `INFO` down     |
+| `missing-severity` | Half or more of the last 200 alerts (at least 20) have no severity.                                                                                                                                                  | `WARNING` at 90%, else `INFO` |
 
 `loadInput` is two statements, every arm on `idx_alert_by_service (serviceId, createdAt)` with a `LIMIT`, so
 a service with millions of alerts costs the same as a small one. It returns
@@ -1173,6 +1174,37 @@ recentMissingSeverity }`; `silentHours` is exact for the first three days and wh
 `derive` turns that into the items above, each with its facts and a `draftHref` to the service's
 integrations page. Tests: `tests/lib/intelligence/ops-insights.test.ts` (pure half) and
 `tests/integration/intelligence/ops-insights.test.ts` (fixtures with known answers).
+
+#### Postmortems (plan J4)
+
+`producers/postmortem-repeat-cause.ts` (scope `SERVICE`, area `postmortems`, kind
+`postmortem.repeat-cause`) fires when a problem (`IncidentFingerprint.template`) recurred at least twice on
+the service in 90 days while an unfinished action item of any occurrence is past due. `CRITICAL` when the
+problem was seen 3+ times and an item is high priority or 30+ days late, else `WARNING`. `loadInput` is two
+statements: problems from the newest 5,000 fingerprints on `idx_incident_fingerprint_service_recent`, then
+overdue items through `idx_incident_fingerprint_problem` and `ActionItem (incidentId, status)`, each with a
+`LIMIT` (both in the query-plan gate). The stored insight holds counts, days and ids only; example links
+resolve text under the viewer's read rules.
+
+On read (`src/lib/intelligence/postmortems/loaders.ts`, never in ingestion), behind the same area switch and
+`INTELLIGENCE_SUGGESTIONS_READ`, every related row filtered by `incidentReadWhere`, `postmortemReadWhere` and
+`runbookReadWhere`:
+
+- `getPostmortemRecurrenceForActor`: earlier occurrences of the same template in 90 days (capped at 100,
+  `idx_incident_fingerprint_problem`), the newest readable postmortem among them and their open action
+  items (cap 100, shown 10). Rendered by `PostmortemRecurrenceStrip`; `src/components/incident/IncidentRecurrence.tsx`
+  is the server component the incident insights inspector mounts.
+- `getPostmortemAssistForActor`: recurrence plus the evidence for the draft (Intelligence time axis,
+  change and upstream-incident correlations with responder-confirmed flags from `IntelligenceFeedback`,
+  at most 20 runbook runs, fixes of similar incidents) and `suggestActionItems`, deduplicated against open
+  action items of this incident and earlier occurrences by word overlap (`findDuplicateActionItem`).
+- `generatePostmortemDraft` applies the evidence with `applyEvidenceToDraft` (pure, `evidence-draft.ts`);
+  off or failing, the template draft is returned unchanged. The AI draft stays on `cachedGenerateStructured`.
+- `checkPostmortemQuality` (`quality.ts`, pure, runs in the editor): missing or placeholder root cause, no
+  action items, open items without owner or due date, timeline gaps over 30 minutes inside the incident.
+
+Tests: `tests/unit/intelligence-postmortems.test.ts`, `tests/components/postmortem-intelligence.test.tsx`,
+`tests/integration/intelligence/postmortem-intelligence.test.ts`.
 
 ### Reading and deciding
 
@@ -1200,12 +1232,12 @@ insight.
 `src/lib/metric-rollup.ts` adds daily operations rollups in `MetricRollup`, run by the existing daily
 rollup step of the cron scheduler (`generateOpsRollups`; a no-op while operations insights are off):
 
-| Name | `subjectKey` | `tags` | `count` / `sum` | Driven by |
-| --- | --- | --- | --- | --- |
-| `ops.pages.user_hour` | user id | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents | `idx_notification_created_cursor` |
-| `ops.runbook.outcome` | runbook id | `status` | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new) |
-| `ops.automation.rule_match` | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode` | decisions / fallbacks | `IncidentAutomationDecision (serviceId, createdAt)` |
-| `ops.escalation.step_outcome` | policy id | `step`, `outcome` | attempts / seconds to acknowledge | Named and shaped only; its source arrives with the escalation capture slice. |
+| Name                          | `subjectKey`          | `tags`                                           | `count` / `sum`                           | Driven by                                                                    |
+| ----------------------------- | --------------------- | ------------------------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `ops.pages.user_hour`         | user id               | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents       | `idx_notification_created_cursor`                                            |
+| `ops.runbook.outcome`         | runbook id            | `status`                                         | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new)                                      |
+| `ops.automation.rule_match`   | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode`        | decisions / fallbacks                     | `IncidentAutomationDecision (serviceId, createdAt)`                          |
+| `ops.escalation.step_outcome` | policy id             | `step`, `outcome`                                | attempts / seconds to acknowledge         | Named and shaped only; its source arrives with the escalation capture slice. |
 
 Each rollup advances one complete UTC day per transaction from its own watermark row
 (`<name>.watermark`), deleting and rewriting the day with the watermark so a crash or a second scheduler
