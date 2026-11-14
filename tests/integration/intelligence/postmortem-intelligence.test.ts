@@ -235,7 +235,7 @@ describe('postmortem assist', () => {
     expect(assist!.recurrence).toMatchObject({ occurrences: 2, openActionItemCount: 1 });
 
     const byTitle = new Map(assist!.suggestions.map(item => [item.title, item]));
-    expect(byTitle.get('Add a pre-release check or canary for API')).toMatchObject({
+    expect(byTitle.get(`Add a pre-release check or canary for ${service.name}`)).toMatchObject({
       source: 'ACCEPTED_CAUSE',
       duplicateOf: {
         title: 'Add canary and pre-release check for the API',
@@ -253,7 +253,7 @@ describe('postmortem assist', () => {
     };
     const draft = applyEvidenceToDraft(base, assist!.evidence);
     expect(draft.rootCause).toContain('Confirmed by responders');
-    expect(draft.rootCause).toContain('Deploy "Deploy api v42" on API');
+    expect(draft.rootCause).toContain(`Deploy "Deploy api v42" on ${service.name}`);
     expect(draft.rootCause).not.toContain('Raise pool size');
     expect(draft.resolution).toContain('Runbook "Restart workers" was tried');
     expect(draft.lessons).toContain('seen 2 times in 90 days');
