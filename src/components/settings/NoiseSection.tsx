@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { Button } from '@/components/ui/shadcn/button';
+import type { ReactNode } from 'react';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
@@ -45,8 +44,15 @@ function PagesByHour({ report }: { report: NoiseReport }) {
   );
 }
 
-export default function NoiseSection({ overview }: { overview: NoiseOverview }) {
-  const { report, insights } = overview;
+export default function NoiseSection({
+  overview,
+  suggestions,
+}: {
+  overview: NoiseOverview;
+  /** Server-rendered InsightsPanel of the person's stored noise insights; null when there are none. */
+  suggestions?: ReactNode;
+}) {
+  const { report } = overview;
   const bundle = useBundlePreference(overview.bundleLowUrgencyPages);
 
   return (
@@ -105,34 +111,12 @@ export default function NoiseSection({ overview }: { overview: NoiseOverview }) 
         </SettingsRow>
       )}
 
-      {insights.length > 0 && (
+      {suggestions && (
         <SettingsRow
           label="Suggestions"
           description="Each opens the setting; nothing changes until you save it there"
         >
-          <ul className="divide-y divide-border">
-            {insights.map(item => (
-              <li
-                key={`${item.kind}:${item.key}`}
-                className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
-              >
-                <div className="min-w-0 space-y-1">
-                  <p className="text-sm font-medium">{item.title}</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{item.summary}</p>
-                </div>
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="min-h-11 shrink-0 md:min-h-9"
-                >
-                  <Link href={item.draftHref} aria-label={`Review: ${item.title}`}>
-                    Review
-                  </Link>
-                </Button>
-              </li>
-            ))}
-          </ul>
+          {suggestions}
         </SettingsRow>
       )}
     </SettingsSection>

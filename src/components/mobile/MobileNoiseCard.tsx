@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { ChevronRight, Layers } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Layers } from 'lucide-react';
 import MobileSettingCard from '@/components/mobile/MobileSettingCard';
 import { MobileSwitch } from '@/components/mobile/MobileSwitch';
 import { useBundlePreference } from '@/components/settings/useBundlePreference';
@@ -9,8 +9,15 @@ import type { NoiseOverview } from '@/lib/notification-noise/loader';
 import { share } from '@/lib/notification-noise/report';
 
 /** Mobile counterpart of the settings "Noise" section: the opt-in, one summary line, the suggestions. */
-export default function MobileNoiseCard({ overview }: { overview: NoiseOverview }) {
-  const { report, insights } = overview;
+export default function MobileNoiseCard({
+  overview,
+  suggestions,
+}: {
+  overview: NoiseOverview;
+  /** Server-rendered InsightsPanel of the person's stored noise insights. */
+  suggestions?: ReactNode;
+}) {
+  const { report } = overview;
   const bundle = useBundlePreference(overview.bundleLowUrgencyPages);
 
   return (
@@ -39,24 +46,7 @@ export default function MobileNoiseCard({ overview }: { overview: NoiseOverview 
         </>
       }
     >
-      {insights.length > 0 && (
-        <ul className="divide-y divide-border/70 border-t border-border/70">
-          {insights.map(item => (
-            <li key={`${item.kind}:${item.key}`}>
-              <Link
-                href={item.draftHref}
-                className="flex min-h-11 items-center justify-between gap-3 py-2 text-sm text-foreground"
-              >
-                <span className="min-w-0">{item.title}</span>
-                <ChevronRight
-                  className="h-4 w-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      {suggestions}
     </MobileSettingCard>
   );
 }

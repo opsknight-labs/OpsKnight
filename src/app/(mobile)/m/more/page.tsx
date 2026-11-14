@@ -25,9 +25,7 @@ export default async function MobileMorePage() {
       role={user?.role || 'User'}
       gender={user?.gender}
       avatarUrl={user?.avatarUrl}
-      noise={
-        user ? <NoiseSettings viewer={{ id: user.id, role: user.role }} variant="mobile" /> : null
-      }
+      noise={user ? <NoiseSettings viewer={{ id: user.id }} variant="mobile" /> : null}
     />
   );
 }

@@ -1,21 +1,20 @@
+import type { OpsRollupPoint } from '@/lib/metric-rollup';
+
 /**
  * Personal notification noise report. Pure: no database, no server-only imports, so the settings UI can
- * import the types.
+ * import the types. Fed by the daily pages rollup (OPS_ROLLUPS.pagesPerUserService).
  *
- * A "page" is one incident that notified the person (however many channels it used), placed at the local
- * hour of its first notification.
+ * A "page" is one incident that notified the person on a day (however many channels it used), placed at
+ * the local hour of its first notification that day.
  */
 
 export const NOISE_REPORT_DAYS = 30;
 /** An incident the source or automation closed this soon after opening needed nobody. */
 export const AUTO_RESOLVE_WINDOW_MINUTES = 5;
 
-/**
- * One row per local day, service and local hour. This is the shape a daily rollup table would store, so
- * the loader's live aggregation can be swapped for a rollup read without touching the report.
- */
+/** One rollup row: UTC day, service and the person's local hour. */
 export interface NoiseDailyRow {
-  /** Local calendar day, YYYY-MM-DD. */
+  /** UTC day, YYYY-MM-DD. */
   day: string;
   serviceId: string;
   /** Local hour, 0-23. */
@@ -46,6 +45,36 @@ export interface NoiseReport extends NoiseCounts {
   byHour: Array<NoiseCounts & { hour: number }>;
 }
 
+const DAY_MS = 86_400_000;
+
+/** The report window: the last NOISE_REPORT_DAYS complete UTC days, the days the rollup has. */
+export function noiseWindow(now: Date, days: number = NOISE_REPORT_DAYS): { from: Date; to: Date } {
+  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return { from: new Date(to.getTime() - days * DAY_MS), to };
+}
+
+/** Rollup points to report rows; points with a malformed tag are skipped. */
+export function toNoiseDailyRows(points: readonly OpsRollupPoint[]): NoiseDailyRow[] {
+  return points.flatMap(point => {
+    const tags = (point.tags ?? {}) as {
+      serviceId?: unknown;
+      hour?: unknown;
+      autoResolved?: unknown;
+    };
+    if (typeof tags.serviceId !== 'string' || typeof tags.hour !== 'number') return [];
+    return [
+      {
+        day: point.bucket.toISOString().slice(0, 10),
+        serviceId: tags.serviceId,
+        hour: tags.hour,
+        pages: point.count,
+        acted: point.sum,
+        autoResolved: tags.autoResolved === true ? point.count : 0,
+      },
+    ];
+  });
+}
+
 const empty = (): NoiseCounts => ({ pages: 0, acted: 0, autoResolved: 0 });
 
 function add(into: NoiseCounts, row: NoiseCounts) {
@@ -73,7 +102,7 @@ export function buildNoiseReport(
   const byService = [...services.entries()]
     .map(([serviceId, counts]) => ({
       serviceId,
-      serviceName: serviceNames.get(serviceId) ?? 'Unknown service',
+      serviceName: serviceNames.get(serviceId) ?? 'A service you cannot open',
       ...counts,
     }))
     .sort((a, b) => b.pages - a.pages || a.serviceName.localeCompare(b.serviceName));

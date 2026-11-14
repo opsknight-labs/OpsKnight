@@ -241,7 +241,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
               phoneNumber={user?.phoneNumber ?? null}
             />
-            {user?.id && <NoiseSettings viewer={{ id: user.id, role }} />}
+            {user?.id && <NoiseSettings viewer={{ id: user.id }} />}
           </>
         }
         scheduleContent={

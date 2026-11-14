@@ -11,6 +11,7 @@ import { incidentEventWhereFor } from './incident-event-classifier';
 import { acquireAdvisoryLock, LOCK_KEYS } from './db-locks';
 import { resolveFrozenSlaTarget } from './metrics/domain/sla-target';
 import { capturedOrEffectiveElapsedMs, effectiveElapsedMs } from './metrics/domain/sla-clock';
+import { AUTO_RESOLVE_WINDOW_MINUTES } from './notification-noise/report';
 
 /**
  * Metric Rollup Service
@@ -1134,6 +1135,14 @@ export const OPS_ROLLUPS = {
    * count = decisions, sum = decisions that fell back.
    */
   automationRuleMatch: 'ops.automation.rule_match',
+  /**
+   * Personal noise (slice J6). A page is one incident that notified a person on the day (however many
+   * channels), at the local hour of its first notification that day. subjectKey = user id.
+   * tags { serviceId, hour, autoResolved }. count = pages, sum = pages the person acted on.
+   */
+  pagesPerUserService: 'ops.pages.user_service',
+  /** The same pages summed per service. subjectKey = service id. tags { autoResolved }. count = pages, sum = acted. */
+  pagesPerService: 'ops.pages.service',
 } as const;
 export type OpsRollupName = (typeof OPS_ROLLUPS)[keyof typeof OPS_ROLLUPS];
 
@@ -1144,6 +1153,29 @@ type OpsRollupSourceRow = {
   tags: Prisma.JsonObject;
 };
 type OpsRollupSource = (sql: PrismaNamespace['sql'], dayStart: Date, dayEnd: Date) => Prisma.Sql;
+
+/**
+ * One row per person and incident paged on the day, through idx_notification_created_cursor, then the
+ * incident by primary key. Acted on: acknowledged through the page itself (Notification.ackedAt), or as
+ * the incident's assignee after the page.
+ */
+const noisePagesSql = (sql: PrismaNamespace['sql'], dayStart: Date, dayEnd: Date) => sql`
+  WITH p AS (
+    SELECT n."userId", n."incidentId", min(n."createdAt") AS "firstAt",
+      bool_or(n."ackedAt" IS NOT NULL) AS "direct"
+    FROM "Notification" n
+    WHERE n."createdAt" >= ${dayStart} AND n."createdAt" < ${dayEnd}
+      AND n."category" = 'INCIDENT' AND n."incidentId" IS NOT NULL
+      AND n."eventType" IN ('incident-triggered', 'triggered') AND n."status" <> 'SKIPPED'
+    GROUP BY n."userId", n."incidentId"
+  ), page AS (
+    SELECT p."userId", i."serviceId", p."firstAt",
+      (p."direct" OR coalesce(i."assigneeId" = p."userId" AND i."acknowledgedAt" >= p."firstAt", false)) AS "acted",
+      coalesce(i."resolutionKind"::text IN ('SOURCE_RECOVERY', 'AUTOMATION', 'AUTO_TIMEOUT')
+        AND i."resolvedAt" <= i."createdAt" + make_interval(mins => ${AUTO_RESOLVE_WINDOW_MINUTES}::int), false)
+        AS "autoResolved"
+    FROM p JOIN "Incident" i ON i."id" = p."incidentId"
+  )`;
 
 /**
  * The one statement that computes a rollup for one UTC day. Each is driven by an index on the day range
@@ -1186,6 +1218,27 @@ export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>>
       ON d."serviceId" = config."serviceId" AND d."createdAt" >= ${dayStart} AND d."createdAt" < ${dayEnd}
     WHERE d."versionId" IS NOT NULL
     GROUP BY d."versionId", d."serviceId", d."matchedRouteRuleId", d."mode"`,
+  [OPS_ROLLUPS.pagesPerUserService]: (sql, dayStart, dayEnd) => sql`
+    ${noisePagesSql(sql, dayStart, dayEnd)}
+    SELECT local."userId" AS "subjectKey", count(*)::int AS "count",
+      (count(*) FILTER (WHERE local."acted"))::float AS "sum",
+      jsonb_build_object('serviceId', local."serviceId", 'hour', local."hour",
+        'autoResolved', local."autoResolved") AS "tags"
+    FROM (
+      SELECT page.*,
+        extract(hour FROM (page."firstAt" AT TIME ZONE 'UTC') AT TIME ZONE coalesce(zone."name", 'UTC'))::int AS "hour"
+      FROM page
+      JOIN "User" u ON u."id" = page."userId"
+      LEFT JOIN pg_timezone_names zone ON zone."name" = u."timeZone"
+    ) local
+    GROUP BY local."userId", local."serviceId", local."hour", local."autoResolved"`,
+  [OPS_ROLLUPS.pagesPerService]: (sql, dayStart, dayEnd) => sql`
+    ${noisePagesSql(sql, dayStart, dayEnd)}
+    SELECT page."serviceId" AS "subjectKey", count(*)::int AS "count",
+      (count(*) FILTER (WHERE page."acted"))::float AS "sum",
+      jsonb_build_object('autoResolved', page."autoResolved") AS "tags"
+    FROM page
+    GROUP BY page."serviceId", page."autoResolved"`,
 };
 
 const OPS_ROLLUP_DAY_MS = 86_400_000;
