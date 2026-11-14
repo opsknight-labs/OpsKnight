@@ -52,7 +52,7 @@ export function PostmortemRecurrenceStrip({
         )}
       </p>
       <details>
-        <summary className="flex min-h-11 cursor-pointer items-center text-muted-foreground hover:text-foreground">
+        <summary className="flex min-h-11 cursor-pointer items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Earlier occurrences{openActionItems.length > 0 && ' and open action items'}
         </summary>
         <ul className="pb-1">
@@ -61,7 +61,9 @@ export function PostmortemRecurrenceStrip({
               <Link href={`/incidents/${incident.incidentId}`} className={ROW_LINK}>
                 {incident.title}
               </Link>
-              <span className="text-xs text-muted-foreground">{day(incident.createdAt)}</span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {day(incident.createdAt)}
+              </span>
             </li>
           ))}
         </ul>
