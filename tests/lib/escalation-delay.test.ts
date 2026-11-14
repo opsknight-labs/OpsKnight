@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   txIncidentUpdate: vi.fn(),
   txIncidentUpdateMany: vi.fn(),
   txIncidentEventCreate: vi.fn(),
+  txExecuteRaw: vi.fn(),
   txBackgroundJobCreate: vi.fn(),
   txBackgroundJobFindFirst: vi.fn(),
   runSerializableTransaction: vi.fn(),
@@ -73,6 +74,7 @@ describe('executeEscalation delay handling', () => {
           updateMany: mocks.txIncidentUpdateMany.mockResolvedValue({ count: 1 }),
         },
         $queryRaw: vi.fn().mockResolvedValue([]),
+        $executeRaw: mocks.txExecuteRaw.mockResolvedValue(1),
         incidentEvent: { create: mocks.txIncidentEventCreate },
         backgroundJob: {
           findFirst: mocks.txBackgroundJobFindFirst.mockResolvedValue(null),
@@ -126,13 +128,16 @@ describe('executeEscalation delay handling', () => {
         escalationProcessingAt: null,
       },
     });
-    expect(mocks.txIncidentEventCreate).toHaveBeenCalledWith({
-      data: {
-        incidentId: 'inc-1',
-        message:
-          'Escalation scheduled for [[scheduledAt=2026-01-01T00:05:00.000Z]] (5 minute delay)',
-      },
-    });
+    // The timeline note and its step-attempt row go out as one statement.
+    expect(mocks.txExecuteRaw).toHaveBeenCalledTimes(1);
+    expect(mocks.txExecuteRaw.mock.calls[0]).toEqual(
+      expect.arrayContaining([
+        'inc-1',
+        'Escalation scheduled for [[scheduledAt=2026-01-01T00:05:00.000Z]] (5 minute delay)',
+        'SCHEDULED',
+      ])
+    );
+    expect(mocks.txIncidentEventCreate).not.toHaveBeenCalled();
     expect(mocks.txBackgroundJobCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

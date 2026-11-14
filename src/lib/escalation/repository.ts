@@ -24,6 +24,7 @@ import {
   type EscalationNotificationPlan,
 } from './notification-intents';
 import { notifyEscalationWorkPending } from './worker';
+import { insertTimelineEventWithAttempt, type EscalationStepAttemptRecord } from './step-attempts';
 import {
   escalationDueAt,
   escalationLifecycleGate,
@@ -295,6 +296,8 @@ export async function commitEscalationPlan(input: {
    * while a responder it meant to page exists nowhere durable.
    */
   notifications?: EscalationNotificationPlan;
+  /** Analytics row for this step; rides the first timeline insert, no extra round trip. */
+  attempt?: EscalationStepAttemptRecord;
 }): Promise<EscalationCommitResult> {
   return runReadCommittedTransaction<EscalationCommitResult>(async tx => {
     // Serialize workers and lifecycle mutations on this incident before any
@@ -361,7 +364,17 @@ export async function commitEscalationPlan(input: {
     // A step whose outcome a lifecycle transition already overrode does not
     // narrate itself into the timeline; the structured log records that it ran.
     if (gate === 'ACTIVE') {
-      for (const event of input.plan.timelineEvents) {
+      for (const [index, event] of input.plan.timelineEvents.entries()) {
+        if (index === 0 && input.attempt) {
+          await insertTimelineEventWithAttempt(tx, {
+            incidentId: input.incidentId,
+            generation: input.generation,
+            stepIndex: input.expectedStep,
+            event,
+            attempt: input.attempt,
+          });
+          continue;
+        }
         await tx.incidentEvent.create({
           data: {
             incidentId: input.incidentId,
@@ -597,6 +610,8 @@ export async function scheduleDelayedEscalationStep(input: {
   stepIndex: number;
   delayMinutes: number;
   dueAt: Date;
+  /** Analytics row (outcome SCHEDULED) written with the timeline note. */
+  attempt?: EscalationStepAttemptRecord;
 }): Promise<boolean> {
   return runSerializableTransaction(async tx => {
     const stepMatch =
@@ -629,12 +644,18 @@ export async function scheduleDelayedEscalationStep(input: {
     });
     if (armed.count === 0) return false;
 
-    await tx.incidentEvent.create({
-      data: {
+    const message = `Escalation scheduled for [[scheduledAt=${input.dueAt.toISOString()}]] (${input.delayMinutes} minute delay)`;
+    if (input.attempt) {
+      await insertTimelineEventWithAttempt(tx, {
         incidentId: input.incidentId,
-        message: `Escalation scheduled for [[scheduledAt=${input.dueAt.toISOString()}]] (${input.delayMinutes} minute delay)`,
-      },
-    });
+        generation: input.generation,
+        stepIndex: input.stepIndex,
+        event: { message },
+        attempt: input.attempt,
+      });
+    } else {
+      await tx.incidentEvent.create({ data: { incidentId: input.incidentId, message } });
+    }
 
     await createEscalationJob(tx, {
       incidentId: input.incidentId,
