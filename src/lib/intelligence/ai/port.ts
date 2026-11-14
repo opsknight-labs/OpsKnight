@@ -112,6 +112,8 @@ export interface AiGenerateResult {
   finishReason?: string;
   /** True when the answer came from the result cache: no model ran and `usage` is zero. */
   cached?: boolean;
+  /** True when spend controls degraded the request (small model, shorter answer) past 80% of a daily budget. */
+  degraded?: boolean;
 }
 
 export type AiStreamEvent =

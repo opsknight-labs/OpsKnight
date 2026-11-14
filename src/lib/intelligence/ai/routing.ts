@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import type { AiCapability } from './port';
+import type { ProviderKind } from './pricing';
 
 /**
  * Per-capability model routing. An administrator may send a capability (cheap classification hops, strong
@@ -77,6 +78,64 @@ export function applyCapabilityRoute<P extends { id: string; model: string }>(
     route.model ? { ...preferred, model: route.model } : preferred,
     ...chain.filter(provider => provider !== preferred),
   ];
+}
+
+/** Cheap, frequent work goes to a provider's small model; conclusions and drafts people act on to its strong one. */
+export type ModelTier = 'small' | 'strong';
+
+export const CAPABILITY_TIERS: Readonly<Record<RoutableCapability, ModelTier>> = {
+  // The conversation's final answer is a synthesis over everything the turn read.
+  SQUIRE_CHAT: 'strong',
+  // Phrasing, briefings and summaries of earlier conversation turns.
+  SUMMARIZE: 'small',
+  DIAGNOSE: 'strong',
+  POSTMORTEM: 'strong',
+  // Classification and the investigation's tool hops.
+  CLASSIFY: 'small',
+};
+
+/**
+ * Each provider's small and strong chat model, from the families in the price table. Hosts that name models per
+ * deployment or region (Azure OpenAI, Bedrock, Vertex, OpenAI-compatible) have no defaults: their configured
+ * model is kept.
+ */
+export const PROVIDER_MODEL_TIERS: Readonly<
+  Partial<Record<ProviderKind, Readonly<Record<ModelTier, string>>>>
+> = {
+  ANTHROPIC: { small: 'claude-haiku-5-5', strong: 'claude-opus-5-5' },
+  OPENAI: { small: 'gpt-5-mini', strong: 'gpt-5' },
+  GOOGLE: { small: 'gemini-2.5-flash', strong: 'gemini-2.5-pro' },
+  MISTRAL: { small: 'mistral-small-latest', strong: 'mistral-large-latest' },
+  GROQ: { small: 'llama-3.1-8b-instant', strong: 'llama-3.3-70b-versatile' },
+};
+
+/** The default model for one capability on one provider kind, or undefined to keep the configured model. */
+export function defaultModelFor(
+  kind: ProviderKind,
+  capability: AiCapability,
+  tier: ModelTier | undefined = capability === 'EMBED'
+    ? undefined
+    : CAPABILITY_TIERS[capability as RoutableCapability]
+): string | undefined {
+  // eslint-disable-next-line security/detect-object-injection -- kind and tier are members of fixed lists
+  return tier ? PROVIDER_MODEL_TIERS[kind]?.[tier] : undefined;
+}
+
+/**
+ * Spend controls' default routing: every provider in the chain answers this capability with its small or strong
+ * model. An administrator's explicit route is applied afterwards and wins. `tier` forces one tier for every
+ * capability (degradation uses `small`).
+ */
+export function applyDefaultTiers<P extends { kind: ProviderKind; model: string }>(
+  chain: readonly P[],
+  capability: AiCapability,
+  tier?: ModelTier
+): P[] {
+  return chain.map(provider => {
+    // An undefined tier falls back to the capability's own tier.
+    const model = defaultModelFor(provider.kind, capability, tier);
+    return model && model !== provider.model ? { ...provider, model } : provider;
+  });
 }
 
 /** Input for the routing and investigation settings form. */
