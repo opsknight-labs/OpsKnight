@@ -8,6 +8,13 @@
  *     Gates a live report: structural pass rate, cases that must always pass (and must have run), the
  *     per-case token ceiling, and, when the report carries judge grades, the judge's mean score and pass rate.
  *
+ *     It also fails when the median tokens per case rose more than `maxMedianTokenRise` (15%) above the
+ *     committed `medianTokensPerCase`.
+ *
+ *   node scripts/check-squire-eval-baseline.cjs --record-tokens [reports/squire-eval.json]
+ *     Writes that report's median tokens per case as the new `medianTokensPerCase`. Run it after reviewing a
+ *     run whose prompts grew on purpose, and commit the result; the gate never moves the number itself.
+ *
  *   node scripts/check-squire-eval-baseline.cjs --record-catalogue
  *     Rewrites only `minimumCases` from the case files (how many cases each tier has), so shrinking the
  *     evaluation set fails the unit test until someone commits a smaller number on purpose. Pass rates and
@@ -55,6 +62,25 @@ if (results.length === 0) {
   console.error('The evaluation ran but recorded no results.');
   process.exit(1);
 }
+const counted = results
+  .map(result => result.tokens)
+  .filter(tokens => typeof tokens === 'number')
+  .sort((a, b) => a - b);
+const mid = Math.floor(counted.length / 2);
+const medianTokens = counted.length % 2 ? counted[mid] : (counted[mid - 1] + counted[mid]) / 2;
+if (process.argv.includes('--record-tokens')) {
+  if (!counted.length) {
+    console.error('The report records no tokens per case; nothing to record.');
+    process.exit(1);
+  }
+  writeFileSync(
+    baselinePath,
+    `${JSON.stringify({ ...baseline, medianTokensPerCase: medianTokens }, null, 2)}\n`
+  );
+  console.log(`Recorded median tokens per case: ${medianTokens}`);
+  process.exit(0);
+}
+
 const failures = [];
 const passed = results.filter(result => result.passed).length;
 const rate = passed / results.length;
@@ -80,6 +106,19 @@ if (baseline.maxTokensPerCase) {
     failures.push(
       `Cases above the ${baseline.maxTokensPerCase}-token ceiling: ${over.map(r => `${r.id} (${r.tokens})`).join(', ')}`
     );
+}
+
+if (baseline.medianTokensPerCase && counted.length) {
+  const allowed = baseline.medianTokensPerCase * (1 + (baseline.maxMedianTokenRise ?? 0.15));
+  console.log(
+    `Median tokens per case: ${medianTokens} (baseline ${baseline.medianTokensPerCase}, allowed ${Math.round(allowed)}).`
+  );
+  if (medianTokens > allowed)
+    failures.push(
+      'Median tokens per case rose more than allowed; if intended, record and commit a new baseline with --record-tokens.'
+    );
+} else if (!baseline.medianTokensPerCase) {
+  console.log('No median token baseline committed yet; record one with --record-tokens after a reviewed run.');
 }
 
 const graded = results.filter(result => result.judge && typeof result.judge.score === 'number');

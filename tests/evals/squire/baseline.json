@@ -9,12 +9,15 @@
     "data-class-secret"
   ],
   "maxTokensPerCase": 60000,
+  "maxMedianTokenRise": 0.15,
+  "medianTokensPerCase": null,
+  "modelMedianPromptTokens": 10916,
   "judge": {
     "minimumMeanScore": 3.5,
     "minimumPassRate": 0.75,
     "minimumGradedRate": 0.9
   },
-  "note": "Raised deliberately by committing a new value after a reviewed run; never by a passing run. minimumCases is refreshed with node scripts/check-squire-eval-baseline.cjs --record-catalogue.",
+  "note": "Raised deliberately by committing a new value after a reviewed run; never by a passing run. minimumCases is refreshed with node scripts/check-squire-eval-baseline.cjs --record-catalogue. medianTokensPerCase (live) is recorded with --record-tokens <report>; modelMedianPromptTokens (scripted tier, estimated prompt tokens) is committed by hand from the failing test's message. Either may rise by maxMedianTokenRise before CI fails.",
   "minimumCases": {
     "basic": 48,
     "model": 100,
