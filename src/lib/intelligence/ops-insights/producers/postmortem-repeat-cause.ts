@@ -137,7 +137,9 @@ export function deriveRepeatCauseInsights(input: RepeatCauseInput): OpsInsightIt
     });
   }
   const rank = { CRITICAL: 0, WARNING: 1, INFO: 2 } as const;
-  return items.sort((a, b) => rank[a.severity] - rank[b.severity] || a.key.localeCompare(b.key));
+  return items.sort(
+    (a, b) => rank[a.severity] - rank[b.severity] || (a.key ?? '').localeCompare(b.key ?? '')
+  );
 }
 
 export const repeatCauseProducer: OpsInsightProducer<RepeatCauseInput> = {

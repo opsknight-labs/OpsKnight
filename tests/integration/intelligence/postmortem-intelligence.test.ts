@@ -5,7 +5,10 @@ import {
   INTELLIGENCE_SETTINGS_DEFAULTS,
 } from '@/lib/intelligence/contract';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
-import { applyEvidenceToDraft } from '@/lib/intelligence/postmortems/evidence-draft';
+import {
+  applyEvidenceToDraft,
+  type DraftTimelineEvent,
+} from '@/lib/intelligence/postmortems/evidence-draft';
 import { runOpsInsights } from '@/lib/intelligence/ops-insights/handlers';
 import {
   REPEAT_CAUSE_KIND,
@@ -246,7 +249,7 @@ describe('postmortem assist', () => {
     expect([...byTitle.keys()].some(title => /configuration/i.test(title))).toBe(false);
 
     const base = {
-      timeline: [],
+      timeline: [] as DraftTimelineEvent[],
       rootCause: 'template',
       resolution: 'template',
       lessons: 'template',
