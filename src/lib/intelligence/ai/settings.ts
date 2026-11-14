@@ -55,6 +55,14 @@ export interface AiSettingsView {
   squireInvestigationEnabled?: boolean;
   /** Reuse an earlier AI answer for an identical input in the same scope; off unless enabled. */
   resultCacheEnabled?: boolean;
+  /**
+   * Spend controls, off unless enabled: default model routing per capability, the background allowance
+   * (`backgroundAiBudgetPercent` of the daily budget for every non-interactive call), the per-service daily
+   * cap on AI-written proactive notes, and degradation from 80% of the daily budget.
+   */
+  spendControlsEnabled?: boolean;
+  backgroundAiBudgetPercent?: number;
+  proactiveNotesPerServiceDaily?: number;
   /** 0 means no row has been saved yet and defaults apply. */
   revision: number;
 }
@@ -84,6 +92,9 @@ const SETTINGS_SELECT = {
   capabilityRouting: true,
   squireInvestigationEnabled: true,
   resultCacheEnabled: true,
+  spendControlsEnabled: true,
+  backgroundAiBudgetPercent: true,
+  proactiveNotesPerServiceDaily: true,
   revision: true,
 } as const;
 
@@ -146,6 +157,15 @@ export async function updateAiSettings(
       squireMcpEnabled: values.squireMcpEnabled ?? previous.squireMcpEnabled,
       squireMobileEnabled: values.squireMobileEnabled ?? previous.squireMobileEnabled,
       resultCacheEnabled: values.resultCacheEnabled ?? previous.resultCacheEnabled ?? false,
+      spendControlsEnabled: values.spendControlsEnabled ?? previous.spendControlsEnabled ?? false,
+      backgroundAiBudgetPercent:
+        values.backgroundAiBudgetPercent ??
+        previous.backgroundAiBudgetPercent ??
+        AI_SETTINGS_DEFAULTS.backgroundAiBudgetPercent,
+      proactiveNotesPerServiceDaily:
+        values.proactiveNotesPerServiceDaily ??
+        previous.proactiveNotesPerServiceDaily ??
+        AI_SETTINGS_DEFAULTS.proactiveNotesPerServiceDaily,
     };
     const next = toSettingsView(
       await tx.aiSettings.upsert({
