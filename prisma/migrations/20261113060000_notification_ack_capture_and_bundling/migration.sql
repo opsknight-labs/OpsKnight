@@ -1,6 +1,6 @@
 -- Additive only: nullable columns on "Notification" and one defaulted boolean on "User" (a constant default
 -- is a catalogue-only change). No existing row is rewritten or backfilled, and no index is added: the noise
--- report reads through the existing ("userId", "createdAt") index.
+-- rollups read each day through the existing ("createdAt", "id") index.
 SET lock_timeout = '2s';
 SET statement_timeout = '10s';
 

@@ -1090,11 +1090,11 @@ The lane itself still needs Intelligence to be enabled.
 
 ### Storage
 
-| Table | Purpose |
-| --- | --- |
-| `OpsInsight` | One insight. Unique on `(scopeType, scopeId, kind, key)`, so recomputation updates a row. Holds `area`, `severity` (`INFO` < `WARNING` < `CRITICAL`), `title`, `summary`, `evidence` (JSON, at most 4 KB: up to 12 facts, 5 examples, a window), optional `draftHref` (in-app path), `inputHash`, `status` (`OPEN`, `ACCEPTED`, `DISMISSED`, `RESOLVED`), `generation`, first/last seen, who decided. |
-| `OpsInsightScopeState` | Per scope: the hash of the producers' inputs and when the scope was last computed. |
-| `MetricRollup` (existing) | Daily operations rollups, with the new nullable `subjectKey` column and `idx_metric_rollup_subject (name, subjectKey, bucket)`. |
+| Table                     | Purpose                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OpsInsight`              | One insight. Unique on `(scopeType, scopeId, kind, key)`, so recomputation updates a row. Holds `area`, `severity` (`INFO` < `WARNING` < `CRITICAL`), `title`, `summary`, `evidence` (JSON, at most 4 KB: up to 12 facts, 5 examples, a window), optional `draftHref` (in-app path), `inputHash`, `status` (`OPEN`, `ACCEPTED`, `DISMISSED`, `RESOLVED`), `generation`, first/last seen, who decided. |
+| `OpsInsightScopeState`    | Per scope: the hash of the producers' inputs and when the scope was last computed.                                                                                                                                                                                                                                                                                                                    |
+| `MetricRollup` (existing) | Daily operations rollups, with the new nullable `subjectKey` column and `idx_metric_rollup_subject (name, subjectKey, bucket)`.                                                                                                                                                                                                                                                                       |
 
 Status rules (`ops-insights/store.ts`, `upsertInsights`): a produced insight keeps a person's decision
 (`ACCEPTED` and `DISMISSED` are sticky while it is still produced); an open or accepted insight that is no
@@ -1160,11 +1160,11 @@ Rules:
 `producers/integration-health.ts` (scope `SERVICE`, area `automation`) answers three questions from the
 alerts a service already stored:
 
-| Key | Fires when | Severity |
-| --- | --- | --- |
-| `silent` | The service sent at least 7 alerts in the week before its last one, and has now been quiet for a day or three of its usual gaps, whichever is longer. Stops after 30 days (probably retired). | `WARNING` |
-| `volume-step` | The last 24 hours hold at least 50 alerts and three times the daily average of the 7 days before (needs 35 alerts in that week), or a quarter of it or less (needs 140). Not judged when a count hit its 20,000 cap. | `WARNING` up, `INFO` down |
-| `missing-severity` | Half or more of the last 200 alerts (at least 20) have no severity. | `WARNING` at 90%, else `INFO` |
+| Key                | Fires when                                                                                                                                                                                                           | Severity                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `silent`           | The service sent at least 7 alerts in the week before its last one, and has now been quiet for a day or three of its usual gaps, whichever is longer. Stops after 30 days (probably retired).                        | `WARNING`                     |
+| `volume-step`      | The last 24 hours hold at least 50 alerts and three times the daily average of the 7 days before (needs 35 alerts in that week), or a quarter of it or less (needs 140). Not judged when a count hit its 20,000 cap. | `WARNING` up, `INFO` down     |
+| `missing-severity` | Half or more of the last 200 alerts (at least 20) have no severity.                                                                                                                                                  | `WARNING` at 90%, else `INFO` |
 
 `loadInput` is two statements, every arm on `idx_alert_by_service (serviceId, createdAt)` with a `LIMIT`, so
 a service with millions of alerts costs the same as a small one. It returns
@@ -1173,6 +1173,46 @@ recentMissingSeverity }`; `silentHours` is exact for the first three days and wh
 `derive` turns that into the items above, each with its facts and a `draftHref` to the service's
 integrations page. Tests: `tests/lib/intelligence/ops-insights.test.ts` (pure half) and
 `tests/integration/intelligence/ops-insights.test.ts` (fixtures with known answers).
+
+#### Notification noise (plan J6)
+
+`producers/notification-noise.ts`, area `notifications`, reads only the two pages rollups below, never raw
+`Notification` rows:
+
+| Kind (scope)                             | Key                     | Fires when                                                                                                                                                                                                             | Severity  |
+| ---------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `notification.noise` (`USER`)            | `low-value:<serviceId>` | Over 30 complete UTC days a service paged the person 5+ times and they acted on 20% or less, or 50%+ of the pages were for incidents auto-resolved within 5 minutes. At most 5. Draft: `/services/<id>/notifications`. | `INFO`    |
+| `notification.noise` (`USER`)            | `quiet-hours`           | Quiet hours off, 5+ pages between 22:00 and 07:00 local, 20% or less acted on. Draft: quiet hours.                                                                                                                     | `INFO`    |
+| `notification.noise` (`USER`)            | `endpoint:<channel>`    | An endpoint is `DEGRADED` (`WARNING`), `INVALID`, `BOUNCED` or `OPTED_OUT` (`CRITICAL`). Draft: notification settings.                                                                                                 | as stated |
+| `notification.service_noise` (`SERVICE`) | `low-value`             | The low-value test over everyone the service paged, from 20 pages.                                                                                                                                                     | `INFO`    |
+
+`USER.loadInput` is two statements (the person's rollup rows on `idx_metric_rollup_subject`, the person and
+their endpoints by primary key); `SERVICE.loadInput` is one. Stored titles and evidence name no service: a
+team owner may read a person's insights without being able to read every service that paged them, so the
+service is only an id in the draft link. The personal report (`src/lib/notification-noise/loader.ts`,
+`loadNoiseOverview`) is gated by `readableOpsInsightScopes(actor, 'USER', ...)` (self, owner of one of the
+person's teams, administrators), reads `ops.pages.user_service` for the person, resolves service names
+through `readableOpsInsightScopes(actor, 'SERVICE', ...)` and lists the stored insights with
+`listInsightsForScope`. The UI is the "Noise" section (`NoiseSettings` server entry, `NoiseSection` on the
+profile Notifications tab, `MobileNoiseCard` on mobile More) with suggestions rendered by `InsightsPanel`.
+
+**Acknowledgement capture.** `Notification` gains nullable `ackedAt`, `ackedVia` and `escalationStepIndex`
+(expand-only migration `20261113060000_notification_ack_capture_and_bundling`). When an acknowledgement
+arrives through a page, `applyIncidentLifecycleCommand` stamps that one notification inside the existing
+acknowledgement transaction (`ackedNotification`, one primary-key `updateMany` guarded by incident, user and
+`ackedAt IS NULL`): the voice gather route and the push action (the service worker sends
+`X-OpsKnight-Notification-Id`) do this today; `SMS` and `LINK` are accepted values for when an SMS-reply or
+per-page link acknowledgement exists. Escalation pages record `escalationStepIndex`. This is the only write
+the slice adds to the acknowledgement path; `processEvent` and the escalation decision are untouched.
+
+**Bundling.** `User.bundleLowUrgencyPages` (default false) is read by the existing recipient query when
+escalation builds page intents. For an opted-in recipient and a `LOW`-urgency incident that is not P1/P2, the
+intent carries `bundle` at `RESPONDER` priority; `isBundleCandidate` in `notification-noise-controller.ts`
+still refuses `RESPONDER_CRITICAL` and `TRANSACTIONAL` traffic and roll-ups. The first page per channel in
+a 5-minute window is delivered, the next is held to the window end and stands for the bundle, later ones
+are suppressed while that held page is waiting. One index-backed read is added, only for opted-in low
+urgency pages. `tests/load/notification-bundling-benchmark.ts` measures `createCentralNotificationIntent`
+p99 OFF vs ON against a 50,000-row history and fails when ON exceeds OFF by more than 5 ms.
 
 ### Reading and deciding
 
@@ -1200,12 +1240,14 @@ insight.
 `src/lib/metric-rollup.ts` adds daily operations rollups in `MetricRollup`, run by the existing daily
 rollup step of the cron scheduler (`generateOpsRollups`; a no-op while operations insights are off):
 
-| Name | `subjectKey` | `tags` | `count` / `sum` | Driven by |
-| --- | --- | --- | --- | --- |
-| `ops.pages.user_hour` | user id | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents | `idx_notification_created_cursor` |
-| `ops.runbook.outcome` | runbook id | `status` | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new) |
-| `ops.automation.rule_match` | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode` | decisions / fallbacks | `IncidentAutomationDecision (serviceId, createdAt)` |
-| `ops.escalation.step_outcome` | policy id | `step`, `outcome` | attempts / seconds to acknowledge | Named and shaped only; its source arrives with the escalation capture slice. |
+| Name                          | `subjectKey`          | `tags`                                                             | `count` / `sum`                                     | Driven by                                                                    |
+| ----------------------------- | --------------------- | ------------------------------------------------------------------ | --------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `ops.pages.user_hour`         | user id               | `hour` (0-23 in the user's time zone), `weekend`                   | incident pages / distinct incidents                 | `idx_notification_created_cursor`                                            |
+| `ops.runbook.outcome`         | runbook id            | `status`                                                           | finished executions / total run time (ms)           | `idx_runbook_execution_completed` (new)                                      |
+| `ops.automation.rule_match`   | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode`                          | decisions / fallbacks                               | `IncidentAutomationDecision (serviceId, createdAt)`                          |
+| `ops.pages.user_service`      | user id               | `serviceId`, `hour` (local, first page of the day), `autoResolved` | pages (one per person, incident and day) / acted on | `idx_notification_created_cursor`, then `Incident` by primary key            |
+| `ops.pages.service`           | service id            | `autoResolved`                                                     | pages / acted on                                    | same statement, grouped by service                                           |
+| `ops.escalation.step_outcome` | policy id             | `step`, `outcome`                                                  | attempts / seconds to acknowledge                   | Named and shaped only; its source arrives with the escalation capture slice. |
 
 Each rollup advances one complete UTC day per transaction from its own watermark row
 (`<name>.watermark`), deleting and rewriting the day with the watermark so a crash or a second scheduler
