@@ -8,13 +8,11 @@ import {
   type PageBucket,
 } from '@/lib/oncall-load/metrics';
 import {
-  coverageGapInsights,
-  ONCALL_INSIGHT_KINDS,
-  samePersonPrimarySecondaryInsights,
-  sustainedNightLoadInsights,
-  unfairRotationInsights,
-  upcomingShiftHeavyInsights,
+  derivePersonInsights,
+  deriveScheduleInsights,
+  samePersonOverlapHours,
 } from '@/lib/oncall-load/insights';
+import { opsInsightItemSchema } from '@/lib/intelligence/ops-insights/contract';
 
 const at = (iso: string) => new Date(iso);
 const WEEK = 7 * 24 * 3600;
@@ -24,8 +22,18 @@ describe('buildCoverageDays', () => {
     const rows = buildCoverageDays(
       [
         // 18:00 on the 1st to 06:00 on the 2nd, New York time (UTC-5 in January).
-        { start: at('2026-01-01T23:00:00Z'), end: at('2026-01-02T11:00:00Z'), userId: 'u1', layerId: 'l1' },
-        { start: at('2026-01-02T11:00:00Z'), end: at('2026-01-02T13:00:00Z'), userId: 'u1', layerId: 'l2' },
+        {
+          start: at('2026-01-01T23:00:00Z'),
+          end: at('2026-01-02T11:00:00Z'),
+          userId: 'u1',
+          layerId: 'l1',
+        },
+        {
+          start: at('2026-01-02T11:00:00Z'),
+          end: at('2026-01-02T13:00:00Z'),
+          userId: 'u1',
+          layerId: 'l2',
+        },
       ],
       'America/New_York',
       '2026-01-01',
@@ -39,15 +47,32 @@ describe('buildCoverageDays', () => {
   });
 
   it('counts the real length of a DST day', () => {
-    const block = { start: at('2026-03-01T00:00:00Z'), end: at('2026-04-01T00:00:00Z'), userId: 'u1', layerId: 'l1' };
-    const [springForward] = buildCoverageDays([block], 'America/New_York', '2026-03-08', '2026-03-09');
+    const block = {
+      start: at('2026-03-01T00:00:00Z'),
+      end: at('2026-04-01T00:00:00Z'),
+      userId: 'u1',
+      layerId: 'l1',
+    };
+    const [springForward] = buildCoverageDays(
+      [block],
+      'America/New_York',
+      '2026-03-08',
+      '2026-03-09'
+    );
     expect(springForward.seconds).toBe(23 * 3600);
   });
 
   it('ignores blocks outside the range', () => {
     expect(
       buildCoverageDays(
-        [{ start: at('2026-01-05T00:00:00Z'), end: at('2026-01-06T00:00:00Z'), userId: 'u1', layerId: 'l1' }],
+        [
+          {
+            start: at('2026-01-05T00:00:00Z'),
+            end: at('2026-01-06T00:00:00Z'),
+            userId: 'u1',
+            layerId: 'l1',
+          },
+        ],
         'UTC',
         '2026-01-01',
         '2026-01-03'
@@ -60,7 +85,12 @@ describe('findCoverageGapDays', () => {
   const now = at('2026-01-01T12:00:00Z');
   it('returns nothing when every day is covered', () => {
     expect(
-      findCoverageGapDays([{ start: '2025-12-31T00:00:00Z', end: '2026-01-20T00:00:00Z' }], 'UTC', now, 14)
+      findCoverageGapDays(
+        [{ start: '2025-12-31T00:00:00Z', end: '2026-01-20T00:00:00Z' }],
+        'UTC',
+        now,
+        14
+      )
     ).toEqual([]);
   });
 
@@ -114,7 +144,13 @@ describe('page bucket time handling', () => {
 
 const from = at('2026-01-01T00:00:00Z');
 const to = at('2026-01-29T00:00:00Z');
-const bucket = (userId: string, day: string, hour: number, pages = 1, weekend = false): PageBucket => ({
+const bucket = (
+  userId: string,
+  day: string,
+  hour: number,
+  pages = 1,
+  weekend = false
+): PageBucket => ({
   userId,
   day,
   hour,
@@ -203,161 +239,169 @@ describe('computeLoad', () => {
 });
 
 describe('on-call insights', () => {
-  const names = new Map(Object.entries({ a: 'Asha', b: 'Bo', c: 'Cy' }));
-  const equalSeconds = new Map([
-    ['a', WEEK],
-    ['b', WEEK],
-    ['c', WEEK],
-  ]);
-  const users = [{ userId: 'a' }, { userId: 'b' }, { userId: 'c' }];
+  const scheduleBase = {
+    scheduleId: 's1',
+    todayKey: '2026-01-01',
+    tomorrowKey: '2026-01-02',
+    gapDays: [] as string[],
+    samePersonHours: [] as Array<{ userId: string; hours: number }>,
+    rotation: null,
+  };
 
-  it('flags the person above 1.5x the rotation mean, and nobody in a fair rotation', () => {
-    const unfair = computeLoad({
-      buckets: [bucket('a', '2026-01-02', 10, 12), bucket('b', '2026-01-09', 10, 3)],
-      users,
-      onCallSeconds: equalSeconds,
-      from,
-      to,
-    });
-    const items = unfairRotationInsights(unfair, names, { rotationHref: '/schedules/s1?tab=rotation' });
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({
-      key: 'a',
-      kind: ONCALL_INSIGHT_KINDS.unfairRotation,
-      severity: 'WARNING',
-      subjectUserId: 'a',
-      draftHref: '/schedules/s1?tab=rotation',
-    });
-    expect(items[0].title).toContain('Asha');
-    expect(items[0].evidence.facts).toContainEqual({ label: 'Rotation mean', value: '5' });
-
-    const fair = computeLoad({
-      buckets: users.map(user => bucket(user.userId, '2026-01-02', 10, 10)),
-      users,
-      onCallSeconds: equalSeconds,
-      from,
-      to,
-    });
-    expect(unfairRotationInsights(fair, names)).toEqual([]);
-  });
-
-  it('does not call a rotation unfair on a handful of pages', () => {
-    const load = computeLoad({
-      buckets: [bucket('a', '2026-01-02', 10, 3)],
-      users,
-      onCallSeconds: equalSeconds,
-      from,
-      to,
-    });
-    expect(unfairRotationInsights(load, names)).toEqual([]);
-  });
-
-  it('flags night pages that recur across weeks, not one bad week', () => {
-    const recurring = computeLoad({
-      buckets: ['2026-01-02', '2026-01-03', '2026-01-09', '2026-01-10', '2026-01-16', '2026-01-17'].map(
-        day => bucket('a', day, 2)
-      ),
-      users,
-      onCallSeconds: equalSeconds,
-      from,
-      to,
-    });
-    const items = sustainedNightLoadInsights(recurring, names);
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({
-      key: 'a',
-      kind: ONCALL_INSIGHT_KINDS.sustainedNightLoad,
-      severity: 'WARNING',
-      subjectUserId: 'a',
-    });
-
-    const oneWeek = computeLoad({
-      buckets: ['01', '02', '03', '04', '05', '06'].map(day => bucket('a', `2026-01-${day}`, 2)),
-      users,
-      onCallSeconds: equalSeconds,
-      from,
-      to,
-    });
-    expect(sustainedNightLoadInsights(oneWeek, names)).toEqual([]);
+  it('says nothing about a healthy schedule', () => {
+    expect(deriveScheduleInsights(scheduleBase)).toEqual([]);
   });
 
   it('raises a coverage gap, critical when it starts today or tomorrow', () => {
-    const base = { todayKey: '2026-01-01', tomorrowKey: '2026-01-02', overridesHref: '/schedules/s1?tab=overrides' };
-    expect(coverageGapInsights({ ...base, gapDays: [] })).toEqual([]);
-    const [later] = coverageGapInsights({ ...base, gapDays: ['2026-01-05', '2026-01-06'] });
+    const [later] = deriveScheduleInsights({
+      ...scheduleBase,
+      gapDays: ['2026-01-05', '2026-01-06'],
+    });
     expect(later).toMatchObject({
-      key: 'next-14d',
-      kind: ONCALL_INSIGHT_KINDS.coverageGap,
+      key: 'gap',
       severity: 'WARNING',
       draftHref: '/schedules/s1?tab=overrides',
     });
-    expect(later.subjectUserId).toBeUndefined();
-    expect(coverageGapInsights({ ...base, gapDays: ['2026-01-02'] })[0].severity).toBe('CRITICAL');
+    expect(later.title).toContain('2 days');
+    expect(deriveScheduleInsights({ ...scheduleBase, gapDays: ['2026-01-02'] })[0].severity).toBe(
+      'CRITICAL'
+    );
   });
 
-  it('finds hours where one person is both primary and backup', () => {
-    const window = { from: at('2026-01-01T00:00:00Z'), to: at('2026-01-15T00:00:00Z'), names };
-    const items = samePersonPrimarySecondaryInsights({
-      ...window,
-      primary: [
-        { userId: 'a', start: at('2026-01-01T00:00:00Z'), end: at('2026-01-02T00:00:00Z') },
-        { userId: 'b', start: at('2026-01-02T00:00:00Z'), end: at('2026-01-03T00:00:00Z') },
-      ],
-      secondary: [
-        { userId: 'a', start: at('2026-01-01T12:00:00Z'), end: at('2026-01-02T12:00:00Z') },
-        { userId: 'c', start: at('2026-01-02T12:00:00Z'), end: at('2026-01-03T00:00:00Z') },
+  it('reports same-person primary and backup hours without naming anyone', () => {
+    const [item] = deriveScheduleInsights({
+      ...scheduleBase,
+      samePersonHours: [
+        { userId: 'a', hours: 12 },
+        { userId: 'b', hours: 3 },
       ],
     });
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ key: 'a', kind: ONCALL_INSIGHT_KINDS.samePersonPrimarySecondary });
-    expect(items[0].evidence.facts[0].value).toBe('12');
+    expect(item).toMatchObject({ key: 'same-person', severity: 'WARNING' });
+    expect(item.title).toContain('15 hours');
+    expect(JSON.stringify(item)).not.toMatch(/"a"|"b"/);
+  });
+
+  it('flags an uneven rotation only with enough people and someone above 1.5x', () => {
     expect(
-      samePersonPrimarySecondaryInsights({
-        ...window,
-        primary: [{ userId: 'a', start: at('2026-01-01T00:00:00Z'), end: at('2026-01-02T00:00:00Z') }],
-        secondary: [{ userId: 'b', start: at('2026-01-01T00:00:00Z'), end: at('2026-01-02T00:00:00Z') }],
+      deriveScheduleInsights({
+        ...scheduleBase,
+        rotation: { size: 4, fairnessIndex: 0.9, above: 0 },
+      })
+    ).toEqual([]);
+    const [item] = deriveScheduleInsights({
+      ...scheduleBase,
+      rotation: { size: 4, fairnessIndex: 0.5, above: 1 },
+    });
+    expect(item).toMatchObject({
+      key: 'unfair',
+      severity: 'WARNING',
+      draftHref: '/schedules/s1?tab=load',
+    });
+    expect(
+      deriveScheduleInsights({
+        ...scheduleBase,
+        rotation: { size: 2, fairnessIndex: 0.5, above: 1 },
+      })
+    ).toEqual([]);
+  });
+
+  const personBase = {
+    userId: 'a',
+    rotations: [] as Parameters<typeof derivePersonInsights>[0]['rotations'],
+    night: { nightPages: 0, nightsPaged: 0, weeksWithNightPages: 0 },
+    upcoming: null,
+  };
+  const rotation = (vsRotationMean: number | null, pages: number) => ({
+    scheduleId: 's1',
+    pages,
+    pagesPerOnCallWeek: 12,
+    vsRotationMean,
+    meanPagesPerOnCallWeek: vsRotationMean ? Math.round(12 / vsRotationMean) : null,
+  });
+
+  it('flags a person above 1.5x the rotation mean, not on a handful of pages', () => {
+    const [item] = derivePersonInsights({ ...personBase, rotations: [rotation(3, 12)] });
+    expect(item).toMatchObject({
+      key: 's1',
+      severity: 'CRITICAL',
+      draftHref: '/schedules/s1?tab=rotation',
+    });
+    expect(item.evidence.facts).toContainEqual({ label: 'Rotation mean', value: '4' });
+    expect(
+      derivePersonInsights({ ...personBase, rotations: [rotation(1.6, 12)] })[0].severity
+    ).toBe('WARNING');
+    expect(derivePersonInsights({ ...personBase, rotations: [rotation(3, 3)] })).toEqual([]);
+    expect(derivePersonInsights({ ...personBase, rotations: [rotation(1.2, 30)] })).toEqual([]);
+    expect(derivePersonInsights({ ...personBase, rotations: [rotation(null, 30)] })).toEqual([]);
+  });
+
+  it('flags night pages that recur across weeks, not one bad week', () => {
+    const [item] = derivePersonInsights({
+      ...personBase,
+      night: { nightPages: 9, nightsPaged: 6, weeksWithNightPages: 3 },
+    });
+    expect(item).toMatchObject({ key: 'night', severity: 'WARNING' });
+    expect(
+      derivePersonInsights({
+        ...personBase,
+        night: { nightPages: 9, nightsPaged: 6, weeksWithNightPages: 1 },
       })
     ).toEqual([]);
   });
 
   it('warns the incoming person only when a service carries a risk signal', () => {
-    const shift = { userId: 'a', start: at('2026-01-05T09:00:00Z'), end: at('2026-01-12T09:00:00Z') };
-    expect(upcomingShiftHeavyInsights({ shift, signals: [] })).toEqual([]);
-    const [item] = upcomingShiftHeavyInsights({
-      shift,
-      signals: [
-        { kind: 'RISKY_CHANGE', serviceId: 's1', serviceName: 'Checkout' },
-        { kind: 'SLO_BURNING', serviceId: 's1', serviceName: 'Checkout' },
-      ],
-    });
-    expect(item).toMatchObject({
-      key: 'a:2026-01-05T09:00:00.000Z',
-      kind: ONCALL_INSIGHT_KINDS.upcomingShiftHeavy,
-      severity: 'WARNING',
-      subjectUserId: 'a',
-    });
-    expect(item.evidence.examples).toEqual([{ label: 'Checkout', href: '/services/s1' }]);
+    const upcoming = {
+      scheduleId: 's1',
+      startsAt: '2026-01-05T09:00:00.000Z',
+      serviceIds: ['svc1'],
+      counts: { RISKY_CHANGE: 1, SLO_BURNING: 0, MAINTENANCE_ENDING: 0 },
+    };
+    const [item] = derivePersonInsights({ ...personBase, upcoming });
+    expect(item).toMatchObject({ key: 'upcoming', severity: 'INFO', draftHref: '/schedules/s1' });
+    expect(item.evidence.examples).toEqual([{ label: 'Service 1', href: '/services/svc1' }]);
+    expect(
+      derivePersonInsights({
+        ...personBase,
+        upcoming: { ...upcoming, counts: { ...upcoming.counts, SLO_BURNING: 1 } },
+      })[0].severity
+    ).toBe('WARNING');
+    expect(
+      derivePersonInsights({ ...personBase, upcoming: { ...upcoming, serviceIds: [] } })
+    ).toEqual([]);
   });
 
-  it('keeps every title within the insight store limit even for long names', () => {
-    const longNames = new Map(Object.entries({ a: 'N'.repeat(300), b: 'Bo', c: 'Cy' }));
-    const load = computeLoad({
-      buckets: [
-        bucket('a', '2026-01-02', 2, 12),
-        ...['2026-01-03', '2026-01-09', '2026-01-10', '2026-01-16', '2026-01-17'].map(day =>
-          bucket('a', day, 2)
-        ),
-      ],
-      users,
-      onCallSeconds: equalSeconds,
-      from,
-      to,
-    });
+  it('emits items the insight store accepts', () => {
     const items = [
-      ...unfairRotationInsights(load, longNames),
-      ...sustainedNightLoadInsights(load, longNames),
+      ...deriveScheduleInsights({
+        ...scheduleBase,
+        gapDays: ['2026-01-02'],
+        samePersonHours: [{ userId: 'a', hours: 2 }],
+        rotation: { size: 3, fairnessIndex: 0.4, above: 1 },
+      }),
+      ...derivePersonInsights({
+        ...personBase,
+        rotations: [rotation(3, 20)],
+        night: { nightPages: 20, nightsPaged: 12, weeksWithNightPages: 4 },
+      }),
     ];
-    expect(items.length).toBe(2);
-    for (const item of items) expect(item.title.length).toBeLessThanOrEqual(140);
+    expect(items).toHaveLength(5);
+    for (const item of items) expect(opsInsightItemSchema.safeParse(item).success).toBe(true);
+  });
+
+  it('counts whole hours one person is both primary and backup', () => {
+    const window = { from: at('2026-01-01T00:00:00Z'), to: at('2026-01-15T00:00:00Z') };
+    expect(
+      samePersonOverlapHours({
+        ...window,
+        primary: [
+          { userId: 'a', start: at('2026-01-01T00:00:00Z'), end: at('2026-01-02T00:00:00Z') },
+          { userId: 'b', start: at('2026-01-02T00:00:00Z'), end: at('2026-01-03T00:00:00Z') },
+        ],
+        secondary: [
+          { userId: 'a', start: at('2026-01-01T12:00:00Z'), end: at('2026-01-02T12:00:00Z') },
+          { userId: 'c', start: at('2026-01-02T12:00:00Z'), end: at('2026-01-03T00:00:00Z') },
+        ],
+      })
+    ).toEqual([{ userId: 'a', hours: 12 }]);
   });
 });
