@@ -1006,6 +1006,22 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'AutomationDraft'
   ),
   op(
+    'post',
+    '/services/{id}/automation/replay',
+    'startAutomationReplay',
+    'automation:read',
+    'item',
+    'AutomationReplay'
+  ),
+  op(
+    'get',
+    '/services/{id}/automation/replay',
+    'getAutomationReplay',
+    'automation:read',
+    'item',
+    'AutomationReplay'
+  ),
+  op(
     'get',
     '/services/{id}/automation/decisions',
     'listAutomationDecisions',

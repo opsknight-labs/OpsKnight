@@ -493,6 +493,18 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     },
     ['valid', 'durationMs', 'issues', 'result']
   ),
+  AutomationReplay: object(
+    {
+      runId: string(),
+      status: { type: 'string', enum: ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED'] },
+      days: { type: 'integer', minimum: 7, maximum: 30 },
+      progress: { type: 'number', minimum: 0, maximum: 1 },
+      result: { oneOf: [{ type: 'object', additionalProperties: true }, { type: 'null' }] },
+      error: { type: ['string', 'null'] },
+      createdAt: date,
+    },
+    ['runId', 'status', 'days', 'progress', 'result', 'error', 'createdAt']
+  ),
   AutomationSimulationResult: object(
     {
       evaluationAt: date,
@@ -2298,6 +2310,31 @@ const operations: Operation[] = [
       'Requires the current draft ETag and team edit permission. Does not publish or change active/candidate versions or operational mode.',
     body: object({ sourceVersionId: id }, ['sourceVersionId']),
   },
+  {
+    method: 'post',
+    path: '/services/{id}/automation/replay',
+    summary: 'Replay a draft against stored alerts',
+    status: 202,
+    description:
+      "Queues a background replay of the draft over the last 7 to 30 days of the service's stored incident-opening alerts (at most 20,000). Changes nothing operational. An identical request within 10 minutes returns the same run. Poll GET with the runId.",
+    body: object(
+      {
+        snapshot: ref('AutomationSnapshot'),
+        days: { type: 'integer', minimum: 7, maximum: 30 },
+        integrationType: { ...string(64), minLength: 1 },
+      },
+      ['snapshot']
+    ),
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation/replay',
+    summary: 'Read a replay run',
+    query: { runId: { ...string(64), minLength: 1 } },
+    description:
+      'Returns progress while the replay runs and route, priority and rule-match counts when it has finished. Results hold counts and identifiers, never alert payloads.',
+  },
+
   {
     method: 'get',
     path: '/services/{id}/automation/decisions',

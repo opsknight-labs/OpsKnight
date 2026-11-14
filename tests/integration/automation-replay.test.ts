@@ -15,6 +15,11 @@ import {
   loadReplayEnvironment,
   startAutomationReplay,
 } from '@/lib/automation/replay-run';
+import {
+  GET as replayStatusRoute,
+  POST as replayRoute,
+} from '@/app/api/v2/services/[id]/automation/replay/route';
+import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 
 const DAY = 86_400_000;
 const now = new Date('2026-11-10T12:00:00.000Z');
@@ -189,4 +194,47 @@ it('refuses a draft that does not validate and never queues a job for it', async
     )
   ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
   expect(await db.backgroundJob.count()).toBe(0);
+});
+
+it('is reachable over REST v2: 202 on start, status by run id, and not across services or scopes', async () => {
+  const { policy, service, other } = await seed();
+  const reader = await createV2Credential(['automation:read']);
+  const outsider = await createV2Credential(['incidents:read']);
+  const path = `/services/${service.id}/automation/replay`;
+  const body = { snapshot: draft(policy.id), days: 7 };
+
+  const started = await invokeV2(replayRoute, reader.token, 'POST', path, { id: service.id }, body);
+  expect(started.status).toBe(202);
+  const { data } = await started.json();
+  expect(data).toMatchObject({ status: 'PENDING', days: 7, progress: 0, result: null });
+
+  const status = await invokeV2(
+    replayStatusRoute,
+    reader.token,
+    'GET',
+    `${path}?runId=${data.runId}`,
+    { id: service.id }
+  );
+  expect(status.status).toBe(200);
+  expect((await status.json()).data.runId).toBe(data.runId);
+
+  const elsewhere = await invokeV2(
+    replayStatusRoute,
+    reader.token,
+    'GET',
+    `/services/${other.id}/automation/replay?runId=${data.runId}`,
+    { id: other.id }
+  );
+  expect(elsewhere.status).toBe(404);
+
+  const denied = await invokeV2(
+    replayRoute,
+    outsider.token,
+    'POST',
+    path,
+    { id: service.id },
+    body
+  );
+  expect(denied.status).toBe(403);
+  expect(await db.backgroundJob.count()).toBe(1);
 });

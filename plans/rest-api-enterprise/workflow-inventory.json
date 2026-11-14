@@ -169,6 +169,8 @@
       "implementedOperations": [
         "validateAutomation",
         "simulateAutomation",
+        "startAutomationReplay",
+        "getAutomationReplay",
         "restoreAutomationDraft",
         "listAutomationDecisions",
         "listAutomationObservations",
@@ -395,9 +397,7 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": [
-        "Final combined identity/browser/SDK certification pending."
-      ],
+      "blockers": ["Final combined identity/browser/SDK certification pending."],
       "implementedOperations": [
         "listTeamMembers",
         "setTeamMember",

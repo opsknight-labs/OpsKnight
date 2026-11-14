@@ -137,12 +137,12 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | schedules | 25 | 13 | 12 | 0 |
 | service-accounts | 6 | 0 | 0 | 6 |
 | service-objectives | 11 | 7 | 4 | 0 |
-| services | 43 | 21 | 21 | 1 |
+| services | 45 | 21 | 21 | 3 |
 | settings | 8 | 3 | 4 | 1 |
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 326 | 148 | 106 | 72 |
+| **All** | 328 | 148 | 106 | 74 |
 
 <details>
 <summary>Operations by area</summary>
@@ -460,6 +460,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `duplicateServiceRunbookRule` | `operation_prepare`, then approval |
 | `getAutomationCandidate` | `read_operation` (sensitive reads on) |
 | `getAutomationDraft` | `read_operation` |
+| `getAutomationReplay` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getAutomationVersion` | `read_operation` |
 | `getService` | `read_operation` |
 | `getServiceAutomation` | `automation_get_effective` |
@@ -483,6 +484,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `restoreAutomationDraft` | `operation_prepare`, then approval |
 | `saveAutomationDraft` | `operation_prepare`, then approval |
 | `simulateAutomation` | `call_operation` |
+| `startAutomationReplay` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `updateService` | `operation_prepare`, then approval |
 | `updateServiceAutomationMode` | `operation_prepare`, then approval |
 | `updateServiceClassificationPolicy` | `operation_prepare`, then approval |

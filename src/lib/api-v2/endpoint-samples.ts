@@ -7,7 +7,11 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'POST /services/{id}/integrations': { name: 'Production alert source', type: 'EVENTS_API_V2' },
   'POST /integrations/{id}/credentials': { credential: 'routing-key', overlapSeconds: 3600 },
   'POST /integrations/{id}/test': {
-    payload: { event_action: 'trigger', dedup_key: 'sample-event', payload: { summary: 'Sample alert', source: 'api-example', severity: 'warning' } },
+    payload: {
+      event_action: 'trigger',
+      dedup_key: 'sample-event',
+      payload: { summary: 'Sample alert', source: 'api-example', severity: 'warning' },
+    },
   },
   'PUT /notification-providers/{provider}': {
     provider: 'resend',
@@ -58,6 +62,10 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
       dedup_key: 'simulation',
       payload: { summary: 'Example', source: 'api', severity: 'info' },
     },
+  },
+  'POST /services/{id}/automation/replay': {
+    snapshot: { schemaVersion: 1, fields: [], rules: [] },
+    days: 7,
   },
   'POST /services/{id}/automation/restore': { sourceVersionId: 'cm123456789012345678901234' },
   'PATCH /services/{id}/automation/mode': { mode: 'DISABLED', expectedActiveVersionId: null },
