@@ -59,7 +59,7 @@ export interface IncidentLifecycleResult {
   changed: boolean;
 }
 
-type IncidentLifecycleSnapshot = {
+export type IncidentLifecycleSnapshot = {
   serviceId: string;
   status: IncidentStatus;
   createdAt: Date;
@@ -370,7 +370,7 @@ function eventForCommand(
   }
 }
 
-function updateDataForCommand(
+export function updateDataForCommand(
   incident: IncidentLifecycleSnapshot,
   input: IncidentLifecycleInput,
   now: Date
@@ -406,6 +406,9 @@ function updateDataForCommand(
     case 'ACKNOWLEDGE':
       if (!incident.acknowledgedAt) {
         data.acknowledgedAt = now;
+        // Analytics only: who acknowledged and through which channel.
+        data.acknowledgedById = input.actor?.id ?? null;
+        data.acknowledgedVia = input.source;
         // ACK SLA is incident-lifetime truth. REOPEN/UNACKNOWLEDGE reset the
         // operational state, but a later acknowledgement must not replace the
         // immutable first-ACK sample.
@@ -449,6 +452,8 @@ function updateDataForCommand(
     case 'REOPEN': {
       const delayMinutes = escalationDelayMinutes(incident, 0);
       data.acknowledgedAt = null;
+      data.acknowledgedById = null;
+      data.acknowledgedVia = null;
       data.resolvedAt = null;
       // Preserve the first-ACK SLA capture across operational reopen cycles.
       data.slaResolveElapsedMs = null;
@@ -465,6 +470,8 @@ function updateDataForCommand(
     case 'UNACKNOWLEDGE': {
       const stepIndex = incident.currentEscalationStep ?? 0;
       data.acknowledgedAt = null;
+      data.acknowledgedById = null;
+      data.acknowledgedVia = null;
       // Unacknowledgement is operational; it cannot erase lifetime ACK truth.
       data.escalationStatus = 'ESCALATING';
       data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
