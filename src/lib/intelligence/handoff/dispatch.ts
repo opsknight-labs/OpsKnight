@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { getBaseUrl } from '@/lib/env-validation';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
+import { enabledOpsInsightAreas } from '../ops-insights/contract';
 import { getIntelligenceSettings } from '../settings/service';
 import { buildHandoffSummary, draftHandoffNarrative, renderHandoffSummary } from './summary';
 
@@ -28,7 +29,8 @@ export async function sendHandoffSummaries(input: {
 }): Promise<number> {
   let sent = 0;
   try {
-    if (!(await getIntelligenceSettings()).handoffSummaryEnabled) return 0;
+    const settings = await getIntelligenceSettings();
+    if (!settings.handoffSummaryEnabled) return 0;
     if (input.serviceIds.length === 0 || input.recipients.length === 0) return 0;
     const now = input.now ?? new Date();
     const summary = await buildHandoffSummary(
@@ -37,6 +39,7 @@ export async function sendHandoffSummaries(input: {
         scheduleName: input.scheduleName,
         serviceIds: input.serviceIds,
         now,
+        includeHeadsUp: enabledOpsInsightAreas(settings).includes('onCall'),
       },
       prisma
     );

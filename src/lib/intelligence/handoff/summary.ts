@@ -6,6 +6,7 @@ import { renderBrief } from '../ai/brief';
 import { outputTokensFor } from '../ai/output-limits';
 import { resolveLanguageModel } from '../ai/port';
 import { cachedGenerate } from '../ai/result-cache';
+import { loadShiftRiskSignals, type ShiftRiskSignal } from '@/lib/oncall-load/signals';
 
 /**
  * Shift handoff summary: what the incoming on-call responder inherits. Built deterministically from the
@@ -46,10 +47,22 @@ export interface HandoffSummary {
   overdueFollowUps: HandoffFollowUp[];
   counts: { open: number; unacknowledged: number; high: number; resolved: number; overdue: number };
   narrative: string | null;
+  /** Services behind the shift with a known risk right now (on-call insights only); absent when off. */
+  headsUp?: ShiftRiskSignal[];
 }
 
+/** How far ahead a maintenance window's end counts as "during this shift". */
+const HEADS_UP_SHIFT_HOURS = 12;
+
 export async function buildHandoffSummary(
-  input: { scheduleId: string; scheduleName: string; serviceIds: readonly string[]; now?: Date },
+  input: {
+    scheduleId: string;
+    scheduleName: string;
+    serviceIds: readonly string[];
+    now?: Date;
+    /** Add the shift heads-up: on only while operations insights for on-call are on. */
+    includeHeadsUp?: boolean;
+  },
   client: typeof prisma = prisma
 ): Promise<HandoffSummary> {
   const now = input.now ?? new Date();
@@ -65,7 +78,7 @@ export async function buildHandoffSummary(
     narrative: null,
   };
   if (serviceIds.length === 0) return empty;
-  const [open, resolved, followUps, openCount, resolvedCount] = await Promise.all([
+  const [open, resolved, followUps, openCount, resolvedCount, headsUp] = await Promise.all([
     client.incident.findMany({
       where: { serviceId: { in: serviceIds }, status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED'] } },
       orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
@@ -103,6 +116,13 @@ export async function buildHandoffSummary(
     client.incident.count({
       where: { serviceId: { in: serviceIds }, status: 'RESOLVED', resolvedAt: { gte: since } },
     }),
+    input.includeHeadsUp
+      ? loadShiftRiskSignals(
+          serviceIds,
+          { now, shiftEnd: new Date(now.getTime() + HEADS_UP_SHIFT_HOURS * 3_600_000) },
+          client
+        )
+      : undefined,
   ]);
   const openRows: HandoffIncident[] = open.map(incident => ({
     id: incident.id,
@@ -140,8 +160,15 @@ export async function buildHandoffSummary(
       overdue: followUps.length,
     },
     narrative: null,
+    ...(headsUp ? { headsUp } : {}),
   };
 }
+
+const HEADS_UP_LABEL: Record<ShiftRiskSignal['kind'], string> = {
+  RISKY_CHANGE: 'high-risk change in the last 24 h',
+  SLO_BURNING: 'burning its SLO budget',
+  MAINTENANCE_ENDING: 'maintenance ends during the shift',
+};
 
 const formatAge = (minutes: number) =>
   minutes < 60
@@ -182,6 +209,13 @@ export function renderHandoffSummary(
       `<h3 style="margin:16px 0 4px">${escapeHtml(title)}</h3><ul>${htmlRows.join('')}</ul>`
     );
   };
+  section(
+    'Heads-up: this shift may be busy',
+    (summary.headsUp ?? []).map(row => `${row.serviceName}: ${HEADS_UP_LABEL[row.kind]}`),
+    (summary.headsUp ?? []).map(
+      row => `<li>${escapeHtml(row.serviceName)} — ${HEADS_UP_LABEL[row.kind]}</li>`
+    )
+  );
   section(
     'Open incidents',
     summary.open.map(
@@ -258,6 +292,12 @@ export function handoffBrief(summary: HandoffSummary): string {
     {
       lines: summary.overdueFollowUps.slice(0, 5).map(row => `Overdue follow-up: ${row.title}.`),
       budget: 800,
+    },
+    {
+      lines: (summary.headsUp ?? [])
+        .slice(0, 5)
+        .map(row => `Heads-up: ${row.serviceName}, ${HEADS_UP_LABEL[row.kind]}.`),
+      budget: 400,
     },
   ]);
 }

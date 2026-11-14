@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- Keys are members of the fixed risk-label map. */
 import type { OpsInsightItem } from '@/lib/intelligence/ops-insights/contract';
 import type { ShiftRiskKind } from './signals';
 
@@ -189,7 +190,6 @@ export function derivePersonInsights(input: PersonInsightInput): OpsInsightItem[
   const upcoming = input.upcoming;
   if (upcoming && upcoming.serviceIds.length > 0) {
     const kinds = (Object.keys(RISK_LABEL) as ShiftRiskKind[]).filter(
-      // eslint-disable-next-line security/detect-object-injection -- kind is a key of the fixed label map
       kind => upcoming.counts[kind] > 0
     );
     const total = kinds.reduce((sum, kind) => sum + upcoming.counts[kind], 0);
@@ -202,9 +202,7 @@ export function derivePersonInsights(input: PersonInsightInput): OpsInsightItem[
       evidence: {
         window: `shift starting ${upcoming.startsAt.slice(0, 16).replace('T', ' ')} UTC`,
         facts: kinds.map(kind => ({
-          // eslint-disable-next-line security/detect-object-injection -- kind is a key of the fixed label map
           label: RISK_LABEL[kind],
-          // eslint-disable-next-line security/detect-object-injection -- kind is a key of the fixed label map
           value: String(upcoming.counts[kind]),
         })),
         examples: upcoming.serviceIds.slice(0, 5).map((serviceId, index) => ({

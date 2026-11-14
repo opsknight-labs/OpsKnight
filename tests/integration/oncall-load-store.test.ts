@@ -14,6 +14,7 @@ import {
 import { updateOpsInsightSwitches } from '@/lib/intelligence/ops-insights/settings';
 import { listInsightsForScope } from '@/lib/intelligence/ops-insights/view';
 import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
+import { buildHandoffSummary, renderHandoffSummary } from '@/lib/intelligence/handoff/summary';
 import { WORK_KINDS } from '@/lib/intelligence/jobs/work-queue';
 import {
   createTestIncident,
@@ -277,6 +278,17 @@ describe('on-call producers in the lane', () => {
     expect(await listInsightsForScope(await actor(lead.id), { type: 'USER', id: asha.id })).toEqual(
       []
     );
+
+    // The incoming person's handoff summary carries the same heads-up, with the service named.
+    const base = { scheduleId: schedule.id, scheduleName: 'Core', serviceIds: [service.id] };
+    const handoff = await buildHandoffSummary({ ...base, includeHeadsUp: true });
+    expect(handoff.headsUp).toEqual([
+      { kind: 'RISKY_CHANGE', serviceId: service.id, serviceName: service.name },
+    ]);
+    expect(renderHandoffSummary(handoff, 'https://ops.example').text).toContain(
+      `${service.name}: high-risk change in the last 24 h`
+    );
+    expect((await buildHandoffSummary(base)).headsUp).toBeUndefined();
   });
 
   it('writes nothing while the on-call area is off', async () => {
