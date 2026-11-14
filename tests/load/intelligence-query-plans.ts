@@ -43,6 +43,7 @@ const EXPECTED_INDEXES: Record<string, string[]> = {
   runbookHistory: ['idx_runbook_execution_service_recent'],
   // Operations insights (Workstream J): the daily rollups, the reference producer and the scheduler scan.
   opsPagesRollup: ['idx_notification_created_cursor'],
+  opsEscalationRollup: ['idx_escalation_step_attempt_created'],
   opsRunbookRollup: ['idx_runbook_execution_completed'],
   opsAutomationRollup: ['IncidentAutomationDecision_serviceId_createdAt_idx'],
   opsRollupRead: ['idx_metric_rollup_subject'],
@@ -56,6 +57,7 @@ type JudgedTable =
   | 'IntelligenceWorkItem'
   | 'Notification'
   | 'RunbookExecution'
+  | 'EscalationStepAttempt'
   | 'IncidentAutomationDecision'
   | 'MetricRollup'
   | 'Alert'
@@ -67,6 +69,7 @@ type JudgedTable =
  */
 const MIN_ROWS_TO_JUDGE: Record<string, { table: JudgedTable; rows: number }> = {
   opsPagesRollup: { table: 'Notification', rows: 200_000 },
+  opsEscalationRollup: { table: 'EscalationStepAttempt', rows: 50_000 },
   opsRunbookRollup: { table: 'RunbookExecution', rows: 50_000 },
   opsAutomationRollup: { table: 'IncidentAutomationDecision', rows: 50_000 },
   opsRollupRead: { table: 'MetricRollup', rows: 50_000 },
@@ -198,6 +201,10 @@ async function main() {
       analyze: true,
       sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.pagesPerUserHour]!(Prisma.sql, opsDay, opsDayEnd),
     },
+    opsEscalationRollup: {
+      analyze: true,
+      sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.escalationStepOutcome]!(Prisma.sql, opsDay, opsDayEnd),
+    },
     opsRunbookRollup: {
       analyze: true,
       sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.runbookOutcome]!(Prisma.sql, opsDay, opsDayEnd),
@@ -228,7 +235,7 @@ async function main() {
   const estimates = await prisma.$queryRaw<Array<{ relname: string; rows: number }>>`
     SELECT relname, greatest(reltuples, 0)::float AS rows FROM pg_class
     WHERE relkind = 'r' AND relname IN ('Notification', 'RunbookExecution', 'IncidentAutomationDecision',
-      'MetricRollup', 'Alert', 'OpsInsightScopeState')`;
+      'MetricRollup', 'Alert', 'OpsInsightScopeState', 'EscalationStepAttempt')`;
   const estimated = (table: string) => estimates.find(row => row.relname === table)?.rows ?? 0;
   const tableRows: Record<JudgedTable, number> = {
     Incident: Number(incidents),
@@ -236,6 +243,7 @@ async function main() {
     IntelligenceWorkItem: Number(workItems),
     Notification: estimated('Notification'),
     RunbookExecution: estimated('RunbookExecution'),
+    EscalationStepAttempt: estimated('EscalationStepAttempt'),
     IncidentAutomationDecision: estimated('IncidentAutomationDecision'),
     MetricRollup: estimated('MetricRollup'),
     Alert: estimated('Alert'),
