@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
-  lowValueSourceInsights,
-  notificationNoiseInsights,
-  quietHoursInsights,
-  unhealthyEndpointInsights,
-} from '@/lib/notification-noise/insights';
-import { buildNoiseReport, share, type NoiseDailyRow } from '@/lib/notification-noise/report';
+  deriveServiceNoise,
+  deriveUserNoise,
+  type UserNoiseInput,
+} from '@/lib/intelligence/ops-insights/producers/notification-noise';
+import { opsInsightItemSchema } from '@/lib/intelligence/ops-insights/contract';
+import {
+  buildNoiseReport,
+  noiseWindow,
+  share,
+  toNoiseDailyRows,
+  type NoiseDailyRow,
+} from '@/lib/notification-noise/report';
 
 const row = (overrides: Partial<NoiseDailyRow>): NoiseDailyRow => ({
   day: '2026-11-10',
@@ -45,7 +51,7 @@ describe('noise report', () => {
     expect(report.byService.map(s => [s.serviceName, s.pages, s.acted, s.autoResolved])).toEqual([
       ['Search', 7, 7, 0],
       ['Payments', 5, 2, 2],
-      ['Unknown service', 1, 0, 0],
+      ['A service you cannot open', 1, 0, 0],
     ]);
     expect(report.byHour[2]).toEqual({ hour: 2, pages: 5, acted: 2, autoResolved: 2 });
     expect(report.byHour[14].pages).toBe(7);
@@ -57,90 +63,103 @@ describe('noise report', () => {
   });
 });
 
-describe('noise insights', () => {
-  const noisy = buildNoiseReport(
-    [
-      // Payments: 10 pages, 1 acted on -> low value.
-      row({ hour: 3, pages: 6, acted: 0 }),
-      row({ hour: 23, pages: 4, acted: 1 }),
-      // Search: 10 pages, all acted on, but 6 resolved by themselves -> low value.
-      row({ serviceId: 'svc-b', hour: 11, pages: 10, acted: 10, autoResolved: 6 }),
-      // Too few pages to be a pattern.
-      row({ serviceId: 'svc-c', hour: 12, pages: 4, acted: 0 }),
-    ],
-    names
-  );
+describe('rollup rows', () => {
+  it('maps rollup points to report rows and skips malformed tags', () => {
+    const bucket = new Date('2026-11-09T00:00:00Z');
+    expect(
+      toNoiseDailyRows([
+        {
+          bucket,
+          subjectKey: 'u',
+          count: 4,
+          sum: 1,
+          tags: { serviceId: 's', hour: 3, autoResolved: true },
+        },
+        {
+          bucket,
+          subjectKey: 'u',
+          count: 2,
+          sum: 2,
+          tags: { serviceId: 's', hour: 9, autoResolved: false },
+        },
+        { bucket, subjectKey: 'u', count: 9, sum: 9, tags: { hour: 1 } },
+        { bucket, subjectKey: 'u', count: 9, sum: 9, tags: null },
+      ])
+    ).toEqual([
+      { day: '2026-11-09', serviceId: 's', hour: 3, pages: 4, acted: 1, autoResolved: 4 },
+      { day: '2026-11-09', serviceId: 's', hour: 9, pages: 2, acted: 2, autoResolved: 0 },
+    ]);
+  });
 
-  it('flags a source that is rarely acted on or mostly resolves by itself', () => {
-    const items = lowValueSourceInsights(noisy);
-    expect(items.map(item => item.key).sort()).toEqual(['svc-a', 'svc-b']);
-    const payments = items.find(item => item.key === 'svc-a')!;
-    expect(payments).toMatchObject({
-      kind: 'notification.low_value_source',
-      severity: 'INFO',
-      draftHref: '/services/svc-a/notifications',
+  it('covers the last 30 complete UTC days', () => {
+    expect(noiseWindow(new Date('2026-11-14T13:00:00Z'))).toEqual({
+      from: new Date('2026-10-15T00:00:00Z'),
+      to: new Date('2026-11-14T00:00:00Z'),
     });
-    expect(payments.evidence.facts[1]).toEqual({ label: 'Acted on', value: '1 (10%)' });
+  });
+});
+
+const input = (overrides: Partial<UserNoiseInput> = {}): UserNoiseInput => ({
+  services: [],
+  night: { pages: 0, acted: 0, autoResolved: 0 },
+  quietHoursEnabled: false,
+  endpoints: [],
+  ...overrides,
+});
+const valid = (items: ReturnType<typeof deriveUserNoise>) => {
+  for (const item of items) expect(opsInsightItemSchema.safeParse(item).success).toBe(true);
+  return items;
+};
+
+describe('notification noise producers (pure half)', () => {
+  it('suggests a digest for a source rarely acted on or mostly self-resolving, naming no service', () => {
+    const items = valid(
+      deriveUserNoise(
+        input({
+          services: [
+            { serviceId: 'svc-a', pages: 10, acted: 1, autoResolved: 0 },
+            { serviceId: 'svc-b', pages: 10, acted: 8, autoResolved: 6 },
+            { serviceId: 'svc-c', pages: 10, acted: 8, autoResolved: 1 },
+            { serviceId: 'svc-d', pages: 4, acted: 0, autoResolved: 0 },
+          ],
+        })
+      )
+    );
+    expect(items.map(item => item.key)).toEqual(['low-value:svc-a', 'low-value:svc-b']);
+    expect(items[0].draftHref).toBe('/services/svc-a/notifications');
+    expect(JSON.stringify(items)).not.toContain('Payments');
   });
 
-  it('says nothing about a source the person acts on', () => {
-    const healthy = buildNoiseReport([row({ pages: 20, acted: 15, autoResolved: 2 })], names);
-    expect(lowValueSourceInsights(healthy)).toEqual([]);
-  });
-
-  it('suggests quiet hours for ignored night pages, only while quiet hours are off', () => {
-    const [item] = quietHoursInsights(noisy, { quietHoursEnabled: false });
-    expect(item).toMatchObject({
-      kind: 'notification.quiet_hours',
-      draftHref: '/settings/profile?tab=schedule',
-    });
-    expect(item.evidence.facts[0].value).toBe('10');
-    expect(quietHoursInsights(noisy, { quietHoursEnabled: true })).toEqual([]);
-  });
-
-  it('does not suggest quiet hours when night pages are acted on or rare', () => {
-    const acted = buildNoiseReport([row({ hour: 2, pages: 10, acted: 8 })], names);
-    const rare = buildNoiseReport([row({ hour: 2, pages: 4, acted: 0 })], names);
-    const daytime = buildNoiseReport([row({ hour: 13, pages: 30, acted: 0 })], names);
-    for (const report of [acted, rare, daytime]) {
-      expect(quietHoursInsights(report, { quietHoursEnabled: false })).toEqual([]);
-    }
+  it('suggests quiet hours for ignored night pages only while quiet hours are off', () => {
+    const night = { pages: 6, acted: 1, autoResolved: 0 };
+    expect(valid(deriveUserNoise(input({ night }))).map(item => item.key)).toEqual(['quiet-hours']);
+    expect(deriveUserNoise(input({ night, quietHoursEnabled: true }))).toEqual([]);
+    expect(deriveUserNoise(input({ night: { pages: 6, acted: 3, autoResolved: 0 } }))).toEqual([]);
+    expect(deriveUserNoise(input({ night: { pages: 4, acted: 0, autoResolved: 0 } }))).toEqual([]);
   });
 
   it('flags only endpoints that cannot reach the person', () => {
-    const items = unhealthyEndpointInsights([
-      { channel: 'EMAIL', status: 'HEALTHY', failureCount: 0 },
-      { channel: 'PUSH', status: 'UNVERIFIED', failureCount: 0 },
-      { channel: 'SMS', status: 'DEGRADED', failureCount: 3, lastErrorCode: '30003' },
-      { channel: 'VOICE', status: 'INVALID', failureCount: 5 },
-    ]);
+    const items = valid(
+      deriveUserNoise(
+        input({
+          endpoints: [
+            { channel: 'SMS', status: 'BOUNCED', failureCount: 3 },
+            { channel: 'EMAIL', status: 'ACTIVE', failureCount: 0 },
+            { channel: 'PUSH', status: 'DEGRADED', failureCount: 1 },
+          ],
+        })
+      )
+    );
     expect(items.map(item => [item.key, item.severity])).toEqual([
-      ['SMS', 'WARNING'],
-      ['VOICE', 'CRITICAL'],
+      ['endpoint:SMS', 'CRITICAL'],
+      ['endpoint:PUSH', 'WARNING'],
     ]);
-    expect(items[0].evidence.facts).toContainEqual({ label: 'Last error', value: '30003' });
   });
 
-  it('returns nothing when there is nothing to say, and the most severe first otherwise', () => {
-    expect(
-      notificationNoiseInsights({
-        report: buildNoiseReport([], names),
-        quietHoursEnabled: false,
-        endpoints: [],
-      })
-    ).toEqual([]);
-    const all = notificationNoiseInsights({
-      report: noisy,
-      quietHoursEnabled: false,
-      endpoints: [{ channel: 'VOICE', status: 'BOUNCED', failureCount: 2 }],
-    });
-    expect(all[0]).toMatchObject({ kind: 'notification.unhealthy_endpoint', severity: 'CRITICAL' });
-    expect(all).toHaveLength(4);
-    // Every item fits the shared insight limits.
-    for (const item of all) {
-      expect(item.title.length).toBeLessThanOrEqual(140);
-      expect(item.summary.length).toBeLessThanOrEqual(400);
-      expect(item.draftHref).toMatch(/^\/(?!\/)/);
-    }
+  it('judges a service over everyone it paged, with a higher floor', () => {
+    const counts = { serviceId: 's', pages: 20, acted: 2, autoResolved: 0 };
+    expect(valid(deriveServiceNoise(counts)).map(item => item.key)).toEqual(['low-value']);
+    expect(deriveServiceNoise({ ...counts, pages: 19 })).toEqual([]);
+    expect(deriveServiceNoise({ ...counts, acted: 15 })).toEqual([]);
   });
 });
