@@ -1,20 +1,15 @@
-import Link from 'next/link';
 import { Activity } from 'lucide-react';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { logger } from '@/lib/logger';
+import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
 import {
   getRunbookHealthView,
   type RunbookHealthView,
-} from '@/lib/intelligence/runbook-health/loader';
-import type { InsightSeverity } from '@/lib/intelligence/runbook-health/types';
+} from '@/lib/intelligence/runbook-health/view';
+import InsightsPanel from '@/components/intelligence/insights/InsightsPanel';
 import { formatDurationSeconds } from '@/components/runbooks/executions/format';
-import { KeyValueGrid, Pill, SectionCard, type Tone } from '@/components/runbooks/ui/primitives';
-
-const SEVERITY: Record<InsightSeverity, { tone: Tone; label: string }> = {
-  critical: { tone: 'danger', label: 'Needs attention' },
-  warning: { tone: 'warning', label: 'Worth a look' },
-  info: { tone: 'info', label: 'Suggestion' },
-};
+import { KeyValueGrid, SectionCard } from '@/components/runbooks/ui/primitives';
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 
@@ -25,24 +20,25 @@ function rateLabel(part: number, whole: number, lowerBound: number | null, noun:
 
 /** Presentation only; renders nothing when there is nothing to say. */
 export function RunbookHealthPanel({
-  runbookId,
   view,
   formatTimestamp,
-  canEdit,
+  canDecide,
+  squireName,
 }: {
-  runbookId: string;
   view: RunbookHealthView;
   formatTimestamp: (value: Date) => string;
-  canEdit: boolean;
+  canDecide: boolean;
+  squireName?: string | null;
 }) {
-  const { effectiveness: e, insights } = view;
+  const { effectiveness: e, insights, suggestedSteps } = view;
+  const suggestions = insights.filter(insight => suggestedSteps[insight.id]);
   if (e.eligible === 0 && insights.length === 0) return null;
   const step = e.mostFailingStep;
   return (
     <SectionCard
       id="runbook-health"
       title="Health"
-      description={`How this runbook performed over the last ${e.windowDays} days.`}
+      description={`How this runbook performed over the last ${e.windowDays} days, up to yesterday.`}
       icon={Activity}
     >
       <KeyValueGrid
@@ -56,14 +52,14 @@ export function RunbookHealthPanel({
             value:
               e.incidentRuns === 0
                 ? 'No runs on incidents yet'
-                : rateLabel(e.fixed, e.incidentRuns, e.fixedLowerBound, 'incident runs'),
+                : `${rateLabel(e.fixed, e.incidentRuns, e.fixedLowerBound, 'incident runs')}; resolved within ${e.fixWindowMinutes} min`,
           },
           {
             label: 'Median duration',
             value:
               e.medianDurationMs === null
                 ? 'Not measured'
-                : formatDurationSeconds(Math.round(e.medianDurationMs / 1000)),
+                : `About ${formatDurationSeconds(Math.round(e.medianDurationMs / 1000))}`,
           },
           {
             label: 'Most-failing step',
@@ -79,25 +75,29 @@ export function RunbookHealthPanel({
         ]}
       />
       {insights.length > 0 && (
-        <ul className="mt-5 space-y-2 border-t border-border/60 pt-4" aria-label="Health findings">
-          {insights.map(insight => (
-            <li
-              key={`${insight.kind}:${insight.key}`}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-foreground"
-            >
-              <Pill tone={SEVERITY[insight.severity].tone}>{SEVERITY[insight.severity].label}</Pill>
-              <span className="min-w-0 break-words">{insight.title}</span>
-              {canEdit && insight.kind === 'RUNBOOK_MISSING_STEP' && (
-                <Link
-                  href={`/runbooks/${runbookId}?tab=builder`}
-                  className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  Add it in the editor
-                </Link>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="mt-5 border-t border-border/60 pt-4">
+          <InsightsPanel
+            insights={insights}
+            canDecide={canDecide}
+            squireName={squireName}
+            draftLabel="Open in editor"
+            label="Runbook health insights"
+          />
+        </div>
+      )}
+      {suggestions.length > 0 && (
+        <div className="mt-4 space-y-1">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Steps responders add by hand
+          </h3>
+          <ul className="space-y-1 text-sm text-foreground" aria-label="Suggested steps">
+            {suggestions.map(insight => (
+              <li key={insight.id} className="break-words">
+                {suggestedSteps[insight.id]}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </SectionCard>
   );
@@ -108,12 +108,10 @@ export async function RunbookHealthSection({
   runbookId,
   actor,
   formatTimestamp,
-  canEdit,
 }: {
   runbookId: string;
   actor: AuthorizationActor;
   formatTimestamp: (value: Date) => string;
-  canEdit: boolean;
 }) {
   let view: RunbookHealthView | null = null;
   try {
@@ -125,12 +123,14 @@ export async function RunbookHealthSection({
     });
   }
   if (!view) return null;
+  // The assistant hand-off only shows while Squire is on; a failed status read just hides it.
+  const squire = view.insights.length ? await getAiPublicStatus().catch(() => null) : null;
   return (
     <RunbookHealthPanel
-      runbookId={runbookId}
       view={view}
       formatTimestamp={formatTimestamp}
-      canEdit={canEdit}
+      canDecide={hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_FEEDBACK)}
+      squireName={squire?.squireEnabled ? squire.squireName : null}
     />
   );
 }

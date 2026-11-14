@@ -761,7 +761,6 @@ export default async function RunbookDetailPage({
                     runbookId={id}
                     actor={authorizationActor}
                     formatTimestamp={formatTimestamp}
-                    canEdit={canManage}
                   />
                 </Suspense>
                 {dangerZoneCard}

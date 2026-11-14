@@ -1,5 +1,3 @@
-import type { InsightItem } from './types';
-
 /**
  * Pure text logic for runbook suggestions: group similar resolution notes and pull the actions out of them.
  * Deterministic and dependency-free; no model is involved.
@@ -204,73 +202,80 @@ export function extractImperativeSteps(
     .map(step => ({ name: step.name, support: step.notes.size }));
 }
 
-export interface ResolutionNote {
+/**
+ * A note by id: an incident note (`note`) or the resolution note of a manual resolve (`event`, an
+ * IncidentEvent). Stored insights hold these, never the text.
+ */
+export interface NoteRef {
+  kind: 'note' | 'event';
+  id: string;
   incidentId: string;
-  text: string;
+}
+
+/** Parses the incident links that `noteRefHref` writes into insight evidence; anything else is skipped. */
+export function noteRefsFromHrefs(hrefs: ReadonlyArray<string | undefined>): NoteRef[] {
+  const refs: NoteRef[] = [];
+  for (const href of hrefs) {
+    const match = href?.match(
+      /^\/incidents\/([A-Za-z0-9_-]{1,64})#(note|event)-([A-Za-z0-9_-]{1,64})$/
+    );
+    if (match) refs.push({ incidentId: match[1], kind: match[2] as NoteRef['kind'], id: match[3] });
+  }
+  return refs;
 }
 
 /** Hand-written resolution notes of one recurring problem (one masked incident title) on one service. */
 export interface ProblemNotes {
   templateHash: string;
-  template: string;
-  notes: readonly ResolutionNote[];
+  notes: ReadonlyArray<NoteRef & { text: string }>;
   /** Runbook runs against these incidents; any means a runbook already covers the problem. */
   runbookRuns: number;
 }
 
-export interface MissingRunbookEvidence extends Record<string, unknown> {
+/** A problem responders fixed by hand the same way, as ids and counts. */
+export interface MissingRunbookProblem {
   templateHash: string;
-  template: string;
+  /** Incidents in the largest group of similar notes. */
   noteCount: number;
-  incidentIds: string[];
-  sampleNotes: string[];
-  steps: DraftStep[];
-  /** Runbooks bound to the service. They never ran on this problem, so they do not cover it. */
-  boundRunbooks: number;
+  /** Draft steps the notes yield; the draft itself is rebuilt from the notes the viewer may read. */
+  stepCount: number;
+  /** At most `maxRefs`, newest first. */
+  refs: NoteRef[];
 }
 
 /**
  * A problem that responders fixed by hand the same way at least three times, with no runbook run against
- * it, is a runbook waiting to be written. One item per problem, built from its largest group of similar
- * notes; problems whose notes contain no recognisable action produce nothing.
+ * it, is a runbook waiting to be written. One entry per problem, from its largest group of similar notes;
+ * problems whose notes contain no recognisable action produce nothing. Text is dropped from the result.
  */
-export function missingRunbookInsights(
+export function missingRunbookProblems(
   problems: readonly ProblemNotes[],
-  context: { boundRunbooks: number }
-): Array<InsightItem & { evidence: MissingRunbookEvidence }> {
-  const items: Array<InsightItem & { evidence: MissingRunbookEvidence }> = [];
+  maxRefs = 5
+): MissingRunbookProblem[] {
+  const found: MissingRunbookProblem[] = [];
   for (const problem of problems) {
     if (problem.runbookRuns > 0) continue;
-    let best: { incidentIds: string[]; texts: string[] } | null = null;
+    let best: Array<NoteRef & { text: string }> | null = null;
+    let bestIncidents = 0;
     for (const cluster of clusterNotes(problem.notes)) {
-      const incidentIds = [...new Set(cluster.members.map(member => member.incidentId))];
-      if (
-        incidentIds.length >= RUNBOOK_SUGGESTION_LIMITS.minSimilarNotes &&
-        incidentIds.length > (best?.incidentIds.length ?? 0)
-      )
-        best = { incidentIds, texts: cluster.members.map(member => member.text) };
+      const incidents = new Set(cluster.members.map(member => member.incidentId)).size;
+      if (incidents >= RUNBOOK_SUGGESTION_LIMITS.minSimilarNotes && incidents > bestIncidents) {
+        best = cluster.members;
+        bestIncidents = incidents;
+      }
     }
     if (!best) continue;
-    const steps = extractImperativeSteps(best.texts);
-    if (steps.length === 0) continue;
-    items.push({
-      key: problem.templateHash,
-      kind: 'RUNBOOK_MISSING',
-      severity: 'info',
-      title: `${best.incidentIds.length} incidents like "${problem.template.slice(0, 120)}" were resolved by hand the same way`,
-      evidence: {
-        templateHash: problem.templateHash,
-        template: problem.template,
-        noteCount: best.incidentIds.length,
-        incidentIds: best.incidentIds.slice(0, 5),
-        sampleNotes: best.texts.slice(0, 3).map(text => text.replace(/\s+/g, ' ').slice(0, 200)),
-        steps,
-        boundRunbooks: context.boundRunbooks,
-      },
+    const stepCount = extractImperativeSteps(best.map(note => note.text)).length;
+    if (stepCount === 0) continue;
+    found.push({
+      templateHash: problem.templateHash,
+      noteCount: bestIncidents,
+      stepCount,
+      refs: best.slice(0, maxRefs).map(({ kind, id, incidentId }) => ({ kind, id, incidentId })),
     });
   }
-  return items.sort(
-    (a, b) => b.evidence.noteCount - a.evidence.noteCount || a.key.localeCompare(b.key)
+  return found.sort(
+    (a, b) => b.noteCount - a.noteCount || a.templateHash.localeCompare(b.templateHash)
   );
 }
 
@@ -291,15 +296,26 @@ export interface RunbookDraft {
   };
 }
 
+/** What the viewer may read of a missing-runbook suggestion, resolved on read. */
+export interface ResolvedProblemNotes {
+  /** Masked incident title of the problem; empty when no readable incident carries it. */
+  template: string;
+  notes: readonly string[];
+}
+
 /**
  * A draft runbook for a missing-runbook suggestion: one manual step per extracted action, nothing that
  * can execute. It is only ever saved as a draft; a person edits and publishes it in the runbook editor.
+ * Built only from the notes the viewer may read.
  */
-export function draftRunbookFromSuggestion(
-  evidence: Pick<MissingRunbookEvidence, 'template' | 'noteCount' | 'sampleNotes' | 'steps'>,
+export function draftRunbookFromNotes(
+  resolved: ResolvedProblemNotes,
   serviceName: string
 ): RunbookDraft {
-  const name = (evidence.template.replace(/\s+/g, ' ').trim() || 'Suggested runbook').slice(0, 120);
+  const steps = extractImperativeSteps(resolved.notes);
+  const name = (
+    resolved.template.replace(/\s+/g, ' ').trim() || `Suggested runbook for ${serviceName}`
+  ).slice(0, 120);
   const slug =
     name
       .toLowerCase()
@@ -311,18 +327,18 @@ export function draftRunbookFromSuggestion(
     name,
     slug,
     description: [
-      `Drafted from ${evidence.noteCount} hand-written resolution notes on ${serviceName}. Review every step before publishing.`,
-      ...evidence.sampleNotes.map(note => `- ${note}`),
+      `Drafted from ${resolved.notes.length} hand-written resolution notes on ${serviceName}. Review every step before publishing.`,
+      ...resolved.notes.slice(0, 3).map(note => `- ${note.replace(/\s+/g, ' ').slice(0, 200)}`),
     ]
       .join('\n')
       .slice(0, 5000),
     definition: {
-      steps: evidence.steps.map((step, index) => ({
+      steps: steps.map((step, index) => ({
         key: `step_${index + 1}`,
         name: step.name,
         type: 'MANUAL' as const,
         riskClass: 'READ_ONLY' as const,
-        description: `Mentioned in ${step.support} of ${evidence.noteCount} resolution notes.`,
+        description: `Mentioned in ${step.support} of ${resolved.notes.length} resolution notes.`,
         config: {},
       })),
     },
