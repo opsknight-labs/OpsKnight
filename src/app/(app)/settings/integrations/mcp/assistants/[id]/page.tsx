@@ -1,3 +1,4 @@
+import { requirePageAccess } from '@/lib/access/server';
 import { notFound } from 'next/navigation';
 import McpAssistantDetail from '@/components/settings/mcp/McpAssistantDetail';
 import { personLabel } from '@/components/settings/mcp/sections/McpConnectionsSection';
@@ -22,6 +23,7 @@ function safeDecode(value: string) {
 
 /** One assistant, for administrators. Everyone else, and unknown ids, get "not found". */
 export default async function McpAssistantPage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/settings/integrations/mcp/assistants/[id]');
   const permissions = await loadMcpPagePermissions();
   if (!permissions.authenticated || !permissions.isAdmin) notFound();
   const viewer = await loadMcpViewer(permissions);
