@@ -11,6 +11,8 @@ interface MetricCardProps {
   variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger';
   className?: string;
   children?: React.ReactNode;
+  /** Rendered below the card body, outside its link, so it may hold its own controls. */
+  footer?: React.ReactNode;
   tooltip?: string;
   href?: string;
 }
@@ -26,6 +28,7 @@ function MetricCard({
   variant = 'default',
   className = '',
   children,
+  footer,
   tooltip,
   href,
 }: MetricCardProps) {
@@ -110,6 +113,7 @@ function MetricCard({
           {children}
         </>
       )}
+      {footer}
     </article>
   );
 }

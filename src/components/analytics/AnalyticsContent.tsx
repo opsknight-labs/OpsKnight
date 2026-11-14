@@ -8,6 +8,11 @@ import { INCIDENT_METRIC_DEFINITIONS, metricDefinitionTooltip } from '@/lib/metr
 import { logger } from '@/lib/logger';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import MetricCard from '@/components/analytics/MetricCard';
+import MetricChangeWhy from '@/components/analytics/MetricChangeWhy';
+import {
+  loadMetricChanges,
+  type MetricChanges,
+} from '@/lib/intelligence/helpers/metric-change-loader';
 import MetricIcon from '@/components/analytics/MetricIcon';
 import GaugeChart from '@/components/analytics/GaugeChart';
 import LineChart from '@/components/analytics/LineChart';
@@ -110,6 +115,11 @@ export default async function AnalyticsContent({
   windowDays,
   userTimeZone,
 }: Props) {
+  // "Why did this change" comes from per-service rollups, which only answer the unfiltered or team view.
+  const changesPromise: Promise<MetricChanges> =
+    serviceId || assigneeId || statusFilter || urgencyFilter
+      ? Promise.resolve({})
+      : loadMetricChanges(actor, { windowDays, teamId }).catch(() => ({}));
   const metrics = await calculateActorSLAMetrics(actor, {
     teamId,
     serviceId,
@@ -255,6 +265,17 @@ export default async function AnalyticsContent({
   };
 
   const previousPeriodAvailable = metrics.previousPeriod.available !== false;
+  const changes = metrics.isClipped ? {} : await changesPromise;
+  // Shown only when the rollups agree with the card's own direction, so the line never contradicts it.
+  const why = (metric: keyof MetricChanges, delta: number | null) => {
+    // eslint-disable-next-line security/detect-object-injection -- metric is a closed union
+    const change = changes[metric];
+    if (!change || delta === null || delta === 0 || delta > 0 !== (change.direction === 'up'))
+      return undefined;
+    return (
+      <MetricChangeWhy metric={metric} line={change.line} windowDays={windowDays} teamId={teamId} />
+    );
+  };
   const incidentDelta = previousPeriodAvailable
     ? getDelta(metrics.totalIncidents, metrics.previousPeriod.totalIncidents)
     : null;
@@ -416,6 +437,7 @@ export default async function AnalyticsContent({
           variant={incidentDelta !== null && incidentDelta > 0 ? 'warning' : 'default'}
           icon={<MetricIcon type="incidents" />}
           href={periodIncidentHref()}
+          footer={why('incidents', incidentDelta)}
           tooltip={metricDefinitionTooltip(
             INCIDENT_METRIC_DEFINITIONS.totalIncidents,
             `Last ${windowLabelDays} days`
@@ -448,6 +470,7 @@ export default async function AnalyticsContent({
           trendValue={formatDelta(mttaDelta)}
           variant="primary"
           icon={<MetricIcon type="MTTA" />}
+          footer={why('mtta', mttaDelta)}
           tooltip={metricDefinitionTooltip(
             INCIDENT_METRIC_DEFINITIONS.mtta,
             `Last ${windowLabelDays} days`
@@ -473,6 +496,7 @@ export default async function AnalyticsContent({
           trendValue={formatDelta(mttrDelta)}
           variant="primary"
           icon={<MetricIcon type="MTTR" />}
+          footer={why('mttr', mttrDelta)}
           tooltip={metricDefinitionTooltip(
             INCIDENT_METRIC_DEFINITIONS.mttr,
             `Last ${windowLabelDays} days`
@@ -495,10 +519,7 @@ export default async function AnalyticsContent({
           detail="SLA compliance"
           variant={
             getComplianceStatus(metrics.resolveCompliance) as
-              | 'success'
-              | 'warning'
-              | 'danger'
-              | 'default'
+              'success' | 'warning' | 'danger' | 'default'
           }
           icon={<Shield className="w-5 h-5" />}
           tooltip={metricDefinitionTooltip(
@@ -530,10 +551,7 @@ export default async function AnalyticsContent({
           detail="Within target"
           variant={
             getComplianceStatus(metrics.ackCompliance) as
-              | 'success'
-              | 'warning'
-              | 'danger'
-              | 'default'
+              'success' | 'warning' | 'danger' | 'default'
           }
           icon={<Shield className="w-5 h-5" />}
           tooltip={metricDefinitionTooltip(

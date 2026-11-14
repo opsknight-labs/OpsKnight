@@ -12,6 +12,8 @@ export const AI_OUTPUT_TOKENS = {
   'squire.classify': 64,
   'squire.plan': 600,
   'squire.diagnose': 1_200,
+  // Two sentences under an analytics card.
+  'analytics.metric-change': 120,
 } as const;
 
 export type AiFeature = keyof typeof AI_OUTPUT_TOKENS;
