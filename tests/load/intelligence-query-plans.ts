@@ -51,6 +51,11 @@ const EXPECTED_INDEXES: Record<string, string[]> = {
   opsAutomationRollup: ['IncidentAutomationDecision_serviceId_createdAt_idx'],
   opsRollupRead: ['idx_metric_rollup_subject'],
   opsIntegrationHealth: ['idx_alert_by_service'],
+  opsRepeatCauseProblems: [
+    'idx_incident_fingerprint_service_recent',
+    'idx_incident_fingerprint_problem',
+  ],
+  opsRepeatCauseOverdue: ['idx_incident_fingerprint_problem', 'ActionItem_incidentId_status_idx'],
   opsDueScopes: ['OpsInsightScopeState_pkey', 'idx_ops_insight_scope_due'],
 };
 
