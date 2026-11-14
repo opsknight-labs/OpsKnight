@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import AuditFilters from '@/components/audit/AuditFilters';
 import AuditLogTable from '@/components/audit/AuditLogTable';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,7 @@ function serializeAuditDetails(details: Prisma.JsonValue | null): string {
 }
 
 export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
+  await requirePageAccess('/audit');
   const currentUser = await assertAuditorOrAdmin();
 
   const awaitedParams = await searchParams;

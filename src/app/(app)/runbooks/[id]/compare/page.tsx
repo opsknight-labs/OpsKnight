@@ -27,6 +27,7 @@ import {
 } from '@/components/runbooks/detail/VersionStepDiff';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,7 @@ export default async function VersionComparePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ base?: string; next?: string; versionsPage?: string }>;
 }) {
+  await requirePageAccess('/runbooks/[id]/compare');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
   const query = await searchParams;

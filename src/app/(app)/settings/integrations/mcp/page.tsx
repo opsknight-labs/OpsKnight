@@ -85,6 +85,7 @@ import {
   loadMcpViewer,
 } from './queries';
 import { getOidcConfig } from '@/lib/oidc-config';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -119,6 +120,7 @@ export default async function McpSettings({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/settings/integrations/mcp');
   // Signed-in users see their own MCP access; every admin-only read below is gated on isAdmin.
   const permissions = await loadMcpPagePermissions();
   const isAdmin = permissions.isAdmin;

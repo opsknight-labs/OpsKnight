@@ -28,6 +28,7 @@ import {
   revokeMcpConnectionsForUser,
 } from '@/app/(app)/settings/integrations/mcp/actions';
 import { loadMcpConnectionActivity } from '@/app/(app)/settings/integrations/mcp/activity-actions';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -51,6 +52,7 @@ function formatLocalTimeInTz(timeZone: string): string {
 }
 
 export default async function UserDetailPage({ params, searchParams }: UserDetailPageProps) {
+  await requirePageAccess('/users/[id]');
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const defaultTab = resolvedSearchParams?.tab || 'overview';

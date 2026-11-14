@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function ServiceSettingsRedirectPage({
   params,
@@ -7,6 +8,7 @@ export default async function ServiceSettingsRedirectPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ saved?: string; error?: string }>;
 }) {
+  await requirePageAccess('/services/[id]/settings');
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const queryString = new URLSearchParams();

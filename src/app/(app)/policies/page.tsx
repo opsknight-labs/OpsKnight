@@ -14,14 +14,22 @@ import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-pars
 import type { PolicyDirectoryItem } from '@/components/policies/PolicyDirectoryCard';
 
 import { Prisma } from '@prisma/client';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 export default async function PoliciesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string; page?: string; q?: string; search?: string; status?: string }>;
+  searchParams?: Promise<{
+    error?: string;
+    page?: string;
+    q?: string;
+    search?: string;
+    status?: string;
+  }>;
 }) {
+  await requirePageAccess('/policies');
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
     redirect('/login?callbackUrl=/policies');

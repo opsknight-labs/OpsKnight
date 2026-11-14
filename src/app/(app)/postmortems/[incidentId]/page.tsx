@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function PostmortemPage({
   params,
@@ -22,6 +23,7 @@ export default async function PostmortemPage({
   params: Promise<{ incidentId: string }>;
   searchParams?: Promise<{ edit?: string }>;
 }) {
+  await requirePageAccess('/postmortems/[incidentId]');
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
     redirect('/login');

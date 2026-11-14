@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Prisma, RunbookPreviewAuthorization } from '@prisma/client';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
+import { effectiveAccessSelect } from '@/lib/access/effective';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { enforceV2Authorization } from '@/lib/api-v2/rbac';
@@ -27,6 +28,7 @@ export async function assertPreviewReviewer(
       status: true,
       tokenVersion: true,
       teamMemberships: { select: { teamId: true } },
+      ...effectiveAccessSelect(),
     },
   });
   requireReview(

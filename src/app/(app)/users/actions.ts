@@ -13,7 +13,7 @@ import { setTeamMembership, teamMemberInput } from '@/lib/teams/administration';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
-import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf, getCurrentUser } from '@/lib/rbac';
+import { assertAdmin, assertTeamManager, assertNotSelf, getCurrentUser } from '@/lib/rbac';
 import { isAppRole } from '@/lib/authorization';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
@@ -251,7 +251,7 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 
   let currentUser: { id: string; role?: string } | null = null;
   try {
-    currentUser = await assertAdminOrTeamOwner(teamId);
+    currentUser = await assertTeamManager(teamId);
   } catch (error) {
     return {
       error:

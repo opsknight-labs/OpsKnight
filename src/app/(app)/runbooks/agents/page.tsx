@@ -27,6 +27,7 @@ import {
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
 } from '@/components/runbooks/RunbookPagination';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -52,6 +53,7 @@ export default async function RunbookAgentsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/runbooks/agents');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const rawParams = await searchParams;
   const legacyTarget = legacyFleetRedirect(rawParams);

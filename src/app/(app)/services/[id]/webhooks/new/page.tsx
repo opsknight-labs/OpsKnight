@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { ChevronLeft, AlertCircle, Webhook } from 'lucide-react';
 import { assertCanModifyService } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function NewWebhookPage({
   params,
@@ -23,6 +24,7 @@ export default async function NewWebhookPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ error?: string }>;
 }) {
+  await requirePageAccess('/services/[id]/webhooks/new');
   const { id } = await params;
   await assertCanModifyService(id);
   const resolvedSearchParams = await searchParams;

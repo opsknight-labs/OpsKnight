@@ -18,10 +18,12 @@ import {
 import { HealthDetailCards } from '@/components/runbooks/health/HealthDetailCards';
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 export default async function RunbookHealthPage() {
+  await requirePageAccess('/runbooks/health');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const user = await getCurrentUser();
   const userTimeZone = getUserTimeZone(user);

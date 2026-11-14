@@ -227,9 +227,8 @@ describe('incident_reopen and incident_unsnooze', () => {
       tool => tool.name
     );
     expect(listed).not.toContain('incident_reopen');
-    // A session that can change nothing is not offered the generic change tool either (W2), so
-    // a call through it is refused before any authority is used.
-    expect(listed).not.toContain('call_operation');
+    // Users may now work their own incidents (acknowledge, note, escalate, resolve), so the
+    // generic change tool can be listed; reopening still needs incident management and is refused.
     const result = await call(outsider.bearer, 'call_operation', {
       operationId: 'reopenIncident',
       args: { path: { id }, body: {}, idempotencyKey: key() },

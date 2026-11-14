@@ -2,6 +2,9 @@
 export const USER_REFERENCE_POLICY = {
   assignedIncidents: { deactivate: 'REPORT', delete: 'BLOCK' },
   teamMemberships: { deactivate: 'REPORT', delete: 'BLOCK' },
+  customRole: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  accessGrants: { deactivate: 'REVOKE', delete: 'CASCADE' },
+  accessRequests: { deactivate: 'KEEP', delete: 'CASCADE' },
   onCallShifts: { deactivate: 'REPORT', delete: 'BLOCK' },
   escalationRules: { deactivate: 'REPORT', delete: 'BLOCK' },
   incidentNotes: { deactivate: 'KEEP', delete: 'SET_NULL' },

@@ -22,6 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/aler
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -92,6 +93,7 @@ type ServicesPageProps = {
 };
 
 export default async function ServicesPage({ searchParams }: ServicesPageProps) {
+  await requirePageAccess('/services');
   const params = await searchParams;
   const searchQuery = typeof params?.search === 'string' ? params.search.trim() : '';
   const statusFilter = typeof params?.status === 'string' ? params.status : 'all';
@@ -346,9 +348,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
     const dynamicStatus = (slaData?.dynamicStatus || service.status || 'OPERATIONAL') as
-      | 'OPERATIONAL'
-      | 'DEGRADED'
-      | 'CRITICAL';
+      'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
     const openIncidentCount = slaData?.activeCount ?? 0;
     const hasCritical = (slaData?.criticalCount ?? 0) > 0;
     const incidentCount = slaData?.count ?? 0;

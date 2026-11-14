@@ -466,9 +466,9 @@ test.describe.serial('dashboard live incidents', () => {
   });
 
   test('quick actions respect permissions and update optimistically', async () => {
-    // A scoped USER never sees management actions.
+    // A scoped USER may acknowledge their own team's incidents but never sees management actions.
     await openDashboard(alpha.page);
-    await expect(alpha.page.getByTestId('live-ack')).toHaveCount(0);
+    await expect(alpha.page.getByTestId('live-ack').first()).toBeVisible();
     await expect(alpha.page.getByTestId('live-assign-me')).toHaveCount(0);
     await expect(alpha.page.getByTestId('live-assign-ghost')).toHaveCount(0);
 

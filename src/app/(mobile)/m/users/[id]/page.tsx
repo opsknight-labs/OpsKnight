@@ -10,6 +10,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { assertCanViewUser } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ type PageProps = {
 };
 
 export default async function MobileUserDetailPage({ params }: PageProps) {
+  await requirePageAccess('/m/users/[id]');
   const { id } = await params;
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', `/m/users/${id}`));

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
-import { assertAdminOrTeamOwner } from '@/lib/rbac';
+import { assertTeamManager } from '@/lib/rbac';
 import { GET } from '@/app/api/teams/[id]/available-users/route';
 
 vi.mock('@/lib/prisma', () => ({
@@ -13,7 +13,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 vi.mock('@/lib/rbac', () => ({
-  assertAdminOrTeamOwner: vi.fn(),
+  assertTeamManager: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', async importOriginal => {
@@ -27,7 +27,7 @@ vi.mock('@/lib/logger', async importOriginal => {
 describe('team available-user directory search', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(assertAdminOrTeamOwner).mockResolvedValue({ id: 'admin-1' } as never);
+    vi.mocked(assertTeamManager).mockResolvedValue({ id: 'admin-1' } as never);
     vi.mocked(prisma.team.findUnique).mockResolvedValue({ id: 'team-1' } as never);
   });
 
@@ -47,7 +47,7 @@ describe('team available-user directory search', () => {
     expect(response.status).toBe(200);
     expect(body.users).toHaveLength(2);
     expect(body.hasMore).toBe(true);
-    expect(assertAdminOrTeamOwner).toHaveBeenCalledWith('team-1');
+    expect(assertTeamManager).toHaveBeenCalledWith('team-1');
     expect(prisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -60,7 +60,7 @@ describe('team available-user directory search', () => {
   });
 
   it('does not expose the directory to unauthorized users', async () => {
-    vi.mocked(assertAdminOrTeamOwner).mockRejectedValue(
+    vi.mocked(assertTeamManager).mockRejectedValue(
       new AuthorizationError(
         'Unauthorized. Admin or Team Owner access required.',
         CAPABILITIES.OPERATIONS_MANAGE

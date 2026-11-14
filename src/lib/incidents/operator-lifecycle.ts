@@ -3,7 +3,12 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import type { IncidentStatus } from '@prisma/client';
 
-import { assertCanAcknowledgeIncident, assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
+import {
+  assertCanAcknowledgeIncident,
+  assertCanResolveIncident,
+  assertResponderOrAbove,
+  getCurrentUser,
+} from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
 import type { IdempotencyContext } from '@/lib/idempotency';
 import type { IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
@@ -71,7 +76,7 @@ export async function resolveIncidentWithNote(
   source: OperatorLifecycleSource = 'WEB',
   idempotency?: IdempotencyContext
 ): Promise<{ replayed: boolean }> {
-  await assertResponderOrAbove();
+  await assertCanResolveIncident(id);
 
   const trimmedResolution = resolution?.trim();
   if (!trimmedResolution || trimmedResolution.length < 10) {

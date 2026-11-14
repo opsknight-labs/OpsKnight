@@ -14,6 +14,7 @@ import { activeIncidentStatuses, mutedIncidentStatuses } from '@/lib/incident-st
 import { normalizeIncidentStatus } from '@/lib/incidents-query';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,7 @@ export default async function MobileIncidentsPage(props: {
     createdBefore?: string;
   }>;
 }) {
+  await requirePageAccess('/m/incidents');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/incidents'));
 

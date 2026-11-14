@@ -17,6 +17,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,7 @@ type PageProps = {
 };
 
 export default async function MobileServiceDetailPage({ params, searchParams }: PageProps) {
+  await requirePageAccess('/m/services/[id]');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/services'));
 

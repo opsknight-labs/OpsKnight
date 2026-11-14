@@ -82,15 +82,23 @@ describe('authorization policy matrix', () => {
   it.each([
     ['acknowledge', AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE],
     ['add a note to', AUTHORIZATION_ACTIONS.INCIDENT_NOTE],
-  ])('keeps User and Auditor read-only when attempting to %s an incident', (_name, action) => {
-    expect(authorize({ actor: actor(), action, resource: incident() })).toMatchObject({
-      allowed: false,
-      reason: 'MISSING_CAPABILITY',
-    });
-    expect(
-      authorize({ actor: actor({ role: 'AUDITOR' }), action, resource: incident() })
-    ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
-  });
+  ])(
+    'limits Users to their own incidents and keeps Auditors read-only when attempting to %s an incident',
+    (_name, action) => {
+      expect(
+        authorize({ actor: actor(), action, resource: incident({ serviceTeamId: 'team-other' }) })
+      ).toMatchObject({
+        allowed: false,
+        reason: 'RESOURCE_OUT_OF_SCOPE',
+      });
+      expect(
+        authorize({ actor: actor(), action, resource: { ...incident(), assigneeId: actor().id } })
+      ).toMatchObject({ allowed: true, scope: 'resource' });
+      expect(
+        authorize({ actor: actor({ role: 'AUDITOR' }), action, resource: incident() })
+      ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
+    }
+  );
 
   it('requires API scope and user permission together', () => {
     const apiActor = actor({

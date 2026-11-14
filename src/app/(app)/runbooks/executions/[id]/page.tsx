@@ -50,10 +50,12 @@ import { cancelExecutionAction } from '../actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { KeyValueGrid, SectionCard } from '@/components/runbooks/ui/primitives';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 export default async function ExecutionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/runbooks/executions/[id]');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
   const [user, permissions] = await Promise.all([getCurrentUser(), getUserPermissions()]);

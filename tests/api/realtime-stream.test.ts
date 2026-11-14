@@ -1,3 +1,4 @@
+import { getRoleCapabilities } from '@/lib/authorization';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
@@ -85,6 +86,10 @@ describe('API Route - Realtime Stream', () => {
     const currentUser: Awaited<ReturnType<typeof getCurrentUser>> = {
       id: 'user-1',
       role: 'ADMIN',
+      baseRole: 'ADMIN',
+      capabilities: [...getRoleCapabilities('ADMIN')],
+      customRoleName: null,
+      elevatedIncidentIds: [],
       email: 'admin@example.com',
       name: 'Admin User',
       timeZone: 'UTC',
@@ -138,6 +143,10 @@ describe('API Route - Realtime Stream', () => {
     vi.mocked(getCurrentUser).mockResolvedValue({
       id: 'user-1',
       role: 'ADMIN',
+      baseRole: 'ADMIN',
+      capabilities: [...getRoleCapabilities('ADMIN')],
+      customRoleName: null,
+      elevatedIncidentIds: [],
       email: 'admin@example.com',
       name: 'Admin',
       timeZone: 'UTC',
@@ -180,6 +189,10 @@ describe('API Route - Realtime Stream', () => {
   const adminUser = {
     id: 'user-1',
     role: 'ADMIN',
+    baseRole: 'ADMIN',
+    capabilities: [...getRoleCapabilities('ADMIN')],
+    customRoleName: null,
+    elevatedIncidentIds: [],
     email: 'admin@example.com',
     name: 'Admin',
     timeZone: 'UTC',

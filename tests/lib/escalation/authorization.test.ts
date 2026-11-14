@@ -76,20 +76,31 @@ describe('authorizeIncidentEscalation', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('does not grant escalation authority to the incident assignee', async () => {
+  it('lets the incident assignee escalate their own incident', async () => {
     vi.mocked(prisma.incident.findUnique).mockResolvedValue(
       incidentResource({ assigneeId: 'user-1' }) as never
     );
 
     await expect(
       authorizeIncidentEscalation({ actorId: 'user-1', incidentId: 'inc-1' })
-    ).rejects.toBeInstanceOf(AuthorizationError);
+    ).resolves.toBeUndefined();
   });
 
-  it('does not grant escalation authority to a service team member', async () => {
+  it('lets a service team member escalate a team incident', async () => {
     mocks.resolveUserActor.mockResolvedValue(actor({ teamIds: ['team-1'] }));
     vi.mocked(prisma.incident.findUnique).mockResolvedValue(
       incidentResource({ service: { teamId: 'team-1' } }) as never
+    );
+
+    await expect(
+      authorizeIncidentEscalation({ actorId: 'user-1', incidentId: 'inc-1' })
+    ).resolves.toBeUndefined();
+  });
+
+  it('never lets an auditor escalate, even when assigned', async () => {
+    mocks.resolveUserActor.mockResolvedValue(actor({ role: 'AUDITOR', teamIds: ['team-1'] }));
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue(
+      incidentResource({ assigneeId: 'user-1', service: { teamId: 'team-1' } }) as never
     );
 
     await expect(

@@ -4,6 +4,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/rbac', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/rbac')>()),
   assertAdminOrTeamOwner: async () => ({ id: identity.id, role: 'ADMIN' }),
+  assertTeamManager: async () => ({ id: identity.id, role: 'ADMIN' }),
 }));
 import { assignServicesToTeam } from '@/app/(app)/teams/actions';
 import { assignTeamServices } from '@/lib/teams/service-commands';

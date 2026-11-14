@@ -49,6 +49,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Calendar, CheckCircle2, Clock3, Info, Layers3, ShieldAlert, Users } from 'lucide-react';
+import { denyResourceAccess, requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -92,6 +93,7 @@ export default async function ScheduleDetailPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ history?: string; tab?: string }>;
 }) {
+  await requirePageAccess('/schedules/[id]');
   const { id } = await params;
   const query = await searchParams;
   const now = new Date();
@@ -103,6 +105,7 @@ export default async function ScheduleDetailPage({
     getScheduleDetails(id),
   ]);
 
+  if (!authResult && schedule) await denyResourceAccess({ resource: 'schedule', id });
   if (!authResult || !schedule) {
     notFound();
   }

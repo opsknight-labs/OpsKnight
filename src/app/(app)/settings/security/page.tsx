@@ -16,8 +16,10 @@ import Link from 'next/link';
 import { ShieldCheck, KeyRound, Fingerprint, ExternalLink } from 'lucide-react';
 import McpConnectEntry from '@/components/settings/mcp/McpConnectEntry';
 import { loadMcpInForce } from '@/lib/mcp/core/policy-in-force';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function SecuritySettingsPage() {
+  await requirePageAccess('/settings/security');
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
 

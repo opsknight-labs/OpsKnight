@@ -43,6 +43,8 @@ import {
 } from 'lucide-react';
 import EditTeamForm from './EditTeamForm';
 import DeleteTeamCard from './DeleteTeamCard';
+import { denyResourceAccess, requirePageAccess } from '@/lib/access/server';
+import { CAPABILITIES } from '@/lib/authorization';
 
 type TeamDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -50,11 +52,14 @@ type TeamDetailPageProps = {
 };
 
 export default async function TeamDetailPage({ params, searchParams }: TeamDetailPageProps) {
+  await requirePageAccess('/teams/[id]');
   const { id } = await params;
   const query = await searchParams;
   try {
     await assertCanViewTeam(id);
   } catch {
+    if (await prisma.team.count({ where: { id } }))
+      await denyResourceAccess({ resource: 'team', id });
     notFound();
   }
 
@@ -126,13 +131,16 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
   }
 
   const ownerCount = team.members.filter(m => m.role === 'OWNER').length;
-  const isTeamOwner =
-    permissions.role !== 'AUDITOR' &&
-    team.members.some(m => m.userId === permissions.id && m.role === 'OWNER');
-  const canUpdateTeam = permissions.isAdmin || isTeamOwner;
+  // Team owners and team admins manage the team; only owners (and org admins) manage owners.
+  const myTeamRole = permissions.capabilities.includes(CAPABILITIES.TEAM_ADMINISTER_SCOPED)
+    ? team.members.find(m => m.userId === permissions.id)?.role
+    : undefined;
+  const isTeamOwner = myTeamRole === 'OWNER';
+  const isTeamManager = isTeamOwner || myTeamRole === 'ADMIN';
+  const canUpdateTeam = permissions.isAdmin || isTeamManager;
   const canDeleteTeam = permissions.isAdmin;
-  const canManageMembers = permissions.isAdmin || isTeamOwner;
-  const canManageNotifications = permissions.isAdmin || isTeamOwner;
+  const canManageMembers = permissions.isAdmin || isTeamManager;
+  const canManageNotifications = permissions.isAdmin || isTeamManager;
   const canAssignOwnerAdmin = permissions.isAdmin || isTeamOwner;
 
   const [users, allServices, auditLogs] = await Promise.all([

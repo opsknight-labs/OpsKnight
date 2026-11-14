@@ -26,6 +26,9 @@ import PwaInstallCard from '@/components/mobile/PwaInstallCard';
 import MobileSignOutButton from '@/components/mobile/MobileSignOutButton';
 import { Card } from '@/components/ui/shadcn/card';
 import { APP_VERSION } from '@/lib/constants';
+import { useEffectiveCapabilities } from '@/components/access/AccessProvider';
+import { canAccessPath } from '@/lib/access/pages';
+import { isAppRole } from '@/lib/authorization';
 
 type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
@@ -34,7 +37,6 @@ type NavigationItem = {
   label: string;
   description?: string;
   icon: IconComponent;
-  requiresRole?: readonly string[];
 };
 
 type MobileMoreContentProps = {
@@ -65,7 +67,6 @@ const operations: NavigationItem[] = [
     label: 'Escalation policies',
     description: 'Escalation paths',
     icon: ShieldCheck,
-    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
   {
     href: '/m/postmortems',
@@ -85,7 +86,6 @@ const operations: NavigationItem[] = [
     label: 'Users',
     description: 'Directory and roles',
     icon: Users,
-    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
 ];
 
@@ -154,9 +154,9 @@ export default function MobileMoreContent({
 }: MobileMoreContentProps) {
   const { getAvatar } = useUserAvatarContextSafe();
   const avatarUrl = userId ? getAvatar(userId, gender, name, avatarUrlProp) : avatarUrlProp;
-  const authorizedOperations = operations.filter(
-    item => !item.requiresRole || item.requiresRole.includes(role.toUpperCase())
-  );
+  const upperRole = role.toUpperCase();
+  const effective = useEffectiveCapabilities({ role: isAppRole(upperRole) ? upperRole : 'USER' });
+  const authorizedOperations = operations.filter(item => canAccessPath(item.href, effective));
 
   return (
     <div className="responsive-page space-y-5">

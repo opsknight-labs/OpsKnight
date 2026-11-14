@@ -37,6 +37,7 @@ import {
   groupNavItemsBySection,
 } from '@/config/navigation';
 import { useRealtime } from '@/hooks/useRealtime';
+import { useAccess } from '@/components/access/AccessProvider';
 
 // Status page shape from sidebar-stats API
 export interface SidebarStatusPage {
@@ -91,7 +92,10 @@ export default function Sidebar({
   // Prefer client session data for reactive updates
   const currentName = session?.user?.name || userName;
   const currentEmail = session?.user?.email || userEmail;
-  const currentRole = (session?.user as { role?: string } | undefined)?.role || userRole;
+  // Effective access from the database (role + custom role + temporary grants). The session
+  // token role is only a fallback before the access snapshot is available.
+  const { snapshot: access } = useAccess();
+  const currentRole = access?.role ?? userRole;
   const currentGender = (session?.user as { gender?: string } | undefined)?.gender || userGender;
 
   const activeCount =
@@ -124,9 +128,9 @@ export default function Sidebar({
 
   // Centralized filtered and grouped items
   const groupedItems = useMemo(() => {
-    const authorized = getAuthorizedNavItems(currentRole);
+    const authorized = getAuthorizedNavItems(access?.capabilities ?? currentRole);
     return groupNavItemsBySection(authorized);
-  }, [currentRole]);
+  }, [access?.capabilities, currentRole]);
 
   // Determine the URL for a status page
   const statusPageHref = (page: SidebarStatusPage) => {

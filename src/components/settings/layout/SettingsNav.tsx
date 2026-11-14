@@ -27,6 +27,8 @@ import {
 import { SETTINGS_NAV_SECTIONS } from '@/components/settings/navConfig';
 import { cn } from '@/lib/utils';
 import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import { useEffectiveCapabilities } from '@/components/access/AccessProvider';
+import { canAccessPath } from '@/lib/access/pages';
 
 type Props = {
   isAdmin?: boolean;
@@ -71,16 +73,9 @@ export default function SettingsNav({
 }: Props) {
   const pathname = usePathname();
 
-  const isItemDisabled = (item: {
-    requiresAdmin?: boolean;
-    requiresAdminOrAuditor?: boolean;
-    requiresResponder?: boolean;
-  }) => {
-    if (item.requiresAdmin && !isAdmin) return true;
-    if (item.requiresAdminOrAuditor && !isAdmin && !isAuditor) return true;
-    if (item.requiresResponder && !isResponderOrAbove) return true;
-    return false;
-  };
+  const capabilities = useEffectiveCapabilities({ isAdmin, isAuditor, isResponderOrAbove });
+  // Hidden when the shared page rule denies it, so the menu matches server enforcement.
+  const isItemDisabled = (item: { href: string }) => !canAccessPath(item.href, capabilities);
 
   return (
     <nav

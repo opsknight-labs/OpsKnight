@@ -96,6 +96,7 @@ import {
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { INTEGRATION_TYPES, IntegrationType } from '@/components/service/integration-types';
+import { denyResourceAccess, requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -190,6 +191,7 @@ function getWebhookUrl(
 }
 
 export default async function ServiceDetailPage({ params, searchParams }: ServiceDetailPageProps) {
+  await requirePageAccess('/services/[id]');
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const requestedPage = parsePageParam(resolvedSearchParams?.page);
@@ -206,6 +208,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   try {
     currentUser = await assertCanViewService(id);
   } catch {
+    if (await prisma.service.count({ where: { id } }))
+      await denyResourceAccess({ resource: 'service', id });
     notFound();
   }
   const [actor, user] = await Promise.all([getCurrentAuthorizationActor(), getCurrentUser()]);

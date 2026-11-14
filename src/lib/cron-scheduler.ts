@@ -597,6 +597,21 @@ async function runOnce() {
     const notificationCapacityCleanup = await cleanupExpiredNotificationCapacityData();
     const { expireDuePrivacyExportArtifacts } = await import('./privacy/export/artifact');
     const privacyExportArtifactsExpired = await expireDuePrivacyExportArtifacts();
+    // Access control maintenance: revert ended temporary access, expire stale requests, and
+    // start scheduled access reviews. Enforcement never depends on this (checked per request).
+    let accessMaintenance: Record<string, unknown> | null = null;
+    try {
+      const { processEndedAccessGrants } = await import('./access/grants');
+      const { expireStaleAccessRequests } = await import('./access/requests');
+      const { maybeStartScheduledAccessReview } = await import('./access/admin');
+      accessMaintenance = {
+        grants: await processEndedAccessGrants(),
+        requests: await expireStaleAccessRequests(),
+        review: await maybeStartScheduledAccessReview(),
+      };
+    } catch (error) {
+      logger.warn('[Cron] Access-control maintenance failed', { error });
+    }
     let jobsCleaned = false;
     if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
       const { default: automationStore } = await import('./prisma');
@@ -611,6 +626,7 @@ async function runOnce() {
       rateLimitCleanup,
       notificationCapacityCleanup,
       privacyExportArtifactsExpired,
+      accessMaintenance,
       mcpCleanup,
       jobsCleaned,
     });

@@ -12,11 +12,13 @@ import { getTeamsGrantedRscPermissions } from '@/lib/microsoft-teams/client';
 import { getMicrosoftTeamsHealth } from '@/lib/microsoft-teams/health';
 import { getWarRoomOperationalSnapshots } from '@/lib/war-room/operations/diagnostics';
 import { summarizeOperationalHealth } from '@/lib/war-room/operations/summary';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function MicrosoftTeamsIntegrationRoute() {
+  await requirePageAccess('/settings/integrations/microsoft-teams');
   const permissions = await getUserPermissions();
   if (!permissions) redirect('/login');
   if (!permissions.isAdmin) redirect('/settings');

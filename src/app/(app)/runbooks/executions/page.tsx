@@ -28,6 +28,7 @@ import {
 import { RunbookExecutionStatus, type Prisma } from '@prisma/client';
 import { runbookExecutionFilterSchema } from '@/lib/runbooks/schemas';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -36,6 +37,7 @@ export default async function RunbookExecutionsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/runbooks/executions');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const [user, permissions] = await Promise.all([getCurrentUser(), getUserPermissions()]);
   const userTimeZone = getUserTimeZone(user);

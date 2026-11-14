@@ -14,6 +14,7 @@ import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { Users, Calendar, Flame, ShieldCheck } from 'lucide-react';
 import ConnectedChatOpsAccounts from '@/components/settings/ConnectedChatOpsAccounts';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -36,6 +37,7 @@ function formatLocalTimeInTz(timeZone: string): string {
 }
 
 export default async function ProfileSettingsPage({ searchParams }: ProfileSettingsPageProps) {
+  await requirePageAccess('/settings/profile');
   const resolvedSearchParams = await searchParams;
   const defaultTab = resolvedSearchParams?.tab || 'profile';
 

@@ -1,10 +1,12 @@
 import prisma from '@/lib/prisma';
 import MobileSchedulesClient from '@/components/mobile/MobileSchedulesClient';
 import { getViewableScheduleWhere } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobileSchedulesPage() {
+  await requirePageAccess('/m/schedules');
   const scheduleWhere = await getViewableScheduleWhere();
   const schedules = await prisma.onCallSchedule.findMany({
     where: scheduleWhere,
