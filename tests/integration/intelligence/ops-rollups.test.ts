@@ -142,6 +142,8 @@ describe('operations rollups', () => {
       [OPS_ROLLUPS.pagesPerUserHour]: 7,
       [OPS_ROLLUPS.runbookOutcome]: 7,
       [OPS_ROLLUPS.automationRuleMatch]: 7,
+      [OPS_ROLLUPS.pagesPerUserService]: 7,
+      [OPS_ROLLUPS.pagesPerService]: 7,
     });
     const range = { from: day(7), to: day(0) };
 
@@ -208,6 +210,8 @@ describe('operations rollups', () => {
       [OPS_ROLLUPS.pagesPerUserHour]: 0,
       [OPS_ROLLUPS.runbookOutcome]: 0,
       [OPS_ROLLUPS.automationRuleMatch]: 0,
+      [OPS_ROLLUPS.pagesPerUserService]: 0,
+      [OPS_ROLLUPS.pagesPerService]: 0,
     });
     expect(await db.metricRollup.count()).toBe(rows);
 
@@ -264,6 +268,16 @@ describe('operations rollup query plans', () => {
       OPS_ROLLUPS.automationRuleMatch,
       'IncidentAutomationDecision',
       /IncidentAutomationDecision_serviceId_createdAt_idx/,
+    ],
+    [
+      OPS_ROLLUPS.pagesPerUserService,
+      'Notification',
+      /idx_notification_created_cursor|idx_notification_category_created/,
+    ],
+    [
+      OPS_ROLLUPS.pagesPerService,
+      'Notification',
+      /idx_notification_created_cursor|idx_notification_category_created/,
     ],
   ] as const)('%s reads its day through an index', async (name, table, index) => {
     const source = OPS_ROLLUP_SOURCES[name];
