@@ -163,7 +163,7 @@ export async function purgeOpsInsights(
   deleted += await client.$executeRaw(Prisma.sql`
     DELETE FROM "MetricRollup" WHERE "id" IN (
       SELECT rollup."id" FROM "MetricRollup" rollup
-      WHERE rollup."name" = ${OPS_ROLLUPS.pagesPerUserHour}
+      WHERE rollup."name" IN (${OPS_ROLLUPS.pagesPerUserHour}, ${OPS_ROLLUPS.pagesPerUserService})
         AND NOT EXISTS (SELECT 1 FROM "User" person WHERE person."id" = rollup."subjectKey")
       LIMIT ${options.limit})`);
   return deleted;

@@ -13,6 +13,7 @@ import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
 import { updateOpsInsightSwitches } from '@/lib/intelligence/ops-insights/settings';
 import { resetOpsInsightsSchedule, runOpsInsights } from '@/lib/intelligence/ops-insights/handlers';
 import { loadNoiseOverview } from '@/lib/notification-noise/loader';
+import { purgeOpsInsights } from '@/lib/intelligence/ops-insights/store';
 
 const DAY = 86_400_000;
 const TODAY = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
@@ -167,14 +168,14 @@ describe('notification noise producers and the personal report', { timeout: 60_0
       ['USER', 'notification.noise', `low-value:${service.id}`, 'INFO'],
       ['USER', 'notification.noise', 'quiet-hours', 'INFO'],
     ]);
-    expect(JSON.stringify(rows)).not.toContain('payments');
+    expect(JSON.stringify(rows)).not.toContain(service.name);
     // Unchanged rollups cost no further writes.
     expect(await run(`USER:${person.id}`)).toBe('unchanged');
   });
 
   it('shows the report to the person, a team owner and admins, naming services under their own scope', async () => {
     const admin = await switchOn();
-    const { person, otherTeam } = await noisyPerson();
+    const { person, otherTeam, service } = await noisyPerson();
     await run(`USER:${person.id}`);
     const owner = await createTestUser({ role: 'USER' });
     await db.teamMember.create({ data: { teamId: otherTeam.id, userId: owner.id, role: 'OWNER' } });
@@ -183,13 +184,13 @@ describe('notification noise producers and the personal report', { timeout: 60_0
 
     const own = await loadNoiseOverview(await actor(person.id), person.id);
     expect(own?.report).toMatchObject({ pages: 20, acted: 0, autoResolved: 0 });
-    expect(own?.report.byService[0]).toMatchObject({ serviceName: 'payments', pages: 20 });
+    expect(own?.report.byService[0]).toMatchObject({ serviceName: service.name, pages: 20 });
     expect(own?.report.byHour[1].pages).toBe(20);
-    expect(own?.insights.map(item => item.key).sort()).toHaveLength(3);
+    expect(own?.insights).toHaveLength(3);
     expect(own?.bundleLowUrgencyPages).toBe(false);
 
     const asAdmin = await loadNoiseOverview(await actor(admin.id), person.id);
-    expect(asAdmin?.report.byService[0].serviceName).toBe('payments');
+    expect(asAdmin?.report.byService[0].serviceName).toBe(service.name);
 
     // The owner of another of the person's teams sees the numbers, not the name of a service they cannot read.
     const asOwner = await loadNoiseOverview(await actor(owner.id), person.id);
@@ -208,6 +209,37 @@ describe('notification noise producers and the personal report', { timeout: 60_0
     await expect(loadNoiseOverview(self, person.id)).resolves.toBeNull();
     await switchOn(false);
     await expect(loadNoiseOverview(self, person.id)).resolves.toBeNull();
-    expect(await run(`USER:${person.id}`)).not.toBe('computed');
+    await run(`USER:${person.id}`);
+    expect(await db.opsInsight.count()).toBe(0);
+  });
+});
+
+describe('notification noise retention', () => {
+  it("removes a deleted person's page counts with the person, and keeps service counts", async () => {
+    const kept = await createTestUser();
+    const row = (name: string, subjectKey: string) => ({
+      name,
+      subjectKey,
+      bucket: day(1),
+      count: 1,
+      sum: 0,
+    });
+    await db.metricRollup.createMany({
+      data: [
+        row(OPS_ROLLUPS.pagesPerUserService, 'deleted-user'),
+        row(OPS_ROLLUPS.pagesPerUserHour, 'deleted-user'),
+        row(OPS_ROLLUPS.pagesPerUserService, kept.id),
+        row(OPS_ROLLUPS.pagesPerService, 'some-service'),
+      ],
+    });
+    expect(await purgeOpsInsights(db, { cutoff: day(400), limit: 100 })).toBe(2);
+    expect(
+      (await db.metricRollup.findMany({ select: { name: true, subjectKey: true } })).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
+    ).toEqual([
+      { name: OPS_ROLLUPS.pagesPerService, subjectKey: 'some-service' },
+      { name: OPS_ROLLUPS.pagesPerUserService, subjectKey: kept.id },
+    ]);
   });
 });
