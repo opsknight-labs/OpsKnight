@@ -183,6 +183,9 @@ type SettingsValues = {
   squireMcpEnabled?: boolean;
   squireMobileEnabled?: boolean;
   resultCacheEnabled?: boolean;
+  spendControlsEnabled?: boolean;
+  backgroundAiBudgetPercent?: number;
+  proactiveNotesPerServiceDaily?: number;
   revision: number;
 };
 
@@ -378,6 +381,38 @@ export function AiSettingsForm({
         defaultChecked={settings.resultCacheEnabled ?? false}
         disabled={disabled}
       />
+      <input type="hidden" name="spendControlsPresent" value="1" />
+      <Check
+        name="spendControlsEnabled"
+        label="Spend controls"
+        help="Sends classification, investigation steps and summaries to each provider's small model and diagnosis, postmortems and assistant answers to its strong one (routes you set below still win). From 80% of a daily budget answers use the small model, are shorter and background AI pauses; at 100% the assistant and drafts stay basic until the next UTC day."
+        defaultChecked={settings.spendControlsEnabled ?? false}
+        disabled={disabled}
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          name="backgroundAiBudgetPercent"
+          label="Background AI allocation (%)"
+          help="Part of the daily budget for work nobody is waiting on: proactive notes, handoff narratives, insight phrasing. Shed first. Default 30%; maximum 80%; 0 pauses it."
+          type="number"
+          min={b.backgroundAiBudgetPercent.min}
+          max={b.backgroundAiBudgetPercent.max}
+          defaultValue={settings.backgroundAiBudgetPercent ?? 30}
+          disabled={disabled}
+          required
+        />
+        <Field
+          name="proactiveNotesPerServiceDaily"
+          label="AI-written notes per service per day"
+          help="Past this, proactive notes on that service are written without AI for the rest of the UTC day. 0 means never with AI."
+          type="number"
+          min={b.proactiveNotesPerServiceDaily.min}
+          max={b.proactiveNotesPerServiceDaily.max}
+          defaultValue={settings.proactiveNotesPerServiceDaily ?? 20}
+          disabled={disabled}
+          required
+        />
+      </div>
       <Check
         name="squireHistoryEnabled"
         label="Let people save assistant conversations"

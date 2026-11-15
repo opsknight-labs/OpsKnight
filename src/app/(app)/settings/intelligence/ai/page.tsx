@@ -94,6 +94,7 @@ export default async function IntelligenceAiPage({
       >
         <AiRoutingForm
           investigationEnabled={settings.squireInvestigationEnabled ?? false}
+          spendControlsEnabled={settings.spendControlsEnabled ?? false}
           routing={settings.capabilityRouting ?? {}}
           providers={(providers ?? []).map(provider => ({
             id: provider.id,

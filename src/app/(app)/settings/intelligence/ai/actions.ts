@@ -82,6 +82,13 @@ export async function saveAiSettingsAction(
         resultCacheEnabled: form.has('resultCachePresent')
           ? checked(form, 'resultCacheEnabled')
           : undefined,
+        ...(form.has('spendControlsPresent')
+          ? {
+              spendControlsEnabled: checked(form, 'spendControlsEnabled'),
+              backgroundAiBudgetPercent: integer(form, 'backgroundAiBudgetPercent'),
+              proactiveNotesPerServiceDaily: integer(form, 'proactiveNotesPerServiceDaily'),
+            }
+          : {}),
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }
