@@ -11,6 +11,7 @@ import {
   publishPolicyVersion,
   resolveEffectivePolicy,
   type IntelligenceActor,
+  getIntelligenceSettings,
 } from '../settings/service';
 import {
   clamp,
@@ -25,11 +26,14 @@ import {
  * Offline fitting of runbook-ranking weights, the runbook counterpart of the cause-weight fit. Labels come
  * from two places: a responder's accept/reject verdict on a runbook recommendation, and the observed outcome
  * when the recommended runbook was then run on that incident (it fixed the incident when the run succeeded and
- * the incident resolved within RESOLVED_WITHIN_MINUTES; it did not when the run failed, timed out, or succeeded
+ * the incident resolved within IntelligenceSettings.runbookFixWindowMinutes; it did not when the run failed, timed out, or succeeded
  * without the incident resolving in that window). An observed outcome outranks a verdict for the same
  * recommendation. Each label carries the evidence the ranker saw when it made the recommendation, so the fit
  * learns how much to trust the service-wide record, the same-problem record, MTTR improvement and an untried
  * binding. Suggest-only: nothing applies until a person publishes the proposal as a policy version.
+ *
+ * The fit runs in the intelligence lane once a day (scheduleRunbookWeightFit) and its result is stored, so
+ * the review page only reads one row.
  */
 
 export interface RunbookExample extends RunbookScoreFeatures {
@@ -52,7 +56,6 @@ export const RUNBOOK_FIT_LIMITS = {
   minPerVerdict: 8,
   lookbackDays: 90,
   maxRows: 2000,
-  resolvedWithinMinutes: 120,
   statementTimeoutMs: 5000,
 } as const;
 
@@ -141,7 +144,8 @@ type LabelRow = {
 export async function loadRunbookExamples(
   client: typeof prisma = prisma
 ): Promise<RunbookExample[]> {
-  const { lookbackDays, maxRows, resolvedWithinMinutes, statementTimeoutMs } = RUNBOOK_FIT_LIMITS;
+  const { lookbackDays, maxRows, statementTimeoutMs } = RUNBOOK_FIT_LIMITS;
+  const resolvedWithinMinutes = (await getIntelligenceSettings(client)).runbookFixWindowMinutes;
   const [feedback, outcomes] = await client.$transaction(async tx => {
     await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = ${statementTimeoutMs}`);
     const verdicts = await tx.$queryRaw<LabelRow[]>`
@@ -238,6 +242,86 @@ export async function suggestRunbookWeights(client: typeof prisma = prisma) {
   };
 }
 
+export type StoredRunbookWeightsProposal = NonNullable<
+  Awaited<ReturnType<typeof suggestRunbookWeights>>
+>;
+
+/** Where the lane keeps the latest fit: one IntelligencePattern row, read by primary-key-like unique. */
+const PROPOSAL_ROW = {
+  scopeKey: 'global',
+  kind: 'RUNBOOK_WEIGHTS_PROPOSAL',
+  key: 'latest',
+} as const;
+const proposalWhere = { scopeKey_kind_key: PROPOSAL_ROW };
+export const RUNBOOK_FIT_SCHEDULE = {
+  checkIntervalMs: 15 * 60_000,
+  refitAfterMs: 24 * 60 * 60_000,
+} as const;
+
+async function storeRunbookWeightProposal(
+  proposal: StoredRunbookWeightsProposal | null,
+  client: typeof prisma
+) {
+  const stats = { proposal } as unknown as Prisma.InputJsonValue;
+  await client.intelligencePattern.upsert({
+    where: proposalWhere,
+    create: { ...PROPOSAL_ROW, stats, support: proposal?.support ?? 0 },
+    update: { stats, support: proposal?.support ?? 0, lastSeenAt: new Date() },
+  });
+}
+
+/** Fits now and stores the result (null when there is no supported improvement). */
+export async function refreshRunbookWeightProposal(client: typeof prisma = prisma) {
+  const proposal = await suggestRunbookWeights(client);
+  await storeRunbookWeightProposal(proposal, client);
+  return proposal;
+}
+
+/** The latest stored proposal, for the review page: one indexed read, no fit. */
+export async function readRunbookWeightProposal(
+  client: typeof prisma = prisma
+): Promise<{ proposal: StoredRunbookWeightsProposal | null; computedAt: Date } | null> {
+  const row = await client.intelligencePattern.findUnique({
+    where: proposalWhere,
+    select: { stats: true, lastSeenAt: true },
+  });
+  if (!row) return null;
+  const stored = (row.stats as { proposal?: StoredRunbookWeightsProposal | null } | null)?.proposal;
+  const valid =
+    stored &&
+    typeof stored.id === 'string' &&
+    runbookWeightsSchema.safeParse(stored.weights).success &&
+    typeof stored.heldOutLoss === 'number' &&
+    typeof stored.baselineLoss === 'number';
+  return { proposal: valid ? stored : null, computedAt: row.lastSeenAt };
+}
+
+const fitSchedule = { checkedAt: 0 };
+
+/** Tests only: forget when the fit was last checked. */
+export function resetRunbookWeightFitSchedule(): void {
+  fitSchedule.checkedAt = 0;
+}
+
+/**
+ * Called once per lane cycle: nothing between checks, then one indexed read, and the fit (two capped reads
+ * under a 5 s statement timeout) at most once a day. Returns whether it refitted.
+ */
+export async function scheduleRunbookWeightFit(
+  now: number,
+  client: typeof prisma = prisma
+): Promise<boolean> {
+  if (now - fitSchedule.checkedAt < RUNBOOK_FIT_SCHEDULE.checkIntervalMs) return false;
+  fitSchedule.checkedAt = now;
+  const row = await client.intelligencePattern.findUnique({
+    where: proposalWhere,
+    select: { lastSeenAt: true },
+  });
+  if (row && now - row.lastSeenAt.getTime() < RUNBOOK_FIT_SCHEDULE.refitAfterMs) return false;
+  await refreshRunbookWeightProposal(client);
+  return true;
+}
+
 /** Recompute before publishing: the browser cannot supply arbitrary coefficients or stale evidence. */
 export async function adoptRunbookWeights(input: unknown, actor: IntelligenceActor) {
   const parsed = parseOrThrow(
@@ -249,7 +333,8 @@ export async function adoptRunbookWeights(input: unknown, actor: IntelligenceAct
       .strict(),
     input
   );
-  const suggestion = await suggestRunbookWeights();
+  // The recomputed proposal replaces the stored one, so a refresh after a conflict shows the current one.
+  const suggestion = await refreshRunbookWeightProposal();
   if (!suggestion || suggestion.id !== parsed.suggestionId)
     throw new AppError({
       code: 'RESOURCE_CONFLICT',

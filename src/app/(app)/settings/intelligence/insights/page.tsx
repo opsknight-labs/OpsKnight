@@ -26,7 +26,7 @@ import { suggestScoringWeights } from '@/lib/intelligence/learning/weights-servi
 import { suggestResponseWeights } from '@/lib/intelligence/learning/response-weights';
 import {
   RUNBOOK_FIT_LIMITS,
-  suggestRunbookWeights,
+  readRunbookWeightProposal,
 } from '@/lib/intelligence/learning/runbook-weights';
 import { DEFAULT_RUNBOOK_WEIGHTS } from '@/lib/intelligence/contract';
 
@@ -46,7 +46,11 @@ async function load() {
         resolveEffectivePolicy(null),
         canManage ? suggestScoringWeights() : Promise.resolve(null),
         canManage ? suggestResponseWeights().catch(() => null) : Promise.resolve(null),
-        canManage ? suggestRunbookWeights().catch(() => null) : Promise.resolve(null),
+        canManage
+          ? readRunbookWeightProposal()
+              .then(stored => stored?.proposal ?? null)
+              .catch(() => null)
+          : Promise.resolve(null),
       ]);
     return {
       insights,
@@ -218,7 +222,7 @@ export default async function IntelligenceInsightsPage() {
                   {RUNBOOK_FIT_LIMITS.lookbackDays} days, at least{' '}
                   {RUNBOOK_FIT_LIMITS.minPerVerdict} that helped and{' '}
                   {RUNBOOK_FIT_LIMITS.minPerVerdict} that did not, and better results on held-out
-                  examples.
+                  examples. The background worker checks once a day.
                 </p>
               )}
             </SettingsSection>
