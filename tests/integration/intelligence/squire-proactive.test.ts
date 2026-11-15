@@ -8,7 +8,7 @@ import {
   INTELLIGENCE_SETTINGS_DEFAULTS,
 } from '@/lib/intelligence/contract';
 import { breakers, invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
-import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
+import { getAiSettings, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { DEFAULT_HANDLERS } from '@/lib/intelligence/jobs/runner';
 import { claimWorkItems, WORK_KINDS } from '@/lib/intelligence/jobs/work-queue';
 import {
@@ -382,6 +382,49 @@ describe('proactive Squire with AI off (deterministic)', () => {
 });
 
 describe('proactive Squire with a model', () => {
+  it('caps AI-written notes per service per day under spend controls, then writes basic notes', async () => {
+    const { service, teamA, admin } = await setup({ ai: true });
+    const current = await getAiSettings();
+    await updateAiSettings(
+      {
+        enabled: true,
+        squireEnabled: true,
+        squireName: 'Pip',
+        allowExternalFallback: false,
+        requestsPerMinutePerUser: 100,
+        dailyTokenBudget: 500_000,
+        maxOutputTokens: 1024,
+        requestTimeoutMs: 10_000,
+        allowedDataRegions: [],
+        spendControlsEnabled: true,
+        proactiveNotesPerServiceDaily: 1,
+        expectedRevision: current.revision,
+      },
+      { actorId: admin.id, source: 'UI' }
+    );
+    await updateSquireServicePolicy(
+      service.id,
+      {
+        briefingEnabled: true,
+        nudgeAfterMinutes: null,
+        postmortemDraftEnabled: false,
+        expectedRevision: 0,
+      },
+      admin.id
+    );
+    const first = await analysedIncident(service.id, teamA.id);
+    const second = await analysedIncident(service.id, teamA.id);
+    model.script.push({ content: JSON.stringify(SUMMARY) }, { content: JSON.stringify(SUMMARY) });
+    expect(await runProactiveJob(`BRIEFING:${first.incident.id}`, 10, budget)).toBe('written');
+    expect(await runProactiveJob(`BRIEFING:${second.incident.id}`, 10, budget)).toBe('written');
+    const notes = await db.squireProactiveNote.findMany({
+      select: { incidentId: true, mode: true },
+    });
+    expect(notes.find(note => note.incidentId === first.incident.id)?.mode).toBe('AI');
+    expect(notes.find(note => note.incidentId === second.incident.id)?.mode).toBe('BASIC');
+    expect(model.requests).toHaveLength(1);
+  });
+
   it('writes AI text through the gateway and shows it only to viewers who may read its inputs', async () => {
     const { service, teamA, admin, member } = await setup({ ai: true });
     await updateSquireServicePolicy(
