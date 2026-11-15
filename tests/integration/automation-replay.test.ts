@@ -92,7 +92,7 @@ async function seed() {
   });
   await opened(service.id, 12, 'critical', 90);
   await opened(other.id, 3, 'critical', 91);
-  return { actor, policy, service, other };
+  return { actor, policy, service, other, incidents };
 }
 
 beforeEach(resetDatabase);
@@ -237,4 +237,72 @@ it('is reachable over REST v2: 202 on start, status by run id, and not across se
   );
   expect(denied.status).toBe(403);
   expect(await db.backgroundJob.count()).toBe(1);
+});
+
+it('reports what people changed afterwards on each replayed incident', async () => {
+  const { policy, service, incidents } = await seed();
+  const minutes = (incident: { createdAt: Date }, count: number) =>
+    new Date(incident.createdAt.getTime() + count * 60_000);
+  await db.incident.update({ where: { id: incidents[0].id }, data: { priority: 'P1' } });
+  await db.incidentEvent.createMany({
+    data: [
+      // A priority change inside the override window.
+      {
+        incidentId: incidents[0].id,
+        type: 'STATUS_CHANGE',
+        message: 'Priority updated to P1',
+        createdAt: minutes(incidents[0], 5),
+      },
+      // A team change an hour later: not "soon", and not a priority change.
+      {
+        incidentId: incidents[1].id,
+        type: 'ASSIGNMENT',
+        message: 'Incident assigned to team: Core',
+        createdAt: minutes(incidents[1], 60),
+      },
+      // A team change inside the window: an override, still not a priority change.
+      {
+        incidentId: incidents[2].id,
+        type: 'ASSIGNMENT',
+        message: 'Incident assigned to team: Core',
+        createdAt: minutes(incidents[2], 3),
+      },
+      {
+        incidentId: incidents[3].id,
+        type: 'COMMENT',
+        message: 'Priority looks right',
+        createdAt: minutes(incidents[3], 1),
+      },
+    ],
+  });
+  const { compiled } = compileAutomation(draft(policy.id));
+  const environment = await db.$transaction(tx => loadReplayEnvironment(tx, service.id, null));
+  const later = new Map<string, unknown>();
+  await replayStoredEvents({
+    compiled,
+    serviceId: service.id,
+    environment,
+    windowStart: new Date(now.getTime() - 7 * DAY),
+    windowEnd: now,
+    run: work => db.$transaction(work),
+    onEvent: event => void later.set(event.incidentId, event.later),
+  });
+  expect(later.get(incidents[0].id)).toEqual({
+    priority: 'P1',
+    priorityChanged: true,
+    overriddenSoon: true,
+  });
+  expect(later.get(incidents[1].id)).toEqual({
+    priority: null,
+    priorityChanged: false,
+    overriddenSoon: false,
+  });
+  expect(later.get(incidents[2].id)).toEqual({
+    priority: null,
+    priorityChanged: false,
+    overriddenSoon: true,
+  });
+  // A comment is not a change, even when its text starts like one.
+  expect(later.get(incidents[3].id)).toMatchObject({ overriddenSoon: false });
+  expect(later.size).toBe(6);
 });

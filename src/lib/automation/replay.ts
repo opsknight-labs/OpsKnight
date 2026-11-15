@@ -32,7 +32,27 @@ export type ReplayEvent = {
   event: EventPayload;
   /** What actually happened when the event arrived. */
   actual: { route: Route; policyId: string | null; priority: string | null };
+  /**
+   * What people did afterwards, for the insight producers: the incident's priority now, and whether a person
+   * changed its priority or team (`overriddenSoon`: within OVERRIDE_WINDOW_MINUTES of opening).
+   */
+  later?: { priority: string | null; priorityChanged: boolean; overriddenSoon: boolean };
 };
+
+/** "Responders keep overriding this rule": a change within this many minutes of the incident opening. */
+export const OVERRIDE_WINDOW_MINUTES = 15;
+/**
+ * Timeline messages that record a person changing an incident's priority, urgency or team. Event writers
+ * use these texts (incidents/actions.ts, rest-patch.ts, bulk-actions.ts, chatops-lifecycle.ts, assignment.ts).
+ * shortcut: matched on message text because priority changes have no dedicated event type; add one if
+ * these wordings ever change.
+ */
+const PRIORITY_CHANGE_MESSAGES = Prisma.sql`(coalesce(e."type"::text, 'STATUS_CHANGE') = 'STATUS_CHANGE'
+  AND (e."message" LIKE 'Priority updated%' OR e."message" LIKE 'Priority changed%'
+    OR e."message" LIKE 'Priority cleared%' OR e."message" LIKE 'Bulk priority updated%'))`;
+const OVERRIDE_MESSAGES = Prisma.sql`(${PRIORITY_CHANGE_MESSAGES} OR e."type" = 'ASSIGNMENT'
+  OR (coalesce(e."type"::text, 'STATUS_CHANGE') = 'STATUS_CHANGE'
+    AND (e."message" LIKE 'Urgency updated%' OR e."message" LIKE 'Bulk urgency updated%')))`;
 
 type Destination = { type: Route['type']; policyId: string | null };
 
@@ -298,6 +318,9 @@ type Row = {
   decisionPolicyId: string | null;
   decisionPriority: string | null;
   hasDecision: boolean;
+  currentPriority: string | null;
+  priorityChanged: boolean;
+  overriddenSoon: boolean;
 };
 
 const SEVERITIES = new Set(['critical', 'error', 'warning', 'info']);
@@ -335,6 +358,11 @@ function toReplayEvent(row: Row, environment: ReplayEnvironment): ReplayEvent | 
           policyId: environment.defaultPolicyId,
           priority: environment.classify(severity).priority,
         },
+    later: {
+      priority: row.currentPriority,
+      priorityChanged: row.priorityChanged,
+      overriddenSoon: row.overriddenSoon,
+    },
   };
 }
 
@@ -353,6 +381,8 @@ export async function replayStoredEvents(input: {
   windowEnd: Date;
   run: <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) => Promise<T>;
   onProgress?: (progress: ReplayProgress) => Promise<void>;
+  /** Sees every evaluated event, for callers that aggregate more than the summary holds. */
+  onEvent?: (event: ReplayEvent, evaluated: ReturnType<typeof replayEvent>) => void;
   batchSize?: number;
   maxEvents?: number;
 }): Promise<ReplaySummary & { alertsScanned: number; truncated: boolean }> {
@@ -377,7 +407,13 @@ export async function replayStoredEvents(input: {
         tx.$queryRaw<Row[]>`
         SELECT a."id" AS "alertId", a."incidentId", a."createdAt", a."dedupKey", a."payload",
                d."routeType"::text AS "routeType", d."escalationPolicyId" AS "decisionPolicyId",
-               d."finalPriority" AS "decisionPriority", (d."incidentId" IS NOT NULL) AS "hasDecision"
+               d."finalPriority" AS "decisionPriority", (d."incidentId" IS NOT NULL) AS "hasDecision",
+               i."priority" AS "currentPriority",
+               EXISTS (SELECT 1 FROM "IncidentEvent" e WHERE e."incidentId" = i."id"
+                 AND ${PRIORITY_CHANGE_MESSAGES}) AS "priorityChanged",
+               EXISTS (SELECT 1 FROM "IncidentEvent" e WHERE e."incidentId" = i."id"
+                 AND e."createdAt" <= i."createdAt" + ${OVERRIDE_WINDOW_MINUTES}::int * interval '1 minute'
+                 AND ${OVERRIDE_MESSAGES}) AS "overriddenSoon"
         FROM "Alert" a
         JOIN "Incident" i ON i."id" = a."incidentId"
         LEFT JOIN "IncidentAutomationDecision" d ON d."incidentId" = i."id"
@@ -400,6 +436,7 @@ export async function replayStoredEvents(input: {
       const started = performance.now();
       const result = replayEvent(input.compiled, event, input.environment);
       accumulator.add(event, result, performance.now() - started);
+      input.onEvent?.(event, result);
       evaluated += 1;
     }
     scanned += rows.length;
