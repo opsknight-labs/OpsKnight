@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CreateIncidentSuggestions from '@/components/incident/CreateIncidentSuggestions';
 import MetricChangeWhy from '@/components/analytics/MetricChangeWhy';
+import StatusDraftSuggestions from '@/components/status-page/StatusDraftSuggestions';
+import { loadStatusDraftsAction } from '@/app/(app)/settings/status-pages/helper-actions';
 import { suggestForIncidentDraftAction } from '@/app/(app)/incidents/helper-actions';
 import { explainMetricChangeAction } from '@/app/(app)/analytics/helper-actions';
 
@@ -10,6 +12,10 @@ vi.mock('@/app/(app)/incidents/helper-actions', () => ({
 }));
 vi.mock('@/app/(app)/analytics/helper-actions', () => ({
   explainMetricChangeAction: vi.fn(),
+}));
+
+vi.mock('@/app/(app)/settings/status-pages/helper-actions', () => ({
+  loadStatusDraftsAction: vi.fn(),
 }));
 
 const suggest = vi.mocked(suggestForIncidentDraftAction);
@@ -106,5 +112,42 @@ describe('MetricChangeWhy', () => {
     await act(async () => fireEvent.click(why));
     await act(async () => fireEvent.click(why));
     expect(explain).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('StatusDraftSuggestions', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders nothing when no open incident touches the page', async () => {
+    vi.mocked(loadStatusDraftsAction).mockResolvedValue([]);
+    const { container } = render(<StatusDraftSuggestions statusPageId="p1" onApply={vi.fn()} />);
+    await act(async () => undefined);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('fills the form from a chosen incident and names the components it selected', async () => {
+    const draft = {
+      incidentId: 'inc-1',
+      incidentTitle: 'api pods crashlooping',
+      type: 'INCIDENT' as const,
+      title: 'Degraded Website',
+      message: 'We are investigating.',
+      affected: [
+        { serviceId: 'web', name: 'Website', reason: 'DEPENDS_ON_SOURCE' as const },
+        { serviceId: 'db', name: 'Database', reason: 'SOURCE' as const },
+      ],
+    };
+    vi.mocked(loadStatusDraftsAction).mockResolvedValue([draft]);
+    const onApply = vi.fn();
+    render(<StatusDraftSuggestions statusPageId="p1" onApply={onApply} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'api pods crashlooping' }));
+
+    expect(onApply).toHaveBeenCalledWith(draft);
+    expect(
+      screen.getByText(
+        'Draft filled in below for Website, Database. Review the wording before you publish.'
+      )
+    ).toBeInTheDocument();
   });
 });

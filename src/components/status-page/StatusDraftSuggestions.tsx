@@ -33,6 +33,7 @@ export default function StatusDraftSuggestions({
   }, [statusPageId]);
 
   if (drafts.length === 0) return null;
+  const appliedDraft = drafts.find(draft => draft.incidentId === applied);
   return (
     <div
       aria-live="polite"
@@ -59,7 +60,14 @@ export default function StatusDraftSuggestions({
           </Button>
         ))}
       </div>
-      {applied && <p>Draft filled in below. Review the wording before you publish.</p>}
+      {appliedDraft && (
+        <p>
+          Draft filled in below
+          {appliedDraft.affected.length > 0 &&
+            ` for ${appliedDraft.affected.map(component => component.name).join(', ')}`}
+          . Review the wording before you publish.
+        </p>
+      )}
     </div>
   );
 }
