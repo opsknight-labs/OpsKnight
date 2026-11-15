@@ -92,7 +92,7 @@ async function buildIncidentBrief(
 }
 
 type DraftResult<T> =
-  | { ok: true; value: T; promptVersion: number; model: string }
+  | { ok: true; value: T; promptVersion: number; model: string; degraded?: boolean }
   | { ok: false; reason: DraftFailure };
 
 async function generate<T>(
@@ -140,11 +140,12 @@ async function generate<T>(
       value: result.object,
       promptVersion: prompt.meta.version,
       model: result.served.model,
+      ...(result.degraded ? { degraded: true } : {}),
     };
   } catch (error) {
     if (error instanceof AiGatewayError) {
-      if (error.code === 'RATE_LIMITED' || error.code === 'BUDGET_EXHAUSTED')
-        return { ok: false, reason: 'LIMITED' };
+      if (error.code === 'BUDGET_EXHAUSTED') return { ok: false, reason: 'BUDGET_EXHAUSTED' };
+      if (error.code === 'RATE_LIMITED') return { ok: false, reason: 'LIMITED' };
       if (error.code === 'OUTPUT_INVALID') return { ok: false, reason: 'INVALID_OUTPUT' };
     }
     return { ok: false, reason: 'UNAVAILABLE' };

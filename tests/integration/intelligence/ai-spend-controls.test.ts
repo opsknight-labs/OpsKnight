@@ -1,4 +1,13 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import {
+  DEFAULT_POLICY_DEFINITION,
+  INTELLIGENCE_SETTINGS_DEFAULTS,
+} from '@/lib/intelligence/contract';
+import { AI_LEAN_NOTICE } from '@/lib/intelligence/ai/contract';
+import { streamSquire } from '@/lib/intelligence/squire/chat';
+import type { SquireEvent } from '@/lib/intelligence/squire/contract';
+import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
 import {
   admitAiRequest,
   getAiSpendLevel,
@@ -15,6 +24,8 @@ import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings
 import { cachedGenerate } from '@/lib/intelligence/ai/result-cache';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import { createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
+
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 const now = new Date('2026-11-05T12:00:00Z');
 const limits = {
@@ -54,22 +65,23 @@ describe('background AI allowance', () => {
   it('keeps the global budget and both shares under a mixed concurrent race', async () => {
     const people = await Promise.all(Array.from({ length: 4 }, () => createTestUser()));
     const results = await Promise.all(
-      Array.from({ length: 24 }, (_, index) =>
+      Array.from({ length: 12 }, (_, index) =>
         index % 2
-          ? hold('system:proactive', 100, 'proactive').then(row => (row ? 'bg' : null))
-          : hold(people[index % 4].id, 100, 'interactive').then(row => (row ? 'fg' : null))
+          ? hold('system:proactive', 200, 'proactive').then(row => (row ? 'bg' : null))
+          : hold(people[index % 4].id, 200, 'interactive').then(row => (row ? 'fg' : null))
       )
     );
     const background = results.filter(result => result === 'bg').length;
     const granted = results.filter(Boolean).length;
-    expect(granted * 100).toBeLessThanOrEqual(1000);
-    expect(background * 100).toBeLessThanOrEqual(300);
+    expect(granted * 200).toBeLessThanOrEqual(1000);
+    expect(background * 200).toBeLessThanOrEqual(300);
     const held = await db.aiTokenReservation.aggregate({ _sum: { tokens: true } });
-    expect(held._sum.tokens).toBe(granted * 100);
+    expect(held._sum.tokens).toBe(granted * 200);
   });
 
   it('settles background tokens from the hold and refuses background admission once the share is used', async () => {
     const reservation = await hold('system:proactive', 300, 'proactive');
+    expect(reservation).not.toBeNull();
     await recordAiUsage({ inputTokens: 250, outputTokens: 50 }, now, undefined, reservation!);
     expect(await db.aiUsageDay.findUnique({ where: { day: '2026-11-05' } })).toMatchObject({
       backgroundAiTokens: 300,
@@ -139,7 +151,7 @@ describe('gateway routing and degradation', () => {
   });
   afterAll(() => server.close());
 
-  async function configure(budget: number) {
+  async function configure(budget: number, maxDataClass: 'INTERNAL' | 'PERSONAL' = 'INTERNAL') {
     const admin = await createTestUser({ role: 'ADMIN' });
     const actor = { actorId: admin.id, source: 'UI' as const };
     await updateAiSettings(
@@ -168,7 +180,7 @@ describe('gateway routing and degradation', () => {
         apiKey: 'sk-test-secret-key-value-1234567890',
         enabled: true,
         isExternal: false,
-        maxDataClass: 'INTERNAL',
+        maxDataClass,
         allowPrivateNetwork: true,
         priority: 10,
       },
@@ -215,5 +227,43 @@ describe('gateway routing and degradation', () => {
     expect(body.model).toBe('gpt-5-mini');
     expect(Number(body.max_completion_tokens ?? body.max_tokens)).toBe(200);
     expect(await db.aiResultCache.count()).toBe(0);
+  });
+
+  async function squire(userId: string) {
+    const actor = await resolveUserActor(userId);
+    const events: SquireEvent[] = [];
+    for await (const event of streamSquire(actor!, { message: 'what is going on?', history: [] }))
+      events.push(event);
+    return events;
+  }
+
+  it('tells the person in Squire when an answer was degraded, and goes basic at the budget', async () => {
+    const admin = await configure(1_000_000, 'PERSONAL');
+    const ctx = { actorId: admin.id, source: 'UI' as const };
+    await publishPolicyVersion(
+      {},
+      { mode: 'SUGGEST', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
+      ctx
+    );
+    await db.intelligenceSettings.create({
+      data: { id: 'default', ...INTELLIGENCE_SETTINGS_DEFAULTS, enabled: true },
+    });
+    // Spent by others, so only the shared day (not this person's share) is near the budget.
+    const day = new Date().toISOString().slice(0, 10);
+    await db.aiUsageDay.create({ data: { day, inputTokens: 850_000 } });
+    server.script.push({ content: 'All quiet.' });
+    const lean = await squire(admin.id);
+    expect(lean).toContainEqual({ type: 'notice', text: AI_LEAN_NOTICE });
+    expect(lean.find(event => event.type === 'meta')).toMatchObject({ mode: 'ai' });
+
+    await db.aiUsageDay.update({ where: { day }, data: { inputTokens: 1_000_000 } });
+    const spent = await squire(admin.id);
+    // The basic answer's own header follows the AI attempt's.
+    expect(spent.filter(event => event.type === 'meta').at(-1)).toMatchObject({
+      mode: 'basic',
+      availability: 'quota',
+      limit: 'budget',
+    });
+    expect(spent).not.toContainEqual({ type: 'notice', text: AI_LEAN_NOTICE });
   });
 });

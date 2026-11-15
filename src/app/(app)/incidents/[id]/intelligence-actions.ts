@@ -116,7 +116,13 @@ export async function decideRelatedIncident(
 
 export type IncidentSummaryState =
   | { status: 'idle' }
-  | { status: 'ok'; summary: IncidentSummary; model: string; promptVersion: number }
+  | {
+      status: 'ok';
+      summary: IncidentSummary;
+      model: string;
+      promptVersion: number;
+      degraded?: boolean;
+    }
   | { status: 'error'; message: string };
 
 /** Generates a read-only summary for the person who asked. Nothing is stored. */
@@ -130,6 +136,7 @@ export async function summarizeIncidentAction(incidentId: string): Promise<Incid
           summary: result.value,
           model: result.model,
           promptVersion: result.promptVersion,
+          ...(result.degraded ? { degraded: true } : {}),
         }
       : { status: 'error', message: DRAFT_FAILURE_MESSAGES[result.reason] };
   } catch (error) {

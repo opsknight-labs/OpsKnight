@@ -12,6 +12,7 @@ import { normalizeLegacyActionItems, type ActionItem } from '@/lib/action-items'
 import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
 import { notify as toast } from '@/lib/toast';
+import { AI_LEAN_NOTICE } from '@/lib/intelligence/ai/contract';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -413,6 +414,7 @@ export default function PostmortemForm({
           });
       }
       if (merged.addedItems.length) setActionItems(current => [...current, ...merged.addedItems]);
+      if (result.degraded) toast.info(AI_LEAN_NOTICE);
       toast.success(
         merged.kept.length
           ? 'AI draft added to empty fields; fields you had already written were kept. Review everything before saving.'

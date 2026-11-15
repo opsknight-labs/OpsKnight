@@ -106,6 +106,10 @@ export function backgroundAiTokenBudget(limits: {
 /** From this share of a daily budget, AI degrades: small model, shorter answers, background paused. */
 export const AI_DEGRADE_AT = 0.8;
 
+/** Shown wherever a degraded answer or draft is displayed. */
+export const AI_LEAN_NOTICE =
+  "Today's AI budget is nearly used: this answer came from a smaller model and is shorter.";
+
 /** The assistant's display name is rendered everywhere, so it is limited to plain, harmless text. */
 const squireName = z
   .string()

@@ -195,6 +195,40 @@ describe('incident summaries and postmortem drafts', () => {
     expect(await db.postmortem.count()).toBe(0);
   });
 
+  it('flags a draft written past 80% of the budget and stops drafting at 100%', async () => {
+    const { admin, ctx, incident } = await setup();
+    const current = await db.aiSettings.findUniqueOrThrow({ where: { id: 'default' } });
+    await updateAiSettings(
+      {
+        enabled: true,
+        squireEnabled: true,
+        squireName: 'Pip',
+        allowExternalFallback: false,
+        requestsPerMinutePerUser: 100,
+        dailyTokenBudget: 500_000,
+        maxOutputTokens: 1024,
+        requestTimeoutMs: 10_000,
+        allowedDataRegions: [],
+        spendControlsEnabled: true,
+        expectedRevision: current.revision,
+      },
+      ctx
+    );
+    invalidateGatewayCache();
+    const day = new Date().toISOString().slice(0, 10);
+    await db.aiUsageDay.create({ data: { day, inputTokens: 420_000 } });
+    model.script.push({ content: JSON.stringify(SUMMARY) });
+    expect(await summarizeIncident(await actorOf(admin.id), incident.id)).toMatchObject({
+      ok: true,
+      degraded: true,
+    });
+    await db.aiUsageDay.update({ where: { day }, data: { inputTokens: 500_000 } });
+    expect(await draftPostmortem(await actorOf(admin.id), incident.id)).toEqual({
+      ok: false,
+      reason: 'BUDGET_EXHAUSTED',
+    });
+  });
+
   it('never returns output that fails the schema', async () => {
     const { admin, incident } = await setup();
     model.script.push(

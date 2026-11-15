@@ -18,6 +18,7 @@ import {
   type AiDataClass,
 } from '../ai/port';
 import { redactSecrets } from '../ai/redact';
+import { AI_LEAN_NOTICE } from '../ai/contract';
 import { getAiSettings } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
 import { getHistoryStatus, type ConversationDetail } from '../conversations/store';
@@ -308,6 +309,8 @@ export async function* streamSquire(
         if (event.type === 'text-delta') {
           answer += event.delta;
           yield { type: 'delta', text: event.delta };
+        } else if (event.type === 'finish') {
+          if (event.result.degraded) yield { type: 'notice', text: AI_LEAN_NOTICE };
         } else if (event.type === 'tool-start') {
           const label = TOOL_LABELS[event.name];
           if (label) yield { type: 'tool', label };
