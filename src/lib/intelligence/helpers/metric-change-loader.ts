@@ -143,10 +143,12 @@ export async function explainMetricChangeFor(
   metric: ChangeMetric,
   options: { windowDays: number; teamId?: string; now?: Date }
 ): Promise<MetricChangeDetail | null> {
+  // eslint-disable-next-line security/detect-object-injection -- metric is a ChangeMetric, validated by the action
   const change = (await loadMetricChanges(actor, options))[metric];
   if (!change) return null;
   const round = (value: number) =>
     metric === 'incidents' ? String(Math.round(value)) : value.toFixed(1);
+  // eslint-disable-next-line security/detect-object-injection -- as above
   const detail = `${METRIC_LABELS[metric]} went from ${round(change.previous)} to ${round(change.current)} between the previous and the last ${options.windowDays} complete days. The services listed account for ${Math.round(Math.min(change.share, 9.99) * 100)}% of that change.`;
 
   let phrasing: string | null = null;
