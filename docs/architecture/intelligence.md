@@ -1253,7 +1253,8 @@ Each rollup advances one complete UTC day per transaction from its own watermark
 (`<name>.watermark`), deleting and rewriting the day with the watermark so a crash or a second scheduler
 cannot double-count. A first run starts 30 days back; at most 31 days are computed per run. Rows never set
 `serviceId`, because incident enrichment reads `MetricRollup` by service. `queryOpsRollup` is the bounded
-reader. Query plans are asserted in `tests/integration/intelligence/ops-rollups.test.ts` and recorded by
+reader. The retention sweep (`purgeOpsInsights`) deletes `ops.pages.user_hour` and `ops.pages.user_service`
+rows whose person no longer exists, in bounded batches; service-keyed rows stay. Query plans are asserted in `tests/integration/intelligence/ops-rollups.test.ts` and recorded by
 the load gate `tests/load/intelligence-query-plans.ts`.
 
 ### UI kit
