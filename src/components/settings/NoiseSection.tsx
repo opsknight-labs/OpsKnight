@@ -32,7 +32,7 @@ function PagesByHour({ report }: { report: NoiseReport }) {
       </div>
       <div
         aria-hidden="true"
-        className="flex justify-between font-mono text-[10px] text-muted-foreground"
+        className="flex justify-between font-mono text-xs text-muted-foreground"
       >
         <span>00</span>
         <span>06</span>
