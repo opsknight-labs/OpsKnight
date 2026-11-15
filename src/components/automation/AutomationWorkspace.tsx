@@ -557,6 +557,7 @@ export default function AutomationWorkspace({
       <AutomationReviewDialog
         key={`${review}:${review === 'LIVE' ? reviewData?.activeVersionId : review === 'activateCandidate' ? reviewData?.candidateVersionId : (restoreVersion?.id ?? status?.activeVersionId)}`}
         action={review}
+        serviceId={serviceId}
         policies={reviewData?.policies}
         destinations={reviewData?.destinations}
         before={reviewBefore}
@@ -766,6 +767,9 @@ export default function AutomationWorkspace({
           {data && area === 'test' && (
             <AutomationTest
               data={data}
+              serviceId={serviceId}
+              draft={draft}
+              integrationType={context.integrationType}
               integrationId={tester.integrationId}
               setIntegrationId={tester.setIntegrationId}
               setIntegrationType={context.setIntegrationType}

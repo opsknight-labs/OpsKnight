@@ -8,12 +8,14 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import { notify } from '@/lib/toast';
 
+import { AutomationReplay } from './AutomationReplay';
 import { ManualSample } from './ManualSample';
 import { TraceDetail } from './TraceDetail';
 import { Hint, NativeSelect, textareaClass } from './authoring/primitives';
 
 import type { testAutomation } from '@/lib/automation/testing';
 import type { Data } from './presentation-types';
+import type { Snapshot } from '@/lib/automation/contract';
 
 const SIMULATION_PRESETS = [
   {
@@ -117,6 +119,9 @@ function recentAlertLabel(alert: Data['alerts'][number]) {
 
 export function AutomationTest({
   data,
+  serviceId,
+  draft,
+  integrationType,
   integrationId,
   setIntegrationId,
   setIntegrationType,
@@ -129,6 +134,10 @@ export function AutomationTest({
   result,
 }: {
   data: Data;
+  /** With a draft, the tab also offers a replay of it against the service's recent incidents. */
+  serviceId?: string;
+  draft?: Snapshot;
+  integrationType?: string;
   integrationId: string;
   setIntegrationId: (value: string) => void;
   setIntegrationType: (value: string) => void;
@@ -594,6 +603,14 @@ export function AutomationTest({
           </>
         )}
       </section>
+      {serviceId && draft && (
+        <AutomationReplay
+          serviceId={serviceId}
+          snapshot={draft}
+          integrationType={integrationType || undefined}
+          className="xl:col-span-2 border-border/80 bg-card shadow-xs"
+        />
+      )}
     </div>
   );
 }

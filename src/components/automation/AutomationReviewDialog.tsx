@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import type { Snapshot } from '@/lib/automation/contract';
 import { compileAutomation, type LintIssue } from '@/lib/automation/compiler';
 import { cn } from '@/lib/utils';
+import { AutomationReplay } from './AutomationReplay';
 import { noticeClasses, toneClasses } from './workspace/status';
 
 const copy = new Map([
@@ -101,7 +102,10 @@ export function AutomationReviewDialog({
   error,
   onCancel,
   onConfirm,
+  serviceId,
 }: {
+  /** When given, the dialog offers a historical replay of the snapshot before the acknowledgements. */
+  serviceId?: string;
   action: 'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null;
   snapshot: Snapshot;
   before?: Snapshot;
@@ -299,6 +303,9 @@ export function AutomationReviewDialog({
                 </li>
               ))}
             </ul>
+          )}
+          {serviceId && action !== 'restore' && (
+            <AutomationReplay serviceId={serviceId} snapshot={snapshot} />
           )}
           {liveReview && (
             <section className="space-y-2 rounded-lg border p-3">
