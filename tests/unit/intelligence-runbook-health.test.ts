@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
-  missingStepInsights,
+  followUpClusters,
   runbookHealthInsights,
+  runStatsFromRollup,
+  stepStatsFromRollup,
   summarizeRunbookEffectiveness,
   type RunbookHealthInput,
   type RunbookStepStats,
 } from '@/lib/intelligence/runbook-health/insights';
 import {
   clusterNotes,
+  draftRunbookFromNotes,
   extractImperativeSteps,
-  missingRunbookInsights,
-  draftRunbookFromSuggestion,
+  missingRunbookProblems,
+  noteRefsFromHrefs,
 } from '@/lib/intelligence/runbook-health/notes';
 import { createRunbookSchema, runbookDefinitionSchema } from '@/lib/runbooks/schemas';
-
-const NOW = new Date('2026-11-12T00:00:00Z');
-const daysAgo = (days: number) => new Date(NOW.getTime() - days * 86_400_000);
 
 const step = (overrides: Partial<RunbookStepStats>): RunbookStepStats => ({
   stepKey: 'restart',
@@ -30,22 +30,141 @@ const step = (overrides: Partial<RunbookStepStats>): RunbookStepStats => ({
 
 const input = (overrides: Partial<RunbookHealthInput> = {}): RunbookHealthInput => ({
   runbookId: 'rb1',
-  publishedAt: daysAgo(200),
   archived: false,
-  lastEditedAt: daysAgo(30),
-  lastRunAt: daysAgo(1),
+  publishedDaysAgo: 91,
+  lastRunDaysAgo: 1,
   windowDays: 90,
-  runs: { eligible: 20, succeeded: 19, incidentRuns: 10, fixed: 8, medianDurationMs: 42_000 },
+  eligible: 20,
+  succeeded: 19,
   steps: [],
+  followUpRuns: 0,
+  followUps: [],
   ...overrides,
 });
 
-const kinds = (value: RunbookHealthInput) =>
-  runbookHealthInsights(value, NOW).map(item => item.kind);
+const keys = (value: RunbookHealthInput) => runbookHealthInsights(value).map(item => item.key);
+
+// floor(4 * log2(seconds)), as ops.runbook.run stores it.
+const bucket = (seconds: number) => Math.floor(4 * Math.log2(seconds));
+
+describe('runStatsFromRollup', () => {
+  const points = [
+    {
+      count: 2,
+      tags: { status: 'SUCCEEDED', onIncident: true, fixMinutes: 30, durationBucket: bucket(60) },
+    },
+    {
+      count: 1,
+      tags: { status: 'SUCCEEDED', onIncident: true, fixMinutes: 300, durationBucket: bucket(60) },
+    },
+    {
+      count: 1,
+      tags: { status: 'FAILED', onIncident: true, fixMinutes: null, durationBucket: bucket(600) },
+    },
+    {
+      count: 1,
+      tags: { status: 'TIMED_OUT', onIncident: false, fixMinutes: null, durationBucket: null },
+    },
+  ];
+
+  it('applies the fix window on read, so a wider window counts the slower fix', () => {
+    expect(runStatsFromRollup(points, 120)).toMatchObject({
+      eligible: 5,
+      succeeded: 3,
+      incidentRuns: 4,
+      fixed: 2,
+    });
+    expect(runStatsFromRollup(points, 600).fixed).toBe(3);
+  });
+
+  it('takes the median from the duration histogram within its resolution', () => {
+    const median = runStatsFromRollup(points, 120).medianDurationMs as number;
+    expect(Math.abs(median - 60_000) / 60_000).toBeLessThan(0.1);
+    expect(runStatsFromRollup([], 120).medianDurationMs).toBeNull();
+  });
+
+  it('ignores malformed tags', () => {
+    expect(runStatsFromRollup([{ count: 3, tags: null }], 120)).toMatchObject({
+      eligible: 3,
+      succeeded: 0,
+      fixed: 0,
+    });
+  });
+});
+
+describe('stepStatsFromRollup', () => {
+  it('merges days and names the top error code of a step failing 4 of 6 runs', () => {
+    const steps = stepStatsFromRollup([
+      {
+        count: 2,
+        tags: {
+          stepKey: 'restart',
+          name: 'Old name',
+          status: 'SUCCEEDED',
+          retried: false,
+          errorCode: null,
+        },
+      },
+      {
+        count: 3,
+        tags: {
+          stepKey: 'restart',
+          name: 'Restart pods',
+          status: 'FAILED',
+          retried: false,
+          errorCode: 'E_TIMEOUT',
+        },
+      },
+      {
+        count: 1,
+        tags: {
+          stepKey: 'restart',
+          name: 'Restart pods',
+          status: 'FAILED',
+          retried: true,
+          errorCode: 'E_OOM',
+        },
+      },
+      {
+        count: 6,
+        tags: { stepKey: 'verify', name: 'Verify', status: 'SUCCEEDED', retried: false },
+      },
+    ]);
+    expect(steps).toEqual([
+      {
+        stepKey: 'restart',
+        name: 'Restart pods',
+        runs: 6,
+        failed: 4,
+        retried: 1,
+        topErrorCode: 'E_TIMEOUT',
+        topErrorCount: 3,
+      },
+      {
+        stepKey: 'verify',
+        name: 'Verify',
+        runs: 6,
+        failed: 0,
+        retried: 0,
+        topErrorCode: null,
+        topErrorCount: 0,
+      },
+    ]);
+  });
+});
 
 describe('summarizeRunbookEffectiveness', () => {
+  const base = {
+    windowDays: 90,
+    fixWindowMinutes: 120,
+    runs: { eligible: 20, succeeded: 19, incidentRuns: 10, fixed: 8, medianDurationMs: 42_000 },
+    steps: [] as RunbookStepStats[],
+    lastRunAt: null,
+    lastEditedAt: null,
+  };
+
   it('reports rates with a Wilson lower bound below the raw rate', () => {
-    const summary = summarizeRunbookEffectiveness(input());
+    const summary = summarizeRunbookEffectiveness(base);
     expect(summary.successRate).toBeCloseTo(0.95);
     expect(summary.successLowerBound).toBeGreaterThan(0.7);
     expect(summary.successLowerBound).toBeLessThan(0.95);
@@ -55,11 +174,10 @@ describe('summarizeRunbookEffectiveness', () => {
   });
 
   it('has no rates without runs and no fix rate without incident runs', () => {
-    const summary = summarizeRunbookEffectiveness(
-      input({
-        runs: { eligible: 0, succeeded: 0, incidentRuns: 0, fixed: 0, medianDurationMs: null },
-      })
-    );
+    const summary = summarizeRunbookEffectiveness({
+      ...base,
+      runs: { eligible: 0, succeeded: 0, incidentRuns: 0, fixed: 0, medianDurationMs: null },
+    });
     expect(summary.successRate).toBeNull();
     expect(summary.successLowerBound).toBeNull();
     expect(summary.fixedRate).toBeNull();
@@ -67,21 +185,14 @@ describe('summarizeRunbookEffectiveness', () => {
   });
 
   it('picks the step that fails most reliably, not the one that failed once out of once', () => {
-    const summary = summarizeRunbookEffectiveness(
-      input({
-        steps: [
-          step({ stepKey: 'once', name: 'Once', runs: 1, failed: 1 }),
-          step({
-            stepKey: 'often',
-            name: 'Often',
-            runs: 20,
-            failed: 12,
-            topErrorCode: 'E_TIMEOUT',
-          }),
-          step({ stepKey: 'fine', name: 'Fine', runs: 20, failed: 0 }),
-        ],
-      })
-    );
+    const summary = summarizeRunbookEffectiveness({
+      ...base,
+      steps: [
+        step({ stepKey: 'once', name: 'Once', runs: 1, failed: 1 }),
+        step({ stepKey: 'often', name: 'Often', runs: 20, failed: 12, topErrorCode: 'E_TIMEOUT' }),
+        step({ stepKey: 'fine', name: 'Fine', runs: 20, failed: 0 }),
+      ],
+    });
     expect(summary.mostFailingStep).toMatchObject({
       stepKey: 'often',
       failureRate: 0.6,
@@ -92,113 +203,103 @@ describe('summarizeRunbookEffectiveness', () => {
 
 describe('runbookHealthInsights', () => {
   it('says nothing about a healthy runbook', () => {
-    expect(runbookHealthInsights(input(), NOW)).toEqual([]);
+    expect(runbookHealthInsights(input())).toEqual([]);
   });
 
   it('flags a runbook that fails often, critical when most runs fail', () => {
-    const half = runbookHealthInsights(
-      input({
-        runs: { eligible: 20, succeeded: 10, incidentRuns: 0, fixed: 0, medianDurationMs: null },
-      }),
-      NOW
+    const [warning] = runbookHealthInsights(input({ eligible: 6, succeeded: 2 }));
+    expect(warning).toMatchObject({ key: 'fails-often', severity: 'WARNING' });
+    expect(warning.draftHref).toBe('/runbooks/rb1?tab=builder');
+    expect(runbookHealthInsights(input({ eligible: 20, succeeded: 2 }))[0].severity).toBe(
+      'CRITICAL'
     );
-    expect(half).toMatchObject([
-      { key: 'fails-often', kind: 'RUNBOOK_FAILS_OFTEN', severity: 'warning' },
-    ]);
-    expect(half[0].evidence).toMatchObject({ failed: 10, eligible: 20, failureRate: 0.5 });
-    const most = runbookHealthInsights(
-      input({
-        runs: { eligible: 20, succeeded: 2, incidentRuns: 0, fixed: 0, medianDurationMs: null },
-      }),
-      NOW
-    );
-    expect(most[0].severity).toBe('critical');
   });
 
-  it('does not call two failures out of three "often"', () => {
-    expect(
-      kinds(
-        input({
-          runs: { eligible: 3, succeeded: 1, incidentRuns: 0, fixed: 0, medianDurationMs: null },
-        })
-      )
-    ).toEqual([]);
+  it('does not call failures "often" with too few runs', () => {
+    expect(keys(input({ eligible: 3, succeeded: 1 }))).toEqual([]);
   });
 
   it('flags a published runbook unused for 90 days, but not a new or unpublished one', () => {
-    const idle = { eligible: 0, succeeded: 0, incidentRuns: 0, fixed: 0, medianDurationMs: null };
-    expect(kinds(input({ runs: idle, lastRunAt: daysAgo(91) }))).toEqual(['RUNBOOK_UNUSED']);
-    expect(kinds(input({ runs: idle, lastRunAt: null }))).toEqual(['RUNBOOK_UNUSED']);
-    expect(kinds(input({ runs: idle, lastRunAt: daysAgo(89) }))).toEqual([]);
-    expect(kinds(input({ runs: idle, lastRunAt: null, publishedAt: daysAgo(10) }))).toEqual([]);
-    expect(kinds(input({ runs: idle, lastRunAt: null, publishedAt: null }))).toEqual([]);
-    expect(kinds(input({ runs: idle, lastRunAt: null, archived: true }))).toEqual([]);
+    expect(keys(input({ lastRunDaysAgo: 91 }))).toEqual(['unused']);
+    expect(keys(input({ lastRunDaysAgo: null }))).toEqual(['unused']);
+    expect(keys(input({ lastRunDaysAgo: 89 }))).toEqual([]);
+    expect(keys(input({ lastRunDaysAgo: null, publishedDaysAgo: 10 }))).toEqual([]);
+    expect(keys(input({ lastRunDaysAgo: null, publishedDaysAgo: null }))).toEqual([]);
+    expect(keys(input({ lastRunDaysAgo: null, archived: true }))).toEqual([]);
   });
 
   it('flags a step failing in more than 30% of runs and names its top error', () => {
-    const items = runbookHealthInsights(
-      input({
-        steps: [
-          step({ runs: 10, failed: 4, topErrorCode: 'AGENT_TIMEOUT', topErrorCount: 3 }),
-          step({ stepKey: 'edge', name: 'Edge', runs: 10, failed: 3 }),
-          step({ stepKey: 'few', name: 'Few', runs: 4, failed: 4 }),
-        ],
-      }),
-      NOW
-    );
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({
-      key: 'step-failing:restart',
-      kind: 'RUNBOOK_STEP_FAILING',
-      severity: 'warning',
-      title: 'Step "Restart service" fails in 40% of runs (mostly AGENT_TIMEOUT)',
-    });
+    const failing = step({ runs: 6, failed: 4, topErrorCode: 'E_TIMEOUT', topErrorCount: 3 });
+    const [item] = runbookHealthInsights(input({ steps: [failing] }));
+    expect(item.key).toBe('step-failing:restart');
+    expect(item.summary).toContain('E_TIMEOUT');
+    expect(item.evidence.facts).toContainEqual({ label: 'Failed', value: '4 of 6 runs' });
+    expect(keys(input({ steps: [step({ runs: 6, failed: 1 })] }))).toEqual([]);
+    expect(keys(input({ steps: [step({ runs: 4, failed: 4 })] }))).toEqual([]);
   });
 
   it('flags a step that needed a retry in every run', () => {
-    expect(
-      runbookHealthInsights(
-        input({
-          steps: [
-            step({ runs: 4, retried: 4 }),
-            step({ stepKey: 'mostly', name: 'Mostly', runs: 4, retried: 3 }),
-            step({ stepKey: 'twice', name: 'Twice', runs: 2, retried: 2 }),
-          ],
-        }),
-        NOW
-      )
-    ).toMatchObject([{ key: 'step-retried:restart', kind: 'RUNBOOK_STEP_ALWAYS_RETRIED' }]);
+    expect(keys(input({ steps: [step({ runs: 3, retried: 3 })] }))).toEqual([
+      'step-retried:restart',
+    ]);
+    expect(keys(input({ steps: [step({ runs: 3, retried: 2 })] }))).toEqual([]);
   });
 });
 
-describe('missingStepInsights', () => {
-  const run = (executionId: string, ...notes: string[]) => ({ executionId, notes });
+describe('followUpClusters (missing step)', () => {
+  const run = (id: string, text?: string) => ({
+    executionId: id,
+    notes: text ? [{ kind: 'note' as const, id: `n-${id}`, incidentId: `i-${id}`, text }] : [],
+  });
+  const flush = [
+    'Flushed the CDN cache for the api domain',
+    'flush CDN cache for api domain',
+    'Flushed CDN cache on the api domain again',
+  ];
 
-  it('suggests a step when most runs are followed by the same note', () => {
-    const items = missingStepInsights([
-      run('e1', 'Cleared the CDN cache afterwards'),
-      run('e2', 'cleared CDN cache afterwards.', 'cleared CDN cache afterwards.'),
-      run('e3', 'Clearing the CDN cache afterwards'),
-      run('e4', 'Paged the database team'),
+  it('suggests a step when most runs are followed by the same note, storing ids only', () => {
+    const clusters = followUpClusters([
+      run('a', flush[0]),
+      run('b', flush[1]),
+      run('c', flush[2]),
+      run('d'),
     ]);
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ kind: 'RUNBOOK_MISSING_STEP', severity: 'info' });
-    expect(items[0].evidence).toMatchObject({ runsWithNote: 3, runs: 4 });
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0].runsWithNote).toBe(3);
+    const items = runbookHealthInsights(input({ followUpRuns: 4, followUps: clusters }));
+    expect(items[0].key).toBe(`missing-step:${clusters[0].signature}`);
+    expect(items[0].evidence.examples?.[0].href).toBe('/incidents/i-a#note-n-a');
+    expect(JSON.stringify(items)).not.toMatch(/CDN|flush/i);
   });
 
   it('stays quiet when the note follows only a minority of runs or there are too few runs', () => {
-    const repeated = 'Cleared the CDN cache afterwards';
     expect(
-      missingStepInsights([
-        run('e1', repeated),
-        run('e2', repeated),
-        run('e3', repeated),
-        run('e4'),
-        run('e5'),
-        run('e6'),
+      followUpClusters([
+        run('a', flush[0]),
+        run('b', flush[1]),
+        run('c', flush[2]),
+        run('d'),
+        run('e'),
+        run('f'),
       ])
     ).toEqual([]);
-    expect(missingStepInsights([run('e1', repeated), run('e2', repeated)])).toEqual([]);
+    expect(followUpClusters([run('a', flush[0]), run('b', flush[1])])).toEqual([]);
+  });
+});
+
+describe('noteRefsFromHrefs', () => {
+  it('round-trips the incident links insights store and skips anything else', () => {
+    expect(
+      noteRefsFromHrefs([
+        '/incidents/i1#note-n1',
+        '/incidents/i2#event-e2',
+        'https://x.test',
+        undefined,
+      ])
+    ).toEqual([
+      { incidentId: 'i1', kind: 'note', id: 'n1' },
+      { incidentId: 'i2', kind: 'event', id: 'e2' },
+    ]);
   });
 });
 
@@ -259,74 +360,62 @@ describe('extractImperativeSteps', () => {
   });
 });
 
-describe('missingRunbookInsights', () => {
-  const notes = (count: number, text = 'Restarted the api pods and cleared the redis cache') =>
-    Array.from({ length: count }, (_, index) => ({ incidentId: `i${index}`, text }));
-  const problem = { templateHash: 'h1', template: 'api latency above <num> ms', runbookRuns: 0 };
+describe('missingRunbookProblems', () => {
+  const note = (incidentId: string, text: string) => ({
+    kind: 'event' as const,
+    id: `e-${incidentId}`,
+    incidentId,
+    text,
+  });
+  const fix = [
+    note('i1', 'Restarted the api pods and cleared the redis cache'),
+    note('i2', 'Restart api pods, clear redis cache'),
+    note('i3', 'Restarting api pods then clearing redis cache'),
+  ];
 
   it('suggests a runbook for three similar hand-written fixes with no runbook run', () => {
-    const items = missingRunbookInsights([{ ...problem, notes: notes(3) }], { boundRunbooks: 0 });
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ key: 'h1', kind: 'RUNBOOK_MISSING', severity: 'info' });
-    expect(items[0].evidence).toMatchObject({
-      noteCount: 3,
-      incidentIds: ['i0', 'i1', 'i2'],
-      steps: [
-        { name: 'Restart the api pods', support: 3 },
-        { name: 'Clear the redis cache', support: 3 },
-      ],
-    });
+    const [problem] = missingRunbookProblems([{ templateHash: 'h1', notes: fix, runbookRuns: 0 }]);
+    expect(problem).toMatchObject({ templateHash: 'h1', noteCount: 3 });
+    expect(problem.stepCount).toBeGreaterThan(0);
+    expect(problem.refs.map(ref => ref.id)).toEqual(['e-i1', 'e-i2', 'e-i3']);
+    expect(JSON.stringify(problem)).not.toMatch(/redis/);
   });
 
-  it('stays quiet with two notes, dissimilar notes, a runbook run, or no recognisable action', () => {
-    const none = (value: Parameters<typeof missingRunbookInsights>[0]) =>
-      expect(missingRunbookInsights(value, { boundRunbooks: 0 })).toEqual([]);
-    none([{ ...problem, notes: notes(2) }]);
-    none([
-      {
-        ...problem,
-        notes: [
-          { incidentId: 'a', text: 'Restarted the api pods' },
-          { incidentId: 'b', text: 'Rotated the TLS certificate' },
-          { incidentId: 'c', text: 'Increased the disk quota on the volume' },
-        ],
-      },
-    ]);
-    none([{ ...problem, notes: notes(5), runbookRuns: 1 }]);
-    none([{ ...problem, notes: notes(4, 'It was the upstream provider outage again') }]);
-  });
-
-  it('counts incidents, not repeated notes on one incident', () => {
-    const same = Array.from({ length: 4 }, () => ({
-      incidentId: 'i0',
-      text: 'Restarted the api pods and cleared the redis cache',
-    }));
-    expect(missingRunbookInsights([{ ...problem, notes: same }], { boundRunbooks: 0 })).toEqual([]);
+  it('stays quiet with two notes, a runbook run, one incident, or no recognisable action', () => {
+    expect(
+      missingRunbookProblems([{ templateHash: 'h', notes: fix.slice(0, 2), runbookRuns: 0 }])
+    ).toEqual([]);
+    expect(missingRunbookProblems([{ templateHash: 'h', notes: fix, runbookRuns: 1 }])).toEqual([]);
+    const oneIncident = fix.map(item => ({ ...item, incidentId: 'i1' }));
+    expect(
+      missingRunbookProblems([{ templateHash: 'h', notes: oneIncident, runbookRuns: 0 }])
+    ).toEqual([]);
+    const prose = ['i1', 'i2', 'i3'].map(id => note(id, 'The api latency was high today'));
+    expect(missingRunbookProblems([{ templateHash: 'h', notes: prose, runbookRuns: 0 }])).toEqual(
+      []
+    );
   });
 
   it('orders problems by how many incidents back them', () => {
-    const items = missingRunbookInsights(
-      [
-        { ...problem, templateHash: 'small', notes: notes(3) },
-        { ...problem, templateHash: 'big', notes: notes(6) },
-      ],
-      { boundRunbooks: 2 }
-    );
-    expect(items.map(item => item.key)).toEqual(['big', 'small']);
-    expect(items[0].evidence.boundRunbooks).toBe(2);
+    const four = [...fix, note('i4', 'restarted api pods and cleared redis cache')];
+    expect(
+      missingRunbookProblems([
+        { templateHash: 'small', notes: fix, runbookRuns: 0 },
+        { templateHash: 'big', notes: four, runbookRuns: 0 },
+      ]).map(problem => problem.templateHash)
+    ).toEqual(['big', 'small']);
   });
 });
 
-describe('draftRunbookFromSuggestion', () => {
+describe('draftRunbookFromNotes', () => {
   it('builds a manual-only draft the runbook editor accepts', () => {
-    const draft = draftRunbookFromSuggestion(
+    const draft = draftRunbookFromNotes(
       {
         template: 'Queue depth high on <host>  ',
-        noteCount: 3,
-        sampleNotes: ['Restarted the api pods and cleared the redis cache'],
-        steps: [
-          { name: 'Restart the api pods', support: 3 },
-          { name: 'Clear the redis cache', support: 2 },
+        notes: [
+          'Restarted the api pods and cleared the redis cache',
+          'restart api pods, clear redis cache',
+          'Restarting api pods',
         ],
       },
       'Checkout'
@@ -334,25 +423,17 @@ describe('draftRunbookFromSuggestion', () => {
     expect(draft.name).toBe('Queue depth high on <host>');
     expect(draft.slug).toBe('queue-depth-high-on-host');
     expect(draft.description).toContain('3 hand-written resolution notes on Checkout');
-    expect(draft.definition.steps.map(step => [step.key, step.type, step.name])).toEqual([
-      ['step_1', 'MANUAL', 'Restart the api pods'],
-      ['step_2', 'MANUAL', 'Clear the redis cache'],
+    expect(draft.definition.steps.map(item => [item.key, item.type])).toEqual([
+      ['step_1', 'MANUAL'],
+      ['step_2', 'MANUAL'],
     ]);
     expect(runbookDefinitionSchema.safeParse(draft.definition).success).toBe(true);
     expect(createRunbookSchema.safeParse(draft).success).toBe(true);
   });
 
   it('falls back to a safe name and slug for an empty template', () => {
-    const draft = draftRunbookFromSuggestion(
-      {
-        template: ' ',
-        noteCount: 3,
-        sampleNotes: [],
-        steps: [{ name: 'Restart it now', support: 3 }],
-      },
-      'Checkout'
-    );
-    expect(draft.name).toBe('Suggested runbook');
-    expect(draft.slug).toBe('suggested-runbook');
+    const draft = draftRunbookFromNotes({ template: ' ', notes: ['Restart it now'] }, 'Checkout');
+    expect(draft.name).toBe('Suggested runbook for Checkout');
+    expect(draft.slug).toBe('suggested-runbook-for-checkout');
   });
 });
