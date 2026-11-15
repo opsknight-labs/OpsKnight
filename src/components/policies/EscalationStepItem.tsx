@@ -25,6 +25,8 @@ import {
 import { useToast } from '@/hooks/use-product-notification';
 import UserAvatar from '@/components/UserAvatar';
 import EscalationStepEditModal from './EscalationStepEditModal';
+import StepOutcomeStrip from './StepOutcomeStrip';
+import type { PolicyStepStat } from '@/lib/escalation/policy-intelligence';
 
 type EscalationStep = {
   id: string;
@@ -70,6 +72,10 @@ type EscalationStepItemProps = {
   }>;
   teams?: Array<{ id: string; name: string }>;
   schedules?: Array<{ id: string; name: string }>;
+  /** Last 30 days at this step, from escalation insights; absent while they are off. */
+  stat?: PolicyStepStat;
+  /** "Apply suggestion": open the editor once with this wait filled in. Nothing saves until the person does. */
+  suggestedDelayMinutes?: number;
 };
 
 export default function EscalationStepItem({
@@ -84,9 +90,12 @@ export default function EscalationStepItem({
   users = [],
   teams = [],
   schedules = [],
+  stat,
+  suggestedDelayMinutes,
 }: EscalationStepItemProps) {
   const [isPending, startTransition] = useTransition();
-  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [suggestion, setSuggestion] = useState(canManage ? suggestedDelayMinutes : undefined);
+  const [isEditOpen, setIsEditOpen] = useState(suggestion !== undefined);
   const { showToast } = useToast();
 
   const handleDelete = () => {
@@ -186,6 +195,7 @@ export default function EscalationStepItem({
               <div>
                 <div className="text-sm font-bold text-slate-900 leading-tight">{label}</div>
                 <div className="text-xs text-slate-500 mt-0.5">{subLabel}</div>
+                <StepOutcomeStrip stat={stat} />
               </div>
             </div>
 
@@ -265,9 +275,12 @@ export default function EscalationStepItem({
       {/* Edit Modal */}
       {isEditOpen && (
         <EscalationStepEditModal
-          step={step}
+          step={suggestion === undefined ? step : { ...step, delayMinutes: suggestion }}
           isOpen={isEditOpen}
-          onClose={() => setIsEditOpen(false)}
+          onClose={() => {
+            setIsEditOpen(false);
+            setSuggestion(undefined);
+          }}
           users={users}
           teams={teams}
           schedules={schedules}

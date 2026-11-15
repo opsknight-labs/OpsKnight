@@ -1,5 +1,10 @@
 import prisma from '@/lib/prisma';
-import { assertCanListPolicies, getUserPermissions } from '@/lib/rbac';
+import {
+  assertCanListPolicies,
+  getCurrentAuthorizationActor,
+  getUserPermissions,
+} from '@/lib/rbac';
+import { countOpenInsightsForScopes } from '@/lib/intelligence/ops-insights/view';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -20,7 +25,13 @@ export const revalidate = 0;
 export default async function PoliciesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string; page?: string; q?: string; search?: string; status?: string }>;
+  searchParams?: Promise<{
+    error?: string;
+    page?: string;
+    q?: string;
+    search?: string;
+    status?: string;
+  }>;
 }) {
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
@@ -99,6 +110,12 @@ export default async function PoliciesPage({
   });
 
   const canManagePolicies = permissions.isAdmin;
+  // One grouped read for the page's rows; empty while escalation insights are off. Never a model call.
+  const insightCounts = await countOpenInsightsForScopes(
+    await getCurrentAuthorizationActor(),
+    'POLICY',
+    policies.map(policy => policy.id)
+  ).catch(() => new Map<string, never>());
 
   // Aggregated stats
   const totalPolicies = allPoliciesCount;
@@ -111,6 +128,7 @@ export default async function PoliciesPage({
     stepCount: p.steps.length,
     serviceCount: p.services.length,
     services: p.services,
+    insights: insightCounts.get(p.id) ?? null,
     steps: p.steps.map(s => ({
       id: s.id,
       stepOrder: s.stepOrder,
