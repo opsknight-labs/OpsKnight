@@ -138,7 +138,7 @@ test('assistant detail page, from the assistants list, at phone and desktop widt
   }
   // The internal personal-token client and unknown ids are not assistants.
   for (const id of ['okmcp-personal-access-tokens', 'no-such-assistant']) {
-    // The route streams behind loading.tsx, so "not found" arrives as content, not a 404 status.
+    // notFound() runs before the page streams, so the shared 404 page renders.
     await page.goto(`/settings/integrations/mcp/assistants/${id}`);
     await expect(page.getByRole('heading', { name: '404 - Page Not Found' })).toBeVisible();
   }
