@@ -51,11 +51,11 @@ everything and stops the daily work.
 
 ## What is available today
 
-| Area | Insight | What it means |
-| --- | --- | --- |
-| Service automation and integrations | **No alerts for N days** | The service used to send alerts regularly and has been quiet for much longer than its usual gap. Check that its integrations are still connected. Reported for 30 days, then dropped. |
-| Service automation and integrations | **Alert volume is N times the usual** / **dropped sharply** | The last 24 hours are far above, or far below, the week before. |
-| Service automation and integrations | **N% of recent alerts have no severity** | Most recent alerts arrived without a severity, so urgency and routing rules cannot use it. |
+| Area                                | Insight                                                     | What it means                                                                                                                                                                         |
+| ----------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service automation and integrations | **No alerts for N days**                                    | The service used to send alerts regularly and has been quiet for much longer than its usual gap. Check that its integrations are still connected. Reported for 30 days, then dropped. |
+| Service automation and integrations | **Alert volume is N times the usual** / **dropped sharply** | The last 24 hours are far above, or far below, the week before.                                                                                                                       |
+| Service automation and integrations | **N% of recent alerts have no severity**                    | Most recent alerts arrived without a severity, so urgency and routing rules cannot use it.                                                                                            |
 
 Insights for the other areas arrive with later updates; their switches are already there so you can decide
 in advance.
@@ -78,6 +78,29 @@ When the condition goes away, the insight resolves by itself. If it returns late
 
 Accepting, dismissing and reopening are recorded in the audit log.
 
+## In the weekly digest
+
+When the weekly Intelligence digest is on, each recipient's email also lists up to five of their open
+insights, most severe first, with a link to each and to the full list on **Intelligence**. Recipients see
+only insights for things they can open. The list is left out when there are none, or when operations
+insights are off.
+
+## Small helpers
+
+A separate switch, **Settings → Intelligence → Show small helpers** (off by default), adds four helpers
+that work from your existing data with no AI provider. None of them creates, saves or publishes anything;
+they only fill a form you then review.
+
+| Where                                       | What you get                                                                                                                                                                                                                                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Create incident**                         | After you type a title of at least eight characters and pause, suggestions appear under it: a service and an urgency when most similar past incidents agree, and a link to an unresolved incident that may already cover the same problem. Selecting a suggestion only fills that field. |
+| Status page **Announcements → New**         | **Draft from an incident** lists open incidents on the page's components or on services those components depend on. Choosing one fills the title, message, type and affected components; review and publish as usual.                                                                    |
+| Command palette                             | Below the usual matches, **From incidents, postmortems and runbooks** shows passages from the knowledge index that match a question such as "payments timeout after deploy". Requires the knowledge index to be on.                                                                      |
+| **Analytics** cards (incidents, MTTA, MTTR) | One line names the services that moved the number most against the previous period of the same length, for example "Most of the rise: Payments +10, Checkout +2". **Why?** shows the numbers behind it and, when an AI provider is set up, a two-sentence explanation.                   |
+
+The analytics line reads the daily rollups, so it covers complete days only and leaves today out. It
+counts only services you can open, so two people can see different lines on the same card.
+
 ## Who sees what
 
 You see insights only for things you can already open: a responder limited to their teams sees their
@@ -94,8 +117,10 @@ sweep.
 
 ## Troubleshooting
 
-| Symptom | Check |
-| --- | --- |
-| No **Needs attention** section | The master switch and the area are on, Intelligence is enabled and its worker is running (**Settings → Intelligence → Status**). An empty section is hidden by design. |
-| An insight you fixed is still listed | Each item is revisited once a day. It resolves at the next visit. |
-| "These settings changed since you opened the page" | Someone else saved Intelligence settings. Refresh and save again. |
+| Symptom                                            | Check                                                                                                                                                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No **Needs attention** section                     | The master switch and the area are on, Intelligence is enabled and its worker is running (**Settings → Intelligence → Status**). An empty section is hidden by design.                                  |
+| An insight you fixed is still listed               | Each item is revisited once a day. It resolves at the next visit.                                                                                                                                       |
+| No suggestions while creating an incident          | **Show small helpers** is on, the title is at least eight characters, and similar past incidents exist for services you can open. Suggestions that agree with what you already picked are not repeated. |
+| No "why" line on an analytics card                 | The rollups have no data for the comparison period, the number did not change, or the helpers are off.                                                                                                  |
+| "These settings changed since you opened the page" | Someone else saved Intelligence settings. Refresh and save again.                                                                                                                                       |

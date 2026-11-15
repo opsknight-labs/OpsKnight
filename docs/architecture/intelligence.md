@@ -384,6 +384,11 @@ handling, cost ceiling; `tests/evals/squire/categories.ts`).
   graded), or when a keyed run recorded nothing. Without a key the suite is skipped and nothing is compared.
   `baseline.json` is raised by committing a reviewed value; `--record-catalogue` refreshes only
   `minimumCases`, which a unit test enforces so the set cannot quietly shrink.
+- _Token guard (K9)._ Every live case records its tokens, and the gate fails when the median per case is
+  more than `maxMedianTokenRise` (15%) above the committed `medianTokensPerCase`; `--record-tokens
+<report>` writes a reviewed run's median, never a passing run on its own. The scripted tier estimates the
+  prompt tokens of every request a case sends (`estimateTokens` over the request body) and fails the same way
+  against `modelMedianPromptTokens`, so a prompt or tool-schema growth is caught on every PR without a key.
 
 Labelled engine fixtures sit beside them: `tests/fixtures/intelligence/storm-fixture.ts` (35 incidents,
 three real problems, one-offs and decoys) must reach a compression ratio of at least 2.9 with no group
@@ -1090,11 +1095,11 @@ The lane itself still needs Intelligence to be enabled.
 
 ### Storage
 
-| Table | Purpose |
-| --- | --- |
-| `OpsInsight` | One insight. Unique on `(scopeType, scopeId, kind, key)`, so recomputation updates a row. Holds `area`, `severity` (`INFO` < `WARNING` < `CRITICAL`), `title`, `summary`, `evidence` (JSON, at most 4 KB: up to 12 facts, 5 examples, a window), optional `draftHref` (in-app path), `inputHash`, `status` (`OPEN`, `ACCEPTED`, `DISMISSED`, `RESOLVED`), `generation`, first/last seen, who decided. |
-| `OpsInsightScopeState` | Per scope: the hash of the producers' inputs and when the scope was last computed. |
-| `MetricRollup` (existing) | Daily operations rollups, with the new nullable `subjectKey` column and `idx_metric_rollup_subject (name, subjectKey, bucket)`. |
+| Table                     | Purpose                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OpsInsight`              | One insight. Unique on `(scopeType, scopeId, kind, key)`, so recomputation updates a row. Holds `area`, `severity` (`INFO` < `WARNING` < `CRITICAL`), `title`, `summary`, `evidence` (JSON, at most 4 KB: up to 12 facts, 5 examples, a window), optional `draftHref` (in-app path), `inputHash`, `status` (`OPEN`, `ACCEPTED`, `DISMISSED`, `RESOLVED`), `generation`, first/last seen, who decided. |
+| `OpsInsightScopeState`    | Per scope: the hash of the producers' inputs and when the scope was last computed.                                                                                                                                                                                                                                                                                                                    |
+| `MetricRollup` (existing) | Daily operations rollups, with the new nullable `subjectKey` column and `idx_metric_rollup_subject (name, subjectKey, bucket)`.                                                                                                                                                                                                                                                                       |
 
 Status rules (`ops-insights/store.ts`, `upsertInsights`): a produced insight keeps a person's decision
 (`ACCEPTED` and `DISMISSED` are sticky while it is still produced); an open or accepted insight that is no
@@ -1160,11 +1165,11 @@ Rules:
 `producers/integration-health.ts` (scope `SERVICE`, area `automation`) answers three questions from the
 alerts a service already stored:
 
-| Key | Fires when | Severity |
-| --- | --- | --- |
-| `silent` | The service sent at least 7 alerts in the week before its last one, and has now been quiet for a day or three of its usual gaps, whichever is longer. Stops after 30 days (probably retired). | `WARNING` |
-| `volume-step` | The last 24 hours hold at least 50 alerts and three times the daily average of the 7 days before (needs 35 alerts in that week), or a quarter of it or less (needs 140). Not judged when a count hit its 20,000 cap. | `WARNING` up, `INFO` down |
-| `missing-severity` | Half or more of the last 200 alerts (at least 20) have no severity. | `WARNING` at 90%, else `INFO` |
+| Key                | Fires when                                                                                                                                                                                                           | Severity                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `silent`           | The service sent at least 7 alerts in the week before its last one, and has now been quiet for a day or three of its usual gaps, whichever is longer. Stops after 30 days (probably retired).                        | `WARNING`                     |
+| `volume-step`      | The last 24 hours hold at least 50 alerts and three times the daily average of the 7 days before (needs 35 alerts in that week), or a quarter of it or less (needs 140). Not judged when a count hit its 20,000 cap. | `WARNING` up, `INFO` down     |
+| `missing-severity` | Half or more of the last 200 alerts (at least 20) have no severity.                                                                                                                                                  | `WARNING` at 90%, else `INFO` |
 
 `loadInput` is two statements, every arm on `idx_alert_by_service (serviceId, createdAt)` with a `LIMIT`, so
 a service with millions of alerts costs the same as a small one. It returns
@@ -1200,12 +1205,12 @@ insight.
 `src/lib/metric-rollup.ts` adds daily operations rollups in `MetricRollup`, run by the existing daily
 rollup step of the cron scheduler (`generateOpsRollups`; a no-op while operations insights are off):
 
-| Name | `subjectKey` | `tags` | `count` / `sum` | Driven by |
-| --- | --- | --- | --- | --- |
-| `ops.pages.user_hour` | user id | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents | `idx_notification_created_cursor` |
-| `ops.runbook.outcome` | runbook id | `status` | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new) |
-| `ops.automation.rule_match` | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode` | decisions / fallbacks | `IncidentAutomationDecision (serviceId, createdAt)` |
-| `ops.escalation.step_outcome` | policy id | `step`, `outcome` | attempts / seconds to acknowledge | Named and shaped only; its source arrives with the escalation capture slice. |
+| Name                          | `subjectKey`          | `tags`                                           | `count` / `sum`                           | Driven by                                                                    |
+| ----------------------------- | --------------------- | ------------------------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `ops.pages.user_hour`         | user id               | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents       | `idx_notification_created_cursor`                                            |
+| `ops.runbook.outcome`         | runbook id            | `status`                                         | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new)                                      |
+| `ops.automation.rule_match`   | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode`        | decisions / fallbacks                     | `IncidentAutomationDecision (serviceId, createdAt)`                          |
+| `ops.escalation.step_outcome` | policy id             | `step`, `outcome`                                | attempts / seconds to acknowledge         | Named and shaped only; its source arrives with the escalation capture slice. |
 
 Each rollup advances one complete UTC day per transaction from its own watermark row
 (`<name>.watermark`), deleting and rewriting the day with the watermark so a crash or a second scheduler
@@ -1221,3 +1226,24 @@ the load gate `tests/load/intelligence-query-plans.ts`.
 dismiss, an optional "Create draft" link and "Ask Squire about this", which only hands a question to the
 assistant) and `InsightsInboxSection` (the "Needs attention" section on `/intelligence`). All render
 nothing when there is nothing to say. Only `InsightActions` is client code.
+
+### Small helpers (J7)
+
+Behind `IntelligenceSettings.opsHelpersEnabled` (default off, with the master switch). None writes on
+read, none is on the ingestion, escalation or notification path, and none calls a model except the
+expanded analytics line. Pure logic sits in `src/lib/intelligence/helpers/<name>.ts`, the scoped loader
+beside it in `<name>-loader.ts`, the server action next to the page that uses it.
+
+| Helper                      | Loader                     | Reads                                                                                                                                                                   | Bound                                                                              |
+| --------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Create-incident suggestions | `create-suggest-loader.ts` | `IncidentFingerprint` trigram candidates from the similarity retrieval (`retrieval.ts` exports), joined to incidents under `incidentReadWhere`                          | 25 candidates; client debounce 500 ms, title ≥ 8 characters, stale answers dropped |
+| Status-update draft         | `status-draft-loader.ts`   | the page's shown components, `ServiceDependency` upstream closure, open incidents on those services under the viewer's scope                                            | 3 hops, 10 incidents                                                               |
+| Palette knowledge search    | `palette-search-loader.ts` | `searchKnowledgeForActor` (FTS + trigram, embedding re-rank only when configured, per-source visibility) over postmortems, runbook steps, resolution and incident notes | 6 hits                                                                             |
+| "Why did this change"       | `metric-change-loader.ts`  | two grouped reads of `IncidentMetricRollup` (daily, per service) for the last N complete UTC days and the N before, limited to `serviceReadWhere`                       | one row per service; ≤ 90-day window                                               |
+
+The metric decomposition is exact: per-service count deltas, or for a mean
+`sum_i(current)/n(current) − sum_i(previous)/n(previous)`, which add up to the whole change; the line lists
+the top three services that moved it in its direction. Expanding the line recomputes on the server and may
+phrase it through `cachedGenerate` (callSite `interactive`, `AI_OUTPUT_TOKENS['analytics.metric-change']`),
+so reopening with unchanged numbers costs nothing; the list page itself never calls a model. The weekly
+digest adds the recipient's top five open insights from `listInsightsInbox` (scoped as on `/intelligence`).
