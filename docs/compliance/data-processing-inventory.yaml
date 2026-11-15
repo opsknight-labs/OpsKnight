@@ -266,3 +266,28 @@ domains:
         current: person-scoped-insights-and-page-counts-removed-by-the-bounded-retention-sweep-after-user-deletion-decider-cleared-on-user-erasure,
         target: erasure-in-the-same-transaction-as-the-user,
       }
+  - domain: escalation-step-attempts
+    data:
+      [
+        escalation-step-attempts-with-target-and-paged-user-ids,
+        skip-reasons-and-notification-times,
+        id-of-the-person-who-acknowledged-an-incident-and-the-channel-used,
+      ]
+    purpose:
+      [
+        escalation-policy-acknowledgement-rates-and-timeout-suggestions,
+        incident-acknowledgement-attribution,
+      ]
+    storage: [postgresql]
+    recipients: [authorized-workspace-users-with-escalation-policy-read-as-counts-only]
+    retention:
+      {
+        current: deleted-with-the-incident-backfilled-rows-marked-approximate,
+        target: user-ids-removed-in-the-user-erasure-transaction,
+      }
+    exportable: partial
+    deletion:
+      {
+        current: cascade-with-the-incident,
+        target: user-ids-removed-in-the-user-erasure-transaction,
+      }
