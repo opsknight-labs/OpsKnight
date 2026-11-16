@@ -1047,6 +1047,22 @@
     "requiredHeaders": ["Idempotency-Key", "If-Match"],
     "bodyRequired": true
   },
+  "startAutomationReplay": {
+    "method": "POST",
+    "path": "/services/{id}/automation/replay",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getAutomationReplay": {
+    "method": "GET",
+    "path": "/services/{id}/automation/replay",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listAutomationDecisions": {
     "method": "GET",
     "path": "/services/{id}/automation/decisions",

@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   FlaskConical,
   GitCompare,
+  Lightbulb,
   ListChecks,
   Pencil,
   ShieldCheck,
@@ -20,6 +21,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 
 import { TraceDetail } from './TraceDetail';
+import { AutomationInsights } from './AutomationInsights';
 import type { Data, Counts, Area } from './presentation-types';
 import { toneClasses } from './workspace/status';
 import { NativeSelect } from './authoring/primitives';
@@ -612,6 +614,22 @@ export const AutomationOverview = memo(function AutomationOverview({
           </div>
         </Panel>
       </div>
+
+      {data.insights?.items.some(insight => insight.kind === 'automation.suggested_rule') && (
+        <Panel icon={Lightbulb} title="Suggested rules">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Corrections people kept making by hand over the last 30 days. Opening one shows the rule
+            in the editor; it joins the draft only when you add it, and the publish review replays
+            it first.
+          </p>
+          <AutomationInsights
+            data={data.insights}
+            kind="automation.suggested_rule"
+            label="Suggested rules"
+            draftLabel="Open as draft rule"
+          />
+        </Panel>
+      )}
     </div>
   );
 });

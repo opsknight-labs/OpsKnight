@@ -1,0 +1,260 @@
+import { createHash } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
+import { z } from 'zod/v3';
+import prisma from '@/lib/prisma';
+import { AppError } from '@/lib/errors/app-error';
+import { logger } from '@/lib/logger';
+import { resolveIncidentClassification } from '@/lib/incidents/classification';
+import { withDbBudget } from '@/lib/intelligence/jobs/db-budget';
+import { validateAutomationSnapshot } from './authoring';
+import { compileAutomation } from './compiler';
+import { snapshotSchema } from './contract';
+import {
+  REPLAY_MAX_DAYS,
+  REPLAY_MIN_DAYS,
+  replayStoredEvents,
+  type ReplayEnvironment,
+  type ReplaySummary,
+} from './replay';
+
+/**
+ * Historical replay as a background job: the request stores a run (IntelligenceEvaluationRun, kind
+ * REPLAY) and a SCHEDULED_TASK BackgroundJob; the worker replays and writes progress and the result
+ * back to the run. Nothing here is reachable from event ingestion.
+ */
+
+const SEVERITIES = ['critical', 'error', 'warning', 'info'] as const;
+const PAGE_DB_MS = 10_000;
+/** An identical request inside this window returns the run that already exists. */
+const REUSE_MS = 10 * 60_000;
+/** A run the worker never finished is reported as failed after this long. */
+const STALE_MS = 10 * 60_000;
+
+export const automationReplayRequestSchema = z
+  .object({
+    snapshot: snapshotSchema,
+    days: z.number().int().min(REPLAY_MIN_DAYS).max(REPLAY_MAX_DAYS).default(REPLAY_MIN_DAYS),
+    /** Which integration's field mappings apply; the service's first integration when omitted. */
+    integrationType: z.string().min(1).max(64).optional(),
+  })
+  .strict();
+
+export type AutomationReplayResult = ReplaySummary & { alertsScanned: number; truncated: boolean };
+
+export type AutomationReplayView = {
+  runId: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  days: number;
+  /** 0..1 share of the window already replayed. */
+  progress: number;
+  result: AutomationReplayResult | null;
+  error: string | null;
+  createdAt: string;
+};
+
+const storedSchema = z.object({
+  type: z.literal('AUTOMATION_REPLAY'),
+  serviceId: z.string(),
+  days: z.number(),
+  inputHash: z.string(),
+  integrationType: z.string().nullable(),
+  progress: z.number(),
+  snapshot: z.unknown().optional(),
+  result: z.unknown().optional(),
+});
+
+type RunRow = {
+  id: string;
+  status: AutomationReplayView['status'];
+  metrics: Prisma.JsonValue | null;
+  error: string | null;
+  createdAt: Date;
+};
+const runSelect = { id: true, status: true, metrics: true, error: true, createdAt: true } as const;
+
+function view(row: RunRow, serviceId: string, now = Date.now()): AutomationReplayView | null {
+  const stored = storedSchema.safeParse(row.metrics);
+  if (!stored.success || stored.data.serviceId !== serviceId) return null;
+  const stale =
+    (row.status === 'PENDING' || row.status === 'RUNNING') &&
+    now - row.createdAt.getTime() > STALE_MS;
+  return {
+    runId: row.id,
+    status: stale ? 'FAILED' : row.status,
+    days: stored.data.days,
+    progress: row.status === 'COMPLETED' ? 1 : stored.data.progress,
+    result:
+      row.status === 'COMPLETED' ? ((stored.data.result as AutomationReplayResult) ?? null) : null,
+    error: stale ? 'The replay did not finish. Run it again.' : row.error,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** Validates the snapshot and queues a replay; the caller has already authorized the service. */
+export async function startAutomationReplay(
+  tx: Prisma.TransactionClient,
+  input: z.infer<typeof automationReplayRequestSchema> & {
+    serviceId: string;
+    actorId: string | null;
+    now?: Date;
+  }
+): Promise<AutomationReplayView> {
+  const validation = await validateAutomationSnapshot(tx, input.serviceId, input.snapshot);
+  const blocking = validation.issues.find(issue => issue.level === 'ERROR');
+  if (blocking)
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      userMessage: `Fix the draft before replaying it: ${blocking.message}`,
+    });
+  const now = input.now ?? new Date();
+  const integrationType = input.integrationType ?? null;
+  const inputHash = createHash('sha256')
+    .update(
+      JSON.stringify([input.serviceId, input.days, integrationType, input.snapshot, input.actorId])
+    )
+    .digest('hex');
+  // Bounded by the (kind, createdAt) index and the reuse window.
+  const existing = await tx.intelligenceEvaluationRun.findFirst({
+    where: {
+      kind: 'REPLAY',
+      status: { not: 'FAILED' },
+      createdAt: { gte: new Date(now.getTime() - REUSE_MS) },
+      metrics: { path: ['inputHash'], equals: inputHash },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: runSelect,
+  });
+  const reused = existing && view(existing, input.serviceId, now.getTime());
+  if (reused && reused.status !== 'FAILED') return reused;
+
+  const run = await tx.intelligenceEvaluationRun.create({
+    data: {
+      kind: 'REPLAY',
+      status: 'PENDING',
+      windowStart: new Date(now.getTime() - input.days * 86_400_000),
+      windowEnd: now,
+      createdById: input.actorId,
+      metrics: {
+        type: 'AUTOMATION_REPLAY',
+        serviceId: input.serviceId,
+        days: input.days,
+        inputHash,
+        integrationType,
+        progress: 0,
+        snapshot: input.snapshot,
+      } as Prisma.InputJsonObject,
+    },
+    select: runSelect,
+  });
+  await tx.backgroundJob.create({
+    data: {
+      type: 'SCHEDULED_TASK',
+      scheduledAt: now,
+      // The run row records failure; a retry would only replay the same window again.
+      maxAttempts: 1,
+      payload: { task: 'AUTOMATION_REPLAY', runId: run.id },
+    },
+  });
+  return view(run, input.serviceId, now.getTime())!;
+}
+
+/** Null when the run does not exist or belongs to another service. */
+export async function getAutomationReplay(
+  client: Pick<Prisma.TransactionClient, 'intelligenceEvaluationRun'>,
+  serviceId: string,
+  runId: string
+): Promise<AutomationReplayView | null> {
+  const row = await client.intelligenceEvaluationRun.findFirst({
+    where: { id: runId, kind: 'REPLAY' },
+    select: runSelect,
+  });
+  return row ? view(row, serviceId) : null;
+}
+
+/** What every event in one replay shares: default policy, integration type and base classification. */
+export async function loadReplayEnvironment(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  integrationType: string | null
+): Promise<ReplayEnvironment> {
+  const service = await tx.service.findUnique({
+    where: { id: serviceId },
+    select: {
+      escalationPolicyId: true,
+      integrations: { select: { type: true }, orderBy: { createdAt: 'asc' }, take: 1 },
+    },
+  });
+  if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
+  const classified = new Map<string, { priority: string | null; urgency: string }>();
+  for (const alertSeverity of SEVERITIES) {
+    const { priority, urgency } = await resolveIncidentClassification(tx, {
+      serviceId,
+      alertSeverity,
+    });
+    classified.set(alertSeverity, { priority, urgency });
+  }
+  return {
+    integrationType: integrationType ?? service.integrations[0]?.type ?? 'EVENTS_API_V2',
+    defaultPolicyId: service.escalationPolicyId,
+    classify: severity => classified.get(severity) ?? { priority: null, urgency: 'HIGH' },
+  };
+}
+
+/** Worker entry point. Failures land on the run row, so the job itself always completes. */
+export async function processAutomationReplay(runId: string) {
+  const claimed = await prisma.intelligenceEvaluationRun.updateMany({
+    where: { id: runId, kind: 'REPLAY', status: 'PENDING' },
+    data: { status: 'RUNNING', startedAt: new Date() },
+  });
+  if (!claimed.count) return;
+  try {
+    const run = await prisma.intelligenceEvaluationRun.findUniqueOrThrow({
+      where: { id: runId },
+      select: { metrics: true, windowStart: true, windowEnd: true },
+    });
+    const stored = storedSchema.parse(run.metrics);
+    const { compiled, issues } = compileAutomation(stored.snapshot);
+    if (issues.some(issue => issue.level === 'ERROR')) throw new Error('The draft is not valid.');
+    const environment = await withDbBudget({ maxDbMs: PAGE_DB_MS }, tx =>
+      loadReplayEnvironment(tx, stored.serviceId, stored.integrationType)
+    );
+    const result = await replayStoredEvents({
+      compiled,
+      serviceId: stored.serviceId,
+      environment,
+      windowStart: run.windowStart,
+      windowEnd: run.windowEnd,
+      run: work => withDbBudget({ maxDbMs: PAGE_DB_MS }, work),
+      onProgress: async progress => {
+        await prisma.$executeRaw`
+          UPDATE "IntelligenceEvaluationRun"
+          SET "metrics" = jsonb_set("metrics", '{progress}', to_jsonb(${progress.fraction}::float8))
+          WHERE "id" = ${runId}`;
+      },
+    });
+    const kept = { ...stored };
+    // The snapshot is dropped once replayed: the run keeps counts, not rule definitions.
+    delete kept.snapshot;
+    await prisma.intelligenceEvaluationRun.update({
+      where: { id: runId },
+      data: {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        metrics: { ...kept, progress: 1, result } as unknown as Prisma.InputJsonObject,
+      },
+    });
+  } catch (error) {
+    logger.warn('[Automation] Replay failed', {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await prisma.intelligenceEvaluationRun.update({
+      where: { id: runId },
+      data: {
+        status: 'FAILED',
+        completedAt: new Date(),
+        error: 'The replay could not be completed. Run it again.',
+      },
+    });
+  }
+}

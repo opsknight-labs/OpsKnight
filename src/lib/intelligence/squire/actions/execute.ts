@@ -225,7 +225,7 @@ export async function executeSquireAction(
 
 type WriteAction = Exclude<
   keyof typeof SQUIRE_ACTION_INPUTS,
-  'open_runbook' | 'draft_postmortem' | ExtendedSquireActionName
+  'open_runbook' | 'draft_postmortem' | 'draft_automation_rule' | ExtendedSquireActionName
 >;
 type FollowUp = Extract<SquireActionResult, { ok: true }>['followUp'];
 type Complete = (

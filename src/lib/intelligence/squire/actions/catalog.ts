@@ -15,6 +15,8 @@ import {
  *
  * WRITE actions change something when confirmed. NAVIGATE actions only open an existing page (for example a
  * runbook, where the application's own run and approval flow takes over), so Squire never runs automation.
+ * The one automation action, `draft_automation_rule`, is NAVIGATE too: it opens the automation workspace with
+ * a rule pre-filled, which joins the draft only when the person adds it and is never published from Squire.
  */
 export const SQUIRE_ACTION_NAMES = [
   'acknowledge_incident',
@@ -24,6 +26,7 @@ export const SQUIRE_ACTION_NAMES = [
   'link_related_incident',
   'open_runbook',
   'draft_postmortem',
+  'draft_automation_rule',
   // Extended actions (opt-in, catalog-extended.ts).
   ...EXTENDED_SQUIRE_ACTION_NAMES,
   // Knowledge memory (F4): a durable fact about the incident's service, saved only after confirmation.
@@ -32,6 +35,19 @@ export const SQUIRE_ACTION_NAMES = [
 export type SquireActionName = (typeof SQUIRE_ACTION_NAMES)[number];
 
 const incidentId = z.string().trim().min(1).max(64);
+const AUTOMATION_RULE_OPERATORS = [
+  'EQ',
+  'NE',
+  'IN',
+  'NOT_IN',
+  'LT',
+  'LTE',
+  'GT',
+  'GTE',
+  'IS_SET',
+  'IS_MISSING',
+] as const;
+const automationValue = z.union([z.string().max(256), z.number(), z.boolean()]);
 const userId = z.string().trim().min(1).max(64);
 
 export const SQUIRE_ACTION_INPUTS = {
@@ -52,6 +68,27 @@ export const SQUIRE_ACTION_INPUTS = {
     .strict(),
   open_runbook: z.object({ incidentId, runbookId: z.string().trim().min(1).max(64) }).strict(),
   draft_postmortem: z.object({ incidentId }).strict(),
+  draft_automation_rule: z
+    .object({
+      incidentId,
+      name: z.string().trim().min(1).max(100).optional(),
+      conditions: z
+        .array(
+          z
+            .object({
+              fieldKey: z.string().trim().min(1).max(64),
+              operator: z.enum(AUTOMATION_RULE_OPERATORS),
+              value: z.union([automationValue, z.array(automationValue).max(50)]).optional(),
+            })
+            .strict()
+        )
+        .min(1)
+        .max(5),
+      priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional(),
+      policyId: z.string().trim().min(1).max(64).optional(),
+      noEscalation: z.literal(true).optional(),
+    })
+    .strict(),
   ...EXTENDED_SQUIRE_ACTION_INPUTS,
   learn_service_fact: z.object({ incidentId, fact: z.string().trim().min(10).max(500) }).strict(),
 } satisfies Record<SquireActionName, z.ZodType>;
@@ -68,6 +105,7 @@ export const SQUIRE_ACTION_KIND: Record<SquireActionName, 'WRITE' | 'NAVIGATE'> 
   link_related_incident: 'WRITE',
   open_runbook: 'NAVIGATE',
   draft_postmortem: 'NAVIGATE',
+  draft_automation_rule: 'NAVIGATE',
   ...EXTENDED_SQUIRE_ACTION_KIND,
   learn_service_fact: 'WRITE',
 };
@@ -112,6 +150,8 @@ export const SQUIRE_ACTION_DESCRIPTIONS: Record<SquireActionName, string> = {
   open_runbook:
     'Offer to open a runbook against this incident. The application then runs its normal run and approval flow.',
   draft_postmortem: 'Offer to open a postmortem draft for this incident.',
+  draft_automation_rule:
+    "Offer a new automation rule for this incident's service, written from what the user asked for: conditions on automation fields (severity, source, integration, urgency, priority or the service's own context fields) and exactly one outcome: a priority, an escalation policy id, or noEscalation. It opens the automation editor with the rule pre-filled; nothing is saved until the user adds it to the draft, and it is never published from here.",
   ...EXTENDED_SQUIRE_ACTION_DESCRIPTIONS,
   learn_service_fact:
     'Propose remembering one durable, non-secret fact about the service of this incident (for example how it fails over or what usually fixes it), learned from this investigation. It is saved to Squire’s knowledge only if the user confirms, and only people who manage the service can confirm.',
@@ -145,6 +185,46 @@ export const SQUIRE_ACTION_JSON_SCHEMAS: Record<SquireActionName, Record<string,
     'runbookId',
   ]),
   draft_postmortem: objectSchema({ incidentId: idSchema() }, ['incidentId']),
+  draft_automation_rule: objectSchema(
+    {
+      incidentId: idSchema(),
+      name: { type: 'string', minLength: 1, maxLength: 100 },
+      conditions: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 5,
+        items: objectSchema(
+          {
+            fieldKey: { type: 'string', minLength: 1, maxLength: 64 },
+            operator: { type: 'string', enum: [...AUTOMATION_RULE_OPERATORS] },
+            value: {
+              anyOf: [
+                { type: 'string', maxLength: 256 },
+                { type: 'number' },
+                { type: 'boolean' },
+                {
+                  type: 'array',
+                  maxItems: 50,
+                  items: {
+                    anyOf: [
+                      { type: 'string', maxLength: 256 },
+                      { type: 'number' },
+                      { type: 'boolean' },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          ['fieldKey', 'operator']
+        ),
+      },
+      priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+      policyId: idSchema(),
+      noEscalation: { type: 'boolean', const: true },
+    },
+    ['incidentId', 'conditions']
+  ),
   ...EXTENDED_SQUIRE_ACTION_JSON_SCHEMAS,
   learn_service_fact: objectSchema(
     { incidentId: idSchema(), fact: { type: 'string', minLength: 10, maxLength: 500 } },

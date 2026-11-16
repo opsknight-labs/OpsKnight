@@ -820,6 +820,8 @@ export function AutomationRules({
       <ConfigurationHealth
         issues={issues}
         rules={draft.rules}
+        fields={draft.fields}
+        insights={data.insights}
         onOpenRule={handleOpenRule}
         onOpenContext={onOpenContext}
       />

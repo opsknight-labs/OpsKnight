@@ -4515,6 +4515,48 @@
         },
         "required": ["valid", "durationMs", "issues", "result"]
       },
+      "AutomationReplay": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "RUNNING", "COMPLETED", "FAILED"]
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 7,
+            "maximum": 30
+          },
+          "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": ["string", "null"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["runId", "status", "days", "progress", "result", "error", "createdAt"]
+      },
       "AutomationSimulationResult": {
         "type": "object",
         "additionalProperties": false,
@@ -37738,6 +37780,223 @@
         "x-required-scope": "automation:write",
         "x-idempotency": "required",
         "x-concurrency": "etag"
+      }
+    },
+    "/services/{id}/automation/replay": {
+      "post": {
+        "tags": ["Services"],
+        "summary": "Replay a draft against stored alerts",
+        "description": "Queues a background replay of the draft over the last 7 to 30 days of the service's stored incident-opening alerts (at most 20,000). Changes nothing operational. An identical request within 10 minutes returns the same run. Poll GET with the runId.\n\nRequires API scope `automation:read` (Automation read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "snapshot": {
+                    "$ref": "#/components/schemas/AutomationSnapshot"
+                  },
+                  "days": {
+                    "type": "integer",
+                    "minimum": 7,
+                    "maximum": 30
+                  },
+                  "integrationType": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 1
+                  }
+                },
+                "required": ["snapshot"]
+              },
+              "example": {
+                "snapshot": {
+                  "schemaVersion": 1,
+                  "fields": [],
+                  "rules": []
+                },
+                "days": 7
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationReplay"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "startAutomationReplay",
+        "x-required-scope": "automation:read",
+        "x-idempotency": "natural",
+        "x-concurrency": "none"
+      },
+      "get": {
+        "tags": ["Services"],
+        "summary": "Read a replay run",
+        "description": "Returns progress while the replay runs and route, priority and rule-match counts when it has finished. Results hold counts and identifiers, never alert payloads.\n\nRequires API scope `automation:read` (Automation read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationReplay"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getAutomationReplay",
+        "x-required-scope": "automation:read"
       }
     },
     "/services/{id}/automation/decisions": {

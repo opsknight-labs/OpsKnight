@@ -1469,6 +1469,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
             'AUTOMATION_OBSERVE',
             'AUTOMATION_RETENTION',
             'AUTOMATION_PRIVACY_CLEANUP',
+            'AUTOMATION_REPLAY',
           ].includes(String(payloadValue(job.payload, 'task')))
         ) {
           const { processAutomationJob } = await import('../automation/jobs');

@@ -975,6 +975,15 @@ export type AutomationSimulation = {
   issues: Array<AutomationLintIssue>;
   result: AutomationSimulationResult | null;
 };
+export type AutomationReplay = {
+  runId: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  days: number;
+  progress: number;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+};
 export type AutomationSimulationResult = {
   evaluationAt: string;
   outcome: { type: 'SERVICE_DEFAULT' | 'ESCALATION_POLICY' | 'NO_ESCALATION'; policyId?: string };
@@ -3110,6 +3119,11 @@ export interface OperationRequests {
     headers: { 'Idempotency-Key': string; 'If-Match': string };
     body: { sourceVersionId: string };
   };
+  startAutomationReplay: {
+    params: { id: string };
+    body: { snapshot: AutomationSnapshot; days?: number; integrationType?: string };
+  };
+  getAutomationReplay: { params: { id: string }; query?: { runId?: string } };
   listAutomationDecisions: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   listAutomationObservations: {
     params: { id: string };
@@ -4577,6 +4591,14 @@ export interface OperationResponses {
     unknown
   >;
   restoreAutomationDraft: { data: AutomationDraft; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  startAutomationReplay: { data: AutomationReplay; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  getAutomationReplay: { data: AutomationReplay; requestId: string; timestamp: string } & Record<
     string,
     unknown
   >;
@@ -6481,6 +6503,22 @@ export const OPERATIONS = {
     idempotency: 'required',
     requiredHeaders: ['Idempotency-Key', 'If-Match'],
     bodyRequired: true,
+  },
+  startAutomationReplay: {
+    method: 'POST',
+    path: '/services/{id}/automation/replay',
+    kind: 'item',
+    idempotency: 'natural',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  getAutomationReplay: {
+    method: 'GET',
+    path: '/services/{id}/automation/replay',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
   },
   listAutomationDecisions: {
     method: 'GET',

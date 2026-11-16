@@ -46,6 +46,8 @@ export const ASK_SQUIRE_SCOPED_TOOLS: Readonly<Record<string, string>> = {
   get_escalation_policy: API_SCOPES.ESCALATION_POLICIES_READ,
   get_status_page: API_SCOPES.STATUS_PAGES_READ,
   get_slo_status: API_SCOPES.SERVICE_OBJECTIVES_READ,
+  get_automation_decision: API_SCOPES.AUTOMATION_READ,
+  explain_automation_rule: API_SCOPES.AUTOMATION_READ,
 };
 
 /**

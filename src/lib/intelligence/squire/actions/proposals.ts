@@ -7,6 +7,7 @@ import { incidentReadWhere, runbookReadWhere } from '@/lib/authorization-filters
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { readIncidentForActor } from '../deterministic';
 import { describeServiceFact } from '../tools-knowledge';
+import { describeAutomationRuleDraft } from '../tools-automation';
 import {
   SQUIRE_ACTION_INPUTS,
   SQUIRE_ACTION_KIND,
@@ -232,6 +233,8 @@ async function describe(
       };
     case 'learn_service_fact':
       return describeServiceFact(actor, incident.id, String(input.fact));
+    case 'draft_automation_rule':
+      return describeAutomationRuleDraft(actor, incident.id, input);
     default:
       return describeExtended(actor, name, input, incident, now);
   }
