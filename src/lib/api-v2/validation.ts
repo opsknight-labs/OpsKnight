@@ -352,6 +352,24 @@ export const PostmortemListQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
 });
 
+export const ActionItemListQuerySchema = z
+  .object({
+    // Parsed by the route's pagination; named here only so the strict schema admits them.
+    limit: z.string().optional(),
+    cursor: z.string().optional(),
+    status: z.enum(['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED']).optional(),
+    priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
+    /** A user id, or the literal `me` for the caller. */
+    ownerId: z.string().trim().min(1).max(100).optional(),
+    incidentId: z.string().trim().min(1).max(100).optional(),
+    postmortemId: z.string().trim().min(1).max(100).optional(),
+    overdue: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform(val => (val === undefined ? undefined : val === 'true')),
+  })
+  .strict();
+
 export const PostmortemImpactV2Schema = z
   .object({
     usersAffected: z.number().int().min(0).max(1_000_000_000).optional(),

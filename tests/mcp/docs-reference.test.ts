@@ -19,7 +19,6 @@ import { renderTools } from '../../scripts/mcp/docs-tools';
 import { MCP_CAPABILITIES, MCP_PROMPT_NAMES } from '@/lib/mcp/catalog/capabilities';
 import { MCP_CATALOG } from '@/lib/mcp/catalog';
 import { projectMcpData } from '@/lib/mcp/core/projection';
-import { CALL_OPERATION_READS_REMOVED_IN } from '@/lib/mcp/protocol/server';
 import { friendlyMcpError } from '@/lib/mcp/auth/friendly-error';
 import { mcpScopesUsableByRole } from '@/lib/mcp/auth/role-scopes';
 import {
@@ -172,15 +171,11 @@ describe('F3: generated MCP reference pages', () => {
     expect(page).toContain('Secrets typed into free text are not detected.');
   });
 
-  it('names one removal release for call_operation reads everywhere it is announced (DX-7)', () => {
-    expect(CALL_OPERATION_READS_REMOVED_IN).toMatch(/^v\d+\.\d+\.\d+$/);
-    const changelog = readFileSync('CHANGELOG.md', 'utf8').split('\n## [')[1];
-    const deprecated = changelog.split('### Deprecated')[1]?.split('\n### ')[0] ?? '';
-    expect(deprecated).toContain('`call_operation`');
-    expect(deprecated).toContain(CALL_OPERATION_READS_REMOVED_IN);
+  it('documents that call_operation refuses reads, with no removal release left over (DX-7)', () => {
     const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
-    expect(catalog).toContain(`until ${CALL_OPERATION_READS_REMOVED_IN}, still serves reads`);
-    expect(catalog).not.toContain('for this release, still serves reads');
+    expect(catalog).toContain('`call_operation` serves routine changes only');
+    expect(catalog).not.toContain('still serves reads');
+    expect(readFileSync('CHANGELOG.md', 'utf8')).not.toContain('reads through `call_operation`');
     expect(readFileSync('src/lib/mcp/protocol/server.ts', 'utf8')).toContain(
       'version: APP_VERSION'
     );

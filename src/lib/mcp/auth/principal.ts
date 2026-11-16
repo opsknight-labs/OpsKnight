@@ -14,10 +14,13 @@ import {
   mcpGrantBlockError,
   type GrantAccessSnapshot,
 } from './effective-access';
+import { effectiveDisabledMcpCapabilities } from './effective-capabilities';
 import { getAccessControlSettings } from '@/lib/access/settings';
 
 interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   clientId: string;
+  userName: string | null;
+  clientName: string | null;
   teamIds: string[];
   /** Active custom role, so assistants act with the person's effective access. */
   customRoleId: string | null;
@@ -32,8 +35,11 @@ interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   maxOperations: number | null;
   requestsPerMinute: number | null;
   disabledCapabilities: string[] | null;
+  roleDisabledCapabilities: unknown;
+  clientDisabledCapabilities: string[] | null;
   scopeStepUpEnabled: boolean | null;
   perUserRequestsPerMinute: number | null;
+  responderDirectWritesEnabled: boolean | null;
 }
 
 /** OAUTH: an assistant's consent. PAT: a personal access token (one token, never refreshed). */
@@ -47,11 +53,14 @@ export interface McpRuntimePolicy {
   maxInFlight: number;
   maxOperations: number;
   requestsPerMinute: number;
+  /** Effective for the principal (effective-capabilities.ts); the stored global list on failure paths. */
   disabledCapabilities: string[];
   /** Answer a grantable missing permission with 403 insufficient_scope (step-up.ts). */
   scopeStepUpEnabled: boolean;
   /** Optional cap on one person's requests per minute across all their connections; null is off. */
   perUserRequestsPerMinute: number | null;
+  /** Routine responder changes may run without a review (catalog "responderDirect"). */
+  responderDirectWritesEnabled: boolean;
 }
 
 const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
@@ -68,6 +77,7 @@ const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
         disabledCapabilities: true,
         scopeStepUpEnabled: true,
         perUserRequestsPerMinute: true,
+        responderDirectWritesEnabled: true,
       },
     })
   );
@@ -88,7 +98,7 @@ export async function resolveMcpGrant(
 // The authority columns shared by both lookups. The access columns are the same ones the
 // settings lists read (effective-access.ts), so the admin page shows what is enforced here.
 const AUTHORITY_COLUMNS = Prisma.sql`
-  ${GRANT_ACCESS_COLUMNS}, g."clientId",
+  ${GRANT_ACCESS_COLUMNS}, g."clientId", u.name AS "userName", c.name AS "clientName",
   ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
   cr.id AS "customRoleId", cr.name AS "customRoleName", cr.capabilities AS "customRoleCapabilities",
   (SELECT COALESCE(json_agg(json_build_object(
@@ -98,7 +108,8 @@ const AUTHORITY_COLUMNS = Prisma.sql`
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
   p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities",
-  p."scopeStepUpEnabled", p."perUserRequestsPerMinute"`;
+  p."scopeStepUpEnabled", p."perUserRequestsPerMinute", p."responderDirectWritesEnabled",
+  p."roleDisabledCapabilities", c."disabledCapabilities" AS "clientDisabledCapabilities"`;
 
 /**
  * The grant's current authority and the MCP policy as of the same statement. The policy is null
@@ -127,6 +138,19 @@ export async function resolveMcpGrantWithPolicy(
       ))
   `;
   return authorityFrom(grant, now);
+}
+
+/**
+ * How a change made through an assistant is named on timelines, in Jira and in chat. The
+ * assistant name is self-declared at registration, so markup and mention characters are removed
+ * and it is kept short.
+ */
+export function mcpActorLabel(userName: string | null | undefined, clientName: string | null) {
+  const assistant = (clientName ?? '')
+    .replace(/[\p{Cc}*_~`<>@|[\]]/gu, '')
+    .trim()
+    .slice(0, 40);
+  return `${userName?.trim() || 'A user'} via ${assistant || 'an assistant'} (AI)`;
 }
 
 function authorityFrom(
@@ -167,7 +191,7 @@ function authorityFrom(
       actor: { ...base, apiKey: { id, scopes } },
       apiKey: {
         id,
-        name: 'MCP',
+        name: mcpActorLabel(grant.userName, grant.clientName),
         prefix: 'mcp',
         tokenHash: '',
         userId: grant.userId,
@@ -185,9 +209,11 @@ function authorityFrom(
             maxInFlight: grant.maxInFlight!,
             maxOperations: grant.maxOperations!,
             requestsPerMinute: grant.requestsPerMinute!,
-            disabledCapabilities: grant.disabledCapabilities ?? [],
+            // Global, the actor's role and this assistant: one list for listing and execution.
+            disabledCapabilities: effectiveDisabledMcpCapabilities(grant, grant.role),
             scopeStepUpEnabled: grant.scopeStepUpEnabled ?? false,
             perUserRequestsPerMinute: grant.perUserRequestsPerMinute ?? null,
+            responderDirectWritesEnabled: grant.responderDirectWritesEnabled ?? false,
           },
   };
 }

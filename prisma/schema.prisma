@@ -1693,6 +1693,10 @@ model IncidentEvent {
   message    String
   type       IncidentEventType?
   createdAt  DateTime           @default(now())
+  // Which channel wrote the row, e.g. "mcp:<clientId>" for an AI assistant; NULL for everything
+  // else. Filled by the database from a transaction-local setting (mutation-authority.ts), so no
+  // write site has to pass it.
+  channel    String?  @default(dbgenerated("NULLIF(current_setting('opsknight.channel'::text, true), ''::text)"))
   incident   Incident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@index([incidentId, createdAt])
@@ -1708,6 +1712,10 @@ model IncidentNote {
   userId     String?
   content    String
   createdAt  DateTime @default(now())
+  // Which channel wrote the row, e.g. "mcp:<clientId>" for an AI assistant; NULL for everything
+  // else. Filled by the database from a transaction-local setting (mutation-authority.ts), so no
+  // write site has to pass it.
+  channel    String?  @default(dbgenerated("NULLIF(current_setting('opsknight.channel'::text, true), ''::text)"))
   incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -2172,8 +2180,11 @@ model AuditLog {
   targetEmail String?
   ip          String?
   createdAt   DateTime        @default(now())
+  // "mcp:<clientId>" when an AI assistant made the change; NULL otherwise.
+  channel     String?
   actor       User?           @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
+  @@index([channel, createdAt])
   @@index([entityType, entityId])
   @@index([entityType, entityId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_service_change_cursor")
   @@index([actorId, createdAt])
@@ -4905,6 +4916,15 @@ model McpPolicy {
   callLogRetentionDays Int @default(30)
   // Strict four-eyes: nobody, administrators included, approves their own prepared change.
   requireDistinctReviewer Boolean @default(false)
+  // Lets the routine responder changes marked "responderDirect" in the catalog review (snooze,
+  // un-acknowledge, edit an incident, add a schedule override) run without a review. Off by default.
+  responderDirectWritesEnabled Boolean @default(false)
+  // Per-role narrowing of what assistants may use, on top of disabledCapabilities:
+  // {"USER": ["domain:schedules", "incident_snooze"]}. Null is none.
+  roleDisabledCapabilities Json?
+  // Lets an organization's identity provider issue MCP access for its users (an ID-JAG
+  // JWT-bearer grant). Needs SSO; refused while SSO is not configured. Off by default.
+  enterpriseManagedAuthEnabled Boolean @default(false)
   // Optional cap on one person's requests per minute across all their connections (null = off).
   perUserRequestsPerMinute Int?
   // Optimistic concurrency for policy saves.
@@ -4918,6 +4938,8 @@ model McpClient {
   redirectUris String[]
   scopes String[]
   revokedAt DateTime?
+  // Capabilities this assistant may not use for anyone, on top of the policy (same id format).
+  disabledCapabilities String[] @default([])
   // Set only for clients identified by an HTTPS metadata document URL (their id).
   metadataUrl String?
   metadataFetchedAt DateTime?
@@ -4949,8 +4971,9 @@ model McpGrant {
   // Last tool call through this grant, written at most once a minute.
   lastCallAt DateTime?
   lastTool String?
-  // OAUTH (an assistant's consent) or PAT (a personal access token, which has one token and no
-  // refresh). A personal token's label is the name its owner gave it.
+  // OAUTH (an assistant's consent), PAT (a personal access token, which has one token and no
+  // refresh) or IDP (granted by the organization's identity provider, no refresh). A personal
+  // token's label is the name its owner gave it.
   kind String @default("OAUTH")
   label String?
   // Set once the owner of a personal token was told it expires within seven days.

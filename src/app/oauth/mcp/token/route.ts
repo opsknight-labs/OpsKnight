@@ -1,7 +1,7 @@
 import { logAudit } from '@/lib/audit';
 import { withMcpDatabase } from '@/lib/database-workload';
 import OAuth2Server from '@node-oauth/oauth2-server';
-import { Prisma } from '@prisma/client';
+import { Prisma, type McpPolicy } from '@prisma/client';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
@@ -15,11 +15,21 @@ import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
 import { observeMcpOAuth } from '@/lib/mcp/auth/oauth-observability';
 import { logger } from '@/lib/logger';
 import { MCP_DEVICE_CODE_GRANT, pollMcpDeviceAuthorization } from '@/lib/mcp/auth/device-flow';
+import {
+  MCP_JWT_BEARER_GRANT,
+  exchangeMcpEnterpriseGrant,
+  mcpEnterpriseGrantIssuer,
+} from '@/lib/mcp/auth/enterprise-grant';
 
 export const runtime = 'nodejs';
 const schema = z
   .object({
-    grant_type: z.enum(['authorization_code', 'refresh_token', MCP_DEVICE_CODE_GRANT]),
+    grant_type: z.enum([
+      'authorization_code',
+      'refresh_token',
+      MCP_DEVICE_CODE_GRANT,
+      MCP_JWT_BEARER_GRANT,
+    ]),
     client_id: z.string().max(256),
     code: z.string().max(256).optional(),
     code_verifier: z
@@ -29,6 +39,7 @@ const schema = z
     redirect_uri: z.string().url().max(2048).optional(),
     refresh_token: z.string().max(256).optional(),
     device_code: z.string().max(256).optional(),
+    assertion: z.string().max(6144).optional(),
     scope: z.string().max(2048).optional(),
     resource: z.string().url().optional(),
   })
@@ -73,6 +84,12 @@ async function handlePost(request: Request, browserOrigin: string | null) {
       requireMcp(policy?.deviceFlowEnabled, 'unsupported_grant_type');
       requireMcp(body.device_code, 'invalid_request');
       return await deviceTokenResponse(body.device_code, body.client_id);
+    }
+    if (body.grant_type === MCP_JWT_BEARER_GRANT) {
+      // Not offered unless enterprise-managed authorization is on and SSO is configured.
+      requireMcp(await mcpEnterpriseGrantIssuer(policy), 'unsupported_grant_type');
+      requireMcp(body.assertion, 'invalid_request');
+      return await enterpriseTokenResponse(body.assertion, body.client_id, body.scope, policy);
     }
     let response = new OAuth2Server.Response();
     const exchange = async () => {
@@ -183,6 +200,35 @@ async function deviceTokenResponse(deviceCode: string, clientId: string) {
     { error: result.error, ...(result.interval ? { interval: result.interval } : {}) },
     { status: result.error === 'invalid_client' ? 401 : 400, headers }
   );
+}
+
+/** ID-JAG exchange (enterprise-grant.ts): verified outside, issued serializable with one retry. */
+async function enterpriseTokenResponse(
+  assertion: string,
+  clientId: string,
+  scope: string | undefined,
+  policy: McpPolicy | null
+) {
+  const headers = { 'Cache-Control': 'no-store', Pragma: 'no-cache' };
+  try {
+    const issue = await exchangeMcpEnterpriseGrant({ assertion, clientId, scope }, policy);
+    const run = () => prisma.$transaction(issue, { isolationLevel: 'Serializable', timeout: 5000 });
+    let body;
+    try {
+      body = await run();
+    } catch (error) {
+      if (!isSerializationConflict(innerError(error))) throw error;
+      body = await run();
+    }
+    return Response.json(body, { headers });
+  } catch (error) {
+    if (error instanceof McpBoundaryError && OAUTH_ERRORS.has(error.code))
+      return Response.json(
+        { error: error.code },
+        { status: error.code === 'invalid_client' ? 401 : 400, headers }
+      );
+    throw error;
+  }
 }
 
 const OAUTH_ERRORS = new Set([

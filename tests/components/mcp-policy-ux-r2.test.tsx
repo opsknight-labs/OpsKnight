@@ -127,3 +127,32 @@ it('UX-13: a successful save clears the warning', async () => {
   await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(beforeUnloadBlocked()).toBe(false));
 });
+
+it('identity-provider access: disabled with the reason without SSO, submittable with it', () => {
+  const { unmount } = section();
+  const off = screen.getByRole('checkbox', {
+    name: /Allow access granted by your identity provider/,
+  }) as HTMLInputElement;
+  expect(off.disabled).toBe(true);
+  expect(off.closest('label')!.textContent).toContain('Requires single sign-on');
+  // No marker: saving without SSO keeps the stored value instead of turning it off.
+  expect(document.querySelector('input[name="enterpriseControls"]')).toBeNull();
+  unmount();
+  render(
+    <McpPolicySection
+      policy={{ ...policy, enterpriseManagedAuthEnabled: true }}
+      revision={0}
+      scopeChoices={['incidents:read']}
+      selectedScopes={['incidents:read']}
+      action={vi.fn()}
+      ssoConfigured
+    />
+  );
+  const on = screen.getByRole('checkbox', {
+    name: /Allow access granted by your identity provider/,
+  }) as HTMLInputElement;
+  expect(on.disabled).toBe(false);
+  expect(on.checked).toBe(true);
+  expect(on.closest('details')).not.toBeNull();
+  expect(document.querySelector('input[name="enterpriseControls"]')).not.toBeNull();
+});

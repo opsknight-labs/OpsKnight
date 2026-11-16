@@ -287,6 +287,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
       'MCP was switched on in settings while the deployment sets MCP_FORCE_DISABLED=true, which overrides the stored policy.',
     fix: 'Ask the operator to remove MCP_FORCE_DISABLED from the environment and restart OpsKnight, then turn MCP on again.',
   },
+  MCP_SSO_REQUIRED: {
+    area: 'settings',
+    meaning:
+      'Access granted by your identity provider was switched on while single sign-on is not configured and enabled.',
+    fix: 'Configure and enable single sign-on (OIDC) first, then turn on Allow access granted by your identity provider.',
+  },
   MCP_DISTINCT_REVIEWER_REQUIRED: {
     area: 'approvals',
     meaning:
@@ -354,6 +360,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     area: 'settings',
     meaning: 'Exposed capabilities was saved with a name that is not a tool, operation or domain.',
     fix: 'Reload the tab and choose from the list.',
+  },
+  MCP_INVALID_USAGE_RANGE: {
+    area: 'settings',
+    meaning:
+      'The usage date range is not valid: the start is after the end, it starts before the request log retention, or it spans more than 365 days.',
+    fix: 'Pick a start before the end, within the retention period and at most 365 days long.',
   },
   MCP_INVALID_CIMD_HOST: {
     area: 'settings',
@@ -462,6 +474,11 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'The settings or review page needs a signed-in user.',
     fix: 'Sign in.',
   },
+  MCP_NOT_A_CHANGE: {
+    area: 'tools',
+    meaning: 'call_operation was called with an operation that only reads.',
+    fix: 'Use read_operation with the same operationId and args.',
+  },
   MCP_NOT_A_READ: {
     area: 'tools',
     meaning: 'read_operation was called with an operation that changes something.',
@@ -491,6 +508,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     area: 'server',
     meaning: 'No App URL is configured.',
     fix: 'Set the App URL in Settings → System.',
+  },
+  MCP_PLAN_REFERENCE: {
+    area: 'tools',
+    meaning:
+      "An execute_plan step has a $from reference that names no dependency, or whose pointer finds nothing usable in that step's result.data.",
+    fix: 'List the step in dependsOn and point at a value that exists, for example /data/0/id.',
   },
   MCP_PLAN_READS_ONLY: {
     area: 'tools',
@@ -681,8 +704,12 @@ export const MCP_LOG_GUIDE: Record<string, string> = {
   'mcp.subscription.poll_failed': 'The subscription change poll failed; the stream retries.',
   'mcp.subscription.access_lost':
     'A listen stream was closed because the person lost access to a subscribed resource, or their role or teams changed. Clients re-read on reconnect.',
+  'mcp.subscription.page_withheld':
+    'A page for opsknight://oncall/me/pages was not sent because the person can no longer read that incident (`incidentId` only).',
   'mcp.token.grace_reissued':
     'A rotated refresh token was replayed inside the grace window and a new token issued (`grantId`, `replacedId`, `revokedSuccessorId`). Occasional lines are lost responses; many for one grant suggest a stolen token racing the real client.',
+  'mcp.token.id_jag_refused':
+    'An identity-provider grant (ID-JAG) was refused at the token endpoint. `reason` names the failed check (for example `verification_failed`, `client_mismatch`, `replayed`, `subject_not_active`, `resource_mismatch`); the client only saw the OAuth error code.',
   'mcp.token.refresh_reuse_revoked':
     'A rotated refresh token was reused outside the grace window; the whole grant was revoked (`grantId`). The audit log has mcp.grant.reuse_detected with the user and client.',
   'mcp.token.transient':

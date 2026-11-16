@@ -243,6 +243,29 @@ for (const capability of MCP_CAPABILITIES) {
 
 export const MCP_CAPABILITY_DOMAINS: readonly string[] = [...domainMembers.keys()].sort();
 
+/** Discovery, identity, reviews and prompts: a toolsets header never hides these. */
+const ALWAYS_LISTED_DOMAINS = new Set(['mcp', 'approvals', PROMPT_DOMAIN]);
+
+/**
+ * `X-OpsKnight-Toolsets: incidents, schedules` as extra `domain:<name>` exclusions for one
+ * connection: every other domain is hidden. It only hides, never grants. Unknown names are
+ * ignored, and a header naming no known domain hides nothing, so a typo never leaves an
+ * assistant with no tools.
+ */
+export function mcpToolsetExclusions(header: string | null | undefined): string[] {
+  const wanted = new Set(
+    (header ?? '')
+      .slice(0, 1024)
+      .split(',')
+      .map(name => name.trim().toLowerCase())
+      .filter(name => domainMembers.has(name))
+  );
+  if (!wanted.size) return [];
+  return MCP_CAPABILITY_DOMAINS.filter(
+    domain => !wanted.has(domain) && !ALWAYS_LISTED_DOMAINS.has(domain)
+  ).map(domain => `${MCP_DOMAIN_PREFIX}${domain}`);
+}
+
 /** Canonical id for an entry, or null when it names nothing that exists. */
 export function canonicalMcpCapabilityEntry(entry: string): string | null {
   if (entry.startsWith(MCP_DOMAIN_PREFIX))

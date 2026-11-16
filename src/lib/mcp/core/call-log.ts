@@ -9,6 +9,9 @@ import { MCP_CATALOG, MCP_OPERATION_MAP } from '../catalog';
  * catalog, the metrics outcome, a duration, the request id and an error code. Never arguments,
  * results or free text. Rows are queued in memory and written in batches, so logging never adds a
  * database round trip to the call it describes; a full queue drops rows and counts them.
+ * shortcut: a process that is killed outright loses up to one second of rows, and a batch that
+ * fails twice is dropped. AuditLog is the durable record of changes; move this to a table-backed
+ * outbox if the activity log ever has to be complete.
  */
 
 /** Default retention; the policy's callLogRetentionDays (7 to 365) overrides it. */
@@ -54,6 +57,8 @@ export function mcpCallLogOperationId(tool: string, args: unknown): string | nul
 }
 
 const queue: McpCallLogEntry[] = [];
+/** The one batch whose write failed and is tried once more with the next flush. */
+let retryBatch: McpCallLogEntry[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 let flushing: Promise<void> | null = null;
 
@@ -76,22 +81,31 @@ export function recordMcpCallLog(entry: McpCallLogEntry) {
   }
 }
 
-/** Writes every queued row. A failed batch is logged and counted as dropped, never retried. */
+/** Writes every queued row. A failed batch is retried once with the next flush, then dropped. */
 export async function flushMcpCallLog(): Promise<void> {
   if (timer) {
     clearTimeout(timer);
     timer = null;
   }
   if (flushing) await flushing;
-  if (!queue.length) return;
-  const batch = queue.splice(0, queue.length);
+  if (!queue.length && !retryBatch.length) return;
+  const retried = retryBatch;
+  const fresh = queue.splice(0, queue.length);
+  retryBatch = [];
   flushing = (async () => {
     try {
-      await prisma.mcpCallLog.createMany({ data: batch });
+      await prisma.mcpCallLog.createMany({ data: [...retried, ...fresh] });
     } catch (error) {
-      addOperationalMetric('opsknight_mcp_call_log_dropped_total', batch.length);
+      if (retried.length)
+        addOperationalMetric('opsknight_mcp_call_log_dropped_total', retried.length);
+      retryBatch = fresh;
+      if (fresh.length && !timer) {
+        timer = setTimeout(() => void flushMcpCallLog(), FLUSH_DELAY_MS);
+        timer.unref?.();
+      }
       logger.warn('mcp.call_log.write_failed', {
-        rows: batch.length,
+        rows: retried.length + fresh.length,
+        dropped: retried.length,
         errorName: error instanceof Error ? error.name : typeof error,
       });
     } finally {
@@ -102,5 +116,5 @@ export async function flushMcpCallLog(): Promise<void> {
 }
 
 export function queuedMcpCallLogForTests() {
-  return queue.length;
+  return queue.length + retryBatch.length;
 }

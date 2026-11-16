@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
+import { clearSignInThrottle } from './mcp-login-limits';
+
+test.beforeEach(clearSignInThrottle);
 // Playwright compiles specs as CommonJS, so import.meta is unavailable; require the CLI checker.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { checkMcpSetup } = require('../../scripts/mcp/doctor.cjs') as {

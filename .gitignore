@@ -86,6 +86,8 @@ artifacts/automation-rolling/
 *.txt
 # Bundled font licence notices must ship with the fonts (SIL OFL 1.1)
 !src/app/fonts/*-OFL.txt
+# The /llms.txt route is a directory, not a log
+!/src/app/llms.txt/
 docker/pgbouncer/userlist.txt
 eslint_output.json
 job_log*.txt

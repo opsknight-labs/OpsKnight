@@ -161,6 +161,8 @@ export type Event = {
   message: string;
   type?: string | null;
   createdAt: Date;
+  /** "mcp:<clientId>" when an AI assistant made the change. */
+  channel?: string | null;
 };
 
 export type Note = {
@@ -382,6 +384,7 @@ export default function IncidentTimeline({
       createdAt: Date;
       type: string;
       sortPriority: number;
+      channel?: string | null;
     }> = [];
 
     let hasCreatedDbEvent = false;
@@ -775,6 +778,16 @@ export default function IncidentTimeline({
                         className="uppercase h-5 text-[10px]"
                       >
                         {event.type}
+                      </Badge>
+                    )}
+                    {event.channel?.startsWith('mcp:') && (
+                      <Badge
+                        variant="outline"
+                        size="xs"
+                        className="h-5 text-[10px]"
+                        title="Made through an AI assistant on this person's behalf"
+                      >
+                        AI assistant
                       </Badge>
                     )}
                   </div>

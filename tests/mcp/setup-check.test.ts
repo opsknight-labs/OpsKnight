@@ -133,6 +133,12 @@ describe('in-app MCP setup check', () => {
     expect(disabled.checks.find(check => check.id === 'authentication')?.message).toContain(
       'turned off'
     );
+    const refused = await runMcpSetupCheck(
+      healthy({ '/mcp': () => new Response('{}', { status: 403 }) })
+    );
+    expect(refused.checks.find(check => check.id === 'authentication')?.message).toContain(
+      'MCP_ALLOWED_HOSTS'
+    );
     const open = await runMcpSetupCheck(
       healthy({ '/mcp': () => new Response('{}', { status: 200 }) })
     );
