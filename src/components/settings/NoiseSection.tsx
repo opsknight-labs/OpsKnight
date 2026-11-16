@@ -19,20 +19,27 @@ function PagesByHour({ report }: { report: NoiseReport }) {
       <p className="text-sm text-muted-foreground">
         Most pages arrive around{' '}
         <span className="font-medium text-foreground">{hourLabel(busiest.hour)}</span> your time.
+        Solid bars are the pages you acted on.
       </p>
       <div aria-hidden="true" className="flex h-16 items-end gap-0.5">
         {report.byHour.map(entry => (
           <div
             key={entry.hour}
             title={`${hourLabel(entry.hour)}: ${entry.pages} pages, ${entry.acted} acted on`}
-            className="flex-1 rounded-t-sm bg-primary/70"
+            className="flex flex-1 flex-col justify-end overflow-hidden rounded-t-sm bg-primary/25"
             style={{ height: entry.pages ? `${Math.max(6, (entry.pages / max) * 100)}%` : '2px' }}
-          />
+          >
+            {/* The solid part is the share of that hour's pages you acted on. */}
+            <div
+              className="bg-primary"
+              style={{ height: entry.pages ? `${(entry.acted / entry.pages) * 100}%` : 0 }}
+            />
+          </div>
         ))}
       </div>
       <div
         aria-hidden="true"
-        className="flex justify-between font-mono text-xs text-muted-foreground"
+        className="flex justify-between text-xs tabular-nums text-muted-foreground"
       >
         <span>00</span>
         <span>06</span>
