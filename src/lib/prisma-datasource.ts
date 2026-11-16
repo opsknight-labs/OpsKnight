@@ -126,7 +126,7 @@ export function isIntelligenceLaneThread(
 export function intelligenceLaneThreadEnv(
   env: NodeJS.ProcessEnv = process.env,
   data: object = {}
-): Record<string, string | undefined> {
+): NodeJS.ProcessEnv {
   return {
     ...env,
     [INTELLIGENCE_LANE_THREAD_ENV]: '1',

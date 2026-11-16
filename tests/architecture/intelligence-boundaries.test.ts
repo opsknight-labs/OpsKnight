@@ -136,7 +136,7 @@ describe('intelligence architecture boundaries', () => {
       const name = relative(root, file);
       expect(source, name).not.toMatch(/worker_threads/);
       if (/\bfork\(/.test(source)) expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
-      if (/intelligenceLaneThreadEnv\(\)/.test(source))
+      if (/(?<!function )intelligenceLaneThreadEnv\(/.test(source))
         expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
     }
     // Ingestion never imports the thread or its protocol; the shared activity mirror lives in activity.ts.

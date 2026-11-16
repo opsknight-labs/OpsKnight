@@ -30,7 +30,7 @@
  *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate] \
  *     [--lane-mode thread|in-process]
  *
- * `--lane-mode thread` (the default) runs the candidate's lane in a worker thread started by the production
+ * `--lane-mode thread` (the default) runs the candidate's lane in a child process started by the production
  * host (lane-thread.ts), as an `integrated` process does; `in-process` runs it on the ingestion thread.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
