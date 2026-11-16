@@ -731,6 +731,8 @@ model Service {
   subscriptionServices            StatusPageSubscriptionService[]
   slackDestinations               SlackDestination[]
   microsoftTeamsDestinations      MicrosoftTeamsDestination[]
+  maintenanceWindows              MaintenanceWindowService[]
+  maintenanceSchedules            MaintenanceScheduleService[]
 
   @@index([teamId])
   @@index([escalationPolicyId])
@@ -1463,7 +1465,11 @@ model Incident {
   slaPauses                           IncidentSlaPause[]
   runbookExecutions                   RunbookExecution[]
   runbookSuggestions                  RunbookSuggestion[]
+  /// Set when the incident was created SUPPRESSED because its service was in a maintenance window.
+  maintenanceWindowId                 String?
+  maintenanceWindow                   MaintenanceWindow?              @relation(fields: [maintenanceWindowId], references: [id], onDelete: Restrict)
 
+  @@index([maintenanceWindowId, status])
   @@index([dedupKey])
   @@index([serviceId, dedupKey, status])
   @@index([nextEscalationAt, escalationStatus])
@@ -2649,7 +2655,11 @@ model StatusPageAnnouncement {
   updatedAt              DateTime                                 @updatedAt
   statusPage             StatusPage                               @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
   incident               Incident?                                @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  /// Announcement published and kept in sync by a service maintenance window.
+  maintenanceWindowId    String?
+  maintenanceWindow      MaintenanceWindow?                       @relation(fields: [maintenanceWindowId], references: [id], onDelete: Cascade)
 
+  @@index([maintenanceWindowId])
   @@index([statusPageId, isActive, startDate])
   @@index([statusPageId, isActive, publishAt])
   @@index([incidentId])
@@ -3084,6 +3094,7 @@ model CronSchedulerState {
   lastObjectiveSnapshotSuccessAt  DateTime?
   lastObjectiveSnapshotDurationMs Int?
   lastObjectiveSnapshotFailed     Int       @default(0)
+  lastMaintenanceSweepAt          DateTime?
   lockedBy                        String?
   lockedAt                        DateTime?
   leaseEpoch                      Int       @default(0)
@@ -5276,4 +5287,105 @@ model AccessReviewItem {
 
   @@index([reviewId, decision])
   @@index([userId])
+}
+
+enum MaintenanceEndBehavior {
+  RESUME_FIRING
+  RESOLVE_HELD
+}
+
+/// A scheduled window during which new alerts for its services are held
+/// (incidents created SUPPRESSED, nobody paged). Activity is derived from
+/// startsAt/endsAt, never from a stored flag.
+model MaintenanceWindow {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  revision            Int                        @default(dbgenerated("1"))
+  id                  String                     @id @default(cuid())
+  title               String
+  description         String?
+  startsAt            DateTime
+  endsAt              DateTime
+  endBehavior         MaintenanceEndBehavior     @default(RESUME_FIRING)
+  publishToStatusPage Boolean                    @default(false)
+  /// Set by the end sweep once every held incident has been handled.
+  endProcessedAt      DateTime?
+  createdById         String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  services            MaintenanceWindowService[]
+  heldIncidents       Incident[]
+  announcements       StatusPageAnnouncement[]
+  /// Set when the window is an occurrence materialised from a recurring schedule.
+  scheduleId          String?
+  schedule            MaintenanceSchedule?       @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+
+  @@unique([scheduleId, startsAt])
+  @@index([endProcessedAt, endsAt])
+  @@index([startsAt])
+}
+
+model MaintenanceWindowService {
+  windowId  String
+  serviceId String
+  /// Denormalised copies of the window bounds so the event hot path is one index range scan.
+  startsAt  DateTime
+  endsAt    DateTime
+  window    MaintenanceWindow @relation(fields: [windowId], references: [id], onDelete: Cascade)
+  service   Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([windowId, serviceId])
+  @@index([serviceId, endsAt, startsAt])
+}
+
+enum MaintenanceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+/// Recurring maintenance. The scheduler materialises upcoming occurrences as
+/// ordinary MaintenanceWindow rows, so ingestion and the end sweep never see it.
+model MaintenanceSchedule {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  revision            Int                          @default(dbgenerated("1"))
+  id                  String                       @id @default(cuid())
+  title               String
+  description         String?
+  endBehavior         MaintenanceEndBehavior       @default(RESUME_FIRING)
+  publishToStatusPage Boolean                      @default(false)
+  frequency           MaintenanceFrequency
+  /// Every N days/weeks/months.
+  interval            Int                          @default(1)
+  /// WEEKLY: local weekdays, 0 = Sunday.
+  byWeekday           Int[]
+  /// MONTHLY: 1-31; shorter months use their last day.
+  dayOfMonth          Int?
+  /// IANA time zone the wall-clock fields are in.
+  timeZone            String
+  /// Local "HH:mm".
+  startTime           String
+  durationMinutes     Int
+  /// Local calendar dates "YYYY-MM-DD"; endsOn is inclusive.
+  startsOn            String
+  endsOn              String?
+  pausedAt            DateTime?
+  /// Occurrences exist up to here; the scheduler tops up when it falls behind.
+  materializedUntil   DateTime?
+  createdById         String?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  services            MaintenanceScheduleService[]
+  windows             MaintenanceWindow[]
+
+  @@index([pausedAt, materializedUntil])
+}
+
+model MaintenanceScheduleService {
+  scheduleId String
+  serviceId  String
+  schedule   MaintenanceSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  service    Service             @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([scheduleId, serviceId])
+  @@index([serviceId])
 }

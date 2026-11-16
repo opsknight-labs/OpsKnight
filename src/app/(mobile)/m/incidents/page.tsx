@@ -89,6 +89,11 @@ export default async function MobileIncidentsPage(props: {
   else if (filter === 'resolved') selectedWhere.status = 'RESOLVED';
 
   if (status) selectedWhere.status = status;
+  // Same as desktop: alerts held by a maintenance window stay out of the default
+  // view; the Muted filter (which includes SUPPRESSED) still lists them.
+  if (filter === 'all' && !status) {
+    selectedWhere.NOT = { status: 'SUPPRESSED', maintenanceWindowId: { not: null } };
+  }
   if (assignee)
     selectedWhere.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
   if (serviceId) selectedWhere.serviceId = serviceId;

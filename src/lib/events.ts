@@ -9,6 +9,7 @@ import { Prisma, IncidentUrgency } from '@prisma/client';
 import type { ProcessingLease } from './ingestion/contract';
 import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
+import { findActiveMaintenanceWindow } from '@/lib/service-maintenance/active';
 import { logger } from './logger';
 import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
@@ -209,14 +210,21 @@ export async function processEvent(
     // transaction client avoids opening a second pooled connection while this
     // interactive transaction is active.
     let isFlapping = false;
+    // Only a brand-new incident is held; incidents already open before the
+    // window keep escalating, as PagerDuty does.
+    let maintenanceWindow: { id: string; title: string } | null = null;
     if (event_action === 'trigger' && !existingIncident) {
-      try {
-        const flappingResult = await checkAlertFlapping(dedup_key, serviceId, undefined, tx);
-        isFlapping = flappingResult.isFlapping;
-      } catch (_) {
-        // Non-critical: if flapping check fails, proceed with normal incident creation
+      maintenanceWindow = await findActiveMaintenanceWindow(tx, serviceId, new Date());
+      if (!maintenanceWindow) {
+        try {
+          const flappingResult = await checkAlertFlapping(dedup_key, serviceId, undefined, tx);
+          isFlapping = flappingResult.isFlapping;
+        } catch (_) {
+          // Non-critical: if flapping check fails, proceed with normal incident creation
+        }
       }
     }
+    const isSuppressed = isFlapping || maintenanceWindow !== null;
 
     // 3. For acknowledge, skip alert creation if no matching incident
     if (event_action === 'acknowledge' && !existingIncident) {
@@ -482,7 +490,8 @@ export async function processEvent(
           title: sanitizedTitle,
           automationSourceRestricted: !!automation,
           description: truncatedDescription,
-          status: isFlapping ? 'SUPPRESSED' : 'OPEN',
+          status: isSuppressed ? 'SUPPRESSED' : 'OPEN',
+          maintenanceWindowId: maintenanceWindow?.id ?? null,
           urgency,
           priority: finalPriority,
           dedupKey: dedupKeys.primary,
@@ -517,19 +526,21 @@ export async function processEvent(
           alerts: { create: alertData() },
           events: {
             create: {
-              message: isFlapping
-                ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
-                : `Incident triggered via API from ${normalizedSource}`,
+              message: maintenanceWindow
+                ? `Incident created in SUPPRESSED state: service is in maintenance window "${truncateString(maintenanceWindow.title, 200)}". Nobody is paged until the window ends.`
+                : isFlapping
+                  ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
+                  : `Incident triggered via API from ${normalizedSource}`,
             },
           },
-          ...(isFlapping
+          ...(isSuppressed
             ? {
                 escalationStatus: 'COMPLETED',
                 nextEscalationAt: null,
                 slaPauseStartedAt: incidentCreatedAt,
                 slaPauses: {
                   create: {
-                    reason: 'flapping-suppression',
+                    reason: maintenanceWindow ? 'maintenance-window' : 'flapping-suppression',
                     startedAt: incidentCreatedAt,
                   },
                 },
@@ -539,7 +550,11 @@ export async function processEvent(
       });
 
       logger.info(
-        isFlapping ? 'event.incident_created_suppressed_flapping' : 'event.incident_created',
+        maintenanceWindow
+          ? 'event.incident_created_suppressed_maintenance'
+          : isFlapping
+            ? 'event.incident_created_suppressed_flapping'
+            : 'event.incident_created',
         {
           incidentId: newIncident.id,
           dedupKey: dedup_key,
@@ -547,6 +562,7 @@ export async function processEvent(
           severity: eventData.severity,
           urgency,
           isFlapping,
+          maintenanceWindowId: maintenanceWindow?.id,
         }
       );
 
@@ -555,11 +571,11 @@ export async function processEvent(
         newIncident.id,
         envelope,
         automation,
-        !isFlapping,
+        !isSuppressed,
         service.escalationPolicyId
       );
 
-      if (!isFlapping) {
+      if (!isSuppressed) {
         // Escalation state and its first due job commit with the incident, so
         // an OPEN incident with a policy is never left with nothing scheduled.
         let inMemoryRouting = automation ? buildResponderRoutingFromAutomation(automation) : null;
@@ -633,7 +649,7 @@ export async function processEvent(
       });
 
       return {
-        action: isFlapping ? ('suppressed' as const) : ('triggered' as const),
+        action: isSuppressed ? ('suppressed' as const) : ('triggered' as const),
         incident: newIncident,
         automationTelemetry: automation,
         telemetry: {

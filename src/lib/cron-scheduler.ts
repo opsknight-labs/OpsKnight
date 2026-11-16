@@ -211,6 +211,7 @@ export type SchedulerStateData = {
   lastObjectiveSnapshotSuccessAt?: Date | null;
   lastObjectiveSnapshotDurationMs?: number | null;
   lastObjectiveSnapshotFailed?: number;
+  lastMaintenanceSweepAt?: Date | null;
 };
 
 /**
@@ -453,6 +454,22 @@ async function runOnce() {
       } catch (_) {}
     }, HEARTBEAT_INTERVAL_MS);
 
+    // Service maintenance windows: release incidents held by windows that ended.
+    // Runs first so a failure in a later step can't keep alerts held, and so the
+    // escalation jobs it enqueues are processed in this same tick. Activation needs no
+    // scheduler (it is time-derived); the sweep is idempotent and resumable.
+    try {
+      const { processEndedMaintenanceWindows } = await import('./service-maintenance/windows');
+      const sweptAt = new Date();
+      const maintenanceWindows = await processEndedMaintenanceWindows(sweptAt);
+      await updateSchedulerState({ lastMaintenanceSweepAt: sweptAt }, leaseEpoch);
+      if (maintenanceWindows.windows > 0) {
+        logger.info('[Cron] Maintenance windows processed', maintenanceWindows);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Maintenance window sweep failed', { error });
+    }
+
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
     const ownership = getSchedulerOwnership(schedulerProfile);
     const jobResult = ownership.backgroundJobs
@@ -579,6 +596,17 @@ async function runOnce() {
     });
 
     await assertLease(leaseEpoch);
+
+    // Recurring maintenance: materialise upcoming occurrences as ordinary windows.
+    try {
+      const { materializeMaintenanceSchedules } = await import('./service-maintenance/schedules');
+      const materialized = await materializeMaintenanceSchedules(new Date());
+      if (materialized.created > 0 || materialized.failed > 0) {
+        logger.info('[Cron] Maintenance schedules materialized', materialized);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Maintenance schedule materialization failed', { error });
+    }
 
     // Group 3: Maintenance tasks (low priority, run last)
     const { processAuthenticationAlerts } = await import('./auth-control/security-events');

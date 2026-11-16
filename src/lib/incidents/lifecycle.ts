@@ -402,6 +402,17 @@ function updateDataForCommand(
   if ((input.command === 'SNOOZE' || input.command === 'SUPPRESS') && !incident.slaPauseStartedAt) {
     data.slaPauseStartedAt = now;
   }
+  // A maintenance link means "held by that window". Once a person takes an incident out
+  // of that hold it is theirs: a later manual suppression must not be released by the
+  // window's end sweep, nor hidden as maintenance-held.
+  if (
+    incident.status === 'SUPPRESSED' &&
+    data.status !== 'SUPPRESSED' &&
+    input.source !== 'SYSTEM' &&
+    input.source !== 'EVENT'
+  ) {
+    data.maintenanceWindow = { disconnect: true };
+  }
 
   switch (input.command) {
     case 'ACKNOWLEDGE':
@@ -602,8 +613,12 @@ export async function applyIncidentLifecycleCommand(
 
   // Required custom fields gate human/operator resolution. Event ingestion is
   // authoritative automation: upstream resolve signals must not be blocked by
-  // fields that can only be completed interactively.
-  if (input.command === 'RESOLVE' && input.source !== 'EVENT') {
+  // fields that can only be completed interactively. The same holds for system
+  // automation resolutions (e.g. a maintenance window auto-resolving held alerts).
+  const automated =
+    input.source === 'EVENT' ||
+    (input.source === 'SYSTEM' && input.resolutionKind === 'AUTOMATION');
+  if (input.command === 'RESOLVE' && !automated) {
     await assertRequiredCustomFieldsPresent(tx, input.incidentId);
   }
 

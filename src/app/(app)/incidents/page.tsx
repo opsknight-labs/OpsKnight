@@ -108,6 +108,11 @@ export default async function IncidentsPage({
   if (currentTeamId !== 'all') {
     where.teamId = currentTeamId === 'mine' ? { in: userTeamIds } : currentTeamId;
   }
+  // Alerts held by a maintenance window stay out of the default view (as incident.io
+  // does); the Suppressed filter still lists them.
+  if (currentFilter === 'all' && !currentStatus) {
+    where.NOT = { status: 'SUPPRESSED', maintenanceWindowId: { not: null } };
+  }
   const effectiveWhere = { AND: [incidentReadWhere(actor), where] };
 
   const orderBy = buildIncidentOrderBy(currentSort);

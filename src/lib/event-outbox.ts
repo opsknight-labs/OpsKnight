@@ -128,11 +128,16 @@ export function getIncidentCreationSideEffects(
 }
 
 export function getLifecycleSideEffects(
-  input: Pick<LifecycleOutboxInput, 'command' | 'source' | 'status'>
+  input: Pick<LifecycleOutboxInput, 'command' | 'source' | 'status'> &
+    Partial<Pick<LifecycleOutboxInput, 'previousStatus'>>
 ): readonly EventSideEffect[] {
   const effects = new Set<EventSideEffect>();
+  // A suppressed incident (maintenance hold, flapping) never paged anyone, so its
+  // resolution is not news to responders; integrations still get the full lifecycle.
+  const quietResolve = input.previousStatus === 'SUPPRESSED' && input.status === 'RESOLVED';
   const responderLifecycle =
-    input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN';
+    !quietResolve &&
+    (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN');
   if (responderLifecycle) {
     effects.add('LIFECYCLE_USER_NOTIFICATION');
     effects.add('LIFECYCLE_SERVICE_NOTIFICATION');

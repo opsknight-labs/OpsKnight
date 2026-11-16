@@ -12,7 +12,7 @@ export type EscalationPolicy = { "id": string; "revision"?: number; "name": stri
 export type Integration = { "id": string; "revision"?: number; "name": string; "type": string; "enabled": boolean; "snsTopicArn"?: string | null; "serviceId": string; "service"?: { "id"?: string; "name"?: string } & Record<string, unknown>; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
 export type Notification = { "id": string; "channel": string; "status": string; "incidentId"?: string | null; "userId": string; "failureReason"?: string | null; "sentAt"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type StatusPage = { "id": string; "name": string; "slug": string; "isDefault": boolean; "enabled": boolean; "description"?: string | null; "createdAt": string; "updatedAt": string; "publication"?: { "status": "LIVE" | "PUBLISHING" | "FAILED" | "DISABLED"; "revision": string; "lastError"?: string | null; "stale"?: boolean } & Record<string, unknown> } & Record<string, unknown>;
-export type StatusPageAnnouncement = { "id": string; "title": string; "message": string; "type": string; "isActive": boolean; "startDate"?: string | null; "endDate"?: string | null; "createdAt": string } & Record<string, unknown>;
+export type StatusPageAnnouncement = { "id": string; "title": string; "message": string; "type": "INCIDENT" | "MAINTENANCE" | "UPDATE" | "WARNING" | "INFO"; "isActive": boolean; "startDate"?: string | null; "endDate"?: string | null; "affectedServiceIds"?: Array<string> | null; "createdAt": string } & Record<string, unknown>;
 export type Runbook = { "id": string; "name": string; "slug": string; "description"?: string | null; "version": number; "steps"?: Array<RunbookStep>; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
 export type RunbookExecution = { "id": string; "runbookId": string; "runbook"?: { "id"?: string; "name"?: string; "slug"?: string } & Record<string, unknown>; "incidentId"?: string | null; "status": string; "triggeredByUserId"?: string | null; "startedAt": string | null; "completedAt"?: string | null; "steps"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type ServiceAccount = { "id": string; "name": string; "role": string; "description"?: string | null; "status": string; "teamIds"?: Array<string>; "activeTokensCount"?: number; "tokensTotal"?: number; "tokensTruncated"?: boolean; "tokens"?: Array<{ "id"?: string; "name"?: string; "prefix"?: string; "scopes"?: Array<string>; "status"?: "ACTIVE" | "EXPIRED" | "REVOKED"; "createdAt"?: string; "lastUsedAt"?: string | null; "expiresAt"?: string | null } & Record<string, unknown>>; "createdAt": string } & Record<string, unknown>;
@@ -76,6 +76,8 @@ export type ServiceObjectiveHistoryItem = { "source": "OBJECTIVE"; "id": string;
 export type ServiceObjectiveEvaluation = { "objectiveId": string; "metric": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR" | "LATENCY_P99" | "ERROR_RATE"; "value": number | null; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "compliant": boolean | null; "breached": boolean | null; "sampleCount": number | null; "sampleCountExact"?: string | null; "elapsedSumMs"?: string | null; "periodStart": string; "periodEnd": string; "dataState": "AVAILABLE" | "NO_DATA" | "UNAVAILABLE"; "definitionVersion": number; "coverage"?: { "effectiveStart": string; "effectiveEnd": string; "complete": boolean } };
 export type ServiceObjectiveEvaluationReceipt = { "outcome": "EVALUATED"; "completedAt": string; "evaluation": ServiceObjectiveEvaluation } | { "outcome": "ACCESS_REVOKED"; "completedAt": string };
 export type ServiceObjectiveEvaluationJob = { "id": string; "objectiveId": string; "versionId": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED"; "attempts": number; "createdAt": string; "completedAt": string | null; "result": ServiceObjectiveEvaluationReceipt | null; "errorCode": "EVALUATION_FAILED" | null };
+export type MaintenanceWindow = { "id": string; "revision": number; "title": string; "description": string | null; "startsAt": string; "endsAt": string; "endBehavior": "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage": boolean; "phase": "UPCOMING" | "ACTIVE" | "ENDED"; "serviceIds": Array<string>; "scheduleId": string | null; "heldIncidentCount": number; "endProcessedAt": string | null; "createdAt": string; "updatedAt": string };
+export type MaintenanceSchedule = { "id": string; "revision": number; "title": string; "description": string | null; "endBehavior": "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage": boolean; "frequency": "DAILY" | "WEEKLY" | "MONTHLY"; "interval": number; "byWeekday": Array<number>; "dayOfMonth": number | null; "timeZone": string; "startTime": string; "durationMinutes": number; "startsOn": string; "endsOn": string | null; "paused": boolean; "pausedAt": string | null; "summary": string; "nextOccurrenceAt": string | null; "serviceIds": Array<string>; "createdAt": string; "updatedAt": string };
 export type StatusPagePublicationState = { "status": "LIVE" | "PUBLISHING" | "FAILED" | "DISABLED"; "revision": string; "stale"?: boolean; "lastError"?: string | null };
 export type StatusPagePublication = { "id": string; "revision": number; "publication": StatusPagePublicationState };
 export type StatusPagePublicationReceipt = { "outcome": string; "completedAt": string; "publication": StatusPagePublicationState };
@@ -278,6 +280,17 @@ export interface OperationRequests {
   rejectRunbookExecutionStep: { "params": { "id": string; "stepId": string }; "headers": { "Idempotency-Key": string }; "body": { "planDigest": string; "reason": string } };
   previewRunbookExecutionRerun: { "params": { "id": string }; "body": Record<string, never> };
   rerunRunbookExecution: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedPlanDigest": string; "previewAuthorizationToken": string } };
+  listMaintenanceWindows: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string; "phase"?: "UPCOMING" | "ACTIVE" | "ENDED" } };
+  createMaintenanceWindow: { "headers": { "Idempotency-Key": string }; "body": { "title": string; "description"?: string | null; "serviceIds": Array<string>; "startsAt": string; "endsAt": string; "endBehavior"?: "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage"?: boolean } };
+  getMaintenanceWindow: { "params": { "id": string } };
+  updateMaintenanceWindow: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "description"?: string | null; "serviceIds"?: Array<string>; "startsAt"?: string; "endsAt"?: string; "endBehavior"?: "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage"?: boolean } };
+  deleteMaintenanceWindow: { "params": { "id": string } };
+  endMaintenanceWindow: { "params": { "id": string }; "body": Record<string, never> };
+  listMaintenanceSchedules: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string } };
+  createMaintenanceSchedule: { "headers": { "Idempotency-Key": string }; "body": { "title": string; "description"?: string | null; "serviceIds": Array<string>; "endBehavior"?: "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage"?: boolean; "frequency": "DAILY" | "WEEKLY" | "MONTHLY"; "interval"?: number; "byWeekday"?: Array<number>; "dayOfMonth"?: number | null; "timeZone": string; "startTime": string; "durationMinutes": number; "startsOn": string; "endsOn"?: string | null } };
+  getMaintenanceSchedule: { "params": { "id": string } };
+  updateMaintenanceSchedule: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "description"?: string | null; "serviceIds"?: Array<string>; "endBehavior"?: "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage"?: boolean; "frequency"?: "DAILY" | "WEEKLY" | "MONTHLY"; "interval"?: number; "byWeekday"?: Array<number>; "dayOfMonth"?: number | null; "timeZone"?: string; "startTime"?: string; "durationMinutes"?: number; "startsOn"?: string; "endsOn"?: string | null; "paused"?: boolean } };
+  deleteMaintenanceSchedule: { "params": { "id": string } };
   getServiceObjectiveCatalog: Record<string, never>;
   listServiceObjectives: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string } };
   createServiceObjective: { "headers": { "Idempotency-Key": string }; "body": { "definition": { "serviceId"?: string | null; "name": string; "description"?: string | null; "metricType": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR"; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "windowType": "SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS"; "windowValue"?: number | null }; "expectedActiveVersionId": string | null } };
@@ -606,6 +619,17 @@ export interface OperationResponses {
   rejectRunbookExecutionStep: { "data": RunbookIntervention; "requestId": string; "timestamp": string } & Record<string, unknown>;
   previewRunbookExecutionRerun: { "data": RunbookExecutionPreview; "requestId": string; "timestamp": string } & Record<string, unknown>;
   rerunRunbookExecution: { "data": RunbookRerun; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listMaintenanceWindows: { "data": Array<MaintenanceWindow>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createMaintenanceWindow: { "data": MaintenanceWindow; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getMaintenanceWindow: { "data": MaintenanceWindow; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateMaintenanceWindow: { "data": MaintenanceWindow; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteMaintenanceWindow: null;
+  endMaintenanceWindow: { "data": MaintenanceWindow; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listMaintenanceSchedules: { "data": Array<MaintenanceSchedule>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createMaintenanceSchedule: { "data": MaintenanceSchedule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getMaintenanceSchedule: { "data": MaintenanceSchedule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateMaintenanceSchedule: { "data": MaintenanceSchedule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteMaintenanceSchedule: null;
   getServiceObjectiveCatalog: { "data": ServiceObjectiveCatalog; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listServiceObjectives: { "data": Array<ServiceObjective>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createServiceObjective: { "data": ServiceObjective; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -1545,6 +1569,104 @@ export const OPERATIONS = {
       "Idempotency-Key"
     ],
     "bodyRequired": true
+  },
+  "listMaintenanceWindows": {
+    "method": "GET",
+    "path": "/maintenance-windows",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createMaintenanceWindow": {
+    "method": "POST",
+    "path": "/maintenance-windows",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getMaintenanceWindow": {
+    "method": "GET",
+    "path": "/maintenance-windows/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateMaintenanceWindow": {
+    "method": "PATCH",
+    "path": "/maintenance-windows/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteMaintenanceWindow": {
+    "method": "DELETE",
+    "path": "/maintenance-windows/{id}",
+    "kind": "none",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "endMaintenanceWindow": {
+    "method": "POST",
+    "path": "/maintenance-windows/{id}/end",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listMaintenanceSchedules": {
+    "method": "GET",
+    "path": "/maintenance-schedules",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createMaintenanceSchedule": {
+    "method": "POST",
+    "path": "/maintenance-schedules",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getMaintenanceSchedule": {
+    "method": "GET",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateMaintenanceSchedule": {
+    "method": "PATCH",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteMaintenanceSchedule": {
+    "method": "DELETE",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "none",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "getServiceObjectiveCatalog": {
     "method": "GET",

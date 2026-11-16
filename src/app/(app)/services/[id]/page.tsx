@@ -39,6 +39,18 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
+import ServiceMaintenancePanel, {
+  type MaintenanceScheduleView,
+  type MaintenanceWindowView,
+} from '@/components/service/ServiceMaintenancePanel';
+import {
+  listServiceMaintenanceOverview,
+  maintenanceWindowPhase,
+} from '@/lib/service-maintenance/windows';
+import {
+  describeMaintenanceSchedule,
+  listMaintenanceSchedules,
+} from '@/lib/service-maintenance/schedules';
 import ServiceSettingsFlashToast from '@/components/service/ServiceSettingsFlashToast';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 
@@ -65,6 +77,7 @@ import {
   Webhook,
   Bell,
   ChevronDown,
+  Wrench,
 } from 'lucide-react';
 
 // Custom Components
@@ -1221,6 +1234,73 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     </div>
   );
 
+  const [maintenanceRows, maintenanceServices, maintenanceScheduleRows] = await Promise.all([
+    listServiceMaintenanceOverview(id, now),
+    canManageService
+      ? prisma.service.findMany({
+          // Only services this user could add to a window (mirrors assertCanModifyService).
+          where: hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)
+            ? {}
+            : { team: { members: { some: { userId: user.id } } } },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+          // shortcut: plain filtered checkbox list, so cap it; switch to server search past this.
+          take: 2000,
+        })
+      : Promise.resolve([]),
+    listMaintenanceSchedules({ serviceIds: [id], take: 20 }),
+  ]);
+  // A window can span other teams' services; name only those this viewer can read.
+  const readableTeams = 'teamId' in serviceReadWhere(actor) ? new Set(actor.teamIds) : null;
+  const readable = <T extends { service: { teamId: string | null } }>(rows: T[]) =>
+    rows.filter(
+      r => !readableTeams || (r.service.teamId !== null && readableTeams.has(r.service.teamId))
+    );
+  const maintenanceSchedules: MaintenanceScheduleView[] = maintenanceScheduleRows.map(s => {
+    const { summary, nextOccurrence } = describeMaintenanceSchedule(s, now);
+    return {
+      id: s.id,
+      title: s.title,
+      summary,
+      paused: s.pausedAt !== null,
+      nextLabel: nextOccurrence
+        ? formatDateTime(nextOccurrence.startsAt, userTimeZone, { format: 'datetime' })
+        : null,
+      serviceNames: readable(s.services).map(x => x.service.name),
+      hiddenServiceCount: s.services.length - readable(s.services).length,
+      description: s.description,
+      serviceIds: readable(s.services).map(x => x.serviceId),
+      frequency: s.frequency,
+      interval: s.interval,
+      byWeekday: s.byWeekday,
+      dayOfMonth: s.dayOfMonth,
+      timeZone: s.timeZone,
+      startTime: s.startTime,
+      durationMinutes: s.durationMinutes,
+      startsOn: s.startsOn,
+      endsOn: s.endsOn,
+      endBehavior: s.endBehavior,
+      publishToStatusPage: s.publishToStatusPage,
+    };
+  });
+  const maintenanceWindows: MaintenanceWindowView[] = maintenanceRows.map(w => ({
+    id: w.id,
+    title: w.title,
+    description: w.description,
+    phase: maintenanceWindowPhase(w, now),
+    startsAt: w.startsAt.toISOString(),
+    endsAt: w.endsAt.toISOString(),
+    startsLabel: formatDateTime(w.startsAt, userTimeZone, { format: 'datetime' }),
+    endsLabel: formatDateTime(w.endsAt, userTimeZone, { format: 'datetime' }),
+    endBehavior: w.endBehavior,
+    publishToStatusPage: w.publishToStatusPage,
+    serviceNames: readable(w.services).map(s => s.service.name),
+    hiddenServiceCount: w.services.length - readable(w.services).length,
+    heldCount: w._count.heldIncidents,
+    recurring: w.scheduleId !== null,
+  }));
+  const activeMaintenance = maintenanceWindows.find(w => w.phase === 'ACTIVE');
+
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Centralized Hero Header */}
@@ -1258,6 +1338,13 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               {dynamicStatus === 'UNKNOWN' && <AlertCircle className="h-3 w-3" />}
               {dynamicStatus === 'UNKNOWN' ? 'Unavailable' : dynamicStatus}
             </Badge>
+
+            {activeMaintenance && (
+              <Badge variant="info" size="xs" className="uppercase font-bold text-[10px] gap-1">
+                <Wrench className="h-3 w-3" aria-hidden="true" />
+                In maintenance until {activeMaintenance.endsLabel}
+              </Badge>
+            )}
 
             {service.team && (
               <Badge
@@ -1353,6 +1440,17 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               : undefined
         }
         notificationsCount={activeNotificationDestinationsCount}
+        maintenanceActive={Boolean(activeMaintenance)}
+        maintenanceContent={
+          <ServiceMaintenancePanel
+            serviceId={service.id}
+            canManage={canManageService}
+            windows={maintenanceWindows}
+            schedules={maintenanceSchedules}
+            services={maintenanceServices}
+            userTimeZone={userTimeZone}
+          />
+        }
         incidentsContent={incidentsContent}
         automationContent={
           hasCapability(actor.role, CAPABILITIES.AUTOMATION_READ) ? (
