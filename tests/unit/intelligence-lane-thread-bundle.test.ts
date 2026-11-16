@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { builtinModules } from 'node:module';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -40,15 +41,15 @@ describe('intelligence lane thread bundle', () => {
     expect(loaded.has('server-only')).toBe(false);
   }, 60_000);
 
-  it('skips an existing bundle with --if-missing and never fails a start with --optional', () => {
+  it('rebuilds an existing bundle on every start and never fails a start with --optional', () => {
     const script = resolve(process.cwd(), 'scripts/build-intelligence-lane-thread.mjs');
     const directory = mkdtempSync(join(tmpdir(), 'lane-bundle-'));
     try {
-      // An existing outfile is left untouched (a start must not rebuild, let alone fail).
+      // A bundle from older code is replaced (a source install that pulled new code must not run the old lane).
       const existing = join(directory, 'existing.cjs');
-      writeFileSync(existing, '// kept');
-      execFileSync(process.execPath, [script, '--outfile', existing, '--if-missing', '--optional']);
-      expect(readFileSync(existing, 'utf8')).toBe('// kept');
+      writeFileSync(existing, '// stale');
+      execFileSync(process.execPath, [script, '--outfile', existing, '--optional']);
+      expect(readFileSync(existing, 'utf8')).toContain('lane-thread-entry');
       // A bundle that cannot be built is a warning with --optional and an error without it.
       const missing = join(directory, 'missing.cjs');
       const optional = spawnSync(
@@ -59,7 +60,6 @@ describe('intelligence lane thread bundle', () => {
           'does/not/exist.ts',
           '--outfile',
           missing,
-          '--if-missing',
           '--optional',
         ],
         { encoding: 'utf8' }

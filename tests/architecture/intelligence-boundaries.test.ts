@@ -165,8 +165,8 @@ describe('intelligence architecture boundaries', () => {
     const pkg = JSON.parse(read(join(root, 'package.json'))) as { scripts: Record<string, string> };
     const builder = 'node scripts/build-intelligence-lane-thread.mjs';
     expect(pkg.scripts.postbuild).toBe(builder);
-    expect(pkg.scripts.prestart).toBe(`${builder} --if-missing --optional`);
-    expect(pkg.scripts['prestart:prod']).toBe(`${builder} --if-missing --optional`);
+    expect(pkg.scripts.prestart).toBe(`${builder} --optional`);
+    expect(pkg.scripts['prestart:prod']).toBe(`${builder} --optional`);
     expect(pkg.scripts['build:scripts']).toContain(builder);
     expect(read(join(root, 'Dockerfile'))).toMatch(/RUN npm run build:scripts/);
   });
