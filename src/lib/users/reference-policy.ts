@@ -7,6 +7,7 @@ export const USER_REFERENCE_POLICY = {
   incidentNotes: { deactivate: 'KEEP', delete: 'SET_NULL' },
   postmortems: { deactivate: 'KEEP', delete: 'SET_NULL' },
   postmortemContributions: { deactivate: 'KEEP', delete: 'CASCADE' },
+  onCallCoverageDays: { deactivate: 'KEEP', delete: 'CASCADE' },
   notifications: { deactivate: 'KEEP', delete: 'SET_NULL' },
   notificationEndpoints: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
   inAppNotifications: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
