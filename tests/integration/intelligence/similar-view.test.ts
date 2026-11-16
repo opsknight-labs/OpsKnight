@@ -7,6 +7,7 @@ import {
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
 import { analyzeIncident } from '@/lib/intelligence/similarity/analyzer';
+import { resetTermFrequencyCacheForTests } from '@/lib/intelligence/similarity/term-stats';
 import { describeReasons, getSimilarIncidentsForActor } from '@/lib/intelligence/similarity/view';
 import {
   createTestIncident,
@@ -22,6 +23,8 @@ beforeEach(async () => {
     throw new Error('Dedicated test DB required');
   }
   await resetDatabase();
+  // Term frequencies are cached per process; an earlier file's data must not skew the scores here.
+  resetTermFrequencyCacheForTests();
 });
 
 const settings = { ...INTELLIGENCE_SETTINGS_DEFAULTS, revision: 1 };
