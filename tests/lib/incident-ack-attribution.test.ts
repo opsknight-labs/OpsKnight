@@ -17,7 +17,7 @@ function snapshot(overrides: Partial<IncidentLifecycleSnapshot> = {}): IncidentL
     currentEscalationStep: 0,
     snoozedUntil: null,
     snoozeReason: null,
-    slaPausedMs: 0n,
+    slaPausedMs: BigInt(0),
     slaPauseStartedAt: null,
     slaFirstAcknowledgedAt: null,
     slaAckElapsedMs: null,
