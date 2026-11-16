@@ -926,7 +926,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
                             </div>
                           </summary>
-                          <div className="border-t border-border/70 bg-slate-950 p-2 text-slate-200">
+                          <div className="border-t border-border/70 bg-zinc-950 p-2 text-zinc-200">
                             <pre className="overflow-x-auto text-[10px] font-mono leading-relaxed select-all">
                               <span className="text-purple-400">curl</span> -X POST {webhookUrl} \
                               <br />
@@ -1352,7 +1352,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                 size="xs"
                 className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Users className="h-3 w-3 mr-1 text-slate-400" />
+                <Users className="h-3 w-3 mr-1 text-ink-400" />
                 {service.team.name}
               </Badge>
             )}
@@ -1373,7 +1373,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                 size="xs"
                 className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Globe className="h-3 w-3 mr-1 text-slate-400" />
+                <Globe className="h-3 w-3 mr-1 text-ink-400" />
                 {service.region}
               </Badge>
             )}
@@ -1384,7 +1384,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
               {service.description || 'No description provided for this service.'}
             </p>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-ink-400">
               30-day reliability metrics • Active incident count excludes snoozed alerts
             </p>
           </div>

@@ -69,7 +69,12 @@ export default function ConfirmDialog({
     },
   };
 
-  const styles = variantStyles[variant];
+  const styles =
+    variant === 'warning'
+      ? variantStyles.warning
+      : variant === 'info'
+        ? variantStyles.info
+        : variantStyles.danger;
 
   return (
     <div
@@ -178,7 +183,7 @@ export default function ConfirmDialog({
               padding: '0.625rem 1.25rem',
               borderRadius: '8px',
               border: '1px solid var(--border)',
-              background: '#ffffff',
+              background: 'hsl(var(--ui-card))',
               color: 'var(--text-primary)',
               fontSize: '0.875rem',
               fontWeight: '600',

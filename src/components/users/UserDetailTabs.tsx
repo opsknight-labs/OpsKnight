@@ -210,7 +210,7 @@ export default function UserDetailTabs({
                     title="Copy Email"
                   >
                     {copiedKey === 'email' ? (
-                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                     ) : (
                       <Copy className="h-3.5 w-3.5" />
                     )}
@@ -237,7 +237,7 @@ export default function UserDetailTabs({
                         title="Copy Phone"
                       >
                         {copiedKey === 'phone' ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                         ) : (
                           <Copy className="h-3.5 w-3.5" />
                         )}
@@ -322,7 +322,7 @@ export default function UserDetailTabs({
                 {user.emailNotificationsEnabled ? (
                   <Badge
                     variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1 dark:text-emerald-400"
                   >
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </Badge>
@@ -349,7 +349,7 @@ export default function UserDetailTabs({
                 {user.smsNotificationsEnabled && user.phoneNumber ? (
                   <Badge
                     variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1 dark:text-emerald-400"
                   >
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </Badge>
@@ -376,7 +376,7 @@ export default function UserDetailTabs({
                 {user.voiceNotificationsEnabled && user.phoneNumber ? (
                   <Badge
                     variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1 dark:text-emerald-400"
                   >
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </Badge>
@@ -403,7 +403,7 @@ export default function UserDetailTabs({
                 {user.pushNotificationsEnabled ? (
                   <Badge
                     variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1 dark:text-emerald-400"
                   >
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </Badge>
@@ -430,7 +430,7 @@ export default function UserDetailTabs({
                 {user.whatsappNotificationsEnabled && user.phoneNumber ? (
                   <Badge
                     variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1 dark:text-emerald-400"
                   >
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </Badge>
@@ -535,7 +535,7 @@ export default function UserDetailTabs({
                 <CardContent className="pt-0 flex items-center justify-between border-t border-border/40 py-3 mt-auto bg-muted/10">
                   <Badge
                     variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold dark:text-emerald-400"
                   >
                     Active Rotation
                   </Badge>

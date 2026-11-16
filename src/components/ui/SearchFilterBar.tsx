@@ -33,9 +33,11 @@ export default function SearchFilterBar({
   const [draftSearch, setDraftSearch] = useState(searchValue);
   const skipNextDebounce = useRef(false);
 
-  useEffect(() => {
+  const [syncedSearchValue, setSyncedSearchValue] = useState(searchValue);
+  if (syncedSearchValue !== searchValue) {
+    setSyncedSearchValue(searchValue);
     setDraftSearch(searchValue);
-  }, [searchValue]);
+  }
 
   useEffect(() => {
     if (!onSearchChange || searchDebounceMs <= 0 || draftSearch === searchValue) return;
@@ -62,7 +64,7 @@ export default function SearchFilterBar({
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 rounded-lg border border-slate-200/80 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between',
+        'flex flex-col gap-3 rounded-lg border border-ink-200/80 bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between',
         className
       )}
     >
@@ -75,7 +77,7 @@ export default function SearchFilterBar({
               placeholder={searchPlaceholder}
               value={draftSearch}
               onChange={e => handleSearchChange(e.target.value)}
-              className="h-9 pr-8 text-xs sm:text-sm bg-slate-50/60 focus:bg-white transition-colors"
+              className="h-9 pr-8 text-xs sm:text-sm bg-ink-50/60 focus:bg-card transition-colors"
               style={{ paddingRight: '2rem' }}
             />
             {draftSearch && (
@@ -110,7 +112,7 @@ export default function SearchFilterBar({
 
       {/* Right: Actions slot (e.g. Export CSV, Live badge, Create button) */}
       {actions && (
-        <div className="flex shrink-0 items-center gap-2 justify-end pt-2 border-t border-slate-100 md:pt-0 md:border-t-0">
+        <div className="flex shrink-0 items-center gap-2 justify-end pt-2 border-t border-ink-100 md:pt-0 md:border-t-0">
           {actions}
         </div>
       )}

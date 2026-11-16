@@ -98,7 +98,7 @@ export default function PostmortemTimelineBuilder({
   return (
     <div className="flex flex-col gap-4">
       {/* Add New Event Form */}
-      <Card className="bg-gradient-to-br from-white to-slate-50">
+      <Card className="bg-gradient-to-br from-card to-ink-50">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Add Timeline Event</CardTitle>
         </CardHeader>
@@ -178,7 +178,7 @@ export default function PostmortemTimelineBuilder({
               TIMELINE_EVENT_TYPE_CONFIG[event.type as keyof typeof TIMELINE_EVENT_TYPE_CONFIG] ||
               TIMELINE_EVENT_TYPE_CONFIG.DETECTION;
             return (
-              <Card key={event.id} className={cn('bg-white border-l-4', config.border)}>
+              <Card key={event.id} className={cn('bg-card border-l-4', config.border)}>
                 <CardContent className="p-4">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
@@ -220,7 +220,7 @@ export default function PostmortemTimelineBuilder({
 
                   {/* Edit Form */}
                   {editingId === event.id && (
-                    <div className="mt-3 p-3 bg-slate-50 rounded-md flex flex-col gap-2">
+                    <div className="mt-3 p-3 bg-ink-50 rounded-md flex flex-col gap-2">
                       <div className="space-y-1.5">
                         <Label>Type</Label>
                         <Select

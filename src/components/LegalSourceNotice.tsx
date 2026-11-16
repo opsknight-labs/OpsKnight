@@ -35,7 +35,7 @@ export default function LegalSourceNotice({ className }: LegalSourceNoticeProps 
     <aside
       aria-label="OpsKnight license and source code"
       className={cn(
-        'flex items-center gap-1.5 text-[10px] text-slate-500 font-normal truncate',
+        'flex items-center gap-1.5 text-[10px] text-ink-500 font-normal truncate',
         className
       )}
     >
@@ -47,7 +47,7 @@ export default function LegalSourceNotice({ className }: LegalSourceNoticeProps 
       >
         AGPL-3.0-only
       </a>
-      <span aria-hidden="true" className="text-slate-600">
+      <span aria-hidden="true" className="text-ink-600">
         ·
       </span>
       <a

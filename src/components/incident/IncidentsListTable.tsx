@@ -123,7 +123,7 @@ function getStatusHoverBorder(status: IncidentStatus): string {
     case 'SNOOZED':
     case 'SUPPRESSED':
     default:
-      return 'hover:border-slate-300/80 dark:hover:border-slate-700/60';
+      return 'hover:border-slate-300/80 dark:hover:border-zinc-700/60';
   }
 }
 

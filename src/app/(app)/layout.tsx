@@ -35,6 +35,7 @@ import AuthenticatedClientProviders from '@/components/auth/AuthenticatedClientP
 import { AccessProvider } from '@/components/access/AccessProvider';
 import ElevatedAccessBanner from '@/components/access/ElevatedAccessBanner';
 import { getAccessSnapshot } from '@/lib/access/server';
+import AccountThemeSync from '@/components/theme/AccountThemeSync';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -109,6 +110,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <AuthenticatedClientProviders initialSession={requestContext.session}>
+      <AccountThemeSync preference={activeShell.user.themePreference} />
       <AccessProvider snapshot={access}>
         <AppErrorBoundary>
           <TimezoneProvider initialTimeZone={userTimeZone}>

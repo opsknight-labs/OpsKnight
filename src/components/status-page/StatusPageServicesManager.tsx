@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react';
 import {
-  Search,
   X,
   Layers,
   Globe,
@@ -12,16 +11,12 @@ import {
   EyeOff,
   ChevronDown,
   ChevronRight,
-  ArrowUpDown,
-  SlidersHorizontal,
   Sparkles,
   ChevronLeft,
-  ChevronsUpDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/shadcn/badge';
 import Switch from '@/components/ui/Switch';
-import FormField from '@/components/ui/FormField';
 import type { PrivacySettings } from '@/components/status-page/StatusPagePrivacySettings';
 
 export interface ServiceItem {
@@ -36,23 +31,23 @@ export interface ServiceConfigState {
   showOnPage: boolean;
 }
 
-interface StatusPageServicesManagerProps {
+interface ServicesFormData {
+  showServicesByRegion: boolean;
+  showServiceOwners: boolean;
+  showServiceSlaTier: boolean;
+}
+
+interface StatusPageServicesManagerProps<TFormData extends ServicesFormData> {
   allServices: ServiceItem[];
   selectedServices: Set<string>;
   setSelectedServices: React.Dispatch<React.SetStateAction<Set<string>>>;
   serviceConfigs: Record<string, ServiceConfigState>;
   updateServiceConfig: (serviceId: string, updates: Partial<ServiceConfigState>) => void;
-  formData: {
-    showServicesByRegion: boolean;
-    showServiceOwners: boolean;
-    showServiceSlaTier: boolean;
-    [key: string]: any;
-  };
-  setFormData: React.Dispatch<React.SetStateAction<any>>;
+  formData: TFormData;
+  setFormData: React.Dispatch<React.SetStateAction<TFormData>>;
   privacySettings: {
     showServiceRegions?: boolean;
     showTeamInformation?: boolean;
-    [key: string]: any;
   };
   setPrivacySettings?: React.Dispatch<React.SetStateAction<PrivacySettings>>;
   hasSelectedRegions: boolean;
@@ -61,7 +56,7 @@ interface StatusPageServicesManagerProps {
 type FilterTab = 'all' | 'selected' | 'unselected' | 'visible' | 'hidden';
 type DensityMode = 'table' | 'cards';
 
-export default function StatusPageServicesManager({
+export default function StatusPageServicesManager<TFormData extends ServicesFormData>({
   allServices,
   selectedServices,
   setSelectedServices,
@@ -72,7 +67,7 @@ export default function StatusPageServicesManager({
   privacySettings,
   setPrivacySettings,
   hasSelectedRegions,
-}: StatusPageServicesManagerProps) {
+}: StatusPageServicesManagerProps<TFormData>) {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
@@ -137,8 +132,9 @@ export default function StatusPageServicesManager({
   const unselectedCount = allServices.length - selectedCount;
   const visibleCount = useMemo(() => {
     let count = 0;
+    const configs = new Map(Object.entries(serviceConfigs));
     selectedServices.forEach(id => {
-      if (serviceConfigs[id]?.showOnPage !== false) count++;
+      if (configs.get(id)?.showOnPage !== false) count++;
     });
     return count;
   }, [selectedServices, serviceConfigs]);
@@ -157,13 +153,14 @@ export default function StatusPageServicesManager({
 
   // Grouped by Region Map
   const servicesByRegion = useMemo(() => {
-    const map: Record<string, ServiceItem[]> = {};
+    const map = new Map<string, ServiceItem[]>();
     paginatedServices.forEach(service => {
       const reg = service.region?.trim() || 'Global / Unassigned';
-      if (!map[reg]) map[reg] = [];
-      map[reg].push(service);
+      const regionServices = map.get(reg) ?? [];
+      regionServices.push(service);
+      map.set(reg, regionServices);
     });
-    return map;
+    return Object.fromEntries(map);
   }, [paginatedServices]);
 
   // --- BULK ACTION HANDLERS ---
@@ -522,7 +519,7 @@ export default function StatusPageServicesManager({
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted/60 hover:bg-muted text-foreground border border-border/60 transition-colors font-medium"
               title="Set Show on Page to true for all selected in this view"
             >
-              <Eye className="w-3.5 h-3.5 text-emerald-600" />
+              <Eye className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               Show All Selected
             </button>
 
@@ -532,7 +529,7 @@ export default function StatusPageServicesManager({
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted/60 hover:bg-muted text-foreground border border-border/60 transition-colors font-medium"
               title="Set Show on Page to false for all selected in this view"
             >
-              <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+              <EyeOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               Hide All Selected
             </button>
           </div>

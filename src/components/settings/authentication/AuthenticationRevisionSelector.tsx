@@ -175,7 +175,10 @@ export default function AuthenticationRevisionSelector({
           role="status"
           className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-foreground/90"
         >
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
+          <Info
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+            aria-hidden
+          />
           The configuration you had selected no longer exists — it may have been deleted in another
           session. {selected ? 'Showing the closest available configuration.' : ''}
         </p>

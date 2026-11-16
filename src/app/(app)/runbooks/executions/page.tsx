@@ -209,7 +209,7 @@ export default async function RunbookExecutionsPage({
               className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
               title={`All execution timestamps reflect your profile timezone: ${userTimeZone}`}
             >
-              <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
+              <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
               {userTimeZone}
             </span>
           </div>

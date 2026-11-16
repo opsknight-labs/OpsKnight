@@ -28,7 +28,7 @@ function ServiceCard({ service, compact = false }: ServiceCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   // Memoize computed values to prevent recalculation on every render
-  const { openIncidents, hasCritical, status, openIncidentCount } = useMemo(() => {
+  const { hasCritical, status, openIncidentCount } = useMemo(() => {
     const incidents = service.incidents || [];
     const count =
       typeof service.openIncidentCount === 'number' ? service.openIncidentCount : incidents.length;
@@ -59,7 +59,7 @@ function ServiceCard({ service, compact = false }: ServiceCardProps) {
         style={{
           display: 'block',
           padding: '1rem',
-          background: '#fff',
+          background: 'hsl(var(--ui-card))',
           border: `1px solid ${compactHovered ? 'var(--primary-color)' : 'var(--border)'}`,
           borderRadius: '0px',
           cursor: 'pointer',
@@ -154,7 +154,8 @@ function ServiceCard({ service, compact = false }: ServiceCardProps) {
       hoverShadow: '0 8px 20px rgba(239, 68, 68, 0.2)',
     },
   };
-  const statusColor = statusColors[status] || statusColors['OPERATIONAL'];
+  const statusColor =
+    new Map(Object.entries(statusColors)).get(status) || statusColors['OPERATIONAL'];
 
   const handleCardClick = () => {
     router.push(`/services/${service.id}`);
@@ -441,7 +442,7 @@ export default memo(ServiceCard, (prevProps, nextProps) => {
   const incidentsEqual =
     prevIncidents.length === nextIncidents.length &&
     prevIncidents.every(
-      (inc, i) => inc.id === nextIncidents[i]?.id && inc.urgency === nextIncidents[i]?.urgency
+      (inc, i) => inc.id === nextIncidents.at(i)?.id && inc.urgency === nextIncidents.at(i)?.urgency
     );
 
   return (

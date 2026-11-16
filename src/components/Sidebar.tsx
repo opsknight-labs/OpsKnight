@@ -158,10 +158,10 @@ export default function Sidebar({
           'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
           // Hover and active states
-          'text-slate-400 hover:text-white hover:bg-slate-800/60',
+          'text-ink-400 hover:text-white hover:bg-slate-800/60',
           active
             ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
-            : 'text-slate-400',
+            : 'text-ink-400',
           // Sizing
           isDesktopCollapsed
             ? 'h-10 w-10 justify-center p-0 mx-auto'
@@ -177,7 +177,7 @@ export default function Sidebar({
         <span
           className={cn(
             'shrink-0 flex items-center justify-center transition-transform duration-150',
-            active ? 'text-rose-400' : 'text-slate-400 group-hover:text-white',
+            active ? 'text-rose-400' : 'text-ink-400 group-hover:text-white',
             'group-hover:scale-105'
           )}
         >
@@ -212,7 +212,7 @@ export default function Sidebar({
               variant="sidebar-danger"
               size="xs"
               aria-label={`${stats!.count} active incidents`}
-              className="ml-auto h-4.5 min-w-4.5 px-1.5 rounded-full text-[10.5px] font-bold bg-rose-500 text-white border-0 shadow-xs"
+              className="ml-auto h-4.5 min-w-4.5 px-1.5 rounded-full text-[10.5px] font-bold bg-rose-600 text-white border-0 shadow-xs"
             >
               {badgeText}
             </Badge>
@@ -229,7 +229,7 @@ export default function Sidebar({
           <TooltipContent
             side="right"
             sideOffset={12}
-            className="text-xs py-1 px-2.5 flex items-center gap-2 bg-slate-900 text-white border-slate-700 shadow-xl"
+            className="text-xs py-1 px-2.5 flex items-center gap-2 bg-zinc-900 text-white border-zinc-700 shadow-xl"
           >
             <span className="font-medium">{item.label}</span>
             {item.releaseStage && (
@@ -242,7 +242,7 @@ export default function Sidebar({
               </Badge>
             )}
             {hasIncidents && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-600 text-white">
                 {badgeText}
               </span>
             )}
@@ -275,7 +275,7 @@ export default function Sidebar({
                 className={cn(
                   'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
                   'h-10 w-10 justify-center p-0 mx-auto',
-                  'text-slate-500 hover:text-white hover:bg-slate-800/60'
+                  'text-ink-500 hover:text-white hover:bg-slate-800/60'
                 )}
               >
                 <Globe className="h-[18px] w-[18px]" />
@@ -284,7 +284,7 @@ export default function Sidebar({
             <TooltipContent
               side="right"
               sideOffset={12}
-              className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+              className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
             >
               Setup Status Page
             </TooltipContent>
@@ -298,7 +298,7 @@ export default function Sidebar({
             className={cn(
               'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
               'px-2.5 py-2 gap-2.5 text-[13px] w-full',
-              'text-slate-500 hover:text-slate-300 hover:bg-slate-800/40'
+              'text-ink-500 hover:text-slate-300 hover:bg-slate-800/40'
             )}
           >
             <span className="shrink-0 flex items-center justify-center">
@@ -332,7 +332,7 @@ export default function Sidebar({
                   'h-10 w-10 justify-center p-0 mx-auto',
                   active
                     ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    : 'text-ink-400 hover:text-white hover:bg-slate-800/60'
                 )}
               >
                 <Activity className={cn('h-[18px] w-[18px]', active && 'text-rose-400')} />
@@ -341,7 +341,7 @@ export default function Sidebar({
             <TooltipContent
               side="right"
               sideOffset={12}
-              className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+              className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
             >
               {page.name}
             </TooltipContent>
@@ -361,7 +361,7 @@ export default function Sidebar({
               showManageLink && 'pr-8',
               active
                 ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                : 'text-ink-400 hover:text-white hover:bg-slate-800/60'
             )}
           >
             {active && (
@@ -370,7 +370,7 @@ export default function Sidebar({
             <span
               className={cn(
                 'shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform',
-                active ? 'text-rose-400' : 'text-slate-400 group-hover:text-white'
+                active ? 'text-rose-400' : 'text-ink-400 group-hover:text-white'
               )}
             >
               <Activity className="h-[18px] w-[18px]" />
@@ -380,7 +380,7 @@ export default function Sidebar({
           {showManageLink && (
             <Link
               href="/settings/status-pages"
-              className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-slate-300 p-0.5 rounded"
+              className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity text-ink-500 hover:text-slate-300 p-0.5 rounded"
               title="Manage status pages"
               aria-label="Manage status pages"
             >
@@ -407,7 +407,7 @@ export default function Sidebar({
                 'h-10 w-10 justify-center p-0 mx-auto',
                 active
                   ? 'bg-slate-800/90 text-white shadow-xs ring-1 ring-white/10'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  : 'text-ink-400 hover:text-white hover:bg-slate-800/60'
               )}
             >
               {active && (
@@ -421,7 +421,7 @@ export default function Sidebar({
           <TooltipContent
             side="right"
             sideOffset={12}
-            className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl p-2 max-w-48"
+            className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl p-2 max-w-48"
           >
             <p className="font-semibold mb-1.5 text-slate-300">Status Pages</p>
             <div className="flex flex-col gap-1">
@@ -429,7 +429,7 @@ export default function Sidebar({
                 <Link
                   key={page.id}
                   href={statusPageHref(page)}
-                  className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 text-ink-400 hover:text-white transition-colors"
                 >
                   <ExternalLink className="h-3 w-3 shrink-0" />
                   <span className="truncate">{page.name}</span>
@@ -455,7 +455,7 @@ export default function Sidebar({
             'px-2.5 py-2 gap-2.5 text-[13px]',
             active
               ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              : 'text-ink-400 hover:text-white hover:bg-slate-800/60'
           )}
         >
           {active && (
@@ -464,20 +464,20 @@ export default function Sidebar({
           <span
             className={cn(
               'shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform',
-              active ? 'text-rose-400' : 'text-slate-400 group-hover:text-white'
+              active ? 'text-rose-400' : 'text-ink-400 group-hover:text-white'
             )}
           >
             <Globe className="h-[18px] w-[18px]" />
           </span>
           <span className="min-w-0 flex-1 truncate text-left">Status Pages</span>
           <span className="ml-auto flex items-center gap-1">
-            <span className="text-[10px] font-bold text-slate-500 tabular-nums">
+            <span className="text-[10px] font-bold text-ink-500 tabular-nums">
               {statusPages.length}
             </span>
             {statusPagesExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-slate-500 transition-transform" />
+              <ChevronDown className="h-3.5 w-3.5 text-ink-500 transition-transform" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-slate-500 transition-transform" />
+              <ChevronRight className="h-3.5 w-3.5 text-ink-500 transition-transform" />
             )}
           </span>
         </button>
@@ -498,7 +498,7 @@ export default function Sidebar({
                     'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-500/40',
                     pageActive
                       ? 'bg-slate-800/70 text-white'
-                      : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/40'
+                      : 'text-ink-500 hover:text-slate-200 hover:bg-slate-800/40'
                   )}
                 >
                   <span
@@ -519,7 +519,7 @@ export default function Sidebar({
             {showManageLink && (
               <Link
                 href="/settings/status-pages"
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-medium text-slate-600 hover:text-slate-400 hover:bg-slate-800/30 transition-colors mt-0.5"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-medium text-ink-600 hover:text-ink-400 hover:bg-slate-800/30 transition-colors mt-0.5"
               >
                 <Settings className="h-3 w-3 shrink-0" />
                 <span>Manage pages</span>
@@ -553,7 +553,7 @@ export default function Sidebar({
             {sectionConfig.dotClass && (
               <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', sectionConfig.dotClass)} />
             )}
-            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">
+            <span className="text-[10px] font-bold tracking-wider uppercase text-ink-400">
               {sectionConfig.label}
             </span>
           </div>
@@ -588,7 +588,7 @@ export default function Sidebar({
         data-collapsed={isDesktopCollapsed ? 'true' : 'false'}
         className={cn(
           // Base styles
-          'sidebar flex flex-col select-none',
+          'sidebar ok-inverse-surface flex flex-col select-none',
           // Desktop positioning: Flush below top header
           !isMobile && [
             'fixed top-14 left-0 bottom-0 z-30 transition-[width] duration-200 ease-in-out',
@@ -649,7 +649,7 @@ export default function Sidebar({
         {/* Sidebar Footer Section */}
         <div
           className={cn(
-            'mt-auto shrink-0 border-t border-white/10 bg-slate-950/60',
+            'mt-auto shrink-0 border-t border-white/10 bg-zinc-950/60',
             isDesktopCollapsed ? 'p-2' : 'p-3'
           )}
         >
@@ -675,10 +675,10 @@ export default function Sidebar({
                 <TooltipContent
                   side="right"
                   sideOffset={12}
-                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                  className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
                 >
                   <p className="font-semibold">{currentName || 'User'}</p>
-                  <p className="text-slate-400 text-[10px]">{currentEmail}</p>
+                  <p className="text-ink-400 text-[10px]">{currentEmail}</p>
                 </TooltipContent>
               </Tooltip>
             ) : (
@@ -696,7 +696,7 @@ export default function Sidebar({
                   <div className="text-[13px] font-semibold text-white truncate">
                     {currentName || 'User'}
                   </div>
-                  <div className="text-[11px] text-slate-400 font-medium truncate">
+                  <div className="text-[11px] text-ink-400 font-medium truncate">
                     {currentEmail || 'user@example.com'}
                   </div>
                 </div>
@@ -709,7 +709,7 @@ export default function Sidebar({
             <div className="grid grid-cols-4 gap-1 mt-2.5 pt-2 border-t border-white/5">
               <Link
                 href="/help"
-                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors"
                 title="Help & Support"
                 aria-label="Help & Support"
               >
@@ -718,7 +718,7 @@ export default function Sidebar({
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
-                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors"
                 title="Keyboard Shortcuts (?)"
                 aria-label="Keyboard Shortcuts"
               >
@@ -726,7 +726,7 @@ export default function Sidebar({
               </button>
               <Link
                 href="/settings"
-                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors"
                 title="Settings"
                 aria-label="Settings"
               >
@@ -734,7 +734,7 @@ export default function Sidebar({
               </Link>
               <Link
                 href="/auth/signout"
-                className="flex items-center justify-center h-7 rounded-md hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-rose-500/20 text-ink-400 hover:text-rose-400 transition-colors"
                 title="Sign Out"
                 aria-label="Sign Out"
               >
@@ -750,7 +750,7 @@ export default function Sidebar({
                 <TooltipTrigger asChild>
                   <Link
                     href="/settings"
-                    className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                    className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors"
                     aria-label="Settings"
                   >
                     <Settings className="h-4 w-4" />
@@ -759,7 +759,7 @@ export default function Sidebar({
                 <TooltipContent
                   side="right"
                   sideOffset={12}
-                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                  className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
                 >
                   Settings
                 </TooltipContent>
@@ -769,7 +769,7 @@ export default function Sidebar({
                 <TooltipTrigger asChild>
                   <Link
                     href="/auth/signout"
-                    className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                    className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-rose-500/20 text-ink-400 hover:text-rose-400 transition-colors"
                     aria-label="Sign Out"
                   >
                     <LogOut className="h-4 w-4" />
@@ -778,7 +778,7 @@ export default function Sidebar({
                 <TooltipContent
                   side="right"
                   sideOffset={12}
-                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                  className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
                 >
                   Sign Out
                 </TooltipContent>
@@ -788,7 +788,7 @@ export default function Sidebar({
 
           {/* Metadata version info */}
           {!isDesktopCollapsed && (
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[10px] text-slate-500">
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[10px] text-ink-400">
               <a
                 href="https://opsknight.com"
                 target="_blank"

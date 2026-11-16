@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 type PaginationProps = {
   currentPage: number;
   totalPages: number;
   totalItems: number;
   itemsPerPage: number;
+  /** Singular noun for the footer, e.g. "postmortem". */
+  itemLabel?: string;
 };
 
 export default function Pagination({
@@ -15,8 +17,11 @@ export default function Pagination({
   totalPages,
   totalItems,
   itemsPerPage,
+  itemLabel = 'incident',
 }: PaginationProps) {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const noun = (count: number) => `${itemLabel}${count !== 1 ? 's' : ''}`;
 
   // Build URL with current query params but update page
   const buildPageUrl = (page: number) => {
@@ -29,7 +34,8 @@ export default function Pagination({
     if (page > 1) {
       params.append('page', page.toString());
     }
-    return `/incidents?${params.toString()}`;
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
   };
 
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
@@ -41,7 +47,7 @@ export default function Pagination({
         style={{
           padding: '1rem 1.5rem',
           borderTop: '1px solid var(--border)',
-          background: '#f9fafb',
+          background: 'hsl(var(--ui-background))',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -50,7 +56,7 @@ export default function Pagination({
         }}
       >
         <span>
-          Showing {totalItems} incident{totalItems !== 1 ? 's' : ''}
+          Showing {totalItems} {noun(totalItems)}
         </span>
       </div>
     );
@@ -100,7 +106,7 @@ export default function Pagination({
       style={{
         padding: '1rem 1.5rem',
         borderTop: '1px solid var(--border)',
-        background: '#f9fafb',
+        background: 'hsl(var(--ui-background))',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -109,7 +115,7 @@ export default function Pagination({
       }}
     >
       <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-        Showing {startItem} to {endItem} of {totalItems} incident{totalItems !== 1 ? 's' : ''}
+        Showing {startItem} to {endItem} of {totalItems} {noun(totalItems)}
       </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -120,7 +126,7 @@ export default function Pagination({
             padding: '0.5rem 0.75rem',
             border: '1px solid var(--border)',
             borderRadius: '0px',
-            background: currentPage === 1 ? '#f3f4f6' : 'white',
+            background: currentPage === 1 ? 'hsl(var(--ui-muted))' : 'hsl(var(--ui-card))',
             color: currentPage === 1 ? 'var(--text-muted)' : 'var(--text-primary)',
             textDecoration: 'none',
             fontSize: '0.85rem',
@@ -161,7 +167,7 @@ export default function Pagination({
                 padding: '0.5rem 0.75rem',
                 border: `1px solid ${isCurrentPage ? 'var(--primary-color)' : 'var(--border)'}`,
                 borderRadius: '0px',
-                background: isCurrentPage ? 'var(--primary-color)' : 'white',
+                background: isCurrentPage ? 'var(--primary-color)' : 'hsl(var(--ui-card))',
                 color: isCurrentPage ? 'white' : 'var(--text-primary)',
                 textDecoration: 'none',
                 fontSize: '0.85rem',
@@ -183,7 +189,7 @@ export default function Pagination({
             padding: '0.5rem 0.75rem',
             border: '1px solid var(--border)',
             borderRadius: '0px',
-            background: currentPage === totalPages ? '#f3f4f6' : 'white',
+            background: currentPage === totalPages ? 'hsl(var(--ui-muted))' : 'hsl(var(--ui-card))',
             color: currentPage === totalPages ? 'var(--text-muted)' : 'var(--text-primary)',
             textDecoration: 'none',
             fontSize: '0.85rem',

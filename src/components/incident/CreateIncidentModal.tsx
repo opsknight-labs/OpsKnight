@@ -234,7 +234,7 @@ const PRIORITY_OPTIONS = [
     label: INCIDENT_PRIORITY_DEFINITIONS.P5.label,
     description: INCIDENT_PRIORITY_DEFINITIONS.P5.description,
     selectedClass:
-      'bg-slate-500/15 text-slate-700 border-slate-500/40 ring-1 ring-slate-500/30 shadow-2xs dark:text-slate-300',
+      'bg-slate-500/15 text-slate-700 border-slate-500/40 ring-1 ring-slate-500/30 shadow-2xs dark:text-zinc-300',
     dotClass: 'bg-slate-400',
   },
 ];
@@ -1027,7 +1027,7 @@ function CreateIncidentModalContent({
                               className={cn(
                                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
                                 field.value === 'PRIVATE'
-                                  ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-slate-300'
+                                  ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-zinc-300'
                                   : 'border-border/80 bg-muted/50 text-muted-foreground'
                               )}
                             >
@@ -1043,7 +1043,7 @@ function CreateIncidentModalContent({
                                     <Badge
                                       variant="secondary"
                                       size="xs"
-                                      className="text-[9px] font-medium px-1.5 py-0 border-slate-500/30 text-slate-700 dark:text-slate-300 bg-slate-500/10"
+                                      className="text-[9px] font-medium px-1.5 py-0 border-slate-500/30 text-slate-700 dark:text-zinc-300 bg-slate-500/10"
                                     >
                                       Service Default
                                     </Badge>
@@ -1054,7 +1054,7 @@ function CreateIncidentModalContent({
                                     className={cn(
                                       'text-[9px] font-semibold',
                                       field.value === 'PRIVATE'
-                                        ? 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
+                                        ? 'border-slate-500/40 text-slate-700 dark:text-zinc-300 bg-slate-500/10'
                                         : 'opacity-60'
                                     )}
                                   >

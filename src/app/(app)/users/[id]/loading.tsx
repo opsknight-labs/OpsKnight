@@ -8,7 +8,7 @@ export default function UserDetailLoading() {
       <Skeleton className="h-4 w-36 rounded-md" />
 
       {/* Hero Profile Banner Skeleton */}
-      <div className="rounded-2xl p-6 sm:p-7 bg-slate-100/80 border border-slate-200/60 shadow-xs">
+      <div className="rounded-2xl p-6 sm:p-7 bg-ink-100/80 border border-ink-200/60 shadow-xs">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <Skeleton className="h-16 w-16 rounded-full" />
@@ -34,7 +34,7 @@ export default function UserDetailLoading() {
 
       {/* Tab Content Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="border-slate-200/80 bg-white">
+        <Card className="border-ink-200/80 bg-card">
           <CardContent className="p-6 space-y-4">
             <Skeleton className="h-5 w-32 rounded-md" />
             <div className="space-y-3 pt-2">
@@ -45,7 +45,7 @@ export default function UserDetailLoading() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white">
+        <Card className="border-ink-200/80 bg-card">
           <CardContent className="p-6 space-y-4">
             <Skeleton className="h-5 w-32 rounded-md" />
             <div className="grid grid-cols-2 gap-3 pt-2">

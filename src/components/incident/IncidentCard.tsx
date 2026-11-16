@@ -45,7 +45,7 @@ function IncidentCard({
         style={{
           display: 'block',
           padding: '1rem',
-          background: '#fff',
+          background: 'hsl(var(--ui-card))',
           border: '1px solid var(--border)',
           borderRadius: '0px',
           textDecoration: 'none',
@@ -230,7 +230,7 @@ function IncidentCard({
             alignItems: 'center',
             gap: '0.5rem',
             padding: '0.5rem 0.75rem',
-            background: '#f9fafb',
+            background: 'hsl(var(--ui-background))',
             border: '1px solid var(--border)',
             borderRadius: '0px',
             marginBottom: '0.75rem',

@@ -95,7 +95,7 @@ function getActionMeta(action: string, rawDetails?: unknown): ActionMeta {
                 .join(' · ')
             : undefined,
         icon: Settings2,
-        iconColor: 'text-slate-600 dark:text-slate-400',
+        iconColor: 'text-slate-600 dark:text-zinc-400',
         iconBg: 'bg-slate-500/10 border-slate-500/20',
       };
     case 'schedule.layer.created':
@@ -167,7 +167,7 @@ function getActionMeta(action: string, rawDetails?: unknown): ActionMeta {
       return {
         title: 'Temporary override removed',
         icon: ShieldAlert,
-        iconColor: 'text-slate-600 dark:text-slate-400',
+        iconColor: 'text-slate-600 dark:text-zinc-400',
         iconBg: 'bg-slate-500/10 border-slate-500/20',
       };
     default: {

@@ -238,7 +238,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       title="Assign to me (m)"
       aria-label={`Assign ${incident.title} to me`}
       className={cn(
-        'inline-flex w-fit items-center gap-1 rounded-md border border-dashed border-slate-300 text-muted-foreground hover:border-primary/60 hover:text-primary disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-slate-700',
+        'inline-flex w-fit items-center gap-1 rounded-md border border-dashed border-slate-300 text-muted-foreground hover:border-primary/60 hover:text-primary disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-zinc-700',
         compact ? 'h-5 px-1.5 text-[10px] leading-none' : 'px-2 py-0.5 text-[11px] font-medium'
       )}
     >

@@ -63,7 +63,8 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
       href: '/incidents/create',
       description: 'Trigger a new incident response',
       icon: <Zap className="h-4 w-4" />,
-      colorClass: 'bg-red-50 text-red-600 border-red-100 group-hover:bg-red-100',
+      colorClass:
+        'bg-red-50 text-red-600 border-red-100 group-hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/30',
       shortcut: 'I',
     },
     {
@@ -71,21 +72,23 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
       href: '/incidents/templates/create',
       description: 'Create incident template',
       icon: <LayoutTemplate className="h-4 w-4" />,
-      colorClass: 'bg-slate-50 text-slate-600 border-slate-100 group-hover:bg-slate-100',
+      colorClass: 'bg-ink-50 text-ink-600 border-ink-100 group-hover:bg-ink-100',
     },
     {
       label: 'New Postmortem',
       href: '/postmortems/create',
       description: 'Create retrospective report',
       icon: <FileText className="h-4 w-4" />,
-      colorClass: 'bg-amber-50 text-amber-600 border-amber-100 group-hover:bg-amber-100',
+      colorClass:
+        'bg-amber-50 text-amber-600 border-amber-100 group-hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30',
     },
     {
       label: 'New Service',
       href: '/services',
       description: 'Register a new microservice',
       icon: <Server className="h-4 w-4" />,
-      colorClass: 'bg-blue-50 text-blue-600 border-blue-100 group-hover:bg-blue-100',
+      colorClass:
+        'bg-blue-50 text-blue-600 border-blue-100 group-hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/30',
       shortcut: 'S',
     },
     {
@@ -93,21 +96,24 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
       href: '/teams',
       description: 'Create a response team',
       icon: <Users className="h-4 w-4" />,
-      colorClass: 'bg-indigo-50 text-indigo-600 border-indigo-100 group-hover:bg-indigo-100',
+      colorClass:
+        'bg-indigo-50 text-indigo-600 border-indigo-100 group-hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/30',
     },
     {
       label: 'New Schedule',
       href: '/schedules',
       description: 'Set up on-call rotation',
       icon: <Calendar className="h-4 w-4" />,
-      colorClass: 'bg-emerald-50 text-emerald-600 border-emerald-100 group-hover:bg-emerald-100',
+      colorClass:
+        'bg-emerald-50 text-emerald-600 border-emerald-100 group-hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30',
     },
     {
       label: 'New Policy',
       href: '/policies',
       description: 'Define escalation rules',
       icon: <Shield className="h-4 w-4" />,
-      colorClass: 'bg-purple-50 text-purple-600 border-purple-100 group-hover:bg-purple-100',
+      colorClass:
+        'bg-purple-50 text-purple-600 border-purple-100 group-hover:bg-purple-100 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/30',
       badge: 'Admin',
     },
   ];

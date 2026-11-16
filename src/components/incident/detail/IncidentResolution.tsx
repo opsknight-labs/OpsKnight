@@ -49,13 +49,13 @@ export default function IncidentResolution({
 }: IncidentResolutionProps) {
   if (!canManage) {
     return (
-      <Card className="border-orange-200 bg-orange-50/50">
+      <Card className="border-orange-200 bg-orange-50/50 dark:border-orange-500/30 dark:bg-orange-500/10">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-orange-900">
+          <CardTitle className="flex items-center gap-2 text-orange-900 dark:text-orange-300">
             <Lock className="h-5 w-5" />
             Resolution - Access Restricted
           </CardTitle>
-          <CardDescription className="text-orange-700">
+          <CardDescription className="text-orange-700 dark:text-orange-300">
             You need Responder role or above to resolve incidents
           </CardDescription>
         </CardHeader>
@@ -64,13 +64,13 @@ export default function IncidentResolution({
   }
 
   return (
-    <Card className="border-emerald-200 bg-emerald-50/50">
+    <Card className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-500/10">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-emerald-900">
+        <CardTitle className="flex items-center gap-2 text-emerald-900 dark:text-emerald-300">
           <Target className="h-5 w-5" />
           Resolve Incident
         </CardTitle>
-        <CardDescription className="text-emerald-700">
+        <CardDescription className="text-emerald-700 dark:text-emerald-300">
           Mark this incident as resolved with a summary note
         </CardDescription>
       </CardHeader>
@@ -84,7 +84,7 @@ export default function IncidentResolution({
               maxLength={1000}
               rows={4}
               placeholder="Root cause, fix applied, or summary..."
-              className="resize-none bg-white"
+              className="resize-none bg-card"
             />
             <p className="text-xs text-muted-foreground">
               10-1000 characters. Supports Markdown formatting.

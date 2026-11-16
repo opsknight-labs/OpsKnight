@@ -29,7 +29,13 @@ import {
   PieChart,
   BarChart,
   ListTodo,
+  Sun,
+  Moon,
+  Monitor,
+  Check,
 } from 'lucide-react';
+import { useThemePreference } from '@/hooks/use-theme-preference';
+import type { ThemeChoice } from '@/lib/theme-preference';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
@@ -202,6 +208,13 @@ const QUICK_ACTIONS = [
   },
 ];
 
+const THEME_ACTIONS: Array<{ choice: ThemeChoice; label: string; icon: typeof Sun }> = [
+  { choice: 'dark', label: 'Use dark theme', icon: Moon },
+  { choice: 'light', label: 'Use light theme', icon: Sun },
+  { choice: 'system', label: 'Match system theme', icon: Monitor },
+];
+const THEME_KEYWORDS = ['theme', 'appearance', 'dark', 'light', 'system', 'mode', 'color'];
+
 const getTypeIcon = (type: string) => {
   switch (type) {
     case 'incident':
@@ -217,7 +230,7 @@ const getTypeIcon = (type: string) => {
     case 'policy':
       return <Shield className="h-4 w-4 text-yellow-500" />;
     case 'postmortem':
-      return <FileText className="h-4 w-4 text-gray-500" />;
+      return <FileText className="h-4 w-4 text-ink-500" />;
     default:
       return <SearchIcon className="h-4 w-4" />;
   }
@@ -425,6 +438,22 @@ export default function SidebarSearch() {
     [router, openCreateIncident, query, results.length, saveRecentSearch]
   );
 
+  const themePreference = useThemePreference();
+  const normalizedQuery = query.trim().toLowerCase();
+  const showThemeActions =
+    !themePreference.locked &&
+    normalizedQuery.length > 0 &&
+    THEME_KEYWORDS.some(word => word.startsWith(normalizedQuery) || normalizedQuery.includes(word));
+  const selectTheme = useCallback(
+    (choice: ThemeChoice) => {
+      themePreference.setChoice(choice);
+      setOpen(false);
+      setQuery('');
+      inputRef.current?.blur();
+    },
+    [themePreference]
+  );
+
   const matchingNavigation = useMemo(() => {
     if (query.trim().length < 2) return [];
     const q = query.trim().toLowerCase();
@@ -556,7 +585,7 @@ export default function SidebarSearch() {
               </div>
             )}
 
-            {!isLoading && query.trim().length >= 2 && !hasAnyResults && (
+            {!isLoading && query.trim().length >= 2 && !hasAnyResults && !showThemeActions && (
               <CommandEmpty>
                 <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
                   <p className="text-sm">No results found for &quot;{query}&quot;</p>
@@ -604,6 +633,39 @@ export default function SidebarSearch() {
                   ))}
                 </CommandGroup>
               </>
+            )}
+
+            {showThemeActions && (
+              <CommandGroup heading="Appearance">
+                {[...THEME_ACTIONS]
+                  .sort(
+                    (a, b) =>
+                      Number(b.choice.startsWith(normalizedQuery)) -
+                      Number(a.choice.startsWith(normalizedQuery))
+                  )
+                  .map(action => {
+                    const active = themePreference.choice === action.choice;
+                    return (
+                      <CommandItem
+                        key={action.choice}
+                        value={`${action.label} theme appearance`}
+                        onSelect={() => selectTheme(action.choice)}
+                        className="aria-selected:bg-accent aria-selected:text-accent-foreground cursor-pointer"
+                      >
+                        <div className="flex items-center justify-center h-7 w-7 rounded-sm bg-muted mr-3">
+                          <action.icon className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
+                        </div>
+                        <span className="font-medium flex-1">{action.label}</span>
+                        {active && (
+                          <Check
+                            className="h-3.5 w-3.5 text-muted-foreground"
+                            aria-label="Current"
+                          />
+                        )}
+                      </CommandItem>
+                    );
+                  })}
+              </CommandGroup>
             )}
 
             {query.length > 0 && (

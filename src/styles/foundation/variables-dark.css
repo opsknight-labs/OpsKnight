@@ -12,7 +12,10 @@
     --primary-hover: #e2e8f0;
     --primary-light: #94a3b8;
     --primary-dark: #ffffff;
-    --primary-foreground: #0f172a;
+    --primary-foreground: #18181b;
+    /* Legacy filled-surface colour (skip link, legacy pagination, buttons with white text). */
+    --primary-color: #3f3f46;
+    --button-primary-hover: #52525b;
 
     --secondary: #a1a1aa;
     --secondary-foreground: #f8fafc;
@@ -58,15 +61,15 @@
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.35);
     --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.4);
     --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.45);
-    --shadow-primary: 0 4px 14px rgba(15, 23, 42, 0.5);
+    --shadow-primary: 0 4px 14px rgba(24, 24, 27, 0.5);
     --shadow-success: 0 4px 14px rgba(5, 150, 105, 0.35);
     --shadow-error: 0 4px 14px rgba(190, 18, 60, 0.35);
 
-    --color-neutral-50: #0f172a;
+    --color-neutral-50: #18181b;
     --color-neutral-100: #111827;
     --color-neutral-200: #1f2937;
-    --color-neutral-300: #334155;
-    --color-neutral-400: #475569;
+    --color-neutral-300: #3f3f46;
+    --color-neutral-400: #52525b;
     --color-neutral-500: #64748b;
     --color-neutral-600: #94a3b8;
     --color-neutral-700: #cbd5e1;
@@ -101,33 +104,33 @@
     --secondary: #94a3b8;
     --accent: #3b82f6;
 
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-dark: #020617;
-    --bg-surface: #1e293b;
+    --bg-primary: #18181b;
+    --bg-secondary: #27272a;
+    --bg-dark: #09090b;
+    --bg-surface: #27272a;
     --bg-overlay: rgba(0, 0, 0, 0.7);
 
     --text-primary: #f8fafc;
     --text-secondary: #cbd5e1;
     --text-muted: #94a3b8;
-    --text-inverse: #0f172a;
+    --text-inverse: #18181b;
     --text-tertiary: #64748b;
 
-    --border: #334155;
-    --border-hover: #475569;
+    --border: #3f3f46;
+    --border-hover: #52525b;
     --border-focus: rgba(59, 130, 246, 0.5);
 
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
 
-    --color-neutral-50: #1e293b;
-    --color-neutral-100: #1e293b;
-    --color-neutral-200: #334155;
-    --color-neutral-300: #475569;
+    --color-neutral-50: #27272a;
+    --color-neutral-100: #27272a;
+    --color-neutral-200: #3f3f46;
+    --color-neutral-300: #52525b;
 
-    --gradient-primary: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    --gradient-surface: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    --gradient-primary: linear-gradient(135deg, #27272a 0%, #18181b 100%);
+    --gradient-surface: linear-gradient(180deg, #27272a 0%, #18181b 100%);
 
     --badge-success-bg: rgba(5, 150, 105, 0.2);
     --badge-success-text: #34d399;

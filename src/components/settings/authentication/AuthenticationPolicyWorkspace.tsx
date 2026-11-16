@@ -169,7 +169,10 @@ export default function AuthenticationPolicyWorkspace() {
                 role="status"
                 className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm"
               >
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+                <CheckCircle2
+                  className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                  aria-hidden
+                />
                 <div className="space-y-1">
                   <p className="font-semibold text-foreground">
                     Single sign-on is on (

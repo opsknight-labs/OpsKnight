@@ -93,21 +93,21 @@ export default function ScheduleQuickStats({
     <div className="space-y-3">
       {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-lg border border-slate-100 bg-white p-2.5 text-center">
+        <div className="rounded-lg border border-ink-100 bg-card p-2.5 text-center">
           <div className="flex items-center justify-center gap-1 text-slate-500 mb-1">
             <Users className="h-3 w-3" />
           </div>
           <p className="text-lg font-bold text-slate-800">{stats.totalResponders}</p>
           <p className="text-[9px] text-slate-500 uppercase tracking-wider">Responders</p>
         </div>
-        <div className="rounded-lg border border-slate-100 bg-white p-2.5 text-center">
+        <div className="rounded-lg border border-ink-100 bg-card p-2.5 text-center">
           <div className="flex items-center justify-center gap-1 text-slate-500 mb-1">
             <Zap className="h-3 w-3" />
           </div>
           <p className="text-lg font-bold text-slate-800">{stats.totalLayers}</p>
           <p className="text-[9px] text-slate-500 uppercase tracking-wider">Layers</p>
         </div>
-        <div className="rounded-lg border border-slate-100 bg-white p-2.5 text-center">
+        <div className="rounded-lg border border-ink-100 bg-card p-2.5 text-center">
           <div className="flex items-center justify-center gap-1 text-slate-500 mb-1">
             <CalendarClock className="h-3 w-3" />
           </div>
@@ -118,7 +118,7 @@ export default function ScheduleQuickStats({
 
       {/* Next Handoff */}
       {stats.nextHandoff && (
-        <div className="rounded-lg border border-violet-100 bg-gradient-to-r from-violet-50/50 to-white p-3">
+        <div className="rounded-lg border border-violet-100 bg-gradient-to-r from-violet-50/50 to-card p-3">
           <div className="flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 uppercase tracking-wider mb-2">
             <Clock className="h-3 w-3" />
             Next Handoff

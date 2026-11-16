@@ -33,28 +33,30 @@ import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 function healthBadgeVariant(health: string): string {
   switch (health) {
     case 'HEALTHY':
-      return 'border-emerald-300 text-emerald-700 bg-emerald-50';
+      return 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10';
     case 'DEGRADED':
-      return 'border-amber-300 text-amber-700 bg-amber-50';
+      return 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10';
     case 'DRIFTED':
-      return 'border-violet-300 text-violet-700 bg-violet-50';
+      return 'border-violet-300 text-violet-700 bg-violet-50 dark:border-violet-500/30 dark:text-violet-300 dark:bg-violet-500/10';
     case 'UNAVAILABLE':
-      return 'border-slate-300 text-slate-600 bg-slate-50';
+      return 'border-ink-300 text-ink-600 bg-ink-50';
     case 'UNKNOWN':
-      return 'border-blue-300 text-blue-700 bg-blue-50';
+      return 'border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-500/30 dark:text-blue-300 dark:bg-blue-500/10';
     default:
       return 'border-border text-muted-foreground';
   }
 }
 
 function stateBadgeVariant(state: string): string {
-  if (state === 'READY') return 'border-emerald-300 text-emerald-700 bg-emerald-50';
+  if (state === 'READY')
+    return 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10';
   if (state === 'PROVISIONING' || state === 'AMBIGUOUS')
-    return 'border-amber-300 text-amber-700 bg-amber-50';
-  if (state === 'CLOSING') return 'border-blue-300 text-blue-700 bg-blue-50';
-  if (state === 'CLOSED' || state === 'ARCHIVED')
-    return 'border-slate-300 text-slate-600 bg-slate-50';
-  if (state === 'FAILED') return 'border-red-300 text-red-700 bg-red-50';
+    return 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10';
+  if (state === 'CLOSING')
+    return 'border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-500/30 dark:text-blue-300 dark:bg-blue-500/10';
+  if (state === 'CLOSED' || state === 'ARCHIVED') return 'border-ink-300 text-ink-600 bg-ink-50';
+  if (state === 'FAILED')
+    return 'border-red-300 text-red-700 bg-red-50 dark:border-red-500/30 dark:text-red-300 dark:bg-red-500/10';
   return 'border-border text-muted-foreground';
 }
 
@@ -197,7 +199,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
           {cleanupPending > 0 && (
             <Badge
               variant="outline"
-              className="border-amber-300 text-amber-700 bg-amber-50 text-[10px]"
+              className="border-amber-300 text-amber-700 bg-amber-50 text-[10px] dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
             >
               <AlertTriangle className="h-3 w-3 mr-1" />
               {cleanupPending} cleanup pending
@@ -238,7 +240,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'HEALTHY' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'HEALTHY' ? 'border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50' : ''}`}
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'HEALTHY' ? 'border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/10' : ''}`}
           onClick={() => {
             setHealthFilter('HEALTHY');
             setPage(1);
@@ -249,7 +251,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'DEGRADED' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'DEGRADED' ? 'border-amber-300 text-amber-700 bg-amber-50/50 hover:bg-amber-50' : ''}`}
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'DEGRADED' ? 'border-amber-300 text-amber-700 bg-amber-50/50 hover:bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10 dark:hover:bg-amber-500/10' : ''}`}
           onClick={() => {
             setHealthFilter('DEGRADED');
             setPage(1);
@@ -260,7 +262,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'DRIFTED' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'DRIFTED' ? 'border-violet-300 text-violet-700 bg-violet-50/50 hover:bg-violet-50' : ''}`}
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'DRIFTED' ? 'border-violet-300 text-violet-700 bg-violet-50/50 hover:bg-violet-50 dark:border-violet-500/30 dark:text-violet-300 dark:bg-violet-500/10 dark:hover:bg-violet-500/10' : ''}`}
           onClick={() => {
             setHealthFilter('DRIFTED');
             setPage(1);
@@ -272,7 +274,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
           <Button
             variant={healthFilter === 'CLEANUP_PENDING' ? 'default' : 'outline'}
             size="sm"
-            className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'CLEANUP_PENDING' ? 'border-amber-400 text-amber-800 bg-amber-100/60 hover:bg-amber-100' : ''}`}
+            className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'CLEANUP_PENDING' ? 'border-amber-400 text-amber-800 bg-amber-100/60 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-500/15 dark:hover:bg-amber-500/15' : ''}`}
             onClick={() => {
               setHealthFilter('CLEANUP_PENDING');
               setPage(1);
@@ -284,7 +286,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'UNAVAILABLE' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'UNAVAILABLE' ? 'border-slate-300 text-slate-600 bg-slate-50 hover:bg-slate-100' : ''}`}
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'UNAVAILABLE' ? 'border-ink-300 text-ink-600 bg-ink-50 hover:bg-ink-100' : ''}`}
           onClick={() => {
             setHealthFilter('UNAVAILABLE');
             setPage(1);
@@ -295,7 +297,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'UNKNOWN' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'UNKNOWN' ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100' : ''}`}
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'UNKNOWN' ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-500/30 dark:text-blue-300 dark:bg-blue-500/10 dark:hover:bg-blue-500/15' : ''}`}
           onClick={() => {
             setHealthFilter('UNKNOWN');
             setPage(1);
@@ -387,7 +389,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                           {isLocked && (
                             <Badge
                               variant="outline"
-                              className="text-[10px] border-slate-300 text-slate-600 bg-slate-50 gap-1"
+                              className="text-[10px] border-ink-300 text-ink-600 bg-ink-50 gap-1"
                             >
                               <Lock className="h-2.5 w-2.5" /> Locked
                             </Badge>
@@ -402,21 +404,23 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                           {s.operationalHealth}
                         </Badge>
                         {s.externalCleanupPending && (
-                          <div className="text-[10px] text-amber-700 mt-0.5">cleanup pending</div>
+                          <div className="text-[10px] text-amber-700 mt-0.5 dark:text-amber-300">
+                            cleanup pending
+                          </div>
                         )}
                       </td>
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         <span
                           className={
                             s.projectionBehind
-                              ? 'text-amber-700 font-semibold'
+                              ? 'text-amber-700 font-semibold dark:text-amber-300'
                               : 'text-muted-foreground'
                           }
                         >
                           {s.lastProjectedVersion}/{s.projectionVersion}
                         </span>
                         {s.projectionBehind && (
-                          <span className="ml-1 text-[10px] text-amber-700">
+                          <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-300">
                             lag {s.projectionLag}
                           </span>
                         )}
@@ -427,7 +431,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                           {s.participantCounts.present}/{s.participantCounts.desired}
                         </span>
                         {s.participantDrift > 0 && (
-                          <span className="ml-1 text-[10px] text-amber-700">
+                          <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-300">
                             drift {s.participantDrift}
                           </span>
                         )}
@@ -642,7 +646,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
         {diag.externalCleanupPending && (
           <Badge
             variant="outline"
-            className="border-amber-300 text-amber-700 bg-amber-50 text-[10px]"
+            className="border-amber-300 text-amber-700 bg-amber-50 text-[10px] dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
           >
             externalCleanupPending
           </Badge>

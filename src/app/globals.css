@@ -255,24 +255,24 @@
 /* Dark theme — applies when next-themes sets class="dark" on <html> */
 .dark {
   color-scheme: dark;
-  --background: 15 23 42;
-  --foreground: 226 232 240;
-  --card: 15 23 42;
-  --card-foreground: 226 232 240;
-  --popover: 15 23 42;
-  --popover-foreground: 226 232 240;
-  --muted: 30 41 59;
-  --muted-foreground: 148 163 184;
-  --accent: 30 41 59;
-  --accent-foreground: 226 232 240;
-  --border: 51 65 85;
-  --input: 51 65 85;
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-surface: #1e293b;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --background: 24 24 27;
+  --foreground: 244 244 245;
+  --card: 24 24 27;
+  --card-foreground: 244 244 245;
+  --popover: 24 24 27;
+  --popover-foreground: 244 244 245;
+  --muted: 39 39 42;
+  --muted-foreground: 161 161 170;
+  --accent: 39 39 42;
+  --accent-foreground: 244 244 245;
+  --border: 63 63 70;
+  --input: 63 63 70;
+  --bg-primary: #18181b;
+  --bg-secondary: #27272a;
+  --bg-surface: #27272a;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
 }
 
 /* Notification toast styles live in src/styles/components/toasts.css. */
@@ -662,7 +662,7 @@ select option {
   padding: 0.3rem 0.625rem;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: hsl(var(--ui-card));
   box-shadow: var(--shadow-sm);
 }
 
@@ -723,7 +723,7 @@ select option {
   justify-content: center;
   padding: 1rem;
   background:
-    linear-gradient(135deg, var(--bg-primary) 0%, #edf2f7 25%, #f1f5f9 50%, #edf2f7 75%, var(--bg-primary) 100%);
+    linear-gradient(135deg, var(--bg-primary) 0%, rgb(var(--ink-100)) 25%, rgb(var(--ink-100)) 50%, rgb(var(--ink-100)) 75%, var(--bg-primary) 100%);
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -1003,7 +1003,7 @@ select option {
   line-height: 1.15;
   font-weight: 800;
   margin-bottom: 0.875rem;
-  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.9) 50%, rgba(248, 250, 252, 0.95) 100%);
+  background: linear-gradient(135deg, hsl(var(--ui-card)) 0%, rgba(255, 255, 255, 0.9) 50%, rgb(var(--ink-50) / 0.95) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -2111,7 +2111,7 @@ select option {
   border-radius: 12px;
   border: 1px solid var(--border);
   padding: 0.85rem 0.9rem;
-  background: #fff;
+  background: hsl(var(--ui-card));
   display: grid;
   gap: 0.3rem;
   color: var(--text-primary);
@@ -2119,7 +2119,7 @@ select option {
 }
 
 .settings-link.active {
-  border-color: rgba(148, 163, 184, 0.4);
+  border-color: rgb(var(--ink-400) / 0.4);
   box-shadow: var(--shadow-md);
 }
 
@@ -2150,7 +2150,7 @@ select option {
 }
 
 .settings-panel {
-  background: #ffffff;
+  background: hsl(var(--ui-card));
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1.25rem;
@@ -2172,13 +2172,13 @@ select option {
   padding: 0.5rem 0.625rem;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: hsl(var(--ui-card));
   color: var(--text-primary);
   font-size: clamp(0.82rem, 1.05vw, 0.9rem);
 }
 
 .settings-field input[readonly] {
-  background: #f8fafc;
+  background: rgb(var(--ink-50));
 }
 
 .settings-note {
@@ -2266,7 +2266,7 @@ select option {
   border-radius: 12px;
   padding: 1rem;
   color: var(--text-muted);
-  background: #f9fafb;
+  background: rgb(var(--ink-50));
 }
 
 .settings-overview h2 {
@@ -2286,7 +2286,7 @@ select option {
 }
 
 .settings-card {
-  background: #fff;
+  background: hsl(var(--ui-card));
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 1.2rem;
@@ -2332,7 +2332,7 @@ select option {
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: #f9fafb;
+  background: rgb(var(--ink-50));
 }
 
 .user-list-desktop {
@@ -2393,7 +2393,7 @@ select option {
 }
 
 .user-card {
-  background: #fff;
+  background: hsl(var(--ui-card));
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 1rem;
@@ -2589,7 +2589,7 @@ select option {
   padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: hsl(var(--ui-card));
 }
 
 .users-filter-actions {
@@ -2722,7 +2722,7 @@ select option {
   padding: 0.6rem;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fff;
+  background: hsl(var(--ui-card));
   font-size: 0.9rem;
 }
 
@@ -2944,7 +2944,7 @@ select option {
 }
 
 .user-table-panel {
-  background: #fff;
+  background: hsl(var(--ui-card));
   border-radius: 18px;
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
@@ -3095,7 +3095,7 @@ select option {
 }
 
 .stats-card {
-  background: #fff;
+  background: hsl(var(--ui-card));
   border: 1px solid rgba(17, 24, 39, 0.08);
   border-radius: 18px;
   padding: 1rem 1.25rem;
@@ -3131,7 +3131,7 @@ select option {
 }
 
 .panel {
-  background: #fff;
+  background: hsl(var(--ui-card));
   border-radius: 12px;
   border: 1px solid rgba(17, 24, 39, 0.08);
   padding: 0.875rem;
@@ -3156,7 +3156,7 @@ select option {
 }
 
 .directory-panel {
-  background: #fff;
+  background: hsl(var(--ui-card));
   border-color: rgba(17, 24, 39, 0.08);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
   padding: 0.85rem 1rem;
@@ -3215,7 +3215,7 @@ select option {
   border: 1px solid var(--border);
   padding: 0.5rem 0.625rem;
   font-size: 0.875rem;
-  background: #fff;
+  background: hsl(var(--ui-card));
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -3227,7 +3227,7 @@ select option {
 .form-select:focus,
 .bulk-actions-select:focus {
   outline: none;
-  border-color: rgba(148, 163, 184, 0.4);
+  border-color: rgb(var(--ink-400) / 0.4);
   box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
 }
 
@@ -3297,7 +3297,7 @@ select option {
 }
 
 .users-table thead th {
-  background: #f8fafc;
+  background: rgb(var(--ink-50));
   font-size: 0.75rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -3445,7 +3445,7 @@ select option {
 }
 
 .btn-ghost {
-  background: #fff;
+  background: hsl(var(--ui-card));
   border: 1px solid rgba(17, 24, 39, 0.12);
   color: var(--text-primary);
 }
@@ -3461,7 +3461,7 @@ select option {
 
 .btn-disabled {
   background: #9ca3af;
-  border-color: #9ca3af;
+  border-color: rgb(var(--ink-400));
   color: #fff;
 }
 
@@ -3491,7 +3491,7 @@ select option {
   border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 16px;
   padding: 0.9rem 1.1rem;
-  background: #fff;
+  background: hsl(var(--ui-card));
   box-shadow: var(--shadow-sm);
 }
 
@@ -3561,7 +3561,7 @@ select option {
   padding: 0.55rem;
   border: 1px dashed rgba(17, 24, 39, 0.2);
   border-radius: 10px;
-  background: #f8fafc;
+  background: rgb(var(--ink-50));
 }
 
 .invite-link-button {
@@ -3710,7 +3710,7 @@ select option {
   padding: 0.75rem;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: hsl(var(--ui-card));
   box-shadow: var(--shadow-md);
   z-index: 10;
 }
@@ -3746,7 +3746,7 @@ select option {
 }
 
 .topbar-dropdown-item:hover {
-  background: #f8fafc;
+  background: rgb(var(--ink-50));
   color: var(--primary-color);
 }
 
@@ -3782,7 +3782,7 @@ select option {
   padding: 0.4rem 0.75rem 0.4rem 0.45rem;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: hsl(var(--ui-card));
   box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
@@ -3833,8 +3833,8 @@ select option {
   gap: 0.75rem;
   padding: 0.3125rem 0.875rem 0.3125rem 0.3125rem;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: #ffffff;
+  border: 1px solid rgb(var(--ink-200) / 0.9);
+  background: hsl(var(--ui-card));
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.08);
   cursor: pointer;
@@ -3854,11 +3854,11 @@ select option {
 }
 
 .user-menu-trigger:hover {
-  border-color: rgba(148, 163, 184, 0.6);
+  border-color: rgb(var(--ink-400) / 0.6);
   box-shadow:
     0 4px 10px rgba(15, 23, 42, 0.12);
   transform: translateY(-1px);
-  background: #ffffff;
+  background: hsl(var(--ui-card));
 }
 
 .user-menu-trigger:hover::before {
@@ -3899,7 +3899,7 @@ select option {
   position: absolute;
   inset: -2px;
   border-radius: 50%;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgb(var(--ink-400) / 0.2);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -3926,7 +3926,7 @@ select option {
 .user-name-new {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #111827;
+  color: rgb(var(--ink-900));
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -3959,13 +3959,13 @@ select option {
 }
 
 .user-role-badge[style*="background: #f3f4f6"] {
-  background: #f3f4f6 !important;
-  color: #4b5563 !important;
-  border-color: #9ca3af !important;
+  background: rgb(var(--ink-100)) !important;
+  color: rgb(var(--ink-600)) !important;
+  border-color: rgb(var(--ink-400)) !important;
 }
 
 .user-menu-chevron {
-  color: #9ca3af;
+  color: rgb(var(--ink-400));
   transition: transform 0.2s ease;
   flex-shrink: 0;
   margin-left: 0.25rem;
@@ -3982,7 +3982,7 @@ select option {
   top: calc(100% + 0.5rem);
   min-width: 280px;
   max-width: 320px;
-  background: #ffffff;
+  background: hsl(var(--ui-card));
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow:

@@ -67,7 +67,7 @@ export function DriftKindBadge({ kind, className }: DriftKindBadgeProps) {
       return (
         <Badge
           variant="outline"
-          className={`bg-slate-500/10 text-slate-500 border-slate-500/20 font-normal ${className || ''}`}
+          className={`bg-slate-500/10 text-ink-500 border-slate-500/20 font-normal ${className || ''}`}
         >
           Applicability Changed
         </Badge>

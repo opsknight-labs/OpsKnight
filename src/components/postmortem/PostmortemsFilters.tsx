@@ -102,7 +102,7 @@ export default function PostmortemsFilters({
       filters={
         <>
           <Select value={currentStatus || 'ALL'} onValueChange={val => updateParam('status', val)}>
-            <SelectTrigger className="h-9 w-[130px] bg-slate-50/60 text-xs">
+            <SelectTrigger className="h-9 w-[130px] bg-ink-50/60 text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -118,7 +118,7 @@ export default function PostmortemsFilters({
               value={currentServiceId || 'ALL'}
               onValueChange={val => updateParam('serviceId', val)}
             >
-              <SelectTrigger className="h-9 w-[150px] bg-slate-50/60 text-xs">
+              <SelectTrigger className="h-9 w-[150px] bg-ink-50/60 text-xs">
                 <SelectValue placeholder="Service" />
               </SelectTrigger>
               <SelectContent>
@@ -139,7 +139,7 @@ export default function PostmortemsFilters({
           size="sm"
           onClick={handleExportCsv}
           disabled={postmortemsData.length === 0}
-          className="h-9 gap-1.5 text-xs shadow-sm hover:bg-slate-100"
+          className="h-9 gap-1.5 text-xs shadow-sm hover:bg-ink-100"
         >
           <Download className="h-3.5 w-3.5 text-muted-foreground" />
           <span>Export CSV</span>

@@ -99,10 +99,10 @@ export default function OperationalStatus({
     neutral: {
       bg: 'bg-slate-500/10 hover:bg-slate-500/15',
       border: 'border-slate-500/30',
-      text: 'text-slate-400',
+      text: 'text-ink-400',
       dot: 'bg-slate-500',
       dotBg: 'bg-slate-500',
-      icon: <MinusCircle className="h-4 w-4 text-slate-400" />,
+      icon: <MinusCircle className="h-4 w-4 text-ink-400" />,
       title: 'No operational scope',
       desc: 'Operational health is unavailable until resources are in your scope.',
     },

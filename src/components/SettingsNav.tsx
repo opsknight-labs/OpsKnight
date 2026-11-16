@@ -71,8 +71,8 @@ export default function SettingsNav({ isAdmin = false }: Props) {
               style={{
                 opacity: 0.6,
                 cursor: 'not-allowed',
-                background: '#f9fafb',
-                border: '1px solid #e5e7eb',
+                background: 'hsl(var(--ui-background))',
+                border: '1px solid hsl(var(--ui-border))',
               }}
               title="Admin role required"
             >

@@ -381,7 +381,7 @@ export default function PostmortemForm({
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {/* Incident Selection */}
         {!incidentId && resolvedIncidents.length > 0 && (
-          <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+          <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
             <CardHeader>
               <CardTitle className="text-xl">Select Incident</CardTitle>
             </CardHeader>
@@ -423,7 +423,7 @@ export default function PostmortemForm({
         )}
 
         {incidentId && effectiveIncidentJiraIssues.length > 0 && (
-          <Card className="border-blue-200/80 bg-blue-50/40 shadow-sm">
+          <Card className="border-blue-200/80 bg-blue-50/40 shadow-sm dark:border-blue-500/30 dark:bg-blue-500/10">
             <CardContent className="p-4 flex flex-col gap-1.5">
               <div className="text-xs font-semibold text-foreground">
                 Inherited incident context
@@ -438,7 +438,7 @@ export default function PostmortemForm({
         )}
 
         {/* Basic Information */}
-        <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="flex flex-row justify-between items-center space-y-0 pb-4">
             <CardTitle className="text-xl">Basic Information</CardTitle>
             <Button
@@ -447,12 +447,12 @@ export default function PostmortemForm({
               size="sm"
               onClick={handleAutoDraft}
               disabled={isDrafting || (!incidentId && !selectedIncidentId)}
-              className="bg-white hover:bg-purple-50 hover:text-purple-700 transition-colors border-purple-200"
+              className="bg-card hover:bg-purple-50 hover:text-purple-700 transition-colors border-purple-200 dark:hover:bg-purple-500/10 dark:hover:text-purple-300 dark:border-purple-500/30"
             >
               {isDrafting ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <Wand2 className="w-4 h-4 mr-2 text-purple-600" />
+                <Wand2 className="w-4 h-4 mr-2 text-purple-600 dark:text-purple-400" />
               )}
               Auto-Draft
             </Button>
@@ -538,7 +538,7 @@ export default function PostmortemForm({
                       </SelectContent>
                     </Select>
                     <FormMessage />
-                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded flex items-start gap-2 text-sm text-yellow-800">
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded flex items-start gap-2 text-sm text-yellow-800 dark:bg-yellow-500/10 dark:border-yellow-500/30 dark:text-yellow-300">
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>Private postmortems are not shown on the public status page.</span>
                     </div>
@@ -550,7 +550,7 @@ export default function PostmortemForm({
         </Card>
 
         {/* Timeline */}
-        <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl">Incident Timeline</CardTitle>
           </CardHeader>
@@ -563,7 +563,7 @@ export default function PostmortemForm({
         <PostmortemImpactInput metrics={impactMetrics} onChange={setImpactMetrics} />
 
         {/* Root Cause Analysis & 5-Whys Studio */}
-        <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="pb-3">
             <CardTitle className="text-xl flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -587,7 +587,7 @@ export default function PostmortemForm({
             </div>
 
             {/* 5-Whys Interactive Builder */}
-            <div className="pt-4 border-t border-slate-200/80">
+            <div className="pt-4 border-t border-ink-200/80">
               <FiveWhysBuilder
                 initialSteps={fiveWhysSteps}
                 onChange={setFiveWhysSteps}
@@ -600,7 +600,7 @@ export default function PostmortemForm({
               control={form.control}
               name="rootCause"
               render={({ field }) => (
-                <FormItem className="pt-4 border-t border-slate-200/80">
+                <FormItem className="pt-4 border-t border-ink-200/80">
                   <FormLabel>Technical Root Cause Narrative</FormLabel>
                   <FormControl>
                     <Textarea
@@ -622,7 +622,7 @@ export default function PostmortemForm({
               control={form.control}
               name="resolution"
               render={({ field }) => (
-                <FormItem className="pt-4 border-t border-slate-200/80">
+                <FormItem className="pt-4 border-t border-ink-200/80">
                   <FormLabel>Mitigation & Resolution Steps</FormLabel>
                   <FormControl>
                     <Textarea
@@ -649,7 +649,7 @@ export default function PostmortemForm({
         />
 
         {/* Lessons Learned */}
-        <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl">Lessons Learned</CardTitle>
           </CardHeader>
@@ -686,7 +686,7 @@ export default function PostmortemForm({
         )}
 
         {/* Form Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+        <div className="flex justify-end gap-3 pt-4 border-t border-ink-200">
           <Button
             type="button"
             variant="outline"

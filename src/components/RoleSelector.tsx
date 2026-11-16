@@ -36,7 +36,7 @@ export default function RoleSelector({
         borderRadius: '6px',
         fontSize: '0.8rem',
         width: '100%',
-        background: 'white',
+        background: 'hsl(var(--ui-card))',
         cursor: isPending ? 'wait' : 'pointer',
         fontWeight: '500',
         opacity: isPending ? 0.6 : 1,

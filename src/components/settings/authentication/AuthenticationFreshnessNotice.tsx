@@ -36,7 +36,7 @@ export default function AuthenticationFreshnessNotice() {
       role="status"
       className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs"
     >
-      <Clock className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
+      <Clock className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
       <span className="min-w-0 flex-1 text-foreground">
         {expired
           ? 'Security changes need a sign-in from the last two hours. Sign in again to continue; your saved configurations are kept.'

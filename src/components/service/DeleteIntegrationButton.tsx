@@ -41,7 +41,7 @@ export default function DeleteIntegrationButton({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-destructive/10"
+            className="h-8 w-8 text-ink-400 hover:text-destructive hover:bg-destructive/10"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -62,9 +62,9 @@ export default function DeleteIntegrationButton({
           <AlertDialogDescription className="space-y-3">
             <div>
               Are you sure you want to delete the integration{' '}
-              <span className="font-semibold text-foreground">"{integrationName}"</span>?
+              <span className="font-semibold text-foreground">&quot;{integrationName}&quot;</span>?
             </div>
-            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 text-amber-800 text-xs rounded-r">
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 text-amber-800 text-xs rounded-r dark:bg-amber-500/10 dark:text-amber-300">
               <span className="font-bold block mb-1">⚠️ Manual Action Required</span>
               Deleting this integration <strong>only removes it from OpsKnight</strong>. You must
               manually delete the webhook from your external provider (e.g. GitHub, Datadog) to stop

@@ -64,7 +64,7 @@ export default function IncidentResolutionSummary({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs gap-1.5 bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                  className="h-7 text-xs gap-1.5 bg-white dark:bg-zinc-900 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
                 >
                   <FileText className="h-3.5 w-3.5" />
                   <span>View Postmortem</span>

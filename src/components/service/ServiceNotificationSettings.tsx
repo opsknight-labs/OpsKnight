@@ -824,7 +824,7 @@ export default function ServiceNotificationSettings({
                     variant="destructive"
                     className="bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300 py-2"
                   >
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                     <AlertTitle className="text-xs font-semibold">
                       Slack is not connected yet
                     </AlertTitle>
@@ -865,7 +865,7 @@ export default function ServiceNotificationSettings({
                               className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5 text-xs flex items-center justify-between gap-2"
                             >
                               <div className="flex items-center gap-1.5 font-medium text-emerald-800 dark:text-emerald-300 min-w-0">
-                                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                                 <span className="truncate text-xs">
                                   <strong>#{dest.channelName ?? dest.channelId}</strong>
                                 </span>
@@ -1155,7 +1155,7 @@ export default function ServiceNotificationSettings({
                           className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5 text-xs flex items-center justify-between gap-2"
                         >
                           <div className="flex items-center gap-1.5 font-medium text-emerald-800 dark:text-emerald-300 min-w-0 flex-1">
-                            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                             <span className="truncate text-xs block min-w-0">
                               <strong>{dest.teamName ?? dest.teamId}</strong> &rarr;{' '}
                               <strong>{dest.channelName ?? dest.channelId}</strong>

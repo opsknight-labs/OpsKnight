@@ -102,7 +102,7 @@ export default function AuthenticationRecoveryWorkspace() {
           <label className="flex items-start gap-2.5 text-sm cursor-pointer select-none">
             <input
               type="checkbox"
-              className="mt-0.5 rounded border-amber-500/40 text-amber-600 focus:ring-amber-500"
+              className="mt-0.5 rounded border-amber-500/40 text-amber-600 focus:ring-amber-500 dark:text-amber-400"
               checked={originRepairConfirmed}
               onChange={event => setOriginRepairConfirmed(event.target.checked)}
             />

@@ -104,3 +104,18 @@ textarea::placeholder {
  * them back to light from prefers-color-scheme: dark; that used to create white
  * inputs with dark-mode text/cards on iOS and Android PWAs.
  */
+
+/*
+ * Browser autofill paints its own (often light blue) background, which looks
+ * broken in the dark theme. Repaint it with the field surface in both themes.
+ */
+input:not(.auth-input):-webkit-autofill,
+input:not(.auth-input):-webkit-autofill:hover,
+input:not(.auth-input):-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+    -webkit-text-fill-color: hsl(var(--ui-foreground));
+    caret-color: hsl(var(--ui-foreground));
+    box-shadow: 0 0 0 1000px hsl(var(--ui-card)) inset;
+    transition: background-color 600000s 0s;
+}

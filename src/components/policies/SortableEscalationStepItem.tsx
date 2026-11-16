@@ -71,7 +71,7 @@ export default function SortableEscalationStepItem(props: SortableEscalationStep
         <div
           {...attributes}
           {...listeners}
-          className="absolute left-0 top-1/2 -translate-y-1/2 p-2 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-colors opacity-0 group-hover/sortable:opacity-100"
+          className="absolute left-0 top-1/2 -translate-y-1/2 p-2 cursor-grab active:cursor-grabbing text-slate-300 hover:text-ink-500 transition-colors opacity-0 group-hover/sortable:opacity-100"
         >
           <GripVertical className="h-4 w-4" />
         </div>

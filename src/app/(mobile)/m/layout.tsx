@@ -15,6 +15,7 @@ import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
 import MobileBiometricGuard from '@/components/mobile/MobileBiometricGuard';
 import { getAppShellContext } from '@/lib/app-shell-context';
+import AccountThemeSync from '@/components/theme/AccountThemeSync';
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { AccessProvider } from '@/components/access/AccessProvider';
@@ -38,6 +39,7 @@ export default async function MobileLayout({ children }: { children: React.React
   const access = await getAccessSnapshot();
   return (
     <AuthenticatedClientProviders initialSession={requestContext.session}>
+      <AccountThemeSync preference={shell.user.themePreference} />
       <AccessProvider snapshot={access}>
         <TimezoneProvider initialTimeZone={shell.user.timeZone || 'UTC'}>
           <UserAvatarProvider

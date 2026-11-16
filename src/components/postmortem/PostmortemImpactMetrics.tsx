@@ -10,17 +10,10 @@ interface PostmortemImpactMetricsProps {
   metrics: ImpactMetrics;
 }
 
-const METRIC_COLORS = {
-  usersAffected: { color: 'text-blue-500', border: 'border-blue-500/40' },
-  downtime: { color: 'text-amber-500', border: 'border-amber-500/40' },
-  errorRate: { color: 'text-red-500', border: 'border-red-500/40' },
-  slaBreaches: { color: 'text-red-600', border: 'border-red-600/40' },
-};
-
 export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMetricsProps) {
   if (!metrics || Object.keys(metrics).length === 0) {
     return (
-      <Card className="bg-gradient-to-br from-white to-slate-50">
+      <Card className="bg-gradient-to-br from-card to-ink-50">
         <CardContent className="py-8 text-center">
           <p className="text-muted-foreground">No impact metrics recorded</p>
         </CardContent>
@@ -50,7 +43,7 @@ export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMet
     metrics.slaBreaches && {
       label: 'SLA Breaches',
       value: metrics.slaBreaches.toString(),
-      colorClass: 'text-red-600',
+      colorClass: 'text-red-600 dark:text-red-400',
       borderClass: 'border-red-600/40',
     },
   ].filter(Boolean) as Array<{
@@ -80,7 +73,7 @@ export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMet
   ].filter(Boolean) as Array<{ label: string; value: number; color: string }>;
 
   return (
-    <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+    <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
       <CardHeader>
         <CardTitle className="text-xl">Impact Metrics</CardTitle>
       </CardHeader>
@@ -90,7 +83,7 @@ export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMet
           {metricCards.map((card, index) => (
             <div
               key={index}
-              className={cn('p-4 bg-white rounded-md shadow-sm border-2', card.borderClass)}
+              className={cn('p-4 bg-card rounded-md shadow-sm border-2', card.borderClass)}
             >
               <div className="text-xs text-muted-foreground mb-1">{card.label}</div>
               <div className={cn('text-2xl font-bold', card.colorClass)}>{card.value}</div>
@@ -101,14 +94,14 @@ export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMet
         {/* Charts */}
         <div className="grid grid-cols-2 gap-4">
           {servicesData.length > 0 && (
-            <div className="p-4 bg-white border border-slate-200 rounded-md">
+            <div className="p-4 bg-card border border-ink-200 rounded-md">
               <h4 className="text-base font-semibold mb-3">Services Affected</h4>
               <BarChart data={servicesData} maxValue={1} height={120} showValues={true} />
             </div>
           )}
 
           {impactDistribution.length > 0 && (
-            <div className="p-4 bg-white border border-slate-200 rounded-md">
+            <div className="p-4 bg-card border border-ink-200 rounded-md">
               <h4 className="text-base font-semibold mb-3">Impact Distribution</h4>
               <PieChart data={impactDistribution} size={150} showLegend={true} />
             </div>
@@ -117,7 +110,7 @@ export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMet
 
         {/* Additional Metrics */}
         {(metrics.apiErrors || metrics.performanceDegradation || metrics.revenueImpact) && (
-          <div className="mt-4 p-4 bg-white border border-slate-200 rounded-md">
+          <div className="mt-4 p-4 bg-card border border-ink-200 rounded-md">
             <h4 className="text-base font-semibold mb-3">Additional Metrics</h4>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
               {metrics.apiErrors && (
@@ -137,7 +130,7 @@ export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMet
               {metrics.revenueImpact && (
                 <div>
                   <div className="text-xs text-muted-foreground">Revenue Impact</div>
-                  <div className="text-lg font-semibold text-red-600">
+                  <div className="text-lg font-semibold text-red-600 dark:text-red-400">
                     ${metrics.revenueImpact.toLocaleString()}
                   </div>
                 </div>

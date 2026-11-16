@@ -90,7 +90,7 @@ export default function PolicyTargetCombobox({
             aria-expanded={open}
             disabled={disabled}
             className={cn(
-              'w-full justify-between h-9 text-xs font-normal bg-white border-slate-200 hover:border-primary/50 hover:bg-slate-50/50',
+              'w-full justify-between h-9 text-xs font-normal bg-card border-ink-200 hover:border-primary/50 hover:bg-ink-50/50',
               !currentValue && 'text-muted-foreground',
               className
             )}
@@ -119,7 +119,7 @@ export default function PolicyTargetCombobox({
             {targetType === 'TEAM' &&
               (selectedTeam ? (
                 <div className="flex items-center gap-2 truncate">
-                  <div className="w-5 h-5 rounded-md bg-purple-50 flex items-center justify-center text-purple-600 shrink-0 border border-purple-100">
+                  <div className="w-5 h-5 rounded-md bg-purple-50 flex items-center justify-center text-purple-600 shrink-0 border border-purple-100 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/30">
                     <Users className="h-3 w-3" />
                   </div>
                   <span className="font-medium truncate">{selectedTeam.name}</span>
@@ -133,7 +133,7 @@ export default function PolicyTargetCombobox({
             {targetType === 'SCHEDULE' &&
               (selectedSchedule ? (
                 <div className="flex items-center gap-2 truncate">
-                  <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 border border-emerald-100">
+                  <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 border border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30">
                     <Calendar className="h-3 w-3" />
                   </div>
                   <span className="font-medium truncate">{selectedSchedule.name}</span>
@@ -214,7 +214,7 @@ export default function PolicyTargetCombobox({
                       className="text-xs flex items-center justify-between cursor-pointer py-2"
                     >
                       <div className="flex items-center gap-2 truncate">
-                        <div className="w-5 h-5 rounded-md bg-purple-50 flex items-center justify-center text-purple-600 shrink-0 border border-purple-100">
+                        <div className="w-5 h-5 rounded-md bg-purple-50 flex items-center justify-center text-purple-600 shrink-0 border border-purple-100 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/30">
                           <Users className="h-3 w-3" />
                         </div>
                         <span className="font-medium truncate">{team.name}</span>
@@ -240,7 +240,7 @@ export default function PolicyTargetCombobox({
                       className="text-xs flex items-center justify-between cursor-pointer py-2"
                     >
                       <div className="flex items-center gap-2 truncate">
-                        <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 border border-emerald-100">
+                        <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 border border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30">
                           <Calendar className="h-3 w-3" />
                         </div>
                         <span className="font-medium truncate">{schedule.name}</span>

@@ -59,10 +59,10 @@ export function AuthLayout({ children, showAnimation = true, isSuccess = false }
             href="https://opsknight.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 py-3 text-center text-[11px] font-medium text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:text-slate-400 dark:hover:text-slate-200 dark:focus-visible:ring-white 2xl:text-xs"
+            className="flex items-center justify-center gap-1.5 py-3 text-center text-[11px] font-medium text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200 dark:focus-visible:ring-white 2xl:text-xs"
           >
             <svg
-              className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500"
+              className="h-3.5 w-3.5 text-slate-400 dark:text-zinc-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

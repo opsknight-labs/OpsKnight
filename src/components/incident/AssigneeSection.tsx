@@ -100,8 +100,8 @@ export default function AssigneeSection({
             onSelect={() => handleReassign('')}
             className="text-sm rounded-md aria-selected:bg-accent"
           >
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 mr-2 border">
-              <X className="h-4 w-4 text-slate-500" />
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-ink-100 mr-2 border">
+              <X className="h-4 w-4 text-ink-500" />
             </div>
             <span>Unassigned</span>
             <Check
@@ -123,8 +123,8 @@ export default function AssigneeSection({
               onSelect={() => handleReassign(`team:${t.id}`)}
               className="text-sm rounded-md aria-selected:bg-accent my-0.5"
             >
-              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2 border border-indigo-200">
-                <UsersIcon className="h-4 w-4 text-indigo-600" />
+              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2 border border-indigo-200 dark:bg-indigo-500/15 dark:border-indigo-500/30">
+                <UsersIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div className="flex flex-col">
                 <span className="font-medium">{t.name}</span>
@@ -158,7 +158,7 @@ export default function AssigneeSection({
                 gender={u.gender}
                 avatarUrl={u.avatarUrl}
                 size="sm"
-                className="mr-2 border-slate-200"
+                className="mr-2 border-ink-200"
               />
               <div className="flex flex-col min-w-0">
                 <span className="font-medium truncate text-xs">{u.name}</span>
@@ -187,7 +187,7 @@ export default function AssigneeSection({
         <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
           {team ? (
             <>
-              <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+              <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
               <span className="truncate max-w-[110px]">{team.name}</span>
             </>
           ) : assignee ? (
@@ -225,7 +225,7 @@ export default function AssigneeSection({
           >
             {team ? (
               <>
-                <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
                 <span className="truncate max-w-[110px]">{team.name}</span>
               </>
             ) : assignee ? (

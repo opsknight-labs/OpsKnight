@@ -35,25 +35,25 @@ export const NAV_SECTIONS: Record<NavSectionKey, NavSectionConfig> = {
     key: 'RELIABILITY',
     label: 'Reliability',
     dotClass: 'bg-emerald-500/80',
-    textClass: 'text-slate-400 dark:text-slate-400',
+    textClass: 'text-slate-400 dark:text-zinc-400',
   },
   ON_CALL: {
     key: 'ON_CALL',
     label: 'On-Call',
     dotClass: 'bg-blue-500/80',
-    textClass: 'text-slate-400 dark:text-slate-400',
+    textClass: 'text-slate-400 dark:text-zinc-400',
   },
   ANALYTICS: {
     key: 'ANALYTICS',
     label: 'Analytics',
     dotClass: 'bg-cyan-500/80',
-    textClass: 'text-slate-400 dark:text-slate-400',
+    textClass: 'text-slate-400 dark:text-zinc-400',
   },
   GOVERNANCE: {
     key: 'GOVERNANCE',
     label: 'Governance',
     dotClass: 'bg-amber-500/80',
-    textClass: 'text-slate-400 dark:text-slate-400',
+    textClass: 'text-slate-400 dark:text-zinc-400',
   },
 };
 
