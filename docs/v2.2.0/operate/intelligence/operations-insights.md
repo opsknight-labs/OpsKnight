@@ -56,9 +56,36 @@ everything and stops the daily work.
 | Service automation and integrations | **No alerts for N days** | The service used to send alerts regularly and has been quiet for much longer than its usual gap. Check that its integrations are still connected. Reported for 30 days, then dropped. |
 | Service automation and integrations | **Alert volume is N times the usual** / **dropped sharply** | The last 24 hours are far above, or far below, the week before. |
 | Service automation and integrations | **N% of recent alerts have no severity** | Most recent alerts arrived without a severity, so urgency and routing rules cannot use it. |
+| On-call schedules | **Nobody is on call for part of N days in the next 14 days** | The final rotation (layers and overrides) leaves a gap. Critical when the gap starts today or tomorrow. Fix it with an override or a layer change. |
+| On-call schedules | **The same person is primary and backup for N hours** | The escalation policy's next step after this schedule pages someone who is already on call here, so a missed page reaches the same person twice. |
+| On-call schedules | **Load is uneven: N responders above 1.5x the rotation's mean** | Over the last 28 days, pages per on-call week differ widely. Needs at least three people and eight pages. |
+| On-call (a person) | **On-call load is Nx the rotation's mean** | One person took more than 1.5x the mean pages per on-call week. Visible to that person, their team owners and administrators. |
+| On-call (a person) | **Paged at night on N nights** | Night pages (22:00 to 07:00 in the person's own time zone) recurred across at least three weeks of the last four. |
+| On-call (a person) | **Next shift may be busy** | The person's shift starts within 24 hours and a service the schedule covers has a risky change in the last day, a burning SLO or a maintenance window ending. The same heads-up appears in their handoff summary. |
 
 Insights for the other areas arrive with later updates; their switches are already there so you can decide
 in advance.
+
+## On-call load and fairness
+
+With the **On-call schedules** area on:
+
+- Each schedule page has a **Load & fairness** tab: the schedule's on-call insights, the rotation's pages,
+  mean pages per on-call week and fairness index (1.00 means every on-call week carried the same load), and
+  one row per person with pages, night pages, weekend pages, interrupted hours, longest quiet gap, time on
+  call, load against the rotation's mean and a strip of pages per day. All numbers cover the last 28 finished
+  days.
+- **Schedules** and the mobile **Schedules** page show a **My on-call load** card with your own numbers when
+  you were on call or paged in that period.
+- Schedules with open insights carry a badge in the schedules list.
+
+You see a person's row only for yourself, for members of teams you own, or as an administrator. Rotation
+totals are hidden when the rotation is so small that they would reveal someone else's numbers.
+
+OpsKnight records who was effectively on call each day (after overrides) once the day is over, so the
+history stays right after layers are edited or deleted. After turning the area on, an administrator can fill
+the last 30 days at once with `npm run backfill:oncall-coverage`; it is safe to run again and resumes with
+`--cursor <scheduleId>`.
 
 ## Review insights
 
@@ -98,4 +125,6 @@ sweep.
 | --- | --- |
 | No **Needs attention** section | The master switch and the area are on, Intelligence is enabled and its worker is running (**Settings → Intelligence → Status**). An empty section is hidden by design. |
 | An insight you fixed is still listed | Each item is revisited once a day. It resolves at the next visit. |
+| No **Load & fairness** tab | The **On-call schedules** area is off. |
+| **Load & fairness** shows zero on-call time for past days | The days before the area was turned on were not recorded. Run `npm run backfill:oncall-coverage`. |
 | "These settings changed since you opened the page" | Someone else saved Intelligence settings. Refresh and save again. |
