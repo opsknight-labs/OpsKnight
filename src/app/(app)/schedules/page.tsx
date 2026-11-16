@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
+import { countOpenInsightsForScopes } from '@/lib/intelligence/ops-insights/view';
 import { createSchedule } from './actions';
 import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
@@ -133,6 +134,14 @@ export default async function SchedulesPage({
     },
     orderBy: { createdAt: 'desc' },
   });
+  // Badges are optional: a failed read just hides them.
+  const insightCounts = Object.fromEntries(
+    await countOpenInsightsForScopes(
+      actor,
+      'SCHEDULE',
+      schedules.map(schedule => schedule.id)
+    ).catch(() => new Map())
+  );
 
   const totalLayers = totalLayersCount;
   const totalUniqueResponders = responderAgg.length;
@@ -220,6 +229,7 @@ export default async function SchedulesPage({
             }}
             currentSearch={searchQuery}
             currentStatus={statusFilter}
+            insightCounts={insightCounts}
           />
         </div>
 

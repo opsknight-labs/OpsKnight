@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Clock, Layers, Users, Calendar } from 'lucide-react';
+import InsightBadge from '@/components/intelligence/insights/InsightBadge';
+import type { OpsInsightCount } from '@/lib/intelligence/ops-insights/contract';
 
 type ScheduleCardProps = {
   schedule: {
@@ -22,9 +24,11 @@ type ScheduleCardProps = {
     }>;
   };
   index?: number;
+  /** Open operations insights on this schedule, for the list badge. */
+  insights?: OpsInsightCount | null;
 };
 
-export default function ScheduleCard({ schedule }: ScheduleCardProps) {
+export default function ScheduleCard({ schedule, insights }: ScheduleCardProps) {
   const uniqueUsersMap = new Map<
     string,
     { name: string; avatarUrl?: string | null; gender?: string | null }
@@ -63,10 +67,13 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
                 {schedule.name}
               </CardTitle>
             </div>
-            <Badge variant="outline" size="xs" className="gap-1.5 shrink-0">
-              <Clock className="h-3 w-3 text-muted-foreground" />
-              {schedule.timeZone}
-            </Badge>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <InsightBadge count={insights} />
+              <Badge variant="outline" size="xs" className="gap-1.5">
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                {schedule.timeZone}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
 
