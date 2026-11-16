@@ -51,7 +51,7 @@ export const GET = defineV2Route({
     });
     const result = objectivePagination(rows, pagination.limit, scope, row => row.startsAt);
     return {
-      data: result.data.map(row => projectMaintenanceWindow(row, now)),
+      data: result.data.map(row => projectMaintenanceWindow(row, actor, now)),
       pagination: result.pagination,
       headers: { 'Cache-Control': 'no-store' },
     };
@@ -69,7 +69,7 @@ export const POST = defineV2Route({
     const row = await createMaintenanceWindow(body, { id: actor.id, source: 'API' }, { tx });
     return {
       status: 201,
-      data: projectMaintenanceWindow(row),
+      data: projectMaintenanceWindow(row, actor),
       headers: {
         ...etagHeaders(row.revision),
         'Cache-Control': 'no-store',

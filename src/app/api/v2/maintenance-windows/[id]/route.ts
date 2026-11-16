@@ -24,7 +24,7 @@ export const GET = defineV2Route({
   handler: async ({ actor, params }) => {
     const row = await requireReadableMaintenanceWindow(prisma, actor, params.id);
     return {
-      data: projectMaintenanceWindow(row),
+      data: projectMaintenanceWindow(row, actor),
       headers: { ...etagHeaders(row.revision), 'Cache-Control': 'no-store' },
     };
   },
@@ -51,7 +51,7 @@ export const PATCH = defineV2Route({
       { tx, expectedRevision: requireRevisionIfMatch(req) }
     );
     return {
-      data: projectMaintenanceWindow(row),
+      data: projectMaintenanceWindow(row, actor),
       headers: { ...etagHeaders(row.revision), 'Cache-Control': 'no-store' },
     };
   },

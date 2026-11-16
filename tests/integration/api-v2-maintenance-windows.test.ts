@@ -220,11 +220,25 @@ it('requires team ownership of every service for non-admins and scopes reads', a
   );
   expect(foreignDelete.status).toBe(403);
 
-  // A scoped reader only sees windows touching its team's services.
+  const shared = await invokeV2(
+    create,
+    admin.token,
+    'POST',
+    '/maintenance-windows',
+    {},
+    windowBody([own.id, other.id], 45),
+    key()
+  );
+  const sharedId = (await shared.json()).data.id;
+
+  // A scoped reader only sees windows touching its team's services, and never the
+  // other team's services on a shared window.
   const reader = await createV2Credential(['services:read'], 'USER');
   await db.teamMember.create({ data: { teamId: ownTeam.id, userId: reader.user.id } });
   const visible = await invokeV2(list, reader.token, 'GET', '/maintenance-windows', {});
-  expect((await visible.json()).data.map((w: { id: string }) => w.id)).toEqual([mine.id]);
+  const visibleRows = (await visible.json()).data as { id: string; serviceIds: string[] }[];
+  expect(visibleRows.map(w => w.id).sort()).toEqual([mine.id, sharedId].sort());
+  expect(visibleRows.find(w => w.id === sharedId)!.serviceIds).toEqual([own.id]);
   const hidden = await invokeV2(read, reader.token, 'GET', `/maintenance-windows/${foreignId}`, {
     id: foreignId,
   });

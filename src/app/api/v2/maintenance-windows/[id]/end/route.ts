@@ -45,7 +45,7 @@ export const POST = defineV2Route({
       })
     );
     return {
-      data: projectMaintenanceWindow(row),
+      data: projectMaintenanceWindow(row, actor),
       headers: { ...etagHeaders(row.revision), 'Cache-Control': 'no-store' },
     };
   },

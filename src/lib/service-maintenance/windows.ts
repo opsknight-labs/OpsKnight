@@ -90,7 +90,7 @@ export const maintenanceWindowSelect = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
-  services: { select: { serviceId: true, service: { select: { name: true } } } },
+  services: { select: { serviceId: true, service: { select: { name: true, teamId: true } } } },
   _count: { select: { heldIncidents: true } },
 } satisfies Prisma.MaintenanceWindowSelect;
 

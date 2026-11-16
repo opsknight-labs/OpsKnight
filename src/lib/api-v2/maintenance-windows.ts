@@ -1,7 +1,12 @@
 import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import { CAPABILITIES } from '@/lib/authorization';
-import { actorHasCapability, type AuthorizationActor } from '@/lib/authorization-policy';
+import {
+  actorHasCapability,
+  authorize,
+  AUTHORIZATION_ACTIONS,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors/app-error';
 import {
@@ -39,7 +44,22 @@ export const MaintenanceWindowPatchBody = z
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Send at least one field to change.');
 
-export function projectMaintenanceWindow(row: MaintenanceWindowRecord, now = new Date()) {
+/**
+ * Projects a window for an API caller. Services outside the caller's read scope are
+ * left out, so a window shared with another team never reveals that team's services.
+ */
+export function projectMaintenanceWindow(
+  row: MaintenanceWindowRecord,
+  actor: AuthorizationActor,
+  now = new Date()
+) {
+  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ });
+  const teams = new Set(actor.teamIds);
+  const visible = row.services.filter(
+    s =>
+      decision.allowed &&
+      (decision.scope === 'global' || (s.service.teamId !== null && teams.has(s.service.teamId)))
+  );
   return {
     id: row.id,
     revision: row.revision,
@@ -50,7 +70,7 @@ export function projectMaintenanceWindow(row: MaintenanceWindowRecord, now = new
     endBehavior: row.endBehavior,
     publishToStatusPage: row.publishToStatusPage,
     phase: maintenanceWindowPhase(row, now),
-    serviceIds: row.services.map(s => s.serviceId),
+    serviceIds: visible.map(s => s.serviceId),
     heldIncidentCount: row._count.heldIncidents,
     endProcessedAt: row.endProcessedAt,
     createdAt: row.createdAt,
