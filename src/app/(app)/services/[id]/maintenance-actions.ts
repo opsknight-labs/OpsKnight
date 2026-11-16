@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { ZodError } from 'zod';
 import { assertCanModifyService, getCurrentUser } from '@/lib/rbac';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { AppError } from '@/lib/errors/app-error';
 import { logger } from '@/lib/logger';
 import {
@@ -30,7 +31,7 @@ export type MaintenanceActionResult = { ok: true } | { ok: false; error: string 
 async function assertCanModifyAll(serviceIds: string[]) {
   const user = await getCurrentUser();
   const ids = new Set(serviceIds);
-  if (ids.size === 0 && user.role !== 'ADMIN') {
+  if (ids.size === 0 && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
     throw new AppError({
       code: 'SERVICE_ACCESS_DENIED',
       userMessage: 'Unauthorized. You do not have permission to modify these services.',

@@ -1239,7 +1239,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     canManageService
       ? prisma.service.findMany({
           // Only services this user could add to a window (mirrors assertCanModifyService).
-          where: user.role === 'ADMIN' ? {} : { team: { members: { some: { userId: user.id } } } },
+          where: hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)
+            ? {}
+            : { team: { members: { some: { userId: user.id } } } },
           select: { id: true, name: true },
           orderBy: { name: 'asc' },
           // shortcut: plain filtered checkbox list, so cap it; switch to server search past this.
