@@ -179,9 +179,7 @@ it('replays stored events to exactly what live evaluation decides for them', () 
         },
       };
     });
-    events.forEach((event, index) =>
-      expect(replayEvent(compiled, event, environment).result).toEqual(live[index])
-    );
+    expect(events.map(event => replayEvent(compiled, event, environment).result)).toEqual(live);
     const summary = replayEvents(compiled, events, environment);
     expect(summary).toMatchObject({
       eventsEvaluated: events.length,
