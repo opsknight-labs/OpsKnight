@@ -39,7 +39,7 @@ export function useThemePreference(): ThemePreferenceState {
   const setChoice = useCallback(
     (next: ThemeChoice) => {
       setTheme(next);
-      void updateThemePreference(next)
+      void updateThemePreference({ choice: next })
         .then(result => {
           if (!result.ok) notify.error(result.error);
         })

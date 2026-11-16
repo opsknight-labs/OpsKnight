@@ -1,5 +1,5 @@
 import {
-  accountThemeSyncScript,
+  ACCOUNT_THEME_SYNC_SCRIPT,
   themeChoiceFromPreference,
   type ThemePreferenceValue,
 } from '@/lib/theme-preference';
@@ -12,10 +12,8 @@ import {
 export default function AccountThemeSync({ preference }: { preference: ThemePreferenceValue }) {
   return (
     <script
-      // Server-generated from a closed enum; no user-controlled content.
-      dangerouslySetInnerHTML={{
-        __html: accountThemeSyncScript(themeChoiceFromPreference(preference)),
-      }}
+      data-theme-pref={themeChoiceFromPreference(preference)}
+      dangerouslySetInnerHTML={{ __html: ACCOUNT_THEME_SYNC_SCRIPT }}
     />
   );
 }

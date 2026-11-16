@@ -75,7 +75,7 @@ Always use semantic color themes across badges, headers, accent borders, and pri
 
 ### Theming & Dark Mode
 
-- The console, mobile app and wallboard follow the user's **Appearance** preference: System (default), Light or Dark. It is stored on `User.themePreference`, applied before first paint (`AccountThemeSync`, `chromeThemeBootstrapScript`) and changed through `useThemePreference()` / `AppearanceControl` (Profile, user menu, `⌘K` palette, mobile More). Public status pages and pre-sign-in pages stay light (`src/lib/theme-routes.ts`).
+- The console and mobile app follow the user's **Appearance** preference: System (default), Light or Dark. It is stored on `User.themePreference`, applied before first paint (`AccountThemeSync`, `CHROME_THEME_BOOTSTRAP_SCRIPT`) and changed through `useThemePreference()` / `AppearanceControl` (Profile, user menu, `⌘K` palette, mobile More). Public status pages and pre-sign-in pages stay light (`src/lib/theme-routes.ts`); the `/wallboard` kiosk display is always dark.
 - Use semantic tokens (`bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`, `border-border`) or the theme-aware neutral scale `ink-50…950` (identical to `slate` in light, inverted in dark). Never add a bare `bg-white` or `slate-*`/`gray-*` neutral without a `dark:` pair.
 - Pastel status fills need a dark pair: `bg-rose-50 dark:bg-rose-500/10`, `border-rose-200 dark:border-rose-500/30`, `text-rose-700 dark:text-rose-300`.
 - Surfaces that are dark in both themes (sidebar, top bar, `DetailHeroBanner`) carry `ok-inverse-surface`, which pins light-on-dark token values inside them.

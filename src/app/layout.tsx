@@ -5,7 +5,7 @@ import './layers.css';
 import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
 import ServiceWorkerBootstrap from '@/components/pwa/ServiceWorkerBootstrap';
-import { THEME_CHROME_COLORS, chromeThemeBootstrapScript } from '@/lib/theme-preference';
+import { THEME_CHROME_COLORS, CHROME_THEME_BOOTSTRAP_SCRIPT } from '@/lib/theme-preference';
 import { LIGHT_PINNED_PREFIXES } from '@/lib/theme-routes';
 
 // Brand typefaces, bundled so builds never depend on Google font downloads.
@@ -69,7 +69,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* OpsKnight ships its own dark theme; stop Dark Reader double-inverting it. */}
         <meta name="darkreader-lock" />
         <script
-          dangerouslySetInnerHTML={{ __html: chromeThemeBootstrapScript(LIGHT_PINNED_PREFIXES) }}
+          data-light-routes={LIGHT_PINNED_PREFIXES.join(',')}
+          dangerouslySetInnerHTML={{ __html: CHROME_THEME_BOOTSTRAP_SCRIPT }}
         />
       </head>
       <body className="antialiased" suppressHydrationWarning>

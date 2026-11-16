@@ -2,8 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   THEME_STORAGE_KEY,
-  accountThemeSyncScript,
-  chromeThemeBootstrapScript,
+  ACCOUNT_THEME_SYNC_SCRIPT,
+  CHROME_THEME_BOOTSTRAP_SCRIPT,
+  THEME_CHROME_COLORS,
   preferenceFromThemeChoice,
   themeChoiceFromPreference,
 } from '@/lib/theme-preference';
@@ -18,9 +19,19 @@ function mockSystemDark(dark: boolean) {
   }));
 }
 
-function run(script: string) {
-  new Function(script)();
+function run(script: string, attrs: Record<string, string>) {
+  const el = document.createElement('script');
+  for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value);
+  Object.defineProperty(document, 'currentScript', { configurable: true, get: () => el });
+  try {
+    new Function(script)();
+  } finally {
+    Object.defineProperty(document, 'currentScript', { configurable: true, get: () => null });
+  }
 }
+const account = (pref: string) => run(ACCOUNT_THEME_SYNC_SCRIPT, { 'data-theme-pref': pref });
+const chrome = () =>
+  run(CHROME_THEME_BOOTSTRAP_SCRIPT, { 'data-light-routes': LIGHT_PINNED_PREFIXES.join(',') });
 
 describe('theme preference mapping', () => {
   it('round-trips every account preference', () => {
@@ -56,7 +67,7 @@ describe('pre-paint scripts', () => {
   it('applies a preference saved on another device before paint', () => {
     mockSystemDark(false);
     localStorage.setItem(THEME_STORAGE_KEY, 'light');
-    run(accountThemeSyncScript('dark'));
+    account('dark');
 
     const root = document.documentElement;
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
@@ -67,34 +78,54 @@ describe('pre-paint scripts', () => {
     );
   });
 
-  it('resolves System from the OS and leaves a matching stored value untouched', () => {
+  it('resolves System from the OS', () => {
     mockSystemDark(true);
-    run(accountThemeSyncScript('system'));
+    account('system');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('system');
 
-    document.documentElement.className = 'light';
-    run(accountThemeSyncScript('system'));
-    expect(document.documentElement.className).toBe('light');
+    mockSystemDark(false);
+    account('system');
+    expect(document.documentElement.classList.contains('light')).toBe(true);
   });
 
   it('keeps browser chrome light on pinned routes even when the user prefers dark', () => {
     mockSystemDark(true);
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     window.history.replaceState(null, '', '/status/acme');
-    run(chromeThemeBootstrapScript(LIGHT_PINNED_PREFIXES));
+    chrome();
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
 
     window.history.replaceState(null, '', '/incidents');
-    run(chromeThemeBootstrapScript(LIGHT_PINNED_PREFIXES));
+    chrome();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('survives blocked storage', () => {
+  it('still applies the account preference when storage is blocked', () => {
     mockSystemDark(false);
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    expect(() => run(accountThemeSyncScript('dark'))).not.toThrow();
-    expect(() => run(chromeThemeBootstrapScript(LIGHT_PINNED_PREFIXES))).not.toThrow();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    account('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(() => chrome()).not.toThrow();
+  });
+
+  it('ignores an unknown preference value', () => {
+    mockSystemDark(false);
+    document.documentElement.className = 'light';
+    account('<img src=x>');
+    expect(document.documentElement.className).toBe('light');
+  });
+
+  it('keeps the inline scripts in sync with the shared constants', () => {
+    for (const script of [ACCOUNT_THEME_SYNC_SCRIPT, CHROME_THEME_BOOTSTRAP_SCRIPT]) {
+      expect(script).toContain(`"${THEME_STORAGE_KEY}"`);
+      expect(script).toContain(THEME_CHROME_COLORS.dark);
+      expect(script).toContain(THEME_CHROME_COLORS.light);
+    }
   });
 });
