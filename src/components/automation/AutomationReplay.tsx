@@ -53,8 +53,14 @@ export function AutomationReplay({
 
   const poll = (runId: string) => {
     timer.current = setTimeout(async () => {
-      const response = await automationAction({ action: 'replayStatus', serviceId, runId });
-      if (!response.ok) return setError(response.error);
+      const response = await automationAction({ action: 'replayStatus', serviceId, runId }).catch(
+        () => ({ ok: false as const, error: 'Could not check the replay. Try again.' })
+      );
+      if (!response.ok) {
+        // Without a status the run would read as still replaying forever.
+        setLatest(null);
+        return setError(response.error);
+      }
       const view = response.data as AutomationReplayView;
       setLatest(previous => (previous ? { ...previous, view } : previous));
       if (view.status === 'PENDING' || view.status === 'RUNNING') poll(runId);
