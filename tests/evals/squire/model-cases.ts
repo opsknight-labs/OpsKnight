@@ -235,6 +235,29 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     expect: { mode: 'ai', toolLabels: ['Checking who is on call'] },
   },
   {
+    id: 'tool-automation-decision',
+    category: 'tool-choice',
+    question: 'Why did automation route this incident here?',
+    script: [
+      { tool: 'get_automation_decision', input: { incidentId: '$incident' } },
+      { say: 'No automation decision was recorded for this incident.' },
+    ],
+    expect: { mode: 'ai', toolLabels: ['Checking why automation routed it'] },
+  },
+  {
+    id: 'tool-automation-rule',
+    category: 'tool-choice',
+    question: 'What does the "Critical to P1" rule on this service do?',
+    script: [
+      {
+        tool: 'explain_automation_rule',
+        input: { serviceId: '$service', ruleName: 'Critical to P1' },
+      },
+      { say: 'This service has no rule by that name in its live automation.' },
+    ],
+    expect: { mode: 'ai', toolLabels: ['Reading the automation rule'] },
+  },
+  {
     id: 'tool-service',
     category: 'tool-choice',
     question: 'Tell me about the checkout service',
