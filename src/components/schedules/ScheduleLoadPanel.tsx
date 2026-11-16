@@ -4,7 +4,9 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { logger } from '@/lib/logger';
 import { listInsightsForScope } from '@/lib/intelligence/ops-insights/view';
+import { UNFAIR_ROTATION_RATIO } from '@/lib/oncall-load/insights';
 import { loadScheduleLoad, type ScheduleLoadView } from '@/lib/oncall-load/store';
+import { cn } from '@/lib/utils';
 import HeatStrip from '@/components/analytics/HeatStrip';
 import InsightsPanel from '@/components/intelligence/insights/InsightsPanel';
 import { SectionError, StatGrid, StatTile } from '@/components/intelligence/overview/primitives';
@@ -128,7 +130,13 @@ export function ScheduleLoadBody({
                 <TableCell className="text-right tabular-nums">
                   {hours(person.onCallHours)}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell
+                  className={cn(
+                    'text-right tabular-nums',
+                    (person.vsRotationMean ?? 0) > UNFAIR_ROTATION_RATIO &&
+                      'font-semibold text-status-elevated-deep dark:text-status-elevated'
+                  )}
+                >
                   {vsMean(person.vsRotationMean)}
                 </TableCell>
                 <TableCell>
