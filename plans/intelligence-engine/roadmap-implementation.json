@@ -311,7 +311,7 @@
         "The postmortem recurrence strip shows only when the incident inspector opens (it has no strip chip or section of its own)",
         "Full unit suite, full typecheck, build and Playwright e2e for the integrated branch run in the landing script, not in this integration"
       ],
-      "verification": "2026-11-16 integration of K and J1 to J7 on Workstream I (0d662b41f): slice unit and component tests plus architecture boundary and design-system tests, slice integration tests on a fresh pgvector pg16 database; prisma validate, migrate deploy and migrate diff (no drift beyond the base's pre-existing drift)"
+      "verification": "2026-11-16 integration of K and J1 to J7 on Workstream I (0d662b41f): 70 slice unit, component and architecture files (819 tests) passed, including intelligence-boundaries, design-system-contract, the MCP tools contract and the API v2 authorization matrix; 30 slice integration files (328 tests) passed on a fresh pgvector pg16 database after two test fixes (boundary rules for K and J5, scripted eval cases for the J1 tools); prisma validate, migrate deploy and migrate diff (no drift beyond the base's pre-existing drift)"
     },
     {
       "id": 10,
