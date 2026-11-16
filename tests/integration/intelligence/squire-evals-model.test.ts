@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
-import { utcDay } from '@/lib/intelligence/ai/budget';
+import { estimateTokens, utcDay } from '@/lib/intelligence/ai/budget';
 import { breakers, invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
 import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { saveObservabilityConnection } from '@/lib/intelligence/connectors/service';
@@ -14,6 +14,7 @@ import {
   type SquireModelEvalCase,
   type SquireModelEvalExpect,
 } from '../../evals/squire/model-cases';
+import baseline from '../../evals/squire/baseline.json';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import {
   createTestIncident,
@@ -400,6 +401,11 @@ describe('Squire scripted-model evaluation', () => {
     await backend?.close();
   });
 
+  /** Prompt tokens each case sent the model (every request of every turn), for the token-regression guard. */
+  const promptTokens = new Map<string, number>();
+  const tokensSent = (result: { requests: unknown[] }) =>
+    result.requests.reduce<number>((sum, body) => sum + estimateTokens(JSON.stringify(body)), 0);
+
   // Longest names first, so `$hiddenService` is never read as `$hidden` + "Service".
   const fill = (text: string) =>
     Object.keys(ids)
@@ -610,6 +616,7 @@ describe('Squire scripted-model evaluation', () => {
         : [];
       const first = await turn(c, c.question, c.script, history);
       check(c.id, c.expect, first);
+      promptTokens.set(c.id, tokensSent(first));
       if (c.then) {
         const next = await turn(c, c.then.question, c.then.script, [
           { role: 'user', content: fill(c.question), contextProof: first.context?.userProof },
@@ -620,8 +627,24 @@ describe('Squire scripted-model evaluation', () => {
           },
         ]);
         check(`${c.id} (follow-up)`, c.then.expect, next);
+        promptTokens.set(c.id, (promptTokens.get(c.id) ?? 0) + tokensSent(next));
       }
     });
+  });
+
+  // K9: a prompt that grows quietly costs every user on every turn. The scripted model is deterministic, so
+  // the median is stable; raise baseline.json `modelMedianPromptTokens` deliberately, in a reviewed commit.
+  it('keeps the median prompt size per case within 15% of the committed baseline', ctx => {
+    if (promptTokens.size < MODEL_CASES.length) ctx.skip(); // a filtered run (-t) measures a subset
+    const sorted = [...promptTokens.values()].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median =
+      sorted.length % 2 ? sorted.at(mid)! : (sorted.at(mid - 1)! + sorted.at(mid)!) / 2;
+    const allowed = baseline.modelMedianPromptTokens * (1 + baseline.maxMedianTokenRise);
+    expect(
+      median,
+      `median prompt tokens per case ${median} vs baseline ${baseline.modelMedianPromptTokens}; if the rise is intended, commit the new median in tests/evals/squire/baseline.json`
+    ).toBeLessThanOrEqual(allowed);
   });
 
   it('exercises every tool and proposal the assistant offers, so a new one cannot land unevaluated', () => {

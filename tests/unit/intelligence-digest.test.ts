@@ -83,4 +83,34 @@ describe('digest email', () => {
     expect(email.subject).toContain('2026-W25');
     expect(email.html).toContain('never changes incidents or paging');
   });
+  it('lists open operations insights, escaped, and hides the section when there are none', () => {
+    const base = {
+      weekKey: '2026-W25',
+      weekly,
+      recurring: [],
+      anomalies: [],
+      insightsUrl: 'https://ops.example.com/settings/intelligence/insights',
+      settingsUrl: 'https://ops.example.com/settings/intelligence/insights#digest',
+    };
+    expect(renderDigestEmail(base).html).not.toContain('Needs attention');
+    expect(renderDigestEmail({ ...base, opsInsights: [] }).text).not.toContain('Needs attention');
+    const email = renderDigestEmail({
+      ...base,
+      opsInsights: Array.from({ length: 7 }, (_, n) => ({
+        scopeName: `<b>svc-${n}</b>`,
+        title: 'No alerts for 3 days',
+        severity: n === 0 ? 'CRITICAL' : 'INFO',
+        url: `https://ops.example.com/services/s${n}`,
+      })),
+      opsInsightsUrl: 'https://ops.example.com/intelligence',
+    });
+    expect(email.text).toContain(
+      '- <b>svc-0</b>: No alerts for 3 days [critical] https://ops.example.com/services/s0'
+    );
+    expect(email.text).toContain('- <b>svc-1</b>: No alerts for 3 days https://');
+    expect(email.text).not.toContain('svc-5');
+    expect(email.html).toContain('&lt;b&gt;svc-0&lt;/b&gt;</a>: No alerts for 3 days [critical]');
+    expect(email.html).not.toContain('<b>svc');
+    expect(email.html).toContain('href="https://ops.example.com/intelligence"');
+  });
 });

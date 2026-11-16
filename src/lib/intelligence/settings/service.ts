@@ -80,6 +80,8 @@ export type IntelligenceSettingsView = {
   opsInsightsNotificationsEnabled: boolean;
   /** A run fixed its incident when the incident resolved within this long after the run finished. */
   runbookFixWindowMinutes: number;
+  /** Small deterministic helpers: create-form suggestions, status drafts, palette knowledge search. */
+  opsHelpersEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -106,6 +108,7 @@ const SETTINGS_SELECT = {
   opsInsightsRunbooksEnabled: true,
   opsInsightsNotificationsEnabled: true,
   runbookFixWindowMinutes: true,
+  opsHelpersEnabled: true,
   revision: true,
 } as const;
 

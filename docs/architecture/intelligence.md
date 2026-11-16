@@ -420,6 +420,11 @@ handling, cost ceiling; `tests/evals/squire/categories.ts`).
   graded), or when a keyed run recorded nothing. Without a key the suite is skipped and nothing is compared.
   `baseline.json` is raised by committing a reviewed value; `--record-catalogue` refreshes only
   `minimumCases`, which a unit test enforces so the set cannot quietly shrink.
+- _Token guard (K9)._ Every live case records its tokens, and the gate fails when the median per case is
+  more than `maxMedianTokenRise` (15%) above the committed `medianTokensPerCase`; `--record-tokens
+<report>` writes a reviewed run's median, never a passing run on its own. The scripted tier estimates the
+  prompt tokens of every request a case sends (`estimateTokens` over the request body) and fails the same way
+  against `modelMedianPromptTokens`, so a prompt or tool-schema growth is caught on every PR without a key.
 
 Labelled engine fixtures sit beside them: `tests/fixtures/intelligence/storm-fixture.ts` (35 incidents,
 three real problems, one-offs and decoys) must reach a compression ratio of at least 2.9 with no group
@@ -1704,3 +1709,23 @@ rollup matches and open rule-health insights), offered only with `automation.rea
 `ask_squire`, only with the `automation:read` scope. `draft_automation_rule` is a `NAVIGATE` proposal
 through the sealed-proposal flow, described only to people who may edit automation: confirming it opens the same pre-filled workspace link; it never saves or
 publishes.
+### Small helpers (J7)
+
+Behind `IntelligenceSettings.opsHelpersEnabled` (default off, with the master switch). None writes on
+read, none is on the ingestion, escalation or notification path, and none calls a model except the
+expanded analytics line. Pure logic sits in `src/lib/intelligence/helpers/<name>.ts`, the scoped loader
+beside it in `<name>-loader.ts`, the server action next to the page that uses it.
+
+| Helper                      | Loader                     | Reads                                                                                                                                                                   | Bound                                                                                                                                        |
+| --------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create-incident suggestions | `create-suggest-loader.ts` | `IncidentFingerprint` trigram candidates from the similarity retrieval (`retrieval.ts` exports), joined to incidents under `incidentReadWhere`                          | 25 candidates per source, 20 look-alikes scored, 400 ms database budget; client debounce 500 ms, title ≥ 8 characters, stale answers dropped |
+| Status-update draft         | `status-draft-loader.ts`   | the page's shown components, `ServiceDependency` upstream closure, open incidents on those services under the viewer's scope                                            | 200 components, 2 dependency hops, 3 drafts                                                                                                  |
+| Palette knowledge search    | `palette-search-loader.ts` | `searchKnowledgeForActor` (FTS + trigram, embedding re-rank only when configured, per-source visibility) over postmortems, runbook steps, resolution and incident notes | queries of 3+ words, 5 hits                                                                                                                  |
+| "Why did this change"       | `metric-change-loader.ts`  | two grouped reads of `IncidentMetricRollup` (daily, per service) for the last N complete UTC days and the N before, limited to `serviceReadWhere`                       | one row per service; ≤ 90-day window                                                                                                         |
+
+The metric decomposition is exact: per-service count deltas, or for a mean
+`sum_i(current)/n(current) − sum_i(previous)/n(previous)`, which add up to the whole change; the line lists
+the top three services that moved it in its direction. Expanding the line recomputes on the server and may
+phrase it through `cachedGenerate` (callSite `interactive`, `AI_OUTPUT_TOKENS['analytics.metric-change']`),
+so reopening with unchanged numbers costs nothing; the list page itself never calls a model. The weekly
+digest adds the recipient's top five open insights from `listInsightsInbox` (scoped as on `/intelligence`).

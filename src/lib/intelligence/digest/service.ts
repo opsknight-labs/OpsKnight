@@ -10,6 +10,7 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getInsights } from '../insights/service';
 import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
+import { listInsightsInbox } from '../ops-insights/view';
 import { parseOrThrow, type IntelligenceActor } from '../settings/service';
 import {
   DIGEST_SETTINGS_DEFAULTS,
@@ -120,6 +121,8 @@ export async function digestRecipients(): Promise<Array<{ id: string; email: str
 
 /** A digest is only worth reading the day it is sent; an outage never delivers last week's mail. */
 const DIGEST_TTL_MS = 24 * 3_600_000;
+/** Open operations insights listed per digest, most severe first; the inbox holds the rest. */
+const DIGEST_OPS_INSIGHTS = 5;
 
 /**
  * Builds one person's digest from what that person may read right now and hands it to the durable
@@ -140,11 +143,20 @@ async function sendDigestTo(
     return false;
   const insights = await getInsights(actor, now);
   if (!insights?.weekly) return false;
+  // Only what this person may read; empty (and the section hidden) when operations insights are off.
+  const ops = await listInsightsInbox(actor, { limit: DIGEST_OPS_INSIGHTS });
   const email = renderDigestEmail({
     weekKey,
     weekly: insights.weekly,
     recurring: insights.recurring,
     anomalies: insights.anomalies,
+    opsInsights: ops.items.map(item => ({
+      scopeName: item.scopeName,
+      title: item.title,
+      severity: item.severity,
+      url: `${appUrl}${item.scopeHref}`,
+    })),
+    opsInsightsUrl: `${appUrl}/intelligence`,
     insightsUrl: `${appUrl}${EVALUATION_PATH}#insights`,
     settingsUrl: `${appUrl}${EVALUATION_PATH}#digest`,
   });

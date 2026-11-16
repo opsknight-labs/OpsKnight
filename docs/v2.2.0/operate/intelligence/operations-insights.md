@@ -234,6 +234,28 @@ evidence shows. The titles and summaries above stay as they are; the rewrite is 
 Expanding the same unchanged list again within a day costs nothing when **Reuse answers for unchanged facts**
 is on. When the daily AI budget is used up, or no provider may receive the data, the list says so and shows
 only the original text.
+## In the weekly digest
+
+When the weekly Intelligence digest is on, each recipient's email also lists up to five of their open
+insights, most severe first, with a link to each and to the full list on **Intelligence**. Recipients see
+only insights for things they can open. The list is left out when there are none, or when operations
+insights are off.
+
+## Small helpers
+
+A separate switch, **Settings → Intelligence → Show small helpers** (off by default), adds four helpers
+that work from your existing data with no AI provider. None of them creates, saves or publishes anything;
+they only fill a form you then review.
+
+| Where                                       | What you get                                                                                                                                                                                                                                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Create incident**                         | After you type a title of at least eight characters and pause, suggestions appear under it: a service and an urgency when most similar past incidents agree, and a link to an unresolved incident that may already cover the same problem. Selecting a suggestion only fills that field. |
+| Status page **Announcements → New**         | **Start from an open incident that affects this page** lists open incidents on the page's components or on services those components depend on. Choosing one fills the title, message, type and affected components; review and publish as usual.                                        |
+| Command palette                             | Below the usual matches, **From past incidents and runbooks** shows up to five passages from incidents, postmortems and runbooks that match a question of three words or more, such as "payments timeout after deploy". Requires the knowledge index to be on.                           |
+| **Analytics** cards (incidents, MTTA, MTTR) | One line names the services that moved the number most against the previous period of the same length, for example "Most of the rise: Payments +10, Checkout +2". **Why?** shows the numbers behind it and, when an AI provider is set up, a two-sentence explanation.                   |
+
+The analytics line reads the daily rollups, so it covers complete days only and leaves today out. It
+counts only services you can open, so two people can see different lines on the same card.
 
 ## Who sees what
 
@@ -261,4 +283,6 @@ sweep.
 | An insight you fixed is still listed | Each item is revisited once a day. It resolves at the next visit. |
 | No **Load & fairness** tab | The **On-call schedules** area is off. |
 | **Load & fairness** shows zero on-call time for past days | The days before the area was turned on were not recorded. Run `npm run backfill:oncall-coverage`. |
+| No suggestions while creating an incident | **Show small helpers** is on, the title is at least eight characters, and similar past incidents exist for services you can open. Suggestions that agree with what you already picked are not repeated. |
+| No "why" line on an analytics card | The rollups have no data for the comparison period, the number did not change, or the helpers are off. |
 | "These settings changed since you opened the page" | Someone else saved Intelligence settings. Refresh and save again. |

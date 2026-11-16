@@ -59,6 +59,7 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   opsInsightsRunbooksEnabled: false,
   opsInsightsNotificationsEnabled: false,
   runbookFixWindowMinutes: 120,
+  opsHelpersEnabled: false,
 } as const;
 
 const bounded = (range: { min: number; max: number }) =>
@@ -88,6 +89,8 @@ export const intelligenceSettingsInputSchema = z
     opsInsightsRunbooksEnabled: z.boolean().optional(),
     opsInsightsNotificationsEnabled: z.boolean().optional(),
     runbookFixWindowMinutes: bounded(INTELLIGENCE_SETTINGS_BOUNDS.runbookFixWindowMinutes).optional(),
+    // A save that omits it (an older API client) leaves the stored switch as it is.
+    opsHelpersEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()

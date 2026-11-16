@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { Button, FormField } from '@/components/ui';
 import { Badge } from '@/components/ui/shadcn/badge';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
+import StatusDraftSuggestions from '@/components/status-page/StatusDraftSuggestions';
 import {
   Dialog,
   DialogContent,
@@ -980,6 +981,20 @@ export default function StatusPageAnnouncementManager({
           <form onSubmit={handleCreate} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto pr-1 space-y-5 py-2">
               <div className="space-y-3.5">
+                {isCreateOpen && (
+                  <StatusDraftSuggestions
+                    statusPageId={statusPageId}
+                    onApply={draft => {
+                      const offered = new Set(allServices.map(service => service.id));
+                      setTitle(draft.title);
+                      setMessage(draft.message);
+                      setType(draft.type);
+                      setAffectedServiceIds(
+                        draft.affected.map(c => c.serviceId).filter(id => offered.has(id))
+                      );
+                    }}
+                  />
+                )}
                 <FormField
                   type="input"
                   label="Title"

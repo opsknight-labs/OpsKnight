@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -225,6 +225,35 @@ describe('Squire evaluation baseline gate', () => {
       })
     ).toBe(1);
   });
+
+  /* eslint-disable security/detect-non-literal-fs-filename -- fresh temporary directories only */
+  it('fails when the median tokens per case rose more than 15% over the committed baseline', () => {
+    // A copy of the repository layout, so recording never touches the committed baseline.
+    const root = mkdtempSync(path.join(tmpdir(), 'squire-eval-root-'));
+    const file = path.join(root, 'tests', 'evals', 'squire', 'baseline.json');
+    mkdirSync(path.dirname(file), { recursive: true });
+    const run = (args: string[]) => {
+      try {
+        execFileSync(process.execPath, [script, ...args], { cwd: root, stdio: 'pipe' });
+        return 0;
+      } catch (error) {
+        return (error as { status: number }).status;
+      }
+    };
+    const report = (tokens: number) => {
+      const out = path.join(root, `r-${tokens}.json`);
+      writeFileSync(out, JSON.stringify({ results: allPassing.map(r => ({ ...r, tokens })) }));
+      return out;
+    };
+    writeFileSync(file, JSON.stringify({ ...baseline, medianTokensPerCase: 1000 }));
+    expect(run([report(1150)])).toBe(0);
+    expect(run([report(1151)])).toBe(1);
+    // Recording is the deliberate update: afterwards the bigger run passes.
+    expect(run(['--record-tokens', report(1400)])).toBe(0);
+    expect(JSON.parse(readFileSync(file, 'utf8')).medianTokensPerCase).toBe(1400);
+    expect(run([report(1400)])).toBe(0);
+  });
+  /* eslint-enable security/detect-non-literal-fs-filename */
 
   it('gates judge grades, including a judged run where nothing could be graded', () => {
     const judged = (score: number) =>

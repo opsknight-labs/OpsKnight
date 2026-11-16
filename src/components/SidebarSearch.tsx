@@ -39,6 +39,7 @@ import {
   queryAddressesAssistant,
   questionFromPaletteQuery,
 } from '@/components/squire/palette-question';
+import PaletteKnowledgeResults from '@/components/search/PaletteKnowledgeResults';
 
 type SearchResult = {
   type: 'incident' | 'service' | 'team' | 'user' | 'policy' | 'postmortem';
@@ -746,6 +747,10 @@ export default function SidebarSearch() {
                       </CommandGroup>
                     );
                   })}
+                <PaletteKnowledgeResults
+                  query={query}
+                  onOpen={href => handleSelect('', { href })}
+                />
               </>
             )}
           </CommandList>
