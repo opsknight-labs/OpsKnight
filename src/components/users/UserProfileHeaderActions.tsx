@@ -107,12 +107,12 @@ export default function UserProfileHeaderActions({
         <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
                 <AlertTriangle className="h-5 w-5" />
                 {isInvited ? 'Delete Invited User' : 'Delete User Permanently'}
               </AlertDialogTitle>
               <AlertDialogDescription className="space-y-2">
-                <span className="text-red-600 font-semibold block">
+                <span className="text-red-600 font-semibold block dark:text-red-400">
                   This action cannot be undone.
                 </span>
                 {isInvited ? (

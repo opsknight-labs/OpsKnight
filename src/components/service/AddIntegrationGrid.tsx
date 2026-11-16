@@ -81,26 +81,26 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
   return (
     <div className="space-y-3.5">
       {/* Compact Header & Search Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-ink-100">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink-900 tracking-tight flex items-center gap-2">
             <span>Add Integration</span>
-            <span className="text-[11px] font-normal text-slate-400">
+            <span className="text-[11px] font-normal text-ink-400">
               ({filteredIntegrations.length} available)
             </span>
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-500">
             Connect external monitoring, alerting, or CI/CD providers to send events into this
             service.
           </p>
         </div>
         <div className="relative w-full sm:w-64 shrink-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-400 pointer-events-none" />
           <Input
             placeholder="Search integrations..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="h-8 pl-8 text-xs bg-slate-50/70 border-slate-200 focus:bg-white transition-colors"
+            className="h-8 pl-8 text-xs bg-ink-50/70 border-ink-200 focus:bg-card transition-colors"
           />
         </div>
       </div>
@@ -117,7 +117,7 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
               ${
                 selectedCategory === category
                   ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                  : 'bg-ink-100/80 text-ink-600 hover:bg-ink-200/80 hover:text-ink-900'
               }
             `}
           >
@@ -127,10 +127,10 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
       </div>
 
       {filteredIntegrations.length === 0 ? (
-        <div className="text-center py-8 border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
+        <div className="text-center py-8 border border-dashed border-ink-200 rounded-lg bg-ink-50/50">
           <Search className="mx-auto h-6 w-6 text-slate-300 mb-2" />
-          <h3 className="text-xs font-semibold text-slate-800">No integrations found</h3>
-          <p className="text-[11px] text-slate-500 mt-0.5">
+          <h3 className="text-xs font-semibold text-ink-800">No integrations found</h3>
+          <p className="text-[11px] text-ink-500 mt-0.5">
             No providers match &ldquo;{searchQuery}&rdquo; in category &ldquo;{selectedCategory}
             &rdquo;.
           </p>
@@ -160,7 +160,7 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
                   handleTypeClick(type.value);
                 }
               }}
-              className="group relative flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200/90 bg-white hover:bg-slate-50/80 hover:border-primary/40 hover:shadow-xs cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="group relative flex items-start gap-2.5 p-2.5 rounded-lg border border-ink-200/90 bg-card hover:bg-ink-50/80 hover:border-primary/40 hover:shadow-xs cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <div
                 className="w-8 h-8 rounded-md shrink-0 flex items-center justify-center shadow-xs ring-1 ring-black/5 group-hover:scale-105 transition-transform [&_svg]:h-4 [&_svg]:w-4"
@@ -171,15 +171,15 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-1.5">
-                  <span className="font-semibold text-xs text-slate-900 group-hover:text-primary transition-colors truncate">
+                  <span className="font-semibold text-xs text-ink-900 group-hover:text-primary transition-colors truncate">
                     {type.label}
                   </span>
                   <Plus className="h-3.5 w-3.5 text-slate-300 group-hover:text-primary transition-colors shrink-0" />
                 </div>
-                <p className="text-[11px] text-slate-500 leading-snug line-clamp-1 mt-0.5">
+                <p className="text-[11px] text-ink-500 leading-snug line-clamp-1 mt-0.5">
                   {type.description}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-medium truncate">
+                <div className="mt-1 text-[10px] text-ink-400 font-medium truncate">
                   {type.category}
                 </div>
               </div>
@@ -204,7 +204,7 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
               </span>
               <span>Add {selectedTypeInfo?.label}</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogDescription className="text-xs text-ink-500">
               Configure details to start receiving alerts from {selectedTypeInfo?.label}.
             </DialogDescription>
           </DialogHeader>
@@ -224,7 +224,7 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
                   placeholder={`e.g. Production ${selectedTypeInfo.label}`}
                   required
                   autoFocus
-                  className="h-8.5 text-xs bg-slate-50 focus:bg-white transition-colors"
+                  className="h-8.5 text-xs bg-ink-50 focus:bg-card transition-colors"
                 />
               </div>
 
@@ -239,15 +239,15 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
                     placeholder="arn:aws:sns:us-east-1:123456789012:opsknight-alerts"
                     required
                     autoComplete="off"
-                    className="h-8.5 bg-slate-50 font-mono text-xs focus:bg-white"
+                    className="h-8.5 bg-ink-50 font-mono text-xs focus:bg-card"
                   />
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-ink-500">
                     Only signed messages from this exact topic are accepted.
                   </p>
                 </div>
               )}
 
-              <div className="bg-blue-50/70 p-3 rounded-md border border-blue-100 text-xs text-blue-700 flex gap-2.5">
+              <div className="bg-blue-50/70 p-3 rounded-md border border-blue-100 text-xs text-blue-700 flex gap-2.5 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300">
                 <Info className="h-4 w-4 shrink-0 text-blue-500 mt-0.5" />
                 <div className="text-[11px] leading-relaxed">
                   After creating this integration, you will be provided with a unique{' '}

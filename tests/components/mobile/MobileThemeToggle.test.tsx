@@ -8,6 +8,10 @@ vi.mock('next-themes', () => ({
   useTheme: vi.fn(),
 }));
 
+vi.mock('@/app/theme-actions', () => ({
+  updateThemePreference: vi.fn(async () => ({ ok: true })),
+}));
+
 describe('MobileThemeToggle', () => {
   beforeEach(() => {
     vi.clearAllMocks();

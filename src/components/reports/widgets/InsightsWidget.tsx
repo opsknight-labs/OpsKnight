@@ -83,7 +83,7 @@ const InsightsWidget = memo(function InsightsWidget({
                 ) : insight.type === 'negative' ? (
                   <TrendingDown className="h-3 w-3 text-red-600 dark:text-red-400" />
                 ) : (
-                  <Sparkles className="h-3 w-3 text-gray-500" />
+                  <Sparkles className="h-3 w-3 text-ink-500" />
                 )}
               </div>
               <p className="flex-1 leading-relaxed">{insight.text}</p>

@@ -107,7 +107,7 @@ function renderFieldValue(field: IncidentContextFieldView) {
     }
     if (valLower === 'low' || valLower === 'info') {
       return (
-        <span className="inline-flex items-center rounded-sm border border-slate-500/30 bg-slate-500/10 px-1.5 py-0.5 text-xs font-medium text-slate-700 dark:text-slate-300">
+        <span className="inline-flex items-center rounded-sm border border-slate-500/30 bg-slate-500/10 px-1.5 py-0.5 text-xs font-medium text-slate-700 dark:text-zinc-300">
           {val}
         </span>
       );

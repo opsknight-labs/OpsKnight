@@ -29,9 +29,7 @@ export default function SessionTimeoutWarning({
   const isAtHardCap = (() => {
     if (!session?.absoluteExpiresAt || !session?.expires) return false;
     const sessionExpiresAtS = new Date(session.expires).getTime() / 1000;
-    return (
-      Math.abs(sessionExpiresAtS - session.absoluteExpiresAt) <= HARD_CAP_TOLERANCE_S
-    );
+    return Math.abs(sessionExpiresAtS - session.absoluteExpiresAt) <= HARD_CAP_TOLERANCE_S;
   })();
 
   const handleExtendSession = useCallback(async () => {
@@ -116,7 +114,7 @@ export default function SessionTimeoutWarning({
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl"
+          className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="session-warning-title"
@@ -127,9 +125,9 @@ export default function SessionTimeoutWarning({
 
           <div className="p-6">
             {/* Icon */}
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15">
               <svg
-                className="h-7 w-7 text-amber-600"
+                className="h-7 w-7 text-amber-600 dark:text-amber-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -145,24 +143,28 @@ export default function SessionTimeoutWarning({
 
             {/* Content */}
             <div className="text-center">
-              <h2 id="session-warning-title" className="text-xl font-semibold text-slate-900">
+              <h2 id="session-warning-title" className="text-xl font-semibold text-ink-900">
                 Session Expiring Soon
               </h2>
 
               {isAtHardCap ? (
                 /* Hard-cap mode: renewal would be a no-op — direct the user to sign in again */
-                <p id="session-warning-description" className="mt-2 text-sm text-slate-500">
+                <p id="session-warning-description" className="mt-2 text-sm text-ink-500">
                   Your session expires in{' '}
-                  <span className="font-semibold text-amber-600">{timeDisplay}</span>. For
-                  security, this trusted session has reached its maximum lifetime. Please sign in
-                  again to continue.
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">
+                    {timeDisplay}
+                  </span>
+                  . For security, this trusted session has reached its maximum lifetime. Please sign
+                  in again to continue.
                 </p>
               ) : (
                 /* Normal mode: renewal is possible */
-                <p id="session-warning-description" className="mt-2 text-sm text-slate-500">
+                <p id="session-warning-description" className="mt-2 text-sm text-ink-500">
                   Your session will expire in{' '}
-                  <span className="font-semibold text-amber-600">{timeDisplay}</span>. Would you
-                  like to stay signed in?
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">
+                    {timeDisplay}
+                  </span>
+                  . Would you like to stay signed in?
                 </p>
               )}
             </div>
@@ -171,7 +173,7 @@ export default function SessionTimeoutWarning({
             <div className="mt-6 flex gap-3">
               <button
                 onClick={handleLogout}
-                className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                className="flex-1 rounded-lg border border-ink-200 bg-card px-4 py-2.5 text-sm font-semibold text-ink-700 transition hover:bg-ink-50"
               >
                 Sign Out
               </button>
@@ -196,7 +198,7 @@ export default function SessionTimeoutWarning({
             </div>
 
             {/* Security note */}
-            <p className="mt-4 text-center text-xs text-slate-400">
+            <p className="mt-4 text-center text-xs text-ink-400">
               {isAtHardCap
                 ? 'Trusted device sessions have a 90-day security limit.'
                 : 'For security, inactive sessions are automatically ended.'}

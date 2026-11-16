@@ -109,9 +109,9 @@ export default function MicrosoftTeamsWarRoomsPanel({
             variant="outline"
             className={
               active
-                ? 'border-emerald-300 text-emerald-700'
+                ? 'border-emerald-300 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-300'
                 : ambiguous
-                  ? 'border-amber-300 text-amber-700'
+                  ? 'border-amber-300 text-amber-700 dark:border-amber-500/30 dark:text-amber-300'
                   : ''
             }
           >
@@ -143,7 +143,10 @@ export default function MicrosoftTeamsWarRoomsPanel({
               </a>
             )}
             {latest.health && latest.health !== 'HEALTHY' && (
-              <Badge variant="outline" className="border-amber-300 text-amber-700">
+              <Badge
+                variant="outline"
+                className="border-amber-300 text-amber-700 dark:border-amber-500/30 dark:text-amber-300"
+              >
                 {latest.health.toLowerCase().replace('_', ' ')}
               </Badge>
             )}

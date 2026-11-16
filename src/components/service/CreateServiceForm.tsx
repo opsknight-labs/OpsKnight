@@ -210,12 +210,12 @@ export default function CreateServiceForm({
             </div>
           </div>
 
-          <Alert className="bg-amber-50 border-amber-200 text-amber-900">
-            <Lightbulb className="h-4 w-4 text-amber-600" />
-            <AlertTitle className="text-amber-800 font-semibold flex items-center gap-2">
+          <Alert className="bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300">
+            <Lightbulb className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <AlertTitle className="text-amber-800 font-semibold flex items-center gap-2 dark:text-amber-300">
               Pro Tip: Notifications
             </AlertTitle>
-            <AlertDescription className="text-amber-800/90 mt-1">
+            <AlertDescription className="text-amber-800/90 mt-1 dark:text-amber-300">
               Once created, navigate to service settings to configure Slack, Microsoft Teams, and
               webhook notifications.
             </AlertDescription>

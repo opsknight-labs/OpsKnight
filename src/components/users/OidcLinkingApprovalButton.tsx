@@ -260,7 +260,7 @@ export default function OidcLinkingApprovalButton({
     }
     if (state === 'linked') {
       return (
-        <DropdownMenuItem disabled className="text-emerald-700">
+        <DropdownMenuItem disabled className="text-emerald-700 dark:text-emerald-300">
           <CheckCircle2 className="mr-2 h-4 w-4" />
           <span>Linked to current provider</span>
         </DropdownMenuItem>
@@ -273,7 +273,7 @@ export default function OidcLinkingApprovalButton({
             event.preventDefault();
             setDialog('allow');
           }}
-          className="text-blue-600 focus:text-blue-700"
+          className="text-blue-600 focus:text-blue-700 dark:text-blue-400 dark:focus:text-blue-300"
         >
           <Link2 className="mr-2 h-4 w-4" />
           <span>Not linked to current provider — Approve</span>
@@ -287,7 +287,7 @@ export default function OidcLinkingApprovalButton({
             event.preventDefault();
             setDialog('revoke');
           }}
-          className="text-orange-600 focus:text-orange-700"
+          className="text-orange-600 focus:text-orange-700 dark:text-orange-400 dark:focus:text-orange-300"
         >
           <Unlink2 className="mr-2 h-4 w-4" />
           <span>Approved — Revoke OIDC linking</span>
@@ -301,7 +301,7 @@ export default function OidcLinkingApprovalButton({
             event.preventDefault();
             setDialog('allow');
           }}
-          className="text-amber-700 focus:text-amber-800"
+          className="text-amber-700 focus:text-amber-800 dark:text-amber-300 dark:focus:text-amber-300"
         >
           <Clock3 className="mr-2 h-4 w-4" />
           <span>Expired — Renew approval</span>
@@ -315,7 +315,7 @@ export default function OidcLinkingApprovalButton({
             event.preventDefault();
             setDialog('allow');
           }}
-          className="text-amber-700 focus:text-amber-800"
+          className="text-amber-700 focus:text-amber-800 dark:text-amber-300 dark:focus:text-amber-300"
         >
           <RotateCcw className="mr-2 h-4 w-4" />
           <span>Config changed — Renew approval</span>
@@ -329,7 +329,7 @@ export default function OidcLinkingApprovalButton({
             event.preventDefault();
             setDialog('allow');
           }}
-          className="text-blue-600 focus:text-blue-700"
+          className="text-blue-600 focus:text-blue-700 dark:text-blue-400 dark:focus:text-blue-300"
         >
           <RotateCcw className="mr-2 h-4 w-4" />
           <span>Revoked — Reapprove OIDC linking</span>
@@ -342,7 +342,7 @@ export default function OidcLinkingApprovalButton({
           event.preventDefault();
           setDialog('allow');
         }}
-        className="text-blue-600 focus:text-blue-700"
+        className="text-blue-600 focus:text-blue-700 dark:text-blue-400 dark:focus:text-blue-300"
       >
         <Link2 className="mr-2 h-4 w-4" />
         <span>Not approved — Allow OIDC linking</span>

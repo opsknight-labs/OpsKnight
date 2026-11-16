@@ -85,7 +85,7 @@ const runtimeStatusPresentation: Record<
   },
   UNVERIFIED: {
     label: 'Unverified',
-    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-400',
+    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-zinc-400',
   },
   NOT_APPLICABLE: {
     label: 'Not Applicable',
@@ -379,7 +379,7 @@ export function FrameworkRequirementsModal({
                                 ) : (
                                   <Badge
                                     variant="outline"
-                                    className="text-[11px] font-semibold text-slate-500 shrink-0 self-start sm:self-center"
+                                    className="text-[11px] font-semibold text-ink-500 shrink-0 self-start sm:self-center"
                                   >
                                     Static Only
                                   </Badge>

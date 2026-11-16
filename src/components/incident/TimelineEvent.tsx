@@ -47,7 +47,7 @@ export default function TimelineEvent({
           width: '12px',
           height: '12px',
           borderRadius: '50%',
-          background: '#fff',
+          background: 'hsl(var(--ui-card))',
           border: '2px solid var(--primary-color)',
           boxShadow: '0 0 0 4px #f1f5f9',
           zIndex: 1,
@@ -78,7 +78,7 @@ export default function TimelineEvent({
         </div>
         <div
           style={{
-            background: '#fff',
+            background: 'hsl(var(--ui-card))',
             border: '1px solid var(--border)',
             borderRadius: '0px',
             padding: '0.875rem 1rem',

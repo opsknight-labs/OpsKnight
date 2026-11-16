@@ -40,7 +40,7 @@ function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
       disabled={pending || !canSubmit}
       className={cn(
         'group relative w-full h-11 2xl:h-12 px-4 rounded-lg font-semibold text-sm 2xl:text-base text-white transition-all duration-150 flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.995]',
-        'bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 border border-slate-900 dark:border-white shadow-sm shadow-slate-950/15 hover:shadow'
+        'bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100 border border-slate-900 dark:border-white shadow-sm shadow-slate-950/15 hover:shadow'
       )}
     >
       {pending ? (
@@ -103,7 +103,8 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
         candidate.pathname !== '/' ||
         candidate.search ||
         candidate.hash
-      ) return '';
+      )
+        return '';
       return candidate.origin;
     } catch {
       return '';
@@ -129,14 +130,14 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">
             Administrator created
           </h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1">
             Your system is initialized. Sign in as{' '}
             <span className="font-medium text-slate-900 dark:text-white">{state.email}</span>.
           </p>
         </div>
         <a
           href="/login"
-          className="inline-flex items-center justify-center w-full h-11 2xl:h-12 rounded-lg font-semibold text-sm bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 transition-colors"
+          className="inline-flex items-center justify-center w-full h-11 2xl:h-12 rounded-lg font-semibold text-sm bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition-colors"
         >
           Continue to sign in
         </a>
@@ -178,12 +179,12 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
       <div>
         <label
           htmlFor="setup-name"
-          className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+          className="block text-xs font-medium text-slate-700 dark:text-zinc-300 mb-1.5"
         >
           Full name
         </label>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
             <User className="h-4 w-4" />
           </div>
           <input
@@ -199,7 +200,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               setName(event.target.value);
               setDismissedError(null);
             }}
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
           />
         </div>
       </div>
@@ -212,13 +213,13 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
             'block text-xs font-medium mb-1.5 transition-colors',
             emailTouched && email && !isEmailValid
               ? 'text-red-600 dark:text-red-400'
-              : 'text-slate-700 dark:text-slate-300'
+              : 'text-slate-700 dark:text-zinc-300'
           )}
         >
           Email address
         </label>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
             <Mail className="h-4 w-4" />
           </div>
           <input
@@ -235,7 +236,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               setDismissedError(null);
             }}
             onBlur={() => setEmailTouched(true)}
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
           />
           {emailTouched && email && !isEmailValid && (
             <div className="absolute right-3 z-10 text-red-500">
@@ -255,14 +256,16 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
         <div className="flex items-center justify-between mb-1.5">
           <label
             htmlFor="setup-app-url"
-            className="block text-xs font-medium text-slate-700 dark:text-slate-300"
+            className="block text-xs font-medium text-slate-700 dark:text-zinc-300"
           >
             Application URL
           </label>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">Detected from request</span>
+          <span className="text-[11px] text-slate-400 dark:text-zinc-500">
+            Detected from request
+          </span>
         </div>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
             <Globe className="h-4 w-4" />
           </div>
           <input
@@ -274,18 +277,22 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
             value={appUrl}
             onChange={event => setAppUrl(event.target.value)}
             placeholder="http://localhost:3000"
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
           />
         </div>
         <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed">
-          <p className="text-slate-500 dark:text-slate-400">
+          <p className="text-slate-500 dark:text-zinc-400">
             Canonical public address used for application links, callbacks, and host authorization.
             Keep it aligned with your authentication URL in normal deployments.
           </p>
           {appUrlMatchesBrowser ? (
-            <p className="text-emerald-600 dark:text-emerald-400">✓ Matches the address currently open in your browser.</p>
+            <p className="text-emerald-600 dark:text-emerald-400">
+              ✓ Matches the address currently open in your browser.
+            </p>
           ) : (
-            <p className="text-amber-600 dark:text-amber-400">⚠ This differs from the address currently open in your browser.</p>
+            <p className="text-amber-600 dark:text-amber-400">
+              ⚠ This differs from the address currently open in your browser.
+            </p>
           )}
           <p className="text-amber-600/90 dark:text-amber-400/90">
             <span className="font-semibold">Important:</span> Enter the exact address (domain or IP)
@@ -300,12 +307,12 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
         <div>
           <label
             htmlFor="setup-secret"
-            className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+            className="block text-xs font-medium text-slate-700 dark:text-zinc-300 mb-1.5"
           >
             Bootstrap code
           </label>
           <div className="group relative flex items-center">
-            <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+            <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
               <KeyRound className="h-4 w-4" />
             </div>
             <input
@@ -321,12 +328,12 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
                 setSetupSecret(event.target.value);
                 setDismissedError(null);
               }}
-              className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+              className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
             />
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            Generate a 30-minute, one-time code with `node scripts/create-bootstrap-code.mjs`.
-            A configured SETUP_SECRET remains accepted for deployment compatibility.
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1">
+            Generate a 30-minute, one-time code with `node scripts/create-bootstrap-code.mjs`. A
+            configured SETUP_SECRET remains accepted for deployment compatibility.
           </p>
         </div>
       )}
@@ -335,12 +342,12 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
       <div>
         <label
           htmlFor="setup-password"
-          className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+          className="block text-xs font-medium text-slate-700 dark:text-zinc-300 mb-1.5"
         >
           Administrator password
         </label>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
             <Lock className="h-4 w-4" />
           </div>
           <input
@@ -356,13 +363,13 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               setPassword(event.target.value);
               setDismissedError(null);
             }}
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
           />
           <button
             type="button"
             onClick={() => setShowPassword(v => !v)}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
-            className="absolute right-3 z-10 p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="absolute right-3 z-10 p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
@@ -376,12 +383,12 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
       <div>
         <label
           htmlFor="setup-confirm-password"
-          className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+          className="block text-xs font-medium text-slate-700 dark:text-zinc-300 mb-1.5"
         >
           Confirm password
         </label>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
             <Lock className="h-4 w-4" />
           </div>
           <input
@@ -397,7 +404,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               setConfirmPassword(event.target.value);
               setDismissedError(null);
             }}
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
           />
           <button
             type="button"
@@ -405,7 +412,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
             aria-label={
               showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'
             }
-            className="absolute right-3 z-10 p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="absolute right-3 z-10 p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
           >
             {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>

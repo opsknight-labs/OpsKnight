@@ -73,7 +73,7 @@
 }
 
 .glass-button:hover {
-    background: #f8fafc;
+    background: rgb(var(--ink-50));
     border-color: var(--border-hover);
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
@@ -95,7 +95,7 @@
 .glass-panel table thead th {
     position: sticky;
     top: 0;
-    background: #f9fafb;
+    background: rgb(var(--ink-50));
     z-index: 1;
 }
 

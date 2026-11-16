@@ -6,7 +6,7 @@ import Link from 'next/link';
 export default function SendTestAlertPage() {
   const [_serviceId, _setServiceId] = useState('');
   const [integrationKey, setIntegrationKey] = useState('');
-  const [dedupKey, setDedupKey] = useState('test_alert_' + Date.now());
+  const [dedupKey, setDedupKey] = useState(() => 'test_alert_' + Date.now());
   const [summary, setSummary] = useState('Test Alert from OpsKnight');
   const [severity, setSeverity] = useState<'critical' | 'error' | 'warning' | 'info'>('critical');
   const [eventAction, setEventAction] = useState<'trigger' | 'resolve' | 'acknowledge'>('trigger');
@@ -83,7 +83,7 @@ export default function SendTestAlertPage() {
         Test the Anti-Gravity Event Intake API by sending a simulated alert.
       </p>
 
-      <div className="glass-panel" style={{ padding: '2rem', background: 'white' }}>
+      <div className="glass-panel" style={{ padding: '2rem', background: 'hsl(var(--ui-card))' }}>
         <div style={{ display: 'grid', gap: '1.5rem' }}>
           {/* Integration Key */}
           <div>

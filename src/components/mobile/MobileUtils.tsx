@@ -37,7 +37,7 @@ export function MobileStatusBadge({
       case 'suppressed':
         return {
           label: 'Suppressed',
-          classes: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+          classes: 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400',
         };
     }
   })();
@@ -150,7 +150,7 @@ export function MobileAvatar({
       className={cn(
         'flex items-center justify-center rounded-full font-bold text-white',
         sizeClass,
-        'bg-gradient-to-br from-slate-200 to-slate-50 dark:from-slate-700 dark:to-slate-900 text-[color:var(--text-primary)]'
+        'bg-gradient-to-br from-slate-200 to-slate-50 dark:from-zinc-700 dark:to-zinc-900 text-[color:var(--text-primary)]'
       )}
     >
       {initials}
@@ -233,7 +233,7 @@ export function MobileProgressBar({
   return (
     <div>
       <div
-        className="w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+        className="w-full overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800"
         style={{ height }}
       >
         <div

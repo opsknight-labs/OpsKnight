@@ -80,6 +80,30 @@
       --ui-destructive-foreground: 210 40% 98%;
       --ui-ring: 215.3 25% 26.7%;
       --ui-radius: 0.75rem;
+
+      /* Theme-aware neutral ramp (RGB channels); light = Tailwind slate. */
+      --ink-50: 248 250 252;
+      --ink-100: 241 245 249;
+      --ink-200: 226 232 240;
+      --ink-300: 203 213 225;
+      --ink-400: 148 163 184;
+      --ink-500: 100 116 139;
+      --ink-600: 71 85 105;
+      --ink-700: 51 65 85;
+      --ink-800: 30 41 59;
+      --ink-900: 15 23 42;
+      --ink-950: 2 6 23;
+   }
+
+   /*
+    * Default border colour for every element. Without this, a bare `border`
+    * utility falls back to Tailwind's fixed gray-200, which renders as a
+    * bright white outline in the dark theme.
+    */
+   *,
+   ::before,
+   ::after {
+      border-color: hsl(var(--ui-border));
    }
 
    /*
@@ -108,5 +132,68 @@
       --ui-destructive: 0 62.8% 30.6%;
       --ui-destructive-foreground: 210 40% 98%;
       --ui-ring: 240 4.9% 83.9%;
+
+      --ink-50: 22 22 26;
+      --ink-100: 28 28 33;
+      --ink-200: 39 39 42;
+      --ink-300: 63 63 70;
+      --ink-400: 113 113 122;
+      --ink-500: 161 161 170;
+      --ink-600: 180 180 188;
+      --ink-700: 212 212 216;
+      --ink-800: 228 228 231;
+      --ink-900: 244 244 245;
+      --ink-950: 250 250 250;
+   }
+}
+
+/*
+ * Always-dark surfaces (hero banners, inverse callouts). Content inside uses the
+ * light-on-dark token values in both themes, so `text-primary-foreground`,
+ * `text-muted-foreground` and `border-border` stay legible whatever the page
+ * theme is.
+ */
+@layer base {
+   .ok-inverse-surface {
+      color-scheme: dark;
+      --ui-foreground: 210 40% 98%;
+      --ui-card-foreground: 210 40% 98%;
+      /* Same primary pair as the light theme, so filled buttons keep their
+         contrast and `text-primary-foreground` stays light on the backdrop. */
+      --ui-primary: 215.3 25% 26.7%;
+      --ui-primary-foreground: 210 40% 98%;
+      --ui-muted: 240 3.7% 15.9%;
+      --ui-muted-foreground: 240 5% 70%;
+      --ui-border: 240 3.7% 20%;
+      --ui-ring: 240 4.9% 83.9%;
+
+      /* Content here was authored for a dark backdrop: keep the light ramp. */
+      --ink-50: 248 250 252;
+      --ink-100: 241 245 249;
+      --ink-200: 226 232 240;
+      --ink-300: 203 213 225;
+      --ink-400: 148 163 184;
+      --ink-500: 100 116 139;
+      --ink-600: 71 85 105;
+      --ink-700: 51 65 85;
+      --ink-800: 30 41 59;
+      --ink-900: 15 23 42;
+      --ink-950: 2 6 23;
+   }
+}
+
+/* Users who ask the OS for more contrast get firmer borders and secondary text. */
+@media (prefers-contrast: more) {
+   :root {
+      --ui-border: 215 20% 65%;
+      --ui-input: 215 20% 55%;
+      --ui-muted-foreground: 215 25% 27%;
+   }
+
+   .dark,
+   [data-theme='dark'] {
+      --ui-border: 240 5% 45%;
+      --ui-input: 240 5% 55%;
+      --ui-muted-foreground: 240 5% 82%;
    }
 }

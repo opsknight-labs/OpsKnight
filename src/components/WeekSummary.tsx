@@ -32,16 +32,16 @@ export default function WeekSummary({ shifts, timeZone }: WeekSummaryProps) {
         weekday: 'short',
       }).formatToParts(now);
       const weekday = parts.find(p => p.type === 'weekday')?.value ?? 'Sun';
-      const dayMap: Record<string, number> = {
-        Sun: 0,
-        Mon: 1,
-        Tue: 2,
-        Wed: 3,
-        Thu: 4,
-        Fri: 5,
-        Sat: 6,
-      };
-      return { day: dayMap[weekday] ?? 0 };
+      const dayMap = new Map<string, number>([
+        ['Sun', 0],
+        ['Mon', 1],
+        ['Tue', 2],
+        ['Wed', 3],
+        ['Thu', 4],
+        ['Fri', 5],
+        ['Sat', 6],
+      ]);
+      return { day: dayMap.get(weekday) ?? 0 };
     })();
     const weekStartMs = now.getTime() - tzDayOfWeek * 86400000;
     const weekStart = startOfDayInTimeZone(new Date(weekStartMs), timeZone);
@@ -94,7 +94,7 @@ export default function WeekSummary({ shifts, timeZone }: WeekSummaryProps) {
       style={{
         padding: '1.5rem',
         background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-        border: '1px solid #e2e8f0',
+        border: '1px solid hsl(var(--ui-border))',
         borderRadius: '12px',
         marginBottom: '2rem',
       }}
@@ -106,7 +106,7 @@ export default function WeekSummary({ shifts, timeZone }: WeekSummaryProps) {
           alignItems: 'center',
           marginBottom: '1.5rem',
           paddingBottom: '1rem',
-          borderBottom: '1px solid #e2e8f0',
+          borderBottom: '1px solid hsl(var(--ui-border))',
         }}
       >
         <div>
@@ -119,7 +119,7 @@ export default function WeekSummary({ shifts, timeZone }: WeekSummaryProps) {
               marginBottom: '0.25rem',
             }}
           >
-            This Week's Schedule
+            This Week&apos;s Schedule
           </h3>
           <p
             style={{
@@ -151,7 +151,7 @@ export default function WeekSummary({ shifts, timeZone }: WeekSummaryProps) {
           style={{
             padding: '2rem 1rem',
             textAlign: 'center',
-            background: '#f8fafc',
+            background: 'hsl(var(--ui-background))',
             borderRadius: '8px',
           }}
         >
@@ -173,9 +173,9 @@ export default function WeekSummary({ shifts, timeZone }: WeekSummaryProps) {
               key={day}
               style={{
                 padding: '1rem',
-                background: '#f8fafc',
+                background: 'hsl(var(--ui-background))',
                 borderRadius: '8px',
-                border: '1px solid #e2e8f0',
+                border: '1px solid hsl(var(--ui-border))',
               }}
             >
               <h4
@@ -201,9 +201,9 @@ export default function WeekSummary({ shifts, timeZone }: WeekSummaryProps) {
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         padding: '0.75rem',
-                        background: 'white',
+                        background: 'hsl(var(--ui-card))',
                         borderRadius: '6px',
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid hsl(var(--ui-border))',
                       }}
                     >
                       <div style={{ flex: 1 }}>

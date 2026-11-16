@@ -81,7 +81,7 @@ export default function AssigneePicker({
               setHighlighted(prev => Math.max(prev - 1, 0));
             } else if (e.key === 'Enter') {
               e.preventDefault();
-              const current = options[highlighted];
+              const current = highlighted >= 0 ? options.at(highlighted) : undefined;
               if (current) {
                 selectUser(current.id, current.name);
               }
@@ -106,7 +106,7 @@ export default function AssigneePicker({
               top: '46px',
               left: 0,
               right: 0,
-              background: '#fff',
+              background: 'hsl(var(--ui-card))',
               border: '1px solid var(--border)',
               borderRadius: '10px',
               padding: '0.5rem',
@@ -125,7 +125,7 @@ export default function AssigneePicker({
                   padding: '0.4rem 0.6rem',
                   borderRadius: '8px',
                   border: user.id === null ? '1px dashed var(--border)' : '1px solid var(--border)',
-                  background: highlighted === index ? accentTint : '#fff',
+                  background: highlighted === index ? accentTint : 'hsl(var(--ui-card))',
                   color: user.id === null ? 'var(--text-secondary)' : 'var(--text-primary)',
                   cursor: 'pointer',
                   display: 'flex',

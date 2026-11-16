@@ -164,7 +164,7 @@ export default function DashboardAnomalyDetection({
               key={index}
               style={{
                 padding: '0.75rem',
-                background: 'white',
+                background: 'hsl(var(--ui-card))',
                 borderRadius: '6px',
                 border: `1px solid ${anomaly.severity === 'high' ? '#ef4444' : anomaly.severity === 'medium' ? '#f59e0b' : '#3b82f6'}`,
                 display: 'flex',

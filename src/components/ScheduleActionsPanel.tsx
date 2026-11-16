@@ -39,8 +39,8 @@ export default function ScheduleActionsPanel({
   if (!canManageSchedules) return null;
 
   return (
-    <Card className="overflow-hidden border-slate-200/80">
-      <CardHeader className="p-4 pb-3 border-b border-slate-100 bg-slate-50/50">
+    <Card className="overflow-hidden border-ink-200/80">
+      <CardHeader className="p-4 pb-3 border-b border-ink-100 bg-ink-50/50">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Plus className="h-4 w-4" />

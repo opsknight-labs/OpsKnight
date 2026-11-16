@@ -101,7 +101,7 @@ type ErasurePlan = {
 };
 
 const EXECUTION_BADGE_CLASS: Record<string, string> = {
-  PENDING: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  PENDING: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-zinc-300',
   RUNNING: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
   PARTIAL: 'border-orange-600/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
   COMPLETED: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
@@ -109,7 +109,7 @@ const EXECUTION_BADGE_CLASS: Record<string, string> = {
 };
 
 const ARTIFACT_BADGE_CLASS: Record<ExportArtifactStatus, string> = {
-  PENDING: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  PENDING: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-zinc-300',
   READY: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   DOWNLOADED: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
   EXPIRED: 'border-orange-600/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
@@ -117,7 +117,7 @@ const ARTIFACT_BADGE_CLASS: Record<ExportArtifactStatus, string> = {
 };
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
-  RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-zinc-300',
   IDENTITY_VERIFICATION: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
   IN_REVIEW: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   PROCESSING: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
@@ -224,10 +224,7 @@ export default function PrivacyRequestDetailDialog({
           id: 'resolution',
           label: isRejected ? 'Rejected' : 'Completed',
           status: (isCompleted ? 'complete' : isRejected ? 'error' : 'upcoming') as
-            | 'complete'
-            | 'current'
-            | 'upcoming'
-            | 'error',
+            'complete' | 'current' | 'upcoming' | 'error',
           caption: isCompleted ? 'Completed' : isRejected ? 'Rejected' : 'Terminal',
         },
       ]
@@ -1005,7 +1002,8 @@ export default function PrivacyRequestDetailDialog({
                       </TableRow>
                     )}
                     {detail.exportArtifacts.map(artifact => {
-                      const expired = new Date(artifact.expiresAt).getTime() <= Date.now();
+                      const expired =
+                        new Date(artifact.expiresAt).getTime() <= new Date().getTime();
                       const downloadable =
                         !expired &&
                         (artifact.status === 'READY' || artifact.status === 'DOWNLOADED');

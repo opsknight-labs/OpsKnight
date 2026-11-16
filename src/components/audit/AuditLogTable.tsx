@@ -46,7 +46,7 @@ export default function AuditLogTable({
 
   return (
     <>
-      <Card className="bg-white overflow-hidden shadow-sm">
+      <Card className="bg-card overflow-hidden shadow-sm">
         {logs.length === 0 ? (
           <div className="p-6">
             <EmptyState
@@ -63,7 +63,7 @@ export default function AuditLogTable({
           <>
             <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
               <Table className="min-w-[850px]">
-                <TableHeader className="bg-slate-50 border-b border-border">
+                <TableHeader className="bg-ink-50 border-b border-border">
                   <TableRow>
                     <TableHead className="text-left p-4 font-semibold text-muted-foreground w-[170px]">
                       Timestamp
@@ -93,7 +93,7 @@ export default function AuditLogTable({
                       <TableRow
                         key={log.id}
                         onClick={() => setSelectedLog(log)}
-                        className="border-b border-slate-100 hover:bg-slate-50/80 cursor-pointer transition-colors group"
+                        className="border-b border-ink-100 hover:bg-ink-50/80 cursor-pointer transition-colors group"
                       >
                         <TableCell className="p-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
                           {formatDateTime(log.createdAt, userTimeZone, { format: 'datetime' })}
@@ -113,7 +113,7 @@ export default function AuditLogTable({
                                 size="sm"
                               />
                             ) : (
-                              <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[0.7rem] font-semibold text-gray-500">
+                              <div className="w-8 h-8 rounded-full bg-ink-200 flex items-center justify-center text-[0.7rem] font-semibold text-ink-500">
                                 SYS
                               </div>
                             )}

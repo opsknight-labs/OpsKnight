@@ -62,8 +62,8 @@ export default function IntegrationStatusToggle({
               text-[10px] px-2 py-0.5 h-5 font-medium border-0 transition-colors
               ${
                 enabled
-                  ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
-                  : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
+                  ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300'
+                  : 'bg-ink-100 text-ink-500 ring-1 ring-ink-200'
               }
             `}
           >
@@ -83,8 +83,8 @@ export default function IntegrationStatusToggle({
             text-[10px] px-2 py-0.5 h-5 font-medium border-0
             ${
               enabled
-                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
-                : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
+                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300'
+                : 'bg-ink-100 text-ink-600 ring-1 ring-ink-200'
             }
           `}
         >

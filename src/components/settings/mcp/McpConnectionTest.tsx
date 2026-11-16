@@ -9,8 +9,18 @@ type Check = { id: string; status: 'pass' | 'warn' | 'fail'; message: string };
 type Report = { ready: boolean; checks: Check[] };
 
 const ICON = {
-  pass: <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-label="Passed" />,
-  warn: <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" aria-label="Warning" />,
+  pass: (
+    <CheckCircle2
+      className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+      aria-label="Passed"
+    />
+  ),
+  warn: (
+    <AlertTriangle
+      className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+      aria-label="Warning"
+    />
+  ),
   fail: <XCircle className="h-4 w-4 shrink-0 text-destructive" aria-label="Failed" />,
 };
 

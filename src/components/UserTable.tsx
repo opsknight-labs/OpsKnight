@@ -142,7 +142,12 @@ export default function UserTable({
         }}
       >
         <thead>
-          <tr style={{ background: '#f9fafb', borderBottom: '2px solid var(--border)' }}>
+          <tr
+            style={{
+              background: 'hsl(var(--ui-background))',
+              borderBottom: '2px solid var(--border)',
+            }}
+          >
             <th
               style={{
                 padding: '0.75rem 1rem',
@@ -395,7 +400,7 @@ export default function UserTable({
                         border: '1px solid var(--border)',
                         borderRadius: '6px',
                         fontSize: '0.8rem',
-                        background: '#f9fafb',
+                        background: 'hsl(var(--ui-background))',
                         color: 'var(--text-secondary)',
                         fontWeight: '500',
                       }}
@@ -499,7 +504,7 @@ export default function UserTable({
                           borderRadius: '4px',
                           fontSize: '0.75rem',
                           minWidth: '100px',
-                          background: 'white',
+                          background: 'hsl(var(--ui-card))',
                         }}
                       >
                         <option value="" disabled>
@@ -519,7 +524,7 @@ export default function UserTable({
                           border: '1px solid var(--border)',
                           borderRadius: '4px',
                           fontSize: '0.75rem',
-                          background: 'white',
+                          background: 'hsl(var(--ui-card))',
                         }}
                       >
                         <option value="MEMBER">Member</option>
@@ -574,7 +579,7 @@ export default function UserTable({
                               style={{
                                 padding: '0.35rem 0.7rem',
                                 fontSize: '0.7rem',
-                                background: 'white',
+                                background: 'hsl(var(--ui-card))',
                                 color: '#ef4444',
                                 border: '1px solid #fee2e2',
                               }}

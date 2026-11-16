@@ -35,7 +35,7 @@ export type LiveDirectoryOption = { id: string; name: string };
 
 const SEARCH_DEBOUNCE_MS = 250;
 const controlClass =
-  'h-8 rounded-lg border-border bg-card px-2.5 text-xs shadow-2xs hover:border-slate-300';
+  'h-8 rounded-lg border-border bg-card px-2.5 text-xs shadow-2xs hover:border-ink-300';
 
 /** Facet options with live counts first, then the rest of the viewer's directory at zero. */
 function mergeOptions(directory: LiveDirectoryOption[], facets: LiveFacetOption[]) {

@@ -13,7 +13,7 @@ export default function AnalyticsSkeleton() {
       {/* Executive Summary — 8 large KPI cards in a 4-col grid */}
       <div className="v2-grid-4 mb-4">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          <div key={i} className="rounded-xl border border-ink-200 bg-card p-4 space-y-3">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-3 w-32" />
@@ -25,7 +25,7 @@ export default function AnalyticsSkeleton() {
       {/* Compact KPIs — 12 small cards */}
       <div className="v2-grid-4 mb-8">
         {Array.from({ length: 12 }).map((_, i) => (
-          <div key={i} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+          <div key={i} className="rounded-lg border border-ink-200 bg-card p-3 space-y-2">
             <Skeleton className="h-3 w-16" />
             <Skeleton className="h-6 w-14" />
             <Skeleton className="h-2.5 w-20" />
@@ -35,7 +35,7 @@ export default function AnalyticsSkeleton() {
 
       {/* Insights + trends split */}
       <div className="v2-grid-split mb-8">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <div className="rounded-xl border border-ink-200 bg-card p-5 space-y-3">
           <Skeleton className="h-5 w-40" />
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex gap-3">
@@ -44,7 +44,7 @@ export default function AnalyticsSkeleton() {
             </div>
           ))}
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <div className="rounded-xl border border-ink-200 bg-card p-5 space-y-3">
           <Skeleton className="h-5 w-56" />
           <Skeleton className="h-[280px] w-full rounded-lg" />
         </div>
@@ -53,7 +53,7 @@ export default function AnalyticsSkeleton() {
       {/* Operational grid — 3 cards */}
       <div className="operational-grid mb-8">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+          <div key={i} className="rounded-xl border border-ink-200 bg-card p-5 space-y-3">
             <Skeleton className="h-5 w-44" />
             <Skeleton className="h-[180px] w-full rounded-lg" />
           </div>
@@ -63,7 +63,7 @@ export default function AnalyticsSkeleton() {
       {/* Distribution + ownership grids */}
       <div className="distribution-grid mb-8">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+          <div key={i} className="rounded-xl border border-ink-200 bg-card p-5 space-y-3">
             <Skeleton className="h-5 w-40" />
             {Array.from({ length: 5 }).map((__, j) => (
               <div key={j} className="space-y-1">
@@ -79,7 +79,7 @@ export default function AnalyticsSkeleton() {
       </div>
 
       {/* SLA panels */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 mb-8 space-y-4">
+      <div className="rounded-xl border border-ink-200 bg-card p-6 mb-8 space-y-4">
         <Skeleton className="h-5 w-64" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -93,7 +93,7 @@ export default function AnalyticsSkeleton() {
       </div>
 
       {/* Heatmap */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="rounded-xl border border-ink-200 bg-card p-6">
         <Skeleton className="h-5 w-48 mb-4" />
         <Skeleton className="h-[160px] w-full rounded-lg" />
       </div>

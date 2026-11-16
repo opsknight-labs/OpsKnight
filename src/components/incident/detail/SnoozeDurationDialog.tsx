@@ -162,7 +162,7 @@ export default function SnoozeDurationDialog({
                           ? '2px solid var(--primary-color)'
                           : '1px solid var(--border)',
                       borderRadius: '0px',
-                      background: duration === preset.minutes ? '#fef2f2' : 'white',
+                      background: duration === preset.minutes ? '#fef2f2' : 'hsl(var(--ui-card))',
                       color: 'var(--text-primary)',
                       fontWeight: duration === preset.minutes ? 600 : 400,
                       cursor: 'pointer',
@@ -229,7 +229,7 @@ export default function SnoozeDurationDialog({
                 padding: '0.75rem 1.5rem',
                 border: '1px solid var(--border)',
                 borderRadius: '0px',
-                background: 'white',
+                background: 'hsl(var(--ui-card))',
                 color: 'var(--text-primary)',
                 fontWeight: 600,
                 cursor: 'pointer',

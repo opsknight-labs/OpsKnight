@@ -255,7 +255,7 @@ export default function CoverageTimeline({
                     const widthPercent =
                       ((endMinutes - startMinutes) / (dayDurationMs / 60000)) * 100;
                     const blockColor = row.effective
-                      ? 'bg-primary'
+                      ? 'bg-primary dark:bg-zinc-600'
                       : shift.source === 'override'
                         ? 'bg-amber-500'
                         : row.color.bg;

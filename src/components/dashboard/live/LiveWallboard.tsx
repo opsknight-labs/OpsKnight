@@ -358,7 +358,7 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
                 >
                   {counter.value ?? '—'}
                 </dd>
-                <dt className="mt-1 text-[clamp(10px,0.75vw,20px)] font-semibold uppercase tracking-wider text-slate-400">
+                <dt className="mt-1 text-[clamp(10px,0.75vw,20px)] font-semibold uppercase tracking-wider text-ink-400">
                   {counter.label}
                 </dt>
               </div>
@@ -459,14 +459,14 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
           </div>
         )}
 
-        <div className="mb-[1vh] flex items-center justify-between px-1 text-[clamp(11px,0.8vw,22px)] text-slate-400">
+        <div className="mb-[1vh] flex items-center justify-between px-1 text-[clamp(11px,0.8vw,22px)] text-ink-400">
           <span
             className="font-semibold uppercase tracking-wider text-slate-300"
             data-testid="wallboard-view"
           >
             {liveViewLabel(query.view)}
             {cycle && hasCritical && (
-              <span className="font-normal normal-case text-slate-500"> · rotating views</span>
+              <span className="font-normal normal-case text-ink-500"> · rotating views</span>
             )}
           </span>
           {cycle && hasCritical && (

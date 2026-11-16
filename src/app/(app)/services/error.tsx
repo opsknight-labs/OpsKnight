@@ -23,18 +23,18 @@ export default function ServicesError({
 
   return (
     <div className="w-full px-4 py-12 flex justify-center">
-      <div className="max-w-lg w-full rounded-xl border border-rose-200 bg-rose-50/60 p-6 text-center space-y-4">
-        <div className="mx-auto w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center">
-          <AlertCircle className="w-6 h-6 text-rose-600" />
+      <div className="max-w-lg w-full rounded-xl border border-rose-200 bg-rose-50/60 p-6 text-center space-y-4 dark:border-rose-500/30 dark:bg-rose-500/10">
+        <div className="mx-auto w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center dark:bg-rose-500/15">
+          <AlertCircle className="w-6 h-6 text-rose-600 dark:text-rose-400" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Services couldn&apos;t load</h2>
-          <p className="text-sm text-slate-600 mt-1">{getUserFacingErrorMessage(error)}</p>
+          <h2 className="text-lg font-semibold text-ink-900">Services couldn&apos;t load</h2>
+          <p className="text-sm text-ink-600 mt-1">{getUserFacingErrorMessage(error)}</p>
         </div>
         <button
           type="button"
           onClick={reset}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 transition"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition"
         >
           <RefreshCw className="w-4 h-4" />
           Try again

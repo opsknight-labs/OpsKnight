@@ -76,7 +76,8 @@ export default function Button({
   const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
     primary: {
       background: 'var(--primary-color)',
-      color: 'var(--text-inverse)',
+      // Filled with a dark fill in both themes, so the label stays white.
+      color: '#ffffff',
       boxShadow: 'var(--shadow-sm)',
     },
     secondary: {
@@ -87,7 +88,7 @@ export default function Button({
     },
     danger: {
       background: 'var(--color-error)',
-      color: 'var(--text-inverse)',
+      color: '#ffffff',
       boxShadow: 'var(--shadow-sm)',
     },
     ghost: {
@@ -105,7 +106,7 @@ export default function Button({
 
   const hoverStyles: Record<ButtonVariant, React.CSSProperties> = {
     primary: {
-      background: 'var(--primary-hover)',
+      background: 'var(--button-primary-hover, var(--primary-hover))',
       boxShadow: 'var(--shadow-md)',
     },
     secondary: {
@@ -124,10 +125,14 @@ export default function Button({
     },
   };
 
+  const sizeStyle = new Map(Object.entries(sizeStyles)).get(size);
+  const variantStyle = new Map(Object.entries(variantStyles)).get(variant);
+  const hoverStyle = new Map(Object.entries(hoverStyles)).get(variant);
+
   const combinedStyles: React.CSSProperties = {
     ...baseStyles,
-    ...sizeStyles[size],
-    ...variantStyles[variant],
+    ...sizeStyle,
+    ...variantStyle,
   };
 
   return (
@@ -139,12 +144,12 @@ export default function Button({
       aria-busy={isLoading}
       onMouseEnter={e => {
         if (!isDisabled) {
-          Object.assign(e.currentTarget.style, hoverStyles[variant]);
+          Object.assign(e.currentTarget.style, hoverStyle);
         }
       }}
       onMouseLeave={e => {
         if (!isDisabled) {
-          Object.assign(e.currentTarget.style, variantStyles[variant]);
+          Object.assign(e.currentTarget.style, variantStyle);
         }
       }}
       {...props}

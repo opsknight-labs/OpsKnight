@@ -130,7 +130,7 @@ export default async function AnalyticsContent({
     return (
       <div className="analytics-content">
         <div
-          className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900"
+          className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
           role="alert"
         >
           <strong>Analytics data is unavailable.</strong>
@@ -495,10 +495,7 @@ export default async function AnalyticsContent({
           detail="SLA compliance"
           variant={
             getComplianceStatus(metrics.resolveCompliance) as
-              | 'success'
-              | 'warning'
-              | 'danger'
-              | 'default'
+              'success' | 'warning' | 'danger' | 'default'
           }
           icon={<Shield className="w-5 h-5" />}
           tooltip={metricDefinitionTooltip(
@@ -530,10 +527,7 @@ export default async function AnalyticsContent({
           detail="Within target"
           variant={
             getComplianceStatus(metrics.ackCompliance) as
-              | 'success'
-              | 'warning'
-              | 'danger'
-              | 'default'
+              'success' | 'warning' | 'danger' | 'default'
           }
           icon={<Shield className="w-5 h-5" />}
           tooltip={metricDefinitionTooltip(
@@ -693,7 +687,7 @@ export default async function AnalyticsContent({
           value={metrics.alertsCount.toLocaleString()}
           detail="Total Signals"
           variant="default"
-          icon={<Bell className="w-5 h-5 text-gray-500" />}
+          icon={<Bell className="w-5 h-5 text-ink-500" />}
         />
         <MetricCard
           className="analytics-card-compact"

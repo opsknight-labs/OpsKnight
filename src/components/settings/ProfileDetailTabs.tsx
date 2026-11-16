@@ -139,7 +139,7 @@ export default function ProfileDetailTabs({
     },
     {
       id: 'schedule',
-      label: 'Timezone & Quiet Hours',
+      label: 'Appearance & Time',
       icon: <Clock className="h-3.5 w-3.5" />,
     },
     {
@@ -162,7 +162,7 @@ export default function ProfileDetailTabs({
         {notificationsContent}
       </DetailTabContent>
 
-      {/* Tab 3: Timezone & Quiet Hours */}
+      {/* Tab 3: Appearance, timezone & quiet hours */}
       <DetailTabContent value="schedule" className="space-y-6">
         {scheduleContent}
       </DetailTabContent>
@@ -288,7 +288,7 @@ export default function ProfileDetailTabs({
                             <Badge
                               variant="outline"
                               size="xs"
-                              className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] gap-1 shrink-0"
+                              className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] gap-1 shrink-0 dark:text-amber-400"
                             >
                               <Crown className="h-2.5 w-2.5" /> Lead
                             </Badge>

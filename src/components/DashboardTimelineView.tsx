@@ -92,7 +92,7 @@ export default function DashboardTimelineView({ incidents, services }: Dashboard
   };
 
   return (
-    <div className="glass-panel" style={{ background: 'white', padding: '1.5rem' }}>
+    <div className="glass-panel" style={{ background: 'hsl(var(--ui-card))', padding: '1.5rem' }}>
       <div
         style={{
           display: 'flex',
@@ -111,7 +111,7 @@ export default function DashboardTimelineView({ incidents, services }: Dashboard
               border: '1px solid var(--border)',
               borderRadius: '6px',
               fontSize: '0.85rem',
-              background: 'white',
+              background: 'hsl(var(--ui-card))',
             }}
           >
             <option value="all">All Services</option>
@@ -137,7 +137,7 @@ export default function DashboardTimelineView({ incidents, services }: Dashboard
                 style={{
                   padding: '0.4rem 0.8rem',
                   border: 'none',
-                  background: zoomLevel === level ? 'var(--primary-color)' : 'white',
+                  background: zoomLevel === level ? 'var(--primary-color)' : 'hsl(var(--ui-card))',
                   color: zoomLevel === level ? 'white' : 'var(--text-primary)',
                   cursor: 'pointer',
                   fontSize: '0.85rem',
@@ -209,9 +209,9 @@ export default function DashboardTimelineView({ incidents, services }: Dashboard
                       key={incident.id}
                       style={{
                         padding: '0.75rem',
-                        background: '#f9fafb',
+                        background: 'hsl(var(--ui-background))',
                         borderRadius: '6px',
-                        border: '1px solid #e5e7eb',
+                        border: '1px solid hsl(var(--ui-border))',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.75rem',

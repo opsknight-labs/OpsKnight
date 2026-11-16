@@ -56,7 +56,7 @@ const typeMeta: Record<ResultType, TypeMeta> = {
   incident: { label: 'Incident', tone: 'text-rose-600 dark:text-rose-400', Icon: AlertTriangle },
   service: { label: 'Service', tone: 'text-blue-600 dark:text-blue-400', Icon: Server },
   team: { label: 'Team', tone: 'text-teal-600 dark:text-teal-300', Icon: Users },
-  user: { label: 'User', tone: 'text-slate-600 dark:text-slate-300', Icon: User },
+  user: { label: 'User', tone: 'text-slate-600 dark:text-zinc-300', Icon: User },
   policy: { label: 'Policy', tone: 'text-amber-700 dark:text-amber-400', Icon: Shield },
   postmortem: { label: 'Postmortem', tone: 'text-purple-600 dark:text-purple-300', Icon: FileText },
 };
@@ -99,6 +99,21 @@ export default function MobileQuickSwitcher() {
     useKeyboardSafeSheetGeometry(open);
   const hasQuery = query.trim().length >= MIN_QUERY_LENGTH;
 
+  const [searchInputs, setSearchInputs] = useState({ open, hasQuery, query });
+  if (
+    searchInputs.open !== open ||
+    searchInputs.hasQuery !== hasQuery ||
+    searchInputs.query !== query
+  ) {
+    setSearchInputs({ open, hasQuery, query });
+    if (searchInputs.open !== open && !open) setQuery('');
+    if (!open || !hasQuery) {
+      setResults([]);
+      setSearchError('');
+      setIsLoading(false);
+    }
+  }
+
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (event.key === 'k' && (event.metaKey || event.ctrlKey)) {
@@ -112,12 +127,7 @@ export default function MobileQuickSwitcher() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!open) {
-      setQuery('');
-      setResults([]);
-      setSearchError('');
-      return;
-    }
+    if (!open) return;
     void readCache<RecentItem[]>(RECENTS_CACHE_KEY, RECENTS_MAX_AGE_MS).then(cached => {
       if (!cancelled && Array.isArray(cached)) setRecents(cached.slice(0, 6));
     });
@@ -128,12 +138,7 @@ export default function MobileQuickSwitcher() {
 
   useEffect(() => {
     const generation = ++searchGeneration.current;
-    if (!open || !hasQuery) {
-      setResults([]);
-      setSearchError('');
-      setIsLoading(false);
-      return;
-    }
+    if (!open || !hasQuery) return;
 
     const controller = new AbortController();
     const handle = window.setTimeout(async () => {
@@ -179,7 +184,7 @@ export default function MobileQuickSwitcher() {
 
   const handleSelect = (item: SearchResult) => {
     const updated = [
-      { ...item, timestamp: Date.now() },
+      { ...item, timestamp: new Date().getTime() },
       ...recents.filter(recent => !(recent.type === item.type && recent.id === item.id)),
     ].slice(0, 6);
     setRecents(updated);

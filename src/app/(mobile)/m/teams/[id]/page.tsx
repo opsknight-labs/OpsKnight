@@ -64,7 +64,7 @@ export default async function MobileTeamDetailPage({ params }: PageProps) {
         </Link>
 
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-lg font-bold text-white dark:from-slate-200 dark:to-slate-50 dark:text-slate-900">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-lg font-bold text-white dark:from-zinc-200 dark:to-zinc-50 dark:text-zinc-900">
             {team.name.charAt(0).toUpperCase()}
           </div>
           <div>

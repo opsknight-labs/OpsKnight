@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DndContext,
@@ -97,9 +97,11 @@ export default function StepsList({
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  useEffect(() => {
+  const [syncedInitialSteps, setSyncedInitialSteps] = useState(initialSteps);
+  if (syncedInitialSteps !== initialSteps) {
+    setSyncedInitialSteps(initialSteps);
     setSteps(initialSteps);
-  }, [initialSteps]);
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -147,7 +149,7 @@ export default function StepsList({
   }
 
   return (
-    <Card className="border-slate-200/80 bg-white shadow-2xs">
+    <Card className="border-ink-200/80 bg-card shadow-2xs">
       <CardHeader className="border-b pb-4">
         <CardTitle className="flex items-center gap-2 text-base font-bold">
           <Clock className="h-4 w-4 text-primary" />
@@ -201,7 +203,7 @@ export default function StepsList({
         )}
 
         {canManage && (
-          <div className="pt-6 border-t border-slate-100">
+          <div className="pt-6 border-t border-ink-100">
             <h3 className="font-semibold text-xs text-foreground mb-3">Add New Step</h3>
             <PolicyStepCreateForm
               policyId={policyId}

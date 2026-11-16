@@ -105,7 +105,7 @@ export default function AuditFilters({
         <>
           <Select value={currentVia} onValueChange={val => updateParam('via', val)}>
             <SelectTrigger
-              className="h-9 w-[160px] bg-slate-50/60 text-xs"
+              className="h-9 w-[160px] bg-ink-50/60 text-xs"
               aria-label="Filter by who made the change"
             >
               <SelectValue />
@@ -119,7 +119,7 @@ export default function AuditFilters({
             value={currentEntityType || 'ALL'}
             onValueChange={val => updateParam('entityType', val)}
           >
-            <SelectTrigger className="h-9 w-[160px] bg-slate-50/60 text-xs">
+            <SelectTrigger className="h-9 w-[160px] bg-ink-50/60 text-xs">
               <SelectValue placeholder="All Entity Types" />
             </SelectTrigger>
             <SelectContent>
@@ -141,7 +141,7 @@ export default function AuditFilters({
             size="sm"
             onClick={handleExportCsv}
             disabled={logsData.length === 0}
-            className="h-9 gap-1.5 text-xs shadow-sm hover:bg-slate-100"
+            className="h-9 gap-1.5 text-xs shadow-sm hover:bg-ink-100"
           >
             <Download className="h-3.5 w-3.5 text-muted-foreground" />
             <span>Export CSV</span>

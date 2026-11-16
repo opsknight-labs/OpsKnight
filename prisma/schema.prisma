@@ -14,6 +14,12 @@ enum Role {
   AUDITOR
 }
 
+enum ThemePreference {
+  SYSTEM
+  LIGHT
+  DARK
+}
+
 enum UserStatus {
   INVITED
   ACTIVE
@@ -510,6 +516,7 @@ model User {
   status                       UserStatus @default(INVITED)
   passwordHash                 String?
   timeZone                     String     @default("UTC")
+  themePreference              ThemePreference @default(SYSTEM)
   emailNotificationsEnabled    Boolean    @default(false)
   smsNotificationsEnabled      Boolean    @default(false)
   voiceNotificationsEnabled    Boolean    @default(false)

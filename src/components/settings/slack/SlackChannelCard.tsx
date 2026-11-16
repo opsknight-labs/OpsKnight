@@ -46,13 +46,17 @@ export function SlackChannelCard({
         !isConnected &&
           isPrivate &&
           'border-l-4 border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20',
-        canAutoJoin && 'border-l-4 border-l-slate-300 hover:border-l-primary'
+        canAutoJoin && 'border-l-4 border-l-ink-300 hover:border-l-primary'
       )}
     >
       {/* Channel Info */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="flex items-center gap-1.5 text-muted-foreground">
-          {isPrivate ? <Lock className="h-4 w-4 text-amber-600" /> : <Hash className="h-4 w-4" />}
+          {isPrivate ? (
+            <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          ) : (
+            <Hash className="h-4 w-4" />
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-medium text-sm truncate" title={channel.name}>
@@ -86,7 +90,7 @@ export function SlackChannelCard({
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : testResult ? (
                 testResult.success ? (
-                  <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                  <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                 ) : (
                   <AlertCircle className="h-3.5 w-3.5 text-destructive" />
                 )

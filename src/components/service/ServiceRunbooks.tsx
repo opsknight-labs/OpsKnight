@@ -273,7 +273,10 @@ export default function ServiceRunbooks({
           className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-100 ring-1 ring-inset ring-amber-500/30"
         >
           <div className="flex min-w-0 items-start gap-2.5">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+            <AlertCircle
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+              aria-hidden
+            />
             <div className="space-y-0.5">
               {loadErrors.includes('agents') && (
                 <p className="font-semibold">

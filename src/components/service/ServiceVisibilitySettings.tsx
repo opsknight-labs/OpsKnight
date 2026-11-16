@@ -77,7 +77,7 @@ export default function ServiceVisibilitySettings({
               'text-[10px] font-semibold w-fit px-2 py-0.5 shrink-0',
               savedVisibility === 'PUBLIC'
                 ? 'border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10'
-                : 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
+                : 'border-slate-500/40 text-slate-700 dark:text-zinc-300 bg-slate-500/10'
             )}
           >
             {savedVisibility === 'PUBLIC' ? 'Default: Public' : 'Default: Private'}
@@ -145,7 +145,7 @@ export default function ServiceVisibilitySettings({
               className={cn(
                 'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border',
                 selectedVisibility === 'PRIVATE'
-                  ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-slate-300'
+                  ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-zinc-300'
                   : 'border-border/80 bg-muted/50 text-muted-foreground'
               )}
             >
@@ -159,7 +159,7 @@ export default function ServiceVisibilitySettings({
                   className={cn(
                     'text-[9px] font-semibold px-1.5 py-0',
                     selectedVisibility === 'PRIVATE'
-                      ? 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
+                      ? 'border-slate-500/40 text-slate-700 dark:text-zinc-300 bg-slate-500/10'
                       : 'opacity-60'
                   )}
                 >

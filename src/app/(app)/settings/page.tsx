@@ -83,8 +83,8 @@ const itemThemes: Record<string, { bg: string; text: string }> = {
     text: 'text-amber-600 dark:text-amber-400',
   },
   'audit-logs': {
-    bg: 'bg-slate-500/10 dark:bg-slate-500/20',
-    text: 'text-slate-600 dark:text-slate-400',
+    bg: 'bg-slate-500/10 dark:bg-zinc-500/20',
+    text: 'text-slate-600 dark:text-zinc-400',
   },
   'security-compliance': {
     bg: 'bg-teal-500/10 dark:bg-teal-500/20',

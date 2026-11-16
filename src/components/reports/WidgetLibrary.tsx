@@ -149,7 +149,7 @@ const WidgetLibrary = memo(function WidgetLibrary({
             onClick={onClose}
             aria-label="Close widget library"
             title="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-100 dark:border-slate-700"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-100 dark:border-zinc-700"
           >
             <X className="h-4 w-4 stroke-[2.25]" />
           </button>
