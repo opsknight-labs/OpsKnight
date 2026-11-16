@@ -25,7 +25,7 @@ import {
 } from '../../helpers/test-db';
 
 // Each case builds about 40 rows and a month of rollups; slow on a shared machine.
-vi.setConfig({ testTimeout: 240_000 });
+vi.setConfig({ testTimeout: 240_000, hookTimeout: 240_000 });
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
