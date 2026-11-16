@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { processEvent } from '@/lib/events';
+import { findActiveMaintenanceWindow } from '@/lib/service-maintenance/active';
 import {
   createMaintenanceWindow,
   deleteMaintenanceWindow,
@@ -14,6 +15,24 @@ import {
   resetDatabase,
   testPrisma,
 } from '../helpers/test-db';
+
+// Lets a test make one release transaction fail, simulating a crash mid-sweep.
+const lifecycleFault = vi.hoisted(() => ({ failNext: 0 }));
+vi.mock('@/lib/incidents/lifecycle', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/incidents/lifecycle')>();
+  return {
+    ...actual,
+    applyIncidentLifecycleCommand: (
+      ...args: Parameters<typeof actual.applyIncidentLifecycleCommand>
+    ) => {
+      if (lifecycleFault.failNext > 0) {
+        lifecycleFault.failNext -= 1;
+        throw new Error('simulated crash');
+      }
+      return actual.applyIncidentLifecycleCommand(...args);
+    },
+  };
+});
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -68,7 +87,46 @@ const incidentFor = (serviceId: string, key: string) =>
 
 describeIfRealDB('service maintenance windows', { timeout: 60000 }, () => {
   beforeEach(async () => {
+    lifecycleFault.failNext = 0;
     await resetDatabase();
+  });
+
+  it('treats the start as inside the window and the end as outside', async () => {
+    const service = await createTestService('Maint Boundary');
+    const window = await openWindow([service.id]);
+    const at = (d: Date) => findActiveMaintenanceWindow(testPrisma, service.id, d);
+    expect(await at(window.startsAt)).toMatchObject({ id: window.id });
+    expect(await at(new Date(window.endsAt.getTime() - 1))).toMatchObject({ id: window.id });
+    expect(await at(window.endsAt)).toBeNull();
+    expect(await at(new Date(window.startsAt.getTime() - 1))).toBeNull();
+  });
+
+  it('resumes after a crash mid-sweep without releasing anything twice', async () => {
+    const service = await createTestService('Maint Crash');
+    const window = await openWindow([service.id]);
+    for (const key of ['c1', 'c2', 'c3']) await trigger(service.id, key);
+    const after = new Date(window.endsAt.getTime() + 1000);
+
+    lifecycleFault.failNext = 1;
+    const crashed = await processEndedMaintenanceWindow(window.id, after);
+    expect(crashed).toEqual({ released: 2, complete: false });
+    const pending = await testPrisma.maintenanceWindow.findUniqueOrThrow({
+      where: { id: window.id },
+    });
+    expect(pending.endProcessedAt).toBeNull();
+
+    const resumed = await processEndedMaintenanceWindows(after);
+    expect(resumed).toEqual({ windows: 1, released: 1 });
+    const statuses = await testPrisma.incident.findMany({
+      where: { maintenanceWindowId: window.id },
+      select: { status: true, events: { select: { message: true } } },
+    });
+    expect(statuses.map(i => i.status)).toEqual(['OPEN', 'OPEN', 'OPEN']);
+    for (const incident of statuses) {
+      expect(incident.events.filter(e => e.message.includes('released for paging'))).toHaveLength(
+        1
+      );
+    }
   });
 
   it('holds new alerts as SUPPRESSED without paging and pauses the SLA clock', async () => {

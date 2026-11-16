@@ -277,6 +277,14 @@ export function matchesRealtimeFilter(
   if (filterName === 'critical_focus' && raw.urgency !== 'HIGH' && raw.priority !== 'P1')
     return false;
   if (filterName === 'muted' && !['SNOOZED', 'SUPPRESSED'].includes(status)) return false;
+  // Mirrors the server: the default view leaves out alerts held by a maintenance window.
+  if (
+    (!filterName || filterName === 'all') &&
+    !filter.status &&
+    status === 'SUPPRESSED' &&
+    typeof raw.maintenanceWindowId === 'string'
+  )
+    return false;
   const namedStatus =
     filterName === 'open'
       ? 'OPEN'

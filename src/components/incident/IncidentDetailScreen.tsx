@@ -30,7 +30,7 @@ import IncidentQuickLinksCard from '@/components/incident/detail/IncidentQuickLi
 import IncidentResponseTimeline from '@/components/incident/detail/IncidentResponseTimeline';
 import IncidentContextCard from '@/components/incident/detail/IncidentContextCard';
 import { getIncidentResponseTimeline } from '@/lib/incidents/response-timeline';
-import { getUserTimeZone } from '@/lib/timezone';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import MobileOperationalContextCard from '@/components/incident/MobileOperationalContextCard';
 import {
@@ -51,7 +51,15 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
 import { redactNotificationError } from '@/lib/notification-operations';
-import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, Pause, Volume2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  Pause,
+  Volume2,
+  Wrench,
+} from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { getIncidentCollaborationView } from '@/lib/incident-collaboration/get-incident-collaboration';
@@ -133,6 +141,7 @@ export default async function IncidentDetailScreen({
       watchers: { include: { user: true }, orderBy: { createdAt: 'asc' } },
       tags: { include: { tag: true }, orderBy: { createdAt: 'asc' } },
       customFieldValues: { include: { customField: true } },
+      maintenanceWindow: { select: { id: true, title: true, endsAt: true } },
     },
   });
 
@@ -504,6 +513,29 @@ export default async function IncidentDetailScreen({
             </div>
           </div>
         </section>
+      )}
+
+      {storedIncident.maintenanceWindow && incident.status === 'SUPPRESSED' && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-status-info-border bg-status-info-soft px-4 py-2.5 text-sm text-status-info-deep"
+        >
+          <Wrench className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            Held by maintenance window{' '}
+            <Link
+              href={`/services/${incident.serviceId}?tab=maintenance`}
+              className="font-semibold underline-offset-2 hover:underline"
+            >
+              {storedIncident.maintenanceWindow.title}
+            </Link>
+            . Nobody is paged until it ends (
+            {formatDateTime(storedIncident.maintenanceWindow.endsAt, userTimeZone, {
+              format: 'datetime',
+            })}
+            ).
+          </span>
+        </div>
       )}
 
       {/* Command Bar: Responders need immediate access to Acknowledge / Resolve */}

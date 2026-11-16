@@ -896,7 +896,14 @@
             "type": "string"
           },
           "type": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "INCIDENT",
+              "MAINTENANCE",
+              "UPDATE",
+              "WARNING",
+              "INFO"
+            ]
           },
           "isActive": {
             "type": "boolean"
@@ -914,6 +921,16 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "affectedServiceIds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Services the announcement applies to; null means the whole page."
           },
           "createdAt": {
             "type": "string",

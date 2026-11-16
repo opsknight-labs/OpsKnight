@@ -3075,6 +3075,7 @@ model CronSchedulerState {
   lastObjectiveSnapshotSuccessAt  DateTime?
   lastObjectiveSnapshotDurationMs Int?
   lastObjectiveSnapshotFailed     Int       @default(0)
+  lastMaintenanceSweepAt          DateTime?
   lockedBy                        String?
   lockedAt                        DateTime?
   leaseEpoch                      Int       @default(0)

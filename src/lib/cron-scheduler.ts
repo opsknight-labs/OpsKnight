@@ -211,6 +211,7 @@ export type SchedulerStateData = {
   lastObjectiveSnapshotSuccessAt?: Date | null;
   lastObjectiveSnapshotDurationMs?: number | null;
   lastObjectiveSnapshotFailed?: number;
+  lastMaintenanceSweepAt?: Date | null;
 };
 
 /**
@@ -585,7 +586,9 @@ async function runOnce() {
     // and resumable, so a failed tick is retried on the next one.
     try {
       const { processEndedMaintenanceWindows } = await import('./service-maintenance/windows');
-      const maintenanceWindows = await processEndedMaintenanceWindows(new Date());
+      const sweptAt = new Date();
+      const maintenanceWindows = await processEndedMaintenanceWindows(sweptAt);
+      await updateSchedulerState({ lastMaintenanceSweepAt: sweptAt }, leaseEpoch);
       if (maintenanceWindows.windows > 0) {
         logger.info('[Cron] Maintenance windows processed', maintenanceWindows);
       }

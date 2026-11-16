@@ -1,4 +1,5 @@
 import { z } from 'zod/v3';
+import { STATUS_ANNOUNCEMENT_TYPES } from '@/lib/validation';
 import { APP_ROLES, isApiScope } from '@/lib/authorization';
 import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 
@@ -297,11 +298,11 @@ export const StatusPageUpdateV2Schema = z.object({
 export const StatusPageAnnouncementV2Schema = z.object({
   title: z.string().trim().min(2).max(200),
   message: z.string().trim().min(1).max(5000),
-  type: z.string().trim().default('INFO'),
+  type: z.enum(STATUS_ANNOUNCEMENT_TYPES).default('INFO'),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional().nullable(),
   isActive: z.boolean().default(true),
-  services: z.array(z.string().trim().min(1)).optional(),
+  services: z.array(z.string().trim().min(1)).max(200).optional(),
 });
 
 export const RunbookExecuteV2Schema = z.object({
