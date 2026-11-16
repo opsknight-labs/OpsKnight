@@ -3829,5 +3829,62 @@
     "evidence": "tests/integration/mcp-approval-services.test.ts",
     "contractSha256": "46b697cfa00e703edde587837d38e00208f061c04ba43aceb85cc709938ca60e",
     "actions": ["maintenance_window.manage"]
+  },
+  "listMaintenanceSchedules": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed service-level operational read through the existing REST route; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "c4589f6f93e79cb12cbda6628ec3fd02cd6dc5339f8b12dc96b81c7b8773588f",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "956d9765bba3d370598e45d2f50fe197ccff8099ebd2e774c080b944ceab9868",
+    "actions": ["maintenance_window.read"]
+  },
+  "getMaintenanceSchedule": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed service-level operational read through the existing REST route; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "d7696d196836f081878646225ab07d7b25e5492251f1ba839b1865401225c054",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "5380ec287f4a8fc0c437425516f11ef6c059ba1279a604ae3353157dc3b0147f",
+    "actions": ["maintenance_window.read"]
+  },
+  "createMaintenanceSchedule": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; a schedule creates recurring windows that hold incidents, so never generic.",
+    "tool": null,
+    "routeSha256": "c4589f6f93e79cb12cbda6628ec3fd02cd6dc5339f8b12dc96b81c7b8773588f",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "63ceb062ddc3d7b23f99055eab5062f1e5fb25d818745f73106087b4654aa12a",
+    "actions": ["maintenance_window.manage"]
+  },
+  "updateMaintenanceSchedule": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; edits replace upcoming occurrences, so never generic.",
+    "tool": null,
+    "routeSha256": "d7696d196836f081878646225ab07d7b25e5492251f1ba839b1865401225c054",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "a2f93323a425af593f7a3e206e5b029135c071f27b80bf52249fdc645ede01d2",
+    "actions": ["maintenance_window.manage"]
+  },
+  "deleteMaintenanceSchedule": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R3",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
+    "tool": null,
+    "routeSha256": "d7696d196836f081878646225ab07d7b25e5492251f1ba839b1865401225c054",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "f125fd39c29ade4f27a9fe3346a91871a898117db00cb4ac6364a6bafb625ba5",
+    "actions": ["maintenance_window.manage"],
+    "impactPreview": "getMaintenanceSchedule",
+    "additionalScopes": ["services:read"]
   }
 }

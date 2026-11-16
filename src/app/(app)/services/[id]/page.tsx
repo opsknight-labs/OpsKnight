@@ -40,9 +40,14 @@ import EmptyState from '@/components/ui/EmptyState';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
 import ServiceMaintenancePanel, {
+  type MaintenanceScheduleView,
   type MaintenanceWindowView,
 } from '@/components/service/ServiceMaintenancePanel';
 import { listMaintenanceWindows, maintenanceWindowPhase } from '@/lib/service-maintenance/windows';
+import {
+  describeMaintenanceSchedule,
+  listMaintenanceSchedules,
+} from '@/lib/service-maintenance/schedules';
 import ServiceSettingsFlashToast from '@/components/service/ServiceSettingsFlashToast';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 
@@ -1226,7 +1231,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     </div>
   );
 
-  const [maintenanceRows, maintenanceServices] = await Promise.all([
+  const [maintenanceRows, maintenanceServices, maintenanceScheduleRows] = await Promise.all([
     listMaintenanceWindows({ serviceIds: [id], take: 20, now }),
     canManageService
       ? prisma.service.findMany({
@@ -1235,7 +1240,21 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           take: 500,
         })
       : Promise.resolve([]),
+    listMaintenanceSchedules({ serviceIds: [id], take: 20 }),
   ]);
+  const maintenanceSchedules: MaintenanceScheduleView[] = maintenanceScheduleRows.map(s => {
+    const { summary, nextOccurrence } = describeMaintenanceSchedule(s, now);
+    return {
+      id: s.id,
+      title: s.title,
+      summary,
+      paused: s.pausedAt !== null,
+      nextLabel: nextOccurrence
+        ? formatDateTime(nextOccurrence.startsAt, userTimeZone, { format: 'datetime' })
+        : null,
+      serviceNames: s.services.map(x => x.service.name),
+    };
+  });
   const maintenanceWindows: MaintenanceWindowView[] = maintenanceRows.map(w => ({
     id: w.id,
     title: w.title,
@@ -1249,6 +1268,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     publishToStatusPage: w.publishToStatusPage,
     serviceNames: w.services.map(s => s.service.name),
     heldCount: w._count.heldIncidents,
+    recurring: w.scheduleId !== null,
   }));
   const activeMaintenance = maintenanceWindows.find(w => w.phase === 'ACTIVE');
 
@@ -1397,7 +1417,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             serviceId={service.id}
             canManage={canManageService}
             windows={maintenanceWindows}
+            schedules={maintenanceSchedules}
             services={maintenanceServices}
+            userTimeZone={userTimeZone}
           />
         }
         incidentsContent={incidentsContent}

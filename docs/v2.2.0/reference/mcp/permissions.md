@@ -100,8 +100,8 @@ Operation columns count catalog operations that need the permission: plain reads
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 7 | 0 | 0 |
 | `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | 5 | 2 | 0 | 2 |
-| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 8 |
+| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | 7 | 2 | 0 | 3 |
+| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 11 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  | 4 | 9 | 0 | 2 |
 | `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  | 0 | 0 | 0 | 10 |
@@ -129,6 +129,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | escalation-policies | 8 | 5 | 3 | 0 |
 | incidents | 41 | 31 | 10 | 0 |
 | integrations | 11 | 6 | 2 | 3 |
+| maintenance-schedules | 5 | 2 | 3 | 0 |
 | maintenance-windows | 6 | 2 | 4 | 0 |
 | notification-providers | 6 | 0 | 0 | 6 |
 | notifications | 4 | 3 | 1 | 0 |
@@ -144,7 +145,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 332 | 150 | 110 | 72 |
+| **All** | 337 | 152 | 113 | 72 |
 
 <details>
 <summary>Operations by area</summary>
@@ -268,6 +269,16 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `updateIntegration` | `operation_prepare`, then approval |
 | `validateIntegrationConfiguration` | `read_operation` (sensitive reads on) |
 | `validateIntegrationPayload` | `read_operation` (sensitive reads on) |
+
+### maintenance-schedules
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createMaintenanceSchedule` | `operation_prepare`, then approval |
+| `deleteMaintenanceSchedule` | `operation_prepare`, then approval |
+| `getMaintenanceSchedule` | `read_operation` |
+| `listMaintenanceSchedules` | `read_operation` |
+| `updateMaintenanceSchedule` | `operation_prepare`, then approval |
 
 ### maintenance-windows
 

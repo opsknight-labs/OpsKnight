@@ -14,6 +14,14 @@ import {
   type MaintenanceWindowCreateInput,
   type MaintenanceWindowPatchInput,
 } from '@/lib/service-maintenance/windows';
+import {
+  createMaintenanceSchedule,
+  deleteMaintenanceSchedule,
+  getMaintenanceSchedule,
+  updateMaintenanceSchedule,
+  type MaintenanceScheduleCreateInput,
+  type MaintenanceSchedulePatchInput,
+} from '@/lib/service-maintenance/schedules';
 
 export type MaintenanceActionResult = { ok: true } | { ok: false; error: string };
 
@@ -100,5 +108,53 @@ export async function deleteMaintenanceWindowAction(
   return run(pathServiceId, 'delete', async () => {
     const actorId = await assertCanModifyAll(await existingServiceIds(windowId));
     await deleteMaintenanceWindow(windowId, { id: actorId, source: 'UI' });
+  });
+}
+
+async function existingScheduleServiceIds(scheduleId: string): Promise<string[]> {
+  const schedule = await getMaintenanceSchedule(scheduleId);
+  if (!schedule) {
+    throw new AppError({
+      code: 'RESOURCE_NOT_FOUND',
+      userMessage: 'Maintenance schedule not found.',
+    });
+  }
+  return schedule.services.map(s => s.serviceId);
+}
+
+export async function createMaintenanceScheduleAction(
+  pathServiceId: string,
+  input: MaintenanceScheduleCreateInput
+): Promise<MaintenanceActionResult> {
+  return run(pathServiceId, 'schedule_create', async () => {
+    const serviceIds = Array.isArray(input?.serviceIds) ? input.serviceIds : [];
+    const actorId = await assertCanModifyAll(serviceIds);
+    await createMaintenanceSchedule(input, { id: actorId, source: 'UI' });
+  });
+}
+
+/** Edits, pauses ({ paused: true }) or resumes ({ paused: false }) a schedule. */
+export async function updateMaintenanceScheduleAction(
+  pathServiceId: string,
+  scheduleId: string,
+  input: MaintenanceSchedulePatchInput
+): Promise<MaintenanceActionResult> {
+  return run(pathServiceId, 'schedule_update', async () => {
+    const next = Array.isArray(input?.serviceIds) ? input.serviceIds : [];
+    const actorId = await assertCanModifyAll([
+      ...(await existingScheduleServiceIds(scheduleId)),
+      ...next,
+    ]);
+    await updateMaintenanceSchedule(scheduleId, input, { id: actorId, source: 'UI' });
+  });
+}
+
+export async function deleteMaintenanceScheduleAction(
+  pathServiceId: string,
+  scheduleId: string
+): Promise<MaintenanceActionResult> {
+  return run(pathServiceId, 'schedule_delete', async () => {
+    const actorId = await assertCanModifyAll(await existingScheduleServiceIds(scheduleId));
+    await deleteMaintenanceSchedule(scheduleId, { id: actorId, source: 'UI' });
   });
 }

@@ -2322,7 +2322,7 @@ export function enterpriseOpenApiPaths() {
               : operation.path.startsWith('/runbooks')
                 ? 'Runbooks'
                 : operation.path.startsWith('/services') ||
-                    operation.path.startsWith('/maintenance-windows')
+                    operation.path.startsWith('/maintenance-')
                   ? 'Services'
                   : operation.path.startsWith('/schedules')
                     ? 'Schedules'

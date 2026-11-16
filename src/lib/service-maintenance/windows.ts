@@ -90,6 +90,7 @@ export const maintenanceWindowSelect = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
+  scheduleId: true,
   services: { select: { serviceId: true, service: { select: { name: true, teamId: true } } } },
   _count: { select: { heldIncidents: true } },
 } satisfies Prisma.MaintenanceWindowSelect;
@@ -157,6 +158,8 @@ export interface MaintenanceCommandOptions {
   now?: Date;
   /** Run inside the caller's transaction (REST v2 idempotent writes). */
   tx?: Prisma.TransactionClient;
+  /** Create only: links an occurrence materialised from a recurring schedule. */
+  scheduleId?: string;
 }
 
 function inTransaction<T>(
@@ -372,6 +375,7 @@ export async function createMaintenanceWindow(
         endBehavior: data.endBehavior,
         publishToStatusPage: data.publishToStatusPage,
         createdById: actor.id,
+        scheduleId: options.scheduleId ?? null,
       },
       select: { id: true },
     });

@@ -76,7 +76,8 @@ export type ServiceObjectiveHistoryItem = { "source": "OBJECTIVE"; "id": string;
 export type ServiceObjectiveEvaluation = { "objectiveId": string; "metric": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR" | "LATENCY_P99" | "ERROR_RATE"; "value": number | null; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "compliant": boolean | null; "breached": boolean | null; "sampleCount": number | null; "sampleCountExact"?: string | null; "elapsedSumMs"?: string | null; "periodStart": string; "periodEnd": string; "dataState": "AVAILABLE" | "NO_DATA" | "UNAVAILABLE"; "definitionVersion": number; "coverage"?: { "effectiveStart": string; "effectiveEnd": string; "complete": boolean } };
 export type ServiceObjectiveEvaluationReceipt = { "outcome": "EVALUATED"; "completedAt": string; "evaluation": ServiceObjectiveEvaluation } | { "outcome": "ACCESS_REVOKED"; "completedAt": string };
 export type ServiceObjectiveEvaluationJob = { "id": string; "objectiveId": string; "versionId": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED"; "attempts": number; "createdAt": string; "completedAt": string | null; "result": ServiceObjectiveEvaluationReceipt | null; "errorCode": "EVALUATION_FAILED" | null };
-export type MaintenanceWindow = { "id": string; "revision": number; "title": string; "description": string | null; "startsAt": string; "endsAt": string; "endBehavior": "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage": boolean; "phase": "UPCOMING" | "ACTIVE" | "ENDED"; "serviceIds": Array<string>; "heldIncidentCount": number; "endProcessedAt": string | null; "createdAt": string; "updatedAt": string };
+export type MaintenanceWindow = { "id": string; "revision": number; "title": string; "description": string | null; "startsAt": string; "endsAt": string; "endBehavior": "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage": boolean; "phase": "UPCOMING" | "ACTIVE" | "ENDED"; "serviceIds": Array<string>; "scheduleId": string | null; "heldIncidentCount": number; "endProcessedAt": string | null; "createdAt": string; "updatedAt": string };
+export type MaintenanceSchedule = { "id": string; "revision": number; "title": string; "description": string | null; "endBehavior": "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage": boolean; "frequency": "DAILY" | "WEEKLY" | "MONTHLY"; "interval": number; "byWeekday": Array<number>; "dayOfMonth": number | null; "timeZone": string; "startTime": string; "durationMinutes": number; "startsOn": string; "endsOn": string | null; "paused": boolean; "pausedAt": string | null; "summary": string; "nextOccurrenceAt": string | null; "serviceIds": Array<string>; "createdAt": string; "updatedAt": string };
 export type StatusPagePublicationState = { "status": "LIVE" | "PUBLISHING" | "FAILED" | "DISABLED"; "revision": string; "stale"?: boolean; "lastError"?: string | null };
 export type StatusPagePublication = { "id": string; "revision": number; "publication": StatusPagePublicationState };
 export type StatusPagePublicationReceipt = { "outcome": string; "completedAt": string; "publication": StatusPagePublicationState };
@@ -285,6 +286,11 @@ export interface OperationRequests {
   updateMaintenanceWindow: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "description"?: string | null; "serviceIds"?: Array<string>; "startsAt"?: string; "endsAt"?: string; "endBehavior"?: "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage"?: boolean } };
   deleteMaintenanceWindow: { "params": { "id": string } };
   endMaintenanceWindow: { "params": { "id": string }; "body": Record<string, never> };
+  listMaintenanceSchedules: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string } };
+  createMaintenanceSchedule: { "headers": { "Idempotency-Key": string }; "body": { "title": string; "description"?: string | null; "serviceIds": Array<string>; "endBehavior"?: "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage"?: boolean; "frequency": "DAILY" | "WEEKLY" | "MONTHLY"; "interval"?: number; "byWeekday"?: Array<number>; "dayOfMonth"?: number | null; "timeZone": string; "startTime": string; "durationMinutes": number; "startsOn": string; "endsOn"?: string | null } };
+  getMaintenanceSchedule: { "params": { "id": string } };
+  updateMaintenanceSchedule: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "description"?: string | null; "serviceIds"?: Array<string>; "endBehavior"?: "RESUME_FIRING" | "RESOLVE_HELD"; "publishToStatusPage"?: boolean; "frequency"?: "DAILY" | "WEEKLY" | "MONTHLY"; "interval"?: number; "byWeekday"?: Array<number>; "dayOfMonth"?: number | null; "timeZone"?: string; "startTime"?: string; "durationMinutes"?: number; "startsOn"?: string; "endsOn"?: string | null; "paused"?: boolean } };
+  deleteMaintenanceSchedule: { "params": { "id": string } };
   getServiceObjectiveCatalog: Record<string, never>;
   listServiceObjectives: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string } };
   createServiceObjective: { "headers": { "Idempotency-Key": string }; "body": { "definition": { "serviceId"?: string | null; "name": string; "description"?: string | null; "metricType": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR"; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "windowType": "SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS"; "windowValue"?: number | null }; "expectedActiveVersionId": string | null } };
@@ -619,6 +625,11 @@ export interface OperationResponses {
   updateMaintenanceWindow: { "data": MaintenanceWindow; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteMaintenanceWindow: null;
   endMaintenanceWindow: { "data": MaintenanceWindow; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listMaintenanceSchedules: { "data": Array<MaintenanceSchedule>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createMaintenanceSchedule: { "data": MaintenanceSchedule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getMaintenanceSchedule: { "data": MaintenanceSchedule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateMaintenanceSchedule: { "data": MaintenanceSchedule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteMaintenanceSchedule: null;
   getServiceObjectiveCatalog: { "data": ServiceObjectiveCatalog; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listServiceObjectives: { "data": Array<ServiceObjective>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createServiceObjective: { "data": ServiceObjective; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -1611,6 +1622,51 @@ export const OPERATIONS = {
     "idempotency": "natural",
     "requiredHeaders": [],
     "bodyRequired": true
+  },
+  "listMaintenanceSchedules": {
+    "method": "GET",
+    "path": "/maintenance-schedules",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createMaintenanceSchedule": {
+    "method": "POST",
+    "path": "/maintenance-schedules",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getMaintenanceSchedule": {
+    "method": "GET",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateMaintenanceSchedule": {
+    "method": "PATCH",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteMaintenanceSchedule": {
+    "method": "DELETE",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "none",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "getServiceObjectiveCatalog": {
     "method": "GET",

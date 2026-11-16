@@ -596,6 +596,17 @@ async function runOnce() {
       logger.warn('[Cron] Maintenance window sweep failed', { error });
     }
 
+    // Recurring maintenance: materialise upcoming occurrences as ordinary windows.
+    try {
+      const { materializeMaintenanceSchedules } = await import('./service-maintenance/schedules');
+      const materialized = await materializeMaintenanceSchedules(new Date());
+      if (materialized.created > 0 || materialized.failed > 0) {
+        logger.info('[Cron] Maintenance schedules materialized', materialized);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Maintenance schedule materialization failed', { error });
+    }
+
     // Group 3: Maintenance tasks (low priority, run last)
     const { processAuthenticationAlerts } = await import('./auth-control/security-events');
     await processAuthenticationAlerts();

@@ -604,6 +604,46 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/maintenance-schedules',
+    'listMaintenanceSchedules',
+    'services:read',
+    'list',
+    'MaintenanceSchedule'
+  ),
+  op(
+    'post',
+    '/maintenance-schedules',
+    'createMaintenanceSchedule',
+    'services:write',
+    'item',
+    'MaintenanceSchedule'
+  ),
+  op(
+    'get',
+    '/maintenance-schedules/{id}',
+    'getMaintenanceSchedule',
+    'services:read',
+    'item',
+    'MaintenanceSchedule'
+  ),
+  op(
+    'patch',
+    '/maintenance-schedules/{id}',
+    'updateMaintenanceSchedule',
+    'services:write',
+    'item',
+    'MaintenanceSchedule'
+  ),
+  op(
+    'delete',
+    '/maintenance-schedules/{id}',
+    'deleteMaintenanceSchedule',
+    'services:write',
+    'none',
+    ''
+  ),
+  op(
+    'get',
     '/service-objectives/catalog',
     'getServiceObjectiveCatalog',
     'service-objectives:read',

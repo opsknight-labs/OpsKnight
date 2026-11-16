@@ -14,6 +14,11 @@ import {
   maintenanceWindowSelect,
   type MaintenanceWindowRecord,
 } from '@/lib/service-maintenance/windows';
+import {
+  describeMaintenanceSchedule,
+  maintenanceScheduleSelect,
+  type MaintenanceScheduleRecord,
+} from '@/lib/service-maintenance/schedules';
 
 export const MaintenanceWindowParams = z
   .object({ id: z.string().regex(/^[a-z0-9_-]{1,64}$/i) })
@@ -48,18 +53,26 @@ export const MaintenanceWindowPatchBody = z
  * Projects a window for an API caller. Services outside the caller's read scope are
  * left out, so a window shared with another team never reveals that team's services.
  */
+function visibleServiceIds(
+  services: { serviceId: string; service: { teamId: string | null } }[],
+  actor: AuthorizationActor
+): string[] {
+  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ });
+  const teams = new Set(actor.teamIds);
+  return services
+    .filter(
+      s =>
+        decision.allowed &&
+        (decision.scope === 'global' || (s.service.teamId !== null && teams.has(s.service.teamId)))
+    )
+    .map(s => s.serviceId);
+}
+
 export function projectMaintenanceWindow(
   row: MaintenanceWindowRecord,
   actor: AuthorizationActor,
   now = new Date()
 ) {
-  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ });
-  const teams = new Set(actor.teamIds);
-  const visible = row.services.filter(
-    s =>
-      decision.allowed &&
-      (decision.scope === 'global' || (s.service.teamId !== null && teams.has(s.service.teamId)))
-  );
   return {
     id: row.id,
     revision: row.revision,
@@ -70,7 +83,8 @@ export function projectMaintenanceWindow(
     endBehavior: row.endBehavior,
     publishToStatusPage: row.publishToStatusPage,
     phase: maintenanceWindowPhase(row, now),
-    serviceIds: visible.map(s => s.serviceId),
+    serviceIds: visibleServiceIds(row.services, actor),
+    scheduleId: row.scheduleId,
     heldIncidentCount: row._count.heldIncidents,
     endProcessedAt: row.endProcessedAt,
     createdAt: row.createdAt,
@@ -124,4 +138,100 @@ export async function assertCanManageMaintenanceServices(
       userMessage: 'You can only manage maintenance for services owned by your teams.',
     });
   }
+}
+
+// Recurring schedules. Same wire conventions and team rules as windows.
+const scheduleFields = {
+  title: fields.title,
+  description: fields.description,
+  serviceIds: fields.serviceIds,
+  endBehavior: fields.endBehavior,
+  publishToStatusPage: fields.publishToStatusPage,
+  frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
+  interval: z.number().int().min(1).max(52),
+  byWeekday: z.array(z.number().int().min(0).max(6)).max(7),
+  dayOfMonth: z.number().int().min(1).max(31).nullable(),
+  timeZone: z.string().trim().min(1).max(64),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  durationMinutes: z.number().int().min(1).max(10080),
+  startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endsOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
+};
+
+export const MaintenanceScheduleCreateBody = z
+  .object({
+    ...scheduleFields,
+    endBehavior: scheduleFields.endBehavior.optional(),
+    publishToStatusPage: scheduleFields.publishToStatusPage.optional(),
+    interval: scheduleFields.interval.optional(),
+    byWeekday: scheduleFields.byWeekday.optional(),
+    dayOfMonth: scheduleFields.dayOfMonth.optional(),
+    endsOn: scheduleFields.endsOn.optional(),
+  })
+  .strict();
+
+export const MaintenanceSchedulePatchBody = z
+  .object({ ...scheduleFields, paused: z.boolean() })
+  .partial()
+  .strict()
+  .refine(body => Object.keys(body).length > 0, 'Send at least one field to change.');
+
+export function projectMaintenanceSchedule(
+  row: MaintenanceScheduleRecord,
+  actor: AuthorizationActor,
+  now = new Date()
+) {
+  const { summary, nextOccurrence } = describeMaintenanceSchedule(row, now);
+  return {
+    id: row.id,
+    revision: row.revision,
+    title: row.title,
+    description: row.description,
+    endBehavior: row.endBehavior,
+    publishToStatusPage: row.publishToStatusPage,
+    frequency: row.frequency,
+    interval: row.interval,
+    byWeekday: row.byWeekday,
+    dayOfMonth: row.dayOfMonth,
+    timeZone: row.timeZone,
+    startTime: row.startTime,
+    durationMinutes: row.durationMinutes,
+    startsOn: row.startsOn,
+    endsOn: row.endsOn,
+    paused: row.pausedAt !== null,
+    pausedAt: row.pausedAt,
+    summary,
+    nextOccurrenceAt: nextOccurrence?.startsAt ?? null,
+    serviceIds: visibleServiceIds(row.services, actor),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/** Schedules touching at least one service the actor can read. */
+export function maintenanceScheduleReadWhere(
+  actor: AuthorizationActor
+): Prisma.MaintenanceScheduleWhereInput {
+  return { services: { some: { service: serviceReadWhere(actor) } } };
+}
+
+export async function requireReadableMaintenanceSchedule(
+  db: Prisma.TransactionClient,
+  actor: AuthorizationActor,
+  id: string
+): Promise<MaintenanceScheduleRecord> {
+  const row = await db.maintenanceSchedule.findFirst({
+    where: { id, ...maintenanceScheduleReadWhere(actor) },
+    select: maintenanceScheduleSelect,
+  });
+  if (!row) {
+    throw new AppError({
+      code: 'RESOURCE_NOT_FOUND',
+      userMessage: 'Maintenance schedule not found.',
+    });
+  }
+  return row;
 }

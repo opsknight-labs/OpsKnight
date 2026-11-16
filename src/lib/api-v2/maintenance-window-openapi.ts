@@ -23,6 +23,40 @@ const inputProperties = {
   publishToStatusPage: { type: 'boolean', default: false },
 };
 
+const recurrenceProperties = {
+  frequency: { type: 'string', enum: ['DAILY', 'WEEKLY', 'MONTHLY'] },
+  interval: { type: 'integer', minimum: 1, maximum: 52 },
+  byWeekday: {
+    type: 'array',
+    items: { type: 'integer', minimum: 0, maximum: 6 },
+    maxItems: 7,
+    description: 'WEEKLY only. Local weekdays, 0 = Sunday.',
+  },
+  dayOfMonth: {
+    type: ['integer', 'null'],
+    minimum: 1,
+    maximum: 31,
+    description: 'MONTHLY only. Months without this day use their last day.',
+  },
+  timeZone: { type: 'string', minLength: 1, maxLength: 64, description: 'IANA time zone.' },
+  startTime: {
+    type: 'string',
+    pattern: '^([01]\\d|2[0-3]):[0-5]\\d$',
+    description: 'Local HH:mm.',
+  },
+  durationMinutes: { type: 'integer', minimum: 1, maximum: 10080 },
+  startsOn: { type: 'string', format: 'date' },
+  endsOn: { type: ['string', 'null'], format: 'date', description: 'Inclusive local date.' },
+};
+const scheduleInputProperties = {
+  title: inputProperties.title,
+  description: inputProperties.description,
+  serviceIds: inputProperties.serviceIds,
+  endBehavior: inputProperties.endBehavior,
+  publishToStatusPage: inputProperties.publishToStatusPage,
+  ...recurrenceProperties,
+};
+
 export const MAINTENANCE_WINDOW_SCHEMAS: Record<string, Schema> = {
   MaintenanceWindow: object({
     id: string,
@@ -35,8 +69,27 @@ export const MAINTENANCE_WINDOW_SCHEMAS: Record<string, Schema> = {
     publishToStatusPage: { type: 'boolean' },
     phase: { type: 'string', enum: ['UPCOMING', 'ACTIVE', 'ENDED'] },
     serviceIds: { type: 'array', items: string },
+    scheduleId: { type: ['string', 'null'] },
     heldIncidentCount: { type: 'integer', minimum: 0 },
     endProcessedAt: nullableDate,
+    createdAt: date,
+    updatedAt: date,
+  }),
+  MaintenanceSchedule: object({
+    id: string,
+    revision: { type: 'integer', minimum: 0 },
+    title: string,
+    description: { type: ['string', 'null'] },
+    endBehavior,
+    publishToStatusPage: { type: 'boolean' },
+    ...recurrenceProperties,
+    dayOfMonth: { type: ['integer', 'null'], minimum: 1, maximum: 31 },
+    endsOn: { type: ['string', 'null'], format: 'date' },
+    paused: { type: 'boolean' },
+    pausedAt: nullableDate,
+    summary: string,
+    nextOccurrenceAt: nullableDate,
+    serviceIds: { type: 'array', items: string },
     createdAt: date,
     updatedAt: date,
   }),
@@ -98,5 +151,53 @@ export const MAINTENANCE_WINDOW_OPERATIONS: {
     body: object({}),
     description:
       'Ending an already-ended window returns it unchanged. Held incidents are released according to endBehavior; the scheduler retries any release that fails.',
+  },
+  {
+    method: 'get',
+    path: '/maintenance-schedules',
+    summary: 'List recurring maintenance schedules touching services the caller can read',
+    paginated: true,
+    query: { serviceId: { type: 'string', minLength: 1, maxLength: 64 } },
+  },
+  {
+    method: 'post',
+    path: '/maintenance-schedules',
+    summary: 'Create a recurring maintenance schedule',
+    status: 201,
+    body: object(scheduleInputProperties, [
+      'title',
+      'serviceIds',
+      'frequency',
+      'timeZone',
+      'startTime',
+      'durationMinutes',
+      'startsOn',
+    ]),
+    description:
+      'Requires an Idempotency-Key. Occurrences starting in the next 14 days are created at once as ordinary maintenance windows (scheduleId set), and the scheduler keeps that horizon filled. Wall-clock times are in timeZone and stay fixed across DST. An occurrence must end at least an hour before the next one starts. Non-admin callers must belong to the owning team of every listed service.',
+  },
+  {
+    method: 'get',
+    path: '/maintenance-schedules/{id}',
+    summary: 'Read a recurring maintenance schedule with a strong ETag',
+  },
+  {
+    method: 'patch',
+    path: '/maintenance-schedules/{id}',
+    summary: 'Change, pause or resume a recurring maintenance schedule using a concrete revision',
+    body: {
+      ...object({ ...scheduleInputProperties, paused: { type: 'boolean' } }, []),
+      minProperties: 1,
+    },
+    description:
+      'Requires If-Match and an Idempotency-Key. Upcoming occurrences are deleted and recreated from the new rule (none while paused); active and ended occurrences are never changed. Non-admin callers must belong to the owning team of every current and requested service.',
+  },
+  {
+    method: 'delete',
+    path: '/maintenance-schedules/{id}',
+    summary: 'Delete a recurring maintenance schedule and its upcoming occurrences',
+    status: 204,
+    description:
+      'Active and ended occurrences are kept as ordinary maintenance windows with scheduleId cleared.',
   },
 ];

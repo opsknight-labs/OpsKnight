@@ -29,6 +29,14 @@ export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
   ],
   ['endMaintenanceWindow', ['end maintenance', 'unmute', 'unsilence', 'resume paging']],
   [
+    'listMaintenanceSchedules',
+    ['recurring maintenance', 'maintenance schedule', 'weekly downtime', 'repeating', 'recurring'],
+  ],
+  [
+    'createMaintenanceSchedule',
+    ['recurring maintenance', 'every week', 'every night', 'repeat downtime', 'recurring'],
+  ],
+  [
     'listStatusPageAnnouncements',
     ['announcement', 'maintenance', 'customer update', 'public update'],
   ],

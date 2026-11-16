@@ -7,7 +7,11 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'POST /services/{id}/integrations': { name: 'Production alert source', type: 'EVENTS_API_V2' },
   'POST /integrations/{id}/credentials': { credential: 'routing-key', overlapSeconds: 3600 },
   'POST /integrations/{id}/test': {
-    payload: { event_action: 'trigger', dedup_key: 'sample-event', payload: { summary: 'Sample alert', source: 'api-example', severity: 'warning' } },
+    payload: {
+      event_action: 'trigger',
+      dedup_key: 'sample-event',
+      payload: { summary: 'Sample alert', source: 'api-example', severity: 'warning' },
+    },
   },
   'PUT /notification-providers/{provider}': {
     provider: 'resend',
@@ -222,6 +226,18 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   },
   'PATCH /maintenance-windows/{id}': { endsAt: '2030-01-15T05:00:00Z' },
   'POST /maintenance-windows/{id}/end': {},
+  'POST /maintenance-schedules': {
+    title: 'Weekly database patching',
+    serviceIds: ['cm123456789012345678901234'],
+    frequency: 'WEEKLY',
+    byWeekday: [0],
+    timeZone: 'Asia/Kolkata',
+    startTime: '02:00',
+    durationMinutes: 120,
+    startsOn: '2030-01-06',
+    endBehavior: 'RESUME_FIRING',
+  },
+  'PATCH /maintenance-schedules/{id}': { paused: true },
   'POST /postmortems': {
     incidentId: 'inc_123456',
     title: 'Postmortem: Checkout Latency Spike in EU Region',

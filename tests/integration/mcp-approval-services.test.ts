@@ -194,6 +194,32 @@ const editWindow = async (s: Record<string, string>) => {
   });
 };
 
+// A weekly schedule on a fresh service; occurrences are not needed for approval checks.
+async function scheduleFixture() {
+  const service = await createTestService('Schedule approval');
+  const schedule = await db.maintenanceSchedule.create({
+    data: {
+      title: 'Weekly patching',
+      frequency: 'WEEKLY',
+      byWeekday: [0],
+      timeZone: 'UTC',
+      startTime: '02:00',
+      durationMinutes: 60,
+      startsOn: '2030-01-06',
+      services: { create: { serviceId: service.id } },
+    },
+  });
+  return { serviceId: service.id, scheduleId: schedule.id };
+}
+const maintenanceSchedule = (s: Record<string, string>) =>
+  db.maintenanceSchedule.findUnique({ where: { id: s.scheduleId } });
+const editSchedule = async (s: Record<string, string>) => {
+  await db.maintenanceSchedule.update({
+    where: { id: s.scheduleId },
+    data: { description: 'Edited out of band' },
+  });
+};
+
 const evaluationJobs = async (s: Record<string, string>) =>
   (
     await db.backgroundJob.findMany({
@@ -345,6 +371,55 @@ const scenarios: Scenario[] = [
       const row = (await maintenanceWindow(s))!;
       return [row.endsAt.toISOString(), row.endProcessedAt !== null];
     },
+  },
+  {
+    name: 'create maintenance schedule',
+    operationId: 'createMaintenanceSchedule',
+    setup: async () => ({ serviceId: (await createTestService('Schedule create')).id }),
+    input: async (_f, s) => ({
+      args: {
+        body: {
+          title: 'Reviewed patching',
+          serviceIds: [s.serviceId],
+          frequency: 'DAILY',
+          timeZone: 'UTC',
+          startTime: '03:00',
+          durationMinutes: 60,
+          startsOn: '2030-01-01',
+        },
+      },
+    }),
+    effect: async (_f, s) =>
+      (
+        await db.maintenanceSchedule.findMany({
+          where: { services: { some: { serviceId: s.serviceId } } },
+        })
+      ).map(row => row.title),
+  },
+  {
+    name: 'update maintenance schedule',
+    operationId: 'updateMaintenanceSchedule',
+    setup: async () => scheduleFixture(),
+    input: async (_f, s) => ({
+      args: {
+        path: { id: s.scheduleId },
+        body: { title: 'Reviewed patching', paused: true },
+        ifMatch: `"${(await maintenanceSchedule(s))!.revision}"`,
+      },
+    }),
+    effect: async (_f, s) => {
+      const row = (await maintenanceSchedule(s))!;
+      return [row.title, row.pausedAt !== null];
+    },
+    invalidate: async (_f, s) => editSchedule(s),
+  },
+  {
+    name: 'delete maintenance schedule',
+    operationId: 'deleteMaintenanceSchedule',
+    setup: async () => scheduleFixture(),
+    input: async (_f, s) => ({ args: { path: { id: s.scheduleId } } }),
+    effect: async (_f, s) => db.maintenanceSchedule.count({ where: { id: s.scheduleId } }),
+    invalidate: async (_f, s) => editSchedule(s),
   },
   {
     name: 'notification settings',
@@ -563,6 +638,22 @@ describe('service batch-wide', () => {
       path: { id: s.windowId },
     })) as { data: { data: Window } };
     expect(one.data.data.id).toBe(s.windowId);
+  });
+
+  it('reads maintenance schedules through generic dispatch', async () => {
+    const f = await fixture();
+    const s = await scheduleFixture();
+    type Schedule = { id: string; summary: string; serviceIds: string[] };
+    const list = (await callMcpOperation(f.ctx(), 'listMaintenanceSchedules', {
+      query: { serviceId: s.serviceId },
+    })) as { data: { data: Schedule[] } };
+    expect(list.data.data.map(row => [row.id, row.summary, row.serviceIds])).toEqual([
+      [s.scheduleId, 'Every Sunday 02:00–03:00 UTC', [s.serviceId]],
+    ]);
+    const one = (await callMcpOperation(f.ctx(), 'getMaintenanceSchedule', {
+      path: { id: s.scheduleId },
+    })) as { data: { data: Schedule } };
+    expect(one.data.data.id).toBe(s.scheduleId);
   });
 
   it('refuses a frozen service create once its escalation policy is gone', async () => {

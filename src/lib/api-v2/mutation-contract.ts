@@ -416,6 +416,22 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'DELETE /api/v2/maintenance-windows/[id]': natural(
     'Only upcoming windows can be deleted; a repeat returns 404.'
   ),
+  'POST /api/v2/maintenance-schedules': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'A retry without a key would create a second schedule and duplicate occurrences. Schedule, service rows, materialised occurrences, announcements, canonical audit and replay commit atomically.',
+  },
+  'PATCH /api/v2/maintenance-schedules/[id]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Concrete revision fences rule, service and pause changes. Upcoming occurrences are replaced under the schedule lock; schedule, occurrences, canonical audit and replay commit together.',
+  },
+  'DELETE /api/v2/maintenance-schedules/[id]': natural(
+    'Deleting removes upcoming occurrences and the schedule; a repeat returns 404. Active and ended occurrences are kept.'
+  ),
   'POST /api/v2/maintenance-windows/[id]/end': natural(
     'Ending an already-ended window returns it unchanged. Runs outside a replay transaction so held incidents are released inline; the scheduler sweep is the durable backstop.'
   ),
