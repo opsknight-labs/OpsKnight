@@ -56,9 +56,32 @@ everything and stops the daily work.
 | Service automation and integrations | **No alerts for N days** | The service used to send alerts regularly and has been quiet for much longer than its usual gap. Check that its integrations are still connected. Reported for 30 days, then dropped. |
 | Service automation and integrations | **Alert volume is N times the usual** / **dropped sharply** | The last 24 hours are far above, or far below, the week before. |
 | Service automation and integrations | **N% of recent alerts have no severity** | Most recent alerts arrived without a severity, so urgency and routing rules cannot use it. |
+| Escalation policies | **Step N was never acknowledged** | At least 5 pages reached the step in 30 days and none was acknowledged there. |
+| Escalation policies | **Step 1 times out most nights** | Half or more of the night pages (22:00 to 07:00 for the person paged) passed to step 2 unanswered, clearly more than by day. |
+| Escalation policies | **Step N is always skipped** | The step paged nobody, with the most common reason (nobody on call, no contact method, inactive user, conditions never match). |
+| Escalation policies | **Wait M minutes before step N, not K** | 75% of acknowledgements came within M minutes, with how many incidents would have reached the next step sooner. |
+| Escalation policies | **One person is on every step** | Nobody covers for that person when they are away. |
+| Escalation policies | **No service uses this policy** | Attach it to a service or archive it. |
 
-Insights for the other areas arrive with later updates; their switches are already there so you can decide
-in advance.
+Insights for on-call schedules, postmortems, runbooks and notifications arrive with later updates; their
+switches are already there so you can decide in advance.
+
+### Escalation policies
+
+With **Escalation policies** on, each policy page gets:
+
+- an **Insights** tab, shown only while the policy has an open insight;
+- one quiet line under every step: pages in the last 30 days, the share acknowledged at that step, and the
+  median time to acknowledge;
+- a count badge on the policies list.
+
+**Apply suggestion** on a timeout insight opens the step editor with the suggested wait filled in. Nothing
+changes until you save.
+
+Step history is recorded from the upgrade onward. To fill the last 90 days from the escalation timeline, an
+administrator can run `npm run backfill:escalation-attempts` once (safe to stop and re-run). Backfilled
+history is approximate: it assumes the service's current policy and does not know who was paged, so it
+never feeds the night-time insight.
 
 ## Review insights
 

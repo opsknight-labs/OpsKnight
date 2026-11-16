@@ -1205,7 +1205,7 @@ rollup step of the cron scheduler (`generateOpsRollups`; a no-op while operation
 | `ops.pages.user_hour` | user id | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents | `idx_notification_created_cursor` |
 | `ops.runbook.outcome` | runbook id | `status` | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new) |
 | `ops.automation.rule_match` | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode` | decisions / fallbacks | `IncidentAutomationDecision (serviceId, createdAt)` |
-| `ops.escalation.step_outcome` | policy id | `step`, `outcome` | attempts / seconds to acknowledge | Named and shaped only; its source arrives with the escalation capture slice. |
+| `ops.escalation.step_outcome` | policy id | `step`, `outcome`, `reason`, `hour` (paged person's zone, UTC when nobody was paged), `ackWithinMin` | attempts / seconds to acknowledge | `idx_escalation_step_attempt_created` (new) |
 
 Each rollup advances one complete UTC day per transaction from its own watermark row
 (`<name>.watermark`), deleting and rewriting the day with the watermark so a crash or a second scheduler
@@ -1213,6 +1213,42 @@ cannot double-count. A first run starts 30 days back; at most 31 days are comput
 `serviceId`, because incident enrichment reads `MetricRollup` by service. `queryOpsRollup` is the bounded
 reader. Query plans are asserted in `tests/integration/intelligence/ops-rollups.test.ts` and recorded by
 the load gate `tests/load/intelligence-query-plans.ts`.
+
+### Escalation step capture and policy insights (J2)
+
+**Capture.** `EscalationStepAttempt` (primary key incident, escalation generation, step index) records
+each step the escalation worker runs: policy and revision, target type and id, resolved user ids, outcome
+(`NOTIFIED`, `SKIPPED` with a reason code, `FAILED`, `SCHEDULED` for a delayed step) and when it notified.
+It is written inside the statement that `src/lib/escalation/repository.ts` already sends to append the
+`IncidentEvent` (commit path and delayed-step path), as one more CTE: no extra read and no extra round trip.
+`tests/integration/escalation-step-attempt-capture.test.ts` counts statements on the commit path.
+`Incident.acknowledgedById` and `acknowledgedVia` (the lifecycle command source) are set in
+`updateDataForCommand` in `src/lib/incidents/lifecycle.ts`, cleared on reopen and unacknowledge.
+
+**Backfill.** `src/lib/escalation/step-attempt-backfill.ts` rebuilds 90 days of attempts from escalation
+timeline text, marked `approximate`, in bounded keyset batches with a resumable cursor; live rows are never
+overwritten. Run it with `npm run backfill:escalation-attempts`.
+
+**Rollup.** `ops.escalation.step_outcome` judges each attempt per UTC day: `ACKED` (the incident was
+acknowledged in the same generation while this was the latest notified step), `TIMED_OUT` (a later step
+was notified), `UNANSWERED`, `SKIPPED` or `FAILED` with the reason. `src/lib/escalation/step-outcomes.ts`
+folds the rows into per-step summaries (`loadPolicyStepOutcomes`, one bounded subject read).
+
+**Producer.** `escalation.policy` (scope `POLICY`, area `escalation`) in
+`src/lib/intelligence/ops-insights/producers/escalation-policy.ts` reads the policy and its steps, a
+service count, one grouped read each for team and schedule sizes, and the rollup. It derives: a step never
+acknowledged (at least 5 pages, no acknowledgement in 30 days), step 1 timing out at night (at least 50% of
+night pages timed out and 20 points above day), a step always skipped with its most common reason, a
+shorter wait before the next step from the 75th percentile of acknowledgement times (bounded to 2-60
+minutes, at least 10 acknowledgements, saving at least 3 minutes) with the expected effect, one person on
+every step, and a policy no service uses (after 7 days). Evidence holds counts only.
+
+**UI.** `loadPolicyIntelligence` (`src/lib/escalation/policy-intelligence.ts`) returns nothing unless the
+viewer may read escalation policies and the area is on; otherwise one `listInsightsForScope` read and one
+rollup read. The policy page shows an Insights tab (`InsightsPanel`, only when an insight is open), one
+line per step (`StepOutcomeStrip`) and `InsightBadge` on the policies list (`countOpenInsightsForScopes`).
+"Apply suggestion" links to `?tab=steps&suggestStep=<id>&suggestDelay=<min>`; the page validates both and
+the step editor opens with the wait filled in. Nothing is saved until the person saves.
 
 ### UI kit
 
