@@ -402,7 +402,7 @@ export async function replayStoredEvents(input: {
     }
     const after: { createdAt: Date; id: string } | null = cursor;
     // The first alert of an incident created in the window is the event that opened it.
-    const rows = await input.run(
+    const rows: Row[] = await input.run(
       tx =>
         tx.$queryRaw<Row[]>`
         SELECT a."id" AS "alertId", a."incidentId", a."createdAt", a."dedupKey", a."payload",
