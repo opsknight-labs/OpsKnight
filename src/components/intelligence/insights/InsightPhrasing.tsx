@@ -49,11 +49,11 @@ export default function InsightPhrasing({
         <div id={regionId} aria-live="polite" aria-busy={pending} className="space-y-2 pt-1">
           {pending && <p className="text-xs text-muted-foreground">Writing…</p>}
           {phrased.length > 0 && (
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {phrased.map(({ id, title, text }) => (
-                <li key={id} className="text-sm">
-                  <span className="sr-only">{title}: </span>
-                  {text}
+                <li key={id} className="space-y-0.5">
+                  <p className="break-words text-xs text-muted-foreground">{title}</p>
+                  <p className="break-words text-sm">{text}</p>
                 </li>
               ))}
             </ul>
