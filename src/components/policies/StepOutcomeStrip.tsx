@@ -2,7 +2,7 @@ import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-inte
 
 function medianText(minutes: number | null): string | null {
   if (minutes === null) return null;
-  return minutes > 120 ? 'median over 2 h' : `median within ${minutes} min`;
+  return minutes > 120 ? 'median ack over 2 h' : `median ack ${minutes} min`;
 }
 
 /**

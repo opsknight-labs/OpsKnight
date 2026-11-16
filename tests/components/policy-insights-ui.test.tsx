@@ -39,7 +39,7 @@ describe('StepOutcomeStrip', () => {
   it('says pages, acknowledgement rate and median in one line', () => {
     render(<StepOutcomeStrip stat={{ paged: 12, ackRate: 0.75, medianAckMinutes: 4 }} />);
     expect(
-      screen.getByText(/12 pages · 75% acknowledged here · median within 4 min/)
+      screen.getByText(/12 pages · 75% acknowledged here · median ack 4 min/)
     ).toBeVisible();
   });
 
@@ -54,7 +54,7 @@ describe('StepOutcomeStrip', () => {
     );
     expect(screen.getByText(/1 page · 0% acknowledged here$/)).toBeVisible();
     rerender(<StepOutcomeStrip stat={{ paged: 3, ackRate: 1, medianAckMinutes: 121 }} />);
-    expect(screen.getByText(/median over 2 h/)).toBeVisible();
+    expect(screen.getByText(/median ack over 2 h/)).toBeVisible();
   });
 });
 
