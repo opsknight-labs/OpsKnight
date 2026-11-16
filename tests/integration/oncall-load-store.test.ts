@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { resolveUserActor } from '@/lib/authorization-actors';
-import { generateOpsRollups } from '@/lib/metric-rollup';
+import { generateOpsRollups, OPS_ROLLUPS } from '@/lib/metric-rollup';
 import {
   backfillOnCallCoverage,
   captureScheduleCoverage,
@@ -297,5 +298,37 @@ describe('on-call producers in the lane', () => {
     await run(`SCHEDULE:${schedule.id}`);
     expect(await db.onCallCoverageDay.count()).toBe(0);
     expect(await db.opsInsight.count()).toBe(0);
+  });
+});
+
+describe('on-call load query plans', () => {
+  async function plan(sql: Prisma.Sql): Promise<string> {
+    const rows = await db.$transaction(async tx => {
+      // With sequential scans priced out, the plan shows whether an index can serve the predicate at all.
+      await tx.$executeRaw`SET LOCAL enable_seqscan = off`;
+      return tx.$queryRaw<unknown[]>(Prisma.sql`EXPLAIN (FORMAT JSON) ${sql}`);
+    });
+    return JSON.stringify(rows);
+  }
+  const from = new Date(TODAY.getTime() - 28 * DAY);
+
+  it('reads the pages rollup for a rotation through the subject index', async () => {
+    const text = await plan(Prisma.sql`
+      SELECT "subjectKey", "bucket", "count" FROM "MetricRollup"
+      WHERE "name" = ${OPS_ROLLUPS.pagesPerUserHour} AND "subjectKey" IN (${'u1'}, ${'u2'})
+        AND "bucket" >= ${from} AND "bucket" < ${TODAY}`);
+    expect(text).toContain('idx_metric_rollup_subject');
+  });
+
+  it.each([
+    ['scheduleId', /OnCallCoverageDay_scheduleId_date_userId_layerId_key/],
+    ['userId', /OnCallCoverageDay_userId_date_idx/],
+  ] as const)('reads coverage days by %s through an index', async (column, index) => {
+    const text = await plan(Prisma.sql`
+      SELECT "userId", SUM("seconds") FROM "OnCallCoverageDay"
+      WHERE ${Prisma.raw(`"${column}"`)} = ${'x'} AND "date" >= ${from} AND "date" < ${TODAY}
+      GROUP BY "userId"`);
+    expect(text).toMatch(index);
+    expect(text).not.toMatch(/"Node Type":\s*"Seq Scan"/);
   });
 });
