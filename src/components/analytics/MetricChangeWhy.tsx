@@ -40,7 +40,8 @@ export default function MetricChangeWhy({
   return (
     <div className="mt-1 text-xs text-muted-foreground" data-testid={`metric-change-${metric}`}>
       <div className="flex items-center gap-1">
-        <p className="min-w-0 flex-1 truncate" title={line}>
+        {/* Truncated while closed; opening shows the whole line, since touch screens have no tooltip. */}
+        <p className={`min-w-0 flex-1 ${open ? '' : 'truncate'}`} title={line}>
           {line}
         </p>
         <button
