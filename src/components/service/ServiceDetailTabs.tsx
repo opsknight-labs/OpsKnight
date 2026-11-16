@@ -2,7 +2,7 @@
 
 import React, { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
-import { Flame, ShieldAlert, Zap, Bell, Settings, Workflow } from 'lucide-react';
+import { Flame, ShieldAlert, Zap, Bell, Settings, Workflow, Wrench } from 'lucide-react';
 
 export type ServiceDetailTab =
   | 'automation'
@@ -11,6 +11,7 @@ export type ServiceDetailTab =
   | 'runbooks'
   | 'integrations'
   | 'notifications'
+  | 'maintenance'
   | 'settings';
 
 export type ServiceDetailTabsProps = {
@@ -25,6 +26,8 @@ export type ServiceDetailTabsProps = {
   runbooksContent: ReactNode;
   integrationsContent: ReactNode;
   notificationsContent: ReactNode;
+  maintenanceContent: ReactNode;
+  maintenanceActive?: boolean;
   settingsContent: ReactNode;
   actions?: ReactNode;
 };
@@ -41,6 +44,8 @@ export default function ServiceDetailTabs({
   runbooksContent,
   integrationsContent,
   notificationsContent,
+  maintenanceContent,
+  maintenanceActive,
   settingsContent,
   actions,
 }: ServiceDetailTabsProps) {
@@ -78,6 +83,12 @@ export default function ServiceDetailTabs({
       count: notificationsCount,
     },
     {
+      id: 'maintenance',
+      label: 'Maintenance',
+      icon: <Wrench className="h-4 w-4" />,
+      count: maintenanceActive ? 'Active' : undefined,
+    },
+    {
       id: 'settings',
       label: 'Service Settings',
       icon: <Settings className="h-4 w-4" />,
@@ -111,6 +122,9 @@ export default function ServiceDetailTabs({
       </DetailTabContent>
       <DetailTabContent value="notifications" className="mt-0 space-y-6">
         {notificationsContent}
+      </DetailTabContent>
+      <DetailTabContent value="maintenance" className="mt-0 space-y-6">
+        {maintenanceContent}
       </DetailTabContent>
       <DetailTabContent value="settings" className="mt-0 space-y-6">
         {settingsContent}

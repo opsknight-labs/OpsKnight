@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { logAudit } from '@/lib/audit';
+import { findServicesInMaintenance } from '@/lib/service-maintenance/windows';
 import {
   getCurrentAuthorizationActor,
   getUserPermissions,
@@ -345,6 +346,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const slaServiceMap = new Map((slaMetrics?.serviceMetrics || []).map(s => [s.id, s]));
   const metricDataState = slaMetrics ? ('available' as const) : ('unavailable' as const);
 
+  const inMaintenance = await findServicesInMaintenance(services.map(s => s.id));
   const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
     const dynamicStatus = (slaData?.dynamicStatus || service.status || 'OPERATIONAL') as
@@ -360,6 +362,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       hasCritical,
       incidentCount,
       metricDataState,
+      maintenanceTitle: inMaintenance.get(service.id)?.title ?? null,
     };
   });
 

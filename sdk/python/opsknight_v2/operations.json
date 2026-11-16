@@ -685,6 +685,59 @@
     ],
     "bodyRequired": true
   },
+  "listMaintenanceWindows": {
+    "method": "GET",
+    "path": "/maintenance-windows",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createMaintenanceWindow": {
+    "method": "POST",
+    "path": "/maintenance-windows",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getMaintenanceWindow": {
+    "method": "GET",
+    "path": "/maintenance-windows/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateMaintenanceWindow": {
+    "method": "PATCH",
+    "path": "/maintenance-windows/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteMaintenanceWindow": {
+    "method": "DELETE",
+    "path": "/maintenance-windows/{id}",
+    "kind": "none",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "endMaintenanceWindow": {
+    "method": "POST",
+    "path": "/maintenance-windows/{id}/end",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
   "getServiceObjectiveCatalog": {
     "method": "GET",
     "path": "/service-objectives/catalog",

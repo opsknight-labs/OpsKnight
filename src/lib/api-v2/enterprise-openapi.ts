@@ -23,6 +23,10 @@ import {
   SERVICE_OBJECTIVE_SCHEMAS,
   SERVICE_OBJECTIVE_OPERATIONS,
 } from './service-objective-openapi';
+import {
+  MAINTENANCE_WINDOW_SCHEMAS,
+  MAINTENANCE_WINDOW_OPERATIONS,
+} from './maintenance-window-openapi';
 import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import {
@@ -223,6 +227,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ...TEAM_ADMINISTRATION_SCHEMAS,
   ...RUNBOOK_INTERVENTION_SCHEMAS,
   ...SERVICE_OBJECTIVE_SCHEMAS,
+  ...MAINTENANCE_WINDOW_SCHEMAS,
   StatusPagePublicationState: object(
     {
       status: { type: 'string', enum: ['LIVE', 'PUBLISHING', 'FAILED', 'DISABLED'] },
@@ -1388,6 +1393,7 @@ const operations: Operation[] = [
   ...TEAM_ADMINISTRATION_OPERATIONS,
   ...RUNBOOK_INTERVENTION_OPERATIONS,
   ...SERVICE_OBJECTIVE_OPERATIONS,
+  ...MAINTENANCE_WINDOW_OPERATIONS,
   {
     method: 'get',
     path: '/status-pages/{id}/preview',
@@ -2315,7 +2321,8 @@ export function enterpriseOpenApiPaths() {
               ? 'Settings'
               : operation.path.startsWith('/runbooks')
                 ? 'Runbooks'
-                : operation.path.startsWith('/services')
+                : operation.path.startsWith('/services') ||
+                    operation.path.startsWith('/maintenance-windows')
                   ? 'Services'
                   : operation.path.startsWith('/schedules')
                     ? 'Schedules'

@@ -580,6 +580,19 @@ async function runOnce() {
 
     await assertLease(leaseEpoch);
 
+    // Service maintenance windows: release incidents held by windows that ended.
+    // Activation needs no scheduler (it is time-derived); this sweep is idempotent
+    // and resumable, so a failed tick is retried on the next one.
+    try {
+      const { processEndedMaintenanceWindows } = await import('./service-maintenance/windows');
+      const maintenanceWindows = await processEndedMaintenanceWindows(new Date());
+      if (maintenanceWindows.windows > 0) {
+        logger.info('[Cron] Maintenance windows processed', maintenanceWindows);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Maintenance window sweep failed', { error });
+    }
+
     // Group 3: Maintenance tasks (low priority, run last)
     const { processAuthenticationAlerts } = await import('./auth-control/security-events');
     await processAuthenticationAlerts();

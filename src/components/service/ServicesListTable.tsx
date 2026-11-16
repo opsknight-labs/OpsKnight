@@ -39,6 +39,7 @@ export type ServiceListItem = {
   hasCritical: boolean;
   incidentCount?: number;
   metricDataState?: 'available' | 'unavailable';
+  maintenanceTitle?: string | null;
   team?: { id: string; name: string } | null;
   _count?: { incidents: number };
 };
@@ -215,6 +216,11 @@ export default function ServicesListTable({
 
                       <div className="flex flex-wrap items-center gap-2">
                         <ServiceStatusBadge status={service.dynamicStatus} />
+                        {service.maintenanceTitle && (
+                          <Badge variant="info" size="xs" title={service.maintenanceTitle}>
+                            In maintenance
+                          </Badge>
+                        )}
                       </div>
                     </div>
 

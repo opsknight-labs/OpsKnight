@@ -39,6 +39,10 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
+import ServiceMaintenancePanel, {
+  type MaintenanceWindowView,
+} from '@/components/service/ServiceMaintenancePanel';
+import { listMaintenanceWindows, maintenanceWindowPhase } from '@/lib/service-maintenance/windows';
 import ServiceSettingsFlashToast from '@/components/service/ServiceSettingsFlashToast';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 
@@ -65,6 +69,7 @@ import {
   Webhook,
   Bell,
   ChevronDown,
+  Wrench,
 } from 'lucide-react';
 
 // Custom Components
@@ -1221,6 +1226,32 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     </div>
   );
 
+  const [maintenanceRows, maintenanceServices] = await Promise.all([
+    listMaintenanceWindows({ serviceIds: [id], take: 20, now }),
+    canManageService
+      ? prisma.service.findMany({
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+          take: 500,
+        })
+      : Promise.resolve([]),
+  ]);
+  const maintenanceWindows: MaintenanceWindowView[] = maintenanceRows.map(w => ({
+    id: w.id,
+    title: w.title,
+    description: w.description,
+    phase: maintenanceWindowPhase(w, now),
+    startsAt: w.startsAt.toISOString(),
+    endsAt: w.endsAt.toISOString(),
+    startsLabel: formatDateTime(w.startsAt, userTimeZone, { format: 'datetime' }),
+    endsLabel: formatDateTime(w.endsAt, userTimeZone, { format: 'datetime' }),
+    endBehavior: w.endBehavior,
+    publishToStatusPage: w.publishToStatusPage,
+    serviceNames: w.services.map(s => s.service.name),
+    heldCount: w._count.heldIncidents,
+  }));
+  const activeMaintenance = maintenanceWindows.find(w => w.phase === 'ACTIVE');
+
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Centralized Hero Header */}
@@ -1258,6 +1289,13 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               {dynamicStatus === 'UNKNOWN' && <AlertCircle className="h-3 w-3" />}
               {dynamicStatus === 'UNKNOWN' ? 'Unavailable' : dynamicStatus}
             </Badge>
+
+            {activeMaintenance && (
+              <Badge variant="info" size="xs" className="uppercase font-bold text-[10px] gap-1">
+                <Wrench className="h-3 w-3" aria-hidden="true" />
+                In maintenance until {activeMaintenance.endsLabel}
+              </Badge>
+            )}
 
             {service.team && (
               <Badge
@@ -1353,6 +1391,15 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               : undefined
         }
         notificationsCount={activeNotificationDestinationsCount}
+        maintenanceActive={Boolean(activeMaintenance)}
+        maintenanceContent={
+          <ServiceMaintenancePanel
+            serviceId={service.id}
+            canManage={canManageService}
+            windows={maintenanceWindows}
+            services={maintenanceServices}
+          />
+        }
         incidentsContent={incidentsContent}
         automationContent={
           hasCapability(actor.role, CAPABILITIES.AUTOMATION_READ) ? (

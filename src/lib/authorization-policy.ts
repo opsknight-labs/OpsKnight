@@ -92,6 +92,8 @@ export const AUTHORIZATION_ACTIONS = {
   POSTMORTEM_MANAGE: 'postmortem.manage',
   SERVICE_ACCOUNT_READ: 'service_account.read',
   SERVICE_ACCOUNT_MANAGE: 'service_account.manage',
+  MAINTENANCE_WINDOW_READ: 'maintenance_window.read',
+  MAINTENANCE_WINDOW_MANAGE: 'maintenance_window.manage',
 } as const;
 
 export type AuthorizationAction =
@@ -229,6 +231,8 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_ACCOUNT_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_ACCOUNT_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.MAINTENANCE_WINDOW_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.MAINTENANCE_WINDOW_MANAGE]?: AuthorizationResource;
 };
 
 export type AuthorizationRequest<A extends AuthorizationAction = AuthorizationAction> = {
@@ -743,6 +747,19 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
       global: CAPABILITIES.ADMIN_MANAGE,
       apiScope: API_SCOPES.SERVICE_ACCOUNTS_WRITE,
     },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.MAINTENANCE_WINDOW_READ,
+    {
+      global: CAPABILITIES.SERVICE_READ_ALL,
+      scoped: CAPABILITIES.SERVICE_READ_SCOPED,
+      apiScope: API_SCOPES.SERVICES_READ,
+    },
+  ],
+  [
+    // Team membership of every touched service is enforced per request (see api-v2/maintenance-windows).
+    AUTHORIZATION_ACTIONS.MAINTENANCE_WINDOW_MANAGE,
+    { global: CAPABILITIES.OPERATIONS_MANAGE, apiScope: API_SCOPES.SERVICES_WRITE },
   ],
 ]);
 

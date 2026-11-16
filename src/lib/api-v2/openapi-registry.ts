@@ -556,6 +556,54 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/maintenance-windows',
+    'listMaintenanceWindows',
+    'services:read',
+    'list',
+    'MaintenanceWindow'
+  ),
+  op(
+    'post',
+    '/maintenance-windows',
+    'createMaintenanceWindow',
+    'services:write',
+    'item',
+    'MaintenanceWindow'
+  ),
+  op(
+    'get',
+    '/maintenance-windows/{id}',
+    'getMaintenanceWindow',
+    'services:read',
+    'item',
+    'MaintenanceWindow'
+  ),
+  op(
+    'patch',
+    '/maintenance-windows/{id}',
+    'updateMaintenanceWindow',
+    'services:write',
+    'item',
+    'MaintenanceWindow'
+  ),
+  op(
+    'delete',
+    '/maintenance-windows/{id}',
+    'deleteMaintenanceWindow',
+    'services:write',
+    'none',
+    ''
+  ),
+  op(
+    'post',
+    '/maintenance-windows/{id}/end',
+    'endMaintenanceWindow',
+    'services:write',
+    'item',
+    'MaintenanceWindow'
+  ),
+  op(
+    'get',
     '/service-objectives/catalog',
     'getServiceObjectiveCatalog',
     'service-objectives:read',

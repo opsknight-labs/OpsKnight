@@ -724,6 +724,7 @@ model Service {
   subscriptionServices            StatusPageSubscriptionService[]
   slackDestinations               SlackDestination[]
   microsoftTeamsDestinations      MicrosoftTeamsDestination[]
+  maintenanceWindows              MaintenanceWindowService[]
 
   @@index([teamId])
   @@index([escalationPolicyId])
@@ -1456,7 +1457,11 @@ model Incident {
   slaPauses                           IncidentSlaPause[]
   runbookExecutions                   RunbookExecution[]
   runbookSuggestions                  RunbookSuggestion[]
+  /// Set when the incident was created SUPPRESSED because its service was in a maintenance window.
+  maintenanceWindowId                 String?
+  maintenanceWindow                   MaintenanceWindow?              @relation(fields: [maintenanceWindowId], references: [id], onDelete: SetNull)
 
+  @@index([maintenanceWindowId, status])
   @@index([dedupKey])
   @@index([serviceId, dedupKey, status])
   @@index([nextEscalationAt, escalationStatus])
@@ -2631,7 +2636,11 @@ model StatusPageAnnouncement {
   updatedAt              DateTime                                 @updatedAt
   statusPage             StatusPage                               @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
   incident               Incident?                                @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  /// Announcement published and kept in sync by a service maintenance window.
+  maintenanceWindowId    String?
+  maintenanceWindow      MaintenanceWindow?                       @relation(fields: [maintenanceWindowId], references: [id], onDelete: Cascade)
 
+  @@index([maintenanceWindowId])
   @@index([statusPageId, isActive, startDate])
   @@index([statusPageId, isActive, publishAt])
   @@index([incidentId])
@@ -5246,4 +5255,48 @@ model AccessReviewItem {
 
   @@index([reviewId, decision])
   @@index([userId])
+}
+
+enum MaintenanceEndBehavior {
+  RESUME_FIRING
+  RESOLVE_HELD
+}
+
+/// A scheduled window during which new alerts for its services are held
+/// (incidents created SUPPRESSED, nobody paged). Activity is derived from
+/// startsAt/endsAt, never from a stored flag.
+model MaintenanceWindow {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  revision            Int                        @default(dbgenerated("1"))
+  id                  String                     @id @default(cuid())
+  title               String
+  description         String?
+  startsAt            DateTime
+  endsAt              DateTime
+  endBehavior         MaintenanceEndBehavior     @default(RESUME_FIRING)
+  publishToStatusPage Boolean                    @default(false)
+  /// Set by the end sweep once every held incident has been handled.
+  endProcessedAt      DateTime?
+  createdById         String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  services            MaintenanceWindowService[]
+  heldIncidents       Incident[]
+  announcements       StatusPageAnnouncement[]
+
+  @@index([endProcessedAt, endsAt])
+  @@index([startsAt])
+}
+
+model MaintenanceWindowService {
+  windowId  String
+  serviceId String
+  /// Denormalised copies of the window bounds so the event hot path is one index range scan.
+  startsAt  DateTime
+  endsAt    DateTime
+  window    MaintenanceWindow @relation(fields: [windowId], references: [id], onDelete: Cascade)
+  service   Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([windowId, serviceId])
+  @@index([serviceId, endsAt, startsAt])
 }

@@ -211,6 +211,17 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
     scopes: ['incidents:read', 'services:read', 'events:write'],
     expiresInDays: 90,
   },
+  'POST /maintenance-windows': {
+    title: 'Database failover rehearsal',
+    description: 'Planned primary failover; alerts are held until the window ends.',
+    serviceIds: ['cm123456789012345678901234'],
+    startsAt: '2030-01-15T02:00:00Z',
+    endsAt: '2030-01-15T04:00:00Z',
+    endBehavior: 'RESUME_FIRING',
+    publishToStatusPage: false,
+  },
+  'PATCH /maintenance-windows/{id}': { endsAt: '2030-01-15T05:00:00Z' },
+  'POST /maintenance-windows/{id}/end': {},
   'POST /postmortems': {
     incidentId: 'inc_123456',
     title: 'Postmortem: Checkout Latency Spike in EU Region',
