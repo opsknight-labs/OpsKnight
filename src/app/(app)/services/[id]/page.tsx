@@ -1253,6 +1253,19 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         ? formatDateTime(nextOccurrence.startsAt, userTimeZone, { format: 'datetime' })
         : null,
       serviceNames: s.services.map(x => x.service.name),
+      description: s.description,
+      serviceIds: s.services.map(x => x.serviceId),
+      frequency: s.frequency,
+      interval: s.interval,
+      byWeekday: s.byWeekday,
+      dayOfMonth: s.dayOfMonth,
+      timeZone: s.timeZone,
+      startTime: s.startTime,
+      durationMinutes: s.durationMinutes,
+      startsOn: s.startsOn,
+      endsOn: s.endsOn,
+      endBehavior: s.endBehavior,
+      publishToStatusPage: s.publishToStatusPage,
     };
   });
   const maintenanceWindows: MaintenanceWindowView[] = maintenanceRows.map(w => ({

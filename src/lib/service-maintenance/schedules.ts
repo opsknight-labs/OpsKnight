@@ -10,6 +10,7 @@ import {
   createMaintenanceWindow,
   deleteMaintenanceWindow,
   MAINTENANCE_LIMITS,
+  updateMaintenanceWindow,
   type MaintenanceActor,
 } from '@/lib/service-maintenance/windows';
 import {
@@ -30,6 +31,9 @@ export const MAINTENANCE_SCHEDULE_LIMITS = {
   refreshMs: 24 * 60 * 60 * 1000,
   schedulesPerRun: 20,
   occurrencesPerSchedule: 60,
+  // Request paths (REST replay transaction, server actions) create only the next
+  // few occurrences; the scheduler fills the rest of the horizon on its next tick.
+  syncOccurrences: 2,
   transactionTimeoutMs: 60_000,
   failureBackoffMs: 15 * 60 * 1000,
 } as const;
@@ -223,6 +227,8 @@ async function audit(
  * Creates the occurrences starting in (materializedUntil, now + horizon]. Starting
  * after the previous horizon means an occurrence someone deleted or moved by hand
  * is not recreated. `fresh` restarts from now (after an edit or resume).
+ * At most `limit` are created; materializedUntil then stops at the last one handled,
+ * so the schedule stays due and the scheduler continues from there.
  * Caller holds the schedule lock.
  */
 async function materializeLocked(
@@ -230,7 +236,8 @@ async function materializeLocked(
   scheduleId: string,
   actor: MaintenanceActor,
   now: Date,
-  fresh: boolean
+  fresh: boolean,
+  limit: number = MAINTENANCE_SCHEDULE_LIMITS.occurrencesPerSchedule
 ): Promise<number> {
   const schedule = await tx.maintenanceSchedule.findUnique({
     where: { id: scheduleId },
@@ -243,6 +250,7 @@ async function materializeLocked(
   const serviceIds = schedule.services.map(s => s.serviceId);
 
   let created = 0;
+  let reached = until;
   if (serviceIds.length > 0 && from <= until) {
     const occurrences = occurrencesBetween(
       scheduleRecurrence(schedule),
@@ -276,11 +284,15 @@ async function materializeLocked(
         { tx, now, scheduleId }
       );
       created += 1;
+      if (created >= limit) {
+        reached = occurrence.startsAt;
+        break;
+      }
     }
   }
   await tx.maintenanceSchedule.update({
     where: { id: scheduleId },
-    data: { materializedUntil: until },
+    data: { materializedUntil: reached },
   });
   return created;
 }
@@ -353,7 +365,14 @@ export async function createMaintenanceSchedule(
       title: data.title,
       summary: describeRecurrence(rule),
     });
-    await materializeLocked(tx, created.id, actor, now, true);
+    await materializeLocked(
+      tx,
+      created.id,
+      actor,
+      now,
+      true,
+      MAINTENANCE_SCHEDULE_LIMITS.syncOccurrences
+    );
     return tx.maintenanceSchedule.findUniqueOrThrow({
       where: { id: created.id },
       select: maintenanceScheduleSelect,
@@ -361,10 +380,24 @@ export async function createMaintenanceSchedule(
   });
 }
 
+/** Same rule, zone, timing, dates and service set: upcoming occurrences can be kept. */
+function sameTiming(
+  a: MaintenanceRecurrence,
+  b: MaintenanceRecurrence,
+  aServices: string[],
+  bServices: string[]
+): boolean {
+  const key = (rule: MaintenanceRecurrence, services: string[]) =>
+    JSON.stringify([rule, [...new Set(services)].sort()]);
+  return key(a, aServices) === key(b, bServices);
+}
+
 /**
- * Applies a change, then replaces the upcoming occurrences: those not yet started
- * are deleted and re-materialised from the new rule (unless paused). Active and
- * ended occurrences keep their original bounds.
+ * Applies a change. When only text, endBehavior or publishing changes, upcoming
+ * occurrences are updated in place (same window ids and announcements). A timing,
+ * service or pause change replaces them: those not yet started are deleted and
+ * re-materialised from the new rule (unless paused). Active and ended occurrences
+ * are never touched.
  */
 export async function updateMaintenanceSchedule(
   id: string,
@@ -420,21 +453,59 @@ export async function updateMaintenanceSchedule(
           ? (existing.pausedAt ?? now)
           : null;
 
+    const inPlace =
+      sameTiming(current, rule, previousServiceIds, serviceIds) &&
+      (pausedAt === null) === (existing.pausedAt === null);
+    const title = patch.title ?? existing.title;
+    const description =
+      patch.description === undefined ? existing.description : patch.description || null;
+    const endBehavior = patch.endBehavior ?? existing.endBehavior;
+    const publishToStatusPage = patch.publishToStatusPage ?? existing.publishToStatusPage;
+
     await tx.maintenanceSchedule.update({
       where: { id },
       data: {
         ...rule,
-        title: patch.title ?? existing.title,
-        description:
-          patch.description === undefined ? existing.description : patch.description || null,
-        ...(patch.endBehavior ? { endBehavior: patch.endBehavior } : {}),
-        publishToStatusPage: patch.publishToStatusPage ?? existing.publishToStatusPage,
+        title,
+        description,
+        endBehavior,
+        publishToStatusPage,
         pausedAt,
-        materializedUntil: null,
+        ...(inPlace ? {} : { materializedUntil: null }),
       },
     });
-    await deleteUpcomingOccurrences(tx, id, actor, now);
-    await materializeLocked(tx, id, actor, now, true);
+    if (inPlace) {
+      const upcoming = await tx.maintenanceWindow.findMany({
+        where: { scheduleId: id, startsAt: { gt: now } },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          endBehavior: true,
+          publishToStatusPage: true,
+        },
+      });
+      for (const window of upcoming) {
+        const changes = {
+          ...(window.title !== title ? { title } : {}),
+          ...(window.description !== description ? { description } : {}),
+          ...(window.endBehavior !== endBehavior ? { endBehavior } : {}),
+          ...(window.publishToStatusPage !== publishToStatusPage ? { publishToStatusPage } : {}),
+        };
+        if (Object.keys(changes).length === 0) continue;
+        await updateMaintenanceWindow(window.id, changes, actor, { tx, now });
+      }
+    } else {
+      await deleteUpcomingOccurrences(tx, id, actor, now);
+      await materializeLocked(
+        tx,
+        id,
+        actor,
+        now,
+        true,
+        MAINTENANCE_SCHEDULE_LIMITS.syncOccurrences
+      );
+    }
 
     const action =
       patch.paused === true && !existing.pausedAt

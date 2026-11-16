@@ -7,7 +7,12 @@ import {
   materializeMaintenanceSchedules,
   updateMaintenanceSchedule,
 } from '@/lib/service-maintenance/schedules';
-import { createTestService, resetDatabase, testPrisma } from '../helpers/test-db';
+import {
+  createTestService,
+  createTestStatusPage,
+  resetDatabase,
+  testPrisma,
+} from '../helpers/test-db';
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -55,7 +60,7 @@ describeIfRealDB('recurring maintenance schedules', { timeout: 120000 }, () => {
     await resetDatabase();
   });
 
-  it('materialises the next 14 days once, idempotently', async () => {
+  it('creates the next two occurrences at once; the scheduler fills 14 days idempotently', async () => {
     const service = await createTestService('Sched Idempotent');
     const now = new Date();
     const schedule = await createMaintenanceSchedule(
@@ -71,7 +76,19 @@ describeIfRealDB('recurring maintenance schedules', { timeout: 120000 }, () => {
       actor,
       { now }
     );
+    // The request path only creates the next two; the schedule stays due.
+    const immediate = await occurrences(schedule.id);
+    expect(immediate).toHaveLength(2);
+    const created = await testPrisma.maintenanceSchedule.findUniqueOrThrow({
+      where: { id: schedule.id },
+    });
+    expect(created.materializedUntil).toEqual(immediate[1].startsAt);
+
+    const fill = await materializeMaintenanceSchedules(now);
+    expect(fill).toMatchObject({ schedules: 1, failed: 0 });
     const first = await occurrences(schedule.id);
+    expect(fill.created).toBe(first.length - 2);
+    expect(first.slice(0, 2).map(w => w.id)).toEqual(immediate.map(w => w.id));
     expect(first.length).toBeGreaterThanOrEqual(14);
     expect(first.length).toBeLessThanOrEqual(15);
     for (const w of first) {
@@ -167,6 +184,8 @@ describeIfRealDB('recurring maintenance schedules', { timeout: 120000 }, () => {
 
     const resumed = await updateMaintenanceSchedule(schedule.id, { paused: false }, actor);
     expect(resumed.pausedAt).toBeNull();
+    expect(await occurrences(schedule.id)).toHaveLength(3);
+    await materializeMaintenanceSchedules(new Date());
     expect((await occurrences(schedule.id)).length).toBeGreaterThanOrEqual(14);
   });
 
@@ -211,12 +230,86 @@ describeIfRealDB('recurring maintenance schedules', { timeout: 120000 }, () => {
       actor,
       { now }
     );
+    await materializeMaintenanceSchedules(now);
     const [skip, ...rest] = await occurrences(schedule.id);
     await deleteMaintenanceWindow(skip.id, actor, { now });
-    await materializeMaintenanceSchedules(new Date(now.getTime() + 2 * DAY));
+    const topUp = await materializeMaintenanceSchedules(new Date(now.getTime() + 2 * DAY));
     const after = await occurrences(schedule.id);
     expect(after.some(w => w.startsAt.getTime() === skip.startsAt.getTime())).toBe(false);
+    expect(topUp.created).toBe(2);
     expect(after.length).toBe(rest.length + 2);
+  });
+
+  it('updates upcoming occurrences in place for a text-only edit', async () => {
+    const service = await createTestService('Sched Text Edit');
+    const page = await createTestStatusPage();
+    await testPrisma.statusPageService.create({
+      data: { statusPageId: page.id, serviceId: service.id, showOnPage: true },
+    });
+    const now = new Date();
+    const input = {
+      title: 'Weekly patching',
+      serviceIds: [service.id],
+      frequency: 'DAILY' as const,
+      timeZone: 'UTC',
+      startTime: '03:00',
+      durationMinutes: 60,
+      startsOn: dateKey(now),
+      publishToStatusPage: true,
+    };
+    const schedule = await createMaintenanceSchedule(input, actor, { now });
+    await materializeMaintenanceSchedules(now);
+    const before = await occurrences(schedule.id);
+    const announcementsBefore = await testPrisma.statusPageAnnouncement.findMany({
+      where: { maintenanceWindowId: { in: before.map(w => w.id) } },
+      orderBy: { id: 'asc' },
+    });
+    expect(announcementsBefore).toHaveLength(before.length);
+    const fanout = (mode: string) =>
+      testPrisma.backgroundJob.count({
+        where: { payload: { path: ['deliveryMode'], equals: mode } },
+      });
+    // Pretend the original announcements were delivered.
+    await testPrisma.backgroundJob.updateMany({
+      where: { type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2' },
+      data: { status: 'COMPLETED' },
+    });
+    const allEligibleBefore = await fanout('ALL_ELIGIBLE');
+    expect(allEligibleBefore).toBe(before.length);
+
+    // The UI resends every field; only the text actually changes.
+    await updateMaintenanceSchedule(
+      schedule.id,
+      { ...input, title: 'Weekly patching (db)', description: 'Rolling restarts' },
+      actor,
+      { now }
+    );
+
+    const after = await occurrences(schedule.id);
+    expect(after.map(w => w.id)).toEqual(before.map(w => w.id));
+    expect(after.map(w => w.startsAt)).toEqual(before.map(w => w.startsAt));
+    for (const w of after) {
+      expect(w.title).toBe('Weekly patching (db)');
+      expect(w.description).toBe('Rolling restarts');
+    }
+    const announcementsAfter = await testPrisma.statusPageAnnouncement.findMany({
+      where: { maintenanceWindowId: { in: after.map(w => w.id) } },
+      orderBy: { id: 'asc' },
+    });
+    expect(announcementsAfter.map(a => a.id)).toEqual(announcementsBefore.map(a => a.id));
+    expect(announcementsAfter.every(a => a.title === 'Weekly patching (db)')).toBe(true);
+    // No announcement is recreated and no ALL_ELIGIBLE fan-out is queued, so nobody
+    // already notified is emailed again. The existing announcement sync does bump the
+    // generation and queue an UNDELIVERED_ONLY fan-out (subscribers never yet emailed).
+    expect(await fanout('ALL_ELIGIBLE')).toBe(allEligibleBefore);
+    expect(await fanout('UNDELIVERED_ONLY')).toBe(before.length);
+    expect(announcementsAfter.map(a => a.notificationGeneration)).toEqual(
+      announcementsBefore.map(a => a.notificationGeneration + 1)
+    );
+    const schedulesAfter = await testPrisma.maintenanceSchedule.findUniqueOrThrow({
+      where: { id: schedule.id },
+    });
+    expect(schedulesAfter.title).toBe('Weekly patching (db)');
   });
 
   it('rejects a duration that overlaps the next occurrence', async () => {

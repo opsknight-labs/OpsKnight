@@ -83,7 +83,8 @@ it('creates a schedule with occurrences, patches with an ETag, pauses and delete
     where: { scheduleId: schedule.id },
     orderBy: { startsAt: 'asc' },
   });
-  expect(occurrences.length).toBeGreaterThanOrEqual(3);
+  // The request creates only the next two; the scheduler fills the rest of the horizon.
+  expect(occurrences).toHaveLength(2);
   expect(occurrences[0].startsAt.toISOString()).toBe(schedule.nextOccurrenceAt);
   const occurrence = await invokeV2(
     readWindow,
