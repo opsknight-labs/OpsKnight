@@ -80,25 +80,33 @@ create a match by themselves, and the match percentage is a ranking signal, **no
 - **Time budgets.** Every work item has a wall-clock budget; every intelligence transaction sets a
   statement and lock timeout. Work that exceeds its budget is stopped and retried with backoff.
 - **Bounded concurrency, batch size and candidate counts** are all settings with enforced limits.
-- **Its own thread in `integrated`.** A single-node `integrated` process runs the lane in a
-  `worker_threads` Worker (`src/lib/intelligence/jobs/lane-thread.ts`), with its own V8 heap, event loop
-  and Prisma client. Measured, the lane's cost to ingestion in the same thread was not its JavaScript
+- **Its own process in `integrated`.** A single-node `integrated` process runs the lane in a forked
+  child process (`src/lib/intelligence/jobs/lane-thread.ts`; status, metrics and settings still call it
+  the "lane thread"), with its own V8 heap, event loop and Prisma client. Measured, the lane's cost to ingestion in the same thread was not its JavaScript
   (3.5 to 5 ms of CPU per burst) but what it shared with `processEvent`: Prisma response parsing,
   allocation and the garbage-collection pauses they cause, which stop every in-flight event. In its
-  own thread none of that lands on ingestion. The thread runs the same lane (wake listener, scheduler,
+  own process none of that lands on ingestion. It is a process and not a `worker_threads` Worker
+  because Prisma's library query engine calls back into the JavaScript environment that created the
+  client: a worker thread that ends (terminated, an uncaught error, out of memory) while its client has
+  queries or a transaction in flight aborts the whole process with SIGSEGV/SIGABRT, even after
+  `$disconnect()` (reproduced on Prisma 5.22 in 5 of 5 runs per scenario). A child process can die in
+  every one of those ways, 20 of 20 runs each, without touching its parent. The cost is a second Node
+  process (its own resident memory, roughly that of a small Node service plus a Prisma engine) while
+  intelligence is enabled. The process runs the same lane (wake listener, scheduler,
   abortable budgets, generation fencing, quarantine, kind breaker, backpressure). Its whole Prisma
   client is the lane's pool (`application_name` `opsknight-intelligence-lane`, size
   `INTELLIGENCE_LANE_DATABASE_POOL_SIZE`, default 10), so the lane never takes an ingestion connection.
-  `processEvent`'s activity count is mirrored into shared memory (a sequence-locked copy, epoch clock),
-  so the thread yields to ingestion exactly as below, and the host publishes the ingestion pool's
-  waiting-query count once a second, so the pool-pressure pause still protects that pool. The thread
-  reports its status and metrics at most once a second (`getIntelligenceLaneStatus()` and `/metrics`
+  `processEvent`'s activity count is sent to the process over IPC (at once when a burst starts,
+  otherwise coalesced to at most one message per 10 ms; epoch clock), so it yields to ingestion as
+  below, and the host sends the ingestion pool's waiting-query count once a second while a lane process
+  exists, so the pool-pressure pause still protects that pool. The process reports its status and metrics at most once a second (`getIntelligenceLaneStatus()` and `/metrics`
   are unchanged; the status gains a `thread` block). A thread that exits unexpectedly is restarted
   with backoff (1 s doubling to 60 s, reset after five minutes of running), health is degraded until
   it runs again, and work it had claimed is re-claimed after its lease. Stopping asks the thread to
-  stop its lane (aborting pauses, waiting for the in-flight cycle) and disconnect, and terminates it
-  after 30 s. `worker`, `general-worker` and the dedicated `intelligence-worker` role are unchanged.
-- **The thread exists only while intelligence is enabled.** `instrumentation.ts` starts the host with a
+  stop its lane (aborting pauses, waiting for the in-flight cycle) and disconnect, and kills it after
+  30 s. A lane process exits when its parent's IPC channel closes, so it never outlives the server.
+  `worker`, `general-worker` and the dedicated `intelligence-worker` role are unchanged.
+- **The lane process exists only while intelligence is enabled.** `instrumentation.ts` starts the host with a
   stand-in (`jobs/lane-stand-in.ts`): while settings say disabled, the ordinary lane idles on the main
   thread as it did before the thread existed (one settings row per poll on the process pool, the
   disabled-time sweeps), so a disabled install carries no second heap, Prisma engine or lane
@@ -109,7 +117,8 @@ create a match by themselves, and the match percentage is a ranking signal, **no
 - **Bundle build path.** The thread entry (`jobs/lane-thread-entry.ts`) is bundled to
   `scripts/dist/intelligence-lane-thread.cjs` by `scripts/build-intelligence-lane-thread.mjs`. Every
   build or start from source produces it: `npm run build` (`postbuild`), `npm start` and
-  `npm run start:prod` (`prestart`, only when missing, never failing the start) and
+  `npm run start:prod` (`prestart`, rebuilt on every start so pulled code never runs an older lane,
+  never failing the start) and
   `npm run build:scripts` (the Dockerfile, unchanged). The host looks for it under the working
   directory (dev, `next start`, the Docker image) and, when the working directory is
   `<root>/.next/standalone` (a standalone start from a checkout), under `<root>`.
@@ -217,7 +226,7 @@ LOG_LEVEL=error DATABASE_URL=postgresql://.../opsknight_bench \
 Each timed burst also records attribution data: event-loop delay and utilisation, process CPU,
 garbage-collection pauses, Prisma pool wait on the ingestion pool, engine-timed ingestion statements
 per event and sampled PostgreSQL wait events. The report records host load and the lane's pool plan.
-`--lane-mode thread` (the default) runs the candidate's lane in a worker thread through the production
+`--lane-mode thread` (the default) runs the candidate's lane in its own process through the production
 host, as `integrated` does; `--lane-mode in-process` runs it on the ingestion thread (the fallback
 configuration, measured separately and outside the contract). The storm drain takes the same flag
 (default `in-process`).
@@ -969,7 +978,7 @@ process. Its wake listener uses one additional session connection, accounted for
 Prisma pool. Pool contention is measured through Prisma's local engine metrics without acquiring
 another SQL connection; contention pauses the lane and requires two measured quiet samples before
 recovery. Paging-lag hysteresis remains independent. Missing pool telemetry is unknown, not a zero
-measurement. A single-node `integrated` install keeps the lane in its own process, in a worker thread
+measurement. A single-node `integrated` install runs the lane in a child process of its own
 with its own heap and Prisma client; it uses its own small pool and backs off while ingestion is busy
 (see "Backpressure and budgets"). A shared process
 can therefore use up to `INTELLIGENCE_LANE_DATABASE_POOL_SIZE` more PostgreSQL connections while the
