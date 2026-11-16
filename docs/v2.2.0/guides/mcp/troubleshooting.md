@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 106 MCP codes and 24 log events found in the source.
+This page lists 110 MCP codes and 26 log events found in the source.
 
 ## Connecting and signing in
 
@@ -92,12 +92,14 @@ This page lists 106 MCP codes and 24 log events found in the source.
 | <a id="MCP_INVALID_DEPENDENCY"></a>`MCP_INVALID_DEPENDENCY` | An execute_plan step depends on a step id that does not exist. | Correct dependsOn. |
 | <a id="MCP_CYCLIC_PLAN"></a>`MCP_CYCLIC_PLAN` | execute_plan steps depend on each other in a cycle. | Remove the circular dependsOn. |
 | <a id="MCP_DEPENDENCY_FAILED"></a>`MCP_DEPENDENCY_FAILED` | An execute_plan step was skipped because a step it depends on failed. | Fix the failed step first. |
+| <a id="MCP_PLAN_REFERENCE"></a>`MCP_PLAN_REFERENCE` | An execute_plan step has a $from reference that names no dependency, or whose pointer finds nothing usable in that step's result.data. | List the step in dependsOn and point at a value that exists, for example /data/0/id. |
 | <a id="MCP_DUPLICATE_OR_UNSAFE_KEY"></a>`MCP_DUPLICATE_OR_UNSAFE_KEY` | The JSON body repeats a key or uses a reserved key such as __proto__. | Send plain JSON with unique keys. |
 | <a id="MCP_JSON_DEPTH"></a>`MCP_JSON_DEPTH` | The JSON body is nested deeper than 24 levels. | Flatten the arguments. |
 | <a id="MCP_CONTENT_TYPE"></a>`MCP_CONTENT_TYPE` | The POST did not send Content-Type: application/json. | Use an MCP client or the official SDK. |
 | <a id="MCP_SUBSCRIPTIONS_BUSY"></a>`MCP_SUBSCRIPTIONS_BUSY` | The process already holds 32 subscription streams. | Retry later. |
 | <a id="MCP_CONTENTION"></a>`MCP_CONTENTION` | Another request changed the same record at the same moment and the database turned this one back after its own retries. | Read the current state, then try again. Reuse the same idempotencyKey for a change so a replay never applies it twice. |
 | <a id="MCP_NOT_A_READ"></a>`MCP_NOT_A_READ` | read_operation was called with an operation that changes something. | Use call_operation for routine changes or operation_prepare for reviewed ones. |
+| <a id="MCP_NOT_A_CHANGE"></a>`MCP_NOT_A_CHANGE` | call_operation was called with an operation that only reads. | Use read_operation with the same operationId and args. |
 | <a id="MCP_SUBSCRIPTIONS_LIMIT"></a>`MCP_SUBSCRIPTIONS_LIMIT` | This connection already holds two subscription streams. | Close a stream first. |
 
 ## Reviewed changes
@@ -132,12 +134,14 @@ This page lists 106 MCP codes and 24 log events found in the source.
 | <a id="MCP_INVALID_CIMD_HOST"></a>`MCP_INVALID_CIMD_HOST` | A trusted assistant host is not a plain DNS name. | Enter one host name per line, without scheme, port or path. |
 | <a id="MCP_INVALID_BROWSER_ORIGIN"></a>`MCP_INVALID_BROWSER_ORIGIN` | An Allowed browser origins entry is not an exact origin (scheme, host and optional port), uses plain http off loopback, or the list has more than 10 entries. | Enter origins such as https://inspector.example.com or http://localhost:6274, one per line. |
 | <a id="MCP_DCR_REQUIRES_SCOPES"></a>`MCP_DCR_REQUIRES_SCOPES` | Automatic connections was turned on with no permissions ticked. | Tick at least one permission under What assistants may do. |
+| <a id="MCP_SSO_REQUIRED"></a>`MCP_SSO_REQUIRED` | Access granted by your identity provider was switched on while single sign-on is not configured and enabled. | Configure and enable single sign-on (OIDC) first, then turn on Allow access granted by your identity provider. |
 | <a id="MCP_INVALID_NAME"></a>`MCP_INVALID_NAME` | A manually registered assistant needs a name. | Enter a name. |
 | <a id="MCP_INVALID_REDIRECT"></a>`MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS, loopback HTTP or a native app scheme (a reverse-DNS scheme, or cursor, vscode, vscode-insiders or windsurf). | Enter the exact callback the assistant uses. |
 | <a id="MCP_CONFIRMATION_REQUIRED"></a>`MCP_CONFIRMATION_REQUIRED` | "Revoke all active connections" was submitted without ticking the confirmation box. | Tick the box in the dialog, then confirm. |
 | <a id="MCP_PAT_INVALID_EXPIRY"></a>`MCP_PAT_INVALID_EXPIRY` | The chosen expiry is outside 1 day to the policy maximum (at most 90 days). | Choose one of the offered expiry options. |
 | <a id="MCP_LOGIN_REQUIRED"></a>`MCP_LOGIN_REQUIRED` | The settings or review page needs a signed-in user. | Sign in. |
 | <a id="MCP_INVALID_CAPABILITY"></a>`MCP_INVALID_CAPABILITY` | Exposed capabilities was saved with a name that is not a tool, operation or domain. | Reload the tab and choose from the list. |
+| <a id="MCP_INVALID_USAGE_RANGE"></a>`MCP_INVALID_USAGE_RANGE` | The usage date range is not valid: the start is after the end, it starts before the request log retention, or it spans more than 365 days. | Pick a start before the end, within the retention period and at most 365 days long. |
 | <a id="MCP_PAT_DISABLED"></a>`MCP_PAT_DISABLED` | A personal access token was requested while personal access tokens are off in the access policy. Turning them off revokes every token; a revoked token gets MCP_INVALID_GRANT. | Ask an administrator to allow personal access tokens, then create a new token. |
 | <a id="MCP_PAT_LIMIT_REACHED"></a>`MCP_PAT_LIMIT_REACHED` | The person already holds 20 active personal access tokens. | Revoke a token that is no longer used under Connections, then create the new one. |
 
@@ -230,8 +234,10 @@ Search the application log for these event names. Entries never contain tokens, 
 | <a id="mcp.sensitive_read.audit_failed"></a>`mcp.sensitive_read.audit_failed` | warn | Writing the audit row for a sensitive read failed; the read itself was still served. `operationId` and `errorName` only. | `src/lib/mcp/core/execution.ts` |
 | <a id="mcp.subscription.access_lost"></a>`mcp.subscription.access_lost` | info | A listen stream was closed because the person lost access to a subscribed resource, or their role or teams changed. Clients re-read on reconnect. | `src/app/mcp/route.ts` |
 | <a id="mcp.subscription.listener_failed"></a>`mcp.subscription.listener_failed` | warn | A subscription stream failed while delivering a change. | `src/lib/mcp/protocol/subscriptions.ts` |
+| <a id="mcp.subscription.page_withheld"></a>`mcp.subscription.page_withheld` | info | A page for opsknight://oncall/me/pages was not sent because the person can no longer read that incident (`incidentId` only). | `src/lib/mcp/protocol/page-push.ts` |
 | <a id="mcp.subscription.poll_failed"></a>`mcp.subscription.poll_failed` | warn | The subscription change poll failed; the stream retries. | `src/lib/mcp/protocol/subscriptions.ts` |
 | <a id="mcp.token.grace_reissued"></a>`mcp.token.grace_reissued` | warn | A rotated refresh token was replayed inside the grace window and a new token issued (`grantId`, `replacedId`, `revokedSuccessorId`). Occasional lines are lost responses; many for one grant suggest a stolen token racing the real client. | `src/lib/mcp/auth/oauth-model.ts` |
+| <a id="mcp.token.id_jag_refused"></a>`mcp.token.id_jag_refused` | warn | An identity-provider grant (ID-JAG) was refused at the token endpoint. `reason` names the failed check (for example `verification_failed`, `client_mismatch`, `replayed`, `subject_not_active`, `resource_mismatch`); the client only saw the OAuth error code. | `src/lib/mcp/auth/enterprise-grant.ts` |
 | <a id="mcp.token.refresh_reuse_revoked"></a>`mcp.token.refresh_reuse_revoked` | warn | A rotated refresh token was reused outside the grace window; the whole grant was revoked (`grantId`). The audit log has mcp.grant.reuse_detected with the user and client. | `src/app/oauth/mcp/token/route.ts` |
 | <a id="mcp.token.transient"></a>`mcp.token.transient` | warn | A token request hit a passing database problem and was answered temporarily_unavailable. `prismaCode` and `state` only. | `src/app/oauth/mcp/token/route.ts` |
 | <a id="mcp.token.unexpected_error"></a>`mcp.token.unexpected_error` | error | An unexpected error on the token endpoint, answered server_error. `name` and `prismaCode` only; never form values, codes or tokens. | `src/app/oauth/mcp/token/route.ts` |

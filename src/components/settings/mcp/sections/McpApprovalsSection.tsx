@@ -16,6 +16,7 @@ import { personLabel } from '@/components/settings/mcp/sections/McpConnectionsSe
 import { getAssistantIcon } from '@/components/common/BrandLogos';
 import { RISK_PILL_CLASS, riskMeta } from '@/components/settings/mcp/risk';
 import { cn } from '@/lib/utils';
+import McpBulkReview, { MCP_BULK_REVIEW_FORM } from '@/components/settings/mcp/McpBulkReview';
 import type {
   McpApprovalRow,
   McpApprovalStatus,
@@ -68,6 +69,8 @@ export default function McpApprovalsSection({
     state: state === 'pending' ? null : state,
   };
   const noun = kind === 'operations' ? 'change' : 'runbook run';
+  // Runbook runs are always reviewed one at a time: each plan has its own steps to read.
+  const bulk = kind === 'operations' && state === 'pending' && !runbooksOnly;
   // The other queue's waiting requests, offered from this queue's empty state.
   const otherKind: ApprovalKind = kind === 'operations' ? 'runbooks' : 'operations';
   const otherWaiting = runbooksOnly
@@ -182,18 +185,30 @@ export default function McpApprovalsSection({
               return (
                 <ResponsiveRow key={row.id}>
                   <ResponsiveCell label="Request" primary className="md:max-w-[22rem]">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground" title={row.title}>
-                        {row.title}
-                      </p>
-                      {row.detail && (
-                        <p
-                          className="truncate font-mono text-[11px] text-muted-foreground"
-                          title={row.detail}
-                        >
-                          {row.detail}
-                        </p>
+                    <div className="flex min-w-0 items-center">
+                      {bulk && (
+                        <input
+                          type="checkbox"
+                          name="ids"
+                          value={row.id}
+                          form={MCP_BULK_REVIEW_FORM}
+                          aria-label={`Select ${row.title} requested by ${who}`}
+                          className="mr-3 h-4 w-4 shrink-0 rounded border-input accent-primary"
+                        />
                       )}
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground" title={row.title}>
+                          {row.title}
+                        </p>
+                        {row.detail && (
+                          <p
+                            className="truncate font-mono text-[11px] text-muted-foreground"
+                            title={row.detail}
+                          >
+                            {row.detail}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </ResponsiveCell>
                   {kind === 'operations' && (
@@ -281,6 +296,7 @@ export default function McpApprovalsSection({
             })}
           </ResponsiveTable>
         )}
+        {bulk && rows.length > 0 && <McpBulkReview />}
       </div>
       <div className="-mx-4 md:-mx-6">
         <Pagination

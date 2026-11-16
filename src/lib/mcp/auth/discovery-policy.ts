@@ -17,6 +17,7 @@ export interface McpDiscoveryPolicy {
   cimdAllowedHosts: string[];
   allowedBrowserOrigins: string[];
   deviceFlowEnabled: boolean;
+  enterpriseManagedAuthEnabled?: boolean;
 }
 
 export const DISCOVERY_POLICY_TTL_MS = 30_000;
@@ -41,6 +42,7 @@ export async function loadDiscoveryPolicy(): Promise<McpDiscoveryPolicy | null> 
         cimdAllowedHosts: true,
         allowedBrowserOrigins: true,
         deviceFlowEnabled: true,
+        enterpriseManagedAuthEnabled: true,
       },
     })
     .then(value => {

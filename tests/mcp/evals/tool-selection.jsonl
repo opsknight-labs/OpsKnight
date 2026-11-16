@@ -1,0 +1,33 @@
+{"id":"r01","persona":"responder","category":"read","prompt":"What incidents are open right now on the payments service?","expected":["incident_search"]}
+{"id":"r02","persona":"responder","category":"read","prompt":"Who is on call right now?","expected":["oncall_now"]}
+{"id":"r03","persona":"responder","category":"read","prompt":"Who is on call for the checkout-api service?","expected":["oncall_for_service"]}
+{"id":"r04","persona":"responder","category":"read","prompt":"Give me everything I need to start working on incident cmabc123incident0000000001: details, recent timeline, related changes.","expected":["incident_get_context"]}
+{"id":"r05","persona":"responder","category":"read","prompt":"Show the timeline of incident cmabc123incident0000000001.","expected":["incident_get_timeline"]}
+{"id":"r06","persona":"responder","category":"read","prompt":"Have we seen an incident like cmabc123incident0000000001 before?","expected":["incident_find_similar"]}
+{"id":"r07","persona":"responder","category":"read","prompt":"When are my next on-call shifts?","expected":["oncall_my_shifts"]}
+{"id":"r08","persona":"responder","category":"read","prompt":"I just came back from leave. What happened while I was off call?","expected":["oncall_catch_up"]}
+{"id":"r09","persona":"responder","category":"read","prompt":"Is the search service healthy?","expected":["service_get_health"]}
+{"id":"r10","persona":"responder","category":"read","prompt":"What changed on the billing service in the last day?","expected":["service_get_changes"]}
+{"id":"r11","persona":"responder","category":"read","prompt":"Which runbook should I use for a database failover?","expected":["runbook_find"]}
+{"id":"r12","persona":"team_lead","category":"read","prompt":"Summarise last month's incident numbers for my team.","expected":["report_get_summary"]}
+{"id":"r13","persona":"team_lead","category":"read","prompt":"Why did the escalation for incident cmabc123incident0000000001 page Priya and not me?","expected":["escalation_explain"]}
+{"id":"r14","persona":"team_lead","category":"read","prompt":"List the overrides on the platform-primary schedule this week.","expected":["schedule_list_overrides"]}
+{"id":"r15","persona":"team_lead","category":"read","prompt":"Pull up the postmortem for last Tuesday's outage.","expected":["postmortem_list","search"]}
+{"id":"r16","persona":"admin","category":"read","prompt":"Which teams exist in OpsKnight?","expected":["team_list"]}
+{"id":"r17","persona":"admin","category":"read","prompt":"What can you do in OpsKnight with my access? Who am I signed in as?","expected":["whoami"]}
+{"id":"c01","persona":"responder","category":"change","prompt":"Acknowledge incident cmabc123incident0000000001, I'm on it.","expected":["incident_acknowledge"]}
+{"id":"c02","persona":"responder","category":"change","prompt":"Add a note to incident cmabc123incident0000000001: rolled back deploy 4812, error rate recovering.","expected":["incident_add_note"]}
+{"id":"c03","persona":"responder","category":"change","prompt":"Resolve incident cmabc123incident0000000001, the fix is deployed and verified.","expected":["incident_resolve"]}
+{"id":"c04","persona":"responder","category":"change","prompt":"Open a new incident for the checkout-api service: card payments failing with 502s.","expected":["incident_create"]}
+{"id":"c05","persona":"responder","category":"change","prompt":"Escalate incident cmabc123incident0000000001 to the next level now.","expected":["incident_escalate"]}
+{"id":"c06","persona":"team_lead","category":"change","prompt":"Make Dana the lead of the Platform team.","expected":["operation_prepare"],"operationId":"setTeamLead"}
+{"id":"c07","persona":"team_lead","category":"change","prompt":"Add Sam to the Platform team.","expected":["operation_prepare"],"operationId":"setTeamMember"}
+{"id":"c08","persona":"admin","category":"change","prompt":"Create a new escalation policy called Database critical that pages the DBA rotation first.","expected":["operation_prepare"],"operationId":"createEscalationPolicy"}
+{"id":"c09","persona":"admin","category":"change","prompt":"Post a maintenance announcement on the public status page for Saturday 02:00 UTC.","expected":["operation_prepare"],"operationId":"createStatusPageAnnouncement"}
+{"id":"c10","persona":"admin","category":"change","prompt":"Publish the postmortem for the checkout outage.","expected":["operation_prepare"],"operationId":"publishPostmortem"}
+{"id":"c11","persona":"admin","category":"change","prompt":"Archive the old 'restart legacy queue' runbook.","expected":["operation_prepare"],"operationId":"archiveRunbook"}
+{"id":"c12","persona":"responder","category":"change","prompt":"Run the database failover runbook for incident cmabc123incident0000000001.","expected":["runbook_prepare_execution","runbook_find"]}
+{"id":"a01","persona":"responder","category":"ambiguous","prompt":"Fix it.","expected":["none"]}
+{"id":"a02","persona":"team_lead","category":"ambiguous","prompt":"Change the schedule for next week.","expected":["none","schedule_list","search_capabilities"]}
+{"id":"a03","persona":"admin","category":"ambiguous","prompt":"Can you update the integration settings?","expected":["none","search_capabilities"]}
+{"id":"a04","persona":"responder","category":"ambiguous","prompt":"Anything I should know about checkout?","expected":["search","incident_search","service_get_health"]}

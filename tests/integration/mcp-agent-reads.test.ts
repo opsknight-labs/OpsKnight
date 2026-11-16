@@ -346,6 +346,20 @@ describe('search and fetch', () => {
     expect(unknown.content[0].text).toMatch(/^MCP_INVALID_ARGUMENTS/);
   });
 
+  it('shortens an oversized record with a note instead of failing over the budget', async () => {
+    // About 150 KB of stored text: the record fits one read, but its markdown and the text
+    // fallback together are past the 256 KB response budget (MCP_RESULT_BUDGET_EXCEEDED before).
+    const big = await createTestIncident('Checkout huge incident', serviceId, {
+      description: 'checkout '.repeat(17000),
+    });
+    const result = await call(admin.bearer, 'fetch', { id: `incident:${big.id}` });
+    expect(result.isError, String(result.content[0].text).slice(0, 300)).not.toBe(true);
+    const document = result.structuredContent as { text: string };
+    expect(document.text).toMatch(/^# Checkout huge incident/);
+    expect(document.text).toMatch(/\[Truncated to fit the response budget\./);
+    await db.incident.delete({ where: { id: big.id } });
+  });
+
   it('never returns a source the person cannot read', async () => {
     const result = await call(outsider.bearer, 'search', { query: 'Team only' });
     const { results } = result.structuredContent as { results: { id: string }[] };

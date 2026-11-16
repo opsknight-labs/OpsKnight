@@ -1,5 +1,5 @@
 import { z } from 'zod/v3';
-import { mcpOrigin } from './config';
+import { mcpAllowedHosts, mcpOrigin } from './config';
 import { requireMcp, McpBoundaryError } from '../core/errors';
 import { friendlyMcpError } from './friendly-error';
 
@@ -17,8 +17,12 @@ export function assertMcpHost(
   // Next's standalone server builds request.url from its internal listener.
   // Require ingress to preserve the pinned public Host; forwarded headers never
   // establish authority here. Fetch Requests without Host use their own URL.
+  // MCP_ALLOWED_HOSTS names the exact Host values a proxy that cannot preserve the public one
+  // sends instead. Tokens, metadata and the Origin check below stay pinned to the public origin.
   requireMcp(
-    host ? host === new URL(origin).host : new URL(request.url).origin === origin,
+    host
+      ? host === new URL(origin).host || mcpAllowedHosts().includes(host.toLowerCase())
+      : new URL(request.url).origin === origin,
     'MCP_INVALID_HOST',
     403
   );

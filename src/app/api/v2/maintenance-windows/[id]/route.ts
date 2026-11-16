@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { etagHeaders, requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 import {
   assertCanManageMaintenanceServices,
   MaintenanceWindowParams,
@@ -67,7 +68,11 @@ export const DELETE = defineV2Route({
       actor,
       existing.services.map(s => s.serviceId)
     );
-    await deleteMaintenanceWindow(params.id, { id: actor.id, source: 'API' });
+    await prisma.$transaction(async tx => {
+      // MCP approval recheck inside the delete's own transaction; a no-op for REST callers.
+      await internalV2MutationGuard()?.(tx);
+      await deleteMaintenanceWindow(params.id, { id: actor.id, source: 'API' }, { tx });
+    });
     return { status: 204 };
   },
 });

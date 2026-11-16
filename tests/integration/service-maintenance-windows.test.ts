@@ -17,19 +17,28 @@ import {
 } from '../helpers/test-db';
 
 // Lets a test make one release transaction fail, simulating a crash mid-sweep.
-const lifecycleFault = vi.hoisted(() => ({ failNext: 0 }));
+const lifecycleFault = vi.hoisted(() => ({
+  failNext: 0,
+  onRelease: null as null | (() => Promise<unknown>),
+}));
 vi.mock('@/lib/incidents/lifecycle', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/incidents/lifecycle')>();
   return {
     ...actual,
-    applyIncidentLifecycleCommand: (
+    applyIncidentLifecycleCommand: async (
       ...args: Parameters<typeof actual.applyIncidentLifecycleCommand>
     ) => {
       if (lifecycleFault.failNext > 0) {
         lifecycleFault.failNext -= 1;
         throw new Error('simulated crash');
       }
-      return actual.applyIncidentLifecycleCommand(...args);
+      const result = await actual.applyIncidentLifecycleCommand(...args);
+      const hook = lifecycleFault.onRelease;
+      if (hook && args[1].command === 'UNSUPPRESS') {
+        lifecycleFault.onRelease = null;
+        await hook();
+      }
+      return result;
     },
   };
 });
@@ -88,6 +97,7 @@ const incidentFor = (serviceId: string, key: string) =>
 describeIfRealDB('service maintenance windows', { timeout: 60000 }, () => {
   beforeEach(async () => {
     lifecycleFault.failNext = 0;
+    lifecycleFault.onRelease = null;
     await resetDatabase();
   });
 
@@ -216,6 +226,87 @@ describeIfRealDB('service maintenance windows', { timeout: 60000 }, () => {
     const incident = await incidentFor(service.id, 'held');
     expect(incident.status).toBe('RESOLVED');
     expect(incident.resolutionKind).toBe('AUTOMATION');
+  });
+
+  it('auto-resolves held incidents even when a required custom field is unset', async () => {
+    await testPrisma.customField.create({
+      data: { name: 'Root cause', key: 'root_cause_maint', type: 'TEXT', required: true },
+    });
+    const service = await createTestService('Maint Required Field');
+    const window = await openWindow([service.id], { endBehavior: 'RESOLVE_HELD' });
+    await trigger(service.id, 'held');
+
+    const after = new Date(window.endsAt.getTime() + 1000);
+    expect(await processEndedMaintenanceWindow(window.id, after)).toEqual({
+      released: 1,
+      complete: true,
+    });
+    expect((await incidentFor(service.id, 'held')).status).toBe('RESOLVED');
+  });
+
+  it('hands a held incident to an overlapping window instead of paging', async () => {
+    const service = await createTestService('Maint Overlap');
+    const first = await openWindow([service.id]);
+    await trigger(service.id, 'held');
+    const now = new Date();
+    const second = await createMaintenanceWindow(
+      {
+        title: 'Follow-up',
+        serviceIds: [service.id],
+        startsAt: now,
+        endsAt: new Date(now.getTime() + 3 * HOUR),
+      },
+      actor,
+      { now }
+    );
+
+    // The first window ends while the second is still active.
+    const firstEnd = new Date(first.endsAt.getTime() + 1000);
+    expect(await processEndedMaintenanceWindow(first.id, firstEnd)).toEqual({
+      released: 1,
+      complete: true,
+    });
+    const held = await incidentFor(service.id, 'held');
+    expect(held.status).toBe('SUPPRESSED');
+    expect(held.maintenanceWindowId).toBe(second.id);
+
+    const secondEnd = new Date(second.endsAt.getTime() + 1000);
+    await processEndedMaintenanceWindow(second.id, secondEnd);
+    expect((await incidentFor(service.id, 'held')).status).toBe('OPEN');
+  });
+
+  it('never links a new alert to a window already marked processed', async () => {
+    const service = await createTestService('Maint Fence');
+    const window = await openWindow([service.id]);
+    // Simulates the sweep committing its final mark just before this event's lookup.
+    await testPrisma.maintenanceWindow.update({
+      where: { id: window.id },
+      data: { endProcessedAt: new Date() },
+    });
+    await trigger(service.id, 'late');
+    const incident = await incidentFor(service.id, 'late');
+    expect(incident.status).toBe('OPEN');
+    expect(incident.maintenanceWindowId).toBeNull();
+  });
+
+  it('never leaves a held incident behind a processed window when one arrives mid-sweep', async () => {
+    const service = await createTestService('Maint Late Hold');
+    const window = await openWindow([service.id]);
+    const after = new Date(window.endsAt.getTime() + 1000);
+    // An in-flight ingestion commits while the sweep is releasing.
+    lifecycleFault.onRelease = () => trigger(service.id, 'late');
+    await trigger(service.id, 'first');
+    await processEndedMaintenanceWindow(window.id, after);
+    await processEndedMaintenanceWindow(window.id, after);
+
+    const row = await testPrisma.maintenanceWindow.findUniqueOrThrow({ where: { id: window.id } });
+    expect(row.endProcessedAt).not.toBeNull();
+    expect(
+      await testPrisma.incident.count({
+        where: { maintenanceWindowId: window.id, status: 'SUPPRESSED' },
+      })
+    ).toBe(0);
+    expect((await incidentFor(service.id, 'late')).status).toBe('OPEN');
   });
 
   it('never overrides a responder who already acted on a held incident', async () => {

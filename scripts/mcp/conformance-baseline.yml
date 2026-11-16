@@ -1,0 +1,34 @@
+# Expected failures for @modelcontextprotocol/conformance (version pinned in scripts/mcp/conformance.ts).
+# The suite fails a run when a scenario listed here passes, so remove an entry as soon as it does.
+server:
+  # The suite's reference fixtures (test_* tools and prompts, test:// resources) exist only on its
+  # own example server; a real product cannot expose them.
+  - completion-complete
+  - tools-call-simple-text
+  - tools-call-image
+  - tools-call-audio
+  - tools-call-embedded-resource
+  - tools-call-mixed-content
+  - tools-call-with-logging
+  - tools-call-error
+  - tools-call-with-progress
+  - tools-call-sampling
+  - tools-call-elicitation
+  - elicitation-sep1034-defaults
+  - elicitation-sep1330-enums
+  - resources-read-text
+  - resources-read-binary
+  - resources-templates-read
+  - prompts-get-simple
+  - prompts-get-with-args
+  - prompts-get-embedded-resource
+  - prompts-get-with-image
+  # Logging is not implemented; the 2026-07-28 revision deprecates it.
+  - logging-set-level
+  # Stateless server: resource subscriptions are served only through 2026-07-28
+  # subscriptions/listen, and the capability is not advertised to 2025 revisions.
+  - resources-subscribe
+  - resources-unsubscribe
+  # Stateless server (no Mcp-Session-Id), so the suite's session checks end in a warning, which
+  # counts as a failure in baseline mode.
+  - server-sse-multiple-streams

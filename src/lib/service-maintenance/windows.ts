@@ -16,7 +16,11 @@ import {
 } from '@/lib/status-pages/announcement-commands';
 import { incrementAnnouncementNotificationGeneration } from '@/lib/status-pages/announcement-notification-generation';
 
-export { findActiveMaintenanceWindow } from '@/lib/service-maintenance/active';
+import {
+  findActiveMaintenanceWindow,
+  maintenanceWindowLockKey,
+} from '@/lib/service-maintenance/active';
+export { findActiveMaintenanceWindow };
 
 // Activity is always derived from startsAt <= now < endsAt. Nothing flips a flag
 // at start time, so a stalled scheduler can never leave a service stuck in (or
@@ -163,7 +167,7 @@ function inTransaction<T>(
 }
 
 async function lockWindow(tx: Prisma.TransactionClient, windowId: string) {
-  const key = `maintenance-window:${windowId}`;
+  const key = maintenanceWindowLockKey(windowId);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
 }
 
@@ -577,11 +581,27 @@ async function releaseHeldIncident(
   return runSerializableTransaction(async tx => {
     const current = await tx.incident.findUnique({
       where: { id: incidentId },
-      select: { status: true, maintenanceWindowId: true },
+      select: { status: true, maintenanceWindowId: true, serviceId: true },
     });
     // A responder may already have acted on it; never override that.
     if (!current || current.status !== 'SUPPRESSED' || current.maintenanceWindowId !== windowId) {
       return false;
+    }
+    // Overlapping maintenance: the service is still under another window, so hand
+    // the hold to it instead of paging; that window's own end releases it.
+    const next = await findActiveMaintenanceWindow(tx, current.serviceId, now);
+    if (next && next.id !== windowId) {
+      await tx.incident.update({
+        where: { id: incidentId },
+        data: { maintenanceWindowId: next.id },
+      });
+      await tx.incidentEvent.create({
+        data: {
+          incidentId,
+          message: `Maintenance window ended; still held by overlapping window '${next.title}'.`,
+        },
+      });
+      return true;
     }
     const result = await applyIncidentLifecycleCommand(tx, {
       incidentId,
@@ -653,10 +673,22 @@ export async function processEndedMaintenanceWindow(
   }
 
   if (failed > 0) return { released, complete: false };
-  await prisma.maintenanceWindow.updateMany({
-    where: { id: windowId, endProcessedAt: null, endsAt: { lte: now } },
-    data: { endProcessedAt: now },
+  // Final check-and-mark under the exclusive window lock. Ingestion holds the lock
+  // shared while it links a new incident, so one committed in the meantime is seen
+  // here and left for the next tick, and none can be linked once this commits.
+  const marked = await prisma.$transaction(async tx => {
+    await lockWindow(tx, windowId);
+    const late = await tx.incident.count({
+      where: { maintenanceWindowId: windowId, status: 'SUPPRESSED' },
+    });
+    if (late > 0) return false;
+    await tx.maintenanceWindow.updateMany({
+      where: { id: windowId, endProcessedAt: null, endsAt: { lte: now } },
+      data: { endProcessedAt: now },
+    });
+    return true;
   });
+  if (!marked) return { released, complete: false };
   logger.info('maintenance_window.end_processed', {
     maintenanceWindowId: windowId,
     released,

@@ -1,5 +1,6 @@
 import { mcpCompositeCost } from '@/lib/mcp/core/composites';
-import { endMcpSpan, startMcpSpan } from '@/lib/mcp/protocol/tracing';
+import { RESOURCE_LIST_COST } from '@/lib/mcp/protocol/resource-list';
+import { endMcpSpan, linkMcpTrace, startMcpSpan } from '@/lib/mcp/protocol/tracing';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -28,6 +29,7 @@ import { boundMcpResponse } from '@/lib/mcp/core/response';
 import { callMcpOperation } from '@/lib/mcp/core/execution';
 import {
   MAX_RESOURCE_SUBSCRIPTIONS,
+  MY_PAGES_URI,
   STREAM_LIFETIME_MS,
   acquireStreamSlot,
   mcpEventBus,
@@ -62,8 +64,10 @@ import {
   mcpToolErrored,
   type McpMetricOutcome,
 } from '@/lib/mcp/protocol/metrics';
-import { isMcpCapabilityDisabled } from '@/lib/mcp/catalog/capabilities';
+import { isMcpCapabilityDisabled, mcpToolsetExclusions } from '@/lib/mcp/catalog/capabilities';
 import { stepUpScopes } from '@/lib/mcp/auth/step-up';
+import { myPagesBus } from '@/lib/mcp/protocol/page-push';
+import { mcpClientExtensions } from '@/lib/mcp/protocol/skills';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -107,7 +111,7 @@ export const OPTIONS = browserPreflight;
 
 async function handlePost(request: Request, requestId: string, browserOrigin: string | null) {
   const started = performance.now();
-  const span = startMcpSpan(requestId);
+  const span = startMcpSpan(requestId, request.headers);
   let outcome: McpMetricOutcome = 'error';
   let tool = 'none';
   let method: string | undefined;
@@ -163,6 +167,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       );
     }
     method = body.method;
+    linkMcpTrace(span, body.params?._meta);
     tool = mcpMetricTool(body.method, body.params?.name);
     if (body.method === 'tools/call')
       operationId = mcpCallLogOperationId(tool, body.params?.arguments);
@@ -223,7 +228,9 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
         ? Math.max(1, steps.length)
         : body.method === 'tools/call'
           ? (mcpCompositeCost(body.params?.name, body.params?.arguments) ?? 1)
-          : 1;
+          : body.method === 'resources/list'
+            ? RESOURCE_LIST_COST
+            : 1;
     requireMcp(cost <= MCP_MAX_OPERATIONS, 'MCP_OPERATION_BUDGET_EXCEEDED');
     await chargeMcpRequest(
       { grantId: identity.grantId, userId: identity.auth.actor.id, policy: identity.policy },
@@ -243,6 +250,9 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       requestId,
       budget,
       omitResourceLinks: !request.headers.has('mcp-protocol-version'),
+      clientExtensions: modern ? mcpClientExtensions(body.params) : {},
+      listenSubscriptions: modern,
+      hiddenCapabilities: mcpToolsetExclusions(request.headers.get('x-opsknight-toolsets')),
     };
     if (taskMethod) {
       // The SDK has no handlers for the 2026-07-28 Tasks extension; the route serves it directly
@@ -283,9 +293,9 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     if (listening) {
       // Authorize every URI now; a notification must never reveal a resource the caller cannot read.
       for (const uri of subscribedUris) {
-        const { readOperation, id } = parseSubscriptionUri(uri);
+        const { readOperation, args } = parseSubscriptionUri(uri);
         try {
-          await callMcpOperation(context, readOperation, { path: { id } });
+          await callMcpOperation(context, readOperation, args);
         } catch {
           outcome = 'subscription_rejected';
           return rpcError(rpcId, -32602, 'Invalid params: resource unavailable');
@@ -323,7 +333,8 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
           identity.auth.actor,
           identity.policy.writesEnabled,
           identity.policy.sensitiveReadsEnabled,
-          identity.policy.disabledCapabilities
+          [...identity.policy.disabledCapabilities, ...context.hiddenCapabilities],
+          identity.policy.responderDirectWritesEnabled
         ),
       {
         // Pre-2026 clients: one fresh server per request, no session.
@@ -518,14 +529,17 @@ async function openListenStream(
         identity.auth.actor,
         identity.policy.writesEnabled,
         identity.policy.sensitiveReadsEnabled,
-        identity.policy.disabledCapabilities
+        [...identity.policy.disabledCapabilities, ...(context.hiddenCapabilities ?? [])],
+        identity.policy.responderDirectWritesEnabled
       ),
     {
       legacy: 'reject',
       responseMode: 'auto',
       maxRequestBodySize: 65536,
       maxSubscriptions: 1,
-      bus: mcpEventBus,
+      bus: uris.includes(MY_PAGES_URI)
+        ? myPagesBus(mcpEventBus, context, identity.auth.actor.id)
+        : mcpEventBus,
       keepAliveMs: 15000,
     }
   );
@@ -581,8 +595,8 @@ async function openListenStream(
       // Re-read each subscribed resource with fresh authority under a small budget.
       const recheck = new CostBudget(MAX_RESOURCE_SUBSCRIPTIONS, 262144);
       try {
-        for (const { readOperation, id } of subscriptions)
-          await callMcpOperation({ ...context, budget: recheck }, readOperation, { path: { id } });
+        for (const { readOperation, args } of subscriptions)
+          await callMcpOperation({ ...context, budget: recheck }, readOperation, args);
       } finally {
         await recheck.drain();
       }

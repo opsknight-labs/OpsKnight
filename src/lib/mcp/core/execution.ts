@@ -18,6 +18,7 @@ import {
   MCP_OPERATION_MAP,
   isMcpApprovalGated,
   isMcpExecutable,
+  isMcpResponderDirect,
   isMcpSensitiveRead,
 } from '../catalog';
 import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS, MCP_PREVIEW_HANDLERS } from '../operations/handlers';
@@ -33,6 +34,7 @@ import { lockMcpMutationAuthority } from './mutation-authority';
 import { allowMcpFields, projectMcpData, summarizeRedactions } from './projection';
 import { mcpListWebUrlTemplate } from './web-links';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
+import { loadEffectiveDisabledMcpCapabilities } from '../auth/effective-capabilities';
 import { ERROR_REGISTRY } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
@@ -311,6 +313,14 @@ export interface ExecutionContext {
    * appears, so links are left out for it. Later revisions get them.
    */
   omitResourceLinks?: boolean;
+  /** `domain:<name>` entries this connection hid with X-OpsKnight-Toolsets; they only hide. */
+  hiddenCapabilities?: readonly string[];
+  /**
+   * The request is on the 2026-07-28 revision, the only one whose resource subscriptions this
+   * stateless server serves (subscriptions/listen); older revisions' resources/subscribe needs a
+   * session, so the capability is not advertised to them.
+   */
+  listenSubscriptions?: boolean;
 }
 
 export function callMcpOperation(context: ExecutionContext, operationId: string, rawArgs: unknown) {
@@ -349,11 +359,31 @@ async function executeMcpOperation(
   guard?: ApprovedCommitGuard,
   previewMode?: 'preview'
 ) {
-  const mode: ExecutionMode = guard ? 'approved' : (previewMode ?? 'generic');
   context.budget.consumeOperation();
   const operation = MCP_OPERATION_MAP.get(operationId);
+  // A routine responder change called directly: it runs like an approved commit (same handler,
+  // same mutation hook), with the administrator switch as its guard instead of a review. The
+  // switch is rechecked under the policy row lock, in the transaction that applies the change.
+  const direct = !guard && !previewMode && Boolean(operation && isMcpResponderDirect(operation));
+  if (direct)
+    guard = async tx => {
+      const policy = await tx.mcpPolicy.findUnique({
+        where: { id: 'default' },
+        select: { responderDirectWritesEnabled: true },
+      });
+      requireMcp(policy?.responderDirectWritesEnabled, 'MCP_OPERATION_UNAVAILABLE', 403);
+    };
+  const mode: ExecutionMode = guard ? 'approved' : (previewMode ?? 'generic');
   requireMcp(operation && availableIn(mode, operation), 'MCP_OPERATION_UNAVAILABLE', 403);
-  const args = validateOperationArgs(operationId, rawArgs, mode);
+  requireMcp(
+    mode === 'preview' || !isMcpCapabilityDisabled(context.hiddenCapabilities, operationId),
+    'MCP_OPERATION_UNAVAILABLE',
+    403,
+    'This connection hides this operation with its X-OpsKnight-Toolsets header; ask the person to add its domain there.'
+  );
+  // With the switch off a direct change is refused as unavailable, like any other gated
+  // operation, before its arguments are looked at; so they are validated after that check.
+  const earlyArgs = direct ? undefined : validateOperationArgs(operationId, rawArgs, mode);
   // Administrator capability controls, judged by the same policy snapshot at every step whatever
   // surface invoked it. Approval previews are internal reads; their gated operation is checked.
   const exposed = (policy: McpRuntimePolicy | null) =>
@@ -370,13 +400,24 @@ async function executeMcpOperation(
   try {
     resolved = await resolveMcpGrantWithPolicy(context.grantId, context.credentialId);
   } catch (error) {
-    const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
+    const stored = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
+    const policy = stored && {
+      ...stored,
+      disabledCapabilities: await loadEffectiveDisabledMcpCapabilities(context.grantId),
+    };
     requireMcp(exposed(policy), 'MCP_CAPABILITY_DISABLED', 403);
     requireMcp(permitted(policy), 'MCP_OPERATION_DISABLED', 403);
     throw error;
   }
   requireMcp(exposed(resolved.policy), 'MCP_CAPABILITY_DISABLED', 403);
   requireMcp(permitted(resolved.policy), 'MCP_OPERATION_DISABLED', 403);
+  // Switch off: the change exists only behind operation_prepare and a review.
+  requireMcp(
+    !direct || resolved.policy?.responderDirectWritesEnabled,
+    'MCP_OPERATION_UNAVAILABLE',
+    403
+  );
+  const args = earlyArgs ?? validateOperationArgs(operationId, rawArgs, mode);
   const { auth } = resolved;
   auth.apiKey.scopes = auth.apiKey.scopes.filter(scope => context.tokenScopes.includes(scope));
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: auth.apiKey.scopes };
@@ -428,7 +469,7 @@ async function executeMcpOperation(
       operation.method === 'get'
         ? undefined
         : JSON.stringify(
-            (mode === 'generic'
+            (mode === 'generic' || direct
               ? resolveMeInBody(
                   operationId,
                   args.body as Record<string, unknown> | undefined,
@@ -513,7 +554,8 @@ async function executeMcpOperation(
           });
         }
       }
-    }
+    },
+    `mcp:${resolved.clientId}`
   );
   // A route that mutates without the shared idempotency path would skip the approval recheck.
   // A replayed receipt was checked in its own lookup; anything else must pass the mutation hook.

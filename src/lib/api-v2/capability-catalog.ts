@@ -470,6 +470,7 @@ const decisions: readonly ApiCapability[] = [
       'updatePostmortem',
       'listPostmortemVersions',
       'listPostmortemActionItems',
+      'listActionItems',
       'getPostmortemActionItem',
       'replacePostmortemActionItems',
       'updatePostmortemActionItem',

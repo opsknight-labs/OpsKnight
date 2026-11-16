@@ -23,6 +23,8 @@ type AuditLogPageProps = {
     action?: string;
     search?: string;
     page?: string;
+    /** "assistant": only changes made through an AI assistant. */
+    via?: string;
   }>;
 };
 
@@ -66,6 +68,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   const actorId = awaitedParams?.actorId;
   const action = awaitedParams?.action;
   const search = awaitedParams?.search;
+  const viaAssistant = awaitedParams?.via === 'assistant';
   const requestedPage = parsePageParam(awaitedParams?.page);
   const pageSize = 50;
 
@@ -76,6 +79,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     ...(entityId ? { entityId } : {}),
     ...(actorId ? { actorId } : {}),
     ...(action ? { action } : {}),
+    ...(viaAssistant ? { channel: { startsWith: 'mcp:' } } : {}),
   };
 
   if (search && search.trim()) {
@@ -134,11 +138,13 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     if (actorId) params.set('actorId', actorId);
     if (action) params.set('action', action);
     if (search) params.set('search', search);
+    if (viaAssistant) params.set('via', 'assistant');
     params.set('page', String(targetPage));
     return `/audit?${params.toString()}`;
   };
 
-  const hasActiveFilters = Boolean(entityType) || Boolean(action) || Boolean(search);
+  const hasActiveFilters =
+    Boolean(entityType) || Boolean(action) || Boolean(search) || viaAssistant;
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
@@ -182,6 +188,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
           currentEntityType={entityType}
           currentAction={action}
           currentSearch={search}
+          currentVia={viaAssistant ? 'assistant' : 'ALL'}
           logsData={viewLogs}
         />
 

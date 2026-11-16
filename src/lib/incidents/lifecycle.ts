@@ -9,6 +9,7 @@ import type {
 } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
+import { internalV2ActorLabel } from '@/lib/api-v2/internal-context';
 import { enqueueLifecycleSideEffects } from '@/lib/event-outbox';
 import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
 import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
@@ -97,7 +98,7 @@ function invalidArgument(userMessage: string, details?: Record<string, unknown>)
 }
 
 function actorSuffix(actor?: IncidentLifecycleActor): string {
-  const name = actor?.name?.trim();
+  const name = actor?.name?.trim() || internalV2ActorLabel();
   return name ? ` by ${name}` : '';
 }
 
@@ -601,8 +602,12 @@ export async function applyIncidentLifecycleCommand(
 
   // Required custom fields gate human/operator resolution. Event ingestion is
   // authoritative automation: upstream resolve signals must not be blocked by
-  // fields that can only be completed interactively.
-  if (input.command === 'RESOLVE' && input.source !== 'EVENT') {
+  // fields that can only be completed interactively. The same holds for system
+  // automation resolutions (e.g. a maintenance window auto-resolving held alerts).
+  const automated =
+    input.source === 'EVENT' ||
+    (input.source === 'SYSTEM' && input.resolutionKind === 'AUTOMATION');
+  if (input.command === 'RESOLVE' && !automated) {
     await assertRequiredCustomFieldsPresent(tx, input.incidentId);
   }
 

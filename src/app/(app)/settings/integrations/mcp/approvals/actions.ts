@@ -8,6 +8,10 @@ import { requireMcp } from '@/lib/mcp/core/errors';
 import { decideMcpRunbookReview } from '@/lib/mcp/approvals/runbook';
 import { decideMcpOperationReview } from '@/lib/mcp/approvals/operation';
 import { checkRateLimit } from '@/lib/rate-limit';
+import {
+  decideMcpOperationReviewsInBulk,
+  type BulkReviewResult,
+} from '@/lib/mcp/approvals/bulk-review';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { expectedReviewCode, type ReviewResult } from './review-result';
@@ -111,5 +115,37 @@ export async function reviewPreparedOperation(
     });
   });
   revalidatePath(`/settings/integrations/mcp/approvals/operations/${input.id}`);
+  return result;
+}
+
+export type { BulkReviewResult };
+
+/** Approve or reject the ticked configuration changes; see decideMcpOperationReviewsInBulk. */
+export async function bulkReviewOperations(
+  _previous: BulkReviewResult | null,
+  form: FormData
+): Promise<BulkReviewResult> {
+  const input = z
+    .object({
+      ids: z.array(z.string().cuid()).min(1).max(25),
+      decision: z.enum(['approve', 'reject']),
+    })
+    .strict()
+    .parse({ ids: [...new Set(form.getAll('ids'))], decision: form.get('decision') });
+  const permissions = await getUserPermissions();
+  requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
+  const user = await getCurrentUser();
+  requireMcp(
+    (await checkRateLimit(`mcp:review-bulk:${user.id}`, 5, 60000)).allowed,
+    'MCP_RATE_LIMITED',
+    429
+  );
+  const session = await getServerSession(await getAuthOptions());
+  const result = await decideMcpOperationReviewsInBulk(input.ids, input.decision, {
+    id: user.id,
+    tokenVersion: user.tokenVersion,
+    authenticatedAt: session?.user?.id === user.id ? session.authenticatedAt : undefined,
+  });
+  revalidatePath('/settings/integrations/mcp');
   return result;
 }

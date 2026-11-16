@@ -6,6 +6,9 @@ import { withMcpDatabase } from '@/lib/database-workload';
 import { logger } from '@/lib/logger';
 import { setOperationalGauge } from '@/lib/metrics/operational/registry';
 import { McpBoundaryError, requireMcp } from '../core/errors';
+import { MY_PAGES_URI, pollPages, resetPagePushForTests } from './page-push';
+
+export { MY_PAGES_URI };
 
 export const MAX_RESOURCE_SUBSCRIPTIONS = 5;
 export const MAX_STREAMS_PER_PROCESS = 32;
@@ -29,11 +32,20 @@ const URI =
   /^opsknight:\/\/(incidents|services|schedules|runbooks|reports|postmortems)\/([A-Za-z0-9_-]{1,128})$/;
 
 export function parseSubscriptionUri(uri: string) {
+  // The person's own pages: authorized (and re-checked) like listing incidents.
+  if (uri === MY_PAGES_URI)
+    return {
+      domain: 'oncall' as const,
+      id: 'me',
+      readOperation: 'listIncidents',
+      args: { query: { limit: 1 } } as Record<string, unknown>,
+    };
   const match = URI.exec(uri);
   requireMcp(match, 'MCP_INVALID_RESOURCE_ID');
   const domain = match[1] as Domain;
+  const id = match[2];
   // eslint-disable-next-line security/detect-object-injection -- domain matched the closed URI pattern
-  return { domain, id: match[2], readOperation: TABLES[domain].read };
+  return { domain, id, readOperation: TABLES[domain].read, args: { path: { id } } };
 }
 
 /** The change bus every listen stream on this replica subscribes to. Events are hints, not data. */
@@ -137,6 +149,7 @@ export async function pollChanges() {
       const byDomain = new Map<Domain, string[]>();
       for (const uri of tracked.keys()) {
         const { domain, id } = parseSubscriptionUri(uri);
+        if (domain === 'oncall') continue;
         byDomain.set(domain, [...(byDomain.get(domain) ?? []), id]);
       }
       for (const [domain, ids] of byDomain) {
@@ -162,6 +175,7 @@ export async function pollChanges() {
       if (policySeen !== undefined && at !== policySeen)
         mcpEventBus.publish({ kind: 'tools_list_changed' });
       policySeen = at;
+      await pollPages();
     });
   } catch (error) {
     // A failed poll only delays hints; clients always re-read with fresh authorization.
@@ -181,4 +195,5 @@ export function resetSubscriptionStateForTests(revalidateMs = 30_000) {
   lastSeen.clear();
   processStreams = 0;
   grantStreams.clear();
+  resetPagePushForTests();
 }

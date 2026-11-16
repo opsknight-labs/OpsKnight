@@ -107,6 +107,8 @@ describe('golden queries against the real catalog', () => {
     ['who owns the payments service', 'getService'],
     ['which services are about to breach sla', 'listServiceObjectives'],
     ['maintenance announcement on the status page', 'listStatusPageAnnouncements'],
+    ['planned downtime for a service', 'listMaintenanceWindows'],
+    ['silence alerts during a change window', 'listMaintenanceWindows'],
     ['my shifts', 'listMyOnCallShifts'],
     ['when am I on call', 'listMyOnCallShifts'],
     ['audit log', 'listAuditLogs'],
