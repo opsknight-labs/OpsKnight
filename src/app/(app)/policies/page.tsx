@@ -167,7 +167,7 @@ export default async function PoliciesPage({
         ]}
         alert={
           errorCode === 'duplicate-policy' ? (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
               An escalation policy with this name already exists. Please choose a unique name.
             </div>
           ) : undefined
@@ -205,7 +205,7 @@ export default async function PoliciesPage({
         {/* Right 1 Col: Quick Links & Documentation */}
         <div className="space-y-4">
           {/* Quick Guide */}
-          <Card className="border-slate-200/80 bg-white">
+          <Card className="border-ink-200/80 bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <HelpCircle className="h-3.5 w-3.5 text-primary" />
@@ -229,7 +229,7 @@ export default async function PoliciesPage({
           </Card>
 
           {/* Quick Navigation Links */}
-          <Card className="border-slate-200/80 bg-white">
+          <Card className="border-ink-200/80 bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Connected Resources
@@ -238,35 +238,35 @@ export default async function PoliciesPage({
             <CardContent className="space-y-2">
               <Link
                 href="/services"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors text-xs font-medium text-slate-700"
+                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
               >
                 <span className="flex items-center gap-2">
-                  <Server className="h-3.5 w-3.5 text-slate-500" />
+                  <Server className="h-3.5 w-3.5 text-ink-500" />
                   Services Directory
                 </span>
-                <ArrowRight className="h-3 w-3 text-slate-400" />
+                <ArrowRight className="h-3 w-3 text-ink-400" />
               </Link>
 
               <Link
                 href="/schedules"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors text-xs font-medium text-slate-700"
+                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
               >
                 <span className="flex items-center gap-2">
-                  <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                  <Calendar className="h-3.5 w-3.5 text-ink-500" />
                   On-Call Schedules
                 </span>
-                <ArrowRight className="h-3 w-3 text-slate-400" />
+                <ArrowRight className="h-3 w-3 text-ink-400" />
               </Link>
 
               <Link
                 href="/teams"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors text-xs font-medium text-slate-700"
+                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
               >
                 <span className="flex items-center gap-2">
-                  <Users className="h-3.5 w-3.5 text-slate-500" />
+                  <Users className="h-3.5 w-3.5 text-ink-500" />
                   Teams & Members
                 </span>
-                <ArrowRight className="h-3 w-3 text-slate-400" />
+                <ArrowRight className="h-3 w-3 text-ink-400" />
               </Link>
             </CardContent>
           </Card>

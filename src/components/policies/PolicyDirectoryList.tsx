@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
@@ -9,8 +9,6 @@ import { X, ShieldAlert, Layers, Loader2 } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import PolicyDirectoryCard, { type PolicyDirectoryItem } from './PolicyDirectoryCard';
 import Pagination from '@/components/service/Pagination';
-
-type FilterType = 'all' | 'in-use' | 'unassigned';
 
 type PolicyDirectoryListProps = {
   policies: PolicyDirectoryItem[];
@@ -43,9 +41,11 @@ export default function PolicyDirectoryList({
   const [searchQuery, setSearchQuery] = useState(currentSearch);
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
+  const [syncedSearch, setSyncedSearch] = useState(currentSearch);
+  if (syncedSearch !== currentSearch) {
+    setSyncedSearch(currentSearch);
     setSearchQuery(currentSearch);
-  }, [currentSearch]);
+  }
 
   const updateFilters = (newParams: { q?: string; status?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -78,7 +78,7 @@ export default function PolicyDirectoryList({
 
   if (totalCount === 0 && !hasActiveFilter) {
     return (
-      <Card className="border-dashed border-2 bg-gradient-to-br from-slate-50/50 via-white to-slate-50/30">
+      <Card className="border-dashed border-2 bg-gradient-to-br from-ink-50/50 via-white to-ink-50/30">
         <CardContent className="p-8 md:p-12 text-center space-y-6">
           <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-xs">
             <ShieldAlert className="h-7 w-7" />
@@ -93,7 +93,7 @@ export default function PolicyDirectoryList({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto text-left pt-2">
-            <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white shadow-2xs space-y-1">
+            <div className="p-3.5 rounded-xl border border-ink-200/80 bg-card shadow-2xs space-y-1">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                 <span className="h-4 w-4 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-bold">
                   1
@@ -105,7 +105,7 @@ export default function PolicyDirectoryList({
               </p>
             </div>
 
-            <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white shadow-2xs space-y-1">
+            <div className="p-3.5 rounded-xl border border-ink-200/80 bg-card shadow-2xs space-y-1">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                 <span className="h-4 w-4 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-bold">
                   2
@@ -117,7 +117,7 @@ export default function PolicyDirectoryList({
               </p>
             </div>
 
-            <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white shadow-2xs space-y-1">
+            <div className="p-3.5 rounded-xl border border-ink-200/80 bg-card shadow-2xs space-y-1">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                 <span className="h-4 w-4 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-bold">
                   3

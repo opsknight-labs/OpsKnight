@@ -87,9 +87,9 @@ export default function AuditDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-white">
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-card">
         {/* Header */}
-        <DialogHeader className="p-5 pr-14 border-b border-slate-100 bg-slate-50/50">
+        <DialogHeader className="p-5 pr-14 border-b border-ink-100 bg-ink-50/50">
           <div className="flex items-center justify-between gap-3 pr-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
@@ -108,7 +108,7 @@ export default function AuditDetailModal({
           {/* Metadata Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Actor Card */}
-            <div className="p-3 rounded-lg border border-slate-200/80 bg-slate-50/40 space-y-1.5 min-w-0 overflow-hidden">
+            <div className="p-3 rounded-lg border border-ink-200/80 bg-ink-50/40 space-y-1.5 min-w-0 overflow-hidden">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5 shrink-0" />
                 Actor
@@ -124,7 +124,7 @@ export default function AuditDetailModal({
                     size="sm"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[0.65rem] font-semibold text-gray-600 shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-ink-200 flex items-center justify-center text-[0.65rem] font-semibold text-ink-600 shrink-0">
                     SYS
                   </div>
                 )}
@@ -149,14 +149,14 @@ export default function AuditDetailModal({
             </div>
 
             {/* Target Entity Card */}
-            <div className="p-3 rounded-lg border border-slate-200/80 bg-slate-50/40 space-y-1.5 min-w-0 overflow-hidden">
+            <div className="p-3 rounded-lg border border-ink-200/80 bg-ink-50/40 space-y-1.5 min-w-0 overflow-hidden">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Layers className="h-3.5 w-3.5 shrink-0" />
                 Target Entity
               </div>
               <div className="pt-0.5 min-w-0">
                 <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 min-w-0">
-                  <span className="bg-slate-200/70 px-1.5 py-0.5 rounded text-[11px] font-mono shrink-0">
+                  <span className="bg-ink-200/70 px-1.5 py-0.5 rounded text-[11px] font-mono shrink-0">
                     {log.entityType}
                   </span>
                   {entityHref ? (
@@ -198,8 +198,10 @@ export default function AuditDetailModal({
               >
                 {copied ? (
                   <>
-                    <Check className="h-3.5 w-3.5 text-emerald-600" />
-                    <span className="text-emerald-600 font-medium">Copied!</span>
+                    <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-emerald-600 font-medium dark:text-emerald-400">
+                      Copied!
+                    </span>
                   </>
                 ) : (
                   <>

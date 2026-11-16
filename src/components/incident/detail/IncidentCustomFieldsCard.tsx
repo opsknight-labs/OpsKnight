@@ -213,7 +213,7 @@ export default function IncidentCustomFieldsCard({
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {isSaving && (
-                        <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                        <span className="flex items-center gap-1 text-[10px] text-ink-400">
                           <Loader2 className="h-3 w-3 animate-spin" />
                           <span>Saving</span>
                         </span>

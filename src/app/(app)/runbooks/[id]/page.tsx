@@ -463,7 +463,7 @@ export default async function RunbookDetailPage({
                 description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
                 label="Restore Runbook"
                 variant="outline"
-                className="h-8 rounded-lg px-3 text-xs font-medium border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                className="h-8 rounded-lg px-3 text-xs font-medium border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"
                 successMessage="Runbook restored"
               />
             ) : (
@@ -594,7 +594,7 @@ export default async function RunbookDetailPage({
                 size="xs"
                 className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px] gap-1"
               >
-                <Users className="h-3 w-3 text-slate-400" />
+                <Users className="h-3 w-3 text-ink-400" />
                 {runbook.ownerTeam.name}
               </Badge>
             ) : (
@@ -612,7 +612,7 @@ export default async function RunbookDetailPage({
               size="xs"
               className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px] font-mono gap-1"
             >
-              <Hash className="h-3 w-3 text-slate-400" />
+              <Hash className="h-3 w-3 text-ink-400" />
               {runbook.slug}
             </Badge>
           </>

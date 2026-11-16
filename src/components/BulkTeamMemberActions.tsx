@@ -51,11 +51,13 @@ export default function BulkTeamMemberActions({
   const [hasMore, setHasMore] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => {
+  const [syncedInputs, setSyncedInputs] = useState({ availableUsers, search });
+  if (syncedInputs.availableUsers !== availableUsers || syncedInputs.search !== search) {
+    setSyncedInputs({ availableUsers, search });
     if (!search) {
       setSearchResults(availableUsers);
     }
-  }, [availableUsers, search]);
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -152,12 +154,12 @@ export default function BulkTeamMemberActions({
     });
   };
 
-  const renderUserItem = (user: User, index: number) => (
+  const renderUserItem = (user: User, _index: number) => (
     <label
       key={user.id}
       className={cn(
         'flex items-center gap-3 p-3 cursor-pointer transition-colors border-b last:border-b-0',
-        selectedUsers.has(user.id) ? 'bg-blue-50' : 'hover:bg-muted/50'
+        selectedUsers.has(user.id) ? 'bg-blue-50 dark:bg-blue-500/10' : 'hover:bg-muted/50'
       )}
     >
       <Checkbox
@@ -239,9 +241,7 @@ export default function BulkTeamMemberActions({
                 ? 'Deselect Visible'
                 : 'Select Visible'}
             </Button>
-            <span className="text-xs text-muted-foreground">
-              {selectedUsers.size} selected
-            </span>
+            <span className="text-xs text-muted-foreground">{selectedUsers.size} selected</span>
           </div>
 
           {/* Role Selection */}

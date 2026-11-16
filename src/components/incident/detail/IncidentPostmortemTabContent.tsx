@@ -151,7 +151,7 @@ export default function IncidentPostmortemTabContent({
                   </>
                 ) : (
                   <>
-                    <Lock className="h-3 w-3 text-slate-400" />
+                    <Lock className="h-3 w-3 text-ink-400" />
                     <span>Internal Only</span>
                   </>
                 )}
@@ -370,7 +370,11 @@ export default function IncidentPostmortemTabContent({
             Document what happened, determine root causes, and track follow-up action items to
             prevent future occurrences.
           </p>
-          <IncidentJiraContext issues={incidentJiraIssues} compact className="justify-center pt-1" />
+          <IncidentJiraContext
+            issues={incidentJiraIssues}
+            compact
+            className="justify-center pt-1"
+          />
         </div>
 
         <div className="inline-flex items-center justify-center gap-3 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
@@ -393,7 +397,7 @@ export default function IncidentPostmortemTabContent({
               </Button>
             </Link>
           ) : (
-            <p className="text-xs text-slate-400 italic">
+            <p className="text-xs text-ink-400 italic">
               Post-incident reviews can be started by responders and admins.
             </p>
           )}

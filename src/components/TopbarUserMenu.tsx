@@ -17,6 +17,7 @@ import { Settings, LogOut, User, Keyboard, HelpCircle } from 'lucide-react';
 import { useUserAvatarSafe } from '@/hooks/useUserAvatar';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import AppearanceControl from '@/components/theme/AppearanceControl';
 
 type Props = {
   name: string | null;
@@ -155,6 +156,13 @@ export default function TopbarUserMenu({
               </Link>
             </DropdownMenuItem>
           </DropdownMenuGroup>
+
+          <DropdownMenuSeparator className="my-1 bg-border/60" />
+
+          <div className="px-2 pb-1.5 pt-1">
+            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Appearance</p>
+            <AppearanceControl size="sm" />
+          </div>
 
           <DropdownMenuSeparator className="my-1 bg-border/60" />
 

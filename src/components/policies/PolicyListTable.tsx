@@ -5,16 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  MoreHorizontal,
-  Plus,
-  ArrowRight,
-  ShieldCheck,
-  LayoutList,
-  Clock,
-  Trash2,
-  Loader2,
-} from 'lucide-react';
+import { MoreHorizontal, ShieldCheck, LayoutList, Clock, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
-import PolicyDeleteButton from '@/components/PolicyDeleteButton';
 
 type PolicyListItem = {
   id: string;
@@ -40,7 +30,7 @@ type PolicyListTableProps = {
 
 export default function PolicyListTable({ policies, canManagePolicies }: PolicyListTableProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
 
   const titleText = 'text-sm';
@@ -49,12 +39,12 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
 
   if (policies.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-white p-10 text-center">
+      <div className="rounded-2xl border border-dashed border-ink-200 bg-gradient-to-br from-ink-50 to-white p-10 text-center">
         <div className="text-4xl opacity-30 mb-3">
           <LayoutList className="mx-auto h-12 w-12" />
         </div>
-        <p className="text-base font-bold text-slate-700 mb-1">No escalation policies yet</p>
-        <p className="text-sm text-slate-500 m-0">
+        <p className="text-base font-bold text-ink-700 mb-1">No escalation policies yet</p>
+        <p className="text-sm text-ink-500 m-0">
           {canManagePolicies
             ? 'Click "Create Policy" above to define who gets notified when incidents occur.'
             : 'No escalation policies have been created yet.'}
@@ -69,10 +59,10 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
         <div
           key={policy.id}
           className={cn(
-            'group relative rounded-2xl border bg-white shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-all',
+            'group relative rounded-2xl border bg-card shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-all',
             'hover:shadow-md hover:-translate-y-[1px]',
             'focus-within:ring-2 focus-within:ring-primary/20',
-            'border-slate-200',
+            'border-ink-200',
             navigatingId === policy.id && 'opacity-70 pointer-events-none'
           )}
           onClick={e => {
@@ -113,7 +103,7 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
                   data-no-row-nav="true"
                   onClick={e => e.stopPropagation()}
                   className={cn(
-                    'block font-extrabold text-slate-900 leading-tight truncate',
+                    'block font-extrabold text-ink-900 leading-tight truncate',
                     titleText,
                     'group-hover:text-primary transition-colors'
                   )}
@@ -123,13 +113,13 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
               </div>
 
               {policy.description && (
-                <p className="text-sm text-slate-600 line-clamp-1">{policy.description}</p>
+                <p className="text-sm text-ink-600 line-clamp-1">{policy.description}</p>
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <div className={cn('flex flex-wrap items-center gap-3 text-slate-500', metaText)}>
+                <div className={cn('flex flex-wrap items-center gap-3 text-ink-500', metaText)}>
                   {/* Steps Badge */}
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-medium">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-ink-100 border border-ink-200 text-ink-700 font-medium">
                     <Clock className="h-3 w-3" />
                     {policy.stepCount} step{policy.stepCount !== 1 ? 's' : ''}
                   </div>
@@ -138,7 +128,7 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
 
                   {/* Services Badge */}
                   <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
+                    <ShieldCheck className="h-3.5 w-3.5 text-ink-400" />
                     <span>
                       {policy.serviceCount} service{policy.serviceCount !== 1 ? 's' : ''}
                     </span>
@@ -155,10 +145,10 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-8 p-0 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
+                      className="h-8 w-8 p-0 rounded-full bg-ink-50 hover:bg-ink-100 border border-ink-200"
                       onClick={e => e.stopPropagation()}
                     >
-                      <MoreHorizontal className="h-4 w-4 text-slate-600" />
+                      <MoreHorizontal className="h-4 w-4 text-ink-600" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
@@ -167,7 +157,7 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
                         href={`/policies/${policy.id}`}
                         className="flex items-center gap-2 cursor-pointer"
                       >
-                        <LayoutList className="h-4 w-4 text-slate-500" />
+                        <LayoutList className="h-4 w-4 text-ink-500" />
                         View Details
                       </Link>
                     </DropdownMenuItem>

@@ -26,7 +26,7 @@ const getIntensityColor = (count: number, maxCount: number): string => {
 
 const getDayLabel = (dayIndex: number): string => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return days[dayIndex];
+  return days.at(dayIndex) ?? '';
 };
 
 const monthNames = [
@@ -63,7 +63,7 @@ export default function HeatmapCalendar({
   }, [data]);
 
   // Memoize date calculations
-  const { normalizedStart, rangeEnd, startOfWeek, endOfWeek, weeks } = useMemo(() => {
+  const { normalizedStart, rangeEnd, startOfWeek, weeks } = useMemo(() => {
     const today = new Date();
     const rangeStart = startDate ? new Date(startDate) : new Date(today);
     const normalized = new Date(
@@ -308,7 +308,7 @@ export default function HeatmapCalendar({
           marginTop: '8px',
           paddingRight: '4px',
           fontSize: containerWidth && containerWidth < 480 ? '10px' : '11px',
-          color: '#64748b',
+          color: 'hsl(var(--ui-muted-foreground))',
         }}
       >
         <span>Less</span>

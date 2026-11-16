@@ -33,7 +33,7 @@ export default function IncidentResponseHealth({
       {/* Header bar matching IncidentDescriptionCard */}
       <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-slate-500 shrink-0" />
+          <Activity className="h-4 w-4 text-ink-500 shrink-0" />
           <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
             Response Health &amp; SLAs
           </h3>

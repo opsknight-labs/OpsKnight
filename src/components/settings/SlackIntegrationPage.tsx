@@ -55,6 +55,8 @@ interface SlackIntegration {
   } | null;
 }
 
+type ChannelsResult = { ok: true; channels?: SlackChannel[] } | { ok: false; error: string };
+
 interface SlackIntegrationPageProps {
   integration: SlackIntegration | null;
   isOAuthConfigured: boolean;
@@ -72,12 +74,25 @@ export default function SlackIntegrationPage({
 }: SlackIntegrationPageProps) {
   const router = useRouter();
   const [channels, setChannels] = useState<SlackChannel[]>([]);
-  const [loadingChannels, setLoadingChannels] = useState(false);
+  const [loadingChannels, setLoadingChannels] = useState(Boolean(integration));
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<ChannelFilter>('all');
   const [channelsError, setChannelsError] = useState<string | null>(null);
   const [lastChannelsSync, setLastChannelsSync] = useState<Date | null>(null);
   const [visibleCount, setVisibleCount] = useState(50);
+  const [channelsIntegrationId, setChannelsIntegrationId] = useState(integration?.id);
+  if (channelsIntegrationId !== integration?.id) {
+    setChannelsIntegrationId(integration?.id);
+    if (integration) {
+      setLoadingChannels(true);
+      setChannelsError(null);
+    }
+  }
+  const [visibleCountResetKey, setVisibleCountResetKey] = useState({ searchQuery, filter });
+  if (visibleCountResetKey.searchQuery !== searchQuery || visibleCountResetKey.filter !== filter) {
+    setVisibleCountResetKey({ searchQuery, filter });
+    setVisibleCount(50);
+  }
   const [joiningChannelId, setJoiningChannelId] = useState<string | null>(null);
   const [bulkConnecting, setBulkConnecting] = useState(false);
   const [testingChannelId, setTestingChannelId] = useState<string | null>(null);
@@ -140,10 +155,7 @@ export default function SlackIntegrationPage({
     return `Slack error: ${errorCode.replace(/_/g, ' ')}`;
   };
 
-  const loadChannels = async () => {
-    if (!integration) return;
-    setLoadingChannels(true);
-    setChannelsError(null);
+  const requestChannels = async (): Promise<ChannelsResult> => {
     try {
       const response = await fetch('/api/slack/channels');
       const data = await response.json();
@@ -154,24 +166,37 @@ export default function SlackIntegrationPage({
           : 'Failed to load Slack channels.';
         throw new Error(errorMessage);
       }
-      if (data.channels) {
-        setChannels(data.channels);
+      return { ok: true, channels: data.channels };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
+  const applyChannelsResult = (result: ChannelsResult) => {
+    if (result.ok) {
+      if (result.channels) {
+        setChannels(result.channels);
         setLastChannelsSync(new Date());
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setChannelsError(errorMessage);
-      toast.error('Failed to load channels', { description: errorMessage });
-      logger.error('Failed to fetch Slack channels', { error: errorMessage });
-    } finally {
-      setLoadingChannels(false);
+    } else {
+      setChannelsError(result.error);
+      toast.error('Failed to load channels', { description: result.error });
+      logger.error('Failed to fetch Slack channels', { error: result.error });
     }
+    setLoadingChannels(false);
+  };
+
+  const loadChannels = async () => {
+    if (!integration) return;
+    setLoadingChannels(true);
+    setChannelsError(null);
+    applyChannelsResult(await requestChannels());
   };
 
   // Load channels when integration exists
   useEffect(() => {
     if (integration) {
-      void loadChannels();
+      void requestChannels().then(applyChannelsResult);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [integration?.id]);
@@ -232,10 +257,6 @@ export default function SlackIntegrationPage({
       action: performReplaceWorkspace,
     });
   };
-
-  useEffect(() => {
-    setVisibleCount(50);
-  }, [searchQuery, filter]);
 
   const handleJoinChannel = async (channel: SlackChannel) => {
     if (channel.isMember || channel.isPrivate || joiningChannelId) return;
@@ -668,7 +689,7 @@ export default function SlackIntegrationPage({
                             title="Copy URL"
                           >
                             {isCopied ? (
-                              <Check className="h-3.5 w-3.5 text-emerald-600" />
+                              <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                             ) : (
                               <Copy className="h-3.5 w-3.5" />
                             )}

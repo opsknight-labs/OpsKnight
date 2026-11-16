@@ -80,7 +80,7 @@ export default function IncidentQuickLinksCard({
               </p>
             </div>
           </div>
-          <ArrowUpRight className="h-3.5 w-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
+          <ArrowUpRight className="h-3.5 w-3.5 text-ink-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
         </Link>
 
         {/* Escalation Policy */}
@@ -102,7 +102,7 @@ export default function IncidentQuickLinksCard({
                 </p>
               </div>
             </div>
-            <ArrowUpRight className="h-3.5 w-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
+            <ArrowUpRight className="h-3.5 w-3.5 text-ink-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
           </Link>
         )}
 
@@ -134,7 +134,7 @@ export default function IncidentQuickLinksCard({
               </p>
             </div>
           </div>
-          <ArrowUpRight className="h-3.5 w-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
+          <ArrowUpRight className="h-3.5 w-3.5 text-ink-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
         </Link>
 
         {/* Assigned Team */}
@@ -156,7 +156,7 @@ export default function IncidentQuickLinksCard({
                 </p>
               </div>
             </div>
-            <ArrowUpRight className="h-3.5 w-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
+            <ArrowUpRight className="h-3.5 w-3.5 text-ink-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
           </Link>
         )}
       </div>

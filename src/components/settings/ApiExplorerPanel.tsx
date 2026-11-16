@@ -540,7 +540,7 @@ export default function ApiExplorerPanel({
                                     {param.required ? (
                                       <Badge
                                         variant="outline"
-                                        className="text-[10px] bg-rose-500/10 text-rose-600 border-rose-500/20"
+                                        className="text-[10px] bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-400"
                                       >
                                         Required
                                       </Badge>

@@ -165,7 +165,7 @@ export default function IncidentTags({
                   Create &quot;{searchValue.trim()}&quot;
                 </Button>
               ) : (
-                <p className="text-xs text-slate-400">Type tag name...</p>
+                <p className="text-xs text-ink-400">Type tag name...</p>
               )}
             </CommandEmpty>
             {filteredAvailableTags.length > 0 && (
@@ -178,7 +178,7 @@ export default function IncidentTags({
                     className="text-xs cursor-pointer flex items-center justify-between py-1.5"
                   >
                     <span className="font-semibold">#{tag.name}</span>
-                    <Plus className="h-3 w-3 text-slate-400 opacity-60" />
+                    <Plus className="h-3 w-3 text-ink-400 opacity-60" />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -247,7 +247,7 @@ export default function IncidentTags({
             className="p-3 w-56 shadow-lg border-slate-200 dark:border-slate-800 rounded-xl"
             align="start"
           >
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-ink-400 mb-2">
               Additional Tags
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -278,9 +278,7 @@ export default function IncidentTags({
       )}
 
       {/* Empty State */}
-      {tags.length === 0 && !canManage && (
-        <span className="text-xs text-slate-400 italic">None</span>
-      )}
+      {tags.length === 0 && !canManage && <span className="text-xs text-ink-400 italic">None</span>}
 
       {/* Add Tag Popover Trigger */}
       {addTagPopover}

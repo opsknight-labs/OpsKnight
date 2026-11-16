@@ -3,7 +3,6 @@
 import { ReactNode } from 'react';
 import { AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
-import { cn } from '@/lib/utils';
 
 export interface ErrorStateProps {
   title?: string;
@@ -43,8 +42,8 @@ export default function ErrorState({
       <div className="max-w-lg w-full">
         {/* Icon */}
         {icon || (
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-100 to-red-50 flex items-center justify-center mx-auto mb-6 border border-red-200">
-            <AlertCircle className="w-8 h-8 text-red-600" />
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-100 to-red-50 flex items-center justify-center mx-auto mb-6 border border-red-200 dark:border-red-500/30">
+            <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
           </div>
         )}
 

@@ -75,7 +75,7 @@ export default function PolicyStepCreateForm({
       <Button
         type="button"
         variant="outline"
-        className="w-full border-dashed border-slate-300 text-slate-500 hover:text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+        className="w-full border-dashed border-ink-300 text-ink-500 hover:text-ink-700 hover:border-ink-400 hover:bg-ink-50"
         onClick={() => setShowForm(true)}
       >
         <Plus className="mr-2 h-4 w-4" />
@@ -110,7 +110,7 @@ export default function PolicyStepCreateForm({
               onValueChange={(val: 'USER' | 'TEAM' | 'SCHEDULE') => setTargetType(val)}
               disabled={isPending}
             >
-              <SelectTrigger className="bg-white">
+              <SelectTrigger className="bg-card">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent>
@@ -162,7 +162,7 @@ export default function PolicyStepCreateForm({
                   disabled={isPending}
                   required
                 />
-                <p className="text-[10px] text-amber-700">
+                <p className="text-[10px] text-amber-700 dark:text-amber-300">
                   Schedule timezone is authoritative. Changing it can shift coverage.
                 </p>
               </div>
@@ -178,7 +178,7 @@ export default function PolicyStepCreateForm({
               defaultValue="0"
               required
               disabled={isPending}
-              className="bg-white"
+              className="bg-card"
             />
             <p className="text-[10px] text-muted-foreground">
               Wait time before this step is executed. Use 0 for immediate.

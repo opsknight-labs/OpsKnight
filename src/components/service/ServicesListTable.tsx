@@ -59,7 +59,7 @@ const statusAccentClass: Record<string, string> = {
   OPERATIONAL: 'border-l-emerald-500',
   DEGRADED: 'border-l-yellow-500',
   CRITICAL: 'border-l-red-500',
-  UNKNOWN: 'border-l-slate-300',
+  UNKNOWN: 'border-l-ink-300',
 };
 
 function ServiceStatusBadge({ status }: { status: string }) {
@@ -116,31 +116,31 @@ export default function ServicesListTable({
     : services.length;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl border border-ink-200 bg-card shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="px-4 md:px-5 py-3.5 bg-white border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+      <div className="px-4 md:px-5 py-3.5 bg-card border-b border-ink-200 flex flex-wrap justify-between items-center gap-3">
         <div className="min-w-[220px]">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-extrabold">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-ink-500 font-extrabold">
             Service directory
           </div>
-          <div className="text-sm text-slate-600 mt-0.5">
+          <div className="text-sm text-ink-600 mt-0.5">
             Showing{' '}
-            <span className="font-semibold text-slate-900">
+            <span className="font-semibold text-ink-900">
               {showingFrom}-{showingTo}
             </span>{' '}
-            of <span className="font-semibold text-slate-900">{totalItems}</span>
+            of <span className="font-semibold text-ink-900">{totalItems}</span>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">
+          <div className="text-[11px] text-ink-500 mt-1">
             Active incident counts exclude snoozed and suppressed incidents.
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-3 md:p-4 lg:p-5 bg-white">
+      <div className="p-3 md:p-4 lg:p-5 bg-card">
         {services.some(service => service.metricDataState === 'unavailable') && (
           <div
-            className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
             role="alert"
           >
             Live service incident statistics are unavailable. Zero counts are hidden until metrics
@@ -163,11 +163,11 @@ export default function ServicesListTable({
               <div
                 key={service.id}
                 className={cn(
-                  'group relative rounded-2xl border bg-white shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-all',
+                  'group relative rounded-2xl border bg-card shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-all',
                   'hover:shadow-md hover:-translate-y-[1px]',
                   'focus-within:ring-2 focus-within:ring-primary/20',
-                  'border-slate-200',
-                  statusAccentClass[service.dynamicStatus] ?? 'border-l-slate-300',
+                  'border-ink-200',
+                  statusAccentClass[service.dynamicStatus] ?? 'border-l-ink-300',
                   'border-l-4',
                   navigatingId === service.id && 'opacity-70 pointer-events-none'
                 )}
@@ -208,7 +208,7 @@ export default function ServicesListTable({
                       <Link
                         href={`/services/${service.id}`}
                         data-no-row-nav="true"
-                        className="block font-extrabold text-slate-900 leading-tight truncate text-base hover:text-primary transition-colors"
+                        className="block font-extrabold text-ink-900 leading-tight truncate text-base hover:text-primary transition-colors"
                       >
                         {service.name}
                       </Link>
@@ -218,14 +218,14 @@ export default function ServicesListTable({
                       </div>
                     </div>
 
-                    <p className="text-sm text-slate-500 line-clamp-1 max-w-3xl">
+                    <p className="text-sm text-ink-500 line-clamp-1 max-w-3xl">
                       {service.description || 'No description provided.'}
                     </p>
 
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-medium">
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-ink-500 font-medium">
                         {service.team && (
-                          <div className="flex items-center gap-1.5 text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
+                          <div className="flex items-center gap-1.5 text-ink-600 bg-ink-100 px-2 py-1 rounded-md">
                             <Users className="h-3 w-3" />
                             {service.team.name}
                           </div>
@@ -247,15 +247,17 @@ export default function ServicesListTable({
 
                         <div className="flex items-center gap-1.5 ml-1">
                           {service.metricDataState === 'unavailable' ? (
-                            <span className="text-amber-700 font-semibold">
+                            <span className="text-amber-700 font-semibold dark:text-amber-300">
                               Metrics unavailable
                             </span>
                           ) : service.openIncidentCount > 0 ? (
-                            <span className="text-red-600 font-semibold">
+                            <span className="text-red-600 font-semibold dark:text-red-400">
                               {service.openIncidentCount} active incidents
                             </span>
                           ) : (
-                            <span className="text-emerald-600">No active incidents</span>
+                            <span className="text-emerald-600 dark:text-emerald-400">
+                              No active incidents
+                            </span>
                           )}
                         </div>
                       </div>
@@ -267,10 +269,10 @@ export default function ServicesListTable({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
+                                className="h-8 w-8 p-0 rounded-full bg-ink-50 hover:bg-ink-100 border border-ink-200"
                                 onClick={e => e.stopPropagation()}
                               >
-                                <MoreHorizontal className="h-4 w-4 text-slate-600" />
+                                <MoreHorizontal className="h-4 w-4 text-ink-600" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48">
@@ -279,7 +281,7 @@ export default function ServicesListTable({
                                   href={`/services/${service.id}`}
                                   className="flex items-center gap-2 cursor-pointer"
                                 >
-                                  <Eye className="h-4 w-4 text-slate-500" />
+                                  <Eye className="h-4 w-4 text-ink-500" />
                                   View Details
                                 </Link>
                               </DropdownMenuItem>
@@ -288,7 +290,7 @@ export default function ServicesListTable({
                                   href={`/services/${service.id}/settings`}
                                   className="flex items-center gap-2 cursor-pointer"
                                 >
-                                  <Settings className="h-4 w-4 text-slate-500" />
+                                  <Settings className="h-4 w-4 text-ink-500" />
                                   Settings
                                 </Link>
                               </DropdownMenuItem>

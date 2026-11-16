@@ -81,7 +81,7 @@ export default function IncidentPostmortemCard({
                 className="w-full justify-between h-8 text-xs font-medium border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <span>{isPublished ? 'View Full Report' : 'Continue Review'}</span>
-                <ArrowUpRight className="h-3.5 w-3.5 text-slate-400" />
+                <ArrowUpRight className="h-3.5 w-3.5 text-ink-400" />
               </Button>
             </Link>
           </div>
@@ -99,7 +99,7 @@ export default function IncidentPostmortemCard({
                 </Button>
               </Link>
             ) : (
-              <p className="text-[11px] text-slate-400 italic">
+              <p className="text-[11px] text-ink-400 italic">
                 Postmortem not started by responders yet.
               </p>
             )}

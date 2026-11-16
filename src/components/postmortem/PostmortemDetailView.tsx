@@ -23,13 +23,16 @@ import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
 import ActionItemJiraContext from '@/components/action-items/ActionItemJiraContext';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
-import { togglePostmortemPublicStatus } from '@/app/(app)/postmortems/actions';
+import {
+  togglePostmortemPublicStatus,
+  type TimelineEvent,
+  type ImpactMetrics,
+} from '@/app/(app)/postmortems/actions';
 import {
   POSTMORTEM_STATUS_CONFIG,
   ACTION_ITEM_STATUS_CONFIG,
   ACTION_ITEM_PRIORITY_CONFIG,
 } from './shared';
-import { type TimelineEvent, type ImpactMetrics } from '@/app/(app)/postmortems/actions';
 
 interface PostmortemDetailViewProps {
   postmortem: {
@@ -111,7 +114,7 @@ export default function PostmortemDetailView({
 
   const parseTimeline = (timeline: unknown): TimelineEvent[] => {
     if (!timeline || !Array.isArray(timeline)) return [];
-    return timeline.map((e: any) => ({
+    return timeline.map((e: Partial<TimelineEvent>) => ({
       id: e.id || `event-${Date.now()}`,
       timestamp: e.timestamp || new Date().toISOString(),
       type: e.type || 'DETECTION',
@@ -123,7 +126,7 @@ export default function PostmortemDetailView({
 
   const parseImpact = (impact: unknown): ImpactMetrics => {
     if (!impact || typeof impact !== 'object') return {};
-    const imp = impact as any;
+    const imp = impact as ImpactMetrics;
     return {
       usersAffected: imp.usersAffected,
       downtimeMinutes: imp.downtimeMinutes,
@@ -256,9 +259,9 @@ export default function PostmortemDetailView({
   return (
     <div className="flex flex-col gap-6">
       {previewAsPublic && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between text-xs text-amber-900">
+        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between text-xs text-amber-900 dark:text-amber-300">
           <div className="flex gap-2">
-            <Eye className="h-4 w-4 text-amber-600" />
+            <Eye className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <span className="font-semibold">
               Customer Preview Mode Active: Viewing redacted version shown on the Public Status
               Page.
@@ -268,14 +271,14 @@ export default function PostmortemDetailView({
             variant="outline"
             size="sm"
             onClick={() => setPreviewAsPublic(false)}
-            className="h-7 text-xs bg-white"
+            className="h-7 text-xs bg-card"
           >
             Exit Customer Preview
           </Button>
         </div>
       )}
 
-      <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md overflow-hidden relative border-slate-200">
+      <Card className="bg-gradient-to-br from-white to-ink-50 shadow-md overflow-hidden relative border-ink-200">
         <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle,rgba(211,47,47,0.05)_0%,transparent_70%)] rounded-full translate-x-[30%] -translate-y-[30%] pointer-events-none" />
 
         <CardContent className="p-6 md:p-8">
@@ -284,12 +287,12 @@ export default function PostmortemDetailView({
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
                 {isPublic ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30">
                     <Globe className="h-3 w-3" />
                     <span>Public on Status Page</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-ink-100 text-ink-600 border border-ink-200">
                     <span>Internal Only</span>
                   </span>
                 )}
@@ -356,7 +359,7 @@ export default function PostmortemDetailView({
             )}
           </div>
 
-          <div className="flex gap-4 pt-4 border-t border-slate-200 text-xs text-muted-foreground flex-wrap items-center">
+          <div className="flex gap-4 pt-4 border-t border-ink-200 text-xs text-muted-foreground flex-wrap items-center">
             <span className="flex items-center gap-1.5">
               {!effectivePublicView && postmortem.createdBy && (
                 <UserAvatar
@@ -398,7 +401,7 @@ export default function PostmortemDetailView({
       </Card>
 
       {postmortem.summary && (
-        <Card className="bg-white shadow-sm border-slate-200">
+        <Card className="bg-card shadow-sm border-ink-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2 font-bold text-foreground">
               <span className="w-1.5 h-4 bg-primary rounded-sm" />
@@ -425,7 +428,7 @@ export default function PostmortemDetailView({
 
       {Object.keys(impactMetrics).length > 0 && <PostmortemImpactMetrics metrics={impactMetrics} />}
 
-      <Card className="bg-white shadow-sm border-slate-200">
+      <Card className="bg-card shadow-sm border-ink-200">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2 font-bold text-foreground">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -440,12 +443,12 @@ export default function PostmortemDetailView({
             <ContributingFactorsSelector selectedFactors={getInferredFactors()} />
           </div>
 
-          <div className="pt-4 border-t border-slate-100">
+          <div className="pt-4 border-t border-ink-100">
             <FiveWhysBuilder initialSteps={parseFiveWhys()} isEditable={false} />
           </div>
 
           {getCleanRootCauseNarrative() && (
-            <div className="pt-4 border-t border-slate-100 space-y-2">
+            <div className="pt-4 border-t border-ink-100 space-y-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Root Cause Analysis Narrative
               </div>
@@ -456,7 +459,7 @@ export default function PostmortemDetailView({
           )}
 
           {postmortem.resolution && (
-            <div className="pt-4 border-t border-slate-100 space-y-2">
+            <div className="pt-4 border-t border-ink-100 space-y-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Mitigation & Resolution Summary
               </div>
@@ -469,14 +472,14 @@ export default function PostmortemDetailView({
       </Card>
 
       {actionItems.length > 0 && (
-        <Card className="bg-white shadow-sm border-slate-200">
+        <Card className="bg-card shadow-sm border-ink-200">
           <CardHeader className="pb-3">
             <div className="flex justify-between items-center">
               <CardTitle className="text-base font-bold text-foreground">
                 Preventative Action Items ({completedActions}/{totalActions} Completed)
               </CardTitle>
               <div className="flex items-center gap-2">
-                <div className="w-28 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                <div className="w-28 h-2 bg-ink-100 rounded-full overflow-hidden border border-ink-200/60">
                   <div
                     className={cn(
                       'h-full transition-all duration-300',
@@ -509,7 +512,7 @@ export default function PostmortemDetailView({
                 <div
                   key={item.id}
                   className={cn(
-                    'p-3.5 bg-white rounded-lg border-2 border-l-4 shadow-2xs transition-all',
+                    'p-3.5 bg-card rounded-lg border-2 border-l-4 shadow-2xs transition-all',
                     statusCfg.border
                   )}
                 >
@@ -582,7 +585,7 @@ export default function PostmortemDetailView({
       )}
 
       {postmortem.lessons && (
-        <Card className="bg-white shadow-sm border-slate-200">
+        <Card className="bg-card shadow-sm border-ink-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-bold text-foreground">
               Lessons Learned & Future Resiliency

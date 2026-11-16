@@ -517,7 +517,7 @@ export default function IncidentCommandBar({
               {!showAcknowledge && showResolve && (
                 <Button
                   type="button"
-                  className="flex-1 min-w-0 h-11 gap-2 border-emerald-300 text-emerald-700 text-sm font-semibold truncate"
+                  className="flex-1 min-w-0 h-11 gap-2 border-emerald-300 text-emerald-700 text-sm font-semibold truncate dark:border-emerald-500/30 dark:text-emerald-300"
                   variant="outline"
                   onClick={() => setShowResolveModal(true)}
                 >
@@ -633,7 +633,7 @@ export default function IncidentCommandBar({
 
             <div className="space-y-4 py-2">
               {jiraError && (
-                <div className="p-2.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-1.5 font-medium">
+                <div className="p-2.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-1.5 font-medium dark:bg-rose-500/10 dark:border-rose-500/30 dark:text-rose-300">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{jiraError}</span>
                 </div>
@@ -655,7 +655,7 @@ export default function IncidentCommandBar({
                             href={link.externalUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-semibold text-blue-600 hover:underline inline-flex items-center gap-1"
+                            className="font-semibold text-blue-600 hover:underline inline-flex items-center gap-1 dark:text-blue-400"
                           >
                             <span>{link.externalKey}</span>
                             <ExternalLink className="h-3 w-3" />
@@ -671,7 +671,7 @@ export default function IncidentCommandBar({
                             </span>
                           )}
                           {link.externalAssignee && (
-                            <span className="text-slate-500 text-[11px] truncate max-w-[120px]">
+                            <span className="text-ink-500 text-[11px] truncate max-w-[120px]">
                               {link.externalAssignee}
                             </span>
                           )}
@@ -689,7 +689,8 @@ export default function IncidentCommandBar({
                                 <RefreshCw
                                   className={cn(
                                     'h-3.5 w-3.5',
-                                    syncingLinkId === link.id && 'animate-spin text-blue-600'
+                                    syncingLinkId === link.id &&
+                                      'animate-spin text-blue-600 dark:text-blue-400'
                                   )}
                                 />
                               </button>
@@ -700,10 +701,10 @@ export default function IncidentCommandBar({
                                 onClick={() => handleUnlinkJira(link.id)}
                                 disabled={isJiraPending || unlinkingLinkId === link.id}
                                 title="Unlink Jira Issue"
-                                className="p-1 rounded text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                className="p-1 rounded text-ink-400 hover:text-rose-600 transition-colors cursor-pointer dark:hover:text-rose-400"
                               >
                                 {unlinkingLinkId === link.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600 dark:text-rose-400" />
                                 ) : (
                                   <Trash2 className="h-3.5 w-3.5" />
                                 )}
@@ -722,7 +723,7 @@ export default function IncidentCommandBar({
                   <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                     Create new issue in project
                   </div>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-ink-500">
                     Automatically creates a Jira issue with this incident&apos;s title and
                     description.
                   </p>

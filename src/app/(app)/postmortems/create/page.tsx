@@ -105,7 +105,7 @@ export default async function CreatePostmortemPage() {
       </div>
 
       {resolvedIncidents.length === 0 ? (
-        <Card className="bg-gradient-to-br from-white to-slate-50 border-slate-200 shadow-md">
+        <Card className="bg-gradient-to-br from-white to-ink-50 border-ink-200 shadow-md">
           <CardContent className="py-8 text-center">
             <h3 className="text-lg font-semibold mb-2">No Resolved Incidents Available</h3>
             <p className="text-muted-foreground mb-4">

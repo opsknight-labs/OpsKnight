@@ -32,45 +32,45 @@ export default function DashboardServiceHealth({ services }: DashboardServiceHea
     switch (status) {
       case 'OPERATIONAL':
         return {
-          bg: 'bg-emerald-50',
-          text: 'text-emerald-700',
-          border: 'border-emerald-200',
+          bg: 'bg-emerald-50 dark:bg-emerald-500/10',
+          text: 'text-emerald-700 dark:text-emerald-300',
+          border: 'border-emerald-200 dark:border-emerald-500/30',
           dotBg: 'bg-emerald-500',
           icon: <CheckCircle className="h-4 w-4" />,
           label: 'Operational',
         };
       case 'DEGRADED':
         return {
-          bg: 'bg-amber-50',
-          text: 'text-amber-700',
-          border: 'border-amber-200',
+          bg: 'bg-amber-50 dark:bg-amber-500/10',
+          text: 'text-amber-700 dark:text-amber-300',
+          border: 'border-amber-200 dark:border-amber-500/30',
           dotBg: 'bg-amber-500',
           icon: <AlertTriangle className="h-4 w-4" />,
           label: 'Degraded',
         };
       case 'PARTIAL_OUTAGE':
         return {
-          bg: 'bg-orange-50',
-          text: 'text-orange-700',
-          border: 'border-orange-200',
+          bg: 'bg-orange-50 dark:bg-orange-500/10',
+          text: 'text-orange-700 dark:text-orange-300',
+          border: 'border-orange-200 dark:border-orange-500/30',
           dotBg: 'bg-orange-500',
           icon: <AlertCircle className="h-4 w-4" />,
           label: 'Partial Outage',
         };
       case 'MAJOR_OUTAGE':
         return {
-          bg: 'bg-red-50',
-          text: 'text-red-700',
-          border: 'border-red-200',
+          bg: 'bg-red-50 dark:bg-red-500/10',
+          text: 'text-red-700 dark:text-red-300',
+          border: 'border-red-200 dark:border-red-500/30',
           dotBg: 'bg-red-500',
           icon: <XCircle className="h-4 w-4" />,
           label: 'Major Outage',
         };
       case 'MAINTENANCE':
         return {
-          bg: 'bg-indigo-50',
-          text: 'text-indigo-700',
-          border: 'border-indigo-200',
+          bg: 'bg-indigo-50 dark:bg-indigo-500/10',
+          text: 'text-indigo-700 dark:text-indigo-300',
+          border: 'border-indigo-200 dark:border-indigo-500/30',
           dotBg: 'bg-indigo-500',
           icon: <Wrench className="h-4 w-4" />,
           label: 'Maintenance',

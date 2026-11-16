@@ -379,7 +379,7 @@ export function FrameworkRequirementsModal({
                                 ) : (
                                   <Badge
                                     variant="outline"
-                                    className="text-[11px] font-semibold text-slate-500 shrink-0 self-start sm:self-center"
+                                    className="text-[11px] font-semibold text-ink-500 shrink-0 self-start sm:self-center"
                                   >
                                     Static Only
                                   </Badge>

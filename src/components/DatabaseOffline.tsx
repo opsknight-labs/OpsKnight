@@ -31,7 +31,7 @@ export default function DatabaseOffline({
           width: '100%',
           maxWidth: '680px',
           background: 'var(--bg-secondary, #ffffff)',
-          border: '1px solid var(--border, #e5e7eb)',
+          border: '1px solid var(--border, hsl(var(--ui-border)))',
           borderRadius: '16px',
           padding: '1.5rem',
           boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
@@ -69,7 +69,7 @@ export default function DatabaseOffline({
               padding: '0.75rem',
               borderRadius: '12px',
               background: 'var(--bg-primary, #f8fafc)',
-              border: '1px solid var(--border, #e5e7eb)',
+              border: '1px solid var(--border, hsl(var(--ui-border)))',
               color: 'var(--text-secondary, #4b5563)',
               overflowX: 'auto',
               fontSize: '0.8rem',
@@ -90,10 +90,12 @@ export default function DatabaseOffline({
               style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--text-secondary, #4b5563)' }}
             >
               <li style={{ marginBottom: '0.25rem' }}>
-                Verify the primary database instance or connection pooler is active and accepting connections.
+                Verify the primary database instance or connection pooler is active and accepting
+                connections.
               </li>
               <li style={{ marginBottom: '0.25rem' }}>
-                Check network policies, VPC peering, and firewall rules between application servers and the database.
+                Check network policies, VPC peering, and firewall rules between application servers
+                and the database.
               </li>
               <li>
                 Review application server error logs for detailed connection diagnostic telemetry.

@@ -25,10 +25,8 @@ export default function SettingsSectionCard({
   className,
 }: Props) {
   return (
-    <Card
-      className={cn('bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden', className)}
-    >
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4 border-b border-slate-100">
+    <Card className={cn('bg-card border-ink-200 shadow-sm rounded-xl overflow-hidden', className)}>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4 border-b border-ink-100">
         <div className="space-y-1">
           <CardTitle className="text-base font-bold text-foreground tracking-tight">
             {title}

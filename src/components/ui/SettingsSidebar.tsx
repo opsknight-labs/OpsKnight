@@ -27,8 +27,8 @@ export default function SettingsSidebar({
       style={{
         width: '240px',
         minWidth: '240px',
-        background: '#ffffff',
-        borderRight: '1px solid #e5e7eb',
+        background: 'hsl(var(--ui-card))',
+        borderRight: '1px solid hsl(var(--ui-border))',
         padding: 'var(--spacing-4)',
         overflowY: 'auto',
         height: '100%',
@@ -43,7 +43,7 @@ export default function SettingsSidebar({
               style={{
                 width: '100%',
                 padding: 'var(--spacing-3) var(--spacing-4)',
-                background: activeItem === item.id ? '#f3f4f6' : 'transparent',
+                background: activeItem === item.id ? 'hsl(var(--ui-muted))' : 'transparent',
                 border: 'none',
                 borderRadius: 'var(--radius-md)',
                 color: activeItem === item.id ? 'var(--primary-color)' : 'var(--text-primary)',
@@ -92,7 +92,7 @@ export default function SettingsSidebar({
                   marginLeft: 'var(--spacing-4)',
                   marginTop: 'var(--spacing-1)',
                   paddingLeft: 'var(--spacing-4)',
-                  borderLeft: '2px solid #e5e7eb',
+                  borderLeft: '2px solid hsl(var(--ui-border))',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 'var(--spacing-1)',
@@ -106,7 +106,7 @@ export default function SettingsSidebar({
                     style={{
                       width: '100%',
                       padding: 'var(--spacing-2) var(--spacing-3)',
-                      background: activeItem === child.id ? '#f3f4f6' : 'transparent',
+                      background: activeItem === child.id ? 'hsl(var(--ui-muted))' : 'transparent',
                       border: 'none',
                       borderRadius: 'var(--radius-md)',
                       color: activeItem === child.id ? 'var(--primary-color)' : 'var(--text-muted)',

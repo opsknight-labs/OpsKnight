@@ -922,10 +922,10 @@ function HealthCheckCard({
                   className={cn(
                     'font-mono font-bold',
                     telemetry.poolUtilization.percent > 90
-                      ? 'text-rose-600'
+                      ? 'text-rose-600 dark:text-rose-400'
                       : telemetry.poolUtilization.percent > 75
-                        ? 'text-amber-600'
-                        : 'text-emerald-600'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
                   )}
                 >
                   {telemetry.poolUtilization.used} / {telemetry.poolUtilization.max} (
@@ -1032,7 +1032,7 @@ function HealthCheckCard({
                 <span
                   className={cn(
                     telemetry.queueDistribution.failed > 0
-                      ? 'text-rose-600 font-bold'
+                      ? 'text-rose-600 font-bold dark:text-rose-400'
                       : 'text-muted-foreground'
                   )}
                 >

@@ -5,6 +5,8 @@ import './layers.css';
 import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
 import ServiceWorkerBootstrap from '@/components/pwa/ServiceWorkerBootstrap';
+import { THEME_CHROME_COLORS, chromeThemeBootstrapScript } from '@/lib/theme-preference';
+import { LIGHT_PINNED_PREFIXES } from '@/lib/theme-routes';
 
 // Brand typefaces, bundled so builds never depend on Google font downloads.
 // Inter is the UI/body face; Space Grotesk is the display face for titles,
@@ -61,15 +63,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta
           id="opsknight-runtime-theme-color"
           name="theme-color"
-          content="#f8fafc"
+          content={THEME_CHROME_COLORS.light}
           suppressHydrationWarning
         />
+        {/* OpsKnight ships its own dark theme; stop Dark Reader double-inverting it. */}
         <meta name="darkreader-lock" />
+        <script
+          dangerouslySetInnerHTML={{ __html: chromeThemeBootstrapScript(LIGHT_PINNED_PREFIXES) }}
+        />
       </head>
-      <body
-        className="antialiased"
-        suppressHydrationWarning
-      >
+      <body className="antialiased" suppressHydrationWarning>
         <Providers>
           <VersionCheck />
           <ServiceWorkerBootstrap />

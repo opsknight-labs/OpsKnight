@@ -72,7 +72,7 @@ function EscalationStatusBadge({
           'h-1.5 w-1.5 rounded-full ring-2 ring-offset-0 shrink-0',
           isEscalating
             ? 'bg-amber-500 ring-amber-200/70 animate-pulse'
-            : 'bg-slate-400 ring-slate-200/70'
+            : 'bg-slate-400 ring-ink-200/70'
         )}
       />
       <span>{labelParts.join(' · ')}</span>

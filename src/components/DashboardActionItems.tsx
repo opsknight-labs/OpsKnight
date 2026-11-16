@@ -43,30 +43,30 @@ export default function DashboardActionItems({
     switch (status) {
       case 'OPEN':
         return {
-          bg: 'bg-blue-50',
-          border: 'border-blue-200',
-          text: 'text-blue-700',
+          bg: 'bg-blue-50 dark:bg-blue-500/10',
+          border: 'border-blue-200 dark:border-blue-500/30',
+          text: 'text-blue-700 dark:text-blue-300',
           dot: 'bg-blue-500',
         };
       case 'IN_PROGRESS':
         return {
-          bg: 'bg-amber-50',
-          border: 'border-amber-200',
-          text: 'text-amber-700',
+          bg: 'bg-amber-50 dark:bg-amber-500/10',
+          border: 'border-amber-200 dark:border-amber-500/30',
+          text: 'text-amber-700 dark:text-amber-300',
           dot: 'bg-amber-500',
         };
       case 'COMPLETED':
         return {
-          bg: 'bg-emerald-50',
-          border: 'border-emerald-200',
-          text: 'text-emerald-700',
+          bg: 'bg-emerald-50 dark:bg-emerald-500/10',
+          border: 'border-emerald-200 dark:border-emerald-500/30',
+          text: 'text-emerald-700 dark:text-emerald-300',
           dot: 'bg-emerald-500',
         };
       case 'BLOCKED':
         return {
-          bg: 'bg-rose-50',
-          border: 'border-rose-200',
-          text: 'text-rose-700',
+          bg: 'bg-rose-50 dark:bg-rose-500/10',
+          border: 'border-rose-200 dark:border-rose-500/30',
+          text: 'text-rose-700 dark:text-rose-300',
           dot: 'bg-rose-500',
         };
       default:
@@ -113,10 +113,12 @@ export default function DashboardActionItems({
       {/* Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <Link href="/action-items?status=OPEN" className="no-underline">
-          <div className="p-4 bg-white border-2 border-blue-200 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <div className="p-4 bg-card border-2 border-blue-200 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:border-blue-500/30">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <AlertCircle className="h-4 w-4 text-blue-600" />
-              <div className="text-2xl font-bold text-blue-600">{stats.open}</div>
+              <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {stats.open}
+              </div>
             </div>
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Open
@@ -124,10 +126,12 @@ export default function DashboardActionItems({
           </div>
         </Link>
         <Link href="/action-items?status=IN_PROGRESS" className="no-underline">
-          <div className="p-4 bg-white border-2 border-amber-200 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <div className="p-4 bg-card border-2 border-amber-200 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:border-amber-500/30">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <Clock className="h-4 w-4 text-amber-600" />
-              <div className="text-2xl font-bold text-amber-600">{stats.inProgress}</div>
+              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                {stats.inProgress}
+              </div>
             </div>
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               In Progress
@@ -135,10 +139,12 @@ export default function DashboardActionItems({
           </div>
         </Link>
         <Link href="/action-items?status=COMPLETED" className="no-underline">
-          <div className="p-4 bg-white border-2 border-emerald-200 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <div className="p-4 bg-card border-2 border-emerald-200 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:border-emerald-500/30">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              <div className="text-2xl font-bold text-emerald-600">{stats.completed}</div>
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {stats.completed}
+              </div>
             </div>
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Completed
@@ -149,15 +155,17 @@ export default function DashboardActionItems({
           <div
             className={cn(
               'p-4 border-2 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5',
-              stats.overdue > 0 ? 'bg-rose-50 border-rose-300' : 'bg-white border-neutral-200'
+              stats.overdue > 0
+                ? 'bg-rose-50 border-rose-300 dark:bg-rose-500/10 dark:border-rose-500/30'
+                : 'bg-card border-neutral-200'
             )}
           >
             <div className="flex items-center justify-center gap-2 mb-1">
-              <AlertTriangle className="h-4 w-4 text-rose-600" />
+              <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
               <div
                 className={cn(
                   'text-2xl font-bold',
-                  stats.overdue > 0 ? 'text-rose-600' : 'text-neutral-500'
+                  stats.overdue > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-neutral-500'
                 )}
               >
                 {stats.overdue}
@@ -171,7 +179,7 @@ export default function DashboardActionItems({
       </div>
 
       {/* Progress Bar */}
-      <div className="mb-5 p-4 bg-white rounded-lg border border-border">
+      <div className="mb-5 p-4 bg-card rounded-lg border border-border">
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-semibold text-foreground">Completion Rate</span>
           <Badge variant="outline" size="xs">
@@ -211,7 +219,7 @@ export default function DashboardActionItems({
                   key={item.id}
                   href={`/postmortems/${item.incidentId}`}
                   className={cn(
-                    'flex items-center justify-between p-3 bg-white rounded-lg border-2 transition-all duration-200',
+                    'flex items-center justify-between p-3 bg-card rounded-lg border-2 transition-all duration-200',
                     'hover:shadow-md hover:translate-x-1 no-underline',
                     config.border
                   )}

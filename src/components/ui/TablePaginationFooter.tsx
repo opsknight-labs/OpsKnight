@@ -40,7 +40,7 @@ export default function TablePaginationFooter({
   return (
     <div
       className={cn(
-        'flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 text-xs text-muted-foreground',
+        'flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-ink-100 bg-ink-50/50 px-4 py-3 text-xs text-muted-foreground',
         className
       )}
     >

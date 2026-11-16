@@ -26,7 +26,7 @@ export default function PageLoadingSkeleton({
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4"
+              className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-4"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
               <Skeleton className="h-4 w-16 mb-2" />
@@ -36,7 +36,7 @@ export default function PageLoadingSkeleton({
         </div>
 
         {/* Chart placeholder */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-6">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           <Skeleton className="h-6 w-40 mb-4" />
           <Skeleton className="h-64 w-full rounded-lg" />
@@ -56,7 +56,7 @@ export default function PageLoadingSkeleton({
     return (
       <div className={cn('w-full px-4 md:px-6 lg:px-8 py-6 space-y-6', className)}>
         {/* Header */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6">
+        <div className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-6">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           <div className="flex items-start justify-between">
             <div className="space-y-3">
@@ -80,7 +80,7 @@ export default function PageLoadingSkeleton({
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5"
+                className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-5"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
                 <Skeleton className="h-5 w-32 mb-3" />
@@ -96,7 +96,7 @@ export default function PageLoadingSkeleton({
             {Array.from({ length: 2 }).map((_, i) => (
               <div
                 key={i}
-                className="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5"
+                className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-5"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
                 <Skeleton className="h-5 w-24 mb-3" />
@@ -119,7 +119,7 @@ export default function PageLoadingSkeleton({
         </div>
 
         {/* Form fields */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 space-y-6">
+        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-6 space-y-6">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="space-y-2">
@@ -172,12 +172,12 @@ export default function PageLoadingSkeleton({
       </div>
 
       {/* List items */}
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50">
+      <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-white to-ink-50">
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
 
         {/* List header */}
-        <div className="px-5 py-4 border-b border-slate-100">
+        <div className="px-5 py-4 border-b border-ink-100">
           <div className="flex justify-between items-center">
             <Skeleton className="h-4 w-40" />
             <Skeleton className="h-8 w-24 rounded-lg" />
@@ -189,7 +189,7 @@ export default function PageLoadingSkeleton({
           {Array.from({ length: itemCount }).map((_, i) => (
             <div
               key={i}
-              className="rounded-2xl border border-slate-200 border-l-4 border-l-slate-300 bg-white p-4"
+              className="rounded-2xl border border-ink-200 border-l-4 border-l-ink-300 bg-card p-4"
               style={{ animationDelay: `${i * 100}ms` }}
             >
               <div className="flex gap-3 items-start">
@@ -216,7 +216,7 @@ export default function PageLoadingSkeleton({
         </div>
 
         {/* Pagination */}
-        <div className="px-5 py-4 border-t border-slate-100 flex justify-between items-center">
+        <div className="px-5 py-4 border-t border-ink-100 flex justify-between items-center">
           <Skeleton className="h-4 w-32" />
           <div className="flex gap-2">
             <Skeleton className="h-9 w-9 rounded-lg" />

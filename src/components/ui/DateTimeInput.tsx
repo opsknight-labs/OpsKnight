@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Calendar, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,12 @@ interface DateTimeInputProps {
   className?: string; // Applied to inputs
 }
 
+function splitDateTime(value?: string) {
+  if (!value) return { date: '', time: '' };
+  const [d, t] = value.split('T');
+  return { date: d || '', time: t || '' };
+}
+
 export default function DateTimeInput({
   name,
   value,
@@ -29,22 +35,18 @@ export default function DateTimeInput({
   className,
 }: DateTimeInputProps) {
   // Parse initial value (YYYY-MM-DDTHH:mm)
-  const [datePart, setDatePart] = useState('');
-  const [timePart, setTimePart] = useState('');
+  const [datePart, setDatePart] = useState(() => splitDateTime(value).date);
+  const [timePart, setTimePart] = useState(() => splitDateTime(value).time);
   const [combinedValue, setCombinedValue] = useState(value || '');
+  const [syncedValue, setSyncedValue] = useState(value);
 
-  useEffect(() => {
-    if (value) {
-      const [d, t] = value.split('T');
-      setDatePart(d || '');
-      setTimePart(t || '');
-      setCombinedValue(value);
-    } else {
-      setDatePart('');
-      setTimePart('');
-      setCombinedValue('');
-    }
-  }, [value]);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
+    const { date, time } = splitDateTime(value);
+    setDatePart(date);
+    setTimePart(time);
+    setCombinedValue(value || '');
+  }
 
   const updateValue = (newDate: string, newTime: string) => {
     if (newDate && newTime) {
@@ -76,7 +78,7 @@ export default function DateTimeInput({
 
       {/* Date Input */}
       <div className="relative flex-grow">
-        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none">
           <Calendar className="h-4 w-4" />
         </div>
         <Input
@@ -93,7 +95,7 @@ export default function DateTimeInput({
 
       {/* Time Input */}
       <div className="relative w-1/3 min-w-[120px]">
-        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none">
           <Clock className="h-4 w-4" />
         </div>
         <Input

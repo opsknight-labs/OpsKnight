@@ -21,14 +21,12 @@ export default function SystemLogsError({
 
   return (
     <main className="mx-auto flex w-full max-w-[1600px] justify-center px-4 py-12 md:px-6">
-      <section className="w-full max-w-lg rounded-xl border border-rose-200 bg-rose-50/60 p-6 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100">
-          <AlertCircle className="h-6 w-6 text-rose-600" aria-hidden="true" />
+      <section className="w-full max-w-lg rounded-xl border border-rose-200 bg-rose-50/60 p-6 text-center dark:border-rose-500/30 dark:bg-rose-500/10">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-500/15">
+          <AlertCircle className="h-6 w-6 text-rose-600 dark:text-rose-400" aria-hidden="true" />
         </div>
-        <h1 className="mt-4 text-lg font-semibold text-slate-900">
-          System logs couldn&apos;t load
-        </h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className="mt-4 text-lg font-semibold text-ink-900">System logs couldn&apos;t load</h1>
+        <p className="mt-1 text-sm text-ink-600">
           An error occurred while loading diagnostic system logs. You can try refreshing the page or
           checking the live app logs.
         </p>

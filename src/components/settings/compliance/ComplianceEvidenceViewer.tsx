@@ -113,7 +113,7 @@ export function ComplianceEvidenceViewer({
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
-                <AlertTriangle className="h-4 w-4 text-rose-600" />
+                <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                 Cryptographic Integrity Mismatch (Tampered Record)
               </span>
               <Button

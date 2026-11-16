@@ -37,14 +37,16 @@ export default function IncidentStatusActions({
 
   if (!canManage && !canAcknowledge) {
     return (
-      <Card className="border-amber-200 bg-amber-50/50">
+      <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-500/10">
         <CardContent className="p-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-            <Lock className="h-4 w-4 text-amber-600" />
+          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-500/15">
+            <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           </div>
           <div>
-            <p className="text-sm font-medium text-amber-900">Access Restricted</p>
-            <p className="text-xs text-amber-700">Responder role required</p>
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-300">
+              Access Restricted
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300">Responder role required</p>
           </div>
         </CardContent>
       </Card>
@@ -58,14 +60,18 @@ export default function IncidentStatusActions({
 
   if (isResolved) {
     return (
-      <Card className="border-emerald-200 bg-emerald-50/50">
+      <Card className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-500/10">
         <CardContent className="p-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 dark:bg-emerald-500/15">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div>
-            <p className="text-sm font-medium text-emerald-900">Incident Resolved</p>
-            <p className="text-xs text-emerald-700">No further actions needed</p>
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-300">
+              Incident Resolved
+            </p>
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">
+              No further actions needed
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -80,7 +86,7 @@ export default function IncidentStatusActions({
           <Button
             type="submit"
             variant="outline"
-            className="w-full h-11 justify-center border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 font-medium"
+            className="w-full h-11 justify-center border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 font-medium dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10 dark:hover:border-red-500/30"
           >
             <X className="h-4 w-4 mr-2" />
             Unacknowledge
@@ -122,12 +128,14 @@ export default function IncidentStatusActions({
               <Button
                 type="submit"
                 variant="outline"
-                className="h-auto py-3 flex-col gap-1 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hover:border-indigo-300"
+                className="h-auto py-3 flex-col gap-1 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hover:border-indigo-300 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/15 dark:hover:border-indigo-500/30"
               >
-                <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center mb-1">
-                  <Bell className="h-3.5 w-3.5 text-indigo-600" />
+                <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center mb-1 dark:bg-indigo-500/15">
+                  <Bell className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
                 </div>
-                <span className="text-xs font-medium text-indigo-700">Unsnooze</span>
+                <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                  Unsnooze
+                </span>
                 <span className="text-[10px] text-indigo-500">Resume alerts</span>
               </Button>
             </form>
@@ -136,14 +144,14 @@ export default function IncidentStatusActions({
               <Button
                 type="button"
                 variant="outline"
-                className="h-auto py-3 flex-col gap-1 border-slate-200 hover:border-slate-300 force-light-surface"
+                className="h-auto py-3 flex-col gap-1 border-ink-200 hover:border-ink-300 force-light-surface"
                 onClick={() => setShowSnoozeDialog(true)}
               >
-                <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center mb-1 force-light-surface">
-                  <Pause className="h-3.5 w-3.5 text-slate-600" />
+                <div className="w-7 h-7 rounded-full bg-ink-100 flex items-center justify-center mb-1 force-light-surface">
+                  <Pause className="h-3.5 w-3.5 text-ink-600" />
                 </div>
-                <span className="text-xs font-medium text-slate-700">Snooze</span>
-                <span className="text-[10px] text-slate-500">Pause alerts</span>
+                <span className="text-xs font-medium text-ink-700">Snooze</span>
+                <span className="text-[10px] text-ink-500">Pause alerts</span>
               </Button>
             )
           )}
@@ -153,12 +161,14 @@ export default function IncidentStatusActions({
               <Button
                 type="submit"
                 variant="outline"
-                className="h-auto py-3 flex-col gap-1 border-purple-200 bg-purple-50/50 hover:bg-purple-100 hover:border-purple-300"
+                className="h-auto py-3 flex-col gap-1 border-purple-200 bg-purple-50/50 hover:bg-purple-100 hover:border-purple-300 dark:border-purple-500/30 dark:bg-purple-500/10 dark:hover:bg-purple-500/15 dark:hover:border-purple-500/30"
               >
-                <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center mb-1">
-                  <Volume2 className="h-3.5 w-3.5 text-purple-600" />
+                <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center mb-1 dark:bg-purple-500/15">
+                  <Volume2 className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
                 </div>
-                <span className="text-xs font-medium text-purple-700">Unsuppress</span>
+                <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                  Unsuppress
+                </span>
                 <span className="text-[10px] text-purple-500">Enable alerts</span>
               </Button>
             </form>
@@ -168,13 +178,13 @@ export default function IncidentStatusActions({
                 <Button
                   type="submit"
                   variant="outline"
-                  className="h-auto py-3 flex-col gap-1 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
+                  className="h-auto py-3 flex-col gap-1 border-ink-200 hover:bg-ink-100 hover:border-ink-300"
                 >
-                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center mb-1">
-                    <BellOff className="h-3.5 w-3.5 text-slate-600" />
+                  <div className="w-7 h-7 rounded-full bg-ink-100 flex items-center justify-center mb-1">
+                    <BellOff className="h-3.5 w-3.5 text-ink-600" />
                   </div>
-                  <span className="text-xs font-medium text-slate-700">Suppress</span>
-                  <span className="text-[10px] text-slate-500">Mute alerts</span>
+                  <span className="text-xs font-medium text-ink-700">Suppress</span>
+                  <span className="text-[10px] text-ink-500">Mute alerts</span>
                 </Button>
               </form>
             )

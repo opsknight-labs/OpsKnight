@@ -1265,7 +1265,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                 size="xs"
                 className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Users className="h-3 w-3 mr-1 text-slate-400" />
+                <Users className="h-3 w-3 mr-1 text-ink-400" />
                 {service.team.name}
               </Badge>
             )}
@@ -1286,7 +1286,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                 size="xs"
                 className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Globe className="h-3 w-3 mr-1 text-slate-400" />
+                <Globe className="h-3 w-3 mr-1 text-ink-400" />
                 {service.region}
               </Badge>
             )}
@@ -1297,7 +1297,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
               {service.description || 'No description provided for this service.'}
             </p>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-ink-400">
               30-day reliability metrics • Active incident count excludes snoozed alerts
             </p>
           </div>

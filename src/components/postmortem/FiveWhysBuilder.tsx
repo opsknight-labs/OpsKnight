@@ -57,7 +57,7 @@ export default function FiveWhysBuilder({
       return (
         <div
           className={cn(
-            'p-4 border border-dashed rounded-lg text-center space-y-3 bg-slate-50/50',
+            'p-4 border border-dashed rounded-lg text-center space-y-3 bg-ink-50/50',
             className
           )}
         >
@@ -70,7 +70,7 @@ export default function FiveWhysBuilder({
             variant="outline"
             size="sm"
             onClick={handleAddStep}
-            className="h-8 text-xs gap-1.5 font-semibold bg-white"
+            className="h-8 text-xs gap-1.5 font-semibold bg-card"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Add First Why Step</span>
@@ -82,7 +82,7 @@ export default function FiveWhysBuilder({
     return (
       <div
         className={cn(
-          'p-3 rounded-lg bg-slate-50 border border-slate-200/70 text-xs text-muted-foreground italic',
+          'p-3 rounded-lg bg-ink-50 border border-ink-200/70 text-xs text-muted-foreground italic',
           className
         )}
       >
@@ -112,7 +112,7 @@ export default function FiveWhysBuilder({
         )}
       </div>
 
-      <div className="relative pl-6 space-y-4 before:absolute before:left-[11px] before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+      <div className="relative pl-6 space-y-4 before:absolute before:left-[11px] before:top-3 before:bottom-3 before:w-0.5 before:bg-ink-200">
         {steps.map((step, idx) => {
           const isLast = idx === steps.length - 1;
 
@@ -133,8 +133,8 @@ export default function FiveWhysBuilder({
                 className={cn(
                   'p-3 rounded-lg border transition-all',
                   isLast
-                    ? 'bg-emerald-50/50 border-emerald-200/80 shadow-sm'
-                    : 'bg-white border-slate-200 shadow-xs'
+                    ? 'bg-emerald-50/50 border-emerald-200/80 shadow-sm dark:bg-emerald-500/10 dark:border-emerald-500/30'
+                    : 'bg-card border-ink-200 shadow-xs'
                 )}
               >
                 {isEditable ? (
@@ -152,7 +152,7 @@ export default function FiveWhysBuilder({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveStep(idx)}
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -162,13 +162,17 @@ export default function FiveWhysBuilder({
                       value={step.answer}
                       onChange={e => handleFieldChange(idx, 'answer', e.target.value)}
                       placeholder="Identified reason / finding..."
-                      className="h-8 text-xs bg-slate-50"
+                      className="h-8 text-xs bg-ink-50"
                     />
                   </div>
                 ) : (
                   <div>
                     <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <span className={cn(isLast ? 'text-emerald-700' : 'text-primary')}>
+                      <span
+                        className={cn(
+                          isLast ? 'text-emerald-700 dark:text-emerald-300' : 'text-primary'
+                        )}
+                      >
                         {isLast ? '🎯 Root Cause Finding' : `Why #${idx + 1}: ${step.question}`}
                       </span>
                     </div>

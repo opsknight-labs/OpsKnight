@@ -29,7 +29,7 @@ export default function ServiceTabs({ serviceId }: ServiceTabsProps) {
   ];
 
   return (
-    <div className="flex items-center gap-6 border-b border-slate-200 mb-8">
+    <div className="flex items-center gap-6 border-b border-ink-200 mb-8">
       {tabs.map(tab => {
         const isActive = activeHref === tab.href;
         return (
@@ -40,7 +40,7 @@ export default function ServiceTabs({ serviceId }: ServiceTabsProps) {
               'pb-3 pt-2 text-sm font-medium border-b-2 transition-colors -mb-px',
               isActive
                 ? 'border-primary text-primary'
-                : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                : 'border-transparent text-ink-500 hover:text-ink-900 hover:border-ink-300'
             )}
           >
             {tab.label}

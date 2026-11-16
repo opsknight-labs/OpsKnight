@@ -75,7 +75,10 @@ describe('user management security contract', () => {
       .filter(parts => parts.length >= 2)
       .filter(parts => !scalarTypes.has(parts[1].replace(/[?\[\]]/g, '')))
       .filter(
-        parts => !['Role', 'RoleSource', 'UserStatus'].includes(parts[1].replace(/[?\[\]]/g, ''))
+        parts =>
+          !['Role', 'RoleSource', 'UserStatus', 'ThemePreference'].includes(
+            parts[1].replace(/[?\[\]]/g, '')
+          )
       )
       .map(parts => parts[0]);
 

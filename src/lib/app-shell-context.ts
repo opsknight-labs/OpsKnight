@@ -10,6 +10,7 @@ import {
 } from '@/lib/request-actor-context';
 import { resolveAccessContext, type AccessContext } from '@/lib/access-context';
 import { logger } from '@/lib/logger';
+import type { ThemePreferenceValue } from '@/lib/theme-preference';
 
 export type AppShellContext = {
   user: {
@@ -20,6 +21,7 @@ export type AppShellContext = {
     avatarUrl: string | null;
     gender: string | null;
     timeZone: string | null;
+    themePreference: ThemePreferenceValue;
     tokenVersion: number;
   };
   incidentCounts: {
@@ -168,6 +170,7 @@ export async function getAppShellContext(
       avatarUrl: context.user.avatarUrl,
       gender: context.user.gender,
       timeZone: context.user.timeZone,
+      themePreference: context.user.themePreference,
       tokenVersion: context.user.tokenVersion,
     },
     incidentCounts: { high, medium, low, active },

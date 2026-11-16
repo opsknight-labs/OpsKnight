@@ -72,8 +72,6 @@ export default memo(function IncidentTable({
     router.push(newUrl, { scroll: false });
   };
 
-  const renderSortArrow = () => (sortOrder === 'asc' ? '↑' : '↓');
-
   const buildUrgencyChip = (urgency: string | null | undefined) => {
     if (!urgency) return null;
     const u = urgency.toUpperCase();
@@ -286,7 +284,7 @@ export default memo(function IncidentTable({
                     'border rounded-xl overflow-hidden cursor-pointer transition-all duration-150',
                     isSelected
                       ? 'border-primary/35 bg-primary/5 shadow-[0_12px_26px_rgba(15,23,42,0.10)]'
-                      : 'border-border bg-white shadow-xs hover:shadow-sm hover:-translate-y-px'
+                      : 'border-border bg-card shadow-xs hover:shadow-sm hover:-translate-y-px'
                   )}
                   style={
                     isSelected
@@ -378,11 +376,11 @@ export default memo(function IncidentTable({
                           >
                             <summary
                               aria-label="More actions"
-                              className="cursor-pointer py-1.5 px-2.5 rounded-lg border border-border bg-white text-secondary-foreground text-sm leading-none select-none shadow-xs"
+                              className="cursor-pointer py-1.5 px-2.5 rounded-lg border border-border bg-card text-secondary-foreground text-sm leading-none select-none shadow-xs"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </summary>
-                            <div className="absolute right-0 top-[calc(100%+8px)] min-w-[220px] bg-white border border-border rounded-lg shadow-lg p-1.5 z-50">
+                            <div className="absolute right-0 top-[calc(100%+8px)] min-w-[220px] bg-card border border-border rounded-lg shadow-lg p-1.5 z-50">
                               <Link
                                 href={`/incidents/${incident.id}`}
                                 onClick={e => {
@@ -474,7 +472,7 @@ export default memo(function IncidentTable({
                       </div>
 
                       <div className="mt-2.5 flex gap-1.5 flex-wrap items-center">
-                        <StatusBadge status={incident.status as any} size="sm" showDot />
+                        <StatusBadge status={incident.status} size="sm" showDot />
                         {urgencyChip}
                         <span className="text-muted-foreground text-xs">•</span>
                         {incident.assignee ? (

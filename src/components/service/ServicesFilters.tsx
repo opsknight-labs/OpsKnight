@@ -116,7 +116,7 @@ export default function ServicesFilters({
           <Badge
             variant={currentStatus === 'OPERATIONAL' ? 'success' : 'outline'}
             size="sm"
-            className="cursor-pointer hover:bg-emerald-100 hover:text-emerald-800 transition-colors"
+            className="cursor-pointer hover:bg-emerald-100 hover:text-emerald-800 transition-colors dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300"
             onClick={() =>
               updateParams({ status: currentStatus === 'OPERATIONAL' ? 'all' : 'OPERATIONAL' })
             }
@@ -126,7 +126,7 @@ export default function ServicesFilters({
           <Badge
             variant={currentStatus === 'DEGRADED' ? 'warning' : 'outline'}
             size="sm"
-            className="cursor-pointer hover:bg-yellow-100 hover:text-yellow-800 transition-colors"
+            className="cursor-pointer hover:bg-yellow-100 hover:text-yellow-800 transition-colors dark:hover:bg-yellow-500/15 dark:hover:text-yellow-300"
             onClick={() =>
               updateParams({ status: currentStatus === 'DEGRADED' ? 'all' : 'DEGRADED' })
             }
@@ -136,7 +136,7 @@ export default function ServicesFilters({
           <Badge
             variant={currentStatus === 'CRITICAL' ? 'danger' : 'outline'}
             size="sm"
-            className="cursor-pointer hover:bg-red-100 hover:text-red-800 transition-colors"
+            className="cursor-pointer hover:bg-red-100 hover:text-red-800 transition-colors dark:hover:bg-red-500/15 dark:hover:text-red-300"
             onClick={() =>
               updateParams({ status: currentStatus === 'CRITICAL' ? 'all' : 'CRITICAL' })
             }

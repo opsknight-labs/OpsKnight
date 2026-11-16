@@ -109,13 +109,15 @@ export default function TeamMemberForm({
 
   if (!canManageMembers) {
     return (
-      <Card className="border-orange-200 bg-orange-50/50">
+      <Card className="border-orange-200 bg-orange-50/50 dark:border-orange-500/30 dark:bg-orange-500/10">
         <CardContent className="pt-6 pb-4">
-          <div className="flex items-center gap-2 text-orange-900 mb-3">
+          <div className="flex items-center gap-2 text-orange-900 mb-3 dark:text-orange-300">
             <AlertTriangle className="h-4 w-4" />
             <p className="text-xs font-medium">No permission to add members</p>
           </div>
-          <p className="text-xs text-orange-700">Admin or Responder role required.</p>
+          <p className="text-xs text-orange-700 dark:text-orange-300">
+            Admin or Responder role required.
+          </p>
         </CardContent>
       </Card>
     );
@@ -145,9 +147,7 @@ export default function TeamMemberForm({
         >
           <SelectTrigger>
             <SelectValue
-              placeholder={
-                selectableUsers.length === 0 ? 'No matching users' : 'Choose a user...'
-              }
+              placeholder={selectableUsers.length === 0 ? 'No matching users' : 'Choose a user...'}
             />
           </SelectTrigger>
           <SelectContent className="max-h-[200px]">
@@ -198,7 +198,7 @@ export default function TeamMemberForm({
           </SelectContent>
         </Select>
         {!canAssignOwnerAdmin && (
-          <p className="text-xs text-orange-600 flex items-center gap-1">
+          <p className="text-xs text-orange-600 flex items-center gap-1 dark:text-orange-400">
             <AlertTriangle className="h-3 w-3" />
             Admin or Team Owner access required for elevated roles
           </p>

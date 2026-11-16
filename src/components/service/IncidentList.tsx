@@ -391,7 +391,7 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                             onClick={e => e.stopPropagation()}
                             className="flex items-center gap-2 cursor-pointer"
                           >
-                            <Eye className="h-4 w-4 text-slate-500" />
+                            <Eye className="h-4 w-4 text-ink-500" />
                             View details
                           </Link>
                         </DropdownMenuItem>

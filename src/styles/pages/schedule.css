@@ -18,7 +18,7 @@
   padding: 1.75rem;
   border-radius: calc(var(--radius) + 4px);
   border: 1px solid var(--border);
-  background: linear-gradient(135deg, #ffffff 0%, #eef2ff 50%, #f8fafc 100%);
+  background: linear-gradient(135deg, hsl(var(--ui-card)) 0%, #eef2ff 50%, rgb(var(--ink-50)) 100%);
   box-shadow: var(--shadow-sm);
   position: relative;
   overflow: hidden;

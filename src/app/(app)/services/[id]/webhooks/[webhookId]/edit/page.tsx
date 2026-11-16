@@ -205,7 +205,7 @@ export default async function EditWebhookPage({
                   name="enabled"
                   value="true"
                   defaultChecked={webhook.enabled}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="h-4 w-4 rounded border-ink-300 text-primary focus:ring-primary"
                 />
                 <Label htmlFor="enabled" className="cursor-pointer font-medium">
                   Enable this integration

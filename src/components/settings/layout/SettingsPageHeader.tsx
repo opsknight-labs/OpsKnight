@@ -31,7 +31,7 @@ export function SettingsPageHeader({
   className,
 }: SettingsPageHeaderProps) {
   return (
-    <header className={cn('relative space-y-3 pb-6 border-b border-slate-200/80', className)}>
+    <header className={cn('relative space-y-3 pb-6 border-b border-ink-200/80', className)}>
       {/* Navigation Breadcrumb / Back link */}
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         {backHref && (

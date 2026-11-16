@@ -82,7 +82,7 @@ export default function ScheduleExportMenu({
 
         <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer gap-2 py-2">
           {copied ? (
-            <Check className="h-3.5 w-3.5 text-emerald-600" />
+            <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
           ) : (
             <Link className="h-3.5 w-3.5 text-muted-foreground" />
           )}

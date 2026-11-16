@@ -6,11 +6,8 @@ import { useEffect } from 'react';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
 import { useEffectiveTheme } from '@/hooks/use-effective-theme';
-
-const MOBILE_THEME_COLORS = {
-  light: '#f8fafc',
-  dark: '#09090b',
-} as const;
+import { THEME_CHROME_COLORS, THEME_STORAGE_KEY } from '@/lib/theme-preference';
+import { isLightPinnedRoute } from '@/lib/theme-routes';
 
 // In React 19 / Next.js 16, next-themes renders an inline <script> tag for noflash theme
 // initialization which triggers a harmless development console warning.
@@ -41,7 +38,7 @@ function ThemeAttributeBridge() {
     // Keep browser/PWA chrome aligned with an explicit in-app theme override,
     // not only with the OS media query used during the initial HTML response.
     const nextThemeColor =
-      effectiveTheme === 'dark' ? MOBILE_THEME_COLORS.dark : MOBILE_THEME_COLORS.light;
+      effectiveTheme === 'dark' ? THEME_CHROME_COLORS.dark : THEME_CHROME_COLORS.light;
     const runtimeThemeColor = document.getElementById('opsknight-runtime-theme-color');
     if (runtimeThemeColor instanceof HTMLMetaElement) {
       runtimeThemeColor.content = nextThemeColor;
@@ -59,18 +56,23 @@ function ThemeAttributeBridge() {
 }
 
 function AppThemeProvider({ children }: { children: React.ReactNode }) {
-  // Mobile/PWA follows the user/system theme. Desktop intentionally remains
-  // light until the authenticated desktop surface has completed its own dark
-  // mode migration. The class attribute is canonical for Tailwind's dark:
+  // The console and mobile app follow the user's appearance preference
+  // (System by default). Public and pre-sign-in pages stay light; see
+  // isLightPinnedRoute. The class attribute is canonical for Tailwind's dark:
   // variant; ThemeAttributeBridge mirrors it to data-theme for legacy CSS.
   const pathname = usePathname();
-  const isMobileRoute = pathname?.startsWith('/m');
-  const themeProps = isMobileRoute
-    ? { defaultTheme: 'system' as const, enableSystem: true }
-    : { forcedTheme: 'light' as const, defaultTheme: 'light' as const, enableSystem: false };
+  const forcedTheme = isLightPinnedRoute(pathname) ? ('light' as const) : undefined;
 
   return (
-    <ThemeProvider attribute="class" disableTransitionOnChange enableColorScheme {...themeProps}>
+    <ThemeProvider
+      attribute="class"
+      storageKey={THEME_STORAGE_KEY}
+      defaultTheme="system"
+      enableSystem
+      enableColorScheme
+      disableTransitionOnChange
+      forcedTheme={forcedTheme}
+    >
       <ThemeAttributeBridge />
       {children}
     </ThemeProvider>

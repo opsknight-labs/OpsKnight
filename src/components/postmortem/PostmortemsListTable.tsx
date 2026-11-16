@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/shadcn/button';
 
 import Pagination from '@/components/incident/Pagination';
 import EmptyState from '@/components/ui/EmptyState';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
+import { notify } from '@/lib/toast';
 import {
   MoreHorizontal,
   FileText,
@@ -79,6 +81,10 @@ export default function PostmortemsListTable({
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: 'bulk'; ids: string[] } | { kind: 'single'; incidentId: string } | null
+  >(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const allSelected = postmortems.length > 0 && selectedIds.length === postmortems.length;
 
@@ -90,43 +96,47 @@ export default function PostmortemsListTable({
     }
   };
 
-  const toggleSelect = (id: string, e: React.MouseEvent) => {
+  const toggleSelect = (id: string, e: React.SyntheticEvent) => {
     e.stopPropagation();
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
-    if (
-      !confirm(
-        `Are you sure you want to delete ${selectedIds.length} selected postmortem(s)? This action cannot be undone.`
-      )
-    ) {
+    setPendingDelete({ kind: 'bulk', ids: selectedIds });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteSingle = (incidentId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPendingDelete({ kind: 'single', incidentId });
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmPendingDelete = async () => {
+    if (!pendingDelete) return;
+
+    if (pendingDelete.kind === 'bulk') {
+      setIsDeleting(true);
+      try {
+        await bulkDeletePostmortems(pendingDelete.ids);
+        setSelectedIds([]);
+        router.refresh();
+      } catch (err) {
+        notify.error(err instanceof Error ? err.message : 'Failed to delete postmortems');
+      } finally {
+        setIsDeleting(false);
+      }
       return;
     }
 
-    setIsDeleting(true);
-    try {
-      await bulkDeletePostmortems(selectedIds);
-      setSelectedIds([]);
-      router.refresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete postmortems');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDeleteSingle = async (incidentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this postmortem draft?')) return;
-
+    const { incidentId } = pendingDelete;
     try {
       await deletePostmortem(incidentId);
       setSelectedIds(prev => prev.filter(id => id !== incidentId));
       router.refresh();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete postmortem');
+      notify.error(err instanceof Error ? err.message : 'Failed to delete postmortem');
     }
   };
 
@@ -145,7 +155,7 @@ export default function PostmortemsListTable({
     <div className="space-y-4">
       {/* Bulk Action Bar */}
       {canManage && selectedIds.length > 0 && (
-        <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-900 transition-all">
+        <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-900 transition-all dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <span>{selectedIds.length} postmortem(s) selected</span>
           </div>
@@ -166,10 +176,10 @@ export default function PostmortemsListTable({
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-ink-200 bg-card shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold">
+            <thead className="bg-ink-50 border-b border-ink-200 text-xs uppercase text-ink-500 font-semibold">
               <tr>
                 {canManage && (
                   <th className="px-4 py-3 w-[40px]">
@@ -177,7 +187,7 @@ export default function PostmortemsListTable({
                       type="checkbox"
                       checked={allSelected}
                       onChange={toggleSelectAll}
-                      className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                      className="rounded border-ink-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
                     />
                   </th>
                 )}
@@ -190,7 +200,7 @@ export default function PostmortemsListTable({
                 <th className="px-4 py-3 w-[60px]"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-ink-100">
               {postmortems.map(pm => {
                 const isSelected = selectedIds.includes(pm.id);
 
@@ -199,7 +209,9 @@ export default function PostmortemsListTable({
                     key={pm.id}
                     className={cn(
                       'group transition-colors cursor-pointer',
-                      isSelected ? 'bg-amber-50/60 hover:bg-amber-50' : 'hover:bg-slate-50/80'
+                      isSelected
+                        ? 'bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-500/10 dark:hover:bg-amber-500/10'
+                        : 'hover:bg-ink-50/80'
                     )}
                     onClick={() => router.push(`/postmortems/${pm.incidentId}`)}
                   >
@@ -208,33 +220,31 @@ export default function PostmortemsListTable({
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={e => toggleSelect(pm.id, e as any)}
-                          className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                          onChange={e => toggleSelect(pm.id, e)}
+                          className="rounded border-ink-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
                         />
                       </td>
                     )}
                     <td className="px-4 py-3">
-                      <div className="font-medium text-slate-900 group-hover:text-primary transition-colors">
+                      <div className="font-medium text-ink-900 group-hover:text-primary transition-colors">
                         {pm.title}
                       </div>
-                      <div className="mt-0.5 text-xs text-slate-500 truncate max-w-[300px]">
+                      <div className="mt-0.5 text-xs text-ink-500 truncate max-w-[300px]">
                         ID: {pm.id.slice(0, 8)}...
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/incidents/${pm.incidentId}`}
-                        className="font-medium text-slate-700 hover:text-primary hover:underline block truncate max-w-[200px]"
+                        className="font-medium text-ink-700 hover:text-primary hover:underline block truncate max-w-[200px]"
                         onClick={e => e.stopPropagation()}
                       >
                         {pm.incident.title}
                       </Link>
-                      <div className="mt-0.5 text-xs text-slate-500 flex items-center gap-1.5">
-                        <span className="font-medium text-slate-600">
-                          {pm.incident.service.name}
-                        </span>
+                      <div className="mt-0.5 text-xs text-ink-500 flex items-center gap-1.5">
+                        <span className="font-medium text-ink-600">{pm.incident.service.name}</span>
                         {pm.incident.status === 'RESOLVED' && (
-                          <span className="text-emerald-600 flex items-center gap-0.5">
+                          <span className="text-emerald-600 flex items-center gap-0.5 dark:text-emerald-400">
                             <CheckCircle2 className="h-3 w-3" /> Resolved
                           </span>
                         )}
@@ -246,7 +256,7 @@ export default function PostmortemsListTable({
                     <td className="px-4 py-3">
                       {pm.isPublic ? (
                         <div
-                          className="flex items-center gap-1.5 text-slate-600"
+                          className="flex items-center gap-1.5 text-ink-600"
                           title="Publicly visible"
                         >
                           <Globe className="h-3.5 w-3.5" />
@@ -254,7 +264,7 @@ export default function PostmortemsListTable({
                         </div>
                       ) : (
                         <div
-                          className="flex items-center gap-1.5 text-slate-400"
+                          className="flex items-center gap-1.5 text-ink-400"
                           title="Internal only"
                         >
                           <Lock className="h-3.5 w-3.5" />
@@ -270,18 +280,18 @@ export default function PostmortemsListTable({
                           avatarUrl={pm.createdBy?.avatarUrl}
                           size="sm"
                         />
-                        <span className="text-xs text-slate-700 truncate max-w-[100px]">
+                        <span className="text-xs text-ink-700 truncate max-w-[100px]">
                           {pm.createdBy?.name || pm.createdBy?.email || 'Unknown'}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-slate-700">
+                      <div className="text-ink-700">
                         {formatDateTime(pm.createdAt, userTimeZone, {
                           format: 'date',
                         })}
                       </div>
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-ink-400">
                         {formatDateTime(pm.createdAt, userTimeZone, {
                           format: 'time',
                         })}
@@ -296,7 +306,7 @@ export default function PostmortemsListTable({
                             className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={e => e.stopPropagation()}
                           >
-                            <MoreHorizontal className="h-4 w-4 text-slate-500" />
+                            <MoreHorizontal className="h-4 w-4 text-ink-500" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -317,7 +327,7 @@ export default function PostmortemsListTable({
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={e => handleDeleteSingle(pm.incidentId, e)}
-                                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:text-red-400 dark:focus:text-red-400 dark:focus:bg-red-500/10"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
@@ -335,15 +345,28 @@ export default function PostmortemsListTable({
         </div>
 
         {/* Pagination */}
-        <div className="border-t border-slate-200 px-4 py-3 bg-slate-50/50">
+        <div className="border-t border-ink-200 px-4 py-3 bg-ink-50/50">
           <Pagination
             currentPage={pagination.currentPage}
             totalPages={pagination.totalPages}
             totalItems={pagination.totalItems}
             itemsPerPage={pagination.itemsPerPage}
+            itemLabel="postmortem"
           />
         </div>
       </div>
+
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={pendingDelete?.kind === 'bulk' ? 'Delete postmortems' : 'Delete postmortem'}
+        description={
+          pendingDelete?.kind === 'bulk'
+            ? `Are you sure you want to delete ${pendingDelete.ids.length} selected postmortem(s)? This action cannot be undone.`
+            : 'Are you sure you want to delete this postmortem draft?'
+        }
+        onConfirm={confirmPendingDelete}
+      />
     </div>
   );
 }

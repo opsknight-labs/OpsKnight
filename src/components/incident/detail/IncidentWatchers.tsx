@@ -249,7 +249,7 @@ export default function IncidentWatchers({
 
                 {/* Searchable User Combobox */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
                     Teammate
                   </label>
                   <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
@@ -276,7 +276,7 @@ export default function IncidentWatchers({
                             </span>
                           </div>
                         ) : (
-                          <span className="text-slate-400 truncate">Select teammate...</span>
+                          <span className="text-ink-400 truncate">Select teammate...</span>
                         )}
                         <ChevronsUpDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50" />
                       </Button>
@@ -288,7 +288,7 @@ export default function IncidentWatchers({
                           className="h-8 text-xs border-none focus:ring-0"
                         />
                         <CommandList className="max-h-48">
-                          <CommandEmpty className="py-4 text-center text-xs text-slate-400">
+                          <CommandEmpty className="py-4 text-center text-xs text-ink-400">
                             No available teammates found.
                           </CommandEmpty>
                           <CommandGroup className="p-1">
@@ -314,7 +314,7 @@ export default function IncidentWatchers({
                                   <span className="font-semibold truncate text-xs">
                                     {user.name}
                                   </span>
-                                  <span className="text-[10px] text-slate-400 truncate">
+                                  <span className="text-[10px] text-ink-400 truncate">
                                     {user.email}
                                   </span>
                                 </div>
@@ -335,7 +335,7 @@ export default function IncidentWatchers({
 
                 {/* Role Selector with Notification Cadence Descriptions */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
                     Subscriber Cadence
                   </label>
                   <Select value={selectedRole} onValueChange={setSelectedRole}>
@@ -348,7 +348,7 @@ export default function IncidentWatchers({
                           <Megaphone className="h-3 w-3" />
                           Stakeholder
                         </div>
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-[10px] text-ink-500">
                           Milestones: Triggered, Ack&apos;d, Resolved
                         </div>
                       </SelectItem>
@@ -357,7 +357,7 @@ export default function IncidentWatchers({
                           <ShieldAlert className="h-3 w-3" />
                           Executive
                         </div>
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-[10px] text-ink-500">
                           Major Outages (P1/P2) &amp; Resolutions only
                         </div>
                       </SelectItem>
@@ -366,7 +366,7 @@ export default function IncidentWatchers({
                           <Bell className="h-3 w-3" />
                           Follower
                         </div>
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-[10px] text-ink-500">
                           All lifecycle transitions &amp; updates
                         </div>
                       </SelectItem>
@@ -415,7 +415,7 @@ export default function IncidentWatchers({
                 size="sm"
                 onClick={handleSelfUnwatch}
                 disabled={isPending}
-                className="h-6 px-2 text-[11px] font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0"
+                className="h-6 px-2 text-[11px] font-medium text-ink-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0 dark:hover:text-rose-400"
               >
                 Unsubscribe
               </Button>
@@ -477,7 +477,7 @@ export default function IncidentWatchers({
           </div>
         ) : (
           <div className="space-y-1.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 pb-0.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-ink-400 px-1 pb-0.5">
               Subscribed Teammates ({watchers.length})
             </div>
             <div className="space-y-1">
@@ -540,14 +540,14 @@ export default function IncidentWatchers({
                             >
                               <div className="flex items-center justify-between w-full font-semibold">
                                 <span className="flex items-center gap-1.5">
-                                  <Bell className="h-3 w-3 text-slate-500" />
+                                  <Bell className="h-3 w-3 text-ink-500" />
                                   Follower
                                 </span>
                                 {watcher.role === 'FOLLOWER' && (
                                   <Check className="h-3.5 w-3.5 text-primary" />
                                 )}
                               </div>
-                              <span className="text-[10px] text-slate-400">
+                              <span className="text-[10px] text-ink-400">
                                 All updates &amp; lifecycle transitions
                               </span>
                             </DropdownMenuItem>
@@ -557,14 +557,14 @@ export default function IncidentWatchers({
                             >
                               <div className="flex items-center justify-between w-full font-semibold text-purple-700 dark:text-purple-300">
                                 <span className="flex items-center gap-1.5">
-                                  <Megaphone className="h-3 w-3 text-purple-600" />
+                                  <Megaphone className="h-3 w-3 text-purple-600 dark:text-purple-400" />
                                   Stakeholder
                                 </span>
                                 {watcher.role === 'STAKEHOLDER' && (
                                   <Check className="h-3.5 w-3.5 text-primary" />
                                 )}
                               </div>
-                              <span className="text-[10px] text-slate-400">
+                              <span className="text-[10px] text-ink-400">
                                 Milestones (Triggered, Ack, Resolve)
                               </span>
                             </DropdownMenuItem>
@@ -574,14 +574,14 @@ export default function IncidentWatchers({
                             >
                               <div className="flex items-center justify-between w-full font-semibold text-amber-700 dark:text-amber-300">
                                 <span className="flex items-center gap-1.5">
-                                  <ShieldAlert className="h-3 w-3 text-amber-600" />
+                                  <ShieldAlert className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                                   Executive
                                 </span>
                                 {watcher.role === 'EXEC' && (
                                   <Check className="h-3.5 w-3.5 text-primary" />
                                 )}
                               </div>
-                              <span className="text-[10px] text-slate-400">
+                              <span className="text-[10px] text-ink-400">
                                 Major outages (P1/P2) &amp; Resolutions only
                               </span>
                             </DropdownMenuItem>
@@ -610,7 +610,7 @@ export default function IncidentWatchers({
                             variant="ghost"
                             size="icon"
                             aria-label={`Remove ${watcher.user.name}`}
-                            className="h-6 w-6 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            className="h-6 w-6 text-ink-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 dark:hover:text-rose-400"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>

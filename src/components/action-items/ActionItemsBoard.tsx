@@ -102,9 +102,9 @@ interface ActionItemCardProps {
 
 const STATUS_CONFIG = {
   OPEN: {
-    color: 'text-blue-600',
+    color: 'text-blue-600 dark:text-blue-400',
     bgColor: 'bg-blue-500',
-    borderColor: 'border-blue-200/80',
+    borderColor: 'border-blue-200/80 dark:border-blue-500/30',
     hoverBorderColor: 'hover:border-blue-400',
     dotGlow: 'shadow-[0_0_8px_rgba(59,130,246,0.6)]',
     label: 'Open',
@@ -112,9 +112,9 @@ const STATUS_CONFIG = {
     icon: Circle,
   },
   IN_PROGRESS: {
-    color: 'text-amber-600',
+    color: 'text-amber-600 dark:text-amber-400',
     bgColor: 'bg-amber-500',
-    borderColor: 'border-amber-200/80',
+    borderColor: 'border-amber-200/80 dark:border-amber-500/30',
     hoverBorderColor: 'hover:border-amber-400',
     dotGlow: 'shadow-[0_0_8px_rgba(245,158,11,0.6)]',
     label: 'In Progress',
@@ -122,9 +122,9 @@ const STATUS_CONFIG = {
     icon: Clock,
   },
   COMPLETED: {
-    color: 'text-emerald-600',
+    color: 'text-emerald-600 dark:text-emerald-400',
     bgColor: 'bg-emerald-500',
-    borderColor: 'border-emerald-200/80',
+    borderColor: 'border-emerald-200/80 dark:border-emerald-500/30',
     hoverBorderColor: 'hover:border-emerald-400',
     dotGlow: 'shadow-[0_0_8px_rgba(34,197,94,0.6)]',
     label: 'Completed',
@@ -132,9 +132,9 @@ const STATUS_CONFIG = {
     icon: CheckCircle2,
   },
   BLOCKED: {
-    color: 'text-rose-600',
+    color: 'text-rose-600 dark:text-rose-400',
     bgColor: 'bg-rose-500',
-    borderColor: 'border-rose-200/80',
+    borderColor: 'border-rose-200/80 dark:border-rose-500/30',
     hoverBorderColor: 'hover:border-rose-400',
     dotGlow: 'shadow-[0_0_8px_rgba(239,68,68,0.6)]',
     label: 'Blocked',
@@ -144,9 +144,17 @@ const STATUS_CONFIG = {
 };
 
 const PRIORITY_CONFIG = {
-  HIGH: { color: 'text-rose-700', bgColor: 'bg-rose-50 border-rose-200/80', label: 'High' },
-  MEDIUM: { color: 'text-amber-700', bgColor: 'bg-amber-50 border-amber-200/80', label: 'Medium' },
-  LOW: { color: 'text-slate-700', bgColor: 'bg-slate-100 border-slate-200/80', label: 'Low' },
+  HIGH: {
+    color: 'text-rose-700 dark:text-rose-300',
+    bgColor: 'bg-rose-50 border-rose-200/80 dark:bg-rose-500/10 dark:border-rose-500/30',
+    label: 'High',
+  },
+  MEDIUM: {
+    color: 'text-amber-700 dark:text-amber-300',
+    bgColor: 'bg-amber-50 border-amber-200/80 dark:bg-amber-500/10 dark:border-amber-500/30',
+    label: 'Medium',
+  },
+  LOW: { color: 'text-ink-700', bgColor: 'bg-ink-100 border-ink-200/80', label: 'Low' },
 };
 
 function getOwnerName(
@@ -199,7 +207,7 @@ function ActionItemCard({
   return (
     <div
       className={cn(
-        'group p-3.5 bg-white rounded-lg border shadow-sm transition-all duration-200',
+        'group p-3.5 bg-card rounded-lg border shadow-sm transition-all duration-200',
         statusConfig.borderColor,
         statusConfig.hoverBorderColor,
         'hover:shadow-md hover:-translate-y-0.5 relative',
@@ -269,17 +277,17 @@ function ActionItemCard({
                 <DropdownMenuItem
                   onClick={() => onStatusChange(item.id, ActionItemStatus.COMPLETED)}
                   disabled={item.status === 'COMPLETED'}
-                  className="gap-2 text-emerald-600 focus:text-emerald-700"
+                  className="gap-2 text-emerald-600 focus:text-emerald-700 dark:text-emerald-400 dark:focus:text-emerald-300"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                   <span>Mark Completed</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => onStatusChange(item.id, ActionItemStatus.BLOCKED)}
                   disabled={item.status === 'BLOCKED'}
-                  className="gap-2 text-rose-600 focus:text-rose-700"
+                  className="gap-2 text-rose-600 focus:text-rose-700 dark:text-rose-400 dark:focus:text-rose-300"
                 >
-                  <AlertOctagon className="h-3.5 w-3.5 text-rose-600" />
+                  <AlertOctagon className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
                   <span>Mark Blocked</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -308,16 +316,16 @@ function ActionItemCard({
         />
       </div>
 
-      <div className="pt-2 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-muted-foreground">
+      <div className="pt-2 border-t border-ink-100 flex flex-col gap-1 text-[11px] text-muted-foreground">
         <div className="flex items-center justify-between">
           <span className="font-medium text-foreground truncate max-w-[150px]">
             👤 {getOwnerName(item.owner, users, item.ownerName)}
           </span>
-          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-700 truncate max-w-[100px]">
+          <span className="bg-ink-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-ink-700 truncate max-w-[100px]">
             {item.serviceName}
           </span>
         </div>
-        <div className="truncate text-slate-500">
+        <div className="truncate text-ink-500">
           From{' '}
           <Link
             href={`/postmortems/${item.incidentId}`}
@@ -354,48 +362,63 @@ export default function ActionItemsBoard({
   const [selectedPriority, setSelectedPriority] = useState(filters.priority || '');
   const [ownerPopoverOpen, setOwnerPopoverOpen] = useState(false);
   const [ownerSearch, setOwnerSearch] = useState('');
-  const [ownerOptions, setOwnerOptions] = useState<Array<{ id: string; name: string; email: string }>>(users);
+  const [ownerOptions, setOwnerOptions] =
+    useState<Array<{ id: string; name: string; email: string }>>(users);
   const [isSearchingOwners, setIsSearchingOwners] = useState(false);
   const jiraCapabilities = useMemo(
     () => new Map<string, JiraCapability>(Object.entries(jiraCapabilitiesByServiceId)),
     [jiraCapabilitiesByServiceId]
   );
 
-  useEffect(() => {
-    setItems(initialItems);
-  }, [initialItems]);
+  const [syncedProps, setSyncedProps] = useState({
+    initialItems,
+    initialSearch,
+    status: filters.status,
+    owner: filters.owner,
+    priority: filters.priority,
+  });
+  if (
+    syncedProps.initialItems !== initialItems ||
+    syncedProps.initialSearch !== initialSearch ||
+    syncedProps.status !== filters.status ||
+    syncedProps.owner !== filters.owner ||
+    syncedProps.priority !== filters.priority
+  ) {
+    setSyncedProps({
+      initialItems,
+      initialSearch,
+      status: filters.status,
+      owner: filters.owner,
+      priority: filters.priority,
+    });
+    if (syncedProps.initialItems !== initialItems) setItems(initialItems);
+    if (syncedProps.initialSearch !== initialSearch) setSearch(initialSearch);
+    if (syncedProps.status !== filters.status) setSelectedStatus(filters.status || '');
+    if (syncedProps.owner !== filters.owner) setSelectedOwner(filters.owner || '');
+    if (syncedProps.priority !== filters.priority) setSelectedPriority(filters.priority || '');
+  }
 
-  useEffect(() => {
-    setSearch(initialSearch);
-  }, [initialSearch]);
-
-  useEffect(() => {
-    setSelectedStatus(filters.status || '');
-  }, [filters.status]);
-
-  useEffect(() => {
-    setSelectedOwner(filters.owner || '');
-  }, [filters.owner]);
-
-  useEffect(() => {
-    setSelectedPriority(filters.priority || '');
-  }, [filters.priority]);
-
-  useEffect(() => {
-    if (!ownerSearch.trim()) {
-      setOwnerOptions(users);
-    }
-  }, [users, ownerSearch]);
-
-  useEffect(() => {
+  const [ownerSearchInputs, setOwnerSearchInputs] = useState({ ownerSearch, users, selectedOwner });
+  if (
+    ownerSearchInputs.ownerSearch !== ownerSearch ||
+    ownerSearchInputs.users !== users ||
+    ownerSearchInputs.selectedOwner !== selectedOwner
+  ) {
+    setOwnerSearchInputs({ ownerSearch, users, selectedOwner });
     if (!ownerSearch.trim()) {
       setOwnerOptions(users);
       setIsSearchingOwners(false);
+    } else {
+      setIsSearchingOwners(true);
+    }
+  }
+
+  useEffect(() => {
+    if (!ownerSearch.trim()) {
       return;
     }
 
     const controller = new AbortController();
-    setIsSearchingOwners(true);
     const timer = window.setTimeout(async () => {
       try {
         const res = await fetch(
@@ -560,7 +583,7 @@ export default function ActionItemsBoard({
                 startTransition(() => router.push(buildFilterUrl({ status: next })));
               }}
             >
-              <SelectTrigger className="h-9 w-[130px] bg-slate-50/60 text-xs">
+              <SelectTrigger className="h-9 w-[130px] bg-ink-50/60 text-xs">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -579,13 +602,13 @@ export default function ActionItemsBoard({
                   role="combobox"
                   aria-expanded={ownerPopoverOpen}
                   aria-label="Filter by owner"
-                  className="h-9 w-[150px] justify-between bg-slate-50/60 text-xs font-normal border-slate-200 hover:bg-slate-100/60"
+                  className="h-9 w-[150px] justify-between bg-ink-50/60 text-xs font-normal border-ink-200 hover:bg-ink-100/60"
                 >
                   <span className="truncate">
                     {selectedOwner
-                      ? (users.find(u => u.id === selectedOwner)?.name ||
-                         ownerOptions.find(u => u.id === selectedOwner)?.name ||
-                         'Owner')
+                      ? users.find(u => u.id === selectedOwner)?.name ||
+                        ownerOptions.find(u => u.id === selectedOwner)?.name ||
+                        'Owner'
                       : 'All Owners'}
                   </span>
                   <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -621,7 +644,9 @@ export default function ActionItemsBoard({
                           className="cursor-pointer text-xs flex items-center justify-between"
                         >
                           <span>All Owners</span>
-                          {!selectedOwner && <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />}
+                          {!selectedOwner && (
+                            <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />
+                          )}
                         </CommandItem>
                         {ownerOptions.map(user => (
                           <CommandItem
@@ -630,14 +655,18 @@ export default function ActionItemsBoard({
                             onSelect={() => {
                               setSelectedOwner(user.id);
                               setOwnerPopoverOpen(false);
-                              startTransition(() => router.push(buildFilterUrl({ owner: user.id })));
+                              startTransition(() =>
+                                router.push(buildFilterUrl({ owner: user.id }))
+                              );
                             }}
                             className="cursor-pointer text-xs flex items-center justify-between"
                           >
                             <div className="flex flex-col min-w-0">
                               <span className="truncate font-medium">{user.name}</span>
                               {user.email && (
-                                <span className="truncate text-[10px] text-muted-foreground">{user.email}</span>
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  {user.email}
+                                </span>
                               )}
                             </div>
                             {selectedOwner === user.id && (
@@ -660,7 +689,7 @@ export default function ActionItemsBoard({
                 startTransition(() => router.push(buildFilterUrl({ priority: next })));
               }}
             >
-              <SelectTrigger className="h-9 w-[130px] bg-slate-50/60 text-xs">
+              <SelectTrigger className="h-9 w-[130px] bg-ink-50/60 text-xs">
                 <SelectValue placeholder="Priority" />
               </SelectTrigger>
               <SelectContent>
@@ -674,13 +703,13 @@ export default function ActionItemsBoard({
         }
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50/60 p-0.5">
+            <div className="flex items-center rounded-lg border border-ink-200 bg-ink-50/60 p-0.5">
               <Link
                 href={buildFilterUrl({ view: 'board' })}
                 className={cn(
                   'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
                   view === 'board'
-                    ? 'bg-white text-primary shadow-sm'
+                    ? 'bg-card text-primary shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
                 aria-label="Board view"
@@ -693,7 +722,7 @@ export default function ActionItemsBoard({
                 className={cn(
                   'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
                   view === 'list'
-                    ? 'bg-white text-primary shadow-sm'
+                    ? 'bg-card text-primary shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
                 aria-label="List view"
@@ -707,7 +736,7 @@ export default function ActionItemsBoard({
               size="sm"
               onClick={handleExportCsv}
               disabled={filteredItems.length === 0}
-              className="h-9 gap-1.5 text-xs shadow-sm hover:bg-slate-100"
+              className="h-9 gap-1.5 text-xs shadow-sm hover:bg-ink-100"
             >
               <Download className="h-3.5 w-3.5 text-muted-foreground" />
               <span>Export CSV</span>
@@ -726,12 +755,12 @@ export default function ActionItemsBoard({
                 key={status}
                 className={cn(
                   'p-3.5 min-h-[480px] rounded-xl flex flex-col',
-                  'bg-slate-50/50 border-2',
+                  'bg-ink-50/50 border-2',
                   config.borderColor,
                   'shadow-sm'
                 )}
               >
-                <CardHeader className="p-0 mb-3 pb-2.5 border-b border-slate-200/70">
+                <CardHeader className="p-0 mb-3 pb-2.5 border-b border-ink-200/70">
                   <div className="flex items-center justify-between">
                     <h3 className={cn('text-xs font-bold flex items-center gap-1.5', config.color)}>
                       <StatusIcon className="h-3.5 w-3.5" />
@@ -769,7 +798,7 @@ export default function ActionItemsBoard({
       ) : (
         <div className="flex flex-col gap-3">
           {filteredItems.length === 0 ? (
-            <Card className="p-8 text-center bg-white border-slate-200 rounded-lg shadow-sm">
+            <Card className="p-8 text-center bg-card border-ink-200 rounded-lg shadow-sm">
               <EmptyState
                 icon={<LayoutGrid className="h-6 w-6 text-muted-foreground/60" />}
                 title="No action items found"
@@ -794,7 +823,7 @@ export default function ActionItemsBoard({
                 <Card
                   key={item.id}
                   className={cn(
-                    'p-4 rounded-lg cursor-pointer shadow-sm bg-white',
+                    'p-4 rounded-lg cursor-pointer shadow-sm bg-card',
                     'border-2 border-l-4 transition-all duration-200 ease-out',
                     statusConfig.borderColor,
                     'hover:shadow-md hover:translate-x-0.5',
@@ -863,7 +892,7 @@ export default function ActionItemsBoard({
                             handleStatusChange(item.id, value as ActionItemStatus)
                           }
                         >
-                          <SelectTrigger className="h-8 w-[130px] text-xs bg-slate-50">
+                          <SelectTrigger className="h-8 w-[130px] text-xs bg-ink-50">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent align="end">
@@ -877,7 +906,7 @@ export default function ActionItemsBoard({
                     )}
                   </div>
 
-                  <div className="flex gap-4 pt-2.5 border-t border-slate-100 text-xs text-muted-foreground flex-wrap items-center">
+                  <div className="flex gap-4 pt-2.5 border-t border-ink-100 text-xs text-muted-foreground flex-wrap items-center">
                     <span>👤 {getOwnerName(item.owner, users, item.ownerName)}</span>
                     <span>
                       📋{' '}
@@ -899,7 +928,7 @@ export default function ActionItemsBoard({
                         {item.incidentTitle}
                       </Link>
                     </span>
-                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-slate-700">
+                    <span className="bg-ink-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-ink-700">
                       {item.serviceName}
                     </span>
                   </div>

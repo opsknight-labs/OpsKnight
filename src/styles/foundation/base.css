@@ -12,16 +12,16 @@
  */
 :root {
     color-scheme: light;
-    forced-color-adjust: none;
-    -ms-high-contrast-adjust: none;
+    /* Native controls (checkboxes, radios, range, progress) use the brand
+       neutral rather than the OS accent, in both themes. */
+    accent-color: hsl(var(--ui-primary));
+    caret-color: hsl(var(--ui-foreground));
 }
 
 html {
     color-scheme: light;
     filter: none !important;
     -webkit-filter: none !important;
-    forced-color-adjust: none;
-    -ms-high-contrast-adjust: none;
     /* Default / Mobile: 16px standard to avoid iOS Safari input auto-zoom */
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
@@ -59,8 +59,6 @@ body {
     color-scheme: inherit;
     filter: none !important;
     -webkit-filter: none !important;
-    forced-color-adjust: none;
-    -ms-high-contrast-adjust: none;
     font-family: var(--font-family-sans);
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-semibold);
@@ -87,20 +85,128 @@ html[data-theme='dark'] body {
     color-scheme: dark !important;
 }
 
-/* Windows High Contrast Mode prevention */
+/*
+ * Windows High Contrast / forced colours: let the OS palette win so text,
+ * borders and focus stay legible. Only restore the cues that forced colours
+ * would otherwise erase (borders on filled controls, visible focus).
+ */
 @media (forced-colors: active) {
-    *,
-    *::before,
-    *::after {
-        forced-color-adjust: none !important;
+    button,
+    [role='button'],
+    [role='tab'],
+    [role='radio'],
+    [role='switch'],
+    [role='menuitem'],
+    input,
+    select,
+    textarea {
+        border: 1px solid ButtonText;
     }
+
+    :focus-visible {
+        outline: 2px solid Highlight !important;
+        outline-offset: 2px;
+    }
+
+    [aria-checked='true'],
+    [aria-selected='true'],
+    [aria-current='page'],
+    [data-state='active'],
+    [data-state='checked'] {
+        outline: 2px solid Highlight;
+        outline-offset: -2px;
+    }
+
+    svg {
+        forced-color-adjust: auto;
+    }
+}
+
+/* Selection follows the theme instead of the browser default blue. */
+::selection {
+    background-color: hsl(var(--ui-primary) / 0.18);
+}
+
+.dark ::selection,
+[data-theme='dark'] ::selection {
+    background-color: hsl(var(--ui-ring) / 0.3);
+}
+
+/*
+ * Scrollbars: standard properties first (Chrome 121+, Firefox, Safari 26.2+);
+ * scrollbar-width is required for macOS overlay scrollbars to take the colour.
+ * Older WebKit falls back to the legacy pseudo-elements below.
+ */
+:root {
+    --scrollbar-thumb: hsl(215 16% 47% / 0.45);
+    --scrollbar-thumb-hover: hsl(215 16% 47% / 0.7);
+    --scrollbar-track: transparent;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.dark,
+[data-theme='dark'] {
+    --scrollbar-thumb: hsl(240 5% 65% / 0.35);
+    --scrollbar-thumb-hover: hsl(240 5% 65% / 0.6);
+}
+
+@supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background-color: var(--scrollbar-thumb);
+        border: 2px solid transparent;
+        border-radius: 9999px;
+        background-clip: content-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background-color: var(--scrollbar-thumb-hover);
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+        background: var(--scrollbar-track);
+    }
+}
+
+/* Native pickers and file buttons inherit the theme. */
+::placeholder {
+    color: hsl(var(--ui-muted-foreground));
+    opacity: 1;
+}
+
+::file-selector-button {
+    color: hsl(var(--ui-foreground));
+    background-color: hsl(var(--ui-muted));
+    border: 1px solid hsl(var(--ui-border));
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    margin-inline-end: 0.625rem;
+    font: inherit;
+    cursor: pointer;
+}
+
+.dark input[type='date']::-webkit-calendar-picker-indicator,
+.dark input[type='time']::-webkit-calendar-picker-indicator,
+.dark input[type='datetime-local']::-webkit-calendar-picker-indicator,
+.dark input[type='month']::-webkit-calendar-picker-indicator,
+.dark input[type='week']::-webkit-calendar-picker-indicator {
+    filter: invert(0.85);
+}
+
+select option,
+select optgroup {
+    background-color: hsl(var(--ui-popover));
+    color: hsl(var(--ui-popover-foreground));
 }
 
 .dark body,
 [data-theme='dark'] body {
-    background-image:
-        radial-gradient(circle at 10% 10%, rgba(15, 23, 42, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 80% 0%, rgba(15, 23, 42, 0.25) 0%, transparent 40%);
+    background-image: none;
 }
 
 /* Fix dropdown text cutoff issue - ensure text is fully visible */
@@ -200,8 +306,8 @@ select option {
 .dark .page-shell::before,
 [data-theme='dark'] .page-shell::before {
     background:
-        radial-gradient(circle at 15% 0%, rgba(15, 23, 42, 0.4), transparent 55%),
-        radial-gradient(circle at 85% 10%, rgba(2, 6, 23, 0.35), transparent 50%);
+        radial-gradient(circle at 15% 0%, rgba(255, 255, 255, 0.025), transparent 55%),
+        radial-gradient(circle at 85% 10%, rgba(255, 255, 255, 0.015), transparent 50%);
 }
 
 .page-shell>* {

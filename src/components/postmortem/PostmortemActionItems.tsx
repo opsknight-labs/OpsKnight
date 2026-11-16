@@ -104,7 +104,7 @@ export default function PostmortemActionItems({
   return (
     <div className="flex flex-col gap-4" id="action-items">
       {/* Add New Item Form */}
-      <Card className="bg-gradient-to-br from-white to-slate-50">
+      <Card className="bg-gradient-to-br from-white to-ink-50">
         <CardHeader className="pb-3">
           <div className="flex justify-between items-center gap-3 flex-wrap">
             <CardTitle className="text-lg">Action Items</CardTitle>
@@ -115,7 +115,7 @@ export default function PostmortemActionItems({
                   <span className="text-sm text-muted-foreground">
                     {completedCount}/{actionItems.length} completed
                   </span>
-                  <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="w-24 h-2 bg-ink-200 rounded-full overflow-hidden">
                     <div
                       className={cn(
                         'h-full transition-all duration-300',
@@ -251,7 +251,7 @@ export default function PostmortemActionItems({
             return (
               <Card
                 key={item.id}
-                className={cn('bg-white border-2 border-l-4', statusConfig.border)}
+                className={cn('bg-card border-2 border-l-4', statusConfig.border)}
               >
                 <CardContent className="p-4">
                   <div className="flex justify-between items-start mb-2">
@@ -329,7 +329,7 @@ export default function PostmortemActionItems({
 
                   {/* Edit Form */}
                   {editingId === item.id && (
-                    <div className="mt-3 p-3 bg-slate-50 rounded-md flex flex-col gap-2">
+                    <div className="mt-3 p-3 bg-ink-50 rounded-md flex flex-col gap-2">
                       <div className="space-y-1.5">
                         <Label>Title</Label>
                         <Input

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ShieldCheck,
   Shield,
@@ -281,12 +281,6 @@ export default function ComplianceClientTabs({
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'evidence') {
-      fetchEvidence();
-    }
-  }, [activeTab]);
-
   const inspectControlEvidence = async (controlId: string) => {
     try {
       const res = await fetch(`/api/compliance/controls/${controlId}/evidence?limit=1`);
@@ -458,7 +452,12 @@ export default function ComplianceClientTabs({
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              onClick={() => {
+                if (tab.id === 'evidence' && activeTab !== 'evidence') {
+                  void fetchEvidence();
+                }
+                setActiveTab(tab.id as typeof activeTab);
+              }}
               className={cn(
                 'flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all select-none whitespace-nowrap',
                 isActive
@@ -772,7 +771,7 @@ export default function ComplianceClientTabs({
                         </div>
                       ) : (
                         <div className="rounded-xl bg-slate-500/5 border border-slate-500/20 p-2.5 text-xs text-muted-foreground flex items-center gap-2">
-                          <CircleDashed className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <CircleDashed className="h-3.5 w-3.5 text-ink-400 shrink-0" />
                           <span>
                             Runtime evaluation pending. Click <strong>Evaluate Controls</strong>{' '}
                             above to evaluate deployment state.
@@ -1007,7 +1006,7 @@ export default function ComplianceClientTabs({
                         </div>
                       ) : (
                         <div className="rounded-xl bg-slate-500/5 border border-slate-500/20 p-2.5 text-xs text-muted-foreground flex items-center gap-2">
-                          <CircleDashed className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <CircleDashed className="h-3.5 w-3.5 text-ink-400 shrink-0" />
                           <span>Runtime evaluation pending.</span>
                         </div>
                       )}

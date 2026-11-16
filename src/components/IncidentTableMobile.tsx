@@ -6,6 +6,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { bulkAcknowledge, bulkResolve } from '@/app/(app)/incidents/bulk-actions';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
+import { notify } from '@/lib/toast';
 
 type Incident = {
   id: string;
@@ -79,7 +80,7 @@ export default function IncidentTableMobile({
       if (result.success) {
         setSelectedIds(new Set());
       } else {
-        alert(result.error || 'Failed to acknowledge incidents');
+        notify.error(result.error || 'Failed to acknowledge incidents');
       }
     });
   };
@@ -90,13 +91,13 @@ export default function IncidentTableMobile({
       if (result.success) {
         setSelectedIds(new Set());
       } else {
-        alert(result.error || 'Failed to resolve incidents');
+        notify.error(result.error || 'Failed to resolve incidents');
       }
     });
   };
 
   return (
-    <div className="glass-panel" style={{ background: 'white', overflow: 'hidden' }}>
+    <div className="glass-panel" style={{ background: 'hsl(var(--ui-card))', overflow: 'hidden' }}>
       {/* Bulk Actions Bar */}
       {selectedIds.size > 0 && (
         <div
@@ -162,7 +163,7 @@ export default function IncidentTableMobile({
               border: '1px solid var(--border)',
               borderRadius: '8px',
               padding: '1rem',
-              background: 'white',
+              background: 'hsl(var(--ui-card))',
               boxShadow: 'var(--shadow-sm)',
             }}
           >
