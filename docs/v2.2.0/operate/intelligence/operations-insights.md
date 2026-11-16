@@ -86,10 +86,7 @@ everything and stops the daily work.
 | Notifications (a person) | **Email / SMS / Voice / Push / WhatsApp is bouncing, invalid, opted out or failing** | That channel cannot reach you right now. Opens your notification settings. |
 | Notifications (a service) | **Most pages from this service need nobody** | The same test summed over everyone the service paged, from 20 pages up. |
 
-Insights for on-call schedules, postmortems, runbooks and notifications arrive with later updates; their
-switches are already there so you can decide in advance.
-
-### Escalation policies
+## Escalation policies
 
 With **Escalation policies** on, each policy page gets:
 
