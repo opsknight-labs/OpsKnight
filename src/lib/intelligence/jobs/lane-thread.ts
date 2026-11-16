@@ -306,8 +306,13 @@ function handleReport(state: HostState, worker: ChildProcess, message: unknown) 
 }
 
 function send(worker: ChildProcess, command: LaneThreadCommand) {
-  // A send that races the process exiting reports to its callback instead of throwing.
-  if (worker.connected) worker.send(command, undefined, {}, () => {});
+  // A send that races the process exiting reports to its callback instead of throwing; the catch keeps
+  // anything else (serialisation) off processEvent, which forwards activity from a finally block.
+  try {
+    if (worker.connected) worker.send(command, undefined, {}, () => {});
+  } catch {
+    // The lane misses one update; the next one carries the whole state.
+  }
 }
 
 interface ActivitySender {
@@ -324,10 +329,11 @@ interface ActivitySender {
 function forwardActivity(state: HostState, values: IngestionActivityValues) {
   const sender = state.activity;
   sender.pending = values;
+  if (values[0] >= BURST_IN_FLIGHT && sender.sentInFlight < BURST_IN_FLIGHT)
+    return flushActivity(state);
   if (sender.timer) return;
-  const burstStart = values[0] >= BURST_IN_FLIGHT && sender.sentInFlight < BURST_IN_FLIGHT;
   const wait = sender.sentAt + ACTIVITY_SEND_MS - performance.now();
-  if (burstStart || wait <= 0) return flushActivity(state);
+  if (wait <= 0) return flushActivity(state);
   sender.timer = setTimeout(() => flushActivity(state), wait);
   sender.timer.unref?.();
 }

@@ -291,6 +291,18 @@ describe('lane thread host', () => {
     });
     expect((probes[0] as { inFlight: number }).inFlight).toBeGreaterThanOrEqual(1);
 
+    // A burst start goes out at once, even while a coalesced update is still waiting for its slot.
+    const sent = vi.spyOn(laneThreadWorker()!, 'send');
+    const ends = [beginIngestionActivity()];
+    ends.pop()!();
+    ends.push(beginIngestionActivity(), beginIngestionActivity());
+    const activity = sent.mock.calls
+      .map(([message]) => message as { type: string; values?: IngestionActivityValues })
+      .filter(message => message.type === 'activity');
+    expect(activity.at(-1)?.values?.[0]).toBe(2);
+    ends.forEach(endEvent => endEvent());
+    sent.mockRestore();
+
     await stopIntelligenceLaneThread();
     expect(laneThreadWorker()).toBeNull();
     const stopped = getIntelligenceLaneStatus();
