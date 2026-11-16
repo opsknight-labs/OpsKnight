@@ -33,6 +33,8 @@ export const MAINTENANCE_LIMITS = {
   startGraceMs: 5 * 60 * 1000,
   sweepWindowsPerRun: 20,
   sweepIncidentBatch: 100,
+  /** Releases per scheduler tick, so a huge window can't stall other scheduled work. */
+  sweepIncidentsPerRun: 500,
 } as const;
 
 const END_BEHAVIORS = ['RESUME_FIRING', 'RESOLVE_HELD'] as const;
@@ -635,7 +637,8 @@ async function releaseHeldIncident(
  */
 export async function processEndedMaintenanceWindow(
   windowId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  limit: number = MAINTENANCE_LIMITS.sweepIncidentsPerRun
 ): Promise<{ released: number; complete: boolean }> {
   const window = await prisma.maintenanceWindow.findUnique({
     where: { id: windowId },
@@ -648,6 +651,7 @@ export async function processEndedMaintenanceWindow(
   let released = 0;
   let failed = 0;
   let cursor: string | undefined;
+  let processed = 0;
   for (;;) {
     const batch = await prisma.incident.findMany({
       where: {
@@ -662,6 +666,9 @@ export async function processEndedMaintenanceWindow(
     if (batch.length === 0) break;
     cursor = batch[batch.length - 1].id;
     for (const incident of batch) {
+      // Out of budget for this tick: the rest resume on the next one.
+      if (processed >= limit) return { released, complete: false };
+      processed += 1;
       try {
         if (await releaseHeldIncident(incident.id, windowId, window.endBehavior, now))
           released += 1;
@@ -711,10 +718,15 @@ export async function processEndedMaintenanceWindows(
     take: MAINTENANCE_LIMITS.sweepWindowsPerRun,
     select: { id: true },
   });
+  // Share the tick's budget so one huge window can't delay every other window's release.
+  const perWindow = Math.max(
+    MAINTENANCE_LIMITS.sweepIncidentBatch,
+    Math.ceil(MAINTENANCE_LIMITS.sweepIncidentsPerRun / Math.max(due.length, 1))
+  );
   let released = 0;
   for (const window of due) {
     try {
-      released += (await processEndedMaintenanceWindow(window.id, now)).released;
+      released += (await processEndedMaintenanceWindow(window.id, now, perWindow)).released;
     } catch (error) {
       logger.error('maintenance_window.sweep_failed', {
         maintenanceWindowId: window.id,

@@ -216,6 +216,27 @@ describeIfRealDB('service maintenance windows', { timeout: 60000 }, () => {
     });
   });
 
+  it('releases a large window across ticks within the per-tick budget', async () => {
+    const service = await createTestService('Maint Budget');
+    const window = await openWindow([service.id]);
+    for (const key of ['a', 'b', 'c']) await trigger(service.id, key);
+    const after = new Date(window.endsAt.getTime() + 1000);
+
+    // With a budget of 2, the first tick releases two and leaves the window open.
+    expect(await processEndedMaintenanceWindow(window.id, after, 2)).toEqual({
+      released: 2,
+      complete: false,
+    });
+    expect(
+      (await testPrisma.maintenanceWindow.findUniqueOrThrow({ where: { id: window.id } }))
+        .endProcessedAt
+    ).toBeNull();
+    expect(await processEndedMaintenanceWindow(window.id, after, 2)).toEqual({
+      released: 1,
+      complete: true,
+    });
+  });
+
   it('auto-resolves held incidents when the window uses RESOLVE_HELD', async () => {
     const service = await createTestService('Maint Resolve Held');
     const window = await openWindow([service.id], { endBehavior: 'RESOLVE_HELD' });
