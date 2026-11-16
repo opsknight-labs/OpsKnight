@@ -81,6 +81,10 @@ everything and stops the daily work.
 | Runbooks | **Step "X" needed a retry in all N runs** | The step never works on the first attempt (at least 3 runs). Fix what it waits for, or give it a longer timeout. |
 | Runbooks | **Responders add the same note after N of M runs** | After at least 3 successful runs, and most of them, responders wrote much the same note on the incident within a day: the runbook is probably missing that step. |
 | Runbooks (on the service) | **N incidents of one recurring problem were resolved by hand the same way** | At least 3 incidents with the same masked title were resolved manually with similar resolution notes and no runbook ran on any of them. **Create draft** opens the service's runbook suggestions, where you can turn the notes into a draft runbook. |
+| Notifications (a person) | **A service pages you but rarely needs you** | Over the last 30 days a service paged you at least 5 times and you acted on 20% or less, or half or more of its pages were for incidents its source or automation closed within 5 minutes. Opens the service's notification settings, where you can move it to a digest or lower its urgency. |
+| Notifications (a person) | **Night pages you rarely act on** | Quiet hours are off and you acted on 20% or less of at least 5 pages between 22:00 and 07:00 your time. Opens your quiet hours. |
+| Notifications (a person) | **Email / SMS / Voice / Push / WhatsApp is bouncing, invalid, opted out or failing** | That channel cannot reach you right now. Opens your notification settings. |
+| Notifications (a service) | **Most pages from this service need nobody** | The same test summed over everyone the service paged, from 20 pages up. |
 
 Insights for on-call schedules, postmortems, runbooks and notifications arrive with later updates; their
 switches are already there so you can decide in advance.
@@ -185,6 +189,24 @@ When a service's responders keep resolving one recurring problem by hand the sam
 found in them. **Open a draft in the editor** saves an unpublished, unbound runbook of manual steps and opens it in the
 editor; nothing runs or publishes until you do it there. You need permission to manage runbooks.
 
+## Your notification noise
+
+With the **Notifications** area on, **Settings > Profile > Notifications** (and **More** on mobile) has a
+**Noise** section with:
+
+- **Bundle low-urgency pages**, off by default. When on, the first low-urgency page in a five-minute window
+  arrives at once and the others in that window arrive together as one. High-urgency pages and account
+  messages (sign-in, verification) are never bundled.
+- **Last 30 days**: pages received, the share you acted on, and how many were for incidents that closed by
+  themselves within 5 minutes; a bar per local hour; and the five busiest services.
+- **Suggestions**: the insights above for you, each opening the setting it is about. Nothing changes until
+  you save there.
+
+A page is one incident that notified you on a day, however many channels it used. You "acted on" it when
+you acknowledged through that page (the voice key press or the push notification's action) or when you
+acknowledged the incident as its assignee. Counts are daily and cover complete days, so today's pages show
+up tomorrow.
+
 ## Review insights
 
 Open **Intelligence**. When there is something to review, a **Needs attention** section lists open
@@ -216,15 +238,17 @@ only the original text.
 ## Who sees what
 
 You see insights only for things you can already open: a responder limited to their teams sees their
-teams' services. Insights about one person, such as on-call load, are visible to that person, the owners of
-their teams and administrators only.
+teams' services. Insights about one person, such as on-call load or notification noise, are visible to that
+person, the owners of their teams and administrators only. A person's noise report follows the same rule and
+names a service only if the viewer can open it; insights about a person never store a service name.
 
 ## Data and retention
 
 Insights hold derived counts and short facts, never alert payloads. They are sent to an AI provider only
 when a person expands **Explain in plain words**, and then only the insights that person can see (an
 insight about a person counts as personal data and goes only to providers cleared for it). Resolved and dismissed insights are deleted after the Intelligence finding retention. Daily
-counts used by later insights (pages per person and hour, runbook outcomes, automation rule matches) are
+counts used by later insights (pages per person and hour, pages per person, service and hour, pages per service,
+runbook outcomes, automation rule matches) are
 kept for the metrics retention; a deleted person's counts and insights are removed by the next retention
 sweep.
 

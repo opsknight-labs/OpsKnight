@@ -313,12 +313,15 @@ describe('scheduling', () => {
     await switchOn();
     resetOpsInsightsSchedule();
     const now = Date.now();
-    expect(await scheduleOpsInsightsWork(now, handlers, { random: () => 0.5 })).toBe(2);
+    // The admin who switched it on is a person scope for the notification-noise producer.
+    const admin = await db.user.findFirstOrThrow({ where: { role: 'ADMIN' } });
+    expect(await scheduleOpsInsightsWork(now, handlers, { random: () => 0.5 })).toBe(3);
     const queued = await db.intelligenceWorkItem.findMany({ orderBy: { subjectKey: 'asc' } });
     expect(queued.map(row => [row.kind, row.subjectKey]).sort()).toEqual(
       [
         ['OPS_INSIGHTS', `SERVICE:${a.id}`],
         ['OPS_INSIGHTS', `SERVICE:${b.id}`],
+        ['OPS_INSIGHTS', `USER:${admin.id}`],
       ].sort()
     );
     expect(queued[0].scheduledAt.getTime()).toBeGreaterThan(now);

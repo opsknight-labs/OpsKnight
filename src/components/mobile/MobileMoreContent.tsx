@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import {
   BarChart3,
   BookOpen,
@@ -45,6 +45,8 @@ type MobileMoreContentProps = {
   role: string;
   gender?: string | null;
   avatarUrl?: string | null;
+  /** Server-rendered personal noise card; absent while the Notifications area is off. */
+  noise?: ReactNode;
 };
 
 const operations: NavigationItem[] = [
@@ -160,6 +162,7 @@ export default function MobileMoreContent({
   role,
   gender,
   avatarUrl: avatarUrlProp,
+  noise,
 }: MobileMoreContentProps) {
   const { getAvatar } = useUserAvatarContextSafe();
   const avatarUrl = userId ? getAvatar(userId, gender, name, avatarUrlProp) : avatarUrlProp;
@@ -198,6 +201,7 @@ export default function MobileMoreContent({
           <MobileThemeToggle />
           <MobileBiometricToggle />
           <PushNotificationToggle />
+          {noise}
         </div>
       </Section>
 

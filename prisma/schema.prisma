@@ -512,6 +512,8 @@ model User {
   quietHoursStartMinutes       Int        @default(1080)
   quietHoursEndMinutes         Int        @default(480)
   quietHoursWeekendAllDay      Boolean    @default(true)
+  /// Opt-in: related low-urgency pages within a short window arrive as one bundled notification.
+  bundleLowUrgencyPages        Boolean    @default(false)
   department                   String?
   jobTitle                     String?
   avatarUrl                    String?
@@ -2056,6 +2058,11 @@ model Notification {
   deliveryProvider       String?
   providerMessageId      String?                       @unique
   attempts               Int                           @default(0)
+  /// Set when the acknowledgement arrived through this notification (voice key press, push action; SMS/LINK reserved).
+  ackedAt                DateTime?
+  ackedVia               String?
+  /// Escalation step that sent this page; null for anything that is not an escalation page.
+  escalationStepIndex    Int?
   createdAt              DateTime                      @default(now())
   incident               Incident?                     @relation(fields: [incidentId], references: [id])
   user                   User?                         @relation(fields: [userId], references: [id], onDelete: SetNull)
