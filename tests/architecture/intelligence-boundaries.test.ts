@@ -272,9 +272,14 @@ describe('intelligence architecture boundaries', () => {
     for (const file of files) {
       const source = read(file);
       const name = relative(root, file);
-      // No model, no network, no notification and no incident or timeline change from an insight.
+      // No model, no network, no notification and no incident or timeline change from an insight. The one
+      // exception is phrasing.ts (plan K, "insight phrasing"): a reader's explicit request rewords stored
+      // insights through the gateway; nothing else in the module may import it, so producing stays model-free.
+      const phrasing = name.endsWith('ops-insights/phrasing.ts');
       expect(source, name).not.toMatch(
-        /\/ai\/gateway|\bfetch\(|notification-control-plane|sendNotification|@\/lib\/incidents\//
+        phrasing
+          ? /\bfetch\(|notification-control-plane|sendNotification|@\/lib\/incidents\//
+          : /\/ai\/gateway|\bfetch\(|notification-control-plane|sendNotification|@\/lib\/incidents\/|\/phrasing'/
       );
       // Raw writes exist only in the store (its own tables and its own rollup rows).
       if (!name.endsWith('ops-insights/store.ts')) expect(source, name).not.toMatch(/\$executeRaw/);
@@ -282,8 +287,9 @@ describe('intelligence architecture boundaries', () => {
     // A producer is a reader: bounded SELECTs and a pure derive.
     for (const file of sourceFiles(join(dir, 'producers'))) {
       const source = read(file);
+      // `(?<!\))` skips chained calls such as createHash(...).update(...), which are not Prisma writes.
       expect(source, relative(root, file)).not.toMatch(
-        /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\b(?:INSERT|UPDATE|DELETE)\b/
+        /(?<!\))\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\b(?:INSERT|UPDATE|DELETE)\b/
       );
     }
     // Ingestion, escalation and notification dispatch never reach into operations insights.
@@ -489,9 +495,11 @@ describe('Squire investigation and model routing boundaries', () => {
   it('routes capabilities only by reordering the chain the data policy already allowed', () => {
     const gateway = read(join(intelligenceDir, 'ai/gateway.ts'));
     expect(gateway).toMatch(
-      /const eligible = selectProviderChain\([\s\S]*?applyCapabilityRoute\(eligible, settings\.capabilityRouting, capability\)/
+      /const eligible = selectProviderChain\([\s\S]*?applyDefaultTiers\(eligible, capability\)[\s\S]*?applyCapabilityRoute\(tiered, settings\.capabilityRouting, capability\)/
     );
     const routing = read(join(intelligenceDir, 'ai/routing.ts'));
+    // Spend controls' default tiers (plan K) only change the model of a provider already in the chain.
+    expect(routing).toMatch(/return chain\.map\(provider => \{/);
     expect(routing).toMatch(/const preferred = chain\.find\(/);
     expect(routing).toMatch(/if \(!preferred\) return \[\.\.\.chain\]/);
     // The routing settings writer touches only the AI settings row, under the shared revision lock.
