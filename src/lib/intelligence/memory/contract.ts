@@ -179,18 +179,67 @@ export function buildChunks(title: string, body: string): KnowledgeChunkDraft[] 
   }));
 }
 
-/** The searchable text of a postmortem: the parts responders read for "how was this fixed". */
+/** Bounds of the structured postmortem sections added to the knowledge body. */
+export const POSTMORTEM_KNOWLEDGE_LIMITS = { timelineEntries: 12, fiveWhys: 5, actionItems: 10, lineChars: 160 } as const;
+
+const knowledgeLine = (text: string) => {
+  const value = text.replace(/\s+/g, ' ').trim();
+  return value.length > POSTMORTEM_KNOWLEDGE_LIMITS.lineChars
+    ? `${value.slice(0, POSTMORTEM_KNOWLEDGE_LIMITS.lineChars - 1)}…`
+    : value;
+};
+const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+const records = (value: unknown): Array<Record<string, unknown>> =>
+  Array.isArray(value)
+    ? value.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+    : [];
+const section = (label: string, lines: string[]) =>
+  lines.length ? `${label}:\n${lines.join('\n')}` : '';
+
+/**
+ * The searchable text of a postmortem: the parts responders read for "how was this fixed". The narrative
+ * comes first because long sources keep their beginning; the timeline summary, five whys and action items
+ * follow as bounded lines (stored JSON is untrusted in shape, so anything malformed is skipped).
+ */
 export function postmortemKnowledgeBody(postmortem: {
   summary?: string | null;
   rootCause?: string | null;
   resolution?: string | null;
   lessons?: string | null;
+  timeline?: unknown;
+  fiveWhys?: unknown;
+  actionItems?: unknown;
 }): string {
+  const limits = POSTMORTEM_KNOWLEDGE_LIMITS;
+  const timeline = records(postmortem.timeline)
+    .filter(event => text(event.title) && !Number.isNaN(Date.parse(text(event.timestamp))))
+    .slice(0, limits.timelineEntries)
+    .map(event => {
+      const at = new Date(text(event.timestamp)).toISOString();
+      return knowledgeLine(
+        `${at.slice(0, 10)} ${at.slice(11, 16)} ${text(event.type).toLowerCase() || 'event'}: ${text(event.title)}`
+      );
+    });
+  const fiveWhys = records(postmortem.fiveWhys)
+    .map(step => [text(step.question), text(step.answer)].filter(Boolean).join(' '))
+    .filter(Boolean)
+    .slice(0, limits.fiveWhys)
+    .map(knowledgeLine);
+  const actionItems = records(postmortem.actionItems)
+    .filter(item => text(item.title))
+    .slice(0, limits.actionItems)
+    .map(item => {
+      const status = text(item.status).toLowerCase().replace(/_/g, ' ');
+      return `${knowledgeLine(text(item.title))}${status ? ` (${status})` : ''}`;
+    });
   return [
     postmortem.summary ? `Summary: ${postmortem.summary}` : '',
     postmortem.rootCause ? `Root cause: ${postmortem.rootCause}` : '',
     postmortem.resolution ? `Resolution: ${postmortem.resolution}` : '',
     postmortem.lessons ? `Lessons: ${postmortem.lessons}` : '',
+    section('Timeline', timeline),
+    section('Five whys', fiveWhys),
+    section('Action items', actionItems),
   ]
     .filter(Boolean)
     .join('\n\n');

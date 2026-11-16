@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   upsertPostmortem,
   type PostmortemData,
@@ -48,12 +48,26 @@ import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { AlertCircle, AlertTriangle, Loader2, Wand2, Sparkles } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod/v3';
 import { POSTMORTEM_STATUS_CONFIG } from './postmortem/shared';
 import { draftPostmortemWithAiAction } from '@/app/(app)/postmortems/ai-actions';
 import { mergeAiDraft } from './postmortem/merge-ai-draft';
+import {
+  getPostmortemAssistAction,
+  type PostmortemAssistView,
+} from '@/app/(app)/postmortems/intelligence-actions';
+import {
+  findDuplicateActionItem,
+  type ActionItemSuggestion,
+} from '@/lib/intelligence/postmortems/evidence-draft';
+import { checkPostmortemQuality } from '@/lib/intelligence/postmortems/quality';
+import {
+  PostmortemActionSuggestions,
+  PostmortemQualityChecklist,
+  PostmortemRecurrenceStrip,
+} from './postmortem/PostmortemIntelligence';
 
 const postmortemSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100, 'Title must be less than 100 characters'),
@@ -427,6 +441,48 @@ export default function PostmortemForm({
     }
   };
 
+  // Postmortem intelligence: null while the switch is off, and then nothing below renders.
+  const assistIncidentId = incidentId || selectedIncidentId;
+  const [assist, setAssist] = useState<{ for: string; view: PostmortemAssistView } | null>(null);
+  useEffect(() => {
+    if (!assistIncidentId) return;
+    let live = true;
+    getPostmortemAssistAction(assistIncidentId)
+      .then(view => {
+        if (live) setAssist(view ? { for: assistIncidentId, view } : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [assistIncidentId]);
+  const assistView = assist?.for === assistIncidentId ? assist.view : null;
+  const rootCauseDraft = useWatch({ control: form.control, name: 'rootCause' });
+  const qualityIssues = assistView
+    ? checkPostmortemQuality({
+        rootCause: rootCauseDraft,
+        actionItems,
+        timeline: timelineEvents,
+        window: assistView.window,
+      })
+    : [];
+  // A suggestion the person already added (or wrote themselves) is shown as covered, not offered again.
+  const suggestions = (assistView?.suggestions ?? []).map(suggestion => ({
+    ...suggestion,
+    duplicateOf: suggestion.duplicateOf ?? findDuplicateActionItem(suggestion.title, actionItems),
+  }));
+  const addSuggestion = (suggestion: ActionItemSuggestion) =>
+    setActionItems(current => [
+      ...current,
+      {
+        id: `suggested-${suggestion.key}`,
+        title: suggestion.title,
+        description: suggestion.description,
+        status: 'OPEN',
+        priority: suggestion.priority,
+      },
+    ]);
+
   const selectedIncident = resolvedIncidents.find(inc => inc.id === selectedIncidentId);
   const effectiveIncidentJiraIssues = incidentId
     ? incidentJiraIssues
@@ -492,6 +548,8 @@ export default function PostmortemForm({
             </CardContent>
           </Card>
         )}
+
+        <PostmortemRecurrenceStrip recurrence={assistView?.recurrence} />
 
         {/* Basic Information */}
         <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
@@ -720,6 +778,7 @@ export default function PostmortemForm({
           jiraCapability={jiraCapability}
           incidentJiraIssues={effectiveIncidentJiraIssues}
         />
+        <PostmortemActionSuggestions suggestions={suggestions} onAdd={addSuggestion} />
 
         {/* Lessons Learned */}
         <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
@@ -757,6 +816,8 @@ export default function PostmortemForm({
             <AlertDescription>{generalError}</AlertDescription>
           </Alert>
         )}
+
+        <PostmortemQualityChecklist issues={qualityIssues} />
 
         {/* Form Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">

@@ -74,6 +74,7 @@ everything and stops the daily work.
 | On-call (a person) | **On-call load is Nx the rotation's mean** | One person took more than 1.5x the mean pages per on-call week. Visible to that person, their team owners and administrators. |
 | On-call (a person) | **Paged at night on N nights** | Night pages (22:00 to 07:00 in the person's own time zone) recurred across at least three weeks of the last four. |
 | On-call (a person) | **Next shift may be busy** | The person's shift starts within 24 hours and a service the schedule covers has a risky change in the last day, a burning SLO or a maintenance window ending. The same heads-up appears in their handoff summary. |
+| Postmortems | **Repeat problem, seen N times, has N overdue action items** | The same problem came back on the service at least twice in 90 days while a follow-up from an earlier postmortem is past due. Critical when the problem was seen three or more times and a follow-up is high priority or a month late. **Create draft** opens that postmortem. |
 
 Insights for on-call schedules, postmortems, runbooks and notifications arrive with later updates; their
 switches are already there so you can decide in advance.
@@ -131,6 +132,28 @@ OpsKnight records who was effectively on call each day (after overrides) once th
 history stays right after layers are edited or deleted. After turning the area on, an administrator can fill
 the last 30 days at once with `npm run backfill:oncall-coverage`; it is safe to run again and resumes with
 `--cursor <scheduleId>`.
+
+## In the postmortem editor
+
+With the **Postmortems** area on, the postmortem editor adds, beside the form:
+
+- **Recurrence**: "Seen N times in 90 days", the last postmortem for an earlier occurrence and the action
+  items from earlier occurrences that are still open (overdue ones are marked). Shown only when the problem
+  has happened before. The same strip is available for the incident page.
+- **Auto-Draft with evidence**: **Auto-Draft** still fills the template, and now also writes in what is
+  already known: the Intelligence timeline, causes responders confirmed (marked helpful or correct) and
+  linked changes, runbook runs and their outcome, the recurrence and fixes from similar incidents.
+  Unconfirmed causes are labelled as correlation only. **Draft with AI** goes through the AI result cache,
+  so drafting the same incident twice costs nothing.
+- **Suggested action items**: follow-ups from confirmed causes, failed runbooks and known fixes. A
+  suggestion that an open action item already covers (in this postmortem or an earlier one) links to that
+  item instead of offering a copy. **Add** puts it in the form; nothing is saved until you save.
+- **Still missing**: a checklist of a missing root cause, no action items, open action items without an
+  owner or due date, and timeline gaps longer than 30 minutes while the incident was open. It disappears
+  when the postmortem is complete.
+
+Everything here is deterministic and works without an AI provider. You see only incidents, postmortems,
+action items and runbooks you can already open.
 
 ## Review insights
 

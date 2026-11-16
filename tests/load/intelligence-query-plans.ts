@@ -26,6 +26,10 @@ import { dueOpsInsightScopesSql } from '../../src/lib/intelligence/ops-insights/
 import { integrationHealthSql } from '../../src/lib/intelligence/ops-insights/producers/integration-health';
 import { automationRouteOutcomesSql } from '../../src/lib/intelligence/ops-insights/producers/automation-rule-health';
 import { automationMiningSql } from '../../src/lib/intelligence/ops-insights/producers/automation-suggested-rules';
+import {
+  repeatCauseOverdueSql,
+  repeatCauseProblemsSql,
+} from '../../src/lib/intelligence/ops-insights/producers/postmortem-repeat-cause';
 import { OPS_ROLLUP_SOURCES, OPS_ROLLUPS } from '../../src/lib/metric-rollup';
 
 /** Any one of the listed indexes satisfies the query; alternatives cover optional extensions. */
@@ -52,6 +56,11 @@ const EXPECTED_INDEXES: Record<string, string[]> = {
   opsIntegrationHealth: ['idx_alert_by_service'],
   opsAutomationRouteOutcomes: ['IncidentAutomationDecision_serviceId_createdAt_idx'],
   opsAutomationMining: ['idx_incident_sla_by_service', 'idx_incident_service_updated_at'],
+  opsRepeatCauseProblems: [
+    'idx_incident_fingerprint_service_recent',
+    'idx_incident_fingerprint_problem',
+  ],
+  opsRepeatCauseOverdue: ['idx_incident_fingerprint_problem', 'ActionItem_incidentId_status_idx'],
   opsDueScopes: ['OpsInsightScopeState_pkey', 'idx_ops_insight_scope_due'],
 };
 
@@ -234,6 +243,14 @@ async function main() {
       sql: automationRouteOutcomesSql(source.serviceId, new Date()),
     },
     opsAutomationMining: { analyze: true, sql: automationMiningSql(source.serviceId, new Date()) },
+    opsRepeatCauseProblems: {
+      analyze: true,
+      sql: repeatCauseProblemsSql(source.serviceId, new Date()),
+    },
+    opsRepeatCauseOverdue: {
+      analyze: true,
+      sql: repeatCauseOverdueSql(source.serviceId, [source.template], new Date()),
+    },
     opsDueScopes: { analyze: true, sql: dueOpsInsightScopesSql('SERVICE', 200) },
   };
 
