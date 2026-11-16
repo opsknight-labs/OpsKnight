@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { logger } from '@/lib/logger';
@@ -48,6 +49,10 @@ export function MissingRunbookList({
                 {suggestion.template ? `“${suggestion.template}”: ` : ''}
                 {suggestion.steps.length} draft {suggestion.steps.length === 1 ? 'step' : 'steps'}{' '}
                 from {suggestion.notes.length} notes you can read
+                <ChevronDown
+                  aria-hidden="true"
+                  className="ml-1.5 h-4 w-4 shrink-0 motion-safe:transition-transform group-open:rotate-180"
+                />
               </summary>
               <div className="grid gap-4 pb-2 text-xs text-muted-foreground sm:grid-cols-2">
                 <div>

@@ -42,6 +42,7 @@ export function RunbookHealthPanel({
       icon={Activity}
     >
       <KeyValueGrid
+        className="tabular-nums"
         items={[
           {
             label: 'Success rate',
@@ -87,7 +88,7 @@ export function RunbookHealthPanel({
       )}
       {suggestions.length > 0 && (
         <div className="mt-4 space-y-1">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <h3 className="text-xs font-medium text-muted-foreground">
             Steps responders add by hand
           </h3>
           <ul className="space-y-1 text-sm text-foreground" aria-label="Suggested steps">
