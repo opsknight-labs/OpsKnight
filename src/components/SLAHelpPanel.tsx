@@ -66,7 +66,7 @@ export default function SLAHelpPanel() {
 
           {/* Basics Tab */}
           <TabsContent value="basics" className="space-y-4 pt-4">
-            <div className="rounded-xl border border-ink-200 bg-gradient-to-br from-ink-50 to-white p-4">
+            <div className="rounded-xl border border-ink-200 bg-gradient-to-br from-ink-50 to-card p-4">
               <h4 className="font-semibold text-ink-800 mb-2 flex items-center gap-2">
                 <Target className="h-4 w-4 text-indigo-500" />
                 What is a service objective?

@@ -20,7 +20,7 @@ const providerConfig: Record<
 > = {
   google: {
     classes:
-      'bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs hover:shadow-sm',
+      'bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 shadow-xs hover:shadow-sm',
     defaultLabel: 'Google',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
@@ -75,7 +75,7 @@ const providerConfig: Record<
   },
   custom: {
     classes:
-      'bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs hover:shadow-sm',
+      'bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 shadow-xs hover:shadow-sm',
     defaultLabel: 'SSO',
     icon: (
       <svg

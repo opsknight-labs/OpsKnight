@@ -286,7 +286,7 @@ export default async function PolicyDetailPage({
               </div>
             </form>
           ) : (
-            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl text-xs text-muted-foreground italic border border-border/60">
+            <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-xl text-xs text-muted-foreground italic border border-border/60">
               You do not have permission to edit this policy. Admin role required.
             </div>
           )}

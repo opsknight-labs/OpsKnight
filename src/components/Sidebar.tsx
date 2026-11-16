@@ -212,7 +212,7 @@ export default function Sidebar({
               variant="sidebar-danger"
               size="xs"
               aria-label={`${stats!.count} active incidents`}
-              className="ml-auto h-4.5 min-w-4.5 px-1.5 rounded-full text-[10.5px] font-bold bg-rose-500 text-white border-0 shadow-xs"
+              className="ml-auto h-4.5 min-w-4.5 px-1.5 rounded-full text-[10.5px] font-bold bg-rose-600 text-white border-0 shadow-xs"
             >
               {badgeText}
             </Badge>
@@ -229,7 +229,7 @@ export default function Sidebar({
           <TooltipContent
             side="right"
             sideOffset={12}
-            className="text-xs py-1 px-2.5 flex items-center gap-2 bg-slate-900 text-white border-slate-700 shadow-xl"
+            className="text-xs py-1 px-2.5 flex items-center gap-2 bg-zinc-900 text-white border-zinc-700 shadow-xl"
           >
             <span className="font-medium">{item.label}</span>
             {item.releaseStage && (
@@ -242,7 +242,7 @@ export default function Sidebar({
               </Badge>
             )}
             {hasIncidents && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-600 text-white">
                 {badgeText}
               </span>
             )}
@@ -284,7 +284,7 @@ export default function Sidebar({
             <TooltipContent
               side="right"
               sideOffset={12}
-              className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+              className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
             >
               Setup Status Page
             </TooltipContent>
@@ -341,7 +341,7 @@ export default function Sidebar({
             <TooltipContent
               side="right"
               sideOffset={12}
-              className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+              className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
             >
               {page.name}
             </TooltipContent>
@@ -421,7 +421,7 @@ export default function Sidebar({
           <TooltipContent
             side="right"
             sideOffset={12}
-            className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl p-2 max-w-48"
+            className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl p-2 max-w-48"
           >
             <p className="font-semibold mb-1.5 text-slate-300">Status Pages</p>
             <div className="flex flex-col gap-1">
@@ -649,7 +649,7 @@ export default function Sidebar({
         {/* Sidebar Footer Section */}
         <div
           className={cn(
-            'mt-auto shrink-0 border-t border-white/10 bg-slate-950/60',
+            'mt-auto shrink-0 border-t border-white/10 bg-zinc-950/60',
             isDesktopCollapsed ? 'p-2' : 'p-3'
           )}
         >
@@ -675,7 +675,7 @@ export default function Sidebar({
                 <TooltipContent
                   side="right"
                   sideOffset={12}
-                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                  className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
                 >
                   <p className="font-semibold">{currentName || 'User'}</p>
                   <p className="text-ink-400 text-[10px]">{currentEmail}</p>
@@ -759,7 +759,7 @@ export default function Sidebar({
                 <TooltipContent
                   side="right"
                   sideOffset={12}
-                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                  className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
                 >
                   Settings
                 </TooltipContent>
@@ -778,7 +778,7 @@ export default function Sidebar({
                 <TooltipContent
                   side="right"
                   sideOffset={12}
-                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                  className="text-xs bg-zinc-900 text-white border-zinc-700 shadow-xl"
                 >
                   Sign Out
                 </TooltipContent>
@@ -788,7 +788,7 @@ export default function Sidebar({
 
           {/* Metadata version info */}
           {!isDesktopCollapsed && (
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[10px] text-ink-500">
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[10px] text-ink-400">
               <a
                 href="https://opsknight.com"
                 target="_blank"

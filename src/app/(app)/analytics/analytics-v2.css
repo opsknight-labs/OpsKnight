@@ -3055,7 +3055,7 @@
     border: 1px solid rgb(var(--ink-400) / 0.2);
     background:
         radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 55%),
-        linear-gradient(135deg, var(--glass-bg), rgba(241, 245, 249, 0.9));
+        linear-gradient(135deg, var(--glass-bg), rgb(var(--ink-100) / 0.9));
     box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
     overflow: hidden;
 }
@@ -3063,13 +3063,13 @@
 .analytics-v2 .sla-summary-panel {
     background:
         radial-gradient(circle at 12% 0%, rgba(14, 165, 233, 0.12), transparent 55%),
-        linear-gradient(135deg, var(--glass-bg), rgba(241, 245, 249, 0.9));
+        linear-gradient(135deg, var(--glass-bg), rgb(var(--ink-100) / 0.9));
 }
 
 .analytics-v2 .sla-service-panel {
     background:
         radial-gradient(circle at 90% 0%, rgba(16, 185, 129, 0.12), transparent 55%),
-        linear-gradient(135deg, var(--glass-bg), rgba(241, 245, 249, 0.9));
+        linear-gradient(135deg, var(--glass-bg), rgb(var(--ink-100) / 0.9));
 }
 
 .analytics-v2 .sla-coverage-header,
@@ -3332,7 +3332,7 @@
     border: 1px solid rgb(var(--ink-400) / 0.2);
     background:
         radial-gradient(circle at 15% 0%, rgba(59, 130, 246, 0.12), transparent 55%),
-        linear-gradient(135deg, var(--glass-bg), rgba(241, 245, 249, 0.9));
+        linear-gradient(135deg, var(--glass-bg), rgb(var(--ink-100) / 0.9));
     box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
     overflow: hidden;
 }
@@ -3470,7 +3470,7 @@
     background:
         radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.12), transparent 45%),
         radial-gradient(circle at 85% 20%, rgba(244, 114, 182, 0.12), transparent 45%),
-        linear-gradient(155deg, var(--glass-bg), rgba(241, 245, 249, 0.92));
+        linear-gradient(155deg, var(--glass-bg), rgb(var(--ink-100) / 0.92));
     box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.4);
     display: flex;
     flex-direction: column;
@@ -3799,7 +3799,7 @@
 /* Dark Mode Overrides */
 [data-theme='dark'] .glass-panel,
 .dark .glass-panel {
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(24, 24, 27, 0.6);
     border-color: rgba(255, 255, 255, 0.08);
     /* More subtle border */
     backdrop-filter: blur(16px) saturate(180%);
@@ -3807,13 +3807,13 @@
 }
 
 [data-theme='dark'] .glass-panel:hover {
-    background: rgba(15, 23, 42, 0.8);
+    background: rgba(24, 24, 27, 0.8);
     border-color: rgba(255, 255, 255, 0.15);
 }
 
 [data-theme='dark'] .v2-gauge-card,
 [data-theme='dark'] .v2-heatmap-container {
-    background: rgba(30, 41, 59, 0.4);
+    background: rgba(39, 39, 42, 0.4);
     border-color: rgba(255, 255, 255, 0.05);
 }
 
@@ -3822,12 +3822,12 @@
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-heading {
-    background: linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.3));
+    background: linear-gradient(135deg, rgba(24, 24, 27, 0.6), rgba(24, 24, 27, 0.3));
     border-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-card {
-    background: linear-gradient(160deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.82));
+    background: linear-gradient(160deg, rgba(24, 24, 27, 0.92), rgba(39, 39, 42, 0.82));
     border-color: rgba(148, 163, 184, 0.16);
     box-shadow: 0 18px 32px rgba(0, 0, 0, 0.35);
 }
@@ -3849,29 +3849,29 @@
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-card .chart-header {
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(24, 24, 27, 0.6);
     border-bottom-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-insights {
-    background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 55%), linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.75));
+    background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 55%), linear-gradient(145deg, rgba(24, 24, 27, 0.9), rgba(39, 39, 42, 0.75));
     border-color: rgba(148, 163, 184, 0.16);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-insights-item,
 [data-theme='dark'] .analytics-v2 .v2-panel-trends-block,
 [data-theme='dark'] .analytics-v2 .analytics-narrative-item {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-surface {
-    background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.82));
+    background: linear-gradient(180deg, rgba(24, 24, 27, 0.94), rgba(39, 39, 42, 0.82));
     border-color: rgba(148, 163, 184, 0.16);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-surface-header {
-    background: rgba(15, 23, 42, 0.75);
+    background: rgba(24, 24, 27, 0.75);
     border-bottom-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -3889,21 +3889,21 @@
 [data-theme='dark'] .analytics-v2 .activity-meta>div,
 [data-theme='dark'] .analytics-v2 .service-health-chip,
 [data-theme='dark'] .analytics-v2 .analytics-insights-summary-item {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-coverage-panel,
 [data-theme='dark'] .analytics-v2 .sla-summary-panel,
 [data-theme='dark'] .analytics-v2 .sla-service-panel {
-    background: linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.82));
+    background: linear-gradient(145deg, rgba(24, 24, 27, 0.94), rgba(39, 39, 42, 0.82));
     border-color: rgba(148, 163, 184, 0.18);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-coverage-header,
 [data-theme='dark'] .analytics-v2 .sla-summary-header,
 [data-theme='dark'] .analytics-v2 .sla-service-header {
-    background: rgba(15, 23, 42, 0.8);
+    background: rgba(24, 24, 27, 0.8);
     border-bottom-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -3914,7 +3914,7 @@
 [data-theme='dark'] .analytics-v2 .sla-coverage-stats>div,
 [data-theme='dark'] .analytics-v2 .sla-summary-grid>div,
 [data-theme='dark'] .analytics-v2 .sla-service-row {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -3924,18 +3924,18 @@
 }
 
 [data-theme='dark'] .analytics-v2 .sla-compliance-panel {
-    background: linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.82));
+    background: linear-gradient(145deg, rgba(24, 24, 27, 0.94), rgba(39, 39, 42, 0.82));
     border-color: rgba(148, 163, 184, 0.18);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-compliance-header {
-    background: rgba(15, 23, 42, 0.8);
+    background: rgba(24, 24, 27, 0.8);
     border-bottom-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-compliance-meta span,
 [data-theme='dark'] .analytics-v2 .sla-compliance-card {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -3947,7 +3947,7 @@
 [data-theme='dark'] .analytics-v2 .dist-services-row,
 [data-theme='dark'] .analytics-v2 .dist-age-row,
 [data-theme='dark'] .analytics-v2 .dist-urgency-card {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -3958,7 +3958,7 @@
 
 [data-theme='dark'] .analytics-v2 .distribution-card,
 [data-theme='dark'] .analytics-v2 .distribution-row {
-    background: rgba(15, 23, 42, 0.88);
+    background: rgba(24, 24, 27, 0.88);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -3970,12 +3970,12 @@
 [data-theme='dark'] .analytics-v2 .operational-card,
 [data-theme='dark'] .analytics-v2 .operational-status-row,
 [data-theme='dark'] .analytics-v2 .operational-metrics>div {
-    background: rgba(15, 23, 42, 0.88);
+    background: rgba(24, 24, 27, 0.88);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .operational-chart {
-    background: rgba(15, 23, 42, 0.8);
+    background: rgba(24, 24, 27, 0.8);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -4000,13 +4000,13 @@
 [data-theme='dark'] .analytics-v2 .trends-panel,
 [data-theme='dark'] .analytics-v2 .insights-panel-row,
 [data-theme='dark'] .analytics-v2 .trends-panel-stat {
-    background: rgba(15, 23, 42, 0.88);
+    background: rgba(24, 24, 27, 0.88);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .insights-panel-header,
 [data-theme='dark'] .analytics-v2 .trends-panel-header {
-    background: rgba(15, 23, 42, 0.75);
+    background: rgba(24, 24, 27, 0.75);
     border-bottom-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -4038,12 +4038,12 @@
 }
 
 [data-theme='dark'] .analytics-v2 .insights-panel-footer {
-    background: rgba(15, 23, 42, 0.75);
+    background: rgba(24, 24, 27, 0.75);
     border-top-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-line-chart-surface {
-    background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.75));
+    background: linear-gradient(180deg, rgba(24, 24, 27, 0.9), rgba(39, 39, 42, 0.75));
     border-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -4061,7 +4061,7 @@
 [data-theme='dark'] .analytics-v2 .ownership-card,
 [data-theme='dark'] .analytics-v2 .ownership-row,
 [data-theme='dark'] .analytics-v2 .ownership-kpi {
-    background: rgba(15, 23, 42, 0.88);
+    background: rgba(24, 24, 27, 0.88);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
@@ -4071,51 +4071,51 @@
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-shell {
-    background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 55%), linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.82));
+    background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 55%), linear-gradient(145deg, rgba(24, 24, 27, 0.94), rgba(39, 39, 42, 0.82));
     border-color: rgba(148, 163, 184, 0.18);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-header {
-    background: rgba(15, 23, 42, 0.75);
+    background: rgba(24, 24, 27, 0.75);
     border-bottom-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-meta-card,
 [data-theme='dark'] .analytics-v2 .service-health-filter,
 [data-theme='dark'] .analytics-v2 .service-health-card {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-sort select {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.25);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-meta-card.is-critical {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(15, 23, 42, 0.85));
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(24, 24, 27, 0.85));
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-meta-card.is-degraded {
-    background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(15, 23, 42, 0.85));
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(24, 24, 27, 0.85));
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-meta-card.is-healthy {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(15, 23, 42, 0.85));
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(24, 24, 27, 0.85));
 }
 
 [data-theme='dark'] .analytics-v2 .activity-panel {
-    background: rgba(15, 23, 42, 0.9);
+    background: rgba(24, 24, 27, 0.9);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .activity-github-header {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .activity-github-heatmap {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(24, 24, 27, 0.85);
     border-color: rgba(148, 163, 184, 0.2);
 }
 

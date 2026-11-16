@@ -39,7 +39,7 @@ const TAG_PALETTES = [
   'bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/80',
   'bg-rose-50 text-rose-700 border-rose-200/80 hover:bg-rose-100/70 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/80',
   'bg-cyan-50 text-cyan-700 border-cyan-200/80 hover:bg-cyan-100/70 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800/80',
-  'bg-slate-100 text-slate-700 border-slate-200/80 hover:bg-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+  'bg-slate-100 text-slate-700 border-slate-200/80 hover:bg-slate-200/70 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
 ];
 
 function getTagClass(name: string): string {
@@ -129,14 +129,14 @@ export default function IncidentTags({
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 px-2.5 text-xs rounded-md border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-400 gap-1 font-medium shadow-2xs transition-all"
+          className="h-7 px-2.5 text-xs rounded-md border-dashed border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:border-slate-400 gap-1 font-medium shadow-2xs transition-all"
         >
           <Plus className="h-3 w-3" />
           <span>{tags.length === 0 ? 'Add Tag' : 'Tag'}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 w-64 shadow-lg border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden"
+        className="p-0 w-64 shadow-lg border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden"
         align="start"
       >
         <Command>
@@ -191,7 +191,7 @@ export default function IncidentTags({
 
   return (
     <div className={cn('flex items-center gap-1.5 flex-wrap min-w-0', className)}>
-      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none flex items-center gap-1 shrink-0">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 select-none flex items-center gap-1 shrink-0">
         <TagIcon className="h-3 w-3" />
         Tags:
       </span>
@@ -238,13 +238,13 @@ export default function IncidentTags({
               type="button"
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-xs font-semibold text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 shadow-2xs hover:bg-slate-100"
+              className="h-7 px-2 text-xs font-semibold text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/80 shadow-2xs hover:bg-slate-100"
             >
               +{overflowTags.length} more
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className="p-3 w-56 shadow-lg border-slate-200 dark:border-slate-800 rounded-xl"
+            className="p-3 w-56 shadow-lg border-slate-200 dark:border-zinc-800 rounded-xl"
             align="start"
           >
             <p className="text-[10px] font-bold uppercase tracking-wider text-ink-400 mb-2">

@@ -57,7 +57,7 @@ import {
 
 function jiraStatusBadgeStyle(status: string | null): string {
   if (!status)
-    return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+    return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
   if (isJiraStatusDone(status)) {
     return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
   }
@@ -68,7 +68,7 @@ function jiraStatusBadgeStyle(status: string | null): string {
   if (lower === 'to do' || lower === 'open' || lower === 'backlog') {
     return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
   }
-  return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+  return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
 }
 
 export type JiraLinkItem = {
@@ -641,14 +641,14 @@ export default function IncidentCommandBar({
 
               {jiraLinks.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                     Linked Issues ({jiraLinks.length})
                   </div>
                   <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                     {jiraLinks.map(link => (
                       <div
                         key={link.id}
-                        className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 bg-slate-50/70 dark:bg-slate-800/40 dark:border-slate-800 text-xs"
+                        className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 bg-slate-50/70 dark:bg-zinc-800/40 dark:border-zinc-800 text-xs"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <a
@@ -684,7 +684,7 @@ export default function IncidentCommandBar({
                                 onClick={() => handleSyncJira(link.id)}
                                 disabled={isJiraPending || syncingLinkId === link.id}
                                 title="Sync Jira Issue"
-                                className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
                               >
                                 <RefreshCw
                                   className={cn(
@@ -719,8 +719,8 @@ export default function IncidentCommandBar({
               )}
 
               {jiraCapability.canCreate ? (
-                <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-slate-800/20 space-y-2">
-                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-zinc-800/20 space-y-2">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                     Create new issue in project
                   </div>
                   <p className="text-xs text-ink-500">
@@ -755,8 +755,8 @@ export default function IncidentCommandBar({
               ) : null}
 
               {jiraCapability.canLink && (
-                <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-slate-800/20 space-y-2">
-                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-zinc-800/20 space-y-2">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                     Or link an existing issue key
                   </div>
                   <div className="flex items-center gap-2">

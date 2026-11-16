@@ -79,7 +79,7 @@ const runtimeStatusPresentation: Record<
   },
   UNVERIFIED: {
     label: 'Unverified',
-    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-400',
+    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-zinc-400',
     icon: CircleDashed,
   },
   NOT_APPLICABLE: {
@@ -665,10 +665,10 @@ export default function ComplianceClientTabs({
                 </div>
               </div>
               <div className="rounded-xl border border-slate-500/20 bg-slate-500/5 p-3">
-                <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                <div className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
                   Unverified
                 </div>
-                <div className="text-xl font-bold font-mono text-slate-700 dark:text-slate-300 mt-0.5">
+                <div className="text-xl font-bold font-mono text-slate-700 dark:text-zinc-300 mt-0.5">
                   {runtimeStats.unverified}
                 </div>
               </div>

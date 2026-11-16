@@ -255,24 +255,24 @@
 /* Dark theme — applies when next-themes sets class="dark" on <html> */
 .dark {
   color-scheme: dark;
-  --background: 15 23 42;
-  --foreground: 226 232 240;
-  --card: 15 23 42;
-  --card-foreground: 226 232 240;
-  --popover: 15 23 42;
-  --popover-foreground: 226 232 240;
-  --muted: 30 41 59;
-  --muted-foreground: 148 163 184;
-  --accent: 30 41 59;
-  --accent-foreground: 226 232 240;
-  --border: 51 65 85;
-  --input: 51 65 85;
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-surface: #1e293b;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --background: 24 24 27;
+  --foreground: 244 244 245;
+  --card: 24 24 27;
+  --card-foreground: 244 244 245;
+  --popover: 24 24 27;
+  --popover-foreground: 244 244 245;
+  --muted: 39 39 42;
+  --muted-foreground: 161 161 170;
+  --accent: 39 39 42;
+  --accent-foreground: 244 244 245;
+  --border: 63 63 70;
+  --input: 63 63 70;
+  --bg-primary: #18181b;
+  --bg-secondary: #27272a;
+  --bg-surface: #27272a;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
 }
 
 /* Notification toast styles live in src/styles/components/toasts.css. */
@@ -723,7 +723,7 @@ select option {
   justify-content: center;
   padding: 1rem;
   background:
-    linear-gradient(135deg, var(--bg-primary) 0%, #edf2f7 25%, #f1f5f9 50%, #edf2f7 75%, var(--bg-primary) 100%);
+    linear-gradient(135deg, var(--bg-primary) 0%, rgb(var(--ink-100)) 25%, rgb(var(--ink-100)) 50%, rgb(var(--ink-100)) 75%, var(--bg-primary) 100%);
   position: relative;
   overflow: hidden;
   width: 100%;

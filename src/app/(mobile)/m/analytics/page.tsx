@@ -51,7 +51,7 @@ function ProgressLine({
           ? 'bg-rose-500'
           : tone === 'blue'
             ? 'bg-blue-500'
-            : 'bg-slate-600 dark:bg-slate-300';
+            : 'bg-slate-600 dark:bg-zinc-300';
   return (
     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
       <div className={`h-full rounded-full ${toneClass}`} style={{ width: `${width}%` }} />

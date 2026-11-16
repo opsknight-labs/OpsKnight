@@ -592,7 +592,7 @@ export default function LayerCard({
                             size="icon"
                             onClick={() => handleRemoveUser(layerUser.userId)}
                             disabled={isPending}
-                            className="h-7 w-7 p-0 rounded-full bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200/80 hover:border-rose-200 transition-colors cursor-pointer dark:bg-slate-800 dark:hover:bg-rose-950/40 dark:text-slate-400 dark:hover:text-rose-400 dark:border-slate-700"
+                            className="h-7 w-7 p-0 rounded-full bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200/80 hover:border-rose-200 transition-colors cursor-pointer dark:bg-zinc-800 dark:hover:bg-rose-950/40 dark:text-zinc-400 dark:hover:text-rose-400 dark:border-zinc-700"
                             aria-label={`Remove ${layerUser.user.name} from ${layer.name}`}
                             title={`Remove ${layerUser.user.name}`}
                           >

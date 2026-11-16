@@ -36,7 +36,7 @@ function getVariantConfig(variant: ButtonVariant) {
       return {
         variant: 'default' as const,
         className:
-          'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-400',
+          'bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-700 dark:hover:bg-amber-600',
       };
     case 'ghost':
       return { variant: 'ghost' as const, className: '' };

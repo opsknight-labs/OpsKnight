@@ -88,7 +88,7 @@ export default function DashboardPerformanceMetrics({
   return (
     <div className="grid grid-cols-2 gap-4">
       {/* MTTA */}
-      <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+      <div className="p-4 bg-ink-50 rounded-lg border border-ink-200">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
             MTTA
@@ -112,7 +112,7 @@ export default function DashboardPerformanceMetrics({
       </div>
 
       {/* MTTR */}
-      <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+      <div className="p-4 bg-ink-50 rounded-lg border border-ink-200">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
             MTTR
@@ -134,7 +134,7 @@ export default function DashboardPerformanceMetrics({
       </div>
 
       {/* Ack SLA */}
-      <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+      <div className="p-4 bg-ink-50 rounded-lg border border-ink-200">
         <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 font-semibold">
           Acknowledge SLA
         </div>
@@ -156,7 +156,7 @@ export default function DashboardPerformanceMetrics({
       </div>
 
       {/* Resolve SLA */}
-      <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+      <div className="p-4 bg-ink-50 rounded-lg border border-ink-200">
         <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 font-semibold">
           Resolve SLA
         </div>

@@ -41,23 +41,21 @@ export default function IncidentQuickLinksCard({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-slate-900 dark:border-slate-800 transition-all',
+        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-zinc-900 dark:border-zinc-800 transition-all',
         className
       )}
     >
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between gap-2">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+          <div className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
             <Compass className="h-4 w-4 shrink-0" />
           </div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 whitespace-nowrap">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 whitespace-nowrap">
             Quick Links
           </h3>
         </div>
-        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-          Resources
-        </span>
+        <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">Resources</span>
       </div>
 
       {/* Links List */}
@@ -65,17 +63,17 @@ export default function IncidentQuickLinksCard({
         {/* Service Catalog */}
         <Link
           href={`${routePrefix}/services/${service.id}`}
-          className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
+          className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-md bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
               <Server className="h-3.5 w-3.5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">
+              <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
                 {service.name}
               </p>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+              <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
                 Service Catalog · {service.slaTier || 'Standard Tier'}
               </p>
             </div>
@@ -87,17 +85,17 @@ export default function IncidentQuickLinksCard({
         {incidentPolicy && (
           <Link
             href={`${routePrefix}/policies/${incidentPolicy.id}`}
-            className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
+            className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-7 h-7 rounded-md bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <ShieldAlert className="h-3.5 w-3.5" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">
+                <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
                   {incidentPolicy.name}
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
                   Incident policy{pinnedPolicy ? ' · Pinned route' : ' · Service routing'}
                 </p>
               </div>
@@ -119,17 +117,17 @@ export default function IncidentQuickLinksCard({
         {/* Analytics */}
         <Link
           href={`${routePrefix}/analytics?incident=${incidentId}`}
-          className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
+          className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-md bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
               <BarChart2 className="h-3.5 w-3.5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">
+              <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
                 Incident Analytics
               </p>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+              <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
                 MTTR &amp; Frequency Metrics
               </p>
             </div>
@@ -141,17 +139,17 @@ export default function IncidentQuickLinksCard({
         {team && (
           <Link
             href={`${routePrefix}/teams/${team.id}`}
-            className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
+            className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-7 h-7 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                 <Users className="h-3.5 w-3.5" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">
+                <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
                   {team.name}
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
                   Team Members &amp; Schedule
                 </p>
               </div>

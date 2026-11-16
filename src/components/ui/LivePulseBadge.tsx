@@ -22,7 +22,7 @@ export default function LivePulseBadge({
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-md transition-all duration-200 shadow-sm',
         isLive
           ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-          : 'border border-ink-400/30 bg-slate-400/10 text-slate-600 dark:text-slate-400',
+          : 'border border-ink-400/30 bg-slate-400/10 text-slate-600 dark:text-zinc-400',
         onClick && 'cursor-pointer hover:scale-105 active:scale-95',
         className
       )}

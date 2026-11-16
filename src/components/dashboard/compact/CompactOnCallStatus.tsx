@@ -80,7 +80,7 @@ const CompactOnCallStatus = memo(function CompactOnCallStatus({
   if (!isOnCall) {
     return (
       <div
-        className="p-3.5 rounded-sm bg-neutral-50 border border-border text-center"
+        className="p-3.5 rounded-sm bg-ink-50 border border-border text-center"
         role="status"
         aria-label="Not currently on-call"
       >

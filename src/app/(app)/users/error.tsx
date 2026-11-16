@@ -34,7 +34,7 @@ export default function UsersError({
         <button
           type="button"
           onClick={reset}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 transition"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition"
         >
           <RefreshCw className="w-4 h-4" />
           Try again

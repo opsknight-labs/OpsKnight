@@ -786,10 +786,10 @@ export default function IncidentTimeline({
                 <p
                   className={`text-sm leading-relaxed whitespace-pre-wrap ${
                     isLifecycleEvent
-                      ? 'text-slate-900 dark:text-slate-100 font-medium'
+                      ? 'text-slate-900 dark:text-zinc-100 font-medium'
                       : isNote
-                        ? 'text-slate-800 dark:text-slate-200'
-                        : 'text-slate-600 dark:text-slate-400'
+                        ? 'text-slate-800 dark:text-zinc-200'
+                        : 'text-slate-600 dark:text-zinc-400'
                   }`}
                 >
                   {formatEscalationMessage(event.message)}
@@ -801,7 +801,7 @@ export default function IncidentTimeline({
       </div>
 
       {hasMoreActivity && (
-        <div className="mt-4 flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 dark:bg-slate-800/40 text-xs text-muted-foreground gap-2">
+        <div className="mt-4 flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 dark:bg-zinc-800/40 text-xs text-muted-foreground gap-2">
           <span>
             Showing {currentItemsCount} of {totalItemsCount} activity items
           </span>

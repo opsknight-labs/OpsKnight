@@ -71,9 +71,9 @@ export default function DashboardActionItems({
         };
       default:
         return {
-          bg: 'bg-neutral-50',
-          border: 'border-neutral-200',
-          text: 'text-neutral-700',
+          bg: 'bg-ink-50',
+          border: 'border-ink-200',
+          text: 'text-ink-700',
           dot: 'bg-neutral-500',
         };
     }
@@ -93,7 +93,7 @@ export default function DashboardActionItems({
   };
 
   return (
-    <div className="p-5 bg-gradient-to-br from-white to-neutral-50/50 border border-border rounded-lg shadow-lg">
+    <div className="p-5 bg-gradient-to-br from-card to-ink-50/50 border border-border rounded-lg shadow-lg">
       {/* Header */}
       <div className="flex justify-between items-start mb-5">
         <div>
@@ -157,7 +157,7 @@ export default function DashboardActionItems({
               'p-4 border-2 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5',
               stats.overdue > 0
                 ? 'bg-rose-50 border-rose-300 dark:bg-rose-500/10 dark:border-rose-500/30'
-                : 'bg-card border-neutral-200'
+                : 'bg-card border-ink-200'
             )}
           >
             <div className="flex items-center justify-center gap-2 mb-1">
@@ -165,7 +165,7 @@ export default function DashboardActionItems({
               <div
                 className={cn(
                   'text-2xl font-bold',
-                  stats.overdue > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-neutral-500'
+                  stats.overdue > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-ink-500'
                 )}
               >
                 {stats.overdue}
@@ -186,7 +186,7 @@ export default function DashboardActionItems({
             {completionRate.toFixed(0)}%
           </Badge>
         </div>
-        <div className="w-full h-3 bg-neutral-200 rounded-full overflow-hidden">
+        <div className="w-full h-3 bg-ink-200 rounded-full overflow-hidden">
           <div
             className={cn(
               'h-full transition-all duration-300 ease-out rounded-full',

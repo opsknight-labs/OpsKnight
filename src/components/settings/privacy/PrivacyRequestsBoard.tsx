@@ -49,12 +49,7 @@ import {
 import { Textarea } from '@/components/ui/shadcn/textarea';
 
 type PrivacyRequestType =
-  | 'ACCESS'
-  | 'RECTIFICATION'
-  | 'ERASURE'
-  | 'RESTRICTION'
-  | 'OBJECTION'
-  | 'PORTABILITY';
+  'ACCESS' | 'RECTIFICATION' | 'ERASURE' | 'RESTRICTION' | 'OBJECTION' | 'PORTABILITY';
 
 type PrivacyRequestStatus =
   | 'RECEIVED'
@@ -91,7 +86,7 @@ export function isAutomatedRequest(
 }
 
 const STATUS_BADGE_CLASS: Record<PrivacyRequestStatus, string> = {
-  RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-zinc-300',
   IDENTITY_VERIFICATION: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
   IN_REVIEW: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   PROCESSING: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
@@ -157,32 +152,48 @@ export default function PrivacyRequestsBoard({
     return map;
   }, [subjectUsers, subjectMatches]);
 
-  useEffect(() => {
+  const [syncedInitial, setSyncedInitial] = useState({ initialRequests, initialNextCursor });
+  if (
+    syncedInitial.initialRequests !== initialRequests ||
+    syncedInitial.initialNextCursor !== initialNextCursor
+  ) {
+    setSyncedInitial({ initialRequests, initialNextCursor });
     setRequests(initialRequests);
     setNextCursor(initialNextCursor);
-  }, [initialRequests, initialNextCursor]);
+  }
 
-  useEffect(() => {
+  const [subjectSearchInputs, setSubjectSearchInputs] = useState({
+    subjectQuery,
+    subjectType,
+    subjectUsers,
+  });
+  if (
+    subjectSearchInputs.subjectQuery !== subjectQuery ||
+    subjectSearchInputs.subjectType !== subjectType ||
+    subjectSearchInputs.subjectUsers !== subjectUsers
+  ) {
+    setSubjectSearchInputs({ subjectQuery, subjectType, subjectUsers });
     if (subjectType !== 'USER') {
       setSubjectMatches([]);
-      return;
-    }
-    const query = subjectQuery.trim();
-    if (query.length === 0) {
+    } else if (subjectQuery.trim().length === 0) {
       setSubjectMatches(subjectUsers);
-      return;
     }
+  }
+
+  useEffect(() => {
+    if (subjectType !== 'USER') return;
+    const query = subjectQuery.trim();
+    if (query.length === 0) return;
     const timer = window.setTimeout(() => {
-      void fetch(
-        `/api/compliance/privacy-requests/subjects?search=${encodeURIComponent(query)}`,
-        { cache: 'no-store' }
-      )
+      void fetch(`/api/compliance/privacy-requests/subjects?search=${encodeURIComponent(query)}`, {
+        cache: 'no-store',
+      })
         .then(readJson)
         .then(body => setSubjectMatches((body?.data?.users as RequestUser[]) ?? []))
         .catch(() => showToast('Failed to search subjects. Please try again.', 'error'));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [subjectQuery, subjectType, subjectUsers]);
+  }, [subjectQuery, subjectType, subjectUsers, showToast]);
 
   const openCount = useMemo(
     () => requests.filter(r => r.status !== 'COMPLETED' && r.status !== 'REJECTED').length,

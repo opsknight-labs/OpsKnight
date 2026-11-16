@@ -37,7 +37,7 @@ export default function DashboardUrgencyDistribution({ data }: DashboardUrgencyD
                   key={item.label}
                   className={cn(
                     'flex justify-between items-center text-sm px-3 py-2',
-                    'bg-neutral-50 rounded-lg border border-border',
+                    'bg-ink-50 rounded-lg border border-border',
                     'transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5'
                   )}
                 >

@@ -85,7 +85,7 @@ const runtimeStatusPresentation: Record<
   },
   UNVERIFIED: {
     label: 'Unverified',
-    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-400',
+    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-zinc-400',
   },
   NOT_APPLICABLE: {
     label: 'Not Applicable',

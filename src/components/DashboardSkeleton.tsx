@@ -29,10 +29,10 @@ export function DashboardSkeleton() {
         <div className="flex flex-col gap-4 md:gap-6">
           {/* Filters Panel */}
           <div className="bg-card p-6 rounded-lg shadow-lg border border-border/50">
-            <div className="h-6 w-36 bg-neutral-200 rounded animate-pulse mb-4"></div>
+            <div className="h-6 w-36 bg-ink-200 rounded animate-pulse mb-4"></div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-16 bg-neutral-100 rounded-lg animate-pulse"></div>
+                <div key={i} className="h-16 bg-ink-100 rounded-lg animate-pulse"></div>
               ))}
             </div>
           </div>
@@ -40,11 +40,11 @@ export function DashboardSkeleton() {
           {/* Incidents Table */}
           <div className="bg-card rounded-lg shadow-lg border border-border/50 overflow-hidden">
             <div className="px-6 py-5 border-b border-border">
-              <div className="h-5 w-28 bg-neutral-200 rounded animate-pulse"></div>
+              <div className="h-5 w-28 bg-ink-200 rounded animate-pulse"></div>
             </div>
             <div className="p-4 space-y-3">
               {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="h-16 bg-neutral-100 rounded-lg animate-pulse"></div>
+                <div key={i} className="h-16 bg-ink-100 rounded-lg animate-pulse"></div>
               ))}
             </div>
           </div>
@@ -57,8 +57,8 @@ export function DashboardSkeleton() {
               key={i}
               className="bg-card p-6 rounded-lg shadow-lg border border-border/50 animate-pulse"
             >
-              <div className="h-5 w-32 bg-neutral-200 rounded mb-4 animate-pulse"></div>
-              <div className="h-24 bg-neutral-100 rounded-lg animate-pulse"></div>
+              <div className="h-5 w-32 bg-ink-200 rounded mb-4 animate-pulse"></div>
+              <div className="h-24 bg-ink-100 rounded-lg animate-pulse"></div>
             </div>
           ))}
         </aside>

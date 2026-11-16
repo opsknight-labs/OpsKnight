@@ -123,24 +123,24 @@ export default function IncidentCustomFieldsCard({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-slate-900 dark:border-slate-800 transition-all',
+        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-zinc-900 dark:border-zinc-800 transition-all',
         className
       )}
     >
       {/* Card Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between gap-3">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+          <div className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
           </div>
           <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 whitespace-nowrap">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 whitespace-nowrap">
               Custom Fields
             </h3>
             {allCustomFields.length > 0 && (
               <Badge
                 variant="secondary"
-                className="text-[10px] h-4.5 px-1.5 font-semibold text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 shrink-0"
+                className="text-[10px] h-4.5 px-1.5 font-semibold text-slate-600 bg-slate-100 dark:bg-zinc-800 dark:text-zinc-400 shrink-0"
               >
                 {allCustomFields.length}
               </Badge>
@@ -152,7 +152,7 @@ export default function IncidentCustomFieldsCard({
           <Link
             href="/settings/custom-fields"
             title="Configure Custom Fields"
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800"
           >
             <Settings className="h-3.5 w-3.5" />
           </Link>
@@ -163,11 +163,11 @@ export default function IncidentCustomFieldsCard({
       <div className="p-3.5">
         {allCustomFields.length === 0 ? (
           <div className="py-4 text-center">
-            <SlidersHorizontal className="h-6 w-6 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <SlidersHorizontal className="h-6 w-6 mx-auto text-slate-300 dark:text-zinc-600 mb-1.5" />
+            <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
               No Custom Fields
             </p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">
+            <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5 leading-relaxed">
               Track metadata like Environment, Affected Region, or Root Cause.
             </p>
             {canManage && (
@@ -176,7 +176,7 @@ export default function IncidentCustomFieldsCard({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs gap-1.5 border-slate-200 dark:border-slate-700"
+                  className="h-7 text-xs gap-1.5 border-slate-200 dark:border-zinc-700"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Configure</span>
@@ -197,12 +197,12 @@ export default function IncidentCustomFieldsCard({
               return (
                 <div
                   key={field.id}
-                  className="p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 space-y-1.5"
+                  className="p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 space-y-1.5"
                 >
                   {/* Field Label & Indicators */}
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      <span className="font-semibold text-slate-800 dark:text-zinc-200 truncate">
                         {field.name}
                       </span>
                       {field.required && (
@@ -238,7 +238,7 @@ export default function IncidentCustomFieldsCard({
                             void handleSave(field.id, val);
                           }}
                         >
-                          <SelectTrigger className="h-8 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                          <SelectTrigger className="h-8 text-xs bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700">
                             <SelectValue placeholder="Select option..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -250,8 +250,8 @@ export default function IncidentCustomFieldsCard({
                           </SelectContent>
                         </Select>
                       ) : field.type === 'BOOLEAN' ? (
-                        <div className="flex items-center justify-between h-8 px-2 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                          <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                        <div className="flex items-center justify-between h-8 px-2 rounded-md bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700">
+                          <span className="text-xs text-slate-700 dark:text-zinc-300 font-medium">
                             {currentValue === 'true' ? 'Yes' : 'No'}
                           </span>
                           <Switch
@@ -271,7 +271,7 @@ export default function IncidentCustomFieldsCard({
                             setFormValues(prev => new Map(prev).set(field.id, e.target.value))
                           }
                           onBlur={e => void handleSave(field.id, e.target.value)}
-                          className="h-8 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                          className="h-8 text-xs bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
                         />
                       ) : field.type === 'NUMBER' ? (
                         <Input
@@ -287,7 +287,7 @@ export default function IncidentCustomFieldsCard({
                               void handleSave(field.id, (e.target as HTMLInputElement).value);
                             }
                           }}
-                          className="h-8 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                          className="h-8 text-xs bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
                         />
                       ) : (
                         <Input
@@ -311,18 +311,18 @@ export default function IncidentCustomFieldsCard({
                               void handleSave(field.id, (e.target as HTMLInputElement).value);
                             }
                           }}
-                          className="h-8 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                          className="h-8 text-xs bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
                         />
                       )}
                     </div>
                   ) : (
-                    <div className="text-xs text-slate-800 dark:text-slate-200">
+                    <div className="text-xs text-slate-800 dark:text-zinc-200">
                       {currentValue ? (
                         <span className="font-medium">
                           {formatFieldValue(currentValue, field.type)}
                         </span>
                       ) : (
-                        <span className="text-slate-400 dark:text-slate-500 italic">Not set</span>
+                        <span className="text-slate-400 dark:text-zinc-500 italic">Not set</span>
                       )}
                     </div>
                   )}

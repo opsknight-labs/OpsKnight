@@ -769,7 +769,7 @@ function HealthHistoryRibbon({
                 <div className="rounded bg-neutral-900 dark:bg-neutral-800 px-2.5 py-1 text-[10px] font-mono font-medium text-white shadow-md border border-white/10 whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
                     <span>{sample.hourLabel}</span>
-                    <span className="text-neutral-400">•</span>
+                    <span className="text-ink-400">•</span>
                     <span
                       className={
                         isHealthy
@@ -783,7 +783,7 @@ function HealthHistoryRibbon({
                     >
                       {statusLabel}
                     </span>
-                    <span className="text-neutral-400">({sample.scorePercent}%)</span>
+                    <span className="text-ink-400">({sample.scorePercent}%)</span>
                   </div>
                   {sample.reason && (
                     <div className="text-[9px] text-neutral-300 dark:text-neutral-400 max-w-[220px] truncate pt-0.5 font-sans">

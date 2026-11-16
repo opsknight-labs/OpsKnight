@@ -148,22 +148,22 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
             {/* Top row: Priority Pill + Service + ID */}
             <div className="flex items-center gap-1.5 mb-1 leading-none">
               <PriorityPill priority={primaryIncident.priority} urgency={primaryIncident.urgency} />
-              <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[160px]">
+              <span className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300 truncate max-w-[160px]">
                 {primaryIncident.service?.name || 'Incident'}
               </span>
-              <span className="text-slate-300 dark:text-slate-700">&middot;</span>
-              <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+              <span className="text-slate-300 dark:text-zinc-700">&middot;</span>
+              <span className="font-mono text-[10px] text-slate-400 dark:text-zinc-500">
                 #{primaryIncident.id.slice(-5).toUpperCase()}
               </span>
             </div>
 
             {/* Title: 1 line truncate */}
-            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-1 break-words">
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-zinc-100 leading-snug line-clamp-1 break-words">
               {cleanTitle(primaryIncident.title)}
             </h4>
 
             {/* Bottom Actions Row */}
-            <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
+            <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-[11px]">
               <div className="flex items-center gap-3">
                 <Link
                   href={`/incidents/${primaryIncident.id}`}
@@ -182,7 +182,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
                     type="button"
                     onClick={() => handleAck(primaryIncident.id)}
                     disabled={ackingId === primaryIncident.id}
-                    className="font-bold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                    className="font-bold text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {ackingId === primaryIncident.id ? (
                       <Loader2 size={11} className="animate-spin shrink-0" />
@@ -194,7 +194,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
                 )}
               </div>
 
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+              <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
                 {elapsed}
               </span>
             </div>
@@ -207,7 +207,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               e.stopPropagation();
               sonnerToast.dismiss(toastId);
             }}
-            className="shrink-0 h-6 w-6 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--toast-focus)] flex items-center justify-center transition-colors cursor-pointer"
+            className="shrink-0 h-6 w-6 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--toast-focus)] flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Dismiss incident alert"
           >
             <X size={14} className="shrink-0 stroke-[2.5]" />
@@ -237,7 +237,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
 
       <div className="p-2.5">
         {/* Header */}
-        <div className="pl-1.5 pr-0.5 flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800/80">
+        <div className="pl-1.5 pr-0.5 flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-100 dark:border-zinc-800/80">
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-2 w-2">
               <span
@@ -264,7 +264,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               e.stopPropagation();
               sonnerToast.dismiss(toastId);
             }}
-            className="shrink-0 h-5 w-5 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--toast-focus)] flex items-center justify-center transition-colors cursor-pointer"
+            className="shrink-0 h-5 w-5 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--toast-focus)] flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Dismiss all incident alerts"
           >
             <X size={13} className="shrink-0 stroke-[2.5]" />
@@ -278,28 +278,28 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               key={item.id}
               href={`/incidents/${item.id}`}
               onClick={() => sonnerToast.dismiss(toastId)}
-              className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group cursor-pointer text-xs"
+              className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-zinc-800/50 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors group cursor-pointer text-xs"
             >
               <div className="min-w-0 flex-1 flex items-center gap-1.5">
                 <PriorityPill priority={item.priority} urgency={item.urgency} />
-                <span className="font-semibold text-[11px] text-slate-900 dark:text-slate-200 truncate group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
+                <span className="font-semibold text-[11px] text-slate-900 dark:text-zinc-200 truncate group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
                   {cleanTitle(item.title)}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0 max-w-[100px] truncate">
+              <span className="text-[10px] text-slate-400 dark:text-zinc-500 shrink-0 max-w-[100px] truncate">
                 {item.service?.name || 'Service'}
               </span>
             </Link>
           ))}
           {incidents.length > 2 && (
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center font-medium pt-0.5">
+            <p className="text-[10px] text-slate-400 dark:text-zinc-500 text-center font-medium pt-0.5">
               +{incidents.length - 2} more incidents on board
             </p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] px-1">
+        <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-[11px] px-1">
           <Link
             href="/incidents"
             onClick={() => sonnerToast.dismiss(toastId)}
@@ -315,7 +315,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
           <button
             type="button"
             onClick={() => sonnerToast.dismiss(toastId)}
-            className="text-[10px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            className="text-[10px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
           >
             Dismiss all
           </button>

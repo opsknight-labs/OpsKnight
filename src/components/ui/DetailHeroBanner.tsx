@@ -302,7 +302,7 @@ export function DetailHeroBannerSkeleton({
       )}
 
       {/* Main Glassmorphic Hero Banner Container */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 sm:p-5 md:p-6 shadow-xl ring-1 ring-white/5">
+      <div className="ok-inverse-surface relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] dark:border-zinc-700/60 dark:from-[#18181d] dark:to-[#111114] p-4 sm:p-5 md:p-6 shadow-xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.02] blur-3xl" />
 
         <div className="relative flex flex-col justify-between gap-4 lg:flex-row lg:items-center">

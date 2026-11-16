@@ -913,7 +913,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
                             </div>
                           </summary>
-                          <div className="border-t border-border/70 bg-slate-950 p-2 text-slate-200">
+                          <div className="border-t border-border/70 bg-zinc-950 p-2 text-zinc-200">
                             <pre className="overflow-x-auto text-[10px] font-mono leading-relaxed select-all">
                               <span className="text-purple-400">curl</span> -X POST {webhookUrl} \
                               <br />

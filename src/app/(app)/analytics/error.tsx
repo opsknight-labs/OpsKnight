@@ -32,10 +32,10 @@ export default function AnalyticsError({
           <AlertCircle className="w-6 h-6 text-rose-600 dark:text-rose-400" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-zinc-100">
             {isChunk ? 'Application Update Available' : "Analytics couldn't load"}
           </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-600 dark:text-zinc-400 mt-1">
             {isChunk ? userFacing.description : userFacing.title}
           </p>
         </div>
@@ -45,7 +45,7 @@ export default function AnalyticsError({
               <button
                 type="button"
                 onClick={() => purgeCachesAndReload()}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 transition cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4" />
                 Reload page
@@ -53,7 +53,7 @@ export default function AnalyticsError({
               <button
                 type="button"
                 onClick={reset}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 font-medium text-sm hover:bg-slate-50 dark:hover:bg-zinc-700 transition cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
                 Try again
@@ -63,7 +63,7 @@ export default function AnalyticsError({
             <button
               type="button"
               onClick={reset}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 transition cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
               Try again

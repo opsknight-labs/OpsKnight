@@ -39,7 +39,7 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
 
   if (policies.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-ink-200 bg-gradient-to-br from-ink-50 to-white p-10 text-center">
+      <div className="rounded-2xl border border-dashed border-ink-200 bg-gradient-to-br from-ink-50 to-card p-10 text-center">
         <div className="text-4xl opacity-30 mb-3">
           <LayoutList className="mx-auto h-12 w-12" />
         </div>

@@ -72,7 +72,7 @@ export function ComplianceEvidenceViewer({
 
   const typeConfig = typePresentation[evidence.type] ?? {
     label: evidence.type,
-    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-400',
+    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-zinc-400',
   };
 
   const handleCopyHash = async () => {

@@ -23,17 +23,17 @@ export default function IncidentPostmortemCard({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-slate-900 dark:border-slate-800 transition-all',
+        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-zinc-900 dark:border-zinc-800 transition-all',
         className
       )}
     >
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between gap-2">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="p-1 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
             <FileText className="h-4 w-4 shrink-0" />
           </div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 whitespace-nowrap">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 whitespace-nowrap">
             Postmortem
           </h3>
         </div>
@@ -50,9 +50,7 @@ export default function IncidentPostmortemCard({
             {postmortemStatus}
           </span>
         ) : (
-          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-            Pending
-          </span>
+          <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">Pending</span>
         )}
       </div>
 
@@ -60,7 +58,7 @@ export default function IncidentPostmortemCard({
       <div className="p-3.5 space-y-3">
         {isFiled ? (
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+            <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-zinc-400">
               {isPublished ? (
                 <>
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
@@ -78,7 +76,7 @@ export default function IncidentPostmortemCard({
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full justify-between h-8 text-xs font-medium border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="w-full justify-between h-8 text-xs font-medium border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800"
               >
                 <span>{isPublished ? 'View Full Report' : 'Continue Review'}</span>
                 <ArrowUpRight className="h-3.5 w-3.5 text-ink-400" />
@@ -87,7 +85,7 @@ export default function IncidentPostmortemCard({
           </div>
         ) : (
           <div className="space-y-2.5">
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
               Document root causes, lessons learned, and track action items to prevent recurrence.
             </p>
 

@@ -26,7 +26,7 @@ export default function PageLoadingSkeleton({
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-4"
+              className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-4"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
               <Skeleton className="h-4 w-16 mb-2" />
@@ -36,7 +36,7 @@ export default function PageLoadingSkeleton({
         </div>
 
         {/* Chart placeholder */}
-        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-6">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           <Skeleton className="h-6 w-40 mb-4" />
           <Skeleton className="h-64 w-full rounded-lg" />
@@ -56,7 +56,7 @@ export default function PageLoadingSkeleton({
     return (
       <div className={cn('w-full px-4 md:px-6 lg:px-8 py-6 space-y-6', className)}>
         {/* Header */}
-        <div className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-6">
+        <div className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-6">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           <div className="flex items-start justify-between">
             <div className="space-y-3">
@@ -80,7 +80,7 @@ export default function PageLoadingSkeleton({
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-5"
+                className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-5"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
                 <Skeleton className="h-5 w-32 mb-3" />
@@ -96,7 +96,7 @@ export default function PageLoadingSkeleton({
             {Array.from({ length: 2 }).map((_, i) => (
               <div
                 key={i}
-                className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-5"
+                className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-5"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
                 <Skeleton className="h-5 w-24 mb-3" />
@@ -119,7 +119,7 @@ export default function PageLoadingSkeleton({
         </div>
 
         {/* Form fields */}
-        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-white to-ink-50 p-6 space-y-6">
+        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-6 space-y-6">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="space-y-2">
@@ -172,7 +172,7 @@ export default function PageLoadingSkeleton({
       </div>
 
       {/* List items */}
-      <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-white to-ink-50">
+      <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-card to-ink-50">
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
 

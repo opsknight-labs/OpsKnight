@@ -466,45 +466,45 @@ aside.sidebar [data-badge="true"][class*="text-green"] {
 /* Danger/red badges - solid red background */
 .sidebar [data-badge="true"][class*="bg-red"],
 aside.sidebar [data-badge="true"][class*="bg-red"] {
-  background-color: #ef4444 !important;
-  border-color: #ef4444 !important;
+  background-color: #dc2626 !important;
+  border-color: #dc2626 !important;
   color: #ffffff !important;
 }
 
 /* Info/blue badges - solid blue background */
 .sidebar [data-badge="true"][class*="bg-blue"],
 aside.sidebar [data-badge="true"][class*="bg-blue"] {
-  background-color: #3b82f6 !important;
-  border-color: #3b82f6 !important;
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
   color: #ffffff !important;
 }
 
 /* Success/emerald badges - solid emerald background */
 .sidebar [data-badge="true"][class*="bg-emerald"],
 aside.sidebar [data-badge="true"][class*="bg-emerald"] {
-  background-color: #10b981 !important;
-  border-color: #10b981 !important;
+  background-color: #047857 !important;
+  border-color: #047857 !important;
   color: #ffffff !important;
 }
 
 /* Warning/amber badges - solid amber background */
 .sidebar [data-badge="true"][class*="bg-amber"],
 aside.sidebar [data-badge="true"][class*="bg-amber"] {
-  background-color: #f59e0b !important;
-  border-color: #f59e0b !important;
+  background-color: #b45309 !important;
+  border-color: #b45309 !important;
   color: #ffffff !important;
 }
 
 /* Classic sidebar-badge class */
 .sidebar-badge {
-  background: #ef4444 !important;
+  background: #dc2626 !important;
   color: #ffffff !important;
   filter: none !important;
   -webkit-filter: none !important;
 }
 
 .sidebar-badge--dot {
-  background: #ef4444 !important;
+  background: #dc2626 !important;
 }
 
 /* ========================================
@@ -520,26 +520,26 @@ aside.sidebar [data-badge="true"][class*="bg-amber"] {
 }
 
 #app-sidebar [data-badge="true"][class*="bg-red"] {
-  background-color: #ef4444 !important;
-  border-color: #ef4444 !important;
+  background-color: #dc2626 !important;
+  border-color: #dc2626 !important;
   color: #ffffff !important;
 }
 
 #app-sidebar [data-badge="true"][class*="bg-blue"] {
-  background-color: #3b82f6 !important;
-  border-color: #3b82f6 !important;
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
   color: #ffffff !important;
 }
 
 #app-sidebar [data-badge="true"][class*="bg-emerald"] {
-  background-color: #10b981 !important;
-  border-color: #10b981 !important;
+  background-color: #047857 !important;
+  border-color: #047857 !important;
   color: #ffffff !important;
 }
 
 #app-sidebar [data-badge="true"][class*="bg-amber"] {
-  background-color: #f59e0b !important;
-  border-color: #f59e0b !important;
+  background-color: #b45309 !important;
+  border-color: #b45309 !important;
   color: #ffffff !important;
 }
 

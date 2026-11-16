@@ -381,7 +381,7 @@ export default function PostmortemForm({
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {/* Incident Selection */}
         {!incidentId && resolvedIncidents.length > 0 && (
-          <Card className="bg-gradient-to-br from-white to-ink-50 shadow-md">
+          <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
             <CardHeader>
               <CardTitle className="text-xl">Select Incident</CardTitle>
             </CardHeader>
@@ -438,7 +438,7 @@ export default function PostmortemForm({
         )}
 
         {/* Basic Information */}
-        <Card className="bg-gradient-to-br from-white to-ink-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="flex flex-row justify-between items-center space-y-0 pb-4">
             <CardTitle className="text-xl">Basic Information</CardTitle>
             <Button
@@ -550,7 +550,7 @@ export default function PostmortemForm({
         </Card>
 
         {/* Timeline */}
-        <Card className="bg-gradient-to-br from-white to-ink-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl">Incident Timeline</CardTitle>
           </CardHeader>
@@ -563,7 +563,7 @@ export default function PostmortemForm({
         <PostmortemImpactInput metrics={impactMetrics} onChange={setImpactMetrics} />
 
         {/* Root Cause Analysis & 5-Whys Studio */}
-        <Card className="bg-gradient-to-br from-white to-ink-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="pb-3">
             <CardTitle className="text-xl flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -649,7 +649,7 @@ export default function PostmortemForm({
         />
 
         {/* Lessons Learned */}
-        <Card className="bg-gradient-to-br from-white to-ink-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl">Lessons Learned</CardTitle>
           </CardHeader>

@@ -11,7 +11,7 @@ interface MobileSkeletonProps {
  * Base mobile skeleton wrapper for consistent padding/margins if needed
  */
 export function MobileSkeleton({ className }: MobileSkeletonProps) {
-  return <Skeleton className={cn('bg-slate-200 dark:bg-slate-800', className)} />;
+  return <Skeleton className={cn('bg-slate-200 dark:bg-zinc-800', className)} />;
 }
 
 export function IncidentListSkeleton() {
@@ -27,7 +27,7 @@ export function IncidentListSkeleton() {
       {[1, 2, 3, 4, 5].map(i => (
         <div
           key={i}
-          className="relative flex flex-col gap-2 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+          className="relative flex flex-col gap-2 p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
         >
           <div className="flex items-center justify-between">
             <MobileSkeleton className="h-4 w-16 rounded-sm" />
@@ -55,7 +55,7 @@ export function DashboardSkeleton() {
       </div>
 
       {/* On-Call Widget */}
-      <div className="w-full h-20 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 p-4 flex items-center gap-3">
+      <div className="w-full h-20 rounded-xl bg-slate-100 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-800 p-4 flex items-center gap-3">
         <MobileSkeleton className="h-10 w-10 rounded-lg" />
         <div className="flex-1 space-y-2">
           <MobileSkeleton className="h-4 w-32 rounded" />
@@ -68,7 +68,7 @@ export function DashboardSkeleton() {
         {[1, 2, 3, 4].map(i => (
           <div
             key={i}
-            className="h-24 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 flex flex-col justify-between"
+            className="h-24 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-4 flex flex-col justify-between"
           >
             <MobileSkeleton className="h-8 w-12 rounded" />
             <MobileSkeleton className="h-4 w-16 rounded" />
@@ -83,7 +83,7 @@ export function DashboardSkeleton() {
       </div>
 
       {/* Incident Card */}
-      <div className="relative flex flex-col gap-2 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <div className="relative flex flex-col gap-2 p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         <div className="flex items-center justify-between">
           <MobileSkeleton className="h-4 w-16 rounded-sm" />
           <MobileSkeleton className="h-4 w-12 rounded-full" />

@@ -78,7 +78,7 @@ export default function PolicyDirectoryList({
 
   if (totalCount === 0 && !hasActiveFilter) {
     return (
-      <Card className="border-dashed border-2 bg-gradient-to-br from-ink-50/50 via-white to-ink-50/30">
+      <Card className="border-dashed border-2 bg-gradient-to-br from-ink-50/50 via-card to-ink-50/30">
         <CardContent className="p-8 md:p-12 text-center space-y-6">
           <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-xs">
             <ShieldAlert className="h-7 w-7" />

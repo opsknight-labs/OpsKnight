@@ -278,7 +278,7 @@ export default function PostmortemDetailView({
         </div>
       )}
 
-      <Card className="bg-gradient-to-br from-white to-ink-50 shadow-md overflow-hidden relative border-ink-200">
+      <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md overflow-hidden relative border-ink-200">
         <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle,rgba(211,47,47,0.05)_0%,transparent_70%)] rounded-full translate-x-[30%] -translate-y-[30%] pointer-events-none" />
 
         <CardContent className="p-6 md:p-8">

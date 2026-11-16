@@ -162,7 +162,7 @@ export default function ScheduleTimezoneNotice({
             type="button"
             onClick={handleDismiss}
             aria-label="Dismiss timezone notice"
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 transition-all duration-150 active:scale-95 cursor-pointer dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-100 dark:border-slate-700 shrink-0"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 transition-all duration-150 active:scale-95 cursor-pointer dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-100 dark:border-zinc-700 shrink-0"
             title="Dismiss notice"
           >
             <X className="h-3.5 w-3.5 stroke-[2.25]" />
