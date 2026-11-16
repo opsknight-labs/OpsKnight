@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { BookOpen, Compass, FileText, GitCommitHorizontal, History, Link2 } from 'lucide-react';
 import type { IncidentInsights } from '@/lib/intelligence/incident-ux/strip';
 import type { InsightsSectionId } from '@/lib/intelligence/incident-ux/strip-contract';
@@ -94,6 +94,7 @@ export default function InsightsSections({
   sections,
   routePrefix = '',
   assistantName,
+  recurrence,
 }: {
   insights: IncidentInsights;
   /** Sections with content, from `insightsSections(insights)`. */
@@ -101,6 +102,8 @@ export default function InsightsSections({
   routePrefix?: string;
   /** Set when the assistant can be opened from this surface. */
   assistantName?: string;
+  /** Postmortem recurrence (a streamed server component); renders nothing when there is nothing to show. */
+  recurrence?: ReactNode;
 }) {
   const { incidentId } = insights;
   const has = (id: InsightsSectionId) => sections.includes(id);
@@ -362,6 +365,8 @@ export default function InsightsSections({
           )}
         </div>
       )}
+
+      {recurrence && <Suspense fallback={null}>{recurrence}</Suspense>}
 
       {has('why') && insights.response && (
         <Section

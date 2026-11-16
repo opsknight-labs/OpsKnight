@@ -9,6 +9,8 @@ import {
   showsFreshnessDot,
 } from '@/lib/intelligence/incident-ux/strip';
 import { toIntelligenceTimelineEvents } from '@/lib/intelligence/incident-ux/timeline-overlay';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import IncidentRecurrence from '@/components/incident/IncidentRecurrence';
 import AdhocRunbookLauncher from '@/components/incident/runbooks/AdhocRunbookLauncher';
 import IncidentTimeline from '@/components/incident/detail/IncidentTimeline';
 import InsightsInspectorHost from './InsightsInspectorHost';
@@ -36,6 +38,8 @@ export default async function IncidentInsights({
   const insights = await incidentInsightsForRequest(incidentId);
   if (!insights) return null;
   const sections = insightsSections(insights);
+  // Already resolved (cached) by incidentInsightsForRequest; the recurrence loader checks the postmortems switch.
+  const actor = await getCurrentAuthorizationActor().catch(() => null);
   const routePrefix = presentation === 'mobile' ? '/m' : '';
   const assistant =
     presentation === 'mobile' ? insights.squire.mobileEnabled : insights.squire.enabled;
@@ -55,6 +59,7 @@ export default async function IncidentInsights({
           sections={sections}
           routePrefix={routePrefix}
           assistantName={assistant ? insights.squire.name : undefined}
+          recurrence={actor && <IncidentRecurrence incidentId={incidentId} actor={actor} />}
         />
       </InsightsInspectorHost>
     </>
