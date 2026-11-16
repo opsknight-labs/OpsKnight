@@ -1,12 +1,14 @@
 import { requirePageAccess } from '@/lib/access/server';
-import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { Bot } from 'lucide-react';
+import { ListEmpty } from '@/components/settings/mcp/McpListKit';
 import McpAssistantDetail from '@/components/settings/mcp/McpAssistantDetail';
 import { personLabel } from '@/components/settings/mcp/sections/McpConnectionsSection';
 import { describeMcpScope } from '@/lib/mcp/auth/scopes';
 import { revokeMcpAccess, restoreMcpClient } from '../../actions';
 import { loadMcpConnectionActivity } from '../../activity-actions';
 import { listMcpClientRecentCalls } from '../../activity';
-import { USAGE_WINDOW_KEYS } from '../../list-params';
+import { USAGE_WINDOW_KEYS, mcpHref } from '../../list-params';
 import { getMcpClient, listMcpGrants, loadMcpPagePermissions, loadMcpViewer } from '../../queries';
 import { getMcpUsage } from '../../usage';
 
@@ -21,16 +23,29 @@ function safeDecode(value: string) {
   }
 }
 
+// Rendered in place rather than through notFound(): the settings route streams behind its
+// loading screen, and a notFound() thrown mid-stream reached the error boundary (React #441).
+function AssistantNotFound() {
+  return (
+    <ListEmpty icon={<Bot className="h-5 w-5" />} title="Assistant not found">
+      It may have been removed, or you may not have access to it.{' '}
+      <Link href={mcpHref({ tab: 'assistants' })} className="font-medium text-primary underline">
+        Back to assistants
+      </Link>
+    </ListEmpty>
+  );
+}
+
 /** One assistant, for administrators. Everyone else, and unknown ids, get "not found". */
 export default async function McpAssistantPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePageAccess('/settings/integrations/mcp/assistants/[id]');
   const permissions = await loadMcpPagePermissions();
-  if (!permissions.authenticated || !permissions.isAdmin) notFound();
+  if (!permissions.authenticated || !permissions.isAdmin) return <AssistantNotFound />;
   const viewer = await loadMcpViewer(permissions);
   const id = safeDecode((await params).id);
   const now = new Date();
   const client = await getMcpClient(viewer, id, now);
-  if (!client) notFound();
+  if (!client) return <AssistantNotFound />;
 
   const [connections, usage, calls] = await Promise.all([
     listMcpGrants(viewer, { status: 'all', q: '', clientId: client.id, page: 1 }, now),

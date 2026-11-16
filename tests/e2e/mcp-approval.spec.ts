@@ -144,8 +144,12 @@ test('remote request requires a different native reviewer and commits one recove
       );
       expect(overflow, `horizontal scroll at ${width}px`).toBeLessThanOrEqual(0);
       for (const name of ['Approve frozen plan (runbook run)', /^Reject/]) {
-        const box = await reviewMain.getByRole('button', { name }).first().boundingBox();
-        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+        // Laid-out height, not the on-screen box: the page scales in from 95% when it opens.
+        const height = await reviewMain
+          .getByRole('button', { name })
+          .first()
+          .evaluate(button => (button as HTMLElement).offsetHeight);
+        expect(height).toBeGreaterThanOrEqual(44);
       }
       if (process.env.MCP_E2E_SCREENSHOTS)
         await reviewPage.screenshot({

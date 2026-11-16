@@ -36,7 +36,7 @@ function Buttons({
         disabled={pending}
         variant="outline"
         size="lg"
-        className="min-h-11 w-full sm:w-auto"
+        className="min-h-[44px] w-full sm:w-auto"
       >
         {choice === 'reject' ? 'Rejecting…' : rejectLabel}
       </Button>
@@ -45,7 +45,7 @@ function Buttons({
         <Button
           type="button"
           size="lg"
-          className="min-h-11 w-full sm:w-auto"
+          className="min-h-[44px] w-full sm:w-auto"
           disabled={pending}
           onClick={() =>
             signOut({ callbackUrl: `/login?callbackUrl=${encodeURIComponent(reviewPath)}` })
@@ -59,7 +59,7 @@ function Buttons({
           name="decision"
           value="approve"
           size="lg"
-          className="min-h-11 w-full sm:w-auto"
+          className="min-h-[44px] w-full sm:w-auto"
           disabled={pending}
           aria-label={`${approveLabel} (${noun})`}
         >
