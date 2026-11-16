@@ -31,6 +31,7 @@ const schedule: MaintenanceScheduleView = {
   paused: false,
   nextLabel: 'Sun 02:30',
   serviceNames: ['Checkout API', 'Payments'],
+  hiddenServiceCount: 0,
   description: 'Kernel updates',
   serviceIds: ['svc-a', 'svc-b'],
   frequency: 'WEEKLY',
@@ -58,11 +59,14 @@ const activeWindow: MaintenanceWindowView = {
   endBehavior: 'RESUME_FIRING',
   publishToStatusPage: false,
   serviceNames: ['Checkout API'],
+  hiddenServiceCount: 0,
   heldCount: 2,
   recurring: false,
 };
 
-function renderPanel() {
+function renderPanel(
+  overrides: Partial<React.ComponentProps<typeof ServiceMaintenancePanel>> = {}
+) {
   return render(
     <ServiceMaintenancePanel
       serviceId="svc-a"
@@ -71,6 +75,7 @@ function renderPanel() {
       schedules={[schedule]}
       services={services}
       userTimeZone="UTC"
+      {...overrides}
     />
   );
 }
@@ -163,5 +168,49 @@ describe('ServiceMaintenancePanel', () => {
     await waitFor(() =>
       expect(actions.deleteMaintenanceScheduleAction).toHaveBeenCalledWith('svc-a', 'sched-1')
     );
+  });
+
+  it('reads a one-off start time in the profile time zone, not the browser zone', async () => {
+    renderPanel({ userTimeZone: 'America/Los_Angeles' });
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule maintenance' }));
+    await screen.findByText('Schedule maintenance', { selector: 'h2' });
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Reboot' } });
+    fireEvent.click(screen.getByLabelText('Start now'));
+    expect(screen.getByText('Time in America/Los_Angeles')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Start time'), {
+      target: { value: '2030-01-15T02:00' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Schedule' }));
+    });
+
+    await waitFor(() => expect(actions.createMaintenanceWindowAction).toHaveBeenCalledTimes(1));
+    const [, input] = actions.createMaintenanceWindowAction.mock.calls[0] as unknown as [
+      string,
+      { startsAt: Date; endsAt: Date },
+    ];
+    // 02:00 PST is 10:00 UTC, whatever zone the browser (or test runner) is in.
+    expect(input.startsAt.toISOString()).toBe('2030-01-15T10:00:00.000Z');
+    expect(input.endsAt.toISOString()).toBe('2030-01-15T11:00:00.000Z');
+  });
+
+  it('names only visible services and counts the hidden ones', () => {
+    renderPanel({
+      windows: [{ ...activeWindow, hiddenServiceCount: 2 }],
+      schedules: [{ ...schedule, serviceNames: ['Checkout API'], hiddenServiceCount: 1 }],
+    });
+    expect(screen.getByText(/Checkout API, \+2 other services ·/)).toBeTruthy();
+    expect(screen.getByText(/· Checkout API, \+1 other service$/)).toBeTruthy();
+  });
+
+  it('filters a long service picker by name', async () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ id: `svc-${i}`, name: `Service ${i}` }));
+    renderPanel({ services: [{ id: 'svc-a', name: 'Checkout API' }, ...many] });
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule maintenance' }));
+    fireEvent.change(await screen.findByLabelText('Filter services'), {
+      target: { value: 'service 1' },
+    });
+    const names = screen.getAllByRole('checkbox').map(c => c.parentElement?.textContent);
+    expect(names).toEqual(['Service 1', 'Service 10', 'Service 11']);
   });
 });

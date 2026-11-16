@@ -32,6 +32,7 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import TimeZoneSelect from '@/components/TimeZoneSelect';
 import { notify } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { resolveLocalDateTimeInTimeZone } from '@/lib/timezone';
 import {
   createMaintenanceScheduleAction,
   createMaintenanceWindowAction,
@@ -55,6 +56,8 @@ export type MaintenanceWindowView = {
   endBehavior: 'RESUME_FIRING' | 'RESOLVE_HELD';
   publishToStatusPage: boolean;
   serviceNames: string[];
+  /** Services on the window the viewer cannot read; only counted. */
+  hiddenServiceCount: number;
   heldCount: number;
   /** Materialised from a recurring schedule. */
   recurring: boolean;
@@ -68,6 +71,7 @@ export type MaintenanceScheduleView = {
   paused: boolean;
   nextLabel: string | null;
   serviceNames: string[];
+  hiddenServiceCount: number;
   /** Raw rule, used to prefill the edit dialog. */
   description: string | null;
   serviceIds: string[];
@@ -187,6 +191,20 @@ function ConfirmButton({
   );
 }
 
+/** Visible service names, plus a count of the ones the viewer cannot see. */
+function servicesLabel(names: string[], hidden: number): string {
+  if (hidden === 0) return names.join(', ');
+  return [...names, `+${hidden} other service${hidden === 1 ? '' : 's'}`].join(', ');
+}
+
+/** Reads a datetime-local value as wall time in `timeZone`, not the browser's zone. */
+function parseLocalDateTimeInput(value: string, timeZone: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [year, month, day, hour, minute] = match.slice(1).map(Number);
+  return resolveLocalDateTimeInTimeZone({ year, month, day, hour, minute }, timeZone);
+}
+
 function durationLabel(minutes: number): string {
   return DURATIONS.find(d => d.minutes === minutes)?.label ?? `${minutes} minutes`;
 }
@@ -220,6 +238,7 @@ function ScheduleDialog({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startNow, setStartNow] = useState(true);
+  const [serviceFilter, setServiceFilter] = useState('');
   const [selected, setSelected] = useState<Set<string>>(() => initial().selected);
   const [publish, setPublish] = useState(() => initial().publish);
   const [repeat, setRepeat] = useState<RepeatMode>(() => initial().repeat);
@@ -248,6 +267,7 @@ function ScheduleDialog({
       setWeekdays(state.weekdays);
       setEndsOnDate(state.endsOnDate);
       setStartNow(true);
+      setServiceFilter('');
       setError(null);
     }
     setOpen(next);
@@ -308,13 +328,15 @@ function ScheduleDialog({
       });
       return;
     }
-    const startsAt = startNow ? new Date() : new Date(String(form.get('startsAt') ?? ''));
-    const minutes = Number(form.get('duration'));
-    const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
-    if (Number.isNaN(startsAt.getTime())) {
-      setError('Choose a start time.');
+    const startsAt = startNow
+      ? new Date()
+      : parseLocalDateTimeInput(String(form.get('startsAt') ?? ''), userTimeZone);
+    if (!startsAt) {
+      setError(`Choose a start time that exists in ${userTimeZone}.`);
       return;
     }
+    const minutes = Number(form.get('duration'));
+    const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
     startTransition(async () => {
       const result = await createMaintenanceWindowAction(serviceId, {
         ...common,
@@ -529,7 +551,18 @@ function ScheduleDialog({
                 <Label htmlFor="mw-start-now">Start now</Label>
               </div>
               {!startNow && (
-                <Input name="startsAt" type="datetime-local" required aria-label="Start time" />
+                <>
+                  <Input
+                    name="startsAt"
+                    type="datetime-local"
+                    required
+                    aria-label="Start time"
+                    aria-describedby="mw-starts-at-zone"
+                  />
+                  <p id="mw-starts-at-zone" className="text-xs text-muted-foreground">
+                    Time in {userTimeZone}
+                  </p>
+                </>
               )}
             </fieldset>
           )}
@@ -552,16 +585,28 @@ function ScheduleDialog({
 
           <fieldset className="space-y-1.5">
             <legend className="text-sm font-medium">Services ({selected.size})</legend>
+            {services.length > 10 && (
+              <Input
+                type="search"
+                value={serviceFilter}
+                onChange={e => setServiceFilter(e.target.value)}
+                placeholder="Filter services"
+                aria-label="Filter services"
+                className="h-9"
+              />
+            )}
             <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
-              {services.map(s => (
-                <label key={s.id} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={selected.has(s.id)}
-                    onCheckedChange={checked => toggle(s.id, checked === true)}
-                  />
-                  {s.name}
-                </label>
-              ))}
+              {services
+                .filter(s => s.name.toLowerCase().includes(serviceFilter.trim().toLowerCase()))
+                .map(s => (
+                  <label key={s.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={selected.has(s.id)}
+                      onCheckedChange={checked => toggle(s.id, checked === true)}
+                    />
+                    {s.name}
+                  </label>
+                ))}
             </div>
           </fieldset>
 
@@ -672,7 +717,7 @@ function WindowRow({
         </p>
         {window.description && <p className="text-sm">{window.description}</p>}
         <p className="text-xs text-muted-foreground">
-          {window.serviceNames.join(', ')} ·{' '}
+          {servicesLabel(window.serviceNames, window.hiddenServiceCount)} ·{' '}
           {window.endBehavior === 'RESOLVE_HELD'
             ? 'auto-resolve held at end'
             : 'page still-firing at end'}{' '}
@@ -752,7 +797,7 @@ function ScheduleRow({
             : schedule.nextLabel
               ? `Next: ${schedule.nextLabel}`
               : 'No further occurrences'}{' '}
-          · {schedule.serviceNames.join(', ')}
+          · {servicesLabel(schedule.serviceNames, schedule.hiddenServiceCount)}
         </p>
       </div>
       {canManage && (

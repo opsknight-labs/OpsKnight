@@ -1460,7 +1460,7 @@ model Incident {
   runbookSuggestions                  RunbookSuggestion[]
   /// Set when the incident was created SUPPRESSED because its service was in a maintenance window.
   maintenanceWindowId                 String?
-  maintenanceWindow                   MaintenanceWindow?              @relation(fields: [maintenanceWindowId], references: [id], onDelete: SetNull)
+  maintenanceWindow                   MaintenanceWindow?              @relation(fields: [maintenanceWindowId], references: [id], onDelete: Restrict)
 
   @@index([maintenanceWindowId, status])
   @@index([dedupKey])

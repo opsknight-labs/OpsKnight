@@ -19,7 +19,10 @@ import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { requirePageAccess } from '@/lib/access/server';
 import { assertCanModifyService } from '@/lib/rbac';
-import { listMaintenanceWindows, maintenanceWindowPhase } from '@/lib/service-maintenance/windows';
+import {
+  listServiceMaintenanceOverview,
+  maintenanceWindowPhase,
+} from '@/lib/service-maintenance/windows';
 import MobileServiceMaintenance, {
   type MobileMaintenanceWindow,
 } from '@/components/mobile/MobileServiceMaintenance';
@@ -85,7 +88,7 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
   }
   const now = new Date();
   const maintenanceWindows: MobileMaintenanceWindow[] = [];
-  for (const w of await listMaintenanceWindows({ serviceIds: [service.id], take: 20, now })) {
+  for (const w of await listServiceMaintenanceOverview(service.id, now)) {
     const phase = maintenanceWindowPhase(w, now);
     if (phase === 'ENDED') continue;
     maintenanceWindows.push({

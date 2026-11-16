@@ -4,7 +4,7 @@ import { Prisma, type MaintenanceEndBehavior } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { logAudit, type AuditEventSource } from '@/lib/audit';
-import { runSerializableTransaction } from '@/lib/db-utils';
+import { runReadCommittedTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors/app-error';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { logger } from '@/lib/logger';
@@ -15,6 +15,7 @@ import {
   suppressUndeliveredAnnouncementIntents,
 } from '@/lib/status-pages/announcement-commands';
 import { incrementAnnouncementNotificationGeneration } from '@/lib/status-pages/announcement-notification-generation';
+import { deriveAnnouncementNotificationPlan } from '@/lib/status-pages/announcement-notification-plan';
 
 import {
   findActiveMaintenanceWindow,
@@ -284,6 +285,23 @@ export async function syncMaintenanceAnnouncements(
 
   if (!window.publishToStatusPage) return;
   const now = new Date();
+  // A recurring schedule materializes occurrences two weeks ahead; emailing subscribers
+  // then would mean one early email per occurrence. They hear when each one starts.
+  const recurring = Boolean(
+    (
+      await tx.maintenanceWindow.findUnique({
+        where: { id: window.id },
+        select: { scheduleId: true },
+      })
+    )?.scheduleId
+  );
+  const notificationTiming = recurring ? ('AT_START' as const) : ('ON_PUBLISH' as const);
+  const { scheduledAt } = deriveAnnouncementNotificationPlan({
+    isActive: true,
+    notificationTiming,
+    publishAt: now,
+    startDate: window.startsAt,
+  });
   for (const [statusPageId, serviceIds] of desired) {
     const content = {
       title: window.title,
@@ -302,7 +320,7 @@ export async function syncMaintenanceAnnouncements(
           timeMode: 'EXACT',
           allDay: false,
           publishAt: now,
-          notificationTiming: 'ON_PUBLISH',
+          notificationTiming,
           isActive: true,
           maintenanceWindowId: window.id,
         },
@@ -311,7 +329,7 @@ export async function syncMaintenanceAnnouncements(
       await createAnnouncementFanoutJob(tx, {
         announcementId: created.id,
         statusPageId,
-        scheduledAt: now,
+        scheduledAt: scheduledAt ?? now,
         generation: created.notificationGeneration,
         deliveryMode: 'ALL_ELIGIBLE',
       });
@@ -343,7 +361,7 @@ export async function syncMaintenanceAnnouncements(
     await createAnnouncementFanoutJob(tx, {
       announcementId: current.id,
       statusPageId,
-      scheduledAt: now,
+      scheduledAt: scheduledAt ?? now,
       generation,
       deliveryMode: 'UNDELIVERED_ONLY',
     });
@@ -411,10 +429,12 @@ export async function updateMaintenanceWindow(
   options: MaintenanceCommandOptions & { expectedRevision?: number } = {}
 ): Promise<MaintenanceWindowRecord> {
   const patch = MaintenanceWindowPatchSchema.parse(input);
-  const now = options.now ?? new Date();
 
   return inTransaction(options.tx, async tx => {
     await lockWindow(tx, id);
+    // Read the clock only once the lock is held, so a long lock wait can't make an
+    // active window look upcoming.
+    const now = options.now ?? new Date();
     const existing = await tx.maintenanceWindow.findUnique({
       where: { id },
       select: maintenanceWindowSelect,
@@ -425,7 +445,9 @@ export async function updateMaintenanceWindow(
     }
 
     const phase = maintenanceWindowPhase(existing, now);
-    if (phase === 'ENDED') throw conflict('An ended maintenance window cannot be changed.');
+    if (phase === 'ENDED' || existing.endProcessedAt) {
+      throw conflict('An ended maintenance window cannot be changed.');
+    }
     if (
       phase === 'ACTIVE' &&
       patch.startsAt &&
@@ -494,9 +516,10 @@ export async function endMaintenanceWindowNow(
   actor: MaintenanceActor,
   options: MaintenanceCommandOptions = {}
 ): Promise<MaintenanceWindowRecord> {
-  const now = options.now ?? new Date();
+  let now = options.now ?? new Date();
   const ended = await inTransaction(options.tx, async tx => {
     await lockWindow(tx, id);
+    now = options.now ?? new Date();
     const existing = await tx.maintenanceWindow.findUnique({
       where: { id },
       select: maintenanceWindowSelect,
@@ -552,15 +575,17 @@ export async function deleteMaintenanceWindow(
   actor: MaintenanceActor,
   options: MaintenanceCommandOptions = {}
 ): Promise<void> {
-  const now = options.now ?? new Date();
   await inTransaction(options.tx, async tx => {
     await lockWindow(tx, id);
+    const now = options.now ?? new Date();
     const existing = await tx.maintenanceWindow.findUnique({
       where: { id },
       select: maintenanceWindowSelect,
     });
     if (!existing) throw notFound();
-    if (maintenanceWindowPhase(existing, now) !== 'UPCOMING') {
+    // A window that already holds an incident has started in practice, whatever this
+    // server's clock says; deleting it would orphan the hold.
+    if (maintenanceWindowPhase(existing, now) !== 'UPCOMING' || existing._count.heldIncidents > 0) {
       throw conflict(
         'Only upcoming maintenance windows can be deleted. End an active window instead.'
       );
@@ -584,7 +609,11 @@ async function releaseHeldIncident(
   endBehavior: MaintenanceEndBehavior,
   now: Date
 ): Promise<boolean> {
-  return runSerializableTransaction(async tx => {
+  // READ COMMITTED on purpose: each statement reads fresh data, so the overlap check
+  // below sees a window marked processed while this transaction waited on its lock.
+  // (A serializable snapshot would not, and could hand the hold to a finished window.)
+  return runReadCommittedTransaction(async tx => {
+    await tx.$queryRaw`SELECT 1 FROM "Incident" WHERE id = ${incidentId} FOR UPDATE`;
     const current = await tx.incident.findUnique({
       where: { id: incidentId },
       select: { status: true, maintenanceWindowId: true, serviceId: true },
@@ -593,9 +622,16 @@ async function releaseHeldIncident(
     if (!current || current.status !== 'SUPPRESSED' || current.maintenanceWindowId !== windowId) {
       return false;
     }
+    // Still the maintenance hold, not a later manual suppression of the same incident.
+    const hold = await tx.incidentSlaPause.findFirst({
+      where: { incidentId, endedAt: null, reason: 'maintenance-window' },
+      select: { id: true },
+    });
+    if (!hold) return false;
     // Overlapping maintenance: the service is still under another window, so hand
     // the hold to it instead of paging; that window's own end releases it.
-    const next = await findActiveMaintenanceWindow(tx, current.serviceId, now);
+    const at = new Date(Math.max(now.getTime(), Date.now()));
+    const next = await findActiveMaintenanceWindow(tx, current.serviceId, at);
     if (next && next.id !== windowId) {
       await tx.incident.update({
         where: { id: incidentId },
@@ -709,32 +745,86 @@ export async function processEndedMaintenanceWindow(
 }
 
 /** Scheduler entrypoint: oldest unprocessed ended windows first, bounded per tick. */
+// Windows whose releases keep failing back off, so they can't hold the oldest-first
+// slots and starve newer windows. Per process; a leader change only costs a retry.
+const sweepBackoff = new Map<string, number>();
+const SWEEP_BACKOFF_MS = 5 * 60_000;
+
 export async function processEndedMaintenanceWindows(
   now: Date = new Date()
 ): Promise<{ windows: number; released: number }> {
+  for (const [id, retryAt] of sweepBackoff) if (retryAt <= now.getTime()) sweepBackoff.delete(id);
   const due = await prisma.maintenanceWindow.findMany({
-    where: { endProcessedAt: null, endsAt: { lte: now } },
+    where: {
+      endProcessedAt: null,
+      endsAt: { lte: now },
+      ...(sweepBackoff.size ? { id: { notIn: [...sweepBackoff.keys()] } } : {}),
+    },
     orderBy: { endsAt: 'asc' },
     take: MAINTENANCE_LIMITS.sweepWindowsPerRun,
     select: { id: true },
   });
-  // Share the tick's budget so one huge window can't delay every other window's release.
-  const perWindow = Math.max(
+  // One budget per tick, shared so a huge window can't delay every other window.
+  let remaining = MAINTENANCE_LIMITS.sweepIncidentsPerRun;
+  const share = Math.max(
     MAINTENANCE_LIMITS.sweepIncidentBatch,
-    Math.ceil(MAINTENANCE_LIMITS.sweepIncidentsPerRun / Math.max(due.length, 1))
+    Math.ceil(remaining / Math.max(due.length, 1))
   );
   let released = 0;
   for (const window of due) {
+    if (remaining <= 0) break;
+    const limit = Math.min(remaining, share);
     try {
-      released += (await processEndedMaintenanceWindow(window.id, now, perWindow)).released;
+      const result = await processEndedMaintenanceWindow(window.id, now, limit);
+      released += result.released;
+      remaining -= result.complete ? result.released : limit;
+      if (!result.complete && result.released === 0) {
+        sweepBackoff.set(window.id, now.getTime() + SWEEP_BACKOFF_MS);
+      }
     } catch (error) {
+      sweepBackoff.set(window.id, now.getTime() + SWEEP_BACKOFF_MS);
       logger.error('maintenance_window.sweep_failed', {
         maintenanceWindowId: window.id,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }
+  released += await releaseOrphanedHolds(now);
   return { windows: due.length, released };
+}
+
+/**
+ * Safety net: an incident still held by a window already marked processed would
+ * otherwise never page. The fences above should make this impossible; if some path
+ * ever slips through, the next tick releases it instead of holding it forever.
+ */
+async function releaseOrphanedHolds(now: Date): Promise<number> {
+  const orphans = await prisma.incident.findMany({
+    where: { status: 'SUPPRESSED', maintenanceWindow: { endProcessedAt: { not: null } } },
+    take: MAINTENANCE_LIMITS.sweepIncidentBatch,
+    select: { id: true, maintenanceWindow: { select: { id: true, endBehavior: true } } },
+  });
+  let released = 0;
+  for (const incident of orphans) {
+    const window = incident.maintenanceWindow;
+    if (!window) continue;
+    try {
+      if (await releaseHeldIncident(incident.id, window.id, window.endBehavior, now)) {
+        released += 1;
+        logger.warn('maintenance_window.orphaned_hold_released', {
+          maintenanceWindowId: window.id,
+          incidentId: incident.id,
+        });
+      }
+    } catch (error) {
+      logger.error('maintenance_window.orphaned_hold_release_failed', {
+        maintenanceWindowId: window.id,
+        incidentId: incident.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return released;
 }
 
 export async function listMaintenanceWindows(options: {
@@ -760,4 +850,34 @@ export async function listMaintenanceWindows(options: {
     ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
     select: maintenanceWindowSelect,
   });
+}
+
+/**
+ * What a service page shows: every active window, the next upcoming ones (soonest first)
+ * and the most recent ended ones. Queried separately so materialised recurring
+ * occurrences can never push an active window out of a single desc-sorted page.
+ */
+export async function listServiceMaintenanceOverview(serviceId: string, now = new Date()) {
+  const forService = { services: { some: { serviceId } } };
+  const [active, upcoming, ended] = await Promise.all([
+    prisma.maintenanceWindow.findMany({
+      where: { ...forService, startsAt: { lte: now }, endsAt: { gt: now } },
+      orderBy: [{ endsAt: 'asc' }, { id: 'asc' }],
+      take: 50,
+      select: maintenanceWindowSelect,
+    }),
+    prisma.maintenanceWindow.findMany({
+      where: { ...forService, startsAt: { gt: now } },
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+      take: 10,
+      select: maintenanceWindowSelect,
+    }),
+    prisma.maintenanceWindow.findMany({
+      where: { ...forService, endsAt: { lte: now } },
+      orderBy: [{ endsAt: 'desc' }, { id: 'desc' }],
+      take: 5,
+      select: maintenanceWindowSelect,
+    }),
+  ]);
+  return [...active, ...upcoming, ...ended];
 }

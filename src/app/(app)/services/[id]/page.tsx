@@ -43,7 +43,10 @@ import ServiceMaintenancePanel, {
   type MaintenanceScheduleView,
   type MaintenanceWindowView,
 } from '@/components/service/ServiceMaintenancePanel';
-import { listMaintenanceWindows, maintenanceWindowPhase } from '@/lib/service-maintenance/windows';
+import {
+  listServiceMaintenanceOverview,
+  maintenanceWindowPhase,
+} from '@/lib/service-maintenance/windows';
 import {
   describeMaintenanceSchedule,
   listMaintenanceSchedules,
@@ -1232,16 +1235,25 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   );
 
   const [maintenanceRows, maintenanceServices, maintenanceScheduleRows] = await Promise.all([
-    listMaintenanceWindows({ serviceIds: [id], take: 20, now }),
+    listServiceMaintenanceOverview(id, now),
     canManageService
       ? prisma.service.findMany({
+          // Only services this user could add to a window (mirrors assertCanModifyService).
+          where: user.role === 'ADMIN' ? {} : { team: { members: { some: { userId: user.id } } } },
           select: { id: true, name: true },
           orderBy: { name: 'asc' },
-          take: 500,
+          // shortcut: plain filtered checkbox list, so cap it; switch to server search past this.
+          take: 2000,
         })
       : Promise.resolve([]),
     listMaintenanceSchedules({ serviceIds: [id], take: 20 }),
   ]);
+  // A window can span other teams' services; name only those this viewer can read.
+  const readableTeams = 'teamId' in serviceReadWhere(actor) ? new Set(actor.teamIds) : null;
+  const readable = <T extends { service: { teamId: string | null } }>(rows: T[]) =>
+    rows.filter(
+      r => !readableTeams || (r.service.teamId !== null && readableTeams.has(r.service.teamId))
+    );
   const maintenanceSchedules: MaintenanceScheduleView[] = maintenanceScheduleRows.map(s => {
     const { summary, nextOccurrence } = describeMaintenanceSchedule(s, now);
     return {
@@ -1252,9 +1264,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       nextLabel: nextOccurrence
         ? formatDateTime(nextOccurrence.startsAt, userTimeZone, { format: 'datetime' })
         : null,
-      serviceNames: s.services.map(x => x.service.name),
+      serviceNames: readable(s.services).map(x => x.service.name),
+      hiddenServiceCount: s.services.length - readable(s.services).length,
       description: s.description,
-      serviceIds: s.services.map(x => x.serviceId),
+      serviceIds: readable(s.services).map(x => x.serviceId),
       frequency: s.frequency,
       interval: s.interval,
       byWeekday: s.byWeekday,
@@ -1279,7 +1292,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     endsLabel: formatDateTime(w.endsAt, userTimeZone, { format: 'datetime' }),
     endBehavior: w.endBehavior,
     publishToStatusPage: w.publishToStatusPage,
-    serviceNames: w.services.map(s => s.service.name),
+    serviceNames: readable(w.services).map(s => s.service.name),
+    hiddenServiceCount: w.services.length - readable(w.services).length,
     heldCount: w._count.heldIncidents,
     recurring: w.scheduleId !== null,
   }));

@@ -305,7 +305,8 @@ async function deleteUpcomingOccurrences(
   now: Date
 ) {
   const upcoming = await tx.maintenanceWindow.findMany({
-    where: { scheduleId, startsAt: { gt: now } },
+    // An occurrence already holding alerts has started in practice; leave it.
+    where: { scheduleId, startsAt: { gt: now }, heldIncidents: { none: {} } },
     select: { id: true },
   });
   for (const window of upcoming) {
@@ -406,10 +407,12 @@ export async function updateMaintenanceSchedule(
   options: MaintenanceScheduleOptions & { expectedRevision?: number } = {}
 ): Promise<MaintenanceScheduleRecord> {
   const patch = MaintenanceSchedulePatchSchema.parse(input);
-  const now = options.now ?? new Date();
+  let now = options.now ?? new Date();
 
   return inTransaction(options.tx, async tx => {
     await lockSchedule(tx, id);
+    // Re-read the clock once the lock is held; the wait can be long.
+    now = options.now ?? new Date();
     const existing = await tx.maintenanceSchedule.findUnique({
       where: { id },
       select: maintenanceScheduleSelect,
@@ -534,9 +537,9 @@ export async function deleteMaintenanceSchedule(
   actor: MaintenanceActor,
   options: MaintenanceScheduleOptions = {}
 ): Promise<void> {
-  const now = options.now ?? new Date();
   await inTransaction(options.tx, async tx => {
     await lockSchedule(tx, id);
+    const now = options.now ?? new Date();
     const existing = await tx.maintenanceSchedule.findUnique({
       where: { id },
       select: maintenanceScheduleSelect,

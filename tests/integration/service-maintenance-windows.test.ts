@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { processEvent } from '@/lib/events';
+import { executeIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { findActiveMaintenanceWindow } from '@/lib/service-maintenance/active';
 import {
   createMaintenanceWindow,
@@ -354,6 +355,86 @@ describeIfRealDB('service maintenance windows', { timeout: 60000 }, () => {
     expect(ended.endsAt.getTime()).toBeLessThanOrEqual(Date.now());
     expect((await incidentFor(service.id, 'held')).status).toBe('OPEN');
     expect((await trigger(service.id, 'after-end')).action).toBe('triggered');
+  });
+
+  it('never leaves an incident held when overlapping windows are ended concurrently', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      const service = await createTestService(`Maint Concurrent End ${round}`);
+      const first = await openWindow([service.id]);
+      await trigger(service.id, `held-${round}`);
+      const second = await openWindow([service.id]);
+      await Promise.all([
+        endMaintenanceWindowNow(first.id, actor),
+        endMaintenanceWindowNow(second.id, actor),
+      ]);
+      // Whatever the interleaving, a tick of the sweep (with its safety net) settles it.
+      await processEndedMaintenanceWindows(new Date());
+      const held = await incidentFor(service.id, `held-${round}`);
+      expect(held.status).toBe('OPEN');
+    }
+  });
+
+  it('releases an incident left held by a window already marked processed', async () => {
+    const service = await createTestService('Maint Orphan');
+    const window = await openWindow([service.id]);
+    await trigger(service.id, 'orphan');
+    // Simulates any path that marks a window done while it still holds an incident.
+    await testPrisma.maintenanceWindow.update({
+      where: { id: window.id },
+      data: { endsAt: new Date(), endProcessedAt: new Date() },
+    });
+    await processEndedMaintenanceWindows(new Date());
+    expect((await incidentFor(service.id, 'orphan')).status).toBe('OPEN');
+  });
+
+  it('refuses to delete a window that already holds an incident, also at the database level', async () => {
+    const service = await createTestService('Maint Delete Held');
+    const window = await openWindow([service.id]);
+    await trigger(service.id, 'held');
+    // Pretend this server's clock still says the window is upcoming.
+    const early = new Date(window.startsAt.getTime() - 60_000);
+    await expect(deleteMaintenanceWindow(window.id, actor, { now: early })).rejects.toMatchObject({
+      code: 'RESOURCE_CONFLICT',
+    });
+    await expect(
+      testPrisma.maintenanceWindow.delete({ where: { id: window.id } })
+    ).rejects.toThrow();
+    expect((await incidentFor(service.id, 'held')).maintenanceWindowId).toBe(window.id);
+  });
+
+  it('leaves a manual re-suppression alone and stops treating it as maintenance-held', async () => {
+    const service = await createTestService('Maint Manual Suppress');
+    const window = await openWindow([service.id]);
+    await trigger(service.id, 'held');
+    const { id } = await incidentFor(service.id, 'held');
+    await executeIncidentLifecycleCommand({
+      incidentId: id,
+      command: 'UNSUPPRESS',
+      source: 'WEB',
+      expectedStatus: 'SUPPRESSED',
+    });
+    await executeIncidentLifecycleCommand({
+      incidentId: id,
+      command: 'SUPPRESS',
+      source: 'WEB',
+      expectedStatus: 'OPEN',
+    });
+    const resuppressed = await incidentFor(service.id, 'held');
+    expect(resuppressed.maintenanceWindowId).toBeNull();
+
+    await processEndedMaintenanceWindow(window.id, new Date(window.endsAt.getTime() + 1000));
+    expect((await incidentFor(service.id, 'held')).status).toBe('SUPPRESSED');
+  });
+
+  it('refuses to change a window once it has been processed', async () => {
+    const service = await createTestService('Maint Processed Edit');
+    const window = await openWindow([service.id]);
+    await endMaintenanceWindowNow(window.id, actor);
+    await expect(
+      updateMaintenanceWindow(window.id, { endsAt: new Date(Date.now() + HOUR) }, actor, {
+        now: new Date(window.startsAt.getTime() + 1000),
+      })
+    ).rejects.toMatchObject({ code: 'RESOURCE_CONFLICT' });
   });
 
   it('enforces lifecycle rules', async () => {

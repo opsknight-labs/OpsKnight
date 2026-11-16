@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { ZodError } from 'zod';
-import { assertCanModifyService } from '@/lib/rbac';
+import { assertCanModifyService, getCurrentUser } from '@/lib/rbac';
 import { AppError } from '@/lib/errors/app-error';
 import { logger } from '@/lib/logger';
 import {
@@ -26,13 +26,18 @@ import {
 export type MaintenanceActionResult = { ok: true } | { ok: false; error: string };
 
 // A window spans services; the caller must be allowed to modify every one of them.
+// Authentication never depends on the set being non-empty.
 async function assertCanModifyAll(serviceIds: string[]) {
-  let actorId: string | null = null;
-  for (const serviceId of new Set(serviceIds)) {
-    const user = await assertCanModifyService(serviceId);
-    actorId = user.id;
+  const user = await getCurrentUser();
+  const ids = new Set(serviceIds);
+  if (ids.size === 0 && user.role !== 'ADMIN') {
+    throw new AppError({
+      code: 'SERVICE_ACCESS_DENIED',
+      userMessage: 'Unauthorized. You do not have permission to modify these services.',
+    });
   }
-  return actorId;
+  for (const serviceId of ids) await assertCanModifyService(serviceId);
+  return user.id;
 }
 
 async function existingServiceIds(windowId: string): Promise<string[]> {

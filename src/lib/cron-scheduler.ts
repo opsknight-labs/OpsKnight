@@ -454,6 +454,22 @@ async function runOnce() {
       } catch (_) {}
     }, HEARTBEAT_INTERVAL_MS);
 
+    // Service maintenance windows: release incidents held by windows that ended.
+    // Runs first so a failure in a later step can't keep alerts held, and so the
+    // escalation jobs it enqueues are processed in this same tick. Activation needs no
+    // scheduler (it is time-derived); the sweep is idempotent and resumable.
+    try {
+      const { processEndedMaintenanceWindows } = await import('./service-maintenance/windows');
+      const sweptAt = new Date();
+      const maintenanceWindows = await processEndedMaintenanceWindows(sweptAt);
+      await updateSchedulerState({ lastMaintenanceSweepAt: sweptAt }, leaseEpoch);
+      if (maintenanceWindows.windows > 0) {
+        logger.info('[Cron] Maintenance windows processed', maintenanceWindows);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Maintenance window sweep failed', { error });
+    }
+
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
     const ownership = getSchedulerOwnership(schedulerProfile);
     const jobResult = ownership.backgroundJobs
@@ -580,21 +596,6 @@ async function runOnce() {
     });
 
     await assertLease(leaseEpoch);
-
-    // Service maintenance windows: release incidents held by windows that ended.
-    // Activation needs no scheduler (it is time-derived); this sweep is idempotent
-    // and resumable, so a failed tick is retried on the next one.
-    try {
-      const { processEndedMaintenanceWindows } = await import('./service-maintenance/windows');
-      const sweptAt = new Date();
-      const maintenanceWindows = await processEndedMaintenanceWindows(sweptAt);
-      await updateSchedulerState({ lastMaintenanceSweepAt: sweptAt }, leaseEpoch);
-      if (maintenanceWindows.windows > 0) {
-        logger.info('[Cron] Maintenance windows processed', maintenanceWindows);
-      }
-    } catch (error) {
-      logger.warn('[Cron] Maintenance window sweep failed', { error });
-    }
 
     // Recurring maintenance: materialise upcoming occurrences as ordinary windows.
     try {

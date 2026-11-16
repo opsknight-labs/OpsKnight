@@ -240,6 +240,41 @@ describeIfRealDB('recurring maintenance schedules', { timeout: 120000 }, () => {
     expect(after.length).toBe(rest.length + 2);
   });
 
+  it('notifies status-page subscribers when each occurrence starts, not weeks ahead', async () => {
+    const service = await createTestService('Sched Notify At Start');
+    const page = await createTestStatusPage();
+    await testPrisma.statusPageService.create({
+      data: { statusPageId: page.id, serviceId: service.id, showOnPage: true },
+    });
+    const now = new Date();
+    const schedule = await createMaintenanceSchedule(
+      {
+        title: 'Nightly reindex',
+        serviceIds: [service.id],
+        frequency: 'DAILY',
+        timeZone: 'UTC',
+        startTime: '03:00',
+        durationMinutes: 60,
+        startsOn: dateKey(new Date(now.getTime() + DAY)),
+        publishToStatusPage: true,
+      },
+      actor,
+      { now }
+    );
+    const windows = await occurrences(schedule.id);
+    expect(windows.length).toBeGreaterThan(0);
+    for (const window of windows) {
+      const announcement = await testPrisma.statusPageAnnouncement.findFirstOrThrow({
+        where: { maintenanceWindowId: window.id },
+      });
+      expect(announcement.notificationTiming).toBe('AT_START');
+      const job = await testPrisma.backgroundJob.findFirstOrThrow({
+        where: { payload: { path: ['announcementId'], equals: announcement.id } },
+      });
+      expect(job.scheduledAt.getTime()).toBe(window.startsAt.getTime());
+    }
+  });
+
   it('updates upcoming occurrences in place for a text-only edit', async () => {
     const service = await createTestService('Sched Text Edit');
     const page = await createTestStatusPage();

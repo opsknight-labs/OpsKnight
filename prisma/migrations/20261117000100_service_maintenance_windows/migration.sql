@@ -38,10 +38,12 @@ ALTER TABLE "StatusPageAnnouncement" ADD COLUMN "maintenanceWindowId" TEXT;
 CREATE INDEX "MaintenanceWindow_endProcessedAt_endsAt_idx" ON "MaintenanceWindow"("endProcessedAt", "endsAt");
 CREATE INDEX "MaintenanceWindow_startsAt_idx" ON "MaintenanceWindow"("startsAt");
 CREATE INDEX "MaintenanceWindowService_serviceId_endsAt_startsAt_idx" ON "MaintenanceWindowService"("serviceId", "endsAt", "startsAt");
-CREATE INDEX "Incident_maintenanceWindowId_status_idx" ON "Incident"("maintenanceWindowId", "status");
+-- The Incident index is built online in 20261117000400; the foreign keys below are added
+-- NOT VALID and validated in 20261117000500, so no step blocks incident writes for a scan.
 CREATE INDEX "StatusPageAnnouncement_maintenanceWindowId_idx" ON "StatusPageAnnouncement"("maintenanceWindowId");
-ALTER TABLE "Incident" ADD CONSTRAINT "Incident_maintenanceWindowId_fkey" FOREIGN KEY ("maintenanceWindowId") REFERENCES "MaintenanceWindow"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "StatusPageAnnouncement" ADD CONSTRAINT "StatusPageAnnouncement_maintenanceWindowId_fkey" FOREIGN KEY ("maintenanceWindowId") REFERENCES "MaintenanceWindow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- RESTRICT: a window holding incidents can never be deleted out from under them.
+ALTER TABLE "Incident" ADD CONSTRAINT "Incident_maintenanceWindowId_fkey" FOREIGN KEY ("maintenanceWindowId") REFERENCES "MaintenanceWindow"("id") ON DELETE RESTRICT ON UPDATE CASCADE NOT VALID;
+ALTER TABLE "StatusPageAnnouncement" ADD CONSTRAINT "StatusPageAnnouncement_maintenanceWindowId_fkey" FOREIGN KEY ("maintenanceWindowId") REFERENCES "MaintenanceWindow"("id") ON DELETE CASCADE ON UPDATE CASCADE NOT VALID;
 ALTER TABLE "MaintenanceWindowService" ADD CONSTRAINT "MaintenanceWindowService_windowId_fkey" FOREIGN KEY ("windowId") REFERENCES "MaintenanceWindow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "MaintenanceWindowService" ADD CONSTRAINT "MaintenanceWindowService_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

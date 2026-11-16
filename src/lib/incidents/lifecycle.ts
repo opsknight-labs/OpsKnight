@@ -402,6 +402,17 @@ function updateDataForCommand(
   if ((input.command === 'SNOOZE' || input.command === 'SUPPRESS') && !incident.slaPauseStartedAt) {
     data.slaPauseStartedAt = now;
   }
+  // A maintenance link means "held by that window". Once a person takes an incident out
+  // of that hold it is theirs: a later manual suppression must not be released by the
+  // window's end sweep, nor hidden as maintenance-held.
+  if (
+    incident.status === 'SUPPRESSED' &&
+    data.status !== 'SUPPRESSED' &&
+    input.source !== 'SYSTEM' &&
+    input.source !== 'EVENT'
+  ) {
+    data.maintenanceWindow = { disconnect: true };
+  }
 
   switch (input.command) {
     case 'ACKNOWLEDGE':
