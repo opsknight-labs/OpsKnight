@@ -29,6 +29,8 @@ export const HOST_VALIDITY_RULE = {
 export const HEAVY_PROCESS_PATTERN =
   /(^|[\s/])tsc( |$)|vitest|next build|ts-node.*tests\/load|playwright|chrome-headless-shell/;
 
+const PLAYWRIGHT_MCP = /@playwright\/mcp|playwright-mcp/;
+
 const SHELL_COMMAND = /^(\S*\/)?(sh|bash|zsh|dash|fish)( |$)/;
 
 export interface HostSample {
@@ -92,6 +94,8 @@ export function otherHeavyProcesses(rows: ProcessRow[], selfPid: number): string
       // A shell whose command line merely mentions a compiler or test runner (a wrapper script waiting for
       // the machine lock, say) is not that tool: when the tool runs it is listed as a process of its own.
       .filter(row => !SHELL_COMMAND.test(row.command))
+      // An idle Playwright MCP server is not a browser; a browser it launches is listed on its own.
+      .filter(row => !PLAYWRIGHT_MCP.test(row.command))
       .map(row => row.command.slice(0, 160))
   );
 }

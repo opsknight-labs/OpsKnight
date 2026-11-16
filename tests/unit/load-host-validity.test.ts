@@ -77,6 +77,23 @@ describe('benchmark host validity', () => {
       'npm exec vitest run',
     ]);
   });
+
+  it('does not take an idle Playwright MCP server for a browser test run', () => {
+    const rows = parsePs(
+      [
+        '  20     1 node ts-node tests/load/intelligence-ingestion-ab.ts',
+        '  50     1 npm exec @playwright/mcp@latest  ',
+        '  51    50 node /u/.npm/_npx/98/node_modules/.bin/playwright-mcp',
+        // A browser it (or anything else) launches still counts, as does a Playwright test run.
+        '  52    51 /u/ms-playwright/chromium_headless_shell-1200/chrome-headless-shell --headless',
+        '  53     1 node /x/node_modules/.bin/playwright test',
+      ].join('\n')
+    );
+    expect(otherHeavyProcesses(rows, 20)).toEqual([
+      '/u/ms-playwright/chromium_headless_shell-1200/chrome-headless-shell --headless',
+      'node /x/node_modules/.bin/playwright test',
+    ]);
+  });
 });
 
 describe('lane work inside the timed burst', () => {
