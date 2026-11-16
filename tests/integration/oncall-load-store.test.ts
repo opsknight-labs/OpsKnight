@@ -313,11 +313,29 @@ describe('on-call load query plans', () => {
   const from = new Date(TODAY.getTime() - 28 * DAY);
 
   it('reads the pages rollup for a rotation through the subject index', async () => {
-    const text = await plan(Prisma.sql`
-      SELECT "subjectKey", "bucket", "count" FROM "MetricRollup"
-      WHERE "name" = ${OPS_ROLLUPS.pagesPerUserHour} AND "subjectKey" IN (${'u1'}, ${'u2'})
-        AND "bucket" >= ${from} AND "bucket" < ${TODAY}`);
+    // An empty table makes name+bucket and name+subject+bucket tie; seed realistic volume
+    // (300 people x 28 days of hours), analyze, and roll it back so the planner chooses as in production.
+    const rows = await db
+      .$transaction(async tx => {
+        await tx.$executeRaw`
+          INSERT INTO "MetricRollup" ("id", "name", "bucket", "count", "sum", "subjectKey")
+          SELECT 'plan-' || g, ${OPS_ROLLUPS.pagesPerUserHour},
+                 ${TODAY}::timestamp - (g % 672) * interval '1 hour', 1, 1, 'plan-u' || (g % 300)
+          FROM generate_series(1, 20000) g`;
+        await tx.$executeRaw`ANALYZE "MetricRollup"`;
+        const explained = await tx.$queryRaw<unknown[]>(Prisma.sql`EXPLAIN (FORMAT JSON)
+          SELECT "subjectKey", "bucket", "count" FROM "MetricRollup"
+          WHERE "name" = ${OPS_ROLLUPS.pagesPerUserHour} AND "subjectKey" IN (${'plan-u1'}, ${'plan-u2'})
+            AND "bucket" >= ${from} AND "bucket" < ${TODAY}`);
+        throw Object.assign(new Error('rollback'), { explained });
+      })
+      .catch((error: { explained?: unknown[] }) => {
+        if (!error.explained) throw error;
+        return error.explained;
+      });
+    const text = JSON.stringify(rows);
     expect(text).toContain('idx_metric_rollup_subject');
+    expect(text).not.toMatch(/"Node Type":\s*"Seq Scan"/);
   });
 
   it.each([
