@@ -148,8 +148,8 @@ export async function register() {
       const { shouldRunIntelligenceLane, startIntelligenceLane, stopIntelligenceLane } =
         await import('./lib/intelligence/jobs/runner');
       if (shouldRunIntelligenceLane(role)) {
-        // In `integrated` the lane runs in a worker thread of its own, so its heap, garbage collection and
-        // Prisma client never pause ingestion on this thread. The thread exists only while intelligence is
+        // In `integrated` the lane runs in a child process of its own, so its heap, garbage collection and
+        // Prisma client never pause ingestion on this thread. The lane process exists only while intelligence is
         // enabled. Without the thread bundle (or with INTELLIGENCE_LANE_THREAD=off) the lane runs here as
         // before; that fallback is outside the ingestion latency contract, so it is never silent.
         const { planIntegratedLane, startIntelligenceLaneThread, stopIntelligenceLaneThread } =

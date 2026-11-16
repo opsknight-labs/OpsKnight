@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { enqueueWorkItems } from '@/lib/intelligence/jobs/work-queue';
 import {
@@ -21,7 +21,7 @@ import {
 
 /**
  * The production lane-thread bundle, built by the production build script, running the real lane in a
- * worker thread against PostgreSQL: it does the work, on its own connections, reports to this thread, and
+ * child process against PostgreSQL: it does the work, on its own connections, reports to this process, and
  * stops cleanly.
  */
 let entry: string;
@@ -63,7 +63,7 @@ async function until(condition: () => Promise<boolean> | boolean, timeoutMs: num
   }
 }
 
-describe('intelligence lane in a worker thread', () => {
+describe('intelligence lane in its own process', () => {
   it('runs queued work on its own connections, reports it, and stops cleanly', async () => {
     await db.intelligenceSettings.create({
       data: {
@@ -145,4 +145,37 @@ describe('intelligence lane in a worker thread', () => {
     await until(async () => (await laneConnections()) === 0, 15_000);
     await stopIntelligenceLaneThread();
   }, 150_000);
+});
+
+describe('a lane process that ends with queries in flight', () => {
+  const INFLIGHT_LANE = join(process.cwd(), 'tests/fixtures/intelligence-lane-thread/inflight-lane.cjs');
+
+  it('never takes this process down: uncaught errors, restarts and a kill on stop', async () => {
+    const inflight: number[] = [];
+    startIntelligenceLaneThread({
+      entry: INFLIGHT_LANE,
+      onMessage: message => {
+        if ((message as { type?: string }).type === 'inflight')
+          inflight.push((message as { pid: number }).pid);
+      },
+      poolWaitingQueries: async () => 0,
+      restartDelayMs: () => 50,
+      stopTimeoutMs: 300,
+    });
+    const ROUNDS = 3;
+    for (let round = 1; round <= ROUNDS; round += 1) {
+      await until(() => inflight.length === round, 15_000);
+      laneThreadWorker()!.send({ type: 'crash' });
+      await until(() => getIntelligenceLaneStatus().thread?.restarts === round, 15_000);
+      expect(getIntelligenceLaneStatus().thread?.lastExit).toBe('Lane thread exited with code 1');
+    }
+    await until(() => inflight.length === ROUNDS + 1, 15_000);
+    // The fixture ignores `stop`, so the host kills it with its queries and transaction still running.
+    await stopIntelligenceLaneThread();
+    expect(laneThreadWorker()).toBeNull();
+    // A late callback from a dead engine would abort this process well within this wait.
+    await new Promise(resolve => setTimeout(resolve, 1_000));
+    const [{ ok }] = await db.$queryRaw<Array<{ ok: number }>>`SELECT 1 AS ok`;
+    expect(ok).toBe(1);
+  }, 90_000);
 });

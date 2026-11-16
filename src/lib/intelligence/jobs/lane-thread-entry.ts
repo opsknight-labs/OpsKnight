@@ -1,14 +1,19 @@
 /**
- * Entry point of the worker thread that runs the intelligence lane for an `integrated` process (see
+ * Entry point of the child process that runs the intelligence lane for an `integrated` process (see
  * lane-thread.ts). Bundled to scripts/dist/intelligence-lane-thread.cjs by
  * scripts/build-intelligence-lane-thread.mjs; never imported by application code.
  *
- * The thread has its own V8 heap, event loop and Prisma client (the lane's pool), so the lane's response
- * parsing, allocation and garbage collection never pause `processEvent` on the main thread.
+ * The process has its own V8 heap, event loop and Prisma client (the lane's pool), so the lane's response
+ * parsing, allocation and garbage collection never pause `processEvent` in the parent, and nothing that
+ * happens here (an uncaught error, running out of memory, a crash in the query engine) can end it.
  */
-import { parentPort, workerData } from 'node:worker_threads';
 import { disconnectPrisma } from '@/lib/prisma';
-import { laneHostForThread, serveLaneThread, type LaneThreadData } from './lane-thread-channel';
+import {
+  exitWithParent,
+  laneHostForThread,
+  parentProcessPort,
+  serveLaneThread,
+} from './lane-thread-channel';
 import {
   configureLaneHost,
   getLocalIntelligenceLaneStatus,
@@ -16,10 +21,10 @@ import {
   stopIntelligenceLane,
 } from './runner';
 
-if (!parentPort) throw new Error('The intelligence lane thread entry must run in a worker thread');
-
-const host = laneHostForThread(workerData as LaneThreadData);
-const server = serveLaneThread(parentPort, {
+const port = parentProcessPort();
+exitWithParent();
+const host = laneHostForThread(port);
+const server = serveLaneThread(port, {
   status: getLocalIntelligenceLaneStatus,
   stop: async () => {
     try {

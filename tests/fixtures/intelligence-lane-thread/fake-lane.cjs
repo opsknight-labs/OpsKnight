@@ -1,15 +1,21 @@
-// A stand-in lane thread for tests/unit/intelligence-lane-thread.test.ts. It speaks the lane-thread
-// protocol (lane-thread-channel.ts) without a database. Behaviour comes from workerData:
-//   crashes: SharedArrayBuffer int32 counter; while it is below `crashTimes` the thread throws after
+// A stand-in lane process for tests/unit/intelligence-lane-thread.test.ts. It speaks the lane-thread
+// protocol (lane-thread-channel.ts) without a database. Behaviour comes from the host's `workerData`
+// (OPSKNIGHT_INTELLIGENCE_LANE_DATA):
+//   crashes: path of a counter file; while it is below `crashTimes` the process throws after
 //            `crashAfterMs`, so a test can watch the host restart it.
 //   exitCode: exit with this code instead of throwing (when crashing).
 //   stopDelayMs: how long stopping the lane takes (an in-flight cycle finishing).
 //   disabledAfterMs: after this long every cycle reports `disabled` (intelligence switched off).
-//   ignoreStop: never answer `stop`, so the host must terminate the thread.
-const { parentPort, workerData } = require('node:worker_threads');
+//   ignoreStop: never answer `stop`, so the host must kill the process.
+const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 
-const data = workerData;
-const crashes = data.crashes ? new Int32Array(data.crashes) : null;
+const data = JSON.parse(process.env.OPSKNIGHT_INTELLIGENCE_LANE_DATA || '{}');
+const crashCount = () =>
+  data.crashes && existsSync(data.crashes) ? Number(readFileSync(data.crashes, 'utf8')) : 0;
+const parentPort = { postMessage: message => process.connected && process.send(message) };
+let activity = [0, 0, 0];
+let poolWaiting = null;
+process.on('disconnect', () => process.exit(0));
 const startedAt = new Date();
 let cycles = 0;
 let running = true;
@@ -62,21 +68,23 @@ const timer = setInterval(() => {
   report();
 }, 10);
 
-if (crashes && Atomics.load(crashes, 0) < (data.crashTimes ?? 0)) {
+if (data.crashes && crashCount() < (data.crashTimes ?? 0)) {
   setTimeout(() => {
-    Atomics.add(crashes, 0, 1);
+    writeFileSync(data.crashes, String(crashCount() + 1));
     if (data.exitCode !== undefined) process.exit(data.exitCode);
     throw new Error('fake lane crashed');
   }, data.crashAfterMs ?? 30);
 }
 
-parentPort.on('message', message => {
+process.on('message', message => {
+  if (message && message.type === 'activity') activity = message.values;
+  if (message && message.type === 'pool') poolWaiting = message.waiting;
   if (message && message.type === 'probe') {
     parentPort.postMessage({
       type: 'probe',
       env: process.env.OPSKNIGHT_INTELLIGENCE_LANE_THREAD ?? null,
-      inFlight: new Float64Array(data.activity, 8, 3)[0],
-      poolWaiting: Atomics.load(new Int32Array(data.poolWaiting), 0),
+      inFlight: activity[0],
+      poolWaiting,
       extra: data.extra ?? null,
     });
     return;
@@ -87,6 +95,5 @@ parentPort.on('message', message => {
     running = false;
     report();
     parentPort.postMessage({ type: 'stopped' });
-    parentPort.close();
   }, data.stopDelayMs ?? 0);
 });

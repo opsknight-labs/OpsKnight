@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   beginIngestionActivity,
-  readSharedIngestionActivity,
-  shareIngestionActivity,
+  mirrorIngestionActivity,
+  readMirroredIngestionActivity,
   snapshotIngestionActivity,
+  type IngestionActivityValues,
 } from '@/lib/ingestion/activity';
 import {
   LANE_THREAD_BUNDLE,
@@ -19,13 +22,7 @@ import {
   startIntelligenceLaneThread,
   stopIntelligenceLaneThread,
 } from '@/lib/intelligence/jobs/lane-thread';
-import {
-  createPoolWaitingBuffer,
-  laneHostForThread,
-  readPoolWaiting,
-  serveLaneThread,
-  writePoolWaiting,
-} from '@/lib/intelligence/jobs/lane-thread-channel';
+import { laneHostForThread, serveLaneThread } from '@/lib/intelligence/jobs/lane-thread-channel';
 import {
   getIntelligenceLaneStatus,
   setIntelligenceLaneMode,
@@ -97,6 +94,17 @@ describe('lane thread placement', () => {
     expect(laneThreadAppRoots('/srv/standalone')).toEqual(['/srv/standalone']);
   });
 
+  it('keeps the lane in-process under next dev, which never rebuilds the bundle, without calling it a fallback', () => {
+    expect(planIntegratedLane('integrated', 'auto', '/app/bundle.cjs', true)).toEqual({
+      mode: 'in-process',
+      fallbackReason: null,
+      remedy: '',
+    });
+    expect(planIntegratedLane('integrated', 'auto', '/app/bundle.cjs', false).mode).toBe(
+      'thread'
+    );
+  });
+
   it('plans the thread for integrated and names the reason when it has to fall back', () => {
     expect(planIntegratedLane('integrated', 'auto', '/app/bundle.cjs')).toEqual({
       mode: 'thread',
@@ -134,46 +142,42 @@ describe('lane thread placement', () => {
   });
 });
 
-describe('shared memory between ingestion and a lane thread', () => {
-  it('mirrors ingestion activity so another thread reads the same load', () => {
-    const buffer = shareIngestionActivity();
-    expect(shareIngestionActivity()).toBe(buffer); // one mirror per process
-    const before = readSharedIngestionActivity(buffer);
+describe('ingestion activity sent to a lane process', () => {
+  afterEach(() => mirrorIngestionActivity(null));
+
+  it('mirrors ingestion activity so another process reads the same load', () => {
+    let last: IngestionActivityValues | null = null;
+    mirrorIngestionActivity(values => {
+      last = values;
+    });
+    expect(last).not.toBeNull(); // the current state is sent at once
+    const before = readMirroredIngestionActivity(last!);
     const end = beginIngestionActivity();
-    const during = readSharedIngestionActivity(buffer);
+    const during = readMirroredIngestionActivity(last!);
     expect(during.inFlight).toBe(snapshotIngestionActivity().inFlight);
     expect(during.inFlight).toBe(before.inFlight + 1);
     end();
-    const later = readSharedIngestionActivity(buffer, during.at + 50);
+    const later = readMirroredIngestionActivity(last!, during.at + 50);
     expect(later.inFlight).toBe(before.inFlight);
     // The integral keeps growing while events are in flight, on the reader's clock.
     expect(later.integralMs).toBeGreaterThanOrEqual(during.integralMs);
+    // Stopping the mirror stops the calls.
+    mirrorIngestionActivity(null);
+    const stopped = last;
+    beginIngestionActivity()();
+    expect(last).toBe(stopped);
   });
 
-  it('carries the main pool waiting count, with unknown kept distinct from zero', () => {
-    const buffer = createPoolWaitingBuffer();
-    expect(readPoolWaiting(buffer)).toBeNull();
-    writePoolWaiting(buffer, 3);
-    expect(readPoolWaiting(buffer)).toBe(3);
-    writePoolWaiting(buffer, 0);
-    expect(readPoolWaiting(buffer)).toBe(0);
-    writePoolWaiting(buffer, null);
-    expect(readPoolWaiting(buffer)).toBeNull();
-    writePoolWaiting(buffer, Number.NaN);
-    expect(readPoolWaiting(buffer)).toBeNull();
-  });
-
-  it('gives the lane in a thread the main thread activity and pool, not its own', async () => {
-    const data = { activity: shareIngestionActivity(), poolWaiting: createPoolWaitingBuffer() };
-    writePoolWaiting(data.poolWaiting, 7);
-    const host = laneHostForThread(data);
+  it('gives the lane in a process the parent activity and pool, not its own', async () => {
+    let deliver: (message: unknown) => void = () => {};
+    const host = laneHostForThread({ on: (_event, listener) => (deliver = listener) });
+    expect(await host.poolWaitingQueries()).toBeNull(); // unknown until the parent says
+    deliver({ type: 'pool', waiting: 7 });
+    deliver({ type: 'activity', values: [3, 10, performance.timeOrigin + performance.now()] });
     expect(await host.poolWaitingQueries()).toBe(7);
-    const end = beginIngestionActivity();
-    try {
-      expect(host.activity().inFlight).toBe(snapshotIngestionActivity().inFlight);
-    } finally {
-      end();
-    }
+    expect(host.activity().inFlight).toBe(3);
+    deliver({ type: 'pool', waiting: null });
+    expect(await host.poolWaitingQueries()).toBeNull();
   });
 });
 
@@ -252,7 +256,7 @@ describe('serving the main thread from a lane thread', () => {
 });
 
 describe('lane thread host', () => {
-  it('runs the thread with the lane marker and shared buffers, and reports its lane as this process lane', async () => {
+  it('runs the process with the lane marker, activity and pool, and reports its lane as this process lane', async () => {
     const probes: unknown[] = [];
     expect(
       startIntelligenceLaneThread({
@@ -274,7 +278,7 @@ describe('lane thread host', () => {
     const end = beginIngestionActivity();
     try {
       await new Promise(resolve => setTimeout(resolve, 20));
-      laneThreadWorker()!.postMessage({ type: 'probe' });
+      laneThreadWorker()!.send({ type: 'probe' });
       await until(() => probes.length > 0);
     } finally {
       end();
@@ -307,7 +311,7 @@ describe('lane thread host', () => {
   });
 
   it('restarts a crashed thread with backoff, reports it degraded meanwhile and keeps totals', async () => {
-    const crashes = new SharedArrayBuffer(4);
+    const crashes = join(mkdtempSync(join(tmpdir(), 'fake-lane-')), 'crashes');
     const delays: number[] = [];
     startIntelligenceLaneThread({
       entry: FAKE_LANE,
@@ -320,7 +324,8 @@ describe('lane thread host', () => {
     });
     await until(() => getIntelligenceLaneStatus().thread?.state === 'restarting');
     const restarting = getIntelligenceLaneStatus();
-    expect(restarting.thread?.lastExit).toBe('Lane thread failed with an uncaught error');
+    // An uncaught error ends the lane process (exit code 1), never this one.
+    expect(restarting.thread?.lastExit).toBe('Lane thread exited with code 1');
     expect(evaluateLaneHealth(restarting)).toEqual({
       status: 'degraded',
       error: 'Lane thread stopped unexpectedly; restarting it',
@@ -339,11 +344,11 @@ describe('lane thread host', () => {
     expect(getIntelligenceLaneStatus().lastCycleAt).not.toBeNull();
     expect(delays).toEqual([1, 2]); // consecutive failures back off
     await until(() => getIntelligenceLaneStatus().totals.cycles > carried + 2);
-    expect(Atomics.load(new Int32Array(crashes), 0)).toBe(2);
+    expect(readFileSync(crashes, 'utf8')).toBe('2');
   });
 
   it('describes a thread that exits with a non-zero code', async () => {
-    const crashes = new SharedArrayBuffer(4);
+    const crashes = join(mkdtempSync(join(tmpdir(), 'fake-lane-')), 'crashes');
     startIntelligenceLaneThread({
       entry: FAKE_LANE,
       workerData: { crashes, crashTimes: 1, crashAfterMs: 20, exitCode: 3 },
@@ -372,7 +377,7 @@ describe('lane thread host', () => {
     expect(getIntelligenceLaneStatus().running).toBe(false);
   });
 
-  it('terminates a thread that does not stop in time', async () => {
+  it('kills a process that does not stop in time', async () => {
     startIntelligenceLaneThread({
       entry: FAKE_LANE,
       workerData: { ignoreStop: true },
@@ -387,7 +392,7 @@ describe('lane thread host', () => {
     });
     await stopIntelligenceLaneThread();
     expect(exited).toBe(true);
-    // A terminated thread is not a crash: nothing restarts it.
+    // A killed lane is not a crash when stopping: nothing restarts it.
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(getIntelligenceLaneStatus().thread).toMatchObject({ state: 'stopped', restarts: 0 });
   });
@@ -426,9 +431,22 @@ describe('lane thread only while intelligence is enabled', () => {
 
   it('starts no thread while disabled and reports the lane as disabled, not degraded', async () => {
     const main = standIn();
-    expect(startIntelligenceLaneThread({ entry: FAKE_LANE, standIn: main.lane })).toBe(true);
+    let sampled = 0;
+    expect(
+      startIntelligenceLaneThread({
+        entry: FAKE_LANE,
+        standIn: main.lane,
+        poolSampleMs: 5,
+        poolWaitingQueries: async () => {
+          sampled += 1;
+          return 0;
+        },
+      })
+    ).toBe(true);
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(laneThreadWorker()).toBeNull();
+    // Nothing reads the pool for a lane process that does not exist.
+    expect(sampled).toBe(0);
     expect(main.calls).toEqual({ started: 1, stopped: 0 });
     const status = getIntelligenceLaneStatus();
     expect(status.thread).toMatchObject({ state: 'parked', restarts: 0 });

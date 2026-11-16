@@ -1,42 +1,53 @@
 import 'server-only';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { Worker } from 'node:worker_threads';
-import { shareIngestionActivity } from '@/lib/ingestion/activity';
+import { fork, type ChildProcess } from 'node:child_process';
+import { mirrorIngestionActivity, type IngestionActivityValues } from '@/lib/ingestion/activity';
 import { logger } from '@/lib/logger';
 import {
   mergeRuntimeOperationalMetricState,
   type RuntimeOperationalMetricState,
 } from '@/lib/metrics/operational/registry';
-import { intelligenceLaneThreadEnv, intelligenceLaneThreadMode } from '@/lib/prisma-datasource';
-import { getPrismaPoolWaitCount } from '@/lib/prisma-pool-pressure';
 import {
-  createPoolWaitingBuffer,
-  writePoolWaiting,
+  intelligenceLaneThreadEnv,
+  intelligenceLaneThreadMode,
+  isNextDevelopment,
+} from '@/lib/prisma-datasource';
+import { getPrismaPoolWaitCount } from '@/lib/prisma-pool-pressure';
+import { INGESTION_YIELD_DEFAULTS } from './ingestion-yield';
+import {
   type LaneThreadCommand,
-  type LaneThreadData,
   type LaneThreadReport,
 } from './lane-thread-channel';
 import type { LaneStatus, LaneThreadStatus, LaneTotals } from './runner';
 
 /**
- * Runs the intelligence lane of an `integrated` process in a worker thread.
+ * Runs the intelligence lane of an `integrated` process in a child process (the "lane thread": it began
+ * as a worker thread, and keeps the name in status, metrics and settings).
  *
  * In `integrated` the lane shares a process with ingestion. Measured in the ingestion A/B benchmark, the
  * lane's cost there was not its JavaScript but what it shares with `processEvent` on one thread: Prisma
  * response parsing, allocation and the garbage collection pauses they cause, which stop every in-flight
- * event (plans/intelligence-engine/certification/perf/README.md). A worker thread has its own V8 heap,
+ * event (plans/intelligence-engine/certification/perf/README.md). A separate process has its own V8 heap,
  * event loop and Prisma client, so none of that lands on the ingestion thread.
  *
- * The thread runs the same lane (wake listener, scheduler, handlers, abort budgets, generation fencing,
- * quarantine, backpressure). It reads the main thread's ingestion activity and pool pressure through
- * shared memory, so it yields to ingestion as an in-process lane does, and reports its status and metrics
- * by message, so health and /metrics are unchanged. A thread that exits unexpectedly is restarted with
- * backoff; claimed work it held is re-claimed after its lease, as after a process crash.
+ * Why a process and not a worker thread: Prisma's library query engine is native code that calls back
+ * into the JavaScript environment that created it. A worker thread that ends (terminated, an uncaught
+ * error, out of memory) while its client has queries in flight leaves those callbacks pointing at a
+ * destroyed environment, and the whole process aborts (SIGSEGV/SIGABRT, reproduced on Prisma 5.22; see
+ * the perf README). A process can die in any of those ways without touching ingestion.
+ *
+ * The process runs the same lane (wake listener, scheduler, handlers, abort budgets, generation fencing,
+ * quarantine, backpressure). The parent sends it ingestion activity (at once when a burst starts, then at
+ * most every ACTIVITY_SEND_MS) and the main pool's waiting-query count (every POOL_SAMPLE_MS), so it
+ * yields to ingestion as an in-process lane does, and it reports its status and metrics by message, so
+ * health and /metrics are unchanged. A lane process that exits unexpectedly is restarted with backoff;
+ * claimed work it held is re-claimed after its lease, as after a process crash.
  *
  * Dedicated `intelligence-worker` processes, and the `worker`/`general-worker` roles, are unaffected: only
  * `integrated` uses a thread. `INTELLIGENCE_LANE_THREAD=off` keeps the lane on the main thread, and so does
- * a build without the thread bundle (for example `next dev` before any `npm run build`). That fallback is
+ * a build without the thread bundle. `next dev` (NODE_ENV=development) keeps it there too, since it does not
+ * rebuild the bundle; that is the design in development, not a fallback. The other two are
  * outside the ingestion latency contract; instrumentation.ts warns about it and health and /metrics show it.
  *
  * With a stand-in (how instrumentation.ts starts it) no thread exists while intelligence is disabled:
@@ -48,16 +59,20 @@ import type { LaneStatus, LaneThreadStatus, LaneTotals } from './runner';
 
 /**
  * Built by scripts/build-intelligence-lane-thread.mjs, which `npm run build` (postbuild), `npm start`
- * (prestart, only when missing) and `npm run build:scripts` (the Docker image) all run.
+ * (prestart, every start, so a source install that pulled new code never runs an old lane) and `npm run build:scripts` (the Docker image) all run.
  */
 export const LANE_THREAD_BUNDLE = join('scripts', 'dist', 'intelligence-lane-thread.cjs');
 const RESTART_MIN_MS = 1_000;
 const RESTART_MAX_MS = 60_000;
 /** A thread that ran this long before exiting is restarted after the shortest delay again. */
 const RESTART_RESET_AFTER_MS = 5 * 60_000;
-/** Stopping waits this long for the thread to finish its in-flight cycle before terminating it. */
+/** Stopping waits this long for the thread to finish its in-flight cycle before killing it (safe for a process). */
 const DEFAULT_STOP_TIMEOUT_MS = 30_000;
 const POOL_SAMPLE_MS = 1_000;
+/** Activity updates are coalesced to at most one per this many milliseconds, except a burst start. */
+export const ACTIVITY_SEND_MS = 10;
+/** In-flight events at which the lane yields at once (see IngestionYield); reaching it is sent at once. */
+const BURST_IN_FLIGHT = INGESTION_YIELD_DEFAULTS.enterInFlight;
 
 export type LaneThreadMode = 'auto' | 'off';
 
@@ -118,9 +133,12 @@ export const LANE_FALLBACK_REMEDY = {
 export function planIntegratedLane(
   role: string,
   mode: LaneThreadMode = laneThreadMode(),
-  entry: string | null = resolveLaneThreadEntry()
+  entry: string | null = resolveLaneThreadEntry(),
+  development: boolean = isNextDevelopment()
 ): IntegratedLanePlan {
-  if (role !== 'integrated') return { mode: 'in-process', fallbackReason: null, remedy: '' };
+  // `next dev` recompiles the app but not the bundle, so a lane process there would run stale code.
+  if (role !== 'integrated' || development)
+    return { mode: 'in-process', fallbackReason: null, remedy: '' };
   const fallbackReason = mode === 'off' ? 'disabled-by-env' : entry ? null : 'bundle-missing';
   if (!fallbackReason) return { mode: 'thread', fallbackReason: null, remedy: '' };
   return {
@@ -140,7 +158,7 @@ export function restartDelayMs(consecutiveFailures: number): number {
 export interface LaneThreadOptions {
   /** Entry file of the thread; defaults to the bundle. Benchmarks and tests pass their own. */
   entry?: string;
-  /** Extra worker data for a custom entry (merged with the shared buffers). */
+  /** Extra data (JSON-serialisable) for a custom entry; it reads it with intelligenceLaneThreadData(). */
   workerData?: Record<string, unknown>;
   /** Messages other than the lane protocol, for a custom entry. */
   onMessage?: (message: unknown) => void;
@@ -168,8 +186,7 @@ interface HostState {
   running: boolean;
   options: LaneThreadOptions;
   entry: string;
-  data: LaneThreadData | null;
-  worker: Worker | null;
+  worker: ChildProcess | null;
   exited: Promise<void> | null;
   stoppedByRequest: boolean;
   thread: LaneThreadStatus;
@@ -178,6 +195,7 @@ interface HostState {
   consecutiveFailures: number;
   restartTimer: ReturnType<typeof setTimeout> | null;
   poolTimer: ReturnType<typeof setInterval> | null;
+  activity: ActivitySender;
   lastStatus: LaneStatus | null;
   lastMetrics: RuntimeOperationalMetricState | null;
   /** Totals of threads that already exited, so restarts never reset the cumulative counts. */
@@ -249,7 +267,7 @@ function statusOf(state: HostState): LaneStatus {
   };
 }
 
-function handleReport(state: HostState, worker: Worker, message: unknown) {
+function handleReport(state: HostState, worker: ChildProcess, message: unknown) {
   if (state.worker !== worker) return;
   const report = message as LaneThreadReport | null;
   if (report?.type === 'status') {
@@ -269,9 +287,9 @@ function handleReport(state: HostState, worker: Worker, message: unknown) {
       report.status.lastResult?.status === 'disabled'
     ) {
       state.parking = true;
-      worker.postMessage({ type: 'stop' } satisfies LaneThreadCommand);
+      send(worker, { type: 'stop' });
       const timer = setTimeout(
-        () => void worker.terminate(),
+        () => worker.kill('SIGKILL'),
         state.options.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS
       );
       timer.unref?.();
@@ -281,21 +299,90 @@ function handleReport(state: HostState, worker: Worker, message: unknown) {
   }
   if (report?.type === 'stopped') {
     // The lane has stopped and its pool is closed; nothing a module timer still holds is worth waiting for.
-    void worker.terminate();
+    worker.kill('SIGKILL');
     return;
   }
   state.options.onMessage?.(message);
 }
 
+function send(worker: ChildProcess, command: LaneThreadCommand) {
+  // A send that races the process exiting reports to its callback instead of throwing.
+  if (worker.connected) worker.send(command, undefined, {}, () => {});
+}
+
+interface ActivitySender {
+  pending: IngestionActivityValues | null;
+  sentInFlight: number;
+  sentAt: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+/**
+ * Forwards ingestion activity to the lane process. Runs on the ingestion hot path, so it only compares
+ * and, at most once per ACTIVITY_SEND_MS, sends three numbers; a burst start is never delayed.
+ */
+function forwardActivity(state: HostState, values: IngestionActivityValues) {
+  const sender = state.activity;
+  sender.pending = values;
+  if (sender.timer) return;
+  const burstStart = values[0] >= BURST_IN_FLIGHT && sender.sentInFlight < BURST_IN_FLIGHT;
+  const wait = sender.sentAt + ACTIVITY_SEND_MS - performance.now();
+  if (burstStart || wait <= 0) return flushActivity(state);
+  sender.timer = setTimeout(() => flushActivity(state), wait);
+  sender.timer.unref?.();
+}
+
+function flushActivity(state: HostState) {
+  const sender = state.activity;
+  if (sender.timer) clearTimeout(sender.timer);
+  sender.timer = null;
+  if (!sender.pending || !state.worker) return;
+  sender.sentInFlight = sender.pending[0];
+  sender.sentAt = performance.now();
+  send(state.worker, { type: 'activity', values: sender.pending });
+}
+
+/**
+ * The lane protects the pool ingestion uses: send it the pool's waiting-query count while a lane process
+ * exists. One engine-local metrics read per second; it never borrows a connection.
+ */
+function startPoolSampling(state: HostState, worker: ChildProcess) {
+  const readPool = state.options.poolWaitingQueries ?? (() => getPrismaPoolWaitCount());
+  let sampling = false;
+  state.poolTimer = setInterval(() => {
+    if (sampling) return;
+    sampling = true;
+    void readPool()
+      .catch(() => null)
+      .then(waiting =>
+        send(worker, {
+          type: 'pool',
+          waiting: waiting === null || !Number.isFinite(waiting) || waiting < 0 ? null : waiting,
+        })
+      )
+      .finally(() => {
+        sampling = false;
+      });
+  }, state.options.poolSampleMs ?? POOL_SAMPLE_MS);
+  state.poolTimer.unref?.();
+}
+
+function stopPoolSampling(state: HostState) {
+  if (state.poolTimer) clearInterval(state.poolTimer);
+  state.poolTimer = null;
+}
+
 function spawn(state: HostState) {
   state.restartTimer = null;
-  if (!state.running || !state.data) return;
-  let worker: Worker;
+  if (!state.running) return;
+  let worker: ChildProcess;
   try {
-    worker = new Worker(state.entry, {
-      name: 'opsknight-intelligence-lane',
-      workerData: { ...state.options.workerData, ...state.data },
-      env: intelligenceLaneThreadEnv(),
+    worker = fork(state.entry, [], {
+      env: intelligenceLaneThreadEnv(undefined, state.options.workerData),
+      // The parent's flags (Next.js's, a debugger's) are not the lane's.
+      execArgv: [],
+      // Structured clone, so status Dates arrive as Dates.
+      serialization: 'advanced',
     });
   } catch (error) {
     failed(state, null, 'Lane thread could not be created', error);
@@ -310,13 +397,18 @@ function spawn(state: HostState) {
   state.thread.startedAt = new Date(state.threadStartedAt);
   let thrown: unknown = null;
   worker.on('message', message => handleReport(state, worker, message));
-  worker.on('error', error => {
-    thrown = error;
-  });
+  state.activity.sentInFlight = 0;
+  mirrorIngestionActivity(values => forwardActivity(state, values));
+  flushActivity(state);
+  startPoolSampling(state, worker);
   state.exited = new Promise<void>(resolve => {
-    worker.once('exit', code => {
+    let ended = false;
+    const end = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (ended) return;
+      ended = true;
       resolve();
       if (state.worker !== worker) return;
+      stopPoolSampling(state);
       // Totals of the thread that ended carry over to the next one.
       state.carried = addTotals(state.carried, state.lastStatus?.totals);
       state.lastStatus = state.lastStatus
@@ -333,15 +425,29 @@ function spawn(state: HostState) {
         state,
         worker,
         thrown
-          ? 'Lane thread failed with an uncaught error'
-          : `Lane thread exited with code ${code}`,
+          ? 'Lane thread could not be started'
+          : signal
+            ? `Lane thread was killed by ${signal}`
+            : `Lane thread exited with code ${code}`,
         thrown
       );
+    };
+    worker.once('exit', end);
+    // A process that could not be spawned may report only an error, never an exit.
+    worker.on('error', error => {
+      if (worker.pid !== undefined) return;
+      thrown = error;
+      end(null, null);
     });
   });
 }
 
-function failed(state: HostState, worker: Worker | null, description: string, error: unknown) {
+function failed(
+  state: HostState,
+  worker: ChildProcess | null,
+  description: string,
+  error: unknown
+) {
   if (worker && Date.now() - state.threadStartedAt >= RESTART_RESET_AFTER_MS)
     state.consecutiveFailures = 0;
   state.consecutiveFailures += 1;
@@ -360,6 +466,7 @@ function failed(state: HostState, worker: Worker | null, description: string, er
 
 /** Runs the disabled lane on this thread until a cycle reads settings as enabled, then starts a thread. */
 function park(state: HostState) {
+  mirrorIngestionActivity(null);
   state.parked = true;
   state.thread.state = 'parked';
   state.thread.startedAt = null;
@@ -388,19 +495,17 @@ function park(state: HostState) {
 }
 
 /**
- * Starts the lane in a worker thread. Returns false (and starts nothing) when there is no thread entry,
+ * Starts the lane in its own process. Returns false (and starts nothing) when there is no thread entry,
  * so the caller can run the lane on the main thread instead. Idempotent while running.
  */
 export function startIntelligenceLaneThread(options: LaneThreadOptions = {}): boolean {
   if (host?.running) return true;
   const entry = options.entry ?? resolveLaneThreadEntry();
   if (!entry) return false;
-  const poolWaiting = createPoolWaitingBuffer();
   const state: HostState = {
     running: true,
     options,
     entry,
-    data: { activity: shareIngestionActivity(), poolWaiting },
     worker: null,
     exited: null,
     stoppedByRequest: false,
@@ -410,6 +515,7 @@ export function startIntelligenceLaneThread(options: LaneThreadOptions = {}): bo
     consecutiveFailures: 0,
     restartTimer: null,
     poolTimer: null,
+    activity: { pending: null, sentInFlight: 0, sentAt: Number.NEGATIVE_INFINITY, timer: null },
     lastStatus: null,
     lastMetrics: null,
     carried: { ...ZERO_TOTALS },
@@ -418,35 +524,20 @@ export function startIntelligenceLaneThread(options: LaneThreadOptions = {}): bo
     moving: null,
   };
   host = state;
-  // The lane protects the pool ingestion uses: publish its waiting-query count for the thread to read.
-  // One engine-local metrics read per second; it never borrows a connection.
-  const readPool = options.poolWaitingQueries ?? (() => getPrismaPoolWaitCount());
-  let sampling = false;
-  state.poolTimer = setInterval(() => {
-    if (sampling) return;
-    sampling = true;
-    void readPool()
-      .catch(() => null)
-      .then(waiting => writePoolWaiting(poolWaiting, waiting))
-      .finally(() => {
-        sampling = false;
-      });
-  }, options.poolSampleMs ?? POOL_SAMPLE_MS);
-  state.poolTimer.unref?.();
   globalThis.opsKnightIntelligenceLaneStatusSource = () => statusOf(state);
   if (options.standIn) {
     park(state);
     logger.info('[Intelligence] Lane thread starts when intelligence is enabled', { entry });
   } else {
     spawn(state);
-    logger.info('[Intelligence] Lane started in a worker thread', { entry });
+    logger.info('[Intelligence] Lane started in its own process', { entry });
   }
   return true;
 }
 
 /**
  * Stops the lane: the thread stops scheduling, waits for its in-flight cycle (abortable handlers end
- * promptly), disconnects its pool and exits. A thread that does not exit in time is terminated; any item
+ * promptly), disconnects its pool and exits. A thread that does not exit in time is killed; any item
  * it still held is re-claimed after its lease.
  */
 export async function stopIntelligenceLaneThread(): Promise<void> {
@@ -456,8 +547,7 @@ export async function stopIntelligenceLaneThread(): Promise<void> {
   state.stoppedByRequest = true;
   if (state.restartTimer) clearTimeout(state.restartTimer);
   state.restartTimer = null;
-  if (state.poolTimer) clearInterval(state.poolTimer);
-  state.poolTimer = null;
+  mirrorIngestionActivity(null);
   await state.moving;
   if (state.parked) {
     await state.options.standIn!.stop().catch(() => {});
@@ -466,7 +556,7 @@ export async function stopIntelligenceLaneThread(): Promise<void> {
   const worker = state.worker;
   if (worker) {
     state.thread.state = 'stopping';
-    worker.postMessage({ type: 'stop' } satisfies LaneThreadCommand);
+    send(worker, { type: 'stop' });
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timedOut = await Promise.race([
       state.exited!.then(() => false),
@@ -479,8 +569,8 @@ export async function stopIntelligenceLaneThread(): Promise<void> {
     ]);
     if (timer) clearTimeout(timer);
     if (timedOut) {
-      logger.warn('[Intelligence] Lane thread did not stop in time; terminating it');
-      await worker.terminate();
+      logger.warn('[Intelligence] Lane thread did not stop in time; killing it');
+      worker.kill('SIGKILL');
       await state.exited;
     }
   }
@@ -488,6 +578,6 @@ export async function stopIntelligenceLaneThread(): Promise<void> {
 }
 
 /** Whether a lane thread is running in this process (for tests and diagnostics). */
-export function laneThreadWorker(): Worker | null {
+export function laneThreadWorker(): ChildProcess | null {
   return host?.worker ?? null;
 }

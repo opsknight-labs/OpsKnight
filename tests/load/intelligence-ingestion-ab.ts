@@ -796,7 +796,7 @@ async function threadCandidate(options: Options): Promise<CandidateLane> {
         const worker = laneThreadWorker();
         if (!worker) return resolve(empty);
         pending = resolve;
-        worker.postMessage({ type: 'bench-snapshot' });
+        worker.send({ type: 'bench-snapshot' });
         setTimeout(() => {
           if (pending === resolve) {
             pending = null;

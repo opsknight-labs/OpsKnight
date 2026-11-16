@@ -110,8 +110,8 @@ export function selectPrePagingLookupDatasourceUrl(
 }
 
 /**
- * Set (to `1`) only in the environment of the worker thread that runs the intelligence lane for an
- * `integrated` process (see intelligence/jobs/lane-thread.ts). That thread's Prisma client is the lane's
+ * Set (to `1`) only in the environment of the child process that runs the intelligence lane for an
+ * `integrated` process (see intelligence/jobs/lane-thread.ts). That process's Prisma client is the lane's
  * own pool. Internal: operators never set it.
  */
 export const INTELLIGENCE_LANE_THREAD_ENV = 'OPSKNIGHT_INTELLIGENCE_LANE_THREAD';
@@ -124,14 +124,34 @@ export function isIntelligenceLaneThread(
 
 /** The environment of a lane thread: this process's, marked as the lane's (see `isIntelligenceLaneThread`). */
 export function intelligenceLaneThreadEnv(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  data: object = {}
 ): Record<string, string | undefined> {
-  return { ...env, [INTELLIGENCE_LANE_THREAD_ENV]: '1' };
+  return {
+    ...env,
+    [INTELLIGENCE_LANE_THREAD_ENV]: '1',
+    [INTELLIGENCE_LANE_DATA_ENV]: JSON.stringify(data),
+  };
+}
+
+/** Extra data (JSON) a benchmark or test hands its own lane entry. Internal. */
+export const INTELLIGENCE_LANE_DATA_ENV = 'OPSKNIGHT_INTELLIGENCE_LANE_DATA';
+
+/** The extra data the parent gave this lane process (an empty object when none). */
+export function intelligenceLaneThreadData<T extends object>(
+  env: NodeJS.ProcessEnv = process.env
+): Partial<T> {
+  return JSON.parse(env[INTELLIGENCE_LANE_DATA_ENV] || '{}') as Partial<T>;
+}
+
+/** `next dev`: it recompiles the app but never the lane bundle, so the lane stays in-process there. */
+export function isNextDevelopment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === 'development';
 }
 
 /**
  * `INTELLIGENCE_LANE_THREAD`: `off` keeps an `integrated` process's lane on its main thread; anything else
- * (the default) runs it in a worker thread when the build includes the thread bundle.
+ * (the default) runs it in a child process when the build includes the thread bundle.
  */
 export function intelligenceLaneThreadMode(
   value: string | undefined = process.env.INTELLIGENCE_LANE_THREAD

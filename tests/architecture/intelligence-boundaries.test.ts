@@ -128,12 +128,14 @@ describe('intelligence architecture boundaries', () => {
     expect(channel).toMatch(typeOnly);
     expect(channel).not.toMatch(/^import (?!type )[^;]*from '\.\/runner';$/m);
     expect(channel).not.toMatch(/@\/lib\/prisma'/);
-    // Only the host starts a lane thread, and only the host marks a thread as the lane's.
+    // Only the host starts a lane process, and only the host marks a process as the lane's. Nothing that
+    // holds a Prisma client runs in a worker thread: a thread that ends with queries in flight aborts the
+    // whole process (the library engine calls back into the destroyed thread; see lane-thread.ts).
     for (const file of sourceFiles(join(root, 'src'))) {
       const source = read(file);
       const name = relative(root, file);
-      if (/new Worker\(/.test(source))
-        expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
+      expect(source, name).not.toMatch(/worker_threads/);
+      if (/\bfork\(/.test(source)) expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
       if (/intelligenceLaneThreadEnv\(\)/.test(source))
         expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
     }

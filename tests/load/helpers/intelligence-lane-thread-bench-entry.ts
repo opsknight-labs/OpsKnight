@@ -1,15 +1,15 @@
 /**
- * Worker-thread entry for the ingestion A/B benchmark's candidate arm with `--lane-mode thread` (the
+ * Child-process entry for the ingestion A/B benchmark's candidate arm with `--lane-mode thread` (the
  * production default for `integrated`). It is bundled exactly like the production entry
  * (scripts/build-intelligence-lane-thread.mjs) and started by the production host (lane-thread.ts), so the
- * thread has its own heap and Prisma client and reads the main thread's ingestion activity and pool
- * pressure through shared memory. The only difference from production is the loop: like the in-process
+ * process has its own heap and Prisma client and receives the parent's ingestion activity and pool
+ * pressure over IPC. The only difference from production is the loop: like the in-process
  * candidate it runs cycles back to back with the periodic sweeps held off and the paging-lag probe
  * bypassed, the worst case for contention.
  */
-import { parentPort, workerData } from 'node:worker_threads';
 import { performance } from 'node:perf_hooks';
 import { disconnectPrisma } from '../../../src/lib/prisma';
+import { intelligenceLaneThreadData } from '../../../src/lib/prisma-datasource';
 import {
   DEFAULT_HANDLERS,
   createLaneState,
@@ -19,15 +19,16 @@ import {
   type WorkHandlers,
 } from '../../../src/lib/intelligence/jobs/runner';
 import {
+  exitWithParent,
   laneHostForThread,
+  parentProcessPort,
   serveLaneThread,
-  type LaneThreadData,
 } from '../../../src/lib/intelligence/jobs/lane-thread-channel';
 import type { WorkKind } from '../../../src/lib/intelligence/jobs/work-queue';
 
-if (!parentPort) throw new Error('Run this entry in a worker thread');
-const port = parentPort;
-const data = workerData as LaneThreadData & { laneYield: boolean };
+const port = parentProcessPort();
+exitWithParent();
+const data = intelligenceLaneThreadData<{ laneYield: boolean }>();
 
 const tracker = {
   completed: 0,
@@ -57,7 +58,7 @@ const handlers = Object.fromEntries(
   ])
 ) as WorkHandlers;
 
-const host = laneHostForThread(data);
+const host = laneHostForThread(port);
 configureLaneHost(host);
 const state = createLaneState();
 if (!data.laneYield) state.ingestionYield = undefined;

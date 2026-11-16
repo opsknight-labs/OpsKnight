@@ -1,4 +1,7 @@
-import { readSharedIngestionActivity } from '@/lib/ingestion/activity';
+import {
+  readMirroredIngestionActivity,
+  type IngestionActivityValues,
+} from '@/lib/ingestion/activity';
 import {
   exportRuntimeOperationalMetricState,
   type RuntimeOperationalMetricState,
@@ -6,70 +9,69 @@ import {
 import type { LaneHost, LaneStatus } from './runner';
 
 /**
- * The protocol between an `integrated` process's main thread and the worker thread running its
- * intelligence lane (see lane-thread.ts). Shared memory carries what the lane polls often and the main
- * thread must not pay a message for: ingestion activity (written on every event) and the main pool's
- * waiting-query count. Messages carry the rest.
+ * The protocol between an `integrated` process and the child process running its intelligence lane (see
+ * lane-thread.ts; the "lane thread" is a forked process). Everything travels over the IPC channel: the
+ * lane reads ingestion activity and the main pool's waiting-query count from the last values the parent
+ * sent (the parent bounds how often it sends them), and reports its status and metrics back.
  */
-export interface LaneThreadData {
-  /** Written by the main thread's ingestion activity counter (see ingestion/activity.ts). */
-  activity: SharedArrayBuffer;
-  /** One int32: queries waiting for a connection on the main thread's pool, -1 when unknown. */
-  poolWaiting: SharedArrayBuffer;
-}
 
-/** Thread to main. */
+/** Child to parent. */
 export type LaneThreadReport =
   | { type: 'status'; status: LaneStatus; metrics: RuntimeOperationalMetricState }
   | { type: 'stopped' };
 
-/** Main to thread. */
-export type LaneThreadCommand = { type: 'stop' };
+/** Parent to child. */
+export type LaneThreadCommand =
+  | { type: 'stop' }
+  | { type: 'activity'; values: IngestionActivityValues }
+  | { type: 'pool'; waiting: number | null };
 
-export const POOL_WAITING_UNKNOWN = -1;
 
-export function createPoolWaitingBuffer(): SharedArrayBuffer {
-  const buffer = new SharedArrayBuffer(4);
-  Atomics.store(new Int32Array(buffer), 0, POOL_WAITING_UNKNOWN);
-  return buffer;
-}
-
-export function writePoolWaiting(buffer: SharedArrayBuffer, waiting: number | null): void {
-  Atomics.store(
-    new Int32Array(buffer),
-    0,
-    waiting === null || !Number.isFinite(waiting) || waiting < 0
-      ? POOL_WAITING_UNKNOWN
-      : Math.min(2 ** 31 - 1, Math.floor(waiting))
-  );
-}
-
-export function readPoolWaiting(buffer: SharedArrayBuffer): number | null {
-  const value = Atomics.load(new Int32Array(buffer), 0);
-  return value < 0 ? null : value;
-}
-
-/** What the lane observes when it runs in a thread: the main thread's ingestion and pool, not its own. */
+/** What the lane observes in its own process: the parent's ingestion and pool, as last sent. */
 export function laneHostForThread(
-  data: LaneThreadData
+  port: Pick<Port, 'on'>
 ): Required<Omit<LaneHost, 'onCycle' | 'handOffWhenEnabled'>> {
+  let activity: IngestionActivityValues = [0, 0, 0];
+  let poolWaiting: number | null = null;
+  port.on('message', message => {
+    const command = message as LaneThreadCommand | null;
+    if (command?.type === 'activity') activity = command.values;
+    else if (command?.type === 'pool') poolWaiting = command.waiting;
+  });
   return {
-    activity: () => readSharedIngestionActivity(data.activity),
-    poolWaitingQueries: async () => readPoolWaiting(data.poolWaiting),
+    activity: () => readMirroredIngestionActivity(activity),
+    poolWaitingQueries: async () => poolWaiting,
   };
 }
 
-interface Port {
+export interface Port {
   postMessage(message: unknown): void;
   on(event: 'message', listener: (message: unknown) => void): unknown;
   close(): void;
+}
+
+/**
+ * This lane process's channel to its parent. The parent ends the process after `stopped`, so `close` has
+ * nothing to do; a parent that goes away disconnects the channel and the process exits (see the entry).
+ */
+export function parentProcessPort(proc: NodeJS.Process = process): Port {
+  const send = proc.send?.bind(proc);
+  if (!send) throw new Error('The intelligence lane entry must run as a forked child process');
+  return {
+    postMessage: message => {
+      // A send that races the channel closing reports to its callback instead of throwing.
+      if (proc.connected) send(message, undefined, {}, () => {});
+    },
+    on: (event, listener) => proc.on(event, listener),
+    close: () => {},
+  };
 }
 
 /** Statuses are sent at most this often (the last one is always sent), so a busy lane costs the main thread little. */
 export const STATUS_REPORT_INTERVAL_MS = 1_000;
 
 /**
- * Serves the main thread from inside a lane thread: reports status (with the thread's metrics) after
+ * Serves the parent from inside a lane process: reports status (with the thread's metrics) after
  * cycles, and on `stop` stops the lane, sends a last status and `stopped`, then closes the port.
  */
 export function serveLaneThread(
@@ -111,7 +113,7 @@ export function serveLaneThread(
       try {
         await lane.stop();
       } catch {
-        // The thread exits either way; the main thread terminates it after `stopped`.
+        // The process ends either way; the parent ends it after `stopped`.
       } finally {
         send();
         closed = true;
@@ -121,4 +123,15 @@ export function serveLaneThread(
     })();
   });
   return { report, flush: send };
+}
+
+/**
+ * A lane process lives only as long as its parent's channel: never an orphan lane holding connections
+ * beside the parent's next one. Ctrl-C and similar signals reach the whole process group; the parent
+ * handles them by stopping the lane, so this process leaves them to it.
+ */
+export function exitWithParent(proc: NodeJS.Process = process): void {
+  proc.on('disconnect', () => proc.exit(0));
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) proc.on(signal, () => {});
+  if (!proc.connected) proc.exit(0);
 }

@@ -269,7 +269,7 @@ export interface LaneState {
 
 /**
  * How the lane observes the process it serves. In-process it reads this thread's ingestion activity and
- * Prisma pool; a lane thread (see lane-thread-entry.ts) reads the main thread's through shared memory and
+ * Prisma pool; a lane thread (see lane-thread-entry.ts) reads its parent process's, sent over IPC, and
  * reports each cycle back to it.
  */
 export interface LaneHost {
@@ -914,7 +914,7 @@ export interface LaneStatus {
   wakeLeader: boolean | null;
   /** Cumulative since process start; lets operators and benchmarks see real throughput. */
   totals: LaneTotals;
-  /** Present when the lane runs in a worker thread of this process (`integrated`; see lane-thread.ts). */
+  /** Present when the lane runs in a child process of this one (`integrated`; see lane-thread.ts). */
   thread?: LaneThreadStatus;
   /** Where the lane runs. `in-process` in `integrated` is a fallback outside the ingestion contract. */
   mode?: 'thread' | 'in-process';
@@ -1117,7 +1117,7 @@ export async function stopIntelligenceLane(): Promise<void> {
 }
 
 declare global {
-  /** Set while the lane runs in a worker thread; the status it reports replaces the local one. */
+  /** Set while the lane runs in a child process; the status it reports replaces the local one. */
   var opsKnightIntelligenceLaneStatusSource: (() => LaneStatus) | undefined;
 }
 
