@@ -29,7 +29,11 @@ export default function InsightPhrasing({
       startTransition(async () => setResult(await phraseInsightsAction(scope)));
   };
 
-  const phrased = result ? titles.filter(([id]) => result.phrases[id]) : [];
+  const phrases = new Map(Object.entries(result?.phrases ?? {}));
+  const phrased = titles.flatMap(([id, title]) => {
+    const text = phrases.get(id);
+    return text ? [{ id, title, text }] : [];
+  });
   return (
     <div className="pt-3">
       <button
@@ -46,10 +50,10 @@ export default function InsightPhrasing({
           {pending && <p className="text-xs text-muted-foreground">Writing…</p>}
           {phrased.length > 0 && (
             <ul className="space-y-2">
-              {phrased.map(([id, title]) => (
+              {phrased.map(({ id, title, text }) => (
                 <li key={id} className="text-sm">
                   <span className="sr-only">{title}: </span>
-                  {result?.phrases[id]}
+                  {text}
                 </li>
               ))}
             </ul>
