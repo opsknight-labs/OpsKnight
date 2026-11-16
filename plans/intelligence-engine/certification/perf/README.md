@@ -345,6 +345,22 @@ lane runs in a forked process; ingestion activity crosses over IPC (burst start 
 every 10 ms). `tests/integration/intelligence/lane-thread.test.ts` crashes a lane process with queries in
 flight three times, then kills it on stop, and checks this process still answers queries.
 
+**Gate status on the lane-process code: NOT MEASURED.** The 2026-11-11 passes above were measured with
+the lane in a worker thread (`95454c2d9`); the lane now runs in a child process and talks to it over IPC
+instead of a SharedArrayBuffer, so those runs are not evidence for this code. A campaign on 2026-11-16
+held the machine-wide lock from 19:02 to 22:13 and started no run: it waits for a 1-minute load below
+2.6 with no other heavy process, and the host never got there (load 3 to 41 from other sessions' test
+runs, and for about three hours a hung headless Chrome GPU process of another session spinning one core,
+which the host check counts as a heavy process). No invocation was started, so there are no valid or
+discarded runs to record for this code. Still required, on a quiet host: 3 valid invocations each of the
+CI shape and every noise control ON (`--lane-mode thread`, which now starts the lane process), and the
+storm gate at 20k / 1k. Until then the ingestion gate is open for this code.
+
+The same campaign found that the host check counted idle `@playwright/mcp` servers (which agent sessions
+keep running) as browser test runs, which would have made every run invalid; they are now excluded, while
+a browser such a server launches and a Playwright test run still count
+(`tests/unit/load-host-validity.test.ts`).
+
 ## Query plans (`tests/load/intelligence-query-plans.ts`)
 
 `query-plans-2026-11-08-local.json` (21k history): **PASS**. Seven queries index-backed, including the
