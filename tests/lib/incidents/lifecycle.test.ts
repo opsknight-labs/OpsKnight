@@ -145,7 +145,7 @@ describe('incident lifecycle command engine', () => {
       incidentId: 'inc-page',
       command: 'SUPPRESS',
       source: 'WEB',
-      ackedNotification: { id: 'ntf-1', via: 'PUSH' },
+      ackedNotification: { id: 'ntf-1', via: 'PUSH', userId: 'user-1' },
       now: NOW,
     });
     expect(updateMany).not.toHaveBeenCalled();

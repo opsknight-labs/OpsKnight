@@ -51,7 +51,7 @@ export interface IncidentLifecycleInput {
    * action). Stamped on that one notification inside the acknowledgement transaction; `userId` keeps a
    * caller from marking somebody else's page.
    */
-  ackedNotification?: { id: string; via: 'VOICE' | 'PUSH' | 'SMS' | 'LINK'; userId?: string };
+  ackedNotification?: { id: string; via: 'VOICE' | 'PUSH' | 'SMS' | 'LINK'; userId: string };
   /** Test seam. Production callers should use the server/DB clock. */
   now?: Date;
 }

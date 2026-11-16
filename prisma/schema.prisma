@@ -2010,7 +2010,7 @@ model Notification {
   deliveryProvider       String?
   providerMessageId      String?                       @unique
   attempts               Int                           @default(0)
-  /// Set when the acknowledgement arrived through this notification (voice key press, push action).
+  /// Set when the acknowledgement arrived through this notification (voice key press, push action; SMS/LINK reserved).
   ackedAt                DateTime?
   ackedVia               String?
   /// Escalation step that sent this page; null for anything that is not an escalation page.
