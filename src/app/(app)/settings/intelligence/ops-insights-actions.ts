@@ -19,6 +19,7 @@ export async function saveOpsInsightSwitches(
     await updateOpsInsightSwitches(
       {
         ...Object.fromEntries(OPS_INSIGHT_SWITCHES.map(name => [name, form.get(name) === 'on'])),
+        runbookFixWindowMinutes: Number(form.get('runbookFixWindowMinutes')),
         expectedRevision: Number(form.get('expectedRevision')),
       },
       { actorId: actor.id, source: 'UI' }

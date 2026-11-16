@@ -1132,6 +1132,21 @@ export const OPS_ROLLUPS = {
   /** subjectKey = runbook id. tags { status }. count = finished executions, sum = total run time in ms. */
   runbookOutcome: 'ops.runbook.outcome',
   /**
+   * subjectKey = runbook id. tags { status (SUCCEEDED | FAILED | TIMED_OUT), onIncident, fixMinutes,
+   * durationBucket }. count = finished runs. fixMinutes is set when the run succeeded and its incident resolved
+   * after the run started and at most a day after it finished: whole minutes from finish to resolution (0 when
+   * it resolved during the run). A reader counts runs with fixMinutes <= its fix window, so the window can
+   * change without a recompute. durationBucket = floor(4 * log2(seconds)), a histogram with about 19%
+   * resolution for the median (RUNBOOK_DURATION_BUCKETS_PER_DOUBLING). Computed a day late
+   * (OPS_ROLLUP_LAG_DAYS), once every resolution inside a day is in.
+   */
+  runbookRun: 'ops.runbook.run',
+  /**
+   * subjectKey = runbook id. tags { stepKey, name, status (SUCCEEDED | FAILED), retried (more than one
+   * attempt), errorCode (of the failure, or of the failed attempt before a retry) }. count = step runs.
+   */
+  runbookStepOutcome: 'ops.runbook.step_outcome',
+  /**
    * subjectKey = automation version id. tags { serviceId, ruleId (null = no route rule matched), ruleName, mode }.
    * count = decisions, sum = decisions that fell back.
    */
@@ -1214,6 +1229,50 @@ export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>>
     FROM "RunbookExecution" e
     WHERE e."completedAt" >= ${dayStart} AND e."completedAt" < ${dayEnd}
     GROUP BY e."runbookId", e."status"`,
+  // idx_runbook_execution_completed, then the incident by primary key. 1440 = the largest fix window.
+  [OPS_ROLLUPS.runbookRun]: (sql, dayStart, dayEnd) => sql`
+    SELECT run."runbookId" AS "subjectKey", count(*)::int AS "count", 0::float AS "sum",
+      jsonb_build_object('status', run."status", 'onIncident', run."onIncident",
+        'fixMinutes', run."fixMinutes", 'durationBucket', run."durationBucket") AS "tags"
+    FROM (
+      SELECT e."runbookId", e."status"::text AS "status", e."incidentId" IS NOT NULL AS "onIncident",
+        CASE WHEN e."status" = 'SUCCEEDED' AND i."status" = 'RESOLVED' AND e."startedAt" IS NOT NULL
+            AND i."resolvedAt" >= e."startedAt"
+            AND i."resolvedAt" <= e."completedAt" + make_interval(mins => 1440)
+          THEN greatest(0, ceil(extract(epoch FROM (i."resolvedAt" - e."completedAt")) / 60))::int
+        END AS "fixMinutes",
+        CASE WHEN e."startedAt" IS NOT NULL
+          THEN floor(4 * log(2, greatest(1, extract(epoch FROM (e."completedAt" - e."startedAt")))::numeric))::int
+        END AS "durationBucket"
+      FROM "RunbookExecution" e
+      LEFT JOIN "Incident" i ON i."id" = e."incidentId"
+      WHERE e."completedAt" >= ${dayStart} AND e."completedAt" < ${dayEnd}
+        AND e."status" IN ('SUCCEEDED', 'FAILED', 'TIMED_OUT')
+    ) run
+    GROUP BY run."runbookId", run."status", run."onIncident", run."fixMinutes", run."durationBucket"`,
+  // idx_runbook_execution_completed, then RunbookExecutionStep ("executionId") and the attempt by its
+  // unique ("executionStepId", "attemptNumber").
+  [OPS_ROLLUPS.runbookStepOutcome]: (sql, dayStart, dayEnd) => sql`
+    SELECT step."runbookId" AS "subjectKey", count(*)::int AS "count", 0::float AS "sum",
+      jsonb_build_object('stepKey', step."stepKey", 'name', max(step."name"), 'status', step."status",
+        'retried', step."retried", 'errorCode', step."errorCode") AS "tags"
+    FROM (
+      SELECT e."runbookId", s."stepKey", left(s."name", 120) AS "name", s."status"::text AS "status",
+        s."attemptCount" > 1 AS "retried",
+        CASE WHEN s."status" = 'FAILED' OR s."attemptCount" > 1
+          THEN left(coalesce(s."errorCode", attempt."errorCode"), 64) END AS "errorCode"
+      FROM "RunbookExecution" e
+      JOIN "RunbookExecutionStep" s ON s."executionId" = e."id"
+      LEFT JOIN LATERAL (
+        SELECT a."errorCode" FROM "RunbookStepAttempt" a
+        WHERE a."executionStepId" = s."id" AND a."status" IN ('FAILED', 'TIMED_OUT')
+          AND a."errorCode" IS NOT NULL
+        ORDER BY a."attemptNumber" DESC LIMIT 1
+      ) attempt ON true
+      WHERE e."completedAt" >= ${dayStart} AND e."completedAt" < ${dayEnd}
+        AND s."status" IN ('SUCCEEDED', 'FAILED')
+    ) step
+    GROUP BY step."runbookId", step."stepKey", step."status", step."retried", step."errorCode"`,
   // One probe of IncidentAutomationDecision ("serviceId", "createdAt") per service that has automation.
   [OPS_ROLLUPS.automationRuleMatch]: (sql, dayStart, dayEnd) => sql`
     SELECT d."versionId" AS "subjectKey", count(*)::int AS "count",
@@ -1225,6 +1284,11 @@ export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>>
       ON d."serviceId" = config."serviceId" AND d."createdAt" >= ${dayStart} AND d."createdAt" < ${dayEnd}
     WHERE d."versionId" IS NOT NULL
     GROUP BY d."versionId", d."serviceId", d."matchedRouteRuleId", d."mode"`,
+};
+
+/** Days a rollup waits after a day ends, for sources whose rows settle later (a resolution after a run). */
+export const OPS_ROLLUP_LAG_DAYS: Partial<Record<OpsRollupName, number>> = {
+  [OPS_ROLLUPS.runbookRun]: 1,
 };
 
 const OPS_ROLLUP_DAY_MS = 86_400_000;
@@ -1273,8 +1337,10 @@ export async function generateOpsRollups(
             ? new Date(watermark.bucket.getTime() + OPS_ROLLUP_DAY_MS)
             : earliest;
           const day = next < earliest ? earliest : next;
-          // Only complete days are rolled up.
-          if (day >= today) return false;
+          // Only complete days are rolled up, and settled ones for a lagging source.
+          // eslint-disable-next-line security/detect-object-injection -- name is a key of the fixed rollup map
+          const lagDays = OPS_ROLLUP_LAG_DAYS[name] ?? 0;
+          if (day.getTime() >= today.getTime() - lagDays * OPS_ROLLUP_DAY_MS) return false;
           const rows = await tx.$queryRaw<OpsRollupSourceRow[]>(
             source(PrismaRuntime.sql, day, new Date(day.getTime() + OPS_ROLLUP_DAY_MS))
           );

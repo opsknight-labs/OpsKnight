@@ -6,6 +6,8 @@ import { escalationPolicyProducer } from './escalation-policy';
 import { integrationHealthProducer } from './integration-health';
 import { onCallPersonProducer, onCallScheduleProducer } from './oncall';
 import { repeatCauseProducer } from './postmortem-repeat-cause';
+import { missingRunbookProducer } from './missing-runbook';
+import { runbookHealthProducer } from './runbook-health';
 
 /**
  * The kinds registry. To add a kind: add one file in this directory that exports an OpsInsightProducer,
@@ -19,4 +21,6 @@ export const OPS_INSIGHT_PRODUCERS: readonly AnyOpsInsightProducer[] = [
   onCallScheduleProducer,
   onCallPersonProducer,
   repeatCauseProducer,
+  runbookHealthProducer,
+  missingRunbookProducer,
 ];

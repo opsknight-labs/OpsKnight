@@ -1,20 +1,23 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
-import { RESPONSE_LIMITS, type RunbookWeights } from '../contract';
+import { INTELLIGENCE_SETTINGS_DEFAULTS, RESPONSE_LIMITS, type RunbookWeights } from '../contract';
 import type { FindingRow } from '../similarity/findings';
 import { rankRunbooks, type RunbookOutcomeCounts } from './wilson';
 import { createHash } from 'node:crypto';
 
 const DAY_MS = 86_400_000;
 const MAX_BOUND_RUNBOOKS = 50;
-/** A run counts as having fixed its incident when the incident resolved within this long after it finished. */
-const RESOLVED_WITHIN_MINUTES = 120;
-
-/** Resolution must follow the start of the run; an already-resolved incident is not a successful fix. */
-const fixed = Prisma.sql`e."status" = 'SUCCEEDED' AND i."status" = 'RESOLVED'
+/**
+ * A run fixed its incident when it succeeded and the incident resolved within `withinMinutes` after it
+ * finished (IntelligenceSettings.runbookFixWindowMinutes). Resolution must follow the start of the run; an
+ * already-resolved incident is not a successful fix. Expects aliases e (RunbookExecution) and i (Incident).
+ */
+export const runbookFixedSql = (
+  withinMinutes: number = INTELLIGENCE_SETTINGS_DEFAULTS.runbookFixWindowMinutes
+) => Prisma.sql`e."status" = 'SUCCEEDED' AND i."status" = 'RESOLVED'
   AND e."startedAt" IS NOT NULL AND e."completedAt" IS NOT NULL
   AND i."resolvedAt" >= e."startedAt"
-  AND i."resolvedAt" <= e."completedAt" + make_interval(mins => ${RESOLVED_WITHIN_MINUTES}::int)`;
+  AND i."resolvedAt" <= e."completedAt" + make_interval(mins => ${withinMinutes}::int)`;
 
 type HistoryRow = {
   runbookId: string;
@@ -28,7 +31,7 @@ type HistoryRow = {
 /**
  * Ranks runbooks for an incident's service by how reliably they have fixed things here. A run counts as a
  * success only when it completed successfully and the incident it ran against was
- * resolved within RESOLVED_WITHIN_MINUTES afterwards: a script that "succeeds" without fixing anything is not
+ * resolved within `fixWindowMinutes` afterwards: a script that "succeeds" without fixing anything is not
  * evidence. Runs on incidents with the same masked title as this one form a separate record, so a runbook
  * that fixed this exact problem before ranks first. Candidates are the runbooks bound to the service plus any
  * run against it; only published, non-archived runbooks are recommended. Nothing is ever executed from here.
@@ -38,8 +41,10 @@ export async function computeRunbookFindings(
   tx: Prisma.TransactionClient,
   incident: { id?: string; serviceId: string },
   now: Date = new Date(),
-  weights?: RunbookWeights
+  weights?: RunbookWeights,
+  fixWindowMinutes?: number
 ): Promise<FindingRow[]> {
+  const fixed = runbookFixedSql(fixWindowMinutes);
   const since = new Date(now.getTime() - RESPONSE_LIMITS.runbookHistoryDays * DAY_MS);
   const template = incident.id
     ? ((

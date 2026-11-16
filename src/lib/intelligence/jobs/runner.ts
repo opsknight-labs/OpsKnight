@@ -48,6 +48,7 @@ import { AiGatewayError } from '../ai/gateway';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
 import { scheduleSquireMemoryWork, SQUIRE_MEMORY_HANDLERS } from '../memory/handlers';
 import { OPS_INSIGHT_HANDLERS, scheduleOpsInsightsWork } from '../ops-insights/handlers';
+import { scheduleRunbookWeightFit } from '../learning/runbook-weights';
 import {
   currentEmbeddingModel,
   embedIncidents,
@@ -646,6 +647,15 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
       await scheduleOpsInsightsWork(now(), handlers);
     } catch (error) {
       logger.warn('[Intelligence] Could not schedule operations insights; will retry', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Runbook-ranking weight fit: once a day here, so the review page only reads the stored proposal.
+    try {
+      await scheduleRunbookWeightFit(now());
+    } catch (error) {
+      logger.warn('[Intelligence] Runbook weight fit failed; will retry', {
         error: error instanceof Error ? error.message : String(error),
       });
     }

@@ -5,6 +5,7 @@ import { useActionState, useId } from 'react';
 import type { IntelligenceActionState } from '@/app/(app)/settings/intelligence/actions';
 import { saveOpsInsightSwitches } from '@/app/(app)/settings/intelligence/ops-insights-actions';
 import { Button } from '@/components/ui/shadcn/button';
+import { INTELLIGENCE_SETTINGS_BOUNDS } from '@/lib/intelligence/contract';
 import {
   OPS_INSIGHT_AREA_KEYS,
   OPS_INSIGHT_AREAS,
@@ -52,11 +53,13 @@ export default function OpsInsightsSettingsForm({
   settings,
   canManage,
 }: {
-  settings: OpsInsightSwitches & { revision: number };
+  settings: OpsInsightSwitches & { runbookFixWindowMinutes: number; revision: number };
   canManage: boolean;
 }) {
   const [state, action, pending] = useActionState(saveOpsInsightSwitches, initialState);
   const disabled = !canManage || pending;
+  const fixWindowId = useId();
+  const fixWindow = INTELLIGENCE_SETTINGS_BOUNDS.runbookFixWindowMinutes;
   return (
     <form action={action} className="space-y-6 py-4">
       <input type="hidden" name="expectedRevision" value={settings.revision} />
@@ -79,6 +82,27 @@ export default function OpsInsightsSettingsForm({
           />
         ))}
       </fieldset>
+      <div className="max-w-sm space-y-1">
+        <label htmlFor={fixWindowId} className="text-sm font-medium">
+          Runbook fix window (minutes)
+        </label>
+        <input
+          id={fixWindowId}
+          name="runbookFixWindowMinutes"
+          type="number"
+          defaultValue={settings.runbookFixWindowMinutes}
+          min={fixWindow.min}
+          max={fixWindow.max}
+          step={1}
+          required
+          disabled={disabled}
+          className="h-11 w-full rounded-md border border-border bg-background px-2 text-sm"
+        />
+        <p className="text-xs text-muted-foreground">
+          A runbook run counts as having fixed its incident when the incident resolves within this long
+          after the run finishes. Used by runbook health and runbook recommendations.
+        </p>
+      </div>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={disabled}>
           {pending ? 'Saving…' : 'Save'}

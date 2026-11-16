@@ -34,6 +34,7 @@ export const INTELLIGENCE_SETTINGS_BOUNDS = {
   lookbackDays: { min: 1, max: 3650 },
   backpressureEscalationLagMs: { min: 1000, max: 3_600_000 },
   retentionDays: { min: 1, max: 3650 },
+  runbookFixWindowMinutes: { min: 5, max: 1440 },
 } as const;
 
 export const INTELLIGENCE_SETTINGS_DEFAULTS = {
@@ -57,6 +58,7 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   opsInsightsPostmortemsEnabled: false,
   opsInsightsRunbooksEnabled: false,
   opsInsightsNotificationsEnabled: false,
+  runbookFixWindowMinutes: 120,
 } as const;
 
 const bounded = (range: { min: number; max: number }) =>
@@ -85,6 +87,7 @@ export const intelligenceSettingsInputSchema = z
     opsInsightsPostmortemsEnabled: z.boolean().optional(),
     opsInsightsRunbooksEnabled: z.boolean().optional(),
     opsInsightsNotificationsEnabled: z.boolean().optional(),
+    runbookFixWindowMinutes: bounded(INTELLIGENCE_SETTINGS_BOUNDS.runbookFixWindowMinutes).optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()

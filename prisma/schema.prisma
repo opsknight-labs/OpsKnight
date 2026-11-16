@@ -4135,6 +4135,7 @@ model RunbookExecution {
   @@index([incidentId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_runbook_execution_incident_cursor")
   @@index([serviceId])
   @@index([serviceId, createdAt], map: "idx_runbook_execution_service_recent")
+  @@index([runbookId, createdAt(sort: Desc)], map: "idx_runbook_execution_runbook_recent")
   @@index([runbookId])
   @@index([completedAt], map: "idx_runbook_execution_completed")
   @@index([runbookVersionId])
@@ -5124,6 +5125,8 @@ model IntelligenceSettings {
   opsInsightsPostmortemsEnabled   Boolean  @default(false)
   opsInsightsRunbooksEnabled      Boolean  @default(false)
   opsInsightsNotificationsEnabled Boolean  @default(false)
+  /// A run fixed its incident when the incident resolved within this many minutes after the run finished.
+  runbookFixWindowMinutes     Int      @default(120)
   revision                    Int      @default(1)
   updatedBy                   String?
   createdAt                   DateTime @default(now())

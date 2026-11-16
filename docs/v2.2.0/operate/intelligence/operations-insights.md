@@ -75,6 +75,12 @@ everything and stops the daily work.
 | On-call (a person) | **Paged at night on N nights** | Night pages (22:00 to 07:00 in the person's own time zone) recurred across at least three weeks of the last four. |
 | On-call (a person) | **Next shift may be busy** | The person's shift starts within 24 hours and a service the schedule covers has a risky change in the last day, a burning SLO or a maintenance window ending. The same heads-up appears in their handoff summary. |
 | Postmortems | **Repeat problem, seen N times, has N overdue action items** | The same problem came back on the service at least twice in 90 days while a follow-up from an earlier postmortem is past due. Critical when the problem was seen three or more times and a follow-up is high priority or a month late. **Create draft** opens that postmortem. |
+| Runbooks | **Failed N of M runs** | Over the last 90 days, at least a quarter of the runbook's finished runs failed or timed out, allowing for how few runs there may be (critical from a half). Needs at least 5 runs. |
+| Runbooks | **Not run in the last 90 days** / **Never run since it was published** | A published runbook nobody has needed for 90 days. Check its bindings, or archive it. |
+| Runbooks | **Step "X" fails in N% of runs** | One step failed in more than 30% of at least 5 runs; the most common error code is named. |
+| Runbooks | **Step "X" needed a retry in all N runs** | The step never works on the first attempt (at least 3 runs). Fix what it waits for, or give it a longer timeout. |
+| Runbooks | **Responders add the same note after N of M runs** | After at least 3 successful runs, and most of them, responders wrote much the same note on the incident within a day: the runbook is probably missing that step. |
+| Runbooks (on the service) | **N incidents of one recurring problem were resolved by hand the same way** | At least 3 incidents with the same masked title were resolved manually with similar resolution notes and no runbook ran on any of them. **Create draft** opens the service's runbook suggestions, where you can turn the notes into a draft runbook. |
 
 Insights for on-call schedules, postmortems, runbooks and notifications arrive with later updates; their
 switches are already there so you can decide in advance.
@@ -155,6 +161,30 @@ With the **Postmortems** area on, the postmortem editor adds, beside the form:
 Everything here is deterministic and works without an AI provider. You see only incidents, postmortems,
 action items and runbooks you can already open.
 
+## Runbook health
+
+With the runbooks area on, each runbook's page shows a **Health** section, and the runbooks list shows a
+badge on runbooks with open insights. Health shows, for the last 90 days:
+
+- **Success rate** and the rate it is at least (the 95% Wilson lower bound), so a runbook that succeeded
+  once out of once does not look perfect.
+- **Fixed the incident**: runs that succeeded and whose incident resolved within the fix window after the
+  run finished (120 minutes by default). Change it under **Settings → Intelligence → Operations insights →
+  Runbook fix window**, from 5 to 1440 minutes; the numbers use the new window straight away.
+- **Median duration** (within about 10%), the **most failing step** with its top error code, the **last
+  run** and the **last edit**.
+- The runbook's open insights, including any suggested missing step. The suggested step's wording comes
+  from the notes, and you see it only if you can open the incidents those notes were written on.
+
+The numbers come from daily counts that are computed a day late, so yesterday's runs appear the day after.
+
+### Write a runbook from hand-written fixes
+
+When a service's responders keep resolving one recurring problem by hand the same way, the service's
+**Runbooks** tab lists it under **Suggested runbooks** with the resolution notes you can read and the steps
+found in them. **Open a draft in the editor** saves an unpublished, unbound runbook of manual steps and opens it in the
+editor; nothing runs or publishes until you do it there. You need permission to manage runbooks.
+
 ## Review insights
 
 Open **Intelligence**. When there is something to review, a **Needs attention** section lists open
@@ -202,6 +232,7 @@ sweep.
 
 | Symptom | Check |
 | --- | --- |
+| No **Health** section on a runbook | The runbooks area is on and you can open the runbook. With no runs in 90 days the numbers are empty. |
 | No **Needs attention** section | The master switch and the area are on, Intelligence is enabled and its worker is running (**Settings → Intelligence → Status**). An empty section is hidden by design. |
 | An insight you fixed is still listed | Each item is revisited once a day. It resolves at the next visit. |
 | No **Load & fairness** tab | The **On-call schedules** area is off. |

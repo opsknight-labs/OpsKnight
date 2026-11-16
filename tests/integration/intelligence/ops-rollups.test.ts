@@ -142,6 +142,9 @@ describe('operations rollups', () => {
       [OPS_ROLLUPS.pagesPerUserHour]: 7,
       [OPS_ROLLUPS.escalationStepOutcome]: 7,
       [OPS_ROLLUPS.runbookOutcome]: 7,
+      // Lags a day: yesterday's resolutions may still arrive.
+      [OPS_ROLLUPS.runbookRun]: 6,
+      [OPS_ROLLUPS.runbookStepOutcome]: 7,
       [OPS_ROLLUPS.automationRuleMatch]: 7,
     });
     const range = { from: day(7), to: day(0) };
@@ -209,6 +212,8 @@ describe('operations rollups', () => {
       [OPS_ROLLUPS.pagesPerUserHour]: 0,
       [OPS_ROLLUPS.escalationStepOutcome]: 0,
       [OPS_ROLLUPS.runbookOutcome]: 0,
+      [OPS_ROLLUPS.runbookRun]: 0,
+      [OPS_ROLLUPS.runbookStepOutcome]: 0,
       [OPS_ROLLUPS.automationRuleMatch]: 0,
     });
     expect(await db.metricRollup.count()).toBe(rows);
@@ -347,6 +352,8 @@ describe('operations rollup query plans', () => {
       /idx_escalation_step_attempt_created/,
     ],
     [OPS_ROLLUPS.runbookOutcome, 'RunbookExecution', /idx_runbook_execution_completed/],
+    [OPS_ROLLUPS.runbookRun, 'RunbookExecution', /idx_runbook_execution_completed/],
+    [OPS_ROLLUPS.runbookStepOutcome, 'RunbookExecution', /idx_runbook_execution_completed/],
     [
       OPS_ROLLUPS.automationRuleMatch,
       'IncidentAutomationDecision',

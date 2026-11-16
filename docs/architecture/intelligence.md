@@ -1052,12 +1052,16 @@ and the burst gate passes.
   runbook (0–0.2, so it never outranks even a 1-of-1 record); the defaults reproduce the shipped Wilson
   ranking exactly. Labels are the latest accept/reject verdict on a `RUNBOOK_RECOMMENDATION` finding and,
   overriding it, the observed outcome of the first run of that runbook on that incident after it was
-  recommended (fixed = succeeded and resolved within 120 minutes; not fixed = failed, timed out, or that
+  recommended (fixed = succeeded and resolved within the fix window, `IntelligenceSettings.runbookFixWindowMinutes`,
+  120 minutes by default; not fixed = failed, timed out, or that
   window elapsed unresolved; runs on already-resolved incidents and still-open windows are undecided). Each
   label carries the evidence the ranker stored, so no history is re-derived. The reads start from recent
   feedback and from recently finished executions via `(status, updatedAt)`, are capped at 2,000 rows each
   and run under a 5 s statement timeout. A proposal needs 40 labels, 8 of each verdict and a held-out
-  log-loss improvement of 0.01; it is recomputed server-side on publish and stored as
+  log-loss improvement of 0.01. The fit runs in the intelligence lane at most once a day
+  (`scheduleRunbookWeightFit`, called once per lane cycle) and stores its proposal in one
+  `IntelligencePattern` row; the insights settings page reads that row and never fits on page open. The
+  proposal is recomputed server-side on publish and stored as
   `response.runbookWeights` in a new policy version (absent = shipped ranking; findings ranked with learned
   weights carry `learnedWeights: true`).
 - **Impact estimate** (`impact/view.ts`, `IncidentImpactCard` in the **Impact** tab): dependent services
@@ -1475,6 +1479,43 @@ On read (`src/lib/intelligence/postmortems/loaders.ts`, never in ingestion), beh
 
 Tests: `tests/unit/intelligence-postmortems.test.ts`, `tests/components/postmortem-intelligence.test.tsx`,
 `tests/integration/intelligence/postmortem-intelligence.test.ts`.
+#### Runbooks (plan J5)
+
+Area `runbooks`, switch `opsInsightsRunbooksEnabled`, fix window `runbookFixWindowMinutes` (5 to 1440,
+default 120, the same rule the runbook ranker and the weight fit use). Pure logic is in
+`src/lib/intelligence/runbook-health/` (`insights.ts`: rollup readers, effectiveness with 95% Wilson lower
+bounds and the RUNBOOK insights; `notes.ts`: note clustering, imperative-step extraction and the draft
+runbook), producers in `ops-insights/producers/`, and the scoped readers in `runbook-health/view.ts`.
+
+- `runbook.health` (scope `RUNBOOK`) reads the runbook by primary key, its latest run on
+  `idx_runbook_execution_runbook_recent` (new: `RunbookExecution (runbookId, completedAt DESC)`), 90 days of
+  `ops.runbook.run` and `ops.runbook.step_outcome`, and for missing steps the latest 50 successful incident
+  runs and their incidents' notes within a day of each run (at most 300). Keys: `fails-often` (at least 5
+  runs, Wilson lower bound of the failure rate at least 0.25, critical from 0.5), `unused` (published, no run
+  in 90 days), `step-failing:<stepKey>` (more than 30% of at least 5 runs, with the top error code),
+  `step-retried:<stepKey>` (a retry in every one of at least 3 runs), `missing-step:<signature>` (the same
+  note after at least 60% of at least 3 runs).
+- `runbook.missing` (scope `SERVICE`) reads the service's latest 300 resolved fingerprints in 90 days on
+  `idx_incident_fingerprint_service_recent`, their `MANUAL_RESOLVED` events and runbook runs on those
+  incidents; a masked title with at least 3 similar resolution notes and no runbook run becomes one insight,
+  keyed by the template hash.
+- Stored evidence holds counts and `/incidents/<id>#note-<id>` or `#event-<id>` links only. On read,
+  `resolveNoteRefs` fetches the note text by primary key joined through `incidentReadWhere(actor)`, so a
+  viewer sees only the notes of incidents they may open; a suggestion whose notes are all hidden keeps its
+  counts and cannot be drafted.
+- **Open a draft in the editor** (`services/[id]/runbook-suggestion-actions.ts`, `runbook.manage`) turns
+  the readable notes into an unpublished, unbound runbook of manual steps (`draftRunbookFromNotes`) and
+  redirects to its editor. Nothing executes or publishes.
+- Publishing a runbook version enqueues its `RUNBOOK` scope (`enqueueOpsInsights`); otherwise the daily
+  schedule applies.
+- UI: the **Health** section on the runbook page (`RunbookHealthSection`, streamed in a `Suspense`
+  boundary, hidden on any error), `InsightBadge` on runbook cards from `countOpenInsightsForScopes`, and
+  **Suggested runbooks** on the service's Runbooks tab. None of them calls a model.
+
+Tests: `tests/unit/intelligence-runbook-health.test.ts`, `tests/integration/intelligence/runbook-health.test.ts`
+(a step failing 4 of 6 runs with `E_TIMEOUT`, fix window 120 vs 600, follow-up notes, three manual
+resolutions, switch off, an out-of-team responder, the lane weight fit) and
+`tests/components/intelligence/runbook-health-ui.test.tsx`.
 
 ### Reading and deciding
 
@@ -1506,6 +1547,8 @@ rollup step of the cron scheduler (`generateOpsRollups`; a no-op while operation
 | --- | --- | --- | --- | --- |
 | `ops.pages.user_hour` | user id | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents | `idx_notification_created_cursor` |
 | `ops.runbook.outcome` | runbook id | `status` | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new) |
+| `ops.runbook.run` | runbook id | `status`, `onIncident`, `fixMinutes` (finish to resolution, at most a day; read against the fix window so the window can change without a recompute), `durationBucket` (floor(4·log2 s)) | finished runs / 0 | `idx_runbook_execution_completed` |
+| `ops.runbook.step_outcome` | runbook id | `stepKey`, `name`, `status`, `retried`, `errorCode` | step runs / 0 | `idx_runbook_execution_completed`, then steps by `executionId` |
 | `ops.automation.rule_match` | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode` | decisions / fallbacks | `IncidentAutomationDecision (serviceId, createdAt)` |
 | `ops.escalation.step_outcome` | policy id | `step`, `outcome`, `reason`, `hour` (paged person's zone, UTC when nobody was paged), `ackWithinMin` | attempts / seconds to acknowledge | `idx_escalation_step_attempt_created` (new) |
 | Name                          | `subjectKey`          | `tags`                                           | `count` / `sum`                           | Driven by                                                                    |
