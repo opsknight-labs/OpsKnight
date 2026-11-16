@@ -44,6 +44,7 @@ export type DraftFailure =
   | 'NOT_FOUND'
   | 'NO_PROVIDER_FOR_DATA'
   | 'LIMITED'
+  | 'BUDGET_EXHAUSTED'
   | 'INVALID_OUTPUT'
   | 'UNAVAILABLE';
 
@@ -54,6 +55,8 @@ export const DRAFT_FAILURE_MESSAGES: Record<DraftFailure, string> = {
   NO_PROVIDER_FOR_DATA:
     'No AI provider is allowed to receive incident notes and timelines. An administrator can raise a provider’s data limit to Personal.',
   LIMITED: 'AI usage limits have been reached. Try again later.',
+  BUDGET_EXHAUSTED:
+    "Today's AI budget is used up, so AI drafting is paused until 00:00 UTC. You can still write it yourself.",
   INVALID_OUTPUT: 'The AI response was not in the expected format, so nothing was used. Try again.',
   UNAVAILABLE: 'AI is unavailable right now. Try again later.',
 };

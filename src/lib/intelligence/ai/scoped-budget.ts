@@ -13,6 +13,8 @@ export interface ReservationScope {
   teamId?: string | null;
   /** Estimated cost of the hold in millionths of a dollar; null or absent when the model has no price. */
   costMicros?: number | null;
+  /** Where the call comes from; proactive and background holds count against the background allowance. */
+  callSite?: 'interactive' | 'proactive' | 'background' | null;
 }
 
 /** What a settled call actually used, for dollars and the per-team/capability/model breakdown. */

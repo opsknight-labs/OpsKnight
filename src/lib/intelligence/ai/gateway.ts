@@ -33,7 +33,7 @@ import { PostgresBreakerStore } from './breaker-store';
 import { embeddingSpaceIdentity } from '../semantic/identity';
 import { AI_SETTINGS_BOUNDS } from './contract';
 import { selectProviderChain } from './policy';
-import { applyCapabilityRoute } from './routing';
+import { applyCapabilityRoute, applyDefaultTiers } from './routing';
 import { redactSecrets, sanitizeUntrusted, UNTRUSTED_DATA_PREAMBLE } from './redact';
 import {
   highestDataClass,
@@ -378,26 +378,42 @@ class GatewayPort implements LanguageModelPort {
 
   private async admit(request: AiGenerateRequest) {
     assertCallSite(request);
-    const decision = await admitAiRequest(request.context.actorId, this.data.settings);
+    const decision = await admitAiRequest(
+      request.context.actorId,
+      this.data.settings,
+      new Date(),
+      request.context.callSite
+    );
     if (!decision.allowed) {
       throw new AiGatewayError(
         decision.reason,
         decision.reason === 'RATE_LIMITED' ? 'Too many requests' : 'Daily AI budget reached'
       );
     }
+    if (decision.degraded) this.degraded.add(request);
+  }
+
+  /** Requests admitted past the degradation point: small model, shorter answers. */
+  private readonly degraded = new WeakSet<AiGenerateRequest>();
+
+  /** Answer-length ceiling for this request; halved while the day's spend is past the degradation point. */
+  private outputLimit(request: AiGenerateRequest, ceiling: number): number {
+    const limit = Math.min(request.maxOutputTokens ?? this.data.settings.maxOutputTokens, ceiling);
+    return this.degraded.has(request)
+      ? Math.max(AI_SETTINGS_BOUNDS.maxOutputTokens.min, Math.floor(limit / 2))
+      : limit;
+  }
+
+  /** Marks an answer written under degradation, so the result cache does not keep it as the normal answer. */
+  private mark<R extends object>(request: AiGenerateRequest, result: R): R {
+    return this.degraded.has(request) ? { ...result, degraded: true } : result;
   }
 
   private async reserve(request: AiGenerateRequest, provider: GatewayProvider, structured = false) {
     const steps = request.tools?.length ? clampSteps(request.maxSteps) : 1;
     const output = structured
-      ? Math.min(
-          request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
-          AI_SETTINGS_BOUNDS.maxOutputTokens.max
-        )
-      : Math.min(
-          request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
-          this.data.settings.maxOutputTokens
-        );
+      ? this.outputLimit(request, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
+      : this.outputLimit(request, this.data.settings.maxOutputTokens);
     const estimate =
       (estimatedInput(request) +
         estimateTokens(
@@ -423,6 +439,7 @@ class GatewayPort implements LanguageModelPort {
         {
           teamId,
           capability: request.context.capability,
+          callSite: request.context.callSite,
           costMicros: costMicrosFor(
             { inputTokens: inputEstimate, outputTokens: output * steps },
             price
@@ -462,7 +479,9 @@ class GatewayPort implements LanguageModelPort {
     const open = allowed.filter(provider => breakers.available(provider.id));
     if (open.length === 0)
       throw new AiGatewayError('NO_PROVIDER', 'No AI provider is currently available');
-    return open;
+    return this.degraded.has(request)
+      ? applyDefaultTiers(open, request.context.capability, 'small')
+      : open;
   }
 
   private async finish(
@@ -556,8 +575,8 @@ class GatewayPort implements LanguageModelPort {
               }),
               // A structured document (a postmortem draft) is not a chat answer: it may ask for more than the
               // answer-length setting, up to the hard ceiling, so it is never cut off and rejected as invalid.
-              maxOutputTokens: Math.min(
-                request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
+              maxOutputTokens: this.outputLimit(
+                request,
                 Math.max(this.data.settings.maxOutputTokens, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
               ),
               abortSignal: this.signalFor(request),
@@ -587,7 +606,12 @@ class GatewayPort implements LanguageModelPort {
         }
         accounted = true;
         await this.finish(request, { usage, served }, { outputValid: true }, reservation);
-        return { object: checked.data, usage, served, finishReason: result.finishReason };
+        return this.mark(request, {
+          object: checked.data,
+          usage,
+          served,
+          finishReason: result.finishReason,
+        });
       } catch (error) {
         if (request.context.signal?.aborted) {
           breakers.release(provider.id);
@@ -651,10 +675,7 @@ class GatewayPort implements LanguageModelPort {
               messages: toMessages(request, provider.kind),
               tools: toToolSet(request.tools),
               stopWhen: stepCountIs(clampSteps(request.maxSteps)),
-              maxOutputTokens: Math.min(
-                request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
-                this.data.settings.maxOutputTokens
-              ),
+              maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
               abortSignal: this.signalFor(request),
               maxRetries: 1,
             });
@@ -673,7 +694,7 @@ class GatewayPort implements LanguageModelPort {
         };
         accounted = true;
         await this.finish(request, served, {}, reservation);
-        return served;
+        return this.mark(request, served);
       } catch (error) {
         if (request.context.signal?.aborted) {
           breakers.release(provider.id);
@@ -750,10 +771,7 @@ class GatewayPort implements LanguageModelPort {
           messages: toMessages(request, provider.kind),
           tools: toToolSet(request.tools),
           stopWhen: stepCountIs(clampSteps(request.maxSteps)),
-          maxOutputTokens: Math.min(
-            request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
-            this.data.settings.maxOutputTokens
-          ),
+          maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
           abortSignal: this.signalFor(request),
           maxRetries: 0,
         });
@@ -790,7 +808,7 @@ class GatewayPort implements LanguageModelPort {
         span.setAttribute('ai.tokens.output', result.usage.outputTokens);
         settled = true;
         await this.finish(request, result, {}, reservation);
-        yield { type: 'finish', result };
+        yield { type: 'finish', result: this.mark(request, result) };
         return;
       } catch (error) {
         failSpan(span, error);
@@ -977,9 +995,14 @@ export async function resolveGatewayPort(
     allowExternalFallback: settings.allowExternalFallback,
     allowedRegions: settings.allowedDataRegions,
   });
+  // Spend controls' default tiers first; an administrator's explicit route is applied on top and wins.
+  const tiered =
+    capability && settings.spendControlsEnabled
+      ? applyDefaultTiers(eligible, capability)
+      : eligible;
   const chain = capability
-    ? applyCapabilityRoute(eligible, settings.capabilityRouting, capability)
-    : eligible;
+    ? applyCapabilityRoute(tiered, settings.capabilityRouting, capability)
+    : tiered;
   return chain.length === 0 ? null : new GatewayPort({ settings, chain });
 }
 

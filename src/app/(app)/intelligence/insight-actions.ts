@@ -1,11 +1,21 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod/v4';
 import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
-import type { OpsInsightDecision, OpsInsightStatus } from '@/lib/intelligence/ops-insights/contract';
+import {
+  OPS_INSIGHT_SCOPE_TYPES,
+  type OpsInsightDecision,
+  type OpsInsightStatus,
+} from '@/lib/intelligence/ops-insights/contract';
 import { decideInsight } from '@/lib/intelligence/ops-insights/decisions';
+import {
+  PHRASING_UNAVAILABLE,
+  phraseInsightsForScope,
+  type InsightPhrasing,
+} from '@/lib/intelligence/ops-insights/phrasing';
 
 export type InsightDecisionState = {
   ok: boolean;
@@ -49,5 +59,26 @@ export async function decideInsightAction(
       error: error instanceof Error ? error.message : String(error),
     });
     return { ok: false, message: 'Unable to save. Refresh and try again.', status: null };
+  }
+}
+
+const phraseScopeSchema = z
+  .object({ type: z.enum(OPS_INSIGHT_SCOPE_TYPES), id: z.string().min(1).max(64) })
+  .strict();
+
+/**
+ * Plain-language phrasing of one scope's open insights, asked for when a person expands the panel. The
+ * insights are read again under the viewer's own scope; nothing the client sends is phrased.
+ */
+export async function phraseInsightsAction(scope: unknown): Promise<InsightPhrasing> {
+  const parsed = phraseScopeSchema.safeParse(scope);
+  if (!parsed.success) return { phrases: {}, notice: PHRASING_UNAVAILABLE };
+  try {
+    return await phraseInsightsForScope(await getCurrentAuthorizationActor(), parsed.data);
+  } catch (error) {
+    logger.warn('[Intelligence] Insight phrasing failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { phrases: {}, notice: PHRASING_UNAVAILABLE };
   }
 }

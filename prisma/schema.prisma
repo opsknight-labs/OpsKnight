@@ -5765,6 +5765,10 @@ model AiSettings {
   squireInvestigationEnabled Boolean @default(false)
   // Reuse an earlier AI answer when the exact same input is asked again in the same scope. Opt-in.
   resultCacheEnabled      Boolean  @default(false)
+  // Spend controls (off by default): default model routing, the background allowance and degradation.
+  spendControlsEnabled    Boolean  @default(false)
+  backgroundAiBudgetPercent Int    @default(30)
+  proactiveNotesPerServiceDaily Int @default(20)
   revision                Int      @default(1)
   updatedBy               String?
   updatedAt               DateTime @updatedAt
@@ -5806,6 +5810,8 @@ model AiUsageDay {
   inputTokens  Int      @default(0)
   outputTokens Int      @default(0)
   backgroundEmbeddingTokens Int @default(0)
+  // Settled tokens of non-interactive (proactive and background) calls, for the background allowance.
+  backgroundAiTokens Int @default(0)
   // Dollar cost in millionths of a US dollar for calls whose model has a price; null before cost tracking.
   costMicros   BigInt?
   updatedAt    DateTime @updatedAt
@@ -5824,6 +5830,8 @@ model AiTokenReservation {
   capability String?
   // Estimated dollar cost of the hold in millionths of a dollar; null when the model has no price.
   costMicros BigInt?
+  // interactive | proactive | background; null on holds made before spend controls.
+  callSite  String?
   createdAt DateTime @default(now())
 
   @@index([day, expiresAt], map: "idx_ai_token_reservation_day")

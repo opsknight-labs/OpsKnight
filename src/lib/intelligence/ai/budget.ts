@@ -2,8 +2,13 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { checkRateLimit } from '@/lib/rate-limit';
-import type { AiUsage } from './port';
-import { BACKGROUND_EMBEDDING_ACTOR, backgroundEmbeddingTokenBudget } from './contract';
+import type { AiCallSite, AiUsage } from './port';
+import {
+  AI_DEGRADE_AT,
+  BACKGROUND_EMBEDDING_ACTOR,
+  backgroundAiTokenBudget,
+  backgroundEmbeddingTokenBudget,
+} from './contract';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import {
   exceededScopedBudget,
@@ -22,15 +27,26 @@ type TokenLimits = {
   dailyTokenBudget: number;
   userDailyTokenBudget?: number;
   backgroundEmbeddingBudgetPercent?: number;
+  /** Spend controls: the background allowance and degradation apply only when this is on. */
+  spendControlsEnabled?: boolean;
+  backgroundAiBudgetPercent?: number;
 };
 
 export type AdmissionDecision =
-  { allowed: true } | { allowed: false; reason: 'RATE_LIMITED' | 'BUDGET_EXHAUSTED' };
+  | {
+      allowed: true;
+      /** At 80% of a daily budget: small model and shorter answers. */ degraded?: true;
+    }
+  | { allowed: false; reason: 'RATE_LIMITED' | 'BUDGET_EXHAUSTED' };
 
 export const utcDay = (now: Date = new Date()) => now.toISOString().slice(0, 10);
 
 /** Background work (embedding) acts as a system identity, never as a person, and has no personal share. */
 const isPerson = (actorId: string) => !actorId.includes(':');
+
+/** Calls nobody is waiting for: the first to be shed when spend runs high. */
+export const isBackgroundCall = (callSite: string | null | undefined) =>
+  callSite === 'proactive' || callSite === 'background';
 
 /**
  * Per-user rate limit, the per-user daily token share and the global daily token budget, checked before
@@ -42,7 +58,8 @@ export async function admitAiRequest(
   limits: TokenLimits & {
     requestsPerMinutePerUser: number;
   },
-  now: Date = new Date()
+  now: Date = new Date(),
+  callSite?: AiCallSite
 ): Promise<AdmissionDecision> {
   const rate = await checkRateLimit(`ai:user:${actorId}`, limits.requestsPerMinutePerUser, 60_000);
   if (!rate.allowed) return { allowed: false, reason: 'RATE_LIMITED' };
@@ -50,7 +67,12 @@ export async function admitAiRequest(
   const [row, personal] = await Promise.all([
     prisma.aiUsageDay.findUnique({
       where: { day },
-      select: { inputTokens: true, outputTokens: true, backgroundEmbeddingTokens: true },
+      select: {
+        inputTokens: true,
+        outputTokens: true,
+        backgroundEmbeddingTokens: true,
+        backgroundAiTokens: true,
+      },
     }),
     limits.userDailyTokenBudget && isPerson(actorId)
       ? prisma.aiUsageUserDay.findUnique({
@@ -69,7 +91,20 @@ export async function admitAiRequest(
   if (limits.userDailyTokenBudget && (personal?.tokens ?? 0) >= limits.userDailyTokenBudget) {
     return { allowed: false, reason: 'BUDGET_EXHAUSTED' };
   }
-  return { allowed: true };
+  if (!limits.spendControlsEnabled) return { allowed: true };
+  const degraded =
+    used >= limits.dailyTokenBudget * AI_DEGRADE_AT ||
+    (!!limits.userDailyTokenBudget &&
+      (personal?.tokens ?? 0) >= limits.userDailyTokenBudget * AI_DEGRADE_AT);
+  // Shed first: background AI pauses from the degradation point and once its own allowance is used.
+  if (
+    isBackgroundCall(callSite) &&
+    (degraded || (row?.backgroundAiTokens ?? 0) >= backgroundAiTokenBudget(limits))
+  ) {
+    countRejection('background');
+    return { allowed: false, reason: 'BUDGET_EXHAUSTED' };
+  }
+  return degraded ? { allowed: true, degraded: true } : { allowed: true };
 }
 
 const MAX_TOKENS_PER_CALL = 2_000_000;
@@ -101,26 +136,37 @@ export async function reserveAiTokens(
       isPerson(actorId)
         ? tx.aiUsageUserDay.findUnique({ where: { day_userId: { day, userId: actorId } } })
         : null,
-      tx.$queryRaw<Array<{ total: bigint; personal: bigint; background: bigint }>>(Prisma.sql`
+      tx.$queryRaw<
+        Array<{ total: bigint; personal: bigint; background: bigint; backgroundAi: bigint }>
+      >(Prisma.sql`
         SELECT coalesce(sum(tokens),0)::bigint AS total,
           coalesce(sum(tokens) FILTER (WHERE "actorId" = ${actorId}),0)::bigint AS personal,
-          coalesce(sum(tokens) FILTER (WHERE "actorId" = ${BACKGROUND_EMBEDDING_ACTOR}),0)::bigint AS background
+          coalesce(sum(tokens) FILTER (WHERE "actorId" = ${BACKGROUND_EMBEDDING_ACTOR}),0)::bigint AS background,
+          coalesce(sum(tokens) FILTER (WHERE "callSite" IN ('proactive', 'background')),0)::bigint AS "backgroundAi"
         FROM "AiTokenReservation" WHERE day = ${day} AND "settledAt" IS NULL AND "expiresAt" > ${now}`),
     ]);
+    const committed =
+      (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0) + Number(reserved[0].total) + tokens;
     const rejected: RejectionScope | null =
-      (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0) + Number(reserved[0].total) + tokens >
-      limits.dailyTokenBudget
+      committed > limits.dailyTokenBudget
         ? 'global'
-        : actorId === BACKGROUND_EMBEDDING_ACTOR &&
-            (usage?.backgroundEmbeddingTokens ?? 0) + Number(reserved[0].background) + tokens >
-              backgroundEmbeddingTokenBudget(limits)
+        : // Background AI never pushes the day past the degradation point, nor past its own allowance.
+          limits.spendControlsEnabled &&
+            isBackgroundCall(scope?.callSite) &&
+            (committed > Math.floor(limits.dailyTokenBudget * AI_DEGRADE_AT) ||
+              (usage?.backgroundAiTokens ?? 0) + Number(reserved[0].backgroundAi) + tokens >
+                backgroundAiTokenBudget(limits))
           ? 'background'
-          : isPerson(actorId) &&
-              limits.userDailyTokenBudget &&
-              (personal?.tokens ?? 0) + Number(reserved[0].personal) + tokens >
-                limits.userDailyTokenBudget
-            ? 'user'
-            : null;
+          : actorId === BACKGROUND_EMBEDDING_ACTOR &&
+              (usage?.backgroundEmbeddingTokens ?? 0) + Number(reserved[0].background) + tokens >
+                backgroundEmbeddingTokenBudget(limits)
+            ? 'background'
+            : isPerson(actorId) &&
+                limits.userDailyTokenBudget &&
+                (personal?.tokens ?? 0) + Number(reserved[0].personal) + tokens >
+                  limits.userDailyTokenBudget
+              ? 'user'
+              : null;
     if (rejected) {
       countRejection(rejected);
       return null;
@@ -144,6 +190,7 @@ export async function reserveAiTokens(
         teamId: scope?.teamId ?? null,
         capability: scope?.capability ?? null,
         costMicros: estimatedCost,
+        callSite: scope?.callSite ?? null,
       },
       select: { id: true, day: true },
     });
@@ -175,14 +222,23 @@ export async function recordAiUsage(
     const person = held?.actorId ?? actorId;
     const backgroundEmbeddingTokens =
       person === BACKGROUND_EMBEDDING_ACTOR ? inputTokens + outputTokens : 0;
+    const backgroundAiTokens = isBackgroundCall(held?.callSite) ? inputTokens + outputTokens : 0;
     await tx.aiUsageDay.upsert({
       where: { day },
-      create: { day, requests: 1, inputTokens, outputTokens, backgroundEmbeddingTokens },
+      create: {
+        day,
+        requests: 1,
+        inputTokens,
+        outputTokens,
+        backgroundEmbeddingTokens,
+        backgroundAiTokens,
+      },
       update: {
         requests: { increment: 1 },
         inputTokens: { increment: inputTokens },
         outputTokens: { increment: outputTokens },
         backgroundEmbeddingTokens: { increment: backgroundEmbeddingTokens },
+        backgroundAiTokens: { increment: backgroundAiTokens },
       },
     });
     const cost = attribution?.costMicros ?? null;
@@ -230,6 +286,34 @@ export async function recordAiUsage(
 /** Rough token count (about four characters per token) for work that ended before the provider reported usage. */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
+}
+
+/**
+ * Where today's spend stands, for the notices in Squire and on AI-drafted surfaces: `lean` from the degradation
+ * point (small model, shorter answers, background AI paused), `exhausted` at the budget (deterministic only).
+ * Without spend controls only `exhausted` is reported. One primary-key read.
+ */
+export type AiSpendLevel = 'normal' | 'lean' | 'exhausted';
+
+export function spendLevel(
+  used: number,
+  limits: Pick<TokenLimits, 'dailyTokenBudget' | 'spendControlsEnabled'>
+): AiSpendLevel {
+  if (used >= limits.dailyTokenBudget) return 'exhausted';
+  return limits.spendControlsEnabled && used >= limits.dailyTokenBudget * AI_DEGRADE_AT
+    ? 'lean'
+    : 'normal';
+}
+
+export async function getAiSpendLevel(
+  limits: Pick<TokenLimits, 'dailyTokenBudget' | 'spendControlsEnabled'>,
+  now: Date = new Date()
+): Promise<AiSpendLevel> {
+  const row = await prisma.aiUsageDay.findUnique({
+    where: { day: utcDay(now) },
+    select: { inputTokens: true, outputTokens: true },
+  });
+  return spendLevel((row?.inputTokens ?? 0) + (row?.outputTokens ?? 0), limits);
 }
 
 export async function getTodayUsage(now: Date = new Date()) {

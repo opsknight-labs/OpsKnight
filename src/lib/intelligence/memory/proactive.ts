@@ -11,6 +11,8 @@ import { outputTokensFor } from '../ai/output-limits';
 import { cachedGenerateStructured } from '../ai/result-cache';
 import { getBuiltInPrompt, getGuidance, renderPrompt } from '../ai/prompts';
 import { getAiSettings } from '../ai/settings';
+import { AI_SETTINGS_DEFAULTS } from '../ai/contract';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { incidentSummarySchema, postmortemDraftSchema } from '../drafts/schemas';
 import { PROACTIVE_AI_ACTOR, PROACTIVE_LIMITS, type ProactiveKind } from './contract';
 import {
@@ -370,6 +372,7 @@ export async function runProactiveJob(
       'Brief the responders who just got paged: what is happening, the likely change if any, and what to try first.',
       proactiveModelBrief(facts, refs),
       incidentId,
+      gathered.serviceId,
       signal
     );
     if (ai) {
@@ -406,6 +409,7 @@ export async function runProactiveJob(
       'Summarise the current state for a stakeholder update. Plain language, no internal jargon.',
       proactiveModelBrief(facts, { similar: [], changes: [], runbooks: [] }),
       incidentId,
+      gathered.serviceId,
       signal
     );
     if (ai) {
@@ -431,6 +435,7 @@ export async function runProactiveJob(
       'Draft a blameless postmortem for this incident. Suggest up to five concrete follow-up action items.',
       proactiveModelBrief(facts, { ...refs, similar: [] }),
       incidentId,
+      gathered.serviceId,
       signal
     );
     if (ai) {
@@ -497,10 +502,25 @@ async function generate<T>(
   instruction: string,
   brief: string,
   incidentId: string,
+  serviceId: string,
   signal?: AbortSignal
 ): Promise<{ value: T; model: string } | null> {
   try {
-    if (!(await getAiSettings()).enabled || signal?.aborted) return null;
+    const settings = await getAiSettings();
+    if (!settings.enabled || signal?.aborted) return null;
+    // Spend controls: at most N AI-written notes per service per UTC day (shared, atomic counter).
+    if (
+      settings.spendControlsEnabled &&
+      !(
+        await checkRateLimit(
+          `ai:proactive-notes:${serviceId}`,
+          settings.proactiveNotesPerServiceDaily ??
+            AI_SETTINGS_DEFAULTS.proactiveNotesPerServiceDaily,
+          86_400_000
+        )
+      ).allowed
+    )
+      return null;
     const definition = getBuiltInPrompt(promptId);
     registerAiGateway();
     const port = await resolveLanguageModel(definition.capability, definition.dataClass);

@@ -37,6 +37,8 @@ export const AI_SETTINGS_BOUNDS = {
   userDailyTokenBudget: { min: 1_000, max: 1_000_000_000 },
   maxOutputTokens: { min: 64, max: 8_192 },
   requestTimeoutMs: { min: 1_000, max: 120_000 },
+  backgroundAiBudgetPercent: { min: 0, max: 80 },
+  proactiveNotesPerServiceDaily: { min: 0, max: 1_000 },
 } as const;
 
 export const AI_SETTINGS_DEFAULTS = {
@@ -61,6 +63,9 @@ export const AI_SETTINGS_DEFAULTS = {
   squireChatOpsEnabled: false,
   squireMcpEnabled: false,
   squireMobileEnabled: false,
+  spendControlsEnabled: false,
+  backgroundAiBudgetPercent: 30,
+  proactiveNotesPerServiceDaily: 20,
 } as const;
 
 /** Shared internal identity; interactive semantic queries continue to use the person's identity. */
@@ -80,6 +85,30 @@ export function backgroundEmbeddingTokenBudget(limits: {
     : 0;
   return Math.max(0, Math.floor((limits.dailyTokenBudget * percent) / 100));
 }
+
+/**
+ * The share of the daily allowance that non-interactive calls (proactive notes, handoff narratives and other
+ * background drafting) may use together. A sub-limit, never an addition; interactive requests keep the rest.
+ */
+export function backgroundAiTokenBudget(limits: {
+  dailyTokenBudget: number;
+  backgroundAiBudgetPercent?: number;
+}): number {
+  if (!Number.isFinite(limits.dailyTokenBudget) || limits.dailyTokenBudget <= 0) return 0;
+  const configured =
+    limits.backgroundAiBudgetPercent ?? AI_SETTINGS_DEFAULTS.backgroundAiBudgetPercent;
+  const percent = Number.isFinite(configured)
+    ? Math.max(0, Math.min(80, Math.trunc(configured)))
+    : 0;
+  return Math.floor((limits.dailyTokenBudget * percent) / 100);
+}
+
+/** From this share of a daily budget, AI degrades: small model, shorter answers, background paused. */
+export const AI_DEGRADE_AT = 0.8;
+
+/** Shown wherever a degraded answer or draft is displayed. */
+export const AI_LEAN_NOTICE =
+  "Today's AI budget is nearly used: this answer came from a smaller model and is shorter.";
 
 /** The assistant's display name is rendered everywhere, so it is limited to plain, harmless text. */
 const squireName = z
@@ -136,6 +165,12 @@ export const aiSettingsInputSchema = z
     squireMobileEnabled: z.boolean().optional(),
     // Result cache. Optional: a client that does not send it keeps the saved value.
     resultCacheEnabled: z.boolean().optional(),
+    // Spend controls. Optional: a client that does not send them keeps the saved values.
+    spendControlsEnabled: z.boolean().optional(),
+    backgroundAiBudgetPercent: intIn(AI_SETTINGS_BOUNDS.backgroundAiBudgetPercent).optional(),
+    proactiveNotesPerServiceDaily: intIn(
+      AI_SETTINGS_BOUNDS.proactiveNotesPerServiceDaily
+    ).optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();

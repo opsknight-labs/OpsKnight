@@ -7,6 +7,7 @@ import {
   type IncidentSummaryState,
 } from '@/app/(app)/incidents/[id]/intelligence-actions';
 import PostSummaryAsNoteButton from '@/components/incident/intelligence/PostSummaryAsNoteButton';
+import { AI_LEAN_NOTICE } from '@/lib/intelligence/ai/contract';
 
 function List({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
@@ -77,6 +78,11 @@ export default function IncidentAiSummary({
             <List title="Key events" items={state.summary.keyEvents} />
             <List title="Possible causes (to verify)" items={state.summary.possibleCauses} />
             <List title="Suggested next steps" items={state.summary.nextSteps} />
+            {state.degraded && (
+              <p role="status" className="text-xs text-status-elevated-deep">
+                {AI_LEAN_NOTICE}
+              </p>
+            )}
             <p className="text-xs text-foreground/70">
               AI-generated from the incident record. Check it before relying on it. Nothing was
               changed.

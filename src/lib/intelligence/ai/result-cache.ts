@@ -184,7 +184,9 @@ const cachedServed = (row: CachedRow) => ({
   cached: true as const,
 });
 
-async function cached<R extends Pick<AiGenerateResult, 'usage' | 'served' | 'finishReason'>>(
+async function cached<
+  R extends Pick<AiGenerateResult, 'usage' | 'served' | 'finishReason' | 'degraded'>,
+>(
   port: LanguageModelPort,
   request: AiGenerateRequest,
   options: ResultCacheOptions,
@@ -211,7 +213,8 @@ async function cached<R extends Pick<AiGenerateResult, 'usage' | 'served' | 'fin
     warn('read', error);
   }
   const result = await live();
-  const payload = complete(result.finishReason) ? pack(result) : undefined;
+  // A degraded answer (small model, shorter) is served but never kept as the answer for this input.
+  const payload = complete(result.finishReason) && !result.degraded ? pack(result) : undefined;
   if (payload !== undefined)
     await writeSlot(slot, payload, result, options.ttlMs ?? RESULT_CACHE_TTL_MS).catch(error =>
       warn('write', error)

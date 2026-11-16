@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/shadcn/button';
 import {
   CAPABILITY_ROUTE_LABELS,
+  CAPABILITY_TIERS,
   ROUTABLE_CAPABILITIES,
   type CapabilityRouting,
 } from '@/lib/intelligence/ai/routing';
@@ -33,7 +34,10 @@ export default function AiRoutingForm({
   providers,
   revision,
   canManage,
+  spendControlsEnabled = false,
 }: {
+  /** With spend controls on, an unrouted capability uses each provider's small or strong model. */
+  spendControlsEnabled?: boolean;
   investigationEnabled: boolean;
   routing: CapabilityRouting;
   providers: RoutingProviderOption[];
@@ -80,6 +84,17 @@ export default function AiRoutingForm({
               <span className="self-center text-sm">
                 {/* eslint-disable-next-line security/detect-object-injection -- fixed label table */}
                 {CAPABILITY_ROUTE_LABELS[capability]}
+                <span
+                  className="block text-xs text-muted-foreground"
+                  data-testid={`route-source-${capability}`}
+                >
+                  {route
+                    ? 'Custom route'
+                    : spendControlsEnabled
+                      ? // eslint-disable-next-line security/detect-object-injection -- fixed tier table
+                        `Default: each provider's ${CAPABILITY_TIERS[capability]} model`
+                      : 'Default: priority order'}
+                </span>
               </span>
               <select
                 name={`route.${capability}.provider`}

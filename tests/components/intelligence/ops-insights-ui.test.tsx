@@ -4,8 +4,10 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
 const decideInsightAction = vi.fn();
+const phraseInsightsAction = vi.fn();
 vi.mock('@/app/(app)/intelligence/insight-actions', () => ({
   decideInsightAction: (...args: unknown[]) => decideInsightAction(...args),
+  phraseInsightsAction: (...args: unknown[]) => phraseInsightsAction(...args),
 }));
 const openSquire = vi.fn();
 vi.mock('@/components/squire/squire-bus', () => ({
@@ -180,5 +182,42 @@ describe('InsightsPanel', () => {
     expect(openSquire).toHaveBeenCalledTimes(1);
     expect(openSquire.mock.calls[0][0]).toContain('service Checkout');
     expect(openSquire.mock.calls[0][0]).toContain('No alerts for 3 days');
+  });
+});
+
+describe('InsightsPanel plain-language phrasing', () => {
+  const scope = { type: 'SERVICE', id: 'svc-1' } as const;
+
+  it('offers no phrasing without a scope and asks nothing until expanded', () => {
+    const { rerender } = render(<InsightsPanel insights={[insight()]} canDecide={false} />);
+    expect(screen.queryByRole('button', { name: 'Explain in plain words' })).toBeNull();
+    rerender(<InsightsPanel insights={[insight()]} canDecide={false} phraseScope={scope} />);
+    expect(screen.getByRole('button', { name: 'Explain in plain words' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(phraseInsightsAction).not.toHaveBeenCalled();
+  });
+
+  it('asks once on the first expand and shows the phrases', async () => {
+    phraseInsightsAction.mockResolvedValue({ phrases: { 'ins-1': 'Alerts stopped arriving.' } });
+    render(<InsightsPanel insights={[insight()]} canDecide={false} phraseScope={scope} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Explain in plain words' }));
+    expect(await screen.findByText('Alerts stopped arriving.')).toBeInTheDocument();
+    expect(phraseInsightsAction).toHaveBeenCalledWith(scope);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide plain-language version' }));
+    expect(screen.queryByText('Alerts stopped arriving.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Explain in plain words' }));
+    expect(screen.getByText('Alerts stopped arriving.')).toBeInTheDocument();
+    expect(phraseInsightsAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the notice when nothing could be phrased', async () => {
+    phraseInsightsAction.mockResolvedValue({ phrases: {}, notice: 'Budget used up.' });
+    render(<InsightsPanel insights={[insight()]} canDecide={false} phraseScope={scope} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Explain in plain words' }));
+    expect(await screen.findByText('Budget used up.')).toBeInTheDocument();
+    expect(screen.queryByText(/Written by AI/)).toBeNull();
   });
 });

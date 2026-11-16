@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/shadcn/badge';
-import type { OpsInsightView } from '@/lib/intelligence/ops-insights/contract';
+import type { OpsInsightScope, OpsInsightView } from '@/lib/intelligence/ops-insights/contract';
 import { INSIGHT_SEVERITY } from './InsightBadge';
 import InsightActions from './InsightActions';
+import InsightPhrasing from './InsightPhrasing';
 
 export type InsightsPanelItem = OpsInsightView & { scopeName?: string; scopeHref?: string };
 
@@ -21,6 +22,8 @@ const SCOPE_NOUN: Record<OpsInsightView['scopeType'], string> = {
  *
  * Feed it from `listInsightsForScope` (one scope) or `listInsightsInbox` (rows then name their scope).
  * `canDecide` is whether the viewer holds the feedback capability; the server action checks it again.
+ * `phraseScope` (one scope's list, AI available) adds an "Explain in plain words" disclosure: the only AI on
+ * this panel, and it runs only when a person expands it.
  */
 export default function InsightsPanel({
   insights,
@@ -28,6 +31,7 @@ export default function InsightsPanel({
   squireName,
   draftLabel,
   label = 'Insights',
+  phraseScope,
 }: {
   insights: readonly InsightsPanelItem[];
   canDecide: boolean;
@@ -36,9 +40,10 @@ export default function InsightsPanel({
   draftLabel?: string;
   /** Accessible name of the list. */
   label?: string;
+  phraseScope?: OpsInsightScope;
 }) {
   if (insights.length === 0) return null;
-  return (
+  const list = (
     <ul aria-label={label} data-insights-panel className="divide-y divide-border">
       {insights.map(insight => (
         <li
@@ -94,5 +99,15 @@ export default function InsightsPanel({
         </li>
       ))}
     </ul>
+  );
+  if (!phraseScope) return list;
+  return (
+    <div>
+      {list}
+      <InsightPhrasing
+        scope={phraseScope}
+        titles={insights.map(insight => [insight.id, insight.title] as const)}
+      />
+    </div>
   );
 }
