@@ -15,10 +15,7 @@ import {
 } from '@/lib/prisma-datasource';
 import { getPrismaPoolWaitCount } from '@/lib/prisma-pool-pressure';
 import { INGESTION_YIELD_DEFAULTS } from './ingestion-yield';
-import {
-  type LaneThreadCommand,
-  type LaneThreadReport,
-} from './lane-thread-channel';
+import { type LaneThreadCommand, type LaneThreadReport } from './lane-thread-channel';
 import type { LaneStatus, LaneThreadStatus, LaneTotals } from './runner';
 
 /**

@@ -148,7 +148,10 @@ describe('intelligence lane in its own process', () => {
 });
 
 describe('a lane process that ends with queries in flight', () => {
-  const INFLIGHT_LANE = join(process.cwd(), 'tests/fixtures/intelligence-lane-thread/inflight-lane.cjs');
+  const INFLIGHT_LANE = join(
+    process.cwd(),
+    'tests/fixtures/intelligence-lane-thread/inflight-lane.cjs'
+  );
 
   it('never takes this process down: uncaught errors, restarts and a kill on stop', async () => {
     const inflight: number[] = [];

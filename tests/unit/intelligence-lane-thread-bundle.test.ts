@@ -54,14 +54,7 @@ describe('intelligence lane thread bundle', () => {
       const missing = join(directory, 'missing.cjs');
       const optional = spawnSync(
         process.execPath,
-        [
-          script,
-          '--entry',
-          'does/not/exist.ts',
-          '--outfile',
-          missing,
-          '--optional',
-        ],
+        [script, '--entry', 'does/not/exist.ts', '--outfile', missing, '--optional'],
         { encoding: 'utf8' }
       );
       expect(optional.status).toBe(0);

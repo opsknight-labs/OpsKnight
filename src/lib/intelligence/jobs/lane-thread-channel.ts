@@ -26,7 +26,6 @@ export type LaneThreadCommand =
   | { type: 'activity'; values: IngestionActivityValues }
   | { type: 'pool'; waiting: number | null };
 
-
 /** What the lane observes in its own process: the parent's ingestion and pool, as last sent. */
 export function laneHostForThread(
   port: Pick<Port, 'on'>

@@ -26,7 +26,8 @@ const status = () => ({
   lastResult: cycles
     ? {
         status:
-          data.disabledAfterMs !== undefined && Date.now() - startedAt.getTime() >= data.disabledAfterMs
+          data.disabledAfterMs !== undefined &&
+          Date.now() - startedAt.getTime() >= data.disabledAfterMs
             ? 'disabled'
             : 'worked',
         criticalLagMs: 0,
@@ -61,7 +62,8 @@ const metrics = () => ({
   ],
   histograms: [],
 });
-const report = () => parentPort.postMessage({ type: 'status', status: status(), metrics: metrics() });
+const report = () =>
+  parentPort.postMessage({ type: 'status', status: status(), metrics: metrics() });
 
 const timer = setInterval(() => {
   cycles += 1;

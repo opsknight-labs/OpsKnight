@@ -100,9 +100,7 @@ describe('lane thread placement', () => {
       fallbackReason: null,
       remedy: '',
     });
-    expect(planIntegratedLane('integrated', 'auto', '/app/bundle.cjs', false).mode).toBe(
-      'thread'
-    );
+    expect(planIntegratedLane('integrated', 'auto', '/app/bundle.cjs', false).mode).toBe('thread');
   });
 
   it('plans the thread for integrated and names the reason when it has to fall back', () => {
