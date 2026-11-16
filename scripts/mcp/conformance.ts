@@ -73,8 +73,7 @@ function startProxy(target: URL, token: string) {
     const headers = { ...request.headers };
     // Either loopback spelling of the proxy's own address means "this server"; any other Host is
     // one of the suite's DNS-rebinding probes and reaches the app unchanged.
-    const self = (value: unknown) =>
-      value === `127.0.0.1:${own}` || value === `localhost:${own}`;
+    const self = (value: unknown) => value === `127.0.0.1:${own}` || value === `localhost:${own}`;
     if (self(headers.host)) headers.host = target.host;
     if (typeof headers.origin === 'string' && self(headers.origin.replace(/^https?:\/\//, '')))
       headers.origin = target.origin;
