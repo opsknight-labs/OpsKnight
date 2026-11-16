@@ -2,9 +2,10 @@
 
 import { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
-import { Layers, Server, Activity, Settings } from 'lucide-react';
+import { Layers, Server, Activity, Settings, Lightbulb } from 'lucide-react';
 
-export type PolicyDetailTab = 'steps' | 'services' | 'activity' | 'settings' | 'dependencies';
+export type PolicyDetailTab =
+  'steps' | 'services' | 'insights' | 'activity' | 'settings' | 'dependencies';
 
 type PolicyDetailTabsProps = {
   defaultTab?: string;
@@ -16,6 +17,9 @@ type PolicyDetailTabsProps = {
   activity: ReactNode;
   settings: ReactNode;
   dependencies?: ReactNode;
+  /** Open escalation insights; the tab only appears when there is at least one. */
+  insightCount?: number;
+  insights?: ReactNode;
 };
 
 export default function PolicyDetailTabs({
@@ -28,7 +32,10 @@ export default function PolicyDetailTabs({
   activity,
   settings,
   dependencies,
+  insightCount = 0,
+  insights,
 }: PolicyDetailTabsProps) {
+  const showInsights = insightCount > 0 && !!insights;
   const tabItems = [
     {
       id: 'steps',
@@ -44,6 +51,16 @@ export default function PolicyDetailTabs({
     },
     ...(dependencies
       ? [{ id: 'dependencies', label: 'Dependencies', icon: <Layers className="h-4 w-4" /> }]
+      : []),
+    ...(showInsights
+      ? [
+          {
+            id: 'insights',
+            label: 'Insights',
+            icon: <Lightbulb className="h-4 w-4" />,
+            count: insightCount,
+          },
+        ]
       : []),
     {
       id: 'activity',
@@ -69,6 +86,11 @@ export default function PolicyDetailTabs({
       <DetailTabContent value="services" className="mt-0 space-y-6">
         {services}
       </DetailTabContent>
+      {showInsights && (
+        <DetailTabContent value="insights" className="mt-0 space-y-6">
+          {insights}
+        </DetailTabContent>
+      )}
       <DetailTabContent value="activity" className="mt-0 space-y-6">
         {activity}
       </DetailTabContent>

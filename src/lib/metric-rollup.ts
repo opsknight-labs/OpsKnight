@@ -1122,9 +1122,11 @@ export const OPS_ROLLUPS = {
   /** subjectKey = user id. tags { hour: 0-23 in the user's time zone, weekend }. count = pages, sum = incidents. */
   pagesPerUserHour: 'ops.pages.user_hour',
   /**
-   * subjectKey = escalation policy id. tags { step, outcome }. count = attempts, sum = seconds to acknowledge.
-   * Defined here so readers can rely on the name and shape; its source needs the per-step attempt table that
-   * slice J2 adds, and J2 fills OPS_ROLLUP_SOURCES for it.
+   * subjectKey = escalation policy id. tags { step (0-based), outcome, reason, hour, ackWithinMin }.
+   * count = attempts, sum = seconds to acknowledge (ACKED rows only).
+   * outcome: ACKED | TIMED_OUT (a later step was paged first) | UNANSWERED | SKIPPED | FAILED | SCHEDULED.
+   * reason = skip reason; hour = local hour of the page in the first paged person's time zone (UTC if none);
+   * ackWithinMin = smallest of 1,2,3,5,10,15,20,30,45,60,120 minutes the acknowledgement came within (null above).
    */
   escalationStepOutcome: 'ops.escalation.step_outcome',
   /** subjectKey = runbook id. tags { status }. count = finished executions, sum = total run time in ms. */
@@ -1166,6 +1168,43 @@ export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>>
         AND n."category" = 'INCIDENT' AND n."incidentId" IS NOT NULL
     ) page
     GROUP BY page."userId", page."hour", page."weekend"`,
+  // idx_escalation_step_attempt_created ("createdAt"); the next step and the incident by primary key.
+  // Acknowledgement is attributed to the last step paged before it, within the same escalation generation.
+  [OPS_ROLLUPS.escalationStepOutcome]: (sql, dayStart, dayEnd) => sql`
+    SELECT step."policyId" AS "subjectKey", count(*)::int AS "count",
+      coalesce(sum(step."ackSeconds") FILTER (WHERE step."outcome" = 'ACKED'), 0)::float AS "sum",
+      jsonb_build_object('step', step."stepIndex", 'outcome', step."outcome", 'reason', step."skipReason",
+        'hour', step."hour", 'ackWithinMin', step."ackWithinMin") AS "tags"
+    FROM (
+      SELECT judged.*,
+        (SELECT min(b) FROM unnest(ARRAY[1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 120]) b
+          WHERE judged."outcome" = 'ACKED' AND judged."ackSeconds" <= b * 60) AS "ackWithinMin"
+      FROM (
+        SELECT a."policyId", a."stepIndex", a."skipReason",
+          CASE
+            WHEN a."outcome" <> 'NOTIFIED' THEN a."outcome"
+            WHEN i."escalationGeneration" = a."generation" AND i."acknowledgedAt" >= a."notifiedAt"
+              AND (nxt."at" IS NULL OR i."acknowledgedAt" < nxt."at") THEN 'ACKED'
+            WHEN nxt."at" IS NOT NULL THEN 'TIMED_OUT'
+            ELSE 'UNANSWERED'
+          END AS "outcome",
+          extract(epoch FROM (i."acknowledgedAt" - a."notifiedAt")) AS "ackSeconds",
+          extract(hour FROM (coalesce(a."notifiedAt", a."createdAt") AT TIME ZONE 'UTC')
+            AT TIME ZONE coalesce(zone."name", 'UTC'))::int AS "hour"
+        FROM "EscalationStepAttempt" a
+        JOIN "Incident" i ON i."id" = a."incidentId"
+        LEFT JOIN LATERAL (
+          SELECT min(n."notifiedAt") AS "at" FROM "EscalationStepAttempt" n
+          WHERE n."incidentId" = a."incidentId" AND n."generation" = a."generation"
+            AND n."stepIndex" > a."stepIndex" AND n."notifiedAt" IS NOT NULL
+        ) nxt ON true
+        LEFT JOIN "User" u ON u."id" = a."resolvedUserIds"[1]
+        LEFT JOIN pg_timezone_names zone ON zone."name" = u."timeZone"
+        WHERE a."createdAt" >= ${dayStart} AND a."createdAt" < ${dayEnd} AND a."policyId" IS NOT NULL
+      ) judged
+    ) step
+    GROUP BY step."policyId", step."stepIndex", step."outcome", step."skipReason", step."hour",
+      step."ackWithinMin"`,
   // idx_runbook_execution_completed ("completedAt").
   [OPS_ROLLUPS.runbookOutcome]: (sql, dayStart, dayEnd) => sql`
     SELECT e."runbookId" AS "subjectKey", count(*)::int AS "count",

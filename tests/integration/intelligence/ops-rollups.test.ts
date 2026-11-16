@@ -140,6 +140,7 @@ describe('operations rollups', () => {
     const done = await generateOpsRollups(NOW, { force: true, lookbackDays: 7 });
     expect(done).toEqual({
       [OPS_ROLLUPS.pagesPerUserHour]: 7,
+      [OPS_ROLLUPS.escalationStepOutcome]: 7,
       [OPS_ROLLUPS.runbookOutcome]: 7,
       [OPS_ROLLUPS.automationRuleMatch]: 7,
     });
@@ -206,6 +207,7 @@ describe('operations rollups', () => {
     const rows = await db.metricRollup.count();
     expect(await generateOpsRollups(NOW, { force: true, lookbackDays: 7 })).toEqual({
       [OPS_ROLLUPS.pagesPerUserHour]: 0,
+      [OPS_ROLLUPS.escalationStepOutcome]: 0,
       [OPS_ROLLUPS.runbookOutcome]: 0,
       [OPS_ROLLUPS.automationRuleMatch]: 0,
     });
@@ -236,8 +238,88 @@ describe('operations rollups', () => {
     expect(second[OPS_ROLLUPS.runbookOutcome]).toBe(4);
   });
 
-  it('has no source for the escalation step rollup until the capture slice adds one', () => {
-    expect(OPS_ROLLUP_SOURCES[OPS_ROLLUPS.escalationStepOutcome]).toBeUndefined();
+  it('judges escalation step outcomes from the captured attempts', async () => {
+    const service = await createTestService('Escalating');
+    const kolkata = await createTestUser({ timeZone: 'Asia/Kolkata' });
+    const policyId = 'policy-known';
+    // Step 1 paged at 20:45, step 2 at 20:55, acknowledged at 20:58: step 1 timed out, step 2 acked in 3 min.
+    const escalated = await createTestIncident('Escalated', service.id, {
+      acknowledgedAt: at(1, '20:58:00'),
+    });
+    // Acknowledged 90 s after the only page.
+    const quick = await createTestIncident('Quick', service.id, {
+      acknowledgedAt: at(1, '10:01:30'),
+    });
+    // The acknowledgement belongs to a later escalation generation than the page.
+    const reopened = await createTestIncident('Reopened', service.id, {
+      acknowledgedAt: at(1, '12:05:00'),
+      escalationGeneration: 1,
+    });
+    const skipped = await createTestIncident('Skipped', service.id);
+    const attempt = (
+      incidentId: string,
+      stepIndex: number,
+      outcome: string,
+      notifiedAt: Date | null,
+      extra: Partial<{ skipReason: string; createdAt: Date; generation: number }> = {}
+    ) => ({
+      incidentId,
+      generation: 0,
+      stepIndex,
+      policyId,
+      outcome,
+      notifiedAt,
+      resolvedUserIds: notifiedAt ? [kolkata.id] : [],
+      createdAt: notifiedAt ?? at(1, '11:00:00'),
+      ...extra,
+    });
+    await db.escalationStepAttempt.createMany({
+      data: [
+        attempt(escalated.id, 0, 'NOTIFIED', at(1, '20:45:00')),
+        attempt(escalated.id, 1, 'NOTIFIED', at(1, '20:55:00')),
+        attempt(quick.id, 0, 'NOTIFIED', at(1, '10:00:00')),
+        attempt(reopened.id, 0, 'NOTIFIED', at(1, '12:00:00')),
+        attempt(skipped.id, 0, 'SKIPPED', null, { skipReason: 'NO_ONE_ON_CALL' }),
+        // Today is not a complete day yet.
+        attempt(skipped.id, 1, 'SKIPPED', null, {
+          skipReason: 'NO_TARGET',
+          createdAt: at(0, '01:00:00'),
+        }),
+      ],
+    });
+
+    await generateOpsRollups(NOW, { force: true, lookbackDays: 7 });
+    const tags = (step: number, outcome: string, hour: number, extra: object = {}) => ({
+      step,
+      outcome,
+      reason: null,
+      hour,
+      ackWithinMin: null,
+      ...extra,
+    });
+    const rows = shape(
+      await queryOpsRollup(OPS_ROLLUPS.escalationStepOutcome, {
+        from: day(7),
+        to: day(0),
+        subjectKey: policyId,
+      })
+    );
+    const expected = [
+      // 20:45 UTC is 02:15 in Kolkata.
+      { day: '', count: 1, sum: 0, tags: tags(0, 'TIMED_OUT', 2) },
+      { day: '', count: 1, sum: 180, tags: tags(1, 'ACKED', 2, { ackWithinMin: 3 }) },
+      { day: '', count: 1, sum: 90, tags: tags(0, 'ACKED', 15, { ackWithinMin: 2 }) },
+      { day: '', count: 1, sum: 0, tags: tags(0, 'UNANSWERED', 17) },
+      // Nobody was paged, so the hour is UTC.
+      {
+        day: '',
+        count: 1,
+        sum: 0,
+        tags: tags(0, 'SKIPPED', 11, { reason: 'NO_ONE_ON_CALL' }),
+      },
+    ].map(row => ({ ...row, day: '2026-06-09' }));
+    expect(rows).toHaveLength(expected.length);
+    expect(rows).toEqual(expect.arrayContaining(expected));
   });
 });
 
@@ -258,6 +340,11 @@ describe('operations rollup query plans', () => {
       OPS_ROLLUPS.pagesPerUserHour,
       'Notification',
       /idx_notification_created_cursor|Notification_createdAt/,
+    ],
+    [
+      OPS_ROLLUPS.escalationStepOutcome,
+      'EscalationStepAttempt',
+      /idx_escalation_step_attempt_created/,
     ],
     [OPS_ROLLUPS.runbookOutcome, 'RunbookExecution', /idx_runbook_execution_completed/],
     [

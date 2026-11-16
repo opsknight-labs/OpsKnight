@@ -2,6 +2,7 @@ import 'server-only';
 import type { AnyOpsInsightProducer } from '../producer';
 import { automationRuleHealthProducer } from './automation-rule-health';
 import { automationSuggestedRulesProducer } from './automation-suggested-rules';
+import { escalationPolicyProducer } from './escalation-policy';
 import { integrationHealthProducer } from './integration-health';
 
 /**
@@ -12,4 +13,5 @@ export const OPS_INSIGHT_PRODUCERS: readonly AnyOpsInsightProducer[] = [
   integrationHealthProducer,
   automationRuleHealthProducer,
   automationSuggestedRulesProducer,
+  escalationPolicyProducer,
 ];

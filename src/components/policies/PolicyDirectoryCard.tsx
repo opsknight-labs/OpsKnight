@@ -10,6 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
+import InsightBadge from '@/components/intelligence/insights/InsightBadge';
+import type { OpsInsightCount } from '@/lib/intelligence/ops-insights/contract';
 import {
   ShieldAlert,
   Clock,
@@ -29,6 +31,8 @@ export type PolicyDirectoryItem = {
   stepCount: number;
   serviceCount: number;
   services: { id: string; name: string }[];
+  /** Open escalation insights on this policy, for the list badge. */
+  insights?: OpsInsightCount | null;
   steps: {
     id: string;
     stepOrder: number;
@@ -65,6 +69,7 @@ export default function PolicyDirectoryCard({
               >
                 {policy.name}
               </Link>
+              <InsightBadge count={policy.insights} />
             </div>
             {policy.description ? (
               <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">

@@ -764,6 +764,30 @@ model EscalationPolicy {
   automationDecisions IncidentAutomationDecision[]
 }
 
+/// One row per escalation step execution (incident + generation + step). Written in the same
+/// statement as the step's timeline event; analytics only, never read by the escalation engine.
+model EscalationStepAttempt {
+  incidentId      String
+  generation      Int
+  stepIndex       Int
+  policyId        String?
+  policyRevision  Int?
+  targetType      String?
+  targetId        String?
+  resolvedUserIds String[]  @default([])
+  /// SCHEDULED | NOTIFIED | SKIPPED | FAILED. Acknowledged / timed out are derived by the step-outcome rollup.
+  outcome         String
+  skipReason      String?
+  notifiedAt      DateTime?
+  /// True for rows reconstructed by the 90-day backfill from timeline text.
+  approximate     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  incident        Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@id([incidentId, generation, stepIndex])
+  @@index([createdAt], map: "idx_escalation_step_attempt_created")
+}
+
 model EscalationRule {
   id                   String                    @id @default(cuid())
   policyId             String
@@ -1415,6 +1439,10 @@ model Incident {
   escalationProcessingAt              DateTime?
   escalationGeneration                Int                             @default(0)
   acknowledgedAt                      DateTime?
+  /// Who acknowledged and through which channel (IncidentLifecycleSource). Null for system acks and legacy rows.
+  acknowledgedById                    String?
+  acknowledgedVia                     String?
+  escalationStepAttempts              EscalationStepAttempt[]
   resolvedAt                          DateTime?
   resolutionKind                      IncidentResolutionKind?
   snoozedUntil                        DateTime?

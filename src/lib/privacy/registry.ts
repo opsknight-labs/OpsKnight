@@ -494,12 +494,39 @@ export const personalDataRegistry = [
     locations: ['DATABASE'],
     retention: {
       current:
-        'Off by default. Insights are derived counts and short facts, recomputed daily and never sent to an external provider. Resolved and dismissed insights follow the finding retention; insights about a person, and that person\'s daily page counts, are deleted in the bounded retention sweep once the person is deleted, and the decider is a foreign key cleared on user erasure. Daily rollups follow the metrics retention.',
-      target: 'Erasure of person-scoped insights and page counts in the same transaction as the user.',
+        "Off by default. Insights are derived counts and short facts, recomputed daily and never sent to an external provider. Resolved and dismissed insights follow the finding retention; insights about a person, and that person's daily page counts, are deleted in the bounded retention sweep once the person is deleted, and the decider is a foreign key cleared on user erasure. Daily rollups follow the metrics retention.",
+      target:
+        'Erasure of person-scoped insights and page counts in the same transaction as the user.',
     },
     discoverable: 'PARTIAL',
     notes: [
-      'An insight about a person (scope USER) is visible only to that person, an owner of a team they belong to, and administrators. Insights about services, schedules, runbooks, teams and policies follow the reader\'s existing read permissions for that record.',
+      "An insight about a person (scope USER) is visible only to that person, an owner of a team they belong to, and administrators. Insights about services, schedules, runbooks, teams and policies follow the reader's existing read permissions for that record.",
+    ],
+  },
+  {
+    domain: 'escalation-step-attempts',
+    models: ['EscalationStepAttempt'],
+    fields: [
+      'EscalationStepAttempt.targetId',
+      'EscalationStepAttempt.resolvedUserIds',
+      'Incident.acknowledgedById',
+      'Incident.acknowledgedVia',
+    ],
+    purpose: [
+      'Recording which escalation step paged whom, and whether it was skipped, so policy insights can show acknowledgement rates and suggest timeouts',
+      'Recording who acknowledged an incident and through which channel (web, mobile, API, email, SMS, voice, Slack)',
+    ],
+    classifications: ['INTERNAL', 'PERSONAL'],
+    locations: ['DATABASE'],
+    retention: {
+      current:
+        'Written in the same statement as the escalation timeline entry, always on, and deleted with the incident (cascade). Attempts rebuilt from older timeline text are marked approximate. They are read only by the daily step-outcome rollup, which stores counts per policy, step and hour, never user ids.',
+      target:
+        "Removal of a deleted user's id from resolvedUserIds and acknowledgedById in the user erasure transaction.",
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'Neither the attempts nor the acknowledging user are shown directly: policy insights show counts only, behind the escalation policy read permission.',
     ],
   },
 ] as const satisfies readonly PersonalDataDomain[];
