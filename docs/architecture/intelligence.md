@@ -602,8 +602,8 @@ savedTokens/savedCostMicros` are nullable and additive; the spend page shows **S
     Background allowance: every reservation stores its `callSite`; `proactive` and `background` holds and
     settled tokens (`AiUsageDay.backgroundAiTokens`) count against `backgroundAiTokenBudget()` (default 30%,
     at most 80% of the daily budget), checked in the same serialisable reservation transaction as the global,
-    personal, team and capability budgets, so concurrent background calls cannot overshoot (integration test
-    races 20 reservations). Proactive notes are also capped per service per UTC day with the shared
+    personal, team and capability budgets, so concurrent background calls cannot overshoot (the spend-controls
+    integration test races concurrent background, personal and mixed holds). Proactive notes are also capped per service per UTC day with the shared
     fixed-window rate limiter (`ai:proactive-notes:<serviceId>`). Degradation: `admitAiRequest` marks a
     request `degraded` from `AI_DEGRADE_AT` (80%) of the global or personal budget; the gateway then forces
     the `small` tier for every provider in the chain, halves the answer-length cap, sets `degraded: true` on
