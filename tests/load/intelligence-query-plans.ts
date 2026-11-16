@@ -24,6 +24,8 @@ import { claimWorkItemsSql } from '../../src/lib/intelligence/jobs/work-queue';
 import { INTELLIGENCE_ENGINE_VERSION } from '../../src/lib/intelligence/contract';
 import { dueOpsInsightScopesSql } from '../../src/lib/intelligence/ops-insights/handlers';
 import { integrationHealthSql } from '../../src/lib/intelligence/ops-insights/producers/integration-health';
+import { automationRouteOutcomesSql } from '../../src/lib/intelligence/ops-insights/producers/automation-rule-health';
+import { automationMiningSql } from '../../src/lib/intelligence/ops-insights/producers/automation-suggested-rules';
 import { OPS_ROLLUP_SOURCES, OPS_ROLLUPS } from '../../src/lib/metric-rollup';
 
 /** Any one of the listed indexes satisfies the query; alternatives cover optional extensions. */
@@ -47,6 +49,8 @@ const EXPECTED_INDEXES: Record<string, string[]> = {
   opsAutomationRollup: ['IncidentAutomationDecision_serviceId_createdAt_idx'],
   opsRollupRead: ['idx_metric_rollup_subject'],
   opsIntegrationHealth: ['idx_alert_by_service'],
+  opsAutomationRouteOutcomes: ['IncidentAutomationDecision_serviceId_createdAt_idx'],
+  opsAutomationMining: ['idx_incident_sla_by_service', 'idx_incident_service_updated_at'],
   opsDueScopes: ['OpsInsightScopeState_pkey', 'idx_ops_insight_scope_due'],
 };
 
@@ -71,6 +75,8 @@ const MIN_ROWS_TO_JUDGE: Record<string, { table: JudgedTable; rows: number }> = 
   opsAutomationRollup: { table: 'IncidentAutomationDecision', rows: 50_000 },
   opsRollupRead: { table: 'MetricRollup', rows: 50_000 },
   opsIntegrationHealth: { table: 'Alert', rows: 200_000 },
+  opsAutomationRouteOutcomes: { table: 'IncidentAutomationDecision', rows: 50_000 },
+  opsAutomationMining: { table: 'Incident', rows: 200_000 },
   opsDueScopes: { table: 'OpsInsightScopeState', rows: 5_000 },
   reconcileWatermark: { table: 'Incident', rows: 200_000 },
   embedPage: { table: 'IncidentFingerprint', rows: 200_000 },
@@ -216,6 +222,11 @@ async function main() {
       analyze: true,
       sql: integrationHealthSql(source.serviceId, new Date()),
     },
+    opsAutomationRouteOutcomes: {
+      analyze: true,
+      sql: automationRouteOutcomesSql(source.serviceId, new Date()),
+    },
+    opsAutomationMining: { analyze: true, sql: automationMiningSql(source.serviceId, new Date()) },
     opsDueScopes: { analyze: true, sql: dueOpsInsightScopesSql('SERVICE', 200) },
   };
 

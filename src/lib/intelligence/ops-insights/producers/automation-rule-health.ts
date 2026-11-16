@@ -231,7 +231,7 @@ export const automationRuleHealthProducer: OpsInsightProducer<AutomationRuleHeal
         });
       }
     }
-    if (input.sample.events >= 100) {
+    if (input.sample.events >= 50) {
       for (const rule of input.sample.rules) {
         if (rule.phase !== 'ENRICH' || rule.matched > 0) continue;
         items.push({

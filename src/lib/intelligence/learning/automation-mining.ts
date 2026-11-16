@@ -93,7 +93,6 @@ export function mineAutomationRules(
       const confidence = wilsonLowerBound(corrected, incidents);
       if (confidence < limits.minConfidence) continue;
       const rule = suggestionRule(facts, priority);
-      if (options.existing?.has(ruleSignature(rule))) continue;
       candidates.push({
         key: `${factsKey(facts)}>${priority}`,
         rule,
@@ -117,7 +116,9 @@ export function mineAutomationRules(
           Object.keys(other.facts).length < Object.keys(candidate.facts).length
       )
   );
+  // Existing rules are dropped last, so an existing general rule also silences its narrower variants.
   return kept
+    .filter(candidate => !options.existing?.has(ruleSignature(candidate.rule)))
     .sort(
       (a, b) => b.confidence - a.confidence || b.corrected - a.corrected || (a.key < b.key ? -1 : 1)
     )
