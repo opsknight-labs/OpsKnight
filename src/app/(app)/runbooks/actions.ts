@@ -18,6 +18,7 @@ import { RUNBOOK_TEMPLATES, runbookTemplate, runbookTemplateInputs } from '@/lib
 import { CAPABILITIES } from '@/lib/authorization';
 import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
+import { enqueueOpsInsights } from '@/lib/intelligence/ops-insights/handlers';
 import { schedulingLabelsSchema } from '@/lib/runbooks/pool-labels';
 import {
   stageExecutionSigningKey,
@@ -219,6 +220,8 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
 export async function publishDraftAction(versionId: string, runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_PUBLISH);
   await publishDraftVersion(idSchema.parse(versionId), actor.id);
+  // Recompute the runbook's health soon; a queue failure must not fail the publish.
+  await enqueueOpsInsights({ type: 'RUNBOOK', id: idSchema.parse(runbookId) }).catch(() => 0);
   revalidatePath('/runbooks');
   revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
 }

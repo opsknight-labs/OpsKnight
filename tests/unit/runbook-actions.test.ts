@@ -5,14 +5,16 @@ import {
   deleteRunbookAction,
   duplicateRunbookAction,
   archiveRunbookAction,
+  publishDraftAction,
 } from '@/app/(app)/runbooks/actions';
+import { enqueueOpsInsights } from '@/lib/intelligence/ops-insights/handlers';
 import {
   checkRunbookDeleteEligibility,
   deleteRunbook,
   duplicateRunbook,
   restoreRunbook,
 } from '@/lib/runbooks/lifecycle';
-import { archiveRunbook } from '@/lib/runbooks/versioning';
+import { archiveRunbook, publishDraftVersion } from '@/lib/runbooks/versioning';
 import { assertCapability } from '@/lib/rbac';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -35,6 +37,10 @@ vi.mock('@/lib/runbooks/versioning', () => ({
   publishDraftVersion: vi.fn(),
   updateDraftVersion: vi.fn(),
   updateRunbookMetadata: vi.fn(),
+}));
+
+vi.mock('@/lib/intelligence/ops-insights/handlers', () => ({
+  enqueueOpsInsights: vi.fn().mockResolvedValue(1),
 }));
 
 vi.mock('next/cache', () => ({
@@ -109,7 +115,9 @@ describe('Runbook Server Actions Unit Tests', () => {
     it('asserts capability, duplicates runbook, and redirects to new runbook', async () => {
       const validCuid = 'clh1234567890123456789012';
       const newCuid = 'clh9876543210987654321098';
-      vi.mocked(duplicateRunbook).mockResolvedValueOnce({ id: newCuid } as unknown as Awaited<ReturnType<typeof duplicateRunbook>>);
+      vi.mocked(duplicateRunbook).mockResolvedValueOnce({ id: newCuid } as unknown as Awaited<
+        ReturnType<typeof duplicateRunbook>
+      >);
 
       await duplicateRunbookAction(validCuid);
 
@@ -131,6 +139,20 @@ describe('Runbook Server Actions Unit Tests', () => {
       expect(archiveRunbook).toHaveBeenCalledWith(validCuid, 'user_1');
       expect(revalidatePath).toHaveBeenCalledWith('/runbooks');
       expect(redirect).toHaveBeenCalledWith('/runbooks');
+    });
+  });
+
+  describe('publishDraftAction', () => {
+    it('publishes, then asks the lane to recompute the runbook health without failing on a queue error', async () => {
+      const versionId = 'clh1234567890123456789012';
+      const runbookId = 'clh9876543210987654321098';
+      vi.mocked(enqueueOpsInsights).mockRejectedValueOnce(new Error('queue down'));
+
+      await publishDraftAction(versionId, runbookId);
+
+      expect(publishDraftVersion).toHaveBeenCalledWith(versionId, 'user_1');
+      expect(enqueueOpsInsights).toHaveBeenCalledWith({ type: 'RUNBOOK', id: runbookId });
+      expect(revalidatePath).toHaveBeenCalledWith(`/runbooks/${runbookId}`);
     });
   });
 });
