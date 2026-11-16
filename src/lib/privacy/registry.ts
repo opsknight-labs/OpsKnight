@@ -168,7 +168,7 @@ export const personalDataRegistry = [
   },
   {
     domain: 'on-call-scheduling',
-    models: ['OnCallLayerUser', 'OnCallOverride', 'OnCallShift'],
+    models: ['OnCallLayerUser', 'OnCallOverride', 'OnCallShift', 'OnCallCoverageDay'],
     fields: ['userId', 'replacesUserId', 'start', 'end'],
     purpose: ['On-call planning', 'routing', 'coverage history'],
     classifications: ['INTERNAL', 'PERSONAL'],

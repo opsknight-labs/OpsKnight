@@ -525,6 +525,7 @@ model User {
   assignedIncidents           Incident[]
   teamMemberships             TeamMember[]
   onCallShifts                OnCallShift[]
+  onCallCoverageDays          OnCallCoverageDay[]
   escalationRules             EscalationRule[]
   incidentNotes               IncidentNote[]
   postmortems                 Postmortem[]
@@ -1929,6 +1930,7 @@ model OnCallSchedule {
   layers          OnCallLayer[]
   overrides       OnCallOverride[]
   shifts          OnCallShift[]
+  coverageDays    OnCallCoverageDay[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   escalationRules EscalationRule[]
@@ -1994,6 +1996,24 @@ model OnCallShift {
   @@index([start, end])
   @@index([scheduleId])
   @@index([userId, start, end])
+}
+
+// Daily history of who was effectively on call, so load and fairness survive later layer edits.
+// `date` is the calendar day in the schedule's time zone. `layerId` is a plain id (no relation):
+// history must outlive a deleted layer.
+model OnCallCoverageDay {
+  id         String         @id @default(cuid())
+  scheduleId String
+  date       DateTime       @db.Date
+  userId     String
+  layerId    String
+  seconds    Int
+  createdAt  DateTime       @default(now())
+  schedule   OnCallSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, date, userId, layerId])
+  @@index([userId, date])
 }
 
 model Notification {

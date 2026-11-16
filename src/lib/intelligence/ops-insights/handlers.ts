@@ -2,6 +2,8 @@ import 'server-only';
 /* eslint-disable security/detect-object-injection -- Indexes of a parallel array built in the same function. */
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
+import { captureScheduleCoverage } from '@/lib/oncall-load/store';
 import { dbNow, withDbBudget } from '../jobs/db-budget';
 import { stableAnalysisHash } from '../jobs/input-hash';
 import {
@@ -145,6 +147,27 @@ export async function runOpsInsights(
   );
 }
 
+/**
+ * The one write the lane does for a scope before its insights: a schedule's daily coverage snapshot
+ * (finished days only, never rewritten), so on-call history survives later layer edits.
+ */
+async function captureBeforeInsights(
+  subjectKey: string,
+  settings: IntelligenceSettingsView
+): Promise<void> {
+  const scope = parseOpsInsightsSubject(subjectKey);
+  if (scope?.type !== 'SCHEDULE' || !enabledOpsInsightAreas(settings).includes('onCall')) return;
+  try {
+    await captureScheduleCoverage(scope.id);
+  } catch (error) {
+    // The snapshot resumes from its last captured day on the next visit; insights still run.
+    logger.warn('[Intelligence] On-call coverage snapshot failed', {
+      scheduleId: scope.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 type Handler = (
   item: ClaimedWorkItem,
   context: { settings: IntelligenceSettingsView; signal: AbortSignal }
@@ -153,6 +176,7 @@ type Handler = (
 /** Registered into the runner's DEFAULT_HANDLERS. */
 export const OPS_INSIGHT_HANDLERS: Partial<Record<WorkKind, Handler>> = {
   [WORK_KINDS.OPS_INSIGHTS]: async (item, { settings, signal }) => {
+    await captureBeforeInsights(item.subjectKey, settings);
     await runOpsInsights(item, settings, { signal });
   },
 };

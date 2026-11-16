@@ -4,6 +4,7 @@ import { automationRuleHealthProducer } from './automation-rule-health';
 import { automationSuggestedRulesProducer } from './automation-suggested-rules';
 import { escalationPolicyProducer } from './escalation-policy';
 import { integrationHealthProducer } from './integration-health';
+import { onCallPersonProducer, onCallScheduleProducer } from './oncall';
 
 /**
  * The kinds registry. To add a kind: add one file in this directory that exports an OpsInsightProducer,
@@ -14,4 +15,6 @@ export const OPS_INSIGHT_PRODUCERS: readonly AnyOpsInsightProducer[] = [
   automationRuleHealthProducer,
   automationSuggestedRulesProducer,
   escalationPolicyProducer,
+  onCallScheduleProducer,
+  onCallPersonProducer,
 ];

@@ -1328,12 +1328,18 @@ export interface OpsRollupPoint {
 }
 
 /**
- * Reads one operations rollup over a date range, optionally for one subject, on
+ * Reads one operations rollup over a date range, optionally for one subject (or a bounded list), on
  * idx_metric_rollup_subject ("name", "subjectKey", "bucket"). Bounded: at most `limit` rows (default 2000).
  */
 export async function queryOpsRollup(
   name: OpsRollupName,
-  range: { from: Date; to: Date; subjectKey?: string; limit?: number },
+  range: {
+    from: Date;
+    to: Date;
+    subjectKey?: string;
+    subjectKeys?: readonly string[];
+    limit?: number;
+  },
   client?: Prisma.TransactionClient
 ): Promise<OpsRollupPoint[]> {
   const db = client ?? (await import('./prisma')).default;
@@ -1341,6 +1347,7 @@ export async function queryOpsRollup(
     where: {
       name,
       ...(range.subjectKey === undefined ? {} : { subjectKey: range.subjectKey }),
+      ...(range.subjectKeys === undefined ? {} : { subjectKey: { in: [...range.subjectKeys] } }),
       bucket: { gte: range.from, lt: range.to },
     },
     orderBy: [{ bucket: 'asc' }, { id: 'asc' }],

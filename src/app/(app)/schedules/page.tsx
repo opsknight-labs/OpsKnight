@@ -1,6 +1,11 @@
+import { Suspense } from 'react';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
+import { countOpenInsightsForScopes } from '@/lib/intelligence/ops-insights/view';
+import { enabledOpsInsightAreas } from '@/lib/intelligence/ops-insights/contract';
+import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
+import MyOnCallLoadCard from '@/components/schedules/MyOnCallLoadCard';
 import { createSchedule } from './actions';
 import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
@@ -30,9 +35,12 @@ export default async function SchedulesPage({
   const searchQuery = (params?.q || params?.search || '').trim();
   const statusFilter = params?.status || 'all';
 
-  const [permissions, actor] = await Promise.all([
+  const [permissions, actor, onCallInsightsOn] = await Promise.all([
     getUserPermissions(),
     getCurrentAuthorizationActor(),
+    getIntelligenceSettings()
+      .then(settings => enabledOpsInsightAreas(settings).includes('onCall'))
+      .catch(() => false),
   ]);
 
   const baseWhere = scheduleReadWhere(actor);
@@ -133,6 +141,14 @@ export default async function SchedulesPage({
     },
     orderBy: { createdAt: 'desc' },
   });
+  // Badges are optional: a failed read just hides them.
+  const insightCounts = Object.fromEntries(
+    await countOpenInsightsForScopes(
+      actor,
+      'SCHEDULE',
+      schedules.map(schedule => schedule.id)
+    ).catch(() => new Map())
+  );
 
   const totalLayers = totalLayersCount;
   const totalUniqueResponders = responderAgg.length;
@@ -220,11 +236,17 @@ export default async function SchedulesPage({
             }}
             currentSearch={searchQuery}
             currentStatus={statusFilter}
+            insightCounts={insightCounts}
           />
         </div>
 
         {/* Sidebar: Step Guide & Quick Links */}
         <aside className="space-y-4">
+          {onCallInsightsOn && (
+            <Suspense fallback={null}>
+              <MyOnCallLoadCard userId={actor.id} />
+            </Suspense>
+          )}
           {/* Clean Guidance Card */}
           <Card className="overflow-hidden border-border/70 shadow-xs">
             <CardHeader className="border-b bg-muted/20 px-4 py-2.5">

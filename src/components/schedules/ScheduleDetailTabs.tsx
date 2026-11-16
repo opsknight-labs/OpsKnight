@@ -2,9 +2,9 @@
 
 import { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
-import { CalendarClock, Layers3, Settings2, ShieldPlus } from 'lucide-react';
+import { CalendarClock, Layers3, Scale, Settings2, ShieldPlus } from 'lucide-react';
 
-export type ScheduleDetailTab = 'overview' | 'rotation' | 'overrides' | 'settings';
+export type ScheduleDetailTab = 'overview' | 'rotation' | 'overrides' | 'load' | 'settings';
 
 type ScheduleDetailTabsProps = {
   defaultTab?: string;
@@ -12,6 +12,8 @@ type ScheduleDetailTabsProps = {
   rotation: ReactNode;
   overrides: ReactNode;
   settings: ReactNode;
+  /** "Load & fairness"; the tab is left out when absent (on-call insights off). */
+  load?: ReactNode;
 };
 
 export default function ScheduleDetailTabs({
@@ -20,6 +22,7 @@ export default function ScheduleDetailTabs({
   rotation,
   overrides,
   settings,
+  load,
 }: ScheduleDetailTabsProps) {
   const tabItems = [
     {
@@ -37,6 +40,9 @@ export default function ScheduleDetailTabs({
       label: 'Overrides',
       icon: <ShieldPlus className="h-4 w-4" />,
     },
+    ...(load
+      ? [{ id: 'load', label: 'Load & fairness', icon: <Scale className="h-4 w-4" /> }]
+      : []),
     {
       id: 'settings',
       label: 'Settings',
@@ -55,6 +61,11 @@ export default function ScheduleDetailTabs({
       <DetailTabContent value="overrides" className="mt-0 space-y-6">
         {overrides}
       </DetailTabContent>
+      {load ? (
+        <DetailTabContent value="load" className="mt-0 space-y-6">
+          {load}
+        </DetailTabContent>
+      ) : null}
       <DetailTabContent value="settings" className="mt-0 space-y-6">
         {settings}
       </DetailTabContent>

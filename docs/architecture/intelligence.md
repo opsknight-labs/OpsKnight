@@ -1407,6 +1407,44 @@ recentMissingSeverity }`; `silentHours` is exact for the first three days and wh
 integrations page. Tests: `tests/lib/intelligence/ops-insights.test.ts` (pure half) and
 `tests/integration/intelligence/ops-insights.test.ts` (fixtures with known answers).
 
+#### On-call load and fairness (J3)
+
+Area `onCall`, two producers in `producers/oncall.ts`, logic in `src/lib/oncall-load/`:
+
+- **Capture.** `OnCallCoverageDay (scheduleId, date, userId, layerId, seconds)` is the daily history of who
+  was effectively on call (from `getFinalScheduleBlocks`, so after overrides), `date` being the calendar day
+  in the schedule's time zone (DST days count their real length). The `OPS_INSIGHTS` handler captures a
+  `SCHEDULE` subject's finished days before running its producers (`captureScheduleCoverage`, resumes from
+  the last captured day, at most 30 back, never rewrites a day), so history survives layer edits and
+  deletes. `layerId` is a plain id for the same reason. `scripts/backfill-oncall-coverage.ts`
+  (`npm run backfill:oncall-coverage`) fills 30 days for every schedule in resumable batches.
+- **Load.** `loadScheduleLoad` and `loadMyOnCallLoad` read the `ops.pages.user_hour` rollup
+  (`queryOpsRollup` with `subjectKeys`, on `idx_metric_rollup_subject`) and the coverage snapshot (unique
+  key, or `OnCallCoverageDay_userId_date_idx`), never raw `Notification` rows. `computeLoad` (pure) gives per
+  person: pages, night pages (22:00 to 07:00 in the person's time zone, read from the rollup's local hour),
+  weekend pages, interrupted hours, longest quiet gap, on-call hours, pages per on-call week and its ratio to
+  the rotation mean; per rotation: total, mean and Jain's fairness index. The window is the last 28 finished
+  UTC days. Shortcut: pages are per person, not per schedule (a notification does not record its schedule),
+  so someone on two rotations counts their pages in both.
+- **Scope.** Per-person rows go through `readableOpsInsightScopes(actor, 'USER', ids)`: self, owners of a
+  team the person belongs to, administrators. Rotation totals are withheld when the viewer cannot see every
+  row and the rotation has fewer than three people (the totals would reveal the other person).
+- **Insights.** `oncall.schedule` (scope `SCHEDULE`): `gap` (no one on call for part of a day in the next 14
+  days, critical within two days; same rule as `ScheduleHealthCheck`), `same-person` (the policy step after
+  this schedule pages someone already on call here), `unfair` (someone above 1.5x the mean; needs three
+  people and eight pages). Schedule evidence holds counts only, never names. `oncall.person` (scope
+  `USER`): load above 1.5x the rotation mean (one item per schedule), `night` (night pages on at least six
+  nights across three of the four weeks), `upcoming` (shift starting within 24 hours on a service with a
+  risky change scored at least 0.6 in the last day, a burning SLO or a maintenance window ending; from
+  `loadShiftRiskSignals`). The handoff summary (`handoff/summary.ts`) shows the same signals to the incoming
+  person as a heads-up while the area is on.
+- **UI.** "Load & fairness" tab on the schedule page (`ScheduleLoadPanel`, own Suspense boundary, only
+  while the area is on; reference screen `ScheduleCoverageExplorer`), "My on-call load" card on `/schedules`
+  and `/m/schedules` (`MyOnCallLoadCard`, renders nothing without on-call time or pages), `InsightBadge` on
+  the schedules list via `countOpenInsightsForScopes`. `HeatStrip` is self-contained (Tailwind only).
+- Tests: `tests/lib/oncall-load.test.ts`, `tests/integration/oncall-load-store.test.ts` (known answers,
+  scoping, lane capture, query plans), `tests/components/schedules/oncall-load-ui.test.tsx`.
+
 ### Reading and deciding
 
 `ops-insights/view.ts`:
