@@ -593,6 +593,32 @@ team>|<caller scope>`) and a SHA-256 of the exact messages, answer-length cap an
     (never an invented discount). `AiUsageBreakdownDay.cacheReadTokens/cacheWriteTokens/resultCacheHits/
 savedTokens/savedCostMicros` are nullable and additive; the spend page shows **Saved by cache** (result
     cache plus net provider-cache saving, floored at zero) and the saving per capability.
+  - _Spend controls_ (`AiSettings.spendControlsEnabled`, off by default). Routing defaults: `CAPABILITY_TIERS`
+    in `ai/routing.ts` maps CLASSIFY and SUMMARIZE (tool hops, phrasing, conversation summaries) to `small` and
+    DIAGNOSE, POSTMORTEM and SQUIRE_CHAT (synthesis) to `strong`; `PROVIDER_MODEL_TIERS` names each provider
+    kind's two models from the price table (deployment-named hosts have none and keep their model).
+    `resolveGatewayPort` applies `applyDefaultTiers` first and the administrator's `capabilityRouting` on top,
+    so a custom route always wins; the routing form shows "Default" or "Custom route" per capability.
+    Background allowance: every reservation stores its `callSite`; `proactive` and `background` holds and
+    settled tokens (`AiUsageDay.backgroundAiTokens`) count against `backgroundAiTokenBudget()` (default 30%,
+    at most 80% of the daily budget), checked in the same serialisable reservation transaction as the global,
+    personal, team and capability budgets, so concurrent background calls cannot overshoot (integration test
+    races 20 reservations). Proactive notes are also capped per service per UTC day with the shared
+    fixed-window rate limiter (`ai:proactive-notes:<serviceId>`). Degradation: `admitAiRequest` marks a
+    request `degraded` from `AI_DEGRADE_AT` (80%) of the global or personal budget; the gateway then forces
+    the `small` tier for every provider in the chain, halves the answer-length cap, sets `degraded: true` on
+    the result (never stored by the result cache), and background calls are refused from that point and may
+    never reserve past it. At 100% every call is refused with `BUDGET_EXHAUSTED` as before; Squire shows its
+    basic-mode notice and drafts show `DRAFT_FAILURE_MESSAGES.BUDGET_EXHAUSTED`. Degraded answers show
+    `AI_LEAN_NOTICE` in Squire (a `notice` event), the incident summary and the postmortem editor.
+  - _Batched insight phrasing._ `phraseInsights(actor, scope, insights)` in `ops-insights/phrasing.ts`
+    phrases all of one scope's insights (at most 12) in one `cachedGenerateStructured` call (SUMMARIZE,
+    `interactive`, prompt `insights.phrasing` v1, `AI_OUTPUT_TOKENS['insights.phrasing']`), keyed by insight
+    id; ids it was not sent are dropped. The brief carries ids, severity, title, summary and evidence facts
+    only. `phraseInsightsForScope` reads the insights again with `listInsightsForScope` under the viewer, so
+    a scope the viewer cannot read sends nothing; USER-scope insights use the PERSONAL data class and a
+    `user:<viewer>` cache scope. `InsightsPanel` takes an optional `phraseScope` and renders the
+    `InsightPhrasing` disclosure, which calls `phraseInsightsAction` on the first expand only.
 
 **Observability connectors (opt-in).** Settings → Intelligence → Connections stores read-only
 `ObservabilityConnection` rows: Prometheus, Loki, Tempo, Grafana (through its data-source proxy),

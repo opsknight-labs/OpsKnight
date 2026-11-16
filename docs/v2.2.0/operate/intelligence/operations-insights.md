@@ -78,6 +78,16 @@ When the condition goes away, the insight resolves by itself. If it returns late
 
 Accepting, dismissing and reopening are recorded in the audit log.
 
+### In plain words
+
+Where a page lists the insights of one thing (a service, a policy, a schedule), and an AI provider is set up,
+the list ends with **Explain in plain words**. Nothing is sent to a model until you expand it. Then all of
+that list's open insights are rewritten in one request, a sentence or two each, from the same facts the
+evidence shows. The titles and summaries above stay as they are; the rewrite is labelled as written by AI.
+Expanding the same unchanged list again within a day costs nothing when **Reuse answers for unchanged facts**
+is on. When the daily AI budget is used up, or no provider may receive the data, the list says so and shows
+only the original text.
+
 ## Who sees what
 
 You see insights only for things you can already open: a responder limited to their teams sees their
@@ -86,8 +96,9 @@ their teams and administrators only.
 
 ## Data and retention
 
-Insights hold derived counts and short facts, never alert payloads, and are not sent to any external
-provider. Resolved and dismissed insights are deleted after the Intelligence finding retention. Daily
+Insights hold derived counts and short facts, never alert payloads. They are sent to an AI provider only
+when a person expands **Explain in plain words**, and then only the insights that person can see (an
+insight about a person counts as personal data and goes only to providers cleared for it). Resolved and dismissed insights are deleted after the Intelligence finding retention. Daily
 counts used by later insights (pages per person and hour, runbook outcomes, automation rule matches) are
 kept for the metrics retention; a deleted person's counts and insights are removed by the next retention
 sweep.

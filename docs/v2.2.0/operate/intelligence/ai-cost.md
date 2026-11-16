@@ -80,6 +80,32 @@ Assistant chat is never reused: its answers depend on live lookups.
 List pages, badges, the wallboard and the Intelligence overview never call a model. This is enforced in the
 gateway, not left to each page.
 
+## Spend controls
+
+Tick **Spend controls** under **Assistant & AI** settings (off by default). With it on:
+
+- **Default model per task.** Classification, the investigation's tool steps, phrasing and summaries of earlier
+  conversation turns go to each provider's small model; diagnosis, postmortem drafts and the assistant's final
+  answer go to its strong one. The defaults come from the built-in price list: Anthropic `claude-haiku-5-5` and
+  `claude-opus-5-5`, OpenAI `gpt-5-mini` and `gpt-5`, Google `gemini-2.5-flash` and `gemini-2.5-pro`, Mistral
+  `mistral-small-latest` and `mistral-large-latest`, Groq `llama-3.1-8b-instant` and `llama-3.3-70b-versatile`.
+  Azure OpenAI, Bedrock, Vertex and OpenAI-compatible providers keep their configured model, because their
+  model names depend on the deployment. **Model routing** shows each task as **Default** or **Custom route**; a
+  route you set always wins.
+- **Background allocation.** Work nobody is waiting on (proactive notes, handoff narratives) may use at most
+  **Background AI allocation (%)** of the daily token budget, 30% by default. It is a share of the budget, never
+  an addition, and it is checked in the same transaction as every other budget, so concurrent requests cannot
+  overshoot it.
+- **Per-service cap on proactive notes.** At most **AI-written notes per service per day** (20 by default) are
+  written with AI for one service; after that its notes are written from the facts alone until 00:00 UTC.
+- **At 80% of the daily budget** (global or your own share): answers use the small model and are half as long,
+  background AI pauses, and the answer carries a notice saying so. Such answers are never kept for reuse.
+- **At 100%**: no model is called. The assistant answers in basic mode and AI drafts say the budget is used up;
+  everything deterministic keeps working.
+
+The 100% behaviour applies with or without spend controls; the routing, allocation, cap and 80% step only with
+them on.
+
 ## Set model prices
 
 Dollars come from a price per million input tokens and per million output tokens.
@@ -140,5 +166,5 @@ deterministic Intelligence engine never depend on AI budgets.
 
 ## Roll back
 
-Remove or untick the budgets, and untick **Reuse answers for unchanged facts** (stored answers expire within 24 hours). Prices and spend records are inert without budgets and need no clean-up; the
+Remove or untick the budgets, untick **Spend controls**, and untick **Reuse answers for unchanged facts** (stored answers expire within 24 hours). Prices and spend records are inert without budgets and need no clean-up; the
 database changes are additive and safe to leave in place on a downgrade.
