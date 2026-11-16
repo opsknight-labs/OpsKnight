@@ -37,7 +37,15 @@ function assertLocalDatabase() {
 /** Turns MCP and personal tokens on (disposable database) and mints one for an active administrator. */
 async function mintToken() {
   await loadMcpRuntime({ force: true });
-  const policy = { enabled: true, patEnabled: true, patAllowedScopes: PAT_SCOPES };
+  // The suite sends bursts of requests on one token; a production per-minute quota would answer
+  // some with 429, which it reads as failures unrelated to the scenario under test.
+  const policy = {
+    enabled: true,
+    patEnabled: true,
+    patAllowedScopes: PAT_SCOPES,
+    requestsPerMinute: 6000,
+    perUserRequestsPerMinute: null,
+  };
   await prisma.mcpPolicy.upsert({ where: { id: 'default' }, create: policy, update: policy });
   const admin = await prisma.user.findFirstOrThrow({
     where: { role: 'ADMIN', status: 'ACTIVE' },
@@ -63,7 +71,13 @@ function startProxy(target: URL, token: string) {
   const server = http.createServer((request, response) => {
     const own = `${(server.address() as { port: number }).port}`;
     const headers = { ...request.headers };
-    if (headers.host === `127.0.0.1:${own}`) headers.host = target.host;
+    // Either loopback spelling of the proxy's own address means "this server"; any other Host is
+    // one of the suite's DNS-rebinding probes and reaches the app unchanged.
+    const self = (value: unknown) =>
+      value === `127.0.0.1:${own}` || value === `localhost:${own}`;
+    if (self(headers.host)) headers.host = target.host;
+    if (typeof headers.origin === 'string' && self(headers.origin.replace(/^https?:\/\//, '')))
+      headers.origin = target.origin;
     headers.authorization ??= `Bearer ${token}`;
     const upstream = http.request(
       {

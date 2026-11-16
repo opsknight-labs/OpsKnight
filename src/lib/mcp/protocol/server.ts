@@ -675,11 +675,11 @@ export function createOpsKnightMcpServer(
       instructions: MCP_SERVER_INSTRUCTIONS,
       // Echoed requestState is refused (-32602) unless this server minted it for this principal.
       requestState: { verify: reviewState.verify },
-      // Advertised because subscriptions/listen is served by the route with authorized URIs only.
+      // subscribe is advertised only where subscriptions/listen serves it (2026-07-28 requests).
       capabilities: {
         // listChanged stays false: resources/list is a live recent-rows sample, re-read on demand;
         // the stateless server keeps no session to announce a changed list to.
-        resources: { subscribe: true, listChanged: false },
+        resources: { subscribe: context.listenSubscriptions === true, listChanged: false },
         tools: { listChanged: true },
         // Served by the route (tasks/get, tasks/update, tasks/cancel); used only when a request opts in.
         extensions: { 'io.modelcontextprotocol/tasks': {} },

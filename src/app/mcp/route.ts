@@ -251,6 +251,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       budget,
       omitResourceLinks: !request.headers.has('mcp-protocol-version'),
       clientExtensions: modern ? mcpClientExtensions(body.params) : {},
+      listenSubscriptions: modern,
       hiddenCapabilities: mcpToolsetExclusions(request.headers.get('x-opsknight-toolsets')),
     };
     if (taskMethod) {

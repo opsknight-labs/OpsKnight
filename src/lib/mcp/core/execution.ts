@@ -315,6 +315,12 @@ export interface ExecutionContext {
   omitResourceLinks?: boolean;
   /** `domain:<name>` entries this connection hid with X-OpsKnight-Toolsets; they only hide. */
   hiddenCapabilities?: readonly string[];
+  /**
+   * The request is on the 2026-07-28 revision, the only one whose resource subscriptions this
+   * stateless server serves (subscriptions/listen); older revisions' resources/subscribe needs a
+   * session, so the capability is not advertised to them.
+   */
+  listenSubscriptions?: boolean;
 }
 
 export function callMcpOperation(context: ExecutionContext, operationId: string, rawArgs: unknown) {
