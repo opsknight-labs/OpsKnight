@@ -40,7 +40,6 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
-import { Suspense } from 'react';
 import { resolveServiceIntelligenceAccess } from '@/lib/intelligence/surfaces/service-intelligence';
 import ServiceIntelligenceTab, {
   ServiceIntelligenceTabSkeleton,
