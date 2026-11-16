@@ -681,6 +681,26 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     expect: { mode: 'ai', proposals: ['learn_service_fact'] },
   },
 
+  {
+    id: 'propose-draft-automation-rule-ai',
+    category: 'proposal-wanted',
+    question: 'Make critical alerts on this service P1 from now on',
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_draft_automation_rule',
+        input: {
+          incidentId: '$incident',
+          conditions: [{ fieldKey: 'severity', operator: 'EQ', value: 'critical' }],
+          priority: 'P1',
+        },
+      },
+      { say: 'Open it to add the rule to the draft; publishing replays it first.' },
+    ],
+    // Only a link to a pre-filled editor: the rule joins the draft when the person adds it there.
+    expect: { mode: 'ai', proposals: ['draft_automation_rule'] },
+  },
+
   // ── Unwanted proposals ──────────────────────────────────────────────────────────────────────────────
   {
     id: 'no-propose-guidance',

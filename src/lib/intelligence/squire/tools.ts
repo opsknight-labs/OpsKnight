@@ -1,6 +1,7 @@
 import 'server-only';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   dashboardUserReadWhere,
   incidentReadWhere,
@@ -41,6 +42,7 @@ import type { EligibleConnection } from '../connectors/service';
 import { buildObservabilityTools, OBSERVABILITY_TOOL_DATA_CLASS } from './tools-observability';
 import { buildIncidentTools, INCIDENT_TOOL_DATA_CLASS } from './tools-incident';
 import { buildKnowledgeTools, KNOWLEDGE_TOOL_DATA_CLASS } from './tools-knowledge';
+import { AUTOMATION_TOOL_DATA_CLASS, buildAutomationTools } from './tools-automation';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
 const MAX_ROWS = 10;
@@ -70,6 +72,8 @@ export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
   ...INCIDENT_TOOL_DATA_CLASS,
   // Knowledge memory (F4), see tools-knowledge.ts.
   ...KNOWLEDGE_TOOL_DATA_CLASS,
+  // Automation (J1.6), see tools-automation.ts.
+  ...AUTOMATION_TOOL_DATA_CLASS,
 };
 const SEMANTIC_UNAVAILABLE = { items: [], coverage: { mode: 'UNAVAILABLE', approximate: false } };
 
@@ -803,6 +807,8 @@ export function buildSquireTools(
   tools.push(...buildIncidentTools(actor, { personal: options.personal }));
   // Knowledge memory (F4): offered only while the index is switched on.
   if (options.knowledge) tools.push(...buildKnowledgeTools(actor, options));
+  // Automation (J1.6): read tools for people who may read automation.
+  tools.push(...buildAutomationTools(actor));
 
   for (const name of SQUIRE_ACTION_NAMES) {
     if (!options.personal && name === 'reassign_incident') continue;
@@ -811,6 +817,11 @@ export function buildSquireTools(
     if (FOLLOW_UP_ONLY_ACTIONS.has(name)) continue;
     if (!options.personal && name === 'add_responder') continue;
     if (!options.knowledge && name === 'learn_service_fact') continue;
+    if (
+      name === 'draft_automation_rule' &&
+      !hasCapability(actor.role, CAPABILITIES.AUTOMATION_EDIT)
+    )
+      continue;
     tools.push(proposalTool(name));
   }
   // Each tool carries the class of what it can return; the turn's class is the highest of the tools that

@@ -82,6 +82,8 @@ const TOOL_LABELS: Record<string, string> = {
   get_problem_outcomes: 'Checking past outcomes for this problem',
   ...OBSERVABILITY_TOOL_LABELS,
   ...INCIDENT_TOOL_LABELS,
+  get_automation_decision: 'Checking why automation routed it',
+  explain_automation_rule: 'Reading the automation rule',
 };
 
 /**
