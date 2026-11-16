@@ -47,10 +47,10 @@ export const OVERRIDE_WINDOW_MINUTES = 15;
  * shortcut: matched on message text because priority changes have no dedicated event type; add one if
  * these wordings ever change.
  */
-const PRIORITY_CHANGE_MESSAGES = Prisma.sql`(coalesce(e."type"::text, 'STATUS_CHANGE') = 'STATUS_CHANGE'
+export const PRIORITY_CHANGE_MESSAGES = Prisma.sql`(coalesce(e."type"::text, 'STATUS_CHANGE') = 'STATUS_CHANGE'
   AND (e."message" LIKE 'Priority updated%' OR e."message" LIKE 'Priority changed%'
     OR e."message" LIKE 'Priority cleared%' OR e."message" LIKE 'Bulk priority updated%'))`;
-const OVERRIDE_MESSAGES = Prisma.sql`(${PRIORITY_CHANGE_MESSAGES} OR e."type" = 'ASSIGNMENT'
+export const OVERRIDE_MESSAGES = Prisma.sql`(${PRIORITY_CHANGE_MESSAGES} OR e."type" = 'ASSIGNMENT'
   OR (coalesce(e."type"::text, 'STATUS_CHANGE') = 'STATUS_CHANGE'
     AND (e."message" LIKE 'Urgency updated%' OR e."message" LIKE 'Bulk urgency updated%')))`;
 
