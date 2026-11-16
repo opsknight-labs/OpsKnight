@@ -12,6 +12,8 @@ export const AI_OUTPUT_TOKENS = {
   'squire.classify': 64,
   'squire.plan': 600,
   'squire.diagnose': 1_200,
+  // One plain-language sentence or two for each insight of one scope, in a single call.
+  'insights.phrasing': 900,
 } as const;
 
 export type AiFeature = keyof typeof AI_OUTPUT_TOKENS;
