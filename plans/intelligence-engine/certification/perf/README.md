@@ -335,6 +335,11 @@ ends it (parent alive 3 s later = survived):
 In the child-process runs the parent also had two queries of its own in flight and answered `SELECT 1`
 afterwards. The earlier probe campaign (2026-11-15, same probe) also showed the thread aborting on
 unhandled rejection (3 of 5) and out of memory (3 of 5, 2 hung), and a cooperative drain hanging 2 of 5.
+Re-checked on the final code's host the same evening with a rewritten probe (same shape, the parent
+judged by exit code and a `SELECT 1` three seconds later): worker thread `terminate()` 5 of 5 aborted
+(SIGABRT), uncaught error 5 of 5 aborted (4 SIGABRT, 1 SIGSEGV), `$disconnect()` then exit 5 of 5
+aborted (SIGSEGV); child process 20 of 20 survived in each of `SIGKILL`, `SIGTERM`, uncaught error,
+unhandled rejection, out of memory (32 MB) and cooperative stop (120 of 120).
 No cooperative protocol makes the thread safe, since even a disconnected client aborts on exit, so the
 lane runs in a forked process; ingestion activity crosses over IPC (burst start at once, otherwise at most
 every 10 ms). `tests/integration/intelligence/lane-thread.test.ts` crashes a lane process with queries in
