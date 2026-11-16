@@ -525,8 +525,14 @@ export default async function IncidentDetailScreen({
           <span>
             Held by maintenance window{' '}
             <Link
-              href={`/services/${incident.serviceId}?tab=maintenance`}
-              className="font-semibold underline-offset-2 hover:underline"
+              href={
+                presentation === 'mobile'
+                  ? `/m/services/${incident.serviceId}`
+                  : `/services/${incident.serviceId}?tab=maintenance`
+              }
+              className={`font-semibold underline-offset-2 hover:underline ${
+                presentation === 'mobile' ? '-my-3 inline-block py-3 underline' : ''
+              }`}
             >
               {storedIncident.maintenanceWindow.title}
             </Link>

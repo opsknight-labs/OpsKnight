@@ -6,6 +6,7 @@ import { appRoutes } from '@/lib/app-routes';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { requirePageAccess } from '@/lib/access/server';
+import { findServicesInMaintenance } from '@/lib/service-maintenance/windows';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,5 +40,18 @@ export default async function MobileServicesPage({
     },
   });
 
-  return <MobileServicesClient initialServices={services} query={query} />;
+  const inMaintenance = await findServicesInMaintenance(services.map(s => s.id));
+
+  return (
+    <MobileServicesClient
+      initialServices={services.map(service => ({
+        id: service.id,
+        name: service.name,
+        description: service.description,
+        _count: service._count,
+        maintenanceTitle: inMaintenance.get(service.id)?.title ?? null,
+      }))}
+      query={query}
+    />
+  );
 }
