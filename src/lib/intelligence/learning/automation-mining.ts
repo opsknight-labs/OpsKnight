@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-object-injection -- Keys are built from a closed field list in this file. */
 import type { PRIORITIES } from '@/lib/automation/contract';
-import type { SuggestedRule } from '@/lib/automation/suggested-rule';
+import { defaultSuggestionName, type SuggestedRule } from '@/lib/automation/suggested-rule';
 import { wilsonLowerBound } from '../recommendations/wilson';
 
 type Priority = (typeof PRIORITIES)[number];
@@ -68,13 +68,18 @@ export function mineAutomationRules(
   } = {}
 ): MinedRuleSuggestion[] {
   const limits = { ...AUTOMATION_MINING, ...options.limits };
-  const totals = new Map<string, { facts: Facts; incidents: number; correctedTo: Map<Priority, number> }>();
+  const totals = new Map<
+    string,
+    { facts: Facts; incidents: number; correctedTo: Map<Priority, number> }
+  >();
   for (const group of groups) {
     for (const facts of antecedents(group)) {
       const key = factsKey(facts);
       const entry = totals.get(key) ?? { facts, incidents: 0, correctedTo: new Map() };
       entry.incidents += group.incidents;
-      for (const [priority, count] of Object.entries(group.correctedTo) as Array<[Priority, number]>)
+      for (const [priority, count] of Object.entries(group.correctedTo) as Array<
+        [Priority, number]
+      >)
         entry.correctedTo.set(priority, (entry.correctedTo.get(priority) ?? 0) + count);
       totals.set(key, entry);
     }
@@ -114,8 +119,7 @@ export function mineAutomationRules(
   );
   return kept
     .sort(
-      (a, b) =>
-        b.confidence - a.confidence || b.corrected - a.corrected || (a.key < b.key ? -1 : 1)
+      (a, b) => b.confidence - a.confidence || b.corrected - a.corrected || (a.key < b.key ? -1 : 1)
     )
     .slice(0, limits.maxSuggestions)
     .map(({ facts: _facts, priority: _priority, ...suggestion }) => suggestion);
@@ -127,8 +131,8 @@ function suggestionRule(facts: Facts, priority: Priority): SuggestedRule {
       ? []
       : [{ fieldKey: field, operator: 'EQ' as const, value: facts[field] as string }]
   );
-  const when = conditions.map(c => `${c.fieldKey} ${String(c.value)}`).join(', ');
-  return { name: `Set ${priority} for ${when}`.slice(0, 100), conditions, priority };
+  const rule = { conditions, priority };
+  return { name: defaultSuggestionName(rule), ...rule };
 }
 
 /** What a rule does, ignoring its name and id, to recognise a suggestion that already exists. */

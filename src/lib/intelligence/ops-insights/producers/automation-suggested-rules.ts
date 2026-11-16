@@ -34,7 +34,12 @@ const SETTLE_MS = 60 * 60_000;
 const DAY_MS = 86_400_000;
 const VALUE_MAX = 64;
 
-type Row = { severity: string | null; source: string | null; correctedTo: string | null; incidents: number };
+type Row = {
+  severity: string | null;
+  source: string | null;
+  correctedTo: string | null;
+  incidents: number;
+};
 
 /** The production statement, exported so the query-plan gate explains exactly what the lane runs. */
 export function automationMiningSql(serviceId: string, now: Date): Prisma.Sql {
@@ -96,7 +101,8 @@ export const automationSuggestedRulesProducer: OpsInsightProducer<AutomationSugg
       };
       group.incidents += row.incidents;
       const priority = PRIORITIES.find(value => value === row.correctedTo);
-      if (priority) group.correctedTo[priority] = (group.correctedTo[priority] ?? 0) + row.incidents;
+      if (priority)
+        group.correctedTo[priority] = (group.correctedTo[priority] ?? 0) + row.incidents;
       groups.set(key, group);
     }
     if (![...groups.values()].some(group => Object.keys(group.correctedTo).length > 0)) return null;
@@ -124,16 +130,23 @@ export const automationSuggestedRulesProducer: OpsInsightProducer<AutomationSugg
           key: `rule:${suggestion.key}`,
           severity: 'INFO',
           title: `Suggested rule: set ${suggestion.rule.priority} when ${when}`.slice(0, 140),
-          summary: `People changed ${suggestion.corrected} of ${suggestion.incidents} incidents where ${when} to ${suggestion.rule.priority} (${share}%). A rule would set it when the incident opens. Replay it before you publish.`.slice(
-            0,
-            400
-          ),
+          summary:
+            `People changed ${suggestion.corrected} of ${suggestion.incidents} incidents where ${when} to ${suggestion.rule.priority} (${share}%). A rule would set it when the incident opens. Replay it before you publish.`.slice(
+              0,
+              400
+            ),
           evidence: {
             window: `last ${WINDOW_DAYS} days, public incidents`,
             facts: [
               { label: 'Incidents with these facts', value: String(suggestion.incidents) },
-              { label: `Changed to ${suggestion.rule.priority} by a person`, value: String(suggestion.corrected) },
-              { label: 'Confidence (lower bound)', value: `${Math.round(suggestion.confidence * 100)}%` },
+              {
+                label: `Changed to ${suggestion.rule.priority} by a person`,
+                value: String(suggestion.corrected),
+              },
+              {
+                label: 'Confidence (lower bound)',
+                value: `${Math.round(suggestion.confidence * 100)}%`,
+              },
             ],
           },
           draftHref: suggestedRuleHref(input.serviceId, suggestion.rule),

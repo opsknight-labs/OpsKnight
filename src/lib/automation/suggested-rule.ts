@@ -31,24 +31,80 @@ export function automationHref(
 ): string {
   const params = new URLSearchParams({ tab: 'automation' });
   if (open.ruleId) params.set(OPEN_RULE_PARAM, open.ruleId);
-  if (open.suggestion) params.set(SUGGESTED_RULE_PARAM, JSON.stringify(open.suggestion));
+  if (open.suggestion) params.set(SUGGESTED_RULE_PARAM, encodeSuggestedRule(open.suggestion));
   return `/services/${encodeURIComponent(serviceId)}?${params.toString()}`;
 }
 
 /** The workspace link for a suggestion, or undefined when it would be too long to carry. */
-export function suggestedRuleHref(serviceId: string, suggestion: SuggestedRule): string | undefined {
+export function suggestedRuleHref(
+  serviceId: string,
+  suggestion: SuggestedRule
+): string | undefined {
   const href = automationHref(serviceId, { suggestion });
   return href.length <= MAX_HREF ? href : undefined;
+}
+
+/**
+ * Compact URL form, so a suggestion fits an insight link: base64url of
+ * [[[field, operator, value], ...], action, name?] where action is a priority, {p: policyId} or 0.
+ */
+export function encodeSuggestedRule(suggestion: SuggestedRule): string {
+  const action = suggestion.priority ?? (suggestion.policyId ? { p: suggestion.policyId } : 0);
+  const compact: unknown[] = [
+    suggestion.conditions.map(c =>
+      c.value === undefined ? [c.fieldKey, c.operator] : [c.fieldKey, c.operator, c.value]
+    ),
+    action,
+  ];
+  if (suggestion.name !== defaultSuggestionName(suggestion)) compact.push(suggestion.name);
+  const bytes = new TextEncoder().encode(JSON.stringify(compact));
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 export function parseSuggestedRule(raw: string | null | undefined): SuggestedRule | null {
   if (!raw || raw.length > 2_000) return null;
   try {
-    const parsed = suggestedRuleSchema.safeParse(JSON.parse(raw));
+    const binary = atob(raw.replace(/-/g, '+').replace(/_/g, '/'));
+    const json = new TextDecoder().decode(Uint8Array.from(binary, char => char.charCodeAt(0)));
+    const [conditions, action, name] = JSON.parse(json) as [unknown, unknown, unknown];
+    if (!Array.isArray(conditions)) return null;
+    const spec = {
+      conditions: conditions.map(c =>
+        Array.isArray(c)
+          ? { fieldKey: c[0], operator: c[1], ...(c.length > 2 ? { value: c[2] } : {}) }
+          : c
+      ),
+      ...(typeof action === 'string'
+        ? { priority: action }
+        : action && typeof action === 'object' && 'p' in action
+          ? { policyId: (action as { p: unknown }).p }
+          : action === 0
+            ? { noEscalation: true }
+            : {}),
+    };
+    const parsed = suggestedRuleSchema.safeParse({
+      ...spec,
+      name: typeof name === 'string' ? name : defaultSuggestionName(spec as SuggestedRule),
+    });
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
+}
+
+/** The name a suggestion gets when nobody named it. */
+export function defaultSuggestionName(
+  spec: Pick<SuggestedRule, 'conditions' | 'priority' | 'policyId'>
+): string {
+  const what = spec.priority
+    ? `Set ${spec.priority}`
+    : spec.policyId
+      ? 'Route to a policy'
+      : 'Do not escalate';
+  return `${what} when ${describeConditions(spec.conditions)}`.slice(0, 100);
 }
 
 /** The rule to add to the draft. A priority suggestion enriches; a destination suggestion routes. */

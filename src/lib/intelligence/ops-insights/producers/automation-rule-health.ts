@@ -283,7 +283,10 @@ export const automationRuleHealthProducer: OpsInsightProducer<AutomationRuleHeal
           window: `last ${WINDOW_DAYS} days`,
           facts: [
             { label: 'Incidents routed', value: String(route.decisions) },
-            { label: `Corrected within ${OVERRIDE_WINDOW_MINUTES} minutes`, value: String(route.overridden) },
+            {
+              label: `Corrected within ${OVERRIDE_WINDOW_MINUTES} minutes`,
+              value: String(route.overridden),
+            },
           ],
         },
         draftHref: route.ruleId ? ruleHref(route.ruleId) : automationHref(input.serviceId),
