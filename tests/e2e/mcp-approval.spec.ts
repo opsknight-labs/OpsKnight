@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
+import { clearSignInThrottle } from './mcp-login-limits';
+
+test.beforeEach(clearSignInThrottle);
 
 async function login(page: Page, email: string) {
   await page.goto('/login');

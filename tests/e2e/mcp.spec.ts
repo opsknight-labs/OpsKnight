@@ -1,6 +1,9 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
 import { sdkHandshake } from '../helpers/mcp-sdk-handshake';
+import { clearSignInThrottle } from './mcp-login-limits';
+
+test.beforeEach(clearSignInThrottle);
 
 /** Playwright's request context as a fetch, so the SDK can reach a replica under the public Host. */
 function playwrightFetch(request: APIRequestContext, target: string, host: string) {

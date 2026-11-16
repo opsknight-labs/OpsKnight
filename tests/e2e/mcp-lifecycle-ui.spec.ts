@@ -1,6 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
+import { clearSignInThrottle } from './mcp-login-limits';
+
+test.beforeEach(clearSignInThrottle);
 
 /**
  * The administrator's lifecycle pages in a real browser, at phone and desktop widths: an
