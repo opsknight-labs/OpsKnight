@@ -17,7 +17,8 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 import type { LintIssue } from '@/lib/automation/compiler';
-import type { Rule } from '@/lib/automation/contract';
+import type { Field, Rule } from '@/lib/automation/contract';
+import { AutomationInsights, type AutomationInsightsData } from './AutomationInsights';
 
 const WARNING_CONFIG = new Map<string, { label: string; description: string; icon: LucideIcon }>([
   [
@@ -68,11 +69,16 @@ const warningLabels = new Map([
 export function ConfigurationHealth({
   issues,
   rules = [],
+  fields = [],
+  insights,
   onOpenRule,
   onOpenContext,
 }: {
   issues: LintIssue[];
   rules?: Rule[];
+  fields?: Field[];
+  /** Rule health from real traffic (operations insights), shown under the static checks. */
+  insights?: AutomationInsightsData;
   onOpenRule?: (ruleId: string) => void;
   onOpenContext?: () => void;
 }) {
@@ -89,7 +95,38 @@ export function ConfigurationHealth({
 
   const rulesById = useMemo(() => new Map(rules.map(rule => [rule.id, rule])), [rules]);
 
-  if (!issues.length) return null;
+  const hasTraffic = !!insights?.items.some(insight => insight.kind === 'automation.rule_health');
+  const traffic = hasTraffic && (
+    <AutomationInsights
+      data={insights}
+      kind="automation.rule_health"
+      rules={rules}
+      fields={fields}
+      label="Rule health from real traffic"
+      draftLabel="Open rule"
+    />
+  );
+
+  if (!issues.length) {
+    if (!hasTraffic) return null;
+    return (
+      <section
+        aria-label="Configuration health"
+        className="space-y-3 rounded-xl border border-border/80 bg-card p-3.5 text-card-foreground shadow-xs"
+      >
+        <div>
+          <h3 className="text-xs font-semibold tracking-tight text-foreground sm:text-sm">
+            Configuration health
+          </h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            How the live rules behaved on real incidents. Nothing changes until you edit and
+            publish.
+          </p>
+        </div>
+        {traffic}
+      </section>
+    );
+  }
 
   const hasErrors = errors.length > 0;
   const HeadingIcon = hasErrors ? ShieldAlert : AlertTriangle;
@@ -325,6 +362,12 @@ export function ConfigurationHealth({
             })}
           </div>
         </details>
+      )}
+      {traffic && (
+        <div className="space-y-2 rounded-lg border border-border/70 bg-background/80 p-2.5 text-foreground shadow-2xs sm:p-3">
+          <p className="text-xs font-semibold">From real traffic</p>
+          {traffic}
+        </div>
       )}
     </section>
   );

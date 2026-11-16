@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getAutomationArea, automationAction } from '@/app/(app)/services/[id]/automation/actions';
 import {
   builtinFields,
@@ -10,6 +11,13 @@ import {
   type Snapshot,
 } from '@/lib/automation/contract';
 import { compileAutomation, type LintIssue } from '@/lib/automation/compiler';
+import {
+  describeConditions,
+  OPEN_RULE_PARAM,
+  parseSuggestedRule,
+  ruleFromSuggestion,
+  SUGGESTED_RULE_PARAM,
+} from '@/lib/automation/suggested-rule';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   AlertDialog,
@@ -518,6 +526,55 @@ export default function AutomationWorkspace({
     },
     [draft.rules, mobile]
   );
+  // Insight and Squire links: ?automationRule=<id> opens a rule; ?suggestedRule=<spec> offers a rule to add.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const linkedRule = searchParams?.get(OPEN_RULE_PARAM) ?? null;
+  const suggestedParam = searchParams?.get(SUGGESTED_RULE_PARAM) ?? null;
+  const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null);
+  const suggestion = useMemo(
+    () => (suggestedParam === dismissedSuggestion ? null : parseSuggestedRule(suggestedParam)),
+    [suggestedParam, dismissedSuggestion]
+  );
+  // A new link switches to the rules once, during render rather than in an effect.
+  const linkKey = suggestedParam ?? linkedRule;
+  const [seenLink, setSeenLink] = useState<string | null>(null);
+  if (linkKey && linkKey !== seenLink) {
+    setSeenLink(linkKey);
+    setArea('rules');
+  }
+  // Then expands the linked rule once the draft holding it has loaded.
+  const [openedLink, setOpenedLink] = useState<string | null>(null);
+  if (linkedRule && linkedRule !== openedLink && draft.rules.some(r => r.id === linkedRule)) {
+    setOpenedLink(linkedRule);
+    setRuleSearch('');
+    setRuleStateFilter('all');
+    setExpandedRules(previous =>
+      mobile ? new Set([linkedRule]) : new Set([...previous, linkedRule])
+    );
+  }
+  const clearSuggestion = useCallback(() => {
+    setDismissedSuggestion(suggestedParam);
+    const params = new URLSearchParams(searchParams?.toString());
+    params.delete(SUGGESTED_RULE_PARAM);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [pathname, router, searchParams, suggestedParam]);
+  const addSuggestion = useCallback(() => {
+    if (!suggestion) return;
+    const rule = ruleFromSuggestion(suggestion, crypto.randomUUID());
+    edit({ ...draft, rules: [...draft.rules, rule] });
+    clearSuggestion();
+    setRuleSearch('');
+    setRuleStateFilter('all');
+    setExpandedRules(previous => new Set([...previous, rule.id]));
+    notifyAction(
+      'Suggested rule added to the draft',
+      'success',
+      'Review it, then publish. The review replays it against recent incidents first.'
+    );
+  }, [suggestion, draft, edit, clearSuggestion, notifyAction]);
+
   const openContext = useCallback(() => setArea('context'), []);
   const viewAffectedRules = (ruleIds: string[]) => {
     setRuleSearch('');
@@ -739,6 +796,29 @@ export default function AutomationWorkspace({
               setProviderSample={context.setProviderSample}
               analyze={context.analyze}
             />
+          )}
+          {data && area === 'rules' && suggestion && (
+            <InlineNotice
+              tone="info"
+              title="Suggested rule"
+              onDismiss={clearSuggestion}
+              data-suggested-rule
+            >
+              <p>
+                {suggestion.name}: when {describeConditions(suggestion.conditions)},{' '}
+                {suggestion.priority
+                  ? `set priority ${suggestion.priority}`
+                  : suggestion.policyId
+                    ? `route to ${data.policies.find(p => p.id === suggestion.policyId)?.name ?? 'the suggested escalation policy'}`
+                    : 'do not escalate'}
+                . Nothing is saved until you add it; publishing replays it first.
+              </p>
+              {data.canEdit && (
+                <Button size="sm" className="mt-2 min-h-11 sm:min-h-9" onClick={addSuggestion}>
+                  Add to draft
+                </Button>
+              )}
+            </InlineNotice>
           )}
           {data && area === 'rules' && (
             <AutomationRules

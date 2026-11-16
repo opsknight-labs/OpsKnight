@@ -1,4 +1,5 @@
 import 'server-only';
+/* eslint-disable security/detect-object-injection -- Priority keys come from the closed PRIORITIES list. */
 import { Prisma } from '@prisma/client';
 import { PRIORITIES, snapshotSchema } from '@/lib/automation/contract';
 import { PRIORITY_CHANGE_MESSAGES } from '@/lib/automation/replay';
