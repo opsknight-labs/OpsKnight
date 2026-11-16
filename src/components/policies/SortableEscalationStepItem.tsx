@@ -3,7 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import EscalationStepItem from './EscalationStepItem';
-import type { PolicyStepStat } from '@/lib/escalation/policy-intelligence';
+import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-intelligence';
 import { GripVertical } from 'lucide-react';
 
 type EscalationStep = {

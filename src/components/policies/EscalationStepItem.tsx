@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-product-notification';
 import UserAvatar from '@/components/UserAvatar';
 import EscalationStepEditModal from './EscalationStepEditModal';
 import StepOutcomeStrip from './StepOutcomeStrip';
-import type { PolicyStepStat } from '@/lib/escalation/policy-intelligence';
+import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-intelligence';
 
 type EscalationStep = {
   id: string;

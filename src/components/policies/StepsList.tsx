@@ -29,7 +29,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Clock, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 import PolicyStepCreateForm from '@/components/PolicyStepCreateForm';
-import type { PolicyStepStat } from '@/lib/escalation/policy-intelligence';
+import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-intelligence';
 
 type EscalationStep = {
   id: string;

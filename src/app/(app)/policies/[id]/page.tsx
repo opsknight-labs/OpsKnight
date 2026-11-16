@@ -1,7 +1,7 @@
 import PolicyDependencies from '@/components/policies/PolicyDependencies';
 import prisma from '@/lib/prisma';
 import { assertCanViewPolicy, getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
-import { loadPolicyIntelligence } from '@/lib/escalation/policy-intelligence';
+import { loadPolicyIntelligence } from '@/lib/intelligence/ops-insights/policy-intelligence';
 import { parseEscalationDelayMinutes } from '@/lib/escalation/policy-validation';
 import InsightsPanel from '@/components/intelligence/insights/InsightsPanel';
 import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';

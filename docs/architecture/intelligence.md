@@ -1243,7 +1243,7 @@ shorter wait before the next step from the 75th percentile of acknowledgement ti
 minutes, at least 10 acknowledgements, saving at least 3 minutes) with the expected effect, one person on
 every step, and a policy no service uses (after 7 days). Evidence holds counts only.
 
-**UI.** `loadPolicyIntelligence` (`src/lib/escalation/policy-intelligence.ts`) returns nothing unless the
+**UI.** `loadPolicyIntelligence` (`src/lib/intelligence/ops-insights/policy-intelligence.ts`) returns nothing unless the
 viewer may read escalation policies and the area is on; otherwise one `listInsightsForScope` read and one
 rollup read. The policy page shows an Insights tab (`InsightsPanel`, only when an insight is open), one
 line per step (`StepOutcomeStrip`) and `InsightBadge` on the policies list (`countOpenInsightsForScopes`).

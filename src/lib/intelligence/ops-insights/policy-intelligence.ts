@@ -9,10 +9,10 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   enabledOpsInsightAreas,
   type OpsInsightView,
-} from '@/lib/intelligence/ops-insights/contract';
-import { listInsightsForScope } from '@/lib/intelligence/ops-insights/view';
+} from './contract';
+import { listInsightsForScope } from './view';
 import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
-import { ackMinutesQuantile, loadPolicyStepOutcomes } from './step-outcomes';
+import { ackMinutesQuantile, loadPolicyStepOutcomes } from '@/lib/escalation/step-outcomes';
 
 /** One line per step on the Steps tab: how often the step was acknowledged and how fast. */
 export interface PolicyStepStat {

@@ -1,4 +1,4 @@
-import type { PolicyStepStat } from '@/lib/escalation/policy-intelligence';
+import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-intelligence';
 
 function medianText(minutes: number | null): string | null {
   if (minutes === null) return null;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
-import { loadPolicyIntelligence } from '@/lib/escalation/policy-intelligence';
+import { loadPolicyIntelligence } from '@/lib/intelligence/ops-insights/policy-intelligence';
 import { runOpsInsights, resetOpsInsightsSchedule } from '@/lib/intelligence/ops-insights/handlers';
 import { updateOpsInsightSwitches } from '@/lib/intelligence/ops-insights/settings';
 import { countOpenInsightsForScopes } from '@/lib/intelligence/ops-insights/view';
