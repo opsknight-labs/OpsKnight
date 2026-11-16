@@ -26,7 +26,9 @@ async function measure<T>(run: () => Promise<T>): Promise<{ result: T; sql: stri
   statements.length = 0;
   const result = await run();
   await new Promise(resolve => setTimeout(resolve, 50));
-  return { result, sql: [...statements] };
+  // Only the transaction itself: a pool health check ("SELECT 1") can land in the window.
+  const begin = statements.indexOf('BEGIN');
+  return { result, sql: statements.slice(begin, statements.indexOf('COMMIT', begin) + 1) };
 }
 
 async function commitFixture() {
