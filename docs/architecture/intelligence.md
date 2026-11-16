@@ -1221,3 +1221,63 @@ the load gate `tests/load/intelligence-query-plans.ts`.
 dismiss, an optional "Create draft" link and "Ask Squire about this", which only hands a question to the
 assistant) and `InsightsInboxSection` (the "Needs attention" section on `/intelligence`). All render
 nothing when there is nothing to say. Only `InsightActions` is client code.
+
+### Service automation (J1.1 to J1.3, J1.6)
+
+Nothing here touches `processEvent` or `automation/runtime.ts`; every piece reads stored data in the lane,
+a background job or on request.
+
+**Replay** (`src/lib/automation/replay.ts`, `replay-run.ts`). `replayStoredEvents` runs a snapshot through
+the same compiler and pure evaluator the live path uses, over the service's stored alerts for 7 to 30 days:
+keyset pages of `REPLAY_BATCH_SIZE` (500) on `(serviceId, createdAt)`, at most `REPLAY_MAX_EVENTS` (20,000),
+each page under a 10 s statement budget. It reports, against what actually happened: same, route changed,
+priority changed, no-escalation changed, fallbacks, evaluations over the live deadline, default-routed,
+unmapped fields, tags, per-rule matched and shadowed counts, route and priority transitions, evaluation time
+p50/p99/max and up to a few example incident ids. Each replayed event also carries whether a person changed
+the incident within `OVERRIDE_WINDOW_MINUTES` (15). `tests/lib/automation-property.test.ts` asserts that
+replay equals live evaluation for generated snapshots and events.
+
+`startAutomationReplay` validates the snapshot (a missing or archived policy is a validation error), stores
+an `IntelligenceEvaluationRun` (`kind: REPLAY`, `metrics.type: AUTOMATION_REPLAY`, progress 0..1) and
+queues one `SCHEDULED_TASK` job (`task: AUTOMATION_REPLAY`, one attempt). An identical request within 10
+minutes returns the existing run; a run not finished within 10 minutes reads as failed. Surfaces:
+`AutomationReplay` in `AutomationReviewDialog` (a "Replay against last 7 days" step before the
+acknowledgement checkboxes) and in the Test tab, and REST `POST /api/v2/services/{id}/automation/replay`
+(202, body `{ snapshot, days?, integrationType? }`) and `GET …/replay?runId=` (both `automation.read`).
+
+**Rule health** (`producers/automation-rule-health.ts`, kind `automation.rule_health`, scope `SERVICE`,
+area `automation`). `loadInput` makes three bounded reads: the `ops.automation.rule_match` rollup for the
+active version over 30 days, one statement over the newest 2,000 settled LIVE decisions on
+`IncidentAutomationDecision (serviceId, createdAt)` joined to `IncidentEvent` for corrections and
+acknowledgements, and one replay page of 500 events from the last 7 days.
+
+| Key | Fires when | Severity |
+| --- | --- | --- |
+| `shadowed:<ruleId>` | In the sample (at least 50 events) a route rule's conditions held at least 5 times but an earlier rule always won. | `WARNING` |
+| `never-matched:<ruleId>` | A route rule has no match in the rollup (version published for at least 7 days, at least 50 decisions), or an enrichment rule has no match in the sample. A shadowed rule is reported once, as shadowed. | `INFO` |
+| `unmapped:<field>` | A context field is unmapped for 20% or more of the sample. | `WARNING` at 50%, else `INFO` |
+| `overridden:<ruleId or default>` | At least 10 decisions by the rule (or the service default), and a person changed priority, urgency or assignee within 15 minutes for 30% or more. | `WARNING` |
+| `policy-no-ack:<policyId>` | Automation routed at least 10 incidents to a policy and none was acknowledged. | `WARNING` |
+
+Stored text names no rule, field or policy, only counts; the key carries the id and the automation
+workspace (`AutomationInsights.tsx`, shown in `ConfigurationHealth` through `InsightsPanel`) resolves names
+for people who may read automation.
+
+**Suggested rules** (`learning/automation-mining.ts`, `producers/automation-suggested-rules.ts`, kind
+`automation.suggested_rule`). One grouped statement over the newest 2,000 settled public incidents of the
+last 30 days (`idx_incident_sla_by_service`, opening alert on `idx_alert_incident_cursor`) counts, per
+(opening severity, source), how many incidents a person changed to each priority. `mineAutomationRules`
+suggests "severity/source → priority" when at least 5 incidents support it (of at least 8 with those
+facts) and the Wilson lower bound (`recommendations/wilson.ts`) is at least 0.5; at most 5, skipping rules
+the active version or draft already has. Only public incidents are mined, so evidence never carries a value
+some viewer of the service could not read. Team and policy corrections are not mined (automation has no
+team action and a policy change after creation is not recorded). The insight's `draftHref` is
+`/services/{id}?tab=automation&suggestedRule=…` (`suggested-rule.ts`): the workspace shows the rule and
+nothing joins the draft until a person adds it; publishing goes through the review and its replay step.
+
+**Squire** (`squire/tools-automation.ts`). Read tools `get_automation_decision` (the stored decision trace
+for an incident the person can read) and `explain_automation_rule` (one rule of a readable service, its
+rollup matches and open rule-health insights), offered only with `automation.read` and, over MCP
+`ask_squire`, only with the `automation:read` scope. `draft_automation_rule` is a `NAVIGATE` proposal
+through the sealed-proposal flow, described only to people who may edit automation: confirming it opens the same pre-filled workspace link; it never saves or
+publishes.

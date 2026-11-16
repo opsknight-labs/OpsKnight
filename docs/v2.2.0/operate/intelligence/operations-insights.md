@@ -56,9 +56,31 @@ everything and stops the daily work.
 | Service automation and integrations | **No alerts for N days** | The service used to send alerts regularly and has been quiet for much longer than its usual gap. Check that its integrations are still connected. Reported for 30 days, then dropped. |
 | Service automation and integrations | **Alert volume is N times the usual** / **dropped sharply** | The last 24 hours are far above, or far below, the week before. |
 | Service automation and integrations | **N% of recent alerts have no severity** | Most recent alerts arrived without a severity, so urgency and routing rules cannot use it. |
+| Service automation and integrations | **A route rule has not matched in N days** / **An enrichment rule did not match any recent incident** | The rule never applied to the incidents the service actually received. Check its conditions or remove it. |
+| Service automation and integrations | **A route rule is always decided by an earlier rule** | Its conditions held, but an earlier route rule always matched first, so it never routes anything. |
+| Service automation and integrations | **A context field is unmapped for N% of incidents** | Integrations send values for the field that are not among its allowed values or aliases, so conditions on it read as unknown. |
+| Service automation and integrations | **Responders often correct incidents routed by a route rule** | In the last 30 days, a person changed the priority, urgency or assignee of 30% or more of the incidents that rule routed within 15 minutes. |
+| Service automation and integrations | **Incidents automation routes to one policy are never acknowledged** | At least 10 incidents were routed to the same escalation policy and none was acknowledged. |
+| Service automation and integrations | **Suggested rule: set P2 when …** | People kept changing incidents with the same severity or source to the same priority. The evidence shows how many incidents and how consistently. **Create draft** opens the automation editor with the rule filled in; nothing is added until you add it, and publishing replays it first. |
 
 Insights for the other areas arrive with later updates; their switches are already there so you can decide
 in advance.
+
+## Service automation
+
+Automation insights appear in the service's **Automation** tab under **Configuration health**, with rule
+names filled in for people who may view automation. Elsewhere (the **Needs attention** inbox) they show
+counts only.
+
+Before you publish an automation draft, the review dialog offers **Replay against last 7 days**: it runs the
+draft over the service's stored alerts (up to 20,000, 7 to 30 days) and shows how many incidents would have
+been routed or prioritised differently, which rules never matched or were always decided by an earlier
+rule, unmapped fields and how long evaluation took. The **Test** tab offers the same replay. A replay reads
+history only; it never changes an incident. The same replay is available over the REST API at
+`POST /api/v2/services/{id}/automation/replay` (then `GET` with the returned `runId`).
+
+Squire can explain why an incident was routed the way it was and what a rule does. Asked to write a rule, it
+offers a link to the editor with the rule filled in; it never saves or publishes automation.
 
 ## Review insights
 
