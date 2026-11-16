@@ -23,7 +23,15 @@ describe('MCP settings URL state', () => {
       approvalState: 'pending',
       usageWindow: '24h',
       usageBy: 'tool',
+      usageFrom: null,
+      usageTo: null,
     });
+  });
+
+  it('keeps usage dates only in calendar-date shape', () => {
+    const params = parseMcpListParams({ from: '2026-11-01', to: '2026-11-03T00:00' }, true);
+    expect(params.usageFrom).toBe('2026-11-01');
+    expect(params.usageTo).toBeNull();
   });
 
   it('keeps administrator sections away from everyone else', () => {

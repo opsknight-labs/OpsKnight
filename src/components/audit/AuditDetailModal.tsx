@@ -23,6 +23,7 @@ export type AuditLogEntry = {
   entityType: string;
   entityId: string | null;
   actorName: string | null;
+  channel?: string | null;
   actorEmail: string | null;
   actor?: {
     id?: string;

@@ -28,6 +28,10 @@ export const MCP_POLICY_INVALID_MESSAGES = new Map([
     'MCP_FORCE_DISABLED',
     'MCP is switched off by the MCP_FORCE_DISABLED environment setting on the server, so it cannot be turned on here.',
   ],
+  [
+    'MCP_SSO_REQUIRED',
+    'Access granted by your identity provider requires single sign-on. Configure and enable single sign-on first, then save.',
+  ],
 ] as const);
 
 export type McpPolicyInvalidCode =

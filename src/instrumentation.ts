@@ -25,6 +25,14 @@ async function stopRuntimeServices(): Promise<void> {
     console.error('[Runtime] Realtime stream drain failed', error);
   }
   const stops: Promise<void>[] = [];
+  // Assistant activity rows still queued in memory are written before the process exits.
+  // Node only: the module reaches node:crypto, which the edge bundle cannot include.
+  if (process.env.NEXT_RUNTIME === 'nodejs')
+    stops.push(
+      import('./lib/mcp/core/call-log')
+        .then(log => log.flushMcpCallLog())
+        .catch(error => console.error('[Runtime] MCP activity log flush failed', error))
+    );
   if (stopIngestionWorkerService) stops.push(stopIngestionWorkerService());
   stopIngestionWorkerService = null;
   if (authenticationHeartbeat) clearInterval(authenticationHeartbeat);

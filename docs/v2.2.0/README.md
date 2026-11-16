@@ -21,7 +21,8 @@ Pages for features unchanged since 2.1.0 remain in the [2.1.0 documentation](../
 
 ## AI assistants (MCP)
 
-- [Overview](./guides/mcp/README.md) and [self-hosted setup](./guides/mcp/self-hosted-setup.md)
+- [Overview](./guides/mcp/README.md), [self-hosted setup](./guides/mcp/self-hosted-setup.md) and the
+  [stdio bridge](./guides/mcp/stdio-bridge.md) for local-only clients
 - [What to ask](./guides/mcp/what-to-ask.md), [build an agent](./guides/mcp/build-an-agent.md) and
   [security and data](./guides/mcp/security-and-data.md)
 - [Troubleshooting](./guides/mcp/troubleshooting.md), [permissions and coverage](./reference/mcp/permissions.md)

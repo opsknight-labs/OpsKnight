@@ -2,6 +2,7 @@ import type { AuditEntityType, Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { sanitizeContext } from './logger';
 import { getRequestContext } from './request-context';
+import { internalV2Channel } from './api-v2/internal-context';
 
 export type AuditDetails = Prisma.InputJsonValue;
 export type AuditEventSource =
@@ -90,6 +91,7 @@ export async function emitAuditEvent(
       actorName: resolvedName,
       targetEmail,
       ip,
+      channel: internalV2Channel() ?? null,
       details: {
         contractVersion: 1,
         source: input.source,

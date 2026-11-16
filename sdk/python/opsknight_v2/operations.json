@@ -2269,6 +2269,14 @@
     "requiredHeaders": [],
     "bodyRequired": true
   },
+  "listActionItems": {
+    "method": "GET",
+    "path": "/action-items",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getMetricsReport": {
     "method": "GET",
     "path": "/reports/metrics",

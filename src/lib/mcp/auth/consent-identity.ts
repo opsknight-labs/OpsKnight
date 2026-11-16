@@ -17,11 +17,17 @@ export function consentRedirectFacts(redirectUri: string) {
     const url = new URL(redirectUri);
     return {
       host: url.host || url.protocol.replace(/:$/, ''),
+      // Without the query: it can carry long, meaningless state.
+      address: `${url.protocol}//${url.host}${url.pathname}`.slice(0, 200),
       staysLocal:
         LOOPBACK_HOSTS.has(url.hostname) || (url.protocol !== 'https:' && url.protocol !== 'http:'),
     };
   } catch {
-    return { host: redirectUri.slice(0, 80), staysLocal: false };
+    return {
+      host: redirectUri.slice(0, 80),
+      address: redirectUri.slice(0, 200),
+      staysLocal: false,
+    };
   }
 }
 

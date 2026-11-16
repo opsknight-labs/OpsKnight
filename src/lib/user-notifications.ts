@@ -16,6 +16,7 @@ import { sendNotification, type NotificationChannel } from './notifications';
 import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
 import { logger } from './logger';
+import { ASSIGNED_NOTIFICATION_TITLE, PAGE_NOTIFICATION_TITLE } from './notification-titles';
 import { filterChannelsForQuietHours } from './quiet-hours';
 import type {
   NotificationDeliveryOutcome,
@@ -23,12 +24,11 @@ import type {
   NotificationEventType,
 } from './notification-delivery';
 import { notificationEventKey } from './notification-identity';
+
 import { syncUserNotificationEndpoint } from './user-notification-endpoints';
 
 export type IncidentNotificationIntent =
-  | 'INCIDENT_UPDATED'
-  | 'ASSIGNED_TO_USER'
-  | 'ASSIGNED_TO_TEAM';
+  'INCIDENT_UPDATED' | 'ASSIGNED_TO_USER' | 'ASSIGNED_TO_TEAM';
 
 export type SendIncidentNotificationOptions = {
   intent?: IncidentNotificationIntent;
@@ -280,7 +280,7 @@ export async function sendUserNotification(
       await createInAppNotifications({
         userIds: [userId],
         type: 'INCIDENT',
-        title: 'Action Required',
+        title: PAGE_NOTIFICATION_TITLE,
         message,
         entityType: 'INCIDENT',
         entityId: incidentId,
@@ -481,7 +481,7 @@ export async function sendIncidentNotifications(
     );
     const eventTitle =
       intent === 'ASSIGNED_TO_USER'
-        ? 'Incident Assigned to You'
+        ? ASSIGNED_NOTIFICATION_TITLE
         : intent === 'ASSIGNED_TO_TEAM'
           ? 'Incident Assigned to Your Team'
           : eventType === 'triggered'

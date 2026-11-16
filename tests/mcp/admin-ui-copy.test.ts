@@ -51,6 +51,15 @@ describe('D6 setup commands', () => {
     expect(JSON.parse(json)).toEqual({ name: 'opsknight', type: 'http', url: endpoint });
   });
 
+  it('builds the same link for VS Code Insiders under its own scheme', () => {
+    const prefix = 'vscode-insiders:mcp/install?';
+    expect(commands.vscodeInsidersInstall.startsWith(prefix)).toBe(true);
+    const json = decodeURIComponent(commands.vscodeInsidersInstall.slice(prefix.length));
+    expect(JSON.parse(json)).toEqual({ name: 'opsknight', type: 'http', url: endpoint });
+    // Fully percent-encoded: nothing in the query can end the link early.
+    expect(commands.vscodeInsidersInstall.slice(prefix.length)).not.toMatch(/[ "{}#&?]/);
+  });
+
   it('keeps the shell commands quoted and offers the no-checkout, container and cluster doctor', () => {
     expect(JSON.parse(commands.cursor)).toEqual({ mcpServers: { opsknight: { url: endpoint } } });
     const quoted = `'https://ops.example.com/mcp?x='\\''y'\\'''`;

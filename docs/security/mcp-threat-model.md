@@ -96,6 +96,38 @@ Boundaries that matter: (1) the network edge to `/mcp` and `/oauth/mcp/*`; (2) t
 | Alerts and dashboard                                              | T9, T11 | `monitoring/prometheus/opsknight-alerts.yaml`, `monitoring/grafana/opsknight-mcp.json` | `monitoring/prometheus/mcp.test.yml`                                                                                                                                                   |
 | Protocol fuzzing                                                  | T9      | `tests/integration/mcp-protocol-fuzz.test.ts`                                          | the test itself                                                                                                                                                                        |
 
+## Enterprise-managed authorization (identity-provider grants)
+
+Optional and off by default. When an administrator turns on **Allow access granted by your identity provider** and single sign-on is configured, the token endpoint accepts an Identity Assertion JWT Authorization Grant (ID-JAG) with the JWT bearer grant (`urn:ietf:params:oauth:grant-type:jwt-bearer`, RFC 7523), as profiled by the [MCP Enterprise-Managed Authorization extension](https://modelcontextprotocol.io/extensions/auth/enterprise-managed-authorization) and [draft-ietf-oauth-identity-assertion-authz-grant-06](https://datatracker.ietf.org/doc/draft-ietf-oauth-identity-assertion-authz-grant/). No consent screen is shown: the identity provider, not the person, decides that the assistant may connect. Without single sign-on, or with the switch off, the grant is neither advertised nor accepted (`unsupported_grant_type`). Code: `src/lib/mcp/auth/enterprise-grant.ts`; tests: `tests/integration/mcp-enterprise-grant.test.ts`.
+
+The new boundary is the token endpoint trusting a JWT signed by the SSO provider. The checks, in order:
+
+1. Switch on, MCP on, single sign-on configured and enabled; else `unsupported_grant_type`. Request rate limits apply as for every grant.
+2. The IdP's discovery metadata validates (cached, SSRF-guarded) and names the configured issuer.
+3. Signing key from the IdP's `jwks_uri`, fetched through the same outbound guard as SSO (public addresses, no redirects, 1 MB cap, 5-minute cache, at most one refetch per 30 seconds for an unknown key id).
+4. Signature with the algorithms OpsKnight accepts from that IdP for ID tokens (RS256); `none` and HMAC are never accepted.
+5. Header `typ` is `oauth-id-jag+jwt`, so an ID token or access token from the same IdP cannot be replayed as a grant.
+6. `iss` equals the configured SSO issuer; `aud` is this server's issuer (`<origin>/oauth/mcp`), as a string or a one-element array.
+7. `exp`, `nbf` and `iat` with 60 seconds of skew; `iat` no older than 10 minutes. `iss`, `sub`, `aud`, `client_id`, `jti`, `exp` and `iat` are required.
+8. Grants bound to a proof-of-possession key (`cnf`) or carrying `authorization_details` are refused: OpsKnight cannot honour them.
+9. `resource`, when present, is this MCP server's resource identifier.
+10. `client_id` equals the requesting client's `client_id`.
+11. `jti` is used once: recorded (keyed by issuer and jti, until the grant expires) in the same serializable transaction that issues the token.
+12. The client is an assistant OpsKnight already knows and trusts under the current policy (registered, self-registered or metadata document; not revoked; non-empty ceiling); else `invalid_client`.
+13. `sub` resolves only through an existing single sign-on link (issuer and subject) to an active person. Nothing is created or linked: no email matching, no just-in-time accounts.
+14. Scopes are the IdP's `scope` ∩ the request's `scope` ∩ the assistant's ceiling ∩ what the person's role can use (and read-only when the policy requires it). None left: `invalid_scope`.
+
+Any other failure is `invalid_grant`. The client learns only the OAuth error code; the failed check is logged server-side as `mcp.token.id_jag_refused` with a reason.
+
+The result is an ordinary connection (kind `IDP`, shown as **Granted by your identity provider**) with a five-minute access token and **no refresh token** (draft §4.4.4): when it expires the assistant needs a fresh grant from the IdP, so disabling a person or an assistant at the IdP ends access within five minutes. The first grant for a person and assistant is audited (`mcp.grant.idp_granted`); each token is audited as `mcp.token.issued`.
+
+Residual risks:
+
+- **Public clients.** OpsKnight assistants have no client secret. The MCP profile allows a client to present only its `client_id`; the IETF draft (-06) requires client authentication or a sender-constrained grant. A stolen, unused ID-JAG can therefore be redeemed by whoever holds it, within its lifetime and once. Keep IdP-issued grant lifetimes short.
+- **The IdP is trusted for its users.** Anyone who controls the SSO provider's signing keys can obtain access as any linked person, within each person's role. That is already true of SSO sign-in.
+- **Revoking in OpsKnight is not final.** A revoked IdP connection is replaced by the next grant the IdP issues. To stop it, remove access at the IdP, revoke the assistant, or turn the switch off; turning it off stops new tokens at once and existing ones within five minutes.
+- **Policy changes at sign-in time are not re-run.** Allowed-domain and organization rules are checked when a person signs in with SSO, not on every grant; disable the account to cut access immediately.
+
 ## Residual risk and decisions for owners
 
 1. **Direct incident actions** (acknowledge, resolve, assign, escalate, reopen, unsnooze, add a note, create an incident, add a watcher or tag) run without a second person, as the person, when changes are on. This is deliberate and documented in the permissions reference. An organisation that wants every change reviewed can leave changes off.

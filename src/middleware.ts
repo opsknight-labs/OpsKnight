@@ -92,6 +92,7 @@ function isPublicPath(pathname: string) {
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/icon.svg') ||
     pathname === '/robots.txt' ||
+    pathname === '/llms.txt' ||
     pathname === '/sitemap.xml' ||
     pathname === '/manifest.webmanifest' ||
     pathname.startsWith('/icons/')

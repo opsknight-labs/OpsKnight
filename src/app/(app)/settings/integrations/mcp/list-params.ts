@@ -71,6 +71,9 @@ export type McpListParams = {
   /** Usage tab: how far back to look, and what to group by. */
   usageWindow: UsageWindow;
   usageBy: UsageGroup;
+  /** Usage tab custom range (YYYY-MM-DD, UTC); judged against retention when the data loads. */
+  usageFrom: string | null;
+  usageTo: string | null;
 };
 
 type RawParams = Record<string, string | string[] | undefined>;
@@ -86,6 +89,11 @@ function oneOf<T extends string>(choices: readonly T[], value: string | undefine
 }
 
 const MAX_PAGE = 10_000;
+
+/** Keeps a date parameter only in YYYY-MM-DD shape; anything else is dropped. */
+function usageDate(value: string | undefined) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
 
 export function parseMcpListParams(
   raw: RawParams,
@@ -121,6 +129,8 @@ export function parseMcpListParams(
     approvalState: oneOf(APPROVAL_STATES, first(raw.state), 'pending'),
     usageWindow: oneOf(USAGE_WINDOW_KEYS, first(raw.window), '24h'),
     usageBy: oneOf(USAGE_GROUPS, first(raw.by), 'tool'),
+    usageFrom: usageDate(first(raw.from)),
+    usageTo: usageDate(first(raw.to)),
   };
 }
 

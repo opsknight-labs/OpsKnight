@@ -136,3 +136,29 @@ export async function listMcpConnectionActivity(
       : null,
   };
 }
+
+/** The latest requests from every connection of one assistant (its detail page), newest first. */
+export async function listMcpClientRecentCalls(
+  viewer: McpViewer,
+  clientId: string,
+  limit = 20
+): Promise<(McpActivityCall & { grantId: string; userId: string | null })[]> {
+  requireMcp(viewer.isAdmin, 'MCP_ADMIN_REQUIRED', 403);
+  const rows = await prisma.mcpCallLog.findMany({
+    where: { clientId },
+    orderBy: [{ at: 'desc' }, { id: 'desc' }],
+    take: limit,
+  });
+  return rows.map(row => ({
+    id: row.id,
+    at: row.at.toISOString(),
+    tool: row.tool,
+    operationId: row.operationId,
+    outcome: row.outcome,
+    durationMs: row.durationMs,
+    requestId: row.requestId,
+    errorCode: row.errorCode,
+    grantId: row.grantId,
+    userId: row.userId,
+  }));
+}

@@ -11,6 +11,7 @@ import {
   type StandardSchemaWithJSON,
 } from '@modelcontextprotocol/server';
 import { COMPLETION_SOURCES, completeAuthorizedIds, type CompletionSource } from './completion';
+import { listAuthorizedResources, oneLineLabel } from './resource-list';
 import { z } from 'zod/v4';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import {
@@ -18,6 +19,7 @@ import {
   MCP_OPERATION_MAP,
   isMcpApprovalGated,
   isMcpExecutable,
+  isMcpResponderDirect,
   isMcpSensitiveRead,
   mcpResponseSchema,
 } from '../catalog';
@@ -46,12 +48,15 @@ import prisma from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { mcpApprovalPollGuidance } from '../approvals/timing';
 import { projectMcpData } from '../core/projection';
+import { attachMcpSkills } from './skills';
+import { attachMcpApps } from './apps';
 import { MCP_WEB_PAGES, mcpWebOrigin } from '../core/web-links';
 import {
   BULK_ACKNOWLEDGE_LIMIT,
   KNOWLEDGE_SOURCES,
   acknowledgeMcpIncidents,
   fetchMcpKnowledge,
+  fitKnowledgeResult,
   getMcpIncidentContext,
   getMcpOncallForService,
   getMcpServiceChanges,
@@ -181,7 +186,11 @@ const SCHEMAS = {
           properties: {
             id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,40}$' },
             operationId: { type: 'string', maxLength: 128 },
-            args: { type: 'object' },
+            args: {
+              type: 'object',
+              description:
+                'Canonical args. Any value may be {"$from": "<stepId>", "pointer": "/data/0/id"}: the value at that JSON Pointer in result.data of a step listed in dependsOn.',
+            },
             dependsOn: {
               type: 'array',
               items: { type: 'string', maxLength: 40 },
@@ -215,6 +224,7 @@ const KNOWLEDGE_OUTPUT = {
         },
       },
       untrusted: { type: 'string' },
+      note: { type: 'string' },
     },
   }),
   fetch: fromJsonSchema({
@@ -336,26 +346,6 @@ export function clampPageSize(
       },
     },
   };
-}
-/** A named tool's advertised result is left off past this size; tools/list stays small. */
-export const MCP_OUTPUT_SCHEMA_MAX_BYTES = 8192;
-const outputSchemas = new WeakMap<object, ReturnType<typeof fromJsonSchema> | null>();
-/**
- * The projected result schema a named tool advertises (see projectedOutputSchema), or null when
- * it would be too large to list. The SDK validates every result against it, so it describes
- * exactly what projection and compaction deliver.
- */
-export function catalogOutputSchema(operation: (typeof MCP_CATALOG)[number]) {
-  let schema = outputSchemas.get(operation);
-  if (schema === undefined) {
-    const projected = projectedOutputSchema(mcpResponseSchema(operation));
-    schema =
-      Buffer.byteLength(JSON.stringify(projected)) <= MCP_OUTPUT_SCHEMA_MAX_BYTES
-        ? fromJsonSchema(projected as JsonSchemaType)
-        : null;
-    outputSchemas.set(operation, schema);
-  }
-  return schema ?? undefined;
 }
 function catalogToolSchema(operation: (typeof MCP_CATALOG)[number]) {
   let schema = catalogSchemas.get(operation);
@@ -655,21 +645,41 @@ export function createOpsKnightMcpServer(
   writesEnabled: boolean,
   sensitiveReadsEnabled = false,
   /** McpPolicy.disabledCapabilities as stored; unknown entries are ignored. */
-  disabledCapabilities: readonly string[] = []
+  disabledCapabilities: readonly string[] = [],
+  /** McpPolicy.responderDirectWritesEnabled: routine responder changes run without a review. */
+  responderDirectWrites = false
 ) {
   // Administrator controls apply to every session whatever its role or consent; execution rechecks.
   const disabled = resolveDisabledMcpCapabilities(disabledCapabilities);
   const reviewState = reviewStateCodec(context.grantId, actor.id);
+  // The running release, as /api/health reports it, so a bug report names its contract.
+  const MCP_SERVER_IDENTITY = { name: 'opsknight', title: 'OpsKnight', version: APP_VERSION };
+  const iconOrigin = mcpWebOrigin();
   const server = new McpServer(
-    // The running release, as /api/health reports it, so a bug report names its contract.
-    { name: 'opsknight', title: 'OpsKnight', version: APP_VERSION },
+    // Served by this installation, so a private deployment needs no outside host for the icon.
+    {
+      ...MCP_SERVER_IDENTITY,
+      ...(iconOrigin
+        ? {
+            icons: [
+              {
+                src: `${iconOrigin}/icons/opsknight-192.png`,
+                mimeType: 'image/png',
+                sizes: ['192x192'],
+              },
+            ],
+          }
+        : {}),
+    },
     {
       instructions: MCP_SERVER_INSTRUCTIONS,
       // Echoed requestState is refused (-32602) unless this server minted it for this principal.
       requestState: { verify: reviewState.verify },
-      // Advertised because subscriptions/listen is served by the route with authorized URIs only.
+      // subscribe is advertised only where subscriptions/listen serves it (2026-07-28 requests).
       capabilities: {
-        resources: { subscribe: true, listChanged: false },
+        // listChanged stays false: resources/list is a live recent-rows sample, re-read on demand;
+        // the stateless server keeps no session to announce a changed list to.
+        resources: { subscribe: context.listenSubscriptions === true, listChanged: false },
         tools: { listChanged: true },
         // Served by the route (tasks/get, tasks/update, tasks/cancel); used only when a request opts in.
         extensions: { 'io.modelcontextprotocol/tasks': {} },
@@ -679,6 +689,9 @@ export function createOpsKnightMcpServer(
   // Identity is never withheld: without it an assistant cannot resolve "me" or explain access.
   const registerAlwaysOn = server.registerTool.bind(server);
   withholdDisabledRegistrations(server, disabled);
+  // Inert unless this request declared the extension (skills, MCP Apps).
+  attachMcpSkills(server, context, actor);
+  attachMcpApps(server, context);
   const registered = recordRegistrations(server);
   // A personal access token never approves its own request, even an administrator's; the review
   // itself refuses it too (approvals/operation.ts).
@@ -792,13 +805,20 @@ export function createOpsKnightMcpServer(
         })
     );
   }
+  // Routine responder changes the administrator lets run without a review; execution rechecks.
+  const runsDirect = (operation: (typeof MCP_CATALOG)[number]) =>
+    responderDirectWrites &&
+    writesEnabled &&
+    isMcpResponderDirect(operation) &&
+    hasOperationAuthority(actor, operation);
   const visible = MCP_CATALOG.filter(
     operation =>
       !disabled.has(operation.operationId) &&
-      canDiscover(actor, operation) &&
-      (isMcpSensitiveRead(operation)
-        ? sensitiveReadsEnabled
-        : operation.risk === 'R0' || writesEnabled)
+      (runsDirect(operation) ||
+        (canDiscover(actor, operation) &&
+          (isMcpSensitiveRead(operation)
+            ? sensitiveReadsEnabled
+            : operation.risk === 'R0' || writesEnabled)))
   );
   // Discovery only; every prepare and commit rechecks authority and the native review.
   const approvalGated = writesEnabled
@@ -806,6 +826,7 @@ export function createOpsKnightMcpServer(
         operation =>
           !disabled.has(operation.operationId) &&
           isMcpApprovalGated(operation) &&
+          !runsDirect(operation) &&
           hasOperationAuthority(actor, operation)
       )
     : [];
@@ -830,6 +851,7 @@ export function createOpsKnightMcpServer(
   const namedTool = (operation: (typeof MCP_CATALOG)[number]) =>
     operation.tool && registered.tools.has(operation.tool) ? operation.tool : null;
   const workflowOf = (operation: (typeof MCP_CATALOG)[number]) => {
+    if (runsDirect(operation)) return 'call_operation';
     if (operation.status === 'APPROVAL_REQUIRED')
       return 'operation_prepare with args (omit idempotencyKey), native approval, operation_commit_approved';
     const tool = namedTool(operation);
@@ -959,8 +981,8 @@ export function createOpsKnightMcpServer(
       {
         title: operation.title ?? operation.tool!,
         description: catalogToolDescription(operation),
+        // No outputSchema: it doubled tools/list. describe_operation returns it on demand.
         inputSchema: catalogToolSchema(operation),
-        ...(catalogOutputSchema(operation) ? { outputSchema: catalogOutputSchema(operation) } : {}),
         annotations: {
           readOnlyHint: read,
           destructiveHint: !read,
@@ -1089,11 +1111,14 @@ export function createOpsKnightMcpServer(
     });
     const knowledgeTool = async (tool: string, callback: () => Promise<unknown>) => {
       try {
-        const result = knowledgeResult(await callback());
-        if (
-          Buffer.byteLength(JSON.stringify(result)) >
-          context.budget.maxBytes - RESULT_ENVELOPE_RESERVE
-        )
+        const fits = (value: unknown) =>
+          Buffer.byteLength(JSON.stringify(knowledgeResult(value))) <=
+          context.budget.maxBytes - RESULT_ENVELOPE_RESERVE;
+        const result = knowledgeResult(
+          fitKnowledgeResult((await callback()) as Record<string, unknown>, fits)
+        );
+        // Only something fitKnowledgeResult cannot shrink gets here.
+        if (!fits(result.structuredContent))
           throw new McpBoundaryError('MCP_RESULT_BUDGET_EXCEEDED', 413);
         return result;
       } catch (error) {
@@ -1270,18 +1295,15 @@ export function createOpsKnightMcpServer(
           context,
           'call_operation',
           async () => {
-            const result = await callMcpOperation(context, input.operationId, input.args);
             const operation = MCP_OPERATION_MAP.get(input.operationId);
-            // Still served for this release; the assistant learns the confirmation-free path.
-            return operation && isRead(operation)
-              ? {
-                  ...result,
-                  evidence: {
-                    ...result.evidence,
-                    warnings: [...result.evidence.warnings, READ_THROUGH_CALL_DEPRECATED],
-                  },
-                }
-              : result;
+            // One tool never mixes safe and unsafe work; unknown ids fall through to execution.
+            requireMcp(
+              !operation || !isRead(operation),
+              'MCP_NOT_A_CHANGE',
+              400,
+              'This operation only reads; use read_operation with the same operationId and args.'
+            );
+            return callMcpOperation(context, input.operationId, input.args);
           },
           linksFor(input.operationId, input.args)
         );
@@ -1292,7 +1314,7 @@ export function createOpsKnightMcpServer(
     {
       title: 'Run several reads',
       description:
-        'Run at most eight independent authorized reads in one call (a single read is fine). dependsOn orders steps and skips a step whose dependency failed; results are not passed between steps. Partial results; no transaction or changes.',
+        'Run at most eight authorized reads in one call (a single read is fine). dependsOn orders steps and skips a step whose dependency failed. A later step can use an earlier result: put {"$from": "<stepId>", "pointer": "/data/0/id"} in its args (a JSON Pointer into that step\'s result.data; list the step in dependsOn). Partial results; no transaction or changes.',
       inputSchema: SCHEMAS.executePlan,
       annotations: {
         readOnlyHint: true,
@@ -1366,7 +1388,7 @@ export function createOpsKnightMcpServer(
     server.registerResource(
       domain,
       new ResourceTemplate(`opsknight://${domain}/{id}`, {
-        list: undefined,
+        list: canList(domain) ? () => listAuthorizedResources(context, domain) : undefined,
         complete: { id: completeIds(domain) },
       }),
       {
@@ -1565,10 +1587,6 @@ export function createOpsKnightMcpServer(
   return server;
 }
 
-/** The release that stops serving reads through call_operation (also in CHANGELOG and catalog). */
-export const CALL_OPERATION_READS_REMOVED_IN = 'v2.3.0';
-const READ_THROUGH_CALL_DEPRECATED = `Reads through call_operation are deprecated and will be removed in ${CALL_OPERATION_READS_REMOVED_IN}; use read_operation, which never changes anything.`;
-
 /** The resource template each resource kind is read through. */
 const RESOURCE_OPERATIONS = new Map<CompletionSource, string>([
   ['incidents', 'getIncident'],
@@ -1647,8 +1665,7 @@ function listLinks(
     links.push({
       type: 'resource_link',
       uri: `${origin}${page}/${encodeURIComponent(id)}`,
-      // Stored text on one line: a link name is not a place for business text to add lines.
-      name: `Open ${label.replace(/[\p{Cc}\s]+/gu, ' ').slice(0, 80)} in OpsKnight`,
+      name: `Open ${oneLineLabel(label)} in OpsKnight`,
       mimeType: 'text/html',
       annotations: { audience: ['user'] },
     });

@@ -132,6 +132,7 @@ export default function AuditLogTable({
                               </div>
                               <div className="text-xs text-muted-foreground truncate">
                                 {log.actor?.email || log.actorEmail || '-'}
+                                {log.channel?.startsWith('mcp:') && ' · via AI assistant'}
                               </div>
                             </div>
                           </div>

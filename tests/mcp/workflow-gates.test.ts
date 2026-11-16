@@ -36,6 +36,13 @@ describe('MCP CI/release gate separation', () => {
     expect(prWorkflow).toContain('name: MCP PR validation');
   });
 
+  it('runs the pinned official conformance suite against the production build', () => {
+    expect(prWorkflow).toContain('npm run --silent mcp:conformance -- --url=http://localhost:3042');
+    const harness = readFileSync('scripts/mcp/conformance.ts', 'utf8');
+    expect(harness).toMatch(/CONFORMANCE_VERSION = '\d+\.\d+\.\d+'/);
+    expect(harness).toContain('@modelcontextprotocol/conformance@${CONFORMANCE_VERSION}');
+  });
+
   it('requires a release asset and protected environment approval for GA certification', () => {
     expect(releaseWorkflow).toContain('name: Enterprise MCP release certification');
     expect(releaseWorkflow).toContain('workflow_dispatch:');

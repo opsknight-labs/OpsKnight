@@ -20,6 +20,7 @@ export type AuditFiltersProps = {
   currentEntityType?: string;
   currentAction?: string;
   currentSearch?: string;
+  currentVia?: string;
   logsData?: Array<{
     id: string;
     createdAt: Date | string;
@@ -29,6 +30,7 @@ export type AuditFiltersProps = {
     actorName: string | null;
     actorEmail: string | null;
     actor?: { name: string | null; email: string | null } | null;
+    channel?: string | null;
     details?: string;
   }>;
 };
@@ -37,6 +39,7 @@ export default function AuditFilters({
   currentEntityType = 'ALL',
   currentAction = '',
   currentSearch = '',
+  currentVia = 'ALL',
   logsData = [],
 }: AuditFiltersProps) {
   const router = useRouter();
@@ -60,7 +63,8 @@ export default function AuditFilters({
   const hasActiveFilters =
     (currentEntityType && currentEntityType !== 'ALL') ||
     Boolean(currentSearch) ||
-    Boolean(currentAction);
+    Boolean(currentAction) ||
+    currentVia !== 'ALL';
 
   const handleReset = () => {
     startTransition(() => {
@@ -79,6 +83,7 @@ export default function AuditFilters({
         { header: 'Action', accessor: 'action' },
         { header: 'Entity Type', accessor: 'entityType' },
         { header: 'Entity ID', accessor: row => row.entityId || '-' },
+        { header: 'Channel', accessor: row => row.channel || '' },
         {
           header: 'Details',
           accessor: row => (row.details === '-' ? '' : row.details || ''),
@@ -97,22 +102,36 @@ export default function AuditFilters({
       hasActiveFilters={hasActiveFilters}
       onResetFilters={handleReset}
       filters={
-        <Select
-          value={currentEntityType || 'ALL'}
-          onValueChange={val => updateParam('entityType', val)}
-        >
-          <SelectTrigger className="h-9 w-[160px] bg-slate-50/60 text-xs">
-            <SelectValue placeholder="All Entity Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Entity Types</SelectItem>
-            {AUDIT_ENTITY_TYPES.map(type => (
-              <SelectItem key={type} value={type}>
-                {type.replace(/_/g, ' ')}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <>
+          <Select value={currentVia} onValueChange={val => updateParam('via', val)}>
+            <SelectTrigger
+              className="h-9 w-[160px] bg-slate-50/60 text-xs"
+              aria-label="Filter by who made the change"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All sources</SelectItem>
+              <SelectItem value="assistant">AI assistants</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={currentEntityType || 'ALL'}
+            onValueChange={val => updateParam('entityType', val)}
+          >
+            <SelectTrigger className="h-9 w-[160px] bg-slate-50/60 text-xs">
+              <SelectValue placeholder="All Entity Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Entity Types</SelectItem>
+              {AUDIT_ENTITY_TYPES.map(type => (
+                <SelectItem key={type} value={type}>
+                  {type.replace(/_/g, ' ')}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
       }
       actions={
         <div className="flex items-center gap-2">

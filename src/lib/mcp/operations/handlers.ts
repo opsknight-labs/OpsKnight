@@ -219,6 +219,7 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/postmortems/[id]/action-items/route')).GET,
   ],
   ['listPostmortems', async () => (await import('@/app/api/v2/postmortems/route')).GET],
+  ['listActionItems', async () => (await import('@/app/api/v2/action-items/route')).GET],
   ['getReportCatalog', async () => (await import('@/app/api/v2/reports/catalog/route')).GET],
   ['listSavedReports', async () => (await import('@/app/api/v2/reports/saved/route')).GET],
   ['getSavedReport', async () => (await import('@/app/api/v2/reports/saved/[id]/route')).GET],

@@ -90,3 +90,7 @@ Prefer OAuth with a refresh loop wherever the platform supports it: its access t
 ## View-only connections
 
 To keep an agent read-only, tick **View only** on the consent page, or give a personal token only view permissions. An administrator can require this for everyone with **Access policy → View-only connections → Require view-only connections**; every connection, OAuth and personal, is then capped to view permissions until the switch is turned off. A view-only session is not offered `call_operation` or `operation_prepare`.
+
+## Fewer tools per connection
+
+An agent that only needs a few areas can send `X-OpsKnight-Toolsets` with a comma-separated list of capability domains, for example `X-OpsKnight-Toolsets: incidents, schedules`. Tools, search results, plans and subscriptions from every other domain are hidden on that connection, which keeps `tools/list` small. Discovery and identity tools (`whoami`, `search_capabilities`, `read_operation`), the review tools and prompts are always listed. The header only hides: it never grants anything the person, the connection or the administrator settings do not already allow. Unknown names are ignored, and a header that names no known domain hides nothing. Domains: `action-items`, `audit-logs`, `custom-fields`, `dashboards`, `escalation-policies`, `incidents`, `integrations`, `notifications`, `operational-events`, `postmortems`, `reports`, `runbooks`, `schedules`, `service-objectives`, `services`, `settings`, `status-pages`, `teams` and `users`.

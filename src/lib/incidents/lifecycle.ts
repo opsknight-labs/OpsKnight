@@ -9,6 +9,7 @@ import type {
 } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
+import { internalV2ActorLabel } from '@/lib/api-v2/internal-context';
 import { enqueueLifecycleSideEffects } from '@/lib/event-outbox';
 import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
 import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
@@ -97,7 +98,7 @@ function invalidArgument(userMessage: string, details?: Record<string, unknown>)
 }
 
 function actorSuffix(actor?: IncidentLifecycleActor): string {
-  const name = actor?.name?.trim();
+  const name = actor?.name?.trim() || internalV2ActorLabel();
   return name ? ` by ${name}` : '';
 }
 
