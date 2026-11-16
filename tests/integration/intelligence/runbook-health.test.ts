@@ -201,7 +201,7 @@ async function world() {
           'Flushed the CDN cache for the api domain',
           'flush CDN cache for api domain',
           'Flushed CDN cache on the api domain',
-        ][index],
+        ].at(index)!,
         createdAt: new Date(completedAt.getTime() + 20 * MIN),
       },
     });
