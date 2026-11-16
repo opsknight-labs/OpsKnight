@@ -44,6 +44,8 @@ const EXPECTED_INDEXES: Record<string, string[]> = {
   // Operations insights (Workstream J): the daily rollups, the reference producer and the scheduler scan.
   opsPagesRollup: ['idx_notification_created_cursor'],
   opsRunbookRollup: ['idx_runbook_execution_completed'],
+  opsRunbookRunRollup: ['idx_runbook_execution_completed'],
+  opsRunbookStepRollup: ['idx_runbook_execution_completed'],
   opsAutomationRollup: ['IncidentAutomationDecision_serviceId_createdAt_idx'],
   opsRollupRead: ['idx_metric_rollup_subject'],
   opsIntegrationHealth: ['idx_alert_by_service'],
@@ -68,6 +70,8 @@ type JudgedTable =
 const MIN_ROWS_TO_JUDGE: Record<string, { table: JudgedTable; rows: number }> = {
   opsPagesRollup: { table: 'Notification', rows: 200_000 },
   opsRunbookRollup: { table: 'RunbookExecution', rows: 50_000 },
+  opsRunbookRunRollup: { table: 'RunbookExecution', rows: 50_000 },
+  opsRunbookStepRollup: { table: 'RunbookExecution', rows: 50_000 },
   opsAutomationRollup: { table: 'IncidentAutomationDecision', rows: 50_000 },
   opsRollupRead: { table: 'MetricRollup', rows: 50_000 },
   opsIntegrationHealth: { table: 'Alert', rows: 200_000 },
@@ -201,6 +205,14 @@ async function main() {
     opsRunbookRollup: {
       analyze: true,
       sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.runbookOutcome]!(Prisma.sql, opsDay, opsDayEnd),
+    },
+    opsRunbookRunRollup: {
+      analyze: true,
+      sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.runbookRun]!(Prisma.sql, opsDay, opsDayEnd),
+    },
+    opsRunbookStepRollup: {
+      analyze: true,
+      sql: OPS_ROLLUP_SOURCES[OPS_ROLLUPS.runbookStepOutcome]!(Prisma.sql, opsDay, opsDayEnd),
     },
     opsAutomationRollup: {
       analyze: true,
