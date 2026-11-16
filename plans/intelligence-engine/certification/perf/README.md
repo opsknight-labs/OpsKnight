@@ -314,6 +314,32 @@ candidate cost is in the event's own statements: about 3.0 ms per event against 
 and a pool wait of 12.6 ms against 11.8 ms (attribution run `attr-all-1`), which is PostgreSQL serving the
 lane thread and the lookup pool beside ingestion, not time spent in the hook.
 
+### Lane in a child process (2026-11-16 onwards)
+
+**Why the lane left the worker thread.** An independent review found that a lane thread ending while its
+Prisma client had queries or an interactive transaction in flight aborted the whole process. Reproduced on
+2026-11-16 against PostgreSQL 16 (container `opsknight-intel-ig3-ingest`), Prisma 5.22, Node 20.20, with a
+probe that starts four `pg_sleep(3)` queries and one interactive transaction in the thread or child, then
+ends it (parent alive 3 s later = survived):
+
+| Probe (20 runs each unless noted)                     | Worker thread                 | Child process (`fork`)                 |
+| :---------------------------------------------------- | :---------------------------- | :------------------------------------- |
+| `terminate()` / `SIGKILL`                             | **20 of 20 aborted** (17 SIGABRT, 3 SIGSEGV) | 20 of 20 survived           |
+| `$disconnect()` in the thread, then exit / terminate  | **20 of 20 aborted** (SIGSEGV) | –                                     |
+| `SIGTERM`                                             | –                             | 20 of 20 survived                      |
+| uncaught error                                        | **5 of 5 aborted** (3 SIGABRT, 2 SIGSEGV) | 20 of 20 survived          |
+| unhandled rejection                                   | –                             | 20 of 20 survived                      |
+| out of memory (32 MB old space)                       | –                             | 20 of 20 survived                      |
+| cooperative stop (await queries, disconnect, exit)    | –                             | 39 of 40 survived; 1 run exited 1 without a signal (not a crash; output not captured, rerun of 20 with output captured: 20 of 20) |
+
+In the child-process runs the parent also had two queries of its own in flight and answered `SELECT 1`
+afterwards. The earlier probe campaign (2026-11-15, same probe) also showed the thread aborting on
+unhandled rejection (3 of 5) and out of memory (3 of 5, 2 hung), and a cooperative drain hanging 2 of 5.
+No cooperative protocol makes the thread safe, since even a disconnected client aborts on exit, so the
+lane runs in a forked process; ingestion activity crosses over IPC (burst start at once, otherwise at most
+every 10 ms). `tests/integration/intelligence/lane-thread.test.ts` crashes a lane process with queries in
+flight three times, then kills it on stop, and checks this process still answers queries.
+
 ## Query plans (`tests/load/intelligence-query-plans.ts`)
 
 `query-plans-2026-11-08-local.json` (21k history): **PASS**. Seven queries index-backed, including the
