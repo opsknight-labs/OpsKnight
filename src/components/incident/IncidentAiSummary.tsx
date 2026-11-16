@@ -79,7 +79,7 @@ export default function IncidentAiSummary({
             <List title="Possible causes (to verify)" items={state.summary.possibleCauses} />
             <List title="Suggested next steps" items={state.summary.nextSteps} />
             {state.degraded && (
-              <p role="status" className="text-xs text-amber-700 dark:text-amber-300">
+              <p role="status" className="text-xs text-status-elevated-deep">
                 {AI_LEAN_NOTICE}
               </p>
             )}

@@ -393,7 +393,7 @@ export function AiSettingsForm({
         <Field
           name="backgroundAiBudgetPercent"
           label="Background AI allocation (%)"
-          help="Part of the daily budget for work nobody is waiting on: proactive notes, handoff narratives, insight phrasing. Shed first. Default 30%; maximum 80%; 0 pauses it."
+          help="Part of the daily budget for work nobody is waiting on: proactive notes and handoff narratives. Shed first. Default 30%; maximum 80%; 0 pauses it."
           type="number"
           min={b.backgroundAiBudgetPercent.min}
           max={b.backgroundAiBudgetPercent.max}
