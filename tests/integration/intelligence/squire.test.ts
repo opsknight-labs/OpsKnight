@@ -250,8 +250,10 @@ describe('AI mode', () => {
     const tools = body.tools?.map(t => t.function.name) ?? [];
     // Conversation turns require Personal clearance, including the corresponding scoped tools.
     expect(tools.filter(name => !name.startsWith('propose_')).sort()).toEqual([
+      'explain_automation_rule',
       'find_people',
       'get_alert_payload',
+      'get_automation_decision',
       'get_escalation_policy',
       'get_incident',
       'get_intelligence',
