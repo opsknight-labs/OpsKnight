@@ -7,7 +7,7 @@
  *
  * Bounded and resumable: a keyset walk over incidents created in the window, a fixed number of statements
  * per batch, and a cursor the caller passes back to continue. Safe to re-run from the start. Run by the
- * intelligence lane (ops-insights/handlers.ts), one batch per work item, while escalation insights are on.
+ * intelligence lane (the BACKFILL_ESCALATION_ATTEMPTS work item), one batch per item, while escalation insights are on.
  *
  * Job payloads are not read: escalation jobs are retention-swept long before 90 days and carry no outcome.
  */
@@ -218,4 +218,36 @@ export async function backfillEscalationStepAttempts(
         ? null
         : { createdAt: last.createdAt.toISOString(), id: last.id },
   };
+}
+
+export const ATTEMPT_BACKFILL_CURSOR = 'escalation-attempt-backfill';
+/** Stored as the cursor's id once the window is walked: the backfill never runs again. */
+export const ATTEMPT_BACKFILL_DONE = '';
+
+/**
+ * One resumable batch: reads the saved keyset cursor, backfills one batch and saves the next cursor on the
+ * same client (run it in one transaction so the cursor and the inserts commit together). Returns true when
+ * there is more to do.
+ */
+export async function backfillEscalationStepAttemptsBatch(
+  tx: Prisma.TransactionClient,
+  options: { now?: Date } = {}
+): Promise<boolean> {
+  const saved = await tx.intelligenceCursor.findUnique({
+    where: { name: ATTEMPT_BACKFILL_CURSOR },
+  });
+  if (saved?.lastId === ATTEMPT_BACKFILL_DONE) return false;
+  const result = await backfillEscalationStepAttempts(tx, {
+    cursor: saved ? { createdAt: saved.watermarkAt.toISOString(), id: saved.lastId } : null,
+    now: options.now,
+  });
+  const next = result.cursor
+    ? { watermarkAt: new Date(result.cursor.createdAt), lastId: result.cursor.id }
+    : { watermarkAt: options.now ?? new Date(), lastId: ATTEMPT_BACKFILL_DONE };
+  await tx.intelligenceCursor.upsert({
+    where: { name: ATTEMPT_BACKFILL_CURSOR },
+    create: { name: ATTEMPT_BACKFILL_CURSOR, ...next },
+    update: next,
+  });
+  return result.cursor !== null;
 }

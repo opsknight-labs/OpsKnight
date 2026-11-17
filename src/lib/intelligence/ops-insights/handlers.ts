@@ -4,7 +4,11 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { captureScheduleCoverage } from '@/lib/oncall-load/store';
-import { backfillEscalationStepAttempts } from '@/lib/escalation/step-attempt-backfill';
+import {
+  ATTEMPT_BACKFILL_CURSOR,
+  ATTEMPT_BACKFILL_DONE,
+  backfillEscalationStepAttemptsBatch,
+} from '@/lib/escalation/step-attempt-backfill';
 import { dbNow, withDbBudget } from '../jobs/db-budget';
 import { stableAnalysisHash } from '../jobs/input-hash';
 import {
@@ -174,10 +178,8 @@ type Handler = (
   context: { settings: IntelligenceSettingsView; signal: AbortSignal }
 ) => Promise<void>;
 
-export const ATTEMPT_BACKFILL_CURSOR = 'escalation-attempt-backfill';
+export { ATTEMPT_BACKFILL_CURSOR };
 const ATTEMPT_BACKFILL_SUBJECT = 'window';
-/** Stored as the cursor's id once the window is walked: the backfill never runs again. */
-const ATTEMPT_BACKFILL_DONE = '';
 
 /**
  * One batch of the escalation-attempt backfill (J2), resumable across items and restarts: the keyset cursor
@@ -191,25 +193,7 @@ export async function runEscalationAttemptBackfill(
   if (!enabledOpsInsightAreas(settings).includes('escalation')) return false;
   return withDbBudget(
     settings,
-    async tx => {
-      const saved = await tx.intelligenceCursor.findUnique({
-        where: { name: ATTEMPT_BACKFILL_CURSOR },
-      });
-      if (saved?.lastId === ATTEMPT_BACKFILL_DONE) return false;
-      const result = await backfillEscalationStepAttempts(tx, {
-        cursor: saved ? { createdAt: saved.watermarkAt.toISOString(), id: saved.lastId } : null,
-        now: options.now,
-      });
-      const next = result.cursor
-        ? { watermarkAt: new Date(result.cursor.createdAt), lastId: result.cursor.id }
-        : { watermarkAt: options.now ?? new Date(), lastId: ATTEMPT_BACKFILL_DONE };
-      await tx.intelligenceCursor.upsert({
-        where: { name: ATTEMPT_BACKFILL_CURSOR },
-        create: { name: ATTEMPT_BACKFILL_CURSOR, ...next },
-        update: next,
-      });
-      return result.cursor !== null;
-    },
+    tx => backfillEscalationStepAttemptsBatch(tx, { now: options.now }),
     prisma,
     { signal: options.signal }
   );
