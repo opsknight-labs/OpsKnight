@@ -101,8 +101,9 @@ evaluation run. Use it with SHADOW to size thresholds, then turn ON per service.
 The page shows alerts per incident (compression), pages avoided (applied) and what SHADOW would have
 avoided, downgrades and holds, the false-group rate (reversed over applied groupings) and heartbeat
 state. Metrics: `opsknight_prepaging_decisions_total{control,action,mode}`,
-`opsknight_prepaging_fail_open_total{reason}`, `opsknight_prepaging_evaluation_seconds`,
-`opsknight_heartbeat_monitors_missing`, `opsknight_heartbeat_pings_total{outcome}`.
+`opsknight_prepaging_fail_open_total{reason}`, `opsknight_prepaging_lookups_total{route,outcome}`
+(evaluations that read the database, on the lookup pool or the savepoint fallback, and how many failed
+open), `opsknight_prepaging_evaluation_seconds`, `opsknight_heartbeat_monitors_missing`, `opsknight_heartbeat_pings_total{outcome}`.
 
 ## What ON does to an alert
 
@@ -127,8 +128,10 @@ If an append or group target closed between the lookup and the write, the event 
 ## Capacity note
 
 Each SHADOW/ON evaluation adds one database round trip on the lookup pool (about 1 ms per event in local
-measurements), and each process that ingests keeps two extra database connections open once any service
-is in SHADOW or ON; count them in your connection budget. During a burst, or on a busy host, the 5 ms
+measurements), and each process that ingests keeps extra database connections open once any service is
+in SHADOW or ON: a quarter of its main pool, 2 to 8 (3 with the default pool of 10), or
+`PREPAGING_LOOKUP_POOL_SIZE` (1 to 32). Count them in your connection budget. A larger pool does not
+lower fail-open: each new connection is slow on first use. During a burst, or on a busy host, the 5 ms
 budget can be exhausted, in which case the event pages normally and
 `opsknight_prepaging_fail_open_total{reason="deadline"}` rises; watch that counter after switching a
 service to SHADOW. Local measurements (`plans/intelligence-engine/certification/perf/README.md`) meet

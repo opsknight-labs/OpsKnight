@@ -104,6 +104,11 @@ export function ImpactCardBody({
                   {service.distance === 1 ? 'direct' : `${service.distance} hops`}
                 </span>
                 <StatusPill status={service.status} />
+                {service.sloBurn && service.sloBurn !== 'none' && (
+                  <span className={`text-xs ${BURN_CLASS[service.sloBurn]}`}>
+                    SLO {BURN_LABEL[service.sloBurn].toLowerCase()}
+                  </span>
+                )}
                 {service.openIncidents > 0 && (
                   <span className="text-xs text-status-critical">
                     {service.openIncidents} open{' '}
@@ -139,6 +144,18 @@ export function ImpactCardBody({
           </ul>
           {view.componentsTruncated && (
             <p className="text-xs text-muted-foreground">Showing the first 25 components.</p>
+          )}
+          {view.subscribers && view.subscribers.total > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {view.subscribers.total.toLocaleString('en-US')}
+              {view.subscribers.capped ? '+' : ''}{' '}
+              {view.subscribers.total === 1 ? 'subscriber gets' : 'subscribers get'} updates for
+              these components on{' '}
+              {view.subscribers.pages === 1
+                ? 'a published page'
+                : `${view.subscribers.pages} published pages`}
+              .
+            </p>
           )}
         </div>
       )}

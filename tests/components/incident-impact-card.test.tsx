@@ -77,6 +77,30 @@ describe('IncidentImpactCard', () => {
     expect(html).toContain('46.3% of the');
   });
 
+  it('marks a burning downstream SLO and counts the subscribers, and stays silent at zero', () => {
+    const html = renderToStaticMarkup(
+      <ImpactCardBody
+        view={{
+          ...full,
+          downstream: [
+            { ...full.downstream[0], sloBurn: 'warning' },
+            { ...full.downstream[1], sloBurn: 'none' },
+          ],
+          subscribers: { total: 10_000, capped: true, pages: 2 },
+        }}
+      />
+    );
+    expect(html).toContain('SLO burning');
+    expect(html.match(/SLO /g)).toHaveLength(1);
+    expect(html).toContain(
+      '10,000+ subscribers get updates for these components on 2 published pages'
+    );
+    const silent = renderToStaticMarkup(
+      <ImpactCardBody view={{ ...full, subscribers: { total: 0, capped: false, pages: 1 } }} />
+    );
+    expect(silent).not.toContain('subscriber');
+  });
+
   it('uses the shared empty state when nothing applies, and explains a restricted SLO', () => {
     const none = renderToStaticMarkup(<ImpactCardBody view={empty} />);
     expect(none).toContain('No wider impact found');

@@ -10,7 +10,11 @@ import {
   setNoiseLookupRoute,
   setPrePagingDeadlineMs,
 } from '@/lib/intelligence/noise-controls/lookup-client';
-import { selectPrePagingLookupDatasourceUrl } from '@/lib/prisma-datasource';
+import {
+  prePagingLookupPoolSize,
+  primaryPoolSize,
+  selectPrePagingLookupDatasourceUrl,
+} from '@/lib/prisma-datasource';
 
 /** The dedicated pre-paging lookup pool: its route, size and deadline-sized server-side timeouts. */
 
@@ -68,5 +72,32 @@ describe('noise-control lookup pool', () => {
     expect(prePagingDeadlineMs()).toBe(1);
     expect(lookupTimeoutMs(4.2)).toBe(5);
     expect(lookupTimeoutMs(0)).toBe(1);
+  });
+
+  it('sizes the pool from the main pool unless PREPAGING_LOOKUP_POOL_SIZE says otherwise', () => {
+    // A quarter of the main pool, 2-8: the default pool of 10 gets 3.
+    expect(prePagingLookupPoolSize(10, undefined)).toBe(3);
+    expect(prePagingLookupPoolSize(1, undefined)).toBe(2);
+    expect(prePagingLookupPoolSize(100, undefined)).toBe(8);
+    expect(prePagingLookupPoolSize(10, '12')).toBe(12);
+    // An invalid override falls back to the derived size rather than failing ingestion.
+    for (const bad of ['0', '33', '2.5', 'many', ' '])
+      expect(prePagingLookupPoolSize(10, bad)).toBe(3);
+  });
+
+  it('reads the main pool size the primary client is configured with', () => {
+    const env = { ...process.env };
+    try {
+      delete process.env.DATABASE_POOL_SIZE;
+      process.env.DATABASE_URL = 'postgresql://u:p@db/app?connection_limit=24';
+      expect(primaryPoolSize()).toBe(24);
+      process.env.DATABASE_POOL_SIZE = '6';
+      expect(primaryPoolSize()).toBe(6);
+      process.env.DATABASE_URL = 'postgresql://u:p@db/app';
+      delete process.env.DATABASE_POOL_SIZE;
+      expect(primaryPoolSize()).toBe(10);
+    } finally {
+      process.env = env;
+    }
   });
 });

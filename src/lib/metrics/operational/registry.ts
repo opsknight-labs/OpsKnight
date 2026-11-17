@@ -313,6 +313,15 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 3,
   },
   {
+    name: 'opsknight_prepaging_lookups_total',
+    help: 'Pre-paging evaluations that read the database, by route (dedicated pool or event-transaction savepoint) and whether they failed open',
+    kind: 'counter',
+    labels: ['route', 'outcome'],
+    scope: 'counter',
+    // 2 routes x 2 outcomes.
+    estimatedMaxSeries: 4,
+  },
+  {
     name: 'opsknight_prepaging_evaluation_seconds',
     help: 'Pre-paging noise control evaluation duration inside the ingestion transaction',
     kind: 'histogram',

@@ -12,6 +12,7 @@ import {
 import {
   readRunbookWeightProposal,
   resetRunbookWeightFitSchedule,
+  runRunbookWeightFit,
   scheduleRunbookWeightFit,
 } from '@/lib/intelligence/learning/runbook-weights';
 import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
@@ -362,13 +363,35 @@ describe('the runbooks switch', () => {
 });
 
 describe('runbook weight fit in the lane', () => {
-  it('fits once, stores the result, and does not refit within the day', async () => {
+  const fitItems = () =>
+    db.intelligenceWorkItem.findMany({
+      where: { kind: 'FIT_RUNBOOK_WEIGHTS' },
+      select: { subjectKey: true, generation: true },
+    });
+
+  it('enqueues one fit, whose handler stores the result, and does not refit within the day', async () => {
     expect(await readRunbookWeightProposal()).toBeNull();
     expect(await scheduleRunbookWeightFit(NOW)).toBe(true);
+    const [item] = await fitItems();
+    expect(item).toMatchObject({ subjectKey: 'global' });
+    // The fit runs in the handler, not in the schedule check.
+    expect(await readRunbookWeightProposal()).toBeNull();
+    expect(await runRunbookWeightFit({ generation: item.generation, force: false })).toBe('fitted');
     // Too few labels: the stored result is "no proposal", read back without fitting.
     expect(await readRunbookWeightProposal()).toMatchObject({ proposal: null });
     expect(await scheduleRunbookWeightFit(NOW + 1)).toBe(false);
     resetRunbookWeightFitSchedule();
     expect(await scheduleRunbookWeightFit(NOW + 20 * MIN)).toBe(false);
+  });
+
+  it('skips the fit when the examples are unchanged and never lets an older generation overwrite', async () => {
+    expect(await runRunbookWeightFit({ generation: 10, force: false })).toBe('fitted');
+    const first = await readRunbookWeightProposal();
+    expect(await runRunbookWeightFit({ generation: 11, force: false })).toBe('unchanged');
+    const touched = await readRunbookWeightProposal();
+    expect(touched!.computedAt.getTime()).toBeGreaterThanOrEqual(first!.computedAt.getTime());
+    // A forced refit from an older generation (a slow, superseded item) is fenced out.
+    expect(await runRunbookWeightFit({ generation: 9, force: true })).toBe('stale');
+    expect(await runRunbookWeightFit({ generation: 12, force: true })).toBe('fitted');
   });
 });

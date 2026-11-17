@@ -3,6 +3,7 @@ import {
   configurePrismaDatasource,
   configureMcpPrismaDatasource,
   selectMcpPrismaDatasourceUrl,
+  rolePoolSize,
   selectPrismaDatasourceUrl,
 } from './prisma-datasource';
 import { getOpsKnightProcessRole, isDedicatedHttpRole } from './runtime-role';
@@ -19,34 +20,6 @@ import type {} from './database-workload';
  * Configure via DATABASE_URL query params or environment variables:
  * DATABASE_URL="postgresql://...?connection_limit=10&pool_timeout=30"
  */
-
-function rolePoolSize(): string | undefined {
-  switch (getOpsKnightProcessRole()) {
-    case 'integrated':
-      return process.env.DATABASE_POOL_SIZE_INTEGRATED;
-    case 'web':
-    case 'http':
-      return process.env.DATABASE_POOL_SIZE_WEB;
-    case 'scheduler':
-      return process.env.DATABASE_POOL_SIZE_SCHEDULER;
-    case 'worker':
-      return process.env.DATABASE_POOL_SIZE_WORKER;
-    case 'general-worker':
-      return process.env.DATABASE_POOL_SIZE_GENERAL_WORKER;
-    case 'critical-worker':
-      return process.env.DATABASE_POOL_SIZE_CRITICAL_WORKER;
-    case 'bulk-worker':
-      return process.env.DATABASE_POOL_SIZE_BULK_WORKER;
-    case 'status-projector':
-      return process.env.DATABASE_POOL_SIZE_STATUS_PROJECTOR;
-    case 'runbook-worker':
-      return process.env.DATABASE_POOL_SIZE_RUNBOOK_WORKER;
-    case 'ingestion-worker':
-      return process.env.DATABASE_POOL_SIZE_INGESTION_WORKER;
-    case 'intelligence-worker':
-      return process.env.DATABASE_POOL_SIZE_INTELLIGENCE_WORKER;
-  }
-}
 
 const prismaClientSingleton = (workload: 'primary' | 'mcp' = 'primary') => {
   const role = getOpsKnightProcessRole();

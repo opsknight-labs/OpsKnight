@@ -1025,6 +1025,24 @@ lane alone measured +1.61 and +2.41 ms), and the 10k burst over 1M history fails
 any run. Keep ON to services where the noise justifies it until the lane's in-process cost is reduced
 and the burst gate passes.
 
+**Lookup pool size and fail-open per route (2026-11-17).** The pool has `PREPAGING_LOOKUP_POOL_SIZE`
+connections (1–32) or, by default, a quarter of the process's main pool, 2–8 (3 for the default pool of
+10). `opsknight_prepaging_lookups_total{route, outcome}` counts every evaluation that read the database,
+by route (`pool` or `transaction`, the savepoint fallback) and `ok`/`fail_open`, so each route's fail-open
+rate is a ratio of two series. The integration test `measures fail-open per route at concurrency 16`
+(320 evaluations, 5 ms deadline, shared host at load 12–17) found that the 28% at concurrency 16 was not
+connections running out: steady-state rounds failed nothing open even on two connections, and 16
+connections failed open more than 2–3 because every fresh connection is cold. The misses were the first
+rounds on cold connections plus per-query client overhead under a burst. Two cheap fixes followed:
+
+- The pool is warmed once per client with the real prefetch statement (matching nothing), one concurrent
+  probe per connection, three passes, from the background snapshot refresh. Pool route after the fix:
+  3–20% on 2 connections and 3–14% at the default size across runs (15–28% before, warmed with `$connect`
+  only); the spread is host noise.
+- The savepoint route opens its savepoint and timeout before the deadline starts, so only the read races
+  it: 38–41% fail-open before, 14% after. On that route, an event that matches a static control first now
+  pays the savepoint round trips too.
+
 ## Triage, change risk, topology and SLO burn (deterministic)
 
 - **Triage** (`triage/predict.ts`, work kind `TRIAGE_INCIDENT`, chained by the similarity analyzer when

@@ -48,6 +48,8 @@ export const WORK_KINDS = {
   OPS_INSIGHTS: 'OPS_INSIGHTS',
   /** One coalesced item: one keyset batch of the 90-day escalation-attempt backfill (J2), re-queued until done. */
   BACKFILL_ESCALATION_ATTEMPTS: 'BACKFILL_ESCALATION_ATTEMPTS',
+  /** The daily runbook-ranking weight fit, one coalesced item (subject `global`); see learning/runbook-weights.ts. */
+  FIT_RUNBOOK_WEIGHTS: 'FIT_RUNBOOK_WEIGHTS',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -71,6 +73,7 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   // Operations insights are daily background analysis: everything about a live incident goes first.
   OPS_INSIGHTS: 60,
   BACKFILL_ESCALATION_ATTEMPTS: 70,
+  FIT_RUNBOOK_WEIGHTS: 65,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;
