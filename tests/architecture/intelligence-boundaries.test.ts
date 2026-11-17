@@ -752,10 +752,11 @@ describe('pre-paging lookups started early by ingestion', () => {
   const events = readFileSync(join(root, 'src/lib/events.ts'), 'utf8');
   const hook = readFileSync(join(intelligenceDir, 'noise-controls/ingest.ts'), 'utf8');
 
-  it('are sent after the dedup-key lock and the open-incident check, and before the hook reads them', () => {
+  it('are sent after the dedup-key lock, the open-incident and buffered-resolve checks, and before the hook reads them', () => {
     const order = [
       'await lockEventDedupKeys(tx,',
       'await findOpenEventIncident(tx,',
+      'const recentResolveAlert = await tx.alert.findFirst(',
       'beginIngestNoiseLookups(',
       'await evaluateIngestNoiseControls(',
     ].map(marker => events.indexOf(marker, events.indexOf('async function applyEvent')));
