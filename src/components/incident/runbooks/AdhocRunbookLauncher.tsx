@@ -112,7 +112,7 @@ export default function AdhocRunbookLauncher({
             if (initialRunbookId) choose(initialRunbookId);
           }}
           size="sm"
-          className="gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium shadow-xs h-8 text-xs shrink-0"
+          className="gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium shadow-xs h-11 sm:h-8 text-xs shrink-0"
         >
           <Play className="h-3.5 w-3.5 fill-current" aria-hidden /> {label}
         </Button>

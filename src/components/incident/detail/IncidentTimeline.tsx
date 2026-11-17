@@ -884,7 +884,7 @@ export default function IncidentTimeline({
                           </a>
                         )}
                         {intel.riskPercent !== undefined && intel.riskPercent !== null && (
-                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal">
+                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal text-foreground">
                             risk {intel.riskPercent}%
                           </span>
                         )}

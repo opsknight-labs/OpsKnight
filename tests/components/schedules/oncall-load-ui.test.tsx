@@ -60,6 +60,11 @@ describe('ScheduleLoadBody', () => {
     expect(
       screen.getByRole('img', { name: 'Pages per day for Ana: 12 from Nov 1 to Nov 2' })
     ).toBeInTheDocument();
+    // The table scrolls sideways on a phone, so its scroll area takes keyboard focus.
+    expect(screen.getByRole('region', { name: /^Load per person/ })).toHaveAttribute(
+      'tabindex',
+      '0'
+    );
   });
 
   it('explains hidden totals instead of revealing a two-person rotation', () => {
