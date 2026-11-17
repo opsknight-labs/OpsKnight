@@ -196,10 +196,10 @@ export default async function ScheduleLoadPanel({
     >
       <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Scale className="h-4 w-4" aria-hidden="true" />
           </div>
-          <div>
+          <div className="min-w-0">
             <CardTitle id="schedule-load-title" className="text-sm font-semibold sm:text-base">
               Load &amp; fairness
             </CardTitle>

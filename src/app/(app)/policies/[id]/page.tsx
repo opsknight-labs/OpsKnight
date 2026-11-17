@@ -187,7 +187,7 @@ export default async function PolicyDetailPage({
 
   // Escalation insights: same card as the Activity tab, the list itself from the shared InsightsPanel.
   const insightsContent = intelligence && intelligence.insights.length > 0 && (
-    <Card className="border-slate-200/80 bg-white shadow-2xs">
+    <Card className="border-border bg-card shadow-2xs">
       <CardHeader className="pb-4">
         <CardTitle className="text-base font-bold flex items-center gap-2">
           <Lightbulb className="h-4 w-4 text-primary" />
@@ -212,7 +212,7 @@ export default async function PolicyDetailPage({
 
   // Tab 2: Linked Services Content
   const servicesContent = (
-    <Card className="border-slate-200/80 bg-white shadow-2xs">
+    <Card className="border-border bg-card shadow-2xs">
       <CardHeader className="pb-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -258,7 +258,7 @@ export default async function PolicyDetailPage({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {services.map(service => (
               <Link key={service.id} href={`/services/${service.id}`} className="block group">
-                <div className="p-4 rounded-xl border border-slate-200/80 bg-white hover:border-primary/50 hover:bg-primary/5 transition-all flex items-start justify-between shadow-2xs">
+                <div className="p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all flex items-start justify-between shadow-2xs">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5 truncate">
                       <Server className="h-3.5 w-3.5 text-slate-400 group-hover:text-primary shrink-0 transition-colors" />
@@ -285,7 +285,7 @@ export default async function PolicyDetailPage({
 
   // Tab 3: Policy Activity History Content
   const activityContent = (
-    <Card className="border-slate-200/80 bg-white shadow-2xs">
+    <Card className="border-border bg-card shadow-2xs">
       <CardHeader className="pb-4">
         <CardTitle className="text-base font-bold flex items-center gap-2">
           <Activity className="h-4 w-4 text-primary" />

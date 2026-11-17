@@ -223,6 +223,25 @@ async function expectAccessible(page: Page, selector: string) {
   ).toEqual([]);
 }
 
+/**
+ * Paints dark (or light) as the theme provider does, with transitions off like its
+ * disableTransitionOnChange, so axe reads settled colours rather than a fade in progress.
+ */
+async function paintDark(page: Page, dark: boolean) {
+  await page.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
+  await page.evaluate(on => {
+    if (!document.getElementById('e2e-no-transitions')) {
+      const style = document.createElement('style');
+      style.id = 'e2e-no-transitions';
+      style.textContent = '*,*::before,*::after{transition:none!important}';
+      document.head.append(style);
+    }
+    const root = document.documentElement;
+    root.classList.toggle('dark', on);
+    root.dataset.theme = on ? 'dark' : 'light';
+  }, dark);
+}
+
 async function noHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth
@@ -328,11 +347,18 @@ test.describe.serial('intelligence responder workflows', () => {
       await expectAccessible(page, '#main-content');
     }
 
-    // Settings lists Intelligence as a first-class area, and it is the active tab here.
-    const settingsNav = page.getByRole('navigation', { name: 'Settings Navigation' });
+    // Intelligence is a first-class settings area: its breadcrumb leads back to it from every group page,
+    // and the settings hub lists it. (The settings shell renders the hub and breadcrumb, not a tab bar.)
     await expect(
-      settingsNav.getByRole('link', { name: 'Intelligence', exact: true })
+      page
+        .locator('#main-content')
+        .getByRole('navigation', { name: 'Breadcrumb' })
+        .getByRole('link', { name: 'Intelligence', exact: true })
     ).toHaveAttribute('href', '/settings/intelligence');
+    await page.goto('/settings');
+    await expect(
+      page.locator('#main-content a[href="/settings/intelligence"]').first()
+    ).toBeVisible();
 
     // Every earlier address still works and lands on the section that now holds its controls.
     const moved: Array<[string, string]> = [
@@ -349,7 +375,8 @@ test.describe.serial('intelligence responder workflows', () => {
     for (const [from, to] of moved) {
       await page.goto(from);
       await expect(page).toHaveURL(url => `${url.pathname}${url.search}${url.hash}` === to);
-      await expect(page.locator(`#${to.split('#')[1]}`)).toBeVisible();
+      // The redirect can leave a hidden copy of the page in the DOM; the visible one is the answer.
+      await expect(page.locator(`#${to.split('#')[1]}`).filter({ visible: true })).toBeVisible();
     }
     // Alert quality has a single home in settings.
     await page.goto('/settings/intelligence/services#alert-quality');
@@ -400,9 +427,12 @@ test.describe.serial('intelligence responder workflows', () => {
         .toBe(percent);
       await page.reload();
       await expect(allocation).toHaveValue(String(percent));
+      // Usage lives on Evaluation & spend since the settings regroup (Workstream I3).
+      await page.goto('/settings/intelligence/evaluation#usage');
       await expect(page.locator('#main-content').getByText(/Background embedding:/)).toContainText(
         `${percent}% of the total allowance`
       );
+      await page.goto('/settings/intelligence/ai');
     }
     expect(
       (await prisma.aiSettings.findUniqueOrThrow({ where: { id: 'default' } })).dailyTokenBudget
@@ -419,7 +449,8 @@ test.describe.serial('intelligence responder workflows', () => {
   test('an incident shows explainable suggestions and accepts feedback', async ({ page }) => {
     await page.goto(`/incidents/${incidentId}`);
     // One row of chips under the command bar; the full analysis is one click away in the inspector.
-    const strip = page.getByTestId('intelligence-strip');
+    // Streaming can leave a hidden copy of a server-rendered block for a moment: match the visible one.
+    const strip = page.getByTestId('intelligence-strip').filter({ visible: true });
     await expect(
       strip.getByRole('link', { name: 'Likely cause: checkout v42 rollout' })
     ).toBeVisible();
@@ -458,7 +489,7 @@ test.describe.serial('intelligence responder workflows', () => {
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/incidents/${incidentId}`);
-    const strip = page.getByTestId('intelligence-strip');
+    const strip = page.getByTestId('intelligence-strip').filter({ visible: true });
     await expect(strip).toBeVisible();
     // The old seven-tab panel and its cards are gone from the main column.
     await expect(page.getByRole('tablist', { name: 'Incident intelligence' })).toHaveCount(0);
@@ -508,12 +539,10 @@ test.describe.serial('intelligence responder workflows', () => {
     await expectAccessible(page, '[data-testid="insights-inspector"]');
 
     // Dark mode keeps the strip and the inspector accessible.
-    await page.emulateMedia({ colorScheme: 'dark' });
-    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await paintDark(page, true);
     await expectAccessible(page, '[data-testid="insights-inspector"]');
     await expectAccessible(page, '[data-testid="intelligence-strip"]');
-    await page.evaluate(() => document.documentElement.classList.remove('dark'));
-    await page.emulateMedia({ colorScheme: 'light' });
+    await paintDark(page, false);
   });
 
   test('the shortcut for insights is listed with the other incident shortcuts', async ({
@@ -811,7 +840,7 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(dialog.getByText('Your confirmed action completed.')).toBeVisible();
     await expectAccessible(page, 'section[role="dialog"]');
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await paintDark(page, true);
     await noHorizontalOverflow(page);
     await expectAccessible(page, 'section[role="dialog"]');
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -846,7 +875,7 @@ test.describe.serial('intelligence responder workflows', () => {
     }
     // The strip is on screen without scrolling, scrolls sideways instead of wrapping, and opens the
     // inspector as a bottom sheet.
-    const strip = page.getByTestId('intelligence-strip');
+    const strip = page.getByTestId('intelligence-strip').filter({ visible: true });
     await expect(strip).toBeVisible();
     const stripBox = (await strip.boundingBox())!;
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
@@ -868,7 +897,7 @@ test.describe.serial('intelligence responder workflows', () => {
 
     // The mobile route has the same strip and the same bottom sheet, and no separate intelligence card.
     await page.goto(`/m/incidents/${incidentId}`);
-    const mobileStrip = page.getByTestId('intelligence-strip');
+    const mobileStrip = page.getByTestId('intelligence-strip').filter({ visible: true });
     await expect(mobileStrip).toBeVisible();
     const mobileBox = (await mobileStrip.boundingBox())!;
     expect(mobileBox.y + mobileBox.height).toBeLessThanOrEqual(844);
@@ -876,10 +905,11 @@ test.describe.serial('intelligence responder workflows', () => {
     await mobileStrip.getByRole('link', { name: '1 similar', exact: true }).click();
     const mobileSheet = page.getByRole('dialog', { name: 'Insights' });
     await expect(mobileSheet).toHaveAttribute('data-layout', 'bottom-sheet');
-    await expect(mobileSheet.getByRole('link', { name: /last month/ })).toHaveAttribute(
-      'href',
-      `/m/incidents/${precedentId}`
-    );
+    await expect(
+      mobileSheet
+        .getByRole('region', { name: 'Similar past incidents' })
+        .getByRole('link', { name: /last month/ })
+    ).toHaveAttribute('href', `/m/incidents/${precedentId}`);
     await noHorizontalOverflow(page);
     await page.keyboard.press('Escape');
     await page.goto(`/incidents/${incidentId}`);
@@ -1212,7 +1242,9 @@ test.describe.serial('intelligence responder workflows', () => {
     // Freshness is stated once, as the strip's dot; its message is announced without opening it.
     const freshness = page.getByRole('group', { name: 'Recommendation freshness' });
     await expect(freshness).toHaveCount(1);
-    await expect(page.getByTestId('intelligence-strip')).toContainText(/Analysing|Paused/);
+    await expect(page.getByTestId('intelligence-strip').filter({ visible: true })).toContainText(
+      /Analysing|Paused/
+    );
     await expect(freshness.getByRole('status')).toHaveText(
       /^(?:Waiting for recommendation analysis\. An empty panel does not mean analysis found no matches\.|Analysis is yielding to paging work\. Earlier suggestions have not been refreshed\.)$/
     );

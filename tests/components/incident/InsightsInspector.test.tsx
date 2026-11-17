@@ -32,6 +32,7 @@ function Page({ presentation }: { presentation?: 'desktop' | 'mobile' }) {
         View group
       </a>
       <input aria-label="Note" />
+      <input type="checkbox" aria-label="Show intelligence events" />
       <InsightsInspectorHost sections={['similar', 'related']} presentation={presentation}>
         <section id="insights-similar" tabIndex={-1} aria-label="Similar past incidents">
           <ul>
@@ -129,6 +130,14 @@ describe('insights inspector', () => {
     fireEvent.keyDown(document.body, { key: 'g' });
     fireEvent.keyDown(document.body, { key: 'i' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('still toggles with I after a checkbox was clicked, since a checkbox takes no typing', async () => {
+    render(<Page />);
+    const toggle = screen.getByLabelText('Show intelligence events');
+    toggle.focus();
+    fireEvent.keyDown(toggle, { key: 'i' });
+    await inspector();
   });
 
   it('opens from a ?insights= deep link, and from a #finding- anchor at that item', async () => {

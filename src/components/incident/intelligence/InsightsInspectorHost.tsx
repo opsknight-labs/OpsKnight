@@ -22,11 +22,14 @@ export type InsightsTarget = {
   nonce: number;
 };
 
+const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range']);
+
 const isTypingTarget = (target: EventTarget | null) => {
   const element = target as HTMLElement | null;
   if (!element || typeof element.tagName !== 'string') return false;
   return (
-    element.tagName === 'INPUT' ||
+    // A checkbox, radio or button input takes no typing, so the shortcut still works after clicking one.
+    (element.tagName === 'INPUT' && !NON_TEXT_INPUTS.has((element as HTMLInputElement).type)) ||
     element.tagName === 'TEXTAREA' ||
     element.tagName === 'SELECT' ||
     element.isContentEditable

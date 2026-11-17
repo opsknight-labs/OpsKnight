@@ -32,7 +32,8 @@ import type { NoiseControlVersionView } from '@/lib/intelligence/noise-controls/
 import type { NoiseVersionDiffEntry } from '@/lib/intelligence/noise-controls/versioning';
 
 const initial: NoiseActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
+const fieldClass =
+  'min-h-11 w-full rounded-md border border-border bg-background p-2 text-sm sm:min-h-9';
 const labelClass = 'text-sm font-medium';
 
 type Option = { id: string; name: string };

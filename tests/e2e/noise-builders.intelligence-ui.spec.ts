@@ -165,13 +165,14 @@ test.describe.serial('noise-control builders', () => {
 
   test('the mobile incident page tells managers how to turn intelligence on', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/m/incidents/${incidentId}`);
-    await expect(
-      page.getByRole('heading', { name: 'Intelligence is off for this service' })
-    ).toBeVisible();
-    const link = page.getByRole('link', { name: 'Open intelligence settings' });
-    await expect(link).toHaveAttribute('href', '/settings/intelligence');
-    const box = await link.boundingBox();
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    // Off means no strip and no card on the page; the hint lives in the insights sheet (Workstream I1).
+    await page.goto(`/m/incidents/${incidentId}?insights=related`);
+    const hint = page.getByRole('dialog', { name: 'Insights' }).getByTestId('insights-off-hint');
+    await expect(hint).toContainText('Intelligence is off for this service');
+    // An inline link inside the sentence (exempt from the 44 px target size, WCAG 2.5.8).
+    await expect(hint.getByRole('link', { name: 'Open intelligence settings' })).toHaveAttribute(
+      'href',
+      '/settings/intelligence'
+    );
   });
 });
