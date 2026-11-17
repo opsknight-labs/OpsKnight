@@ -228,13 +228,31 @@ test.describe('mobile PWA browser contract', () => {
     expect(snapshot.appBackground).not.toBe('rgb(9, 9, 11)');
     expect(snapshot.themeColor.toLowerCase()).toBe('#f8fafc');
 
-    await page.evaluate(() => localStorage.setItem('theme', 'dark'));
-    await page.reload();
-    await expect(page.locator('html')).toHaveClass(/dark/);
-    await expect.poll(async () => (await mobileThemeSnapshot(page)).dataTheme).toBe('dark');
-    snapshot = await mobileThemeSnapshot(page);
-    expect(snapshot.appBackground).not.toBe('rgb(255, 255, 255)');
-    expect(snapshot.themeColor.toLowerCase()).toBe('#09090b');
+    // The account preference is authoritative (it follows the user across devices),
+    // so set the override through the Appearance control, not localStorage.
+    const chooseAppearance = async (label: 'Dark' | 'System') => {
+      await page.goto('/m/more');
+      const option = page.getByRole('radio', { name: label });
+      await expect(option).toBeEnabled();
+      if ((await option.getAttribute('aria-checked')) === 'true') return;
+      const saved = page.waitForResponse(
+        response => response.request().method() === 'POST' && response.url().includes('/m/more')
+      );
+      await option.click();
+      await saved;
+    };
+
+    await chooseAppearance('Dark');
+    try {
+      await page.reload();
+      await expect(page.locator('html')).toHaveClass(/dark/);
+      await expect.poll(async () => (await mobileThemeSnapshot(page)).dataTheme).toBe('dark');
+      snapshot = await mobileThemeSnapshot(page);
+      expect(snapshot.appBackground).not.toBe('rgb(255, 255, 255)');
+      expect(snapshot.themeColor.toLowerCase()).toBe('#09090b');
+    } finally {
+      await chooseAppearance('System');
+    }
   });
 
   test('protected mobile navigation preserves a safe same-origin callback', async ({ page }) => {
