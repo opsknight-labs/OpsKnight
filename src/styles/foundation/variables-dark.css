@@ -56,15 +56,6 @@
     --border-hover: #3f3f46;
     --border-focus: rgba(59, 130, 246, 0.5);
 
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.35);
-    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.4);
-    --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.45);
-    --shadow-primary: 0 4px 14px rgba(24, 24, 27, 0.5);
-    --shadow-success: 0 4px 14px rgba(5, 150, 105, 0.35);
-    --shadow-error: 0 4px 14px rgba(190, 18, 60, 0.35);
-
     --color-neutral-50: #18181b;
     --color-neutral-100: #111827;
     --color-neutral-200: #1f2937;
@@ -119,10 +110,6 @@
     --border: #3f3f46;
     --border-hover: #52525b;
     --border-focus: rgba(59, 130, 246, 0.5);
-
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
 
     --color-neutral-50: #27272a;
     --color-neutral-100: #27272a;

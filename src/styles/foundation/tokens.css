@@ -1,0 +1,290 @@
+/* ==========================================================================
+   OpsKnight design tokens: the single source of truth.
+
+   Imported first from src/styles/index.css. Every scale lives here (type,
+   spacing, radius, elevation, motion, z-index, density) together with the
+   semantic colour roles for light and dark. Other stylesheets consume these
+   variables and may only alias them (`--x: var(--token)`); they never redefine
+   a value. Documented in DESIGN.md; pinned by
+   tests/architecture/design-tokens-contract.test.ts.
+
+   Defined elsewhere on purpose:
+   - `ink-50…950` neutral ramp and `.ok-inverse-surface`: src/styles/index.css
+   - status hues (critical/elevated/ok/info/shift): src/lib/design/status-palette.ts
+   - legacy hex colour palette (--bg-*, --text-*, --badge-*):
+     src/styles/foundation/variables.css + variables-dark.css (deprecated; new
+     code uses the semantic roles below through Tailwind).
+   ========================================================================== */
+
+:root {
+   /* ---- Typography: families --------------------------------------------
+      --font-inter / --font-space-grotesk come from next/font on <html>. */
+   --font-family-sans: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+   --font-family-display: var(--font-space-grotesk), 'Space Grotesk', var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+   --font-family-mono: ui-monospace, 'SF Mono', SFMono-Regular, 'Fira Code', Menlo, Consolas, monospace;
+
+   /* ---- Typography: scale -------------------------------------------------
+      One rem scale shared with Tailwind (`text-2xs` … `text-5xl` resolve
+      these variables). Steps from sm upward grow by ~1.13–1.2; 4xl/5xl are
+      display steps for hero numerals. Each step carries its line height and
+      tracking. Sizes are rem, so they follow the density root below. */
+   --font-size-2xs: 0.6875rem;
+   --font-size-2xs--line-height: 1rem;
+   --font-size-2xs--letter-spacing: 0.02em;
+   --font-size-xs: 0.75rem;
+   --font-size-xs--line-height: 1.1rem;
+   --font-size-xs--letter-spacing: 0.01em;
+   --font-size-sm: 0.8125rem;
+   --font-size-sm--line-height: 1.25rem;
+   --font-size-sm--letter-spacing: 0;
+   --font-size-base: 0.9375rem;
+   --font-size-base--line-height: 1.5rem;
+   --font-size-base--letter-spacing: -0.003em;
+   --font-size-lg: 1.0625rem;
+   --font-size-lg--line-height: 1.625rem;
+   --font-size-lg--letter-spacing: -0.005em;
+   --font-size-xl: 1.25rem;
+   --font-size-xl--line-height: 1.75rem;
+   --font-size-xl--letter-spacing: -0.01em;
+   --font-size-2xl: 1.5rem;
+   --font-size-2xl--line-height: 2rem;
+   --font-size-2xl--letter-spacing: -0.015em;
+   --font-size-3xl: 1.75rem;
+   --font-size-3xl--line-height: 2.125rem;
+   --font-size-3xl--letter-spacing: -0.02em;
+   --font-size-4xl: 2.25rem;
+   --font-size-4xl--line-height: 2.5rem;
+   --font-size-4xl--letter-spacing: -0.025em;
+   --font-size-5xl: 3rem;
+   --font-size-5xl--line-height: 3.25rem;
+   --font-size-5xl--letter-spacing: -0.03em;
+
+   /* Inherited size of unstyled text and native form controls: exactly the
+      density root (16 CSS px on phones, so iOS never zooms a focused field).
+      UI text picks an explicit step from the scale above. */
+   --body-font-size: 1rem;
+
+   --font-weight-light: 300;
+   --font-weight-normal: 400;
+   --font-weight-medium: 500;
+   --font-weight-semibold: 600;
+   --font-weight-bold: 700;
+   --font-weight-extrabold: 800;
+
+   --line-height-none: 1;
+   --line-height-tight: 1.2;
+   --line-height-snug: 1.3;
+   --line-height-normal: 1.5;
+   --line-height-relaxed: 1.6;
+   --line-height-loose: 1.8;
+
+   --letter-spacing-tighter: -0.03em;
+   --letter-spacing-tight: -0.02em;
+   --letter-spacing-snug: -0.01em;
+   --letter-spacing-normal: 0;
+   --letter-spacing-wide: 0.01em;
+   --letter-spacing-wider: 0.02em;
+   --letter-spacing-widest: 0.08em;
+
+   /* ---- Spacing (4px base; mirrors Tailwind's spacing steps) ------------- */
+   --spacing-1: 0.25rem;
+   --spacing-2: 0.5rem;
+   --spacing-3: 0.75rem;
+   --spacing-4: 1rem;
+   --spacing-5: 1.25rem;
+   --spacing-6: 1.5rem;
+   --spacing-8: 2rem;
+   --spacing-10: 2.5rem;
+   --spacing-12: 3rem;
+   --spacing-16: 4rem;
+   --spacing-20: 5rem;
+   --spacing-24: 6rem;
+
+   /* ---- Radius ------------------------------------------------------------
+      --ui-radius drives Tailwind `rounded-lg` (= --ui-radius), `rounded-md`
+      (-2px) and `rounded-sm` (-4px) and scales with density. The px steps
+      serve legacy CSS and inline styles. */
+   --ui-radius: 0.75rem;
+   --radius-sm: 8px;
+   --radius-md: 12px;
+   --radius: 14px;
+   --radius-lg: 16px;
+   --radius-xl: 20px;
+   --radius-full: 9999px;
+
+   /* ---- Elevation (light) -------------------------------------------------- */
+   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+   --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.07);
+   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+   --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+   --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.15);
+   --shadow-primary: 0 4px 14px rgba(15, 23, 42, 0.15);
+   --shadow-success: 0 4px 14px rgba(5, 150, 105, 0.15);
+   --shadow-error: 0 4px 14px rgba(190, 18, 60, 0.15);
+
+   /* ---- Motion ------------------------------------------------------------
+      State transitions use fast/base (150–200ms). slow is for large surfaces
+      (sheets, drawers); slower only for ambient, non-blocking effects. */
+   --transition-fast: 150ms;
+   --transition-base: 200ms;
+   --transition-slow: 300ms;
+   --transition-slower: 500ms;
+   --ease-in: cubic-bezier(0.4, 0, 1, 1);
+   --ease-out: cubic-bezier(0, 0, 0.2, 1);
+   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+   /* ---- Breakpoints (reference values; media queries cannot read vars) --- */
+   --breakpoint-sm: 640px;
+   --breakpoint-md: 768px;
+   --breakpoint-lg: 1024px;
+   --breakpoint-xl: 1280px;
+   --breakpoint-2xl: 1536px;
+
+   /* ---- Z-index ----------------------------------------------------------- */
+   --z-base: 0;
+   --z-dropdown: 1000;
+   --z-user-menu: 1010;
+   --z-sticky: 1020;
+   --z-fixed: 1030;
+   --z-modal-backdrop: 1040;
+   --z-modal: 1050;
+   --z-popover: 1060;
+   --z-tooltip: 1070;
+
+   /* ---- Semantic colour roles (HSL channels, consumed as hsl(var(--ui-x)))
+      Tailwind maps them to bg-background, bg-card, text-foreground,
+      text-muted-foreground, border-border, ring-ring, bg-primary … */
+   --ui-background: 210 40% 98%;
+   --ui-foreground: 222.2 47.4% 11.2%;
+   --ui-muted: 210 40% 96.1%;
+   --ui-muted-foreground: 215.4 16.3% 46.9%;
+   --ui-popover: 0 0% 100%;
+   --ui-popover-foreground: 222.2 47.4% 11.2%;
+   --ui-card: 0 0% 100%;
+   --ui-card-foreground: 222.2 47.4% 11.2%;
+   --ui-border: 214.3 31.8% 91.4%;
+   --ui-input: 214.3 31.8% 91.4%;
+   --ui-primary: 215.3 25% 26.7%;
+   --ui-primary-foreground: 210 40% 98%;
+   --ui-secondary: 210 40% 96.1%;
+   --ui-secondary-foreground: 222.2 47.4% 11.2%;
+   --ui-accent: 210 40% 96.1%;
+   --ui-accent-foreground: 222.2 47.4% 11.2%;
+   --ui-destructive: 346.8 77.2% 49.8%;
+   --ui-destructive-foreground: 210 40% 98%;
+   --ui-ring: 215.3 25% 26.7%;
+}
+
+/*
+ * Dark theme. Neutral, low-chroma zinc surfaces; status hues stay semantic
+ * accents. `.dark` is set by next-themes before first paint; data-theme is the
+ * legacy compatibility mirror.
+ */
+.dark,
+[data-theme='dark'] {
+   --ui-background: 240 10% 3.9%;
+   --ui-foreground: 210 40% 98%;
+   --ui-muted: 240 3.7% 15.9%;
+   --ui-muted-foreground: 240 5% 64.9%;
+   --ui-popover: 240 5.9% 7.5%;
+   --ui-popover-foreground: 210 40% 98%;
+   --ui-card: 240 5.9% 7.5%;
+   --ui-card-foreground: 210 40% 98%;
+   --ui-border: 240 3.7% 15.9%;
+   --ui-input: 240 3.7% 15.9%;
+   --ui-primary: 210 40% 98%;
+   --ui-primary-foreground: 222.2 47.4% 11.2%;
+   --ui-secondary: 240 3.7% 15.9%;
+   --ui-secondary-foreground: 210 40% 98%;
+   --ui-accent: 240 3.7% 15.9%;
+   --ui-accent-foreground: 210 40% 98%;
+   --ui-destructive: 0 62.8% 30.6%;
+   --ui-destructive-foreground: 210 40% 98%;
+   --ui-ring: 240 4.9% 83.9%;
+
+   /* Elevation (dark): deeper, near-black shadows read on zinc surfaces. */
+   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35);
+   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.35);
+   --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.4);
+   --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.45);
+   --shadow-primary: 0 4px 14px rgba(24, 24, 27, 0.5);
+   --shadow-success: 0 4px 14px rgba(5, 150, 105, 0.35);
+   --shadow-error: 0 4px 14px rgba(190, 18, 60, 0.35);
+}
+
+/* The mobile app's raised zinc-800 surfaces need a lighter shadow in dark. */
+.dark .mobile-shell,
+[data-theme='dark'] .mobile-shell {
+   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+/* Users who ask the OS for more contrast get firmer borders and secondary text. */
+@media (prefers-contrast: more) {
+   :root {
+      --ui-border: 215 20% 65%;
+      --ui-input: 215 20% 55%;
+      --ui-muted-foreground: 215 25% 27%;
+   }
+
+   .dark,
+   [data-theme='dark'] {
+      --ui-border: 240 5% 45%;
+      --ui-input: 240 5% 55%;
+      --ui-muted-foreground: 240 5% 82%;
+   }
+}
+
+/* ==========================================================================
+   Density
+
+   The root font size is the density root: every rem (type, spacing, Tailwind
+   radius) scales with it, while px tokens (legacy radius, shadows, borders)
+   stay fixed. `html[data-density]` pins a density explicitly:
+
+   - comfortable: 16px root everywhere.
+   - compact:     14.4px root (90%) from 769px up; phones keep 16px so iOS
+                  never zooms focused inputs.
+   - absent / "auto" (default): follows the viewport, matching the console's
+     historical sizing: phones and large displays (>1536px wide and >860px
+     tall) 16px, laptops 14.4px, small laptops (<=1280px wide or <=740px
+     tall) 14px.
+   ========================================================================== */
+:root {
+   --density-scale: 1;
+}
+
+@media (min-width: 769px) and (max-width: 1536px),
+       (min-width: 769px) and (max-height: 860px) {
+   :root {
+      --density-scale: 0.9;
+   }
+}
+
+@media (min-width: 769px) and (max-width: 1280px),
+       (min-width: 769px) and (max-height: 740px) {
+   :root {
+      --density-scale: 0.875;
+   }
+}
+
+html[data-density='comfortable'] {
+   --density-scale: 1;
+}
+
+html[data-density='compact'] {
+   --density-scale: 1;
+}
+
+@media (min-width: 769px) {
+   html[data-density='compact'] {
+      --density-scale: 0.9;
+   }
+}
+
+html {
+   font-size: calc(16px * var(--density-scale));
+}
