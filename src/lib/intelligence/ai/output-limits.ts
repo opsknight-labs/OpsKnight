@@ -16,6 +16,8 @@ export const AI_OUTPUT_TOKENS = {
   'insights.phrasing': 900,
   // Two sentences under an analytics card.
   'analytics.metric-change': 120,
+  // Two sentences per team in the weekly digest.
+  'digest.team-brief': 120,
 } as const;
 
 export type AiFeature = keyof typeof AI_OUTPUT_TOKENS;

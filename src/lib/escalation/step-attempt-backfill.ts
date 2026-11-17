@@ -6,12 +6,17 @@
  * last cycle takes the incident's current generation). Live capture always wins: inserts never overwrite.
  *
  * Bounded and resumable: a keyset walk over incidents created in the window, a fixed number of statements
- * per batch, and a cursor the caller passes back to continue. Safe to re-run from the start.
+ * per batch, and a cursor the caller passes back to continue. Safe to re-run from the start. Run by the
+ * intelligence lane (ops-insights/handlers.ts), one batch per work item, while escalation insights are on.
+ *
+ * Job payloads are not read: escalation jobs are retention-swept long before 90 days and carry no outcome.
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { EscalationAttemptOutcome, EscalationSkipReason } from './step-attempts';
 
 export const STEP_ATTEMPT_BACKFILL_DAYS = 90;
+/** Incidents per batch: one lane work item each. */
+export const STEP_ATTEMPT_BACKFILL_BATCH = 250;
 
 export interface BackfilledAttempt {
   generation: number;
@@ -127,11 +132,11 @@ export interface StepAttemptBackfillResult {
  * escalation events, one insert). Only events older than the first live-captured attempt are read.
  */
 export async function backfillEscalationStepAttempts(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   options: { cursor?: StepAttemptBackfillCursor | null; batchSize?: number; now?: Date } = {}
 ): Promise<StepAttemptBackfillResult> {
   const now = options.now ?? new Date();
-  const batchSize = Math.max(1, Math.min(options.batchSize ?? 200, 1000));
+  const batchSize = Math.max(1, Math.min(options.batchSize ?? STEP_ATTEMPT_BACKFILL_BATCH, 1000));
   const since = new Date(now.getTime() - STEP_ATTEMPT_BACKFILL_DAYS * 86_400_000);
   const firstLive = await prisma.escalationStepAttempt.findFirst({
     where: { approximate: false },

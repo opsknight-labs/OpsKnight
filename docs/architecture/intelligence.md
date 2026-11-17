@@ -1454,6 +1454,7 @@ Area `onCall`, two producers in `producers/oncall.ts`, logic in `src/lib/oncall-
   the schedules list via `countOpenInsightsForScopes`. `HeatStrip` is self-contained (Tailwind only).
 - Tests: `tests/lib/oncall-load.test.ts`, `tests/integration/oncall-load-store.test.ts` (known answers,
   scoping, lane capture, query plans), `tests/components/schedules/oncall-load-ui.test.tsx`.
+
 #### Postmortems (plan J4)
 
 `producers/postmortem-repeat-cause.ts` (scope `SERVICE`, area `postmortems`, kind
@@ -1484,6 +1485,7 @@ On read (`src/lib/intelligence/postmortems/loaders.ts`, never in ingestion), beh
 
 Tests: `tests/unit/intelligence-postmortems.test.ts`, `tests/components/postmortem-intelligence.test.tsx`,
 `tests/integration/intelligence/postmortem-intelligence.test.ts`.
+
 #### Runbooks (plan J5)
 
 Area `runbooks`, switch `opsInsightsRunbooksEnabled`, fix window `runbookFixWindowMinutes` (5 to 1440,
@@ -1521,6 +1523,7 @@ Tests: `tests/unit/intelligence-runbook-health.test.ts`, `tests/integration/inte
 (a step failing 4 of 6 runs with `E_TIMEOUT`, fix window 120 vs 600, follow-up notes, three manual
 resolutions, switch off, an out-of-team responder, the lane weight fit) and
 `tests/components/intelligence/runbook-health-ui.test.tsx`.
+
 #### Notification noise (plan J6)
 
 `producers/notification-noise.ts`, area `notifications`, reads only the two pages rollups below, never raw
@@ -1587,16 +1590,16 @@ insight.
 `src/lib/metric-rollup.ts` adds daily operations rollups in `MetricRollup`, run by the existing daily
 rollup step of the cron scheduler (`generateOpsRollups`; a no-op while operations insights are off):
 
-| Name | `subjectKey` | `tags` | `count` / `sum` | Driven by |
-| --- | --- | --- | --- | --- |
-| `ops.pages.user_hour` | user id | `hour` (0-23 in the user's time zone), `weekend` | incident pages / distinct incidents | `idx_notification_created_cursor` |
-| `ops.runbook.outcome` | runbook id | `status` | finished executions / total run time (ms) | `idx_runbook_execution_completed` (new) |
-| `ops.runbook.run` | runbook id | `status`, `onIncident`, `fixMinutes` (finish to resolution, at most a day; read against the fix window so the window can change without a recompute), `durationBucket` (floor(4·log2 s)) | finished runs / 0 | `idx_runbook_execution_completed` |
-| `ops.runbook.step_outcome` | runbook id | `stepKey`, `name`, `status`, `retried`, `errorCode` | step runs / 0 | `idx_runbook_execution_completed`, then steps by `executionId` |
-| `ops.automation.rule_match` | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode` | decisions / fallbacks | `IncidentAutomationDecision (serviceId, createdAt)` |
-| `ops.pages.user_service` | user id | `serviceId`, `hour` (local, first page of the day), `autoResolved` | pages (one per person, incident and day) / acted on | `idx_notification_created_cursor`, then `Incident` by primary key |
-| `ops.pages.service` | service id | `autoResolved` | pages / acted on | same statement, grouped by service |
-| `ops.escalation.step_outcome` | policy id | `step`, `outcome`, `reason`, `hour` (paged person's zone, UTC when nobody was paged), `ackWithinMin` | attempts / seconds to acknowledge | `idx_escalation_step_attempt_created` (new) |
+| Name                          | `subjectKey`          | `tags`                                                                                                                                                                                   | `count` / `sum`                                     | Driven by                                                         |
+| ----------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------- |
+| `ops.pages.user_hour`         | user id               | `hour` (0-23 in the user's time zone), `weekend`                                                                                                                                         | incident pages / distinct incidents                 | `idx_notification_created_cursor`                                 |
+| `ops.runbook.outcome`         | runbook id            | `status`                                                                                                                                                                                 | finished executions / total run time (ms)           | `idx_runbook_execution_completed` (new)                           |
+| `ops.runbook.run`             | runbook id            | `status`, `onIncident`, `fixMinutes` (finish to resolution, at most a day; read against the fix window so the window can change without a recompute), `durationBucket` (floor(4·log2 s)) | finished runs / 0                                   | `idx_runbook_execution_completed`                                 |
+| `ops.runbook.step_outcome`    | runbook id            | `stepKey`, `name`, `status`, `retried`, `errorCode`                                                                                                                                      | step runs / 0                                       | `idx_runbook_execution_completed`, then steps by `executionId`    |
+| `ops.automation.rule_match`   | automation version id | `serviceId`, `ruleId`, `ruleName`, `mode`                                                                                                                                                | decisions / fallbacks                               | `IncidentAutomationDecision (serviceId, createdAt)`               |
+| `ops.pages.user_service`      | user id               | `serviceId`, `hour` (local, first page of the day), `autoResolved`                                                                                                                       | pages (one per person, incident and day) / acted on | `idx_notification_created_cursor`, then `Incident` by primary key |
+| `ops.pages.service`           | service id            | `autoResolved`                                                                                                                                                                           | pages / acted on                                    | same statement, grouped by service                                |
+| `ops.escalation.step_outcome` | policy id             | `step`, `outcome`, `reason`, `hour` (paged person's zone, UTC when nobody was paged), `ackWithinMin`                                                                                     | attempts / seconds to acknowledge                   | `idx_escalation_step_attempt_created` (new)                       |
 
 Each rollup advances one complete UTC day per transaction from its own watermark row
 (`<name>.watermark`), deleting and rewriting the day with the watermark so a crash or a second scheduler
@@ -1619,7 +1622,12 @@ It is written inside the statement that `src/lib/escalation/repository.ts` alrea
 
 **Backfill.** `src/lib/escalation/step-attempt-backfill.ts` rebuilds 90 days of attempts from escalation
 timeline text, marked `approximate`, in bounded keyset batches with a resumable cursor; live rows are never
-overwritten. Run it with `npm run backfill:escalation-attempts`.
+overwritten. It runs on the intelligence lane, not as a script: while escalation insights are on, the
+ops-insights scan queues one coalesced `BACKFILL_ESCALATION_ATTEMPTS` item, whose handler
+(`runEscalationAttemptBackfill` in `ops-insights/handlers.ts`) does one 250-incident batch under
+`withDbBudget`, saves the keyset cursor (`IntelligenceCursor` `escalation-attempt-backfill`) in the same
+transaction, and re-queues itself until the window is walked; the cursor then records done and nothing is
+queued again. Job payloads are not read: escalation jobs are retention-swept after 7 days.
 
 **Rollup.** `ops.escalation.step_outcome` judges each attempt per UTC day: `ACKED` (the incident was
 acknowledged in the same generation while this was the latest notified step), `TIMED_OUT` (a later step
@@ -1679,13 +1687,13 @@ active version over 30 days, one statement over the newest 2,000 settled LIVE de
 `IncidentAutomationDecision (serviceId, createdAt)` joined to `IncidentEvent` for corrections and
 acknowledgements, and one replay page of 500 events from the last 7 days.
 
-| Key | Fires when | Severity |
-| --- | --- | --- |
-| `shadowed:<ruleId>` | In the sample (at least 50 events) a route rule's conditions held at least 5 times but an earlier rule always won. | `WARNING` |
-| `never-matched:<ruleId>` | A route rule has no match in the rollup (version published for at least 7 days, at least 50 decisions), or an enrichment rule has no match in the sample. A shadowed rule is reported once, as shadowed. | `INFO` |
-| `unmapped:<field>` | A context field is unmapped for 20% or more of the sample. | `WARNING` at 50%, else `INFO` |
-| `overridden:<ruleId or default>` | At least 10 decisions by the rule (or the service default), and a person changed priority, urgency or assignee within 15 minutes for 30% or more. | `WARNING` |
-| `policy-no-ack:<policyId>` | Automation routed at least 10 incidents to a policy and none was acknowledged. | `WARNING` |
+| Key                              | Fires when                                                                                                                                                                                               | Severity                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `shadowed:<ruleId>`              | In the sample (at least 50 events) a route rule's conditions held at least 5 times but an earlier rule always won.                                                                                       | `WARNING`                     |
+| `never-matched:<ruleId>`         | A route rule has no match in the rollup (version published for at least 7 days, at least 50 decisions), or an enrichment rule has no match in the sample. A shadowed rule is reported once, as shadowed. | `INFO`                        |
+| `unmapped:<field>`               | A context field is unmapped for 20% or more of the sample.                                                                                                                                               | `WARNING` at 50%, else `INFO` |
+| `overridden:<ruleId or default>` | At least 10 decisions by the rule (or the service default), and a person changed priority, urgency or assignee within 15 minutes for 30% or more.                                                        | `WARNING`                     |
+| `policy-no-ack:<policyId>`       | Automation routed at least 10 incidents to a policy and none was acknowledged.                                                                                                                           | `WARNING`                     |
 
 Stored text names no rule, field or policy, only counts; the key carries the id and the automation
 workspace (`AutomationInsights.tsx`, shown in `ConfigurationHealth` through `InsightsPanel`) resolves names
@@ -1694,12 +1702,17 @@ for people who may read automation.
 **Suggested rules** (`learning/automation-mining.ts`, `producers/automation-suggested-rules.ts`, kind
 `automation.suggested_rule`). One grouped statement over the newest 2,000 settled public incidents of the
 last 30 days (`idx_incident_sla_by_service`, opening alert on `idx_alert_incident_cursor`) counts, per
-(opening severity, source), how many incidents a person changed to each priority. `mineAutomationRules`
-suggests "severity/source → priority" when at least 5 incidents support it (of at least 8 with those
-facts) and the Wilson lower bound (`recommendations/wilson.ts`) is at least 0.5; at most 5, skipping rules
-the active version or draft already has. Only public incidents are mined, so evidence never carries a value
-some viewer of the service could not read. Team and policy corrections are not mined (automation has no
-team action and a policy change after creation is not recorded). The insight's `draftHref` is
+(opening severity, source), how many incidents a person changed to each priority and how many a person
+handed to a team (an `ASSIGNMENT` event "Incident assigned to team:" and the incident's final `teamId`),
+capped at 1,000 groups (`AUTOMATION_MINING.maxGroups`, largest first). `mineAutomationRules` suggests
+"severity/source → priority" or "severity/source → route through policy P" when at least 5 incidents
+support it (of at least 8 with those facts) and the Wilson lower bound (`recommendations/wilson.ts`) is at
+least 0.5; at most 5, skipping rules the active version or draft already has. A team hand-off becomes a
+`USE_ESCALATION_POLICY` suggestion only when exactly one live policy pages that team at its first step and
+it is not the service's own policy (two bounded `EscalationRule` reads, only when hand-offs exist);
+automation has no team action, and this is the only policy change a person makes after creation, so it is
+how policy corrections are mined. Only public incidents are mined, so evidence never carries a value some
+viewer of the service could not read. The insight's `draftHref` is
 `/services/{id}?tab=automation&suggestedRule=…` (`suggested-rule.ts`): the workspace shows the rule and
 nothing joins the draft until a person adds it; publishing goes through the review and its replay step.
 
@@ -1709,6 +1722,7 @@ rollup matches and open rule-health insights), offered only with `automation.rea
 `ask_squire`, only with the `automation:read` scope. `draft_automation_rule` is a `NAVIGATE` proposal
 through the sealed-proposal flow, described only to people who may edit automation: confirming it opens the same pre-filled workspace link; it never saves or
 publishes.
+
 ### Small helpers (J7)
 
 Behind `IntelligenceSettings.opsHelpersEnabled` (default off, with the master switch). None writes on

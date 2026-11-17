@@ -6,6 +6,14 @@ import {
   createTestIncident,
 } from '../helpers/test-db';
 import { backfillEscalationStepAttempts } from '@/lib/escalation/step-attempt-backfill';
+import {
+  ATTEMPT_BACKFILL_CURSOR,
+  OPS_INSIGHT_HANDLERS,
+  resetOpsInsightsSchedule,
+  runEscalationAttemptBackfill,
+  scheduleOpsInsightsWork,
+} from '@/lib/intelligence/ops-insights/handlers';
+import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
 
 beforeEach(() => resetDatabase());
 afterAll(() => db.$disconnect());
@@ -124,4 +132,50 @@ it('rebuilds approximate attempts from timeline text, in resumable batches, with
 
   // Running again from the start inserts nothing.
   expect((await backfillEscalationStepAttempts(db, { now: NOW, batchSize: 10 })).inserted).toBe(0);
+});
+
+it('runs as a resumable lane job only while escalation insights are on, and stops once done', async () => {
+  const service = await createTestService('Lane backfill');
+  for (const days of [3, 2, 1]) {
+    const row = await createTestIncident(`Lane ${days}`, service.id, { createdAt: ago(days) });
+    await db.incidentEvent.create({
+      data: { incidentId: row.id, message: 'Escalated to A (Level 1)', createdAt: ago(days) },
+    });
+  }
+  const off = await getIntelligenceSettings();
+  expect(await runEscalationAttemptBackfill(off, { now: NOW })).toBe(false);
+  expect(await db.escalationStepAttempt.count()).toBe(0);
+  expect(await db.intelligenceCursor.count()).toBe(0);
+
+  const switches = { opsInsightsEnabled: true, opsInsightsEscalationEnabled: true };
+  await db.intelligenceSettings.upsert({
+    where: { id: 'default' },
+    create: switches,
+    update: switches,
+  });
+  const on = await getIntelligenceSettings();
+  resetOpsInsightsSchedule();
+  await scheduleOpsInsightsWork(Date.now(), OPS_INSIGHT_HANDLERS);
+  expect(
+    await db.intelligenceWorkItem.count({ where: { kind: 'BACKFILL_ESCALATION_ATTEMPTS' } })
+  ).toBe(1);
+
+  // One batch per call; the cursor survives between calls (a restart resumes where it stopped).
+  let batches = 0;
+  while (await runEscalationAttemptBackfill(on, { now: NOW })) batches += 1;
+  expect(batches).toBe(0); // 3 incidents fit in one 250-row batch
+  expect(await db.escalationStepAttempt.count({ where: { approximate: true } })).toBe(3);
+  const cursor = await db.intelligenceCursor.findUniqueOrThrow({
+    where: { name: ATTEMPT_BACKFILL_CURSOR },
+  });
+  expect(cursor.lastId).toBe('');
+
+  // Done: further runs read nothing new, and the scan no longer queues it.
+  expect(await runEscalationAttemptBackfill(on, { now: NOW })).toBe(false);
+  await db.intelligenceWorkItem.deleteMany();
+  resetOpsInsightsSchedule();
+  await scheduleOpsInsightsWork(Date.now(), OPS_INSIGHT_HANDLERS);
+  expect(
+    await db.intelligenceWorkItem.count({ where: { kind: 'BACKFILL_ESCALATION_ATTEMPTS' } })
+  ).toBe(0);
 });

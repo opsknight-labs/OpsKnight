@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { captureScheduleCoverage } from '@/lib/oncall-load/store';
+import { backfillEscalationStepAttempts } from '@/lib/escalation/step-attempt-backfill';
 import { dbNow, withDbBudget } from '../jobs/db-budget';
 import { stableAnalysisHash } from '../jobs/input-hash';
 import {
@@ -173,11 +174,56 @@ type Handler = (
   context: { settings: IntelligenceSettingsView; signal: AbortSignal }
 ) => Promise<void>;
 
+export const ATTEMPT_BACKFILL_CURSOR = 'escalation-attempt-backfill';
+const ATTEMPT_BACKFILL_SUBJECT = 'window';
+/** Stored as the cursor's id once the window is walked: the backfill never runs again. */
+const ATTEMPT_BACKFILL_DONE = '';
+
+/**
+ * One batch of the escalation-attempt backfill (J2), resumable across items and restarts: the keyset cursor
+ * is saved in the same budgeted transaction as the batch's inserts. Nothing while escalation insights are
+ * off; nothing once the window is done. Returns true when there is more to do.
+ */
+export async function runEscalationAttemptBackfill(
+  settings: IntelligenceSettingsView,
+  options: { signal?: AbortSignal; now?: Date } = {}
+): Promise<boolean> {
+  if (!enabledOpsInsightAreas(settings).includes('escalation')) return false;
+  return withDbBudget(
+    settings,
+    async tx => {
+      const saved = await tx.intelligenceCursor.findUnique({
+        where: { name: ATTEMPT_BACKFILL_CURSOR },
+      });
+      if (saved?.lastId === ATTEMPT_BACKFILL_DONE) return false;
+      const result = await backfillEscalationStepAttempts(tx, {
+        cursor: saved ? { createdAt: saved.watermarkAt.toISOString(), id: saved.lastId } : null,
+        now: options.now,
+      });
+      const next = result.cursor
+        ? { watermarkAt: new Date(result.cursor.createdAt), lastId: result.cursor.id }
+        : { watermarkAt: options.now ?? new Date(), lastId: ATTEMPT_BACKFILL_DONE };
+      await tx.intelligenceCursor.upsert({
+        where: { name: ATTEMPT_BACKFILL_CURSOR },
+        create: { name: ATTEMPT_BACKFILL_CURSOR, ...next },
+        update: next,
+      });
+      return result.cursor !== null;
+    },
+    prisma,
+    { signal: options.signal }
+  );
+}
+
 /** Registered into the runner's DEFAULT_HANDLERS. */
 export const OPS_INSIGHT_HANDLERS: Partial<Record<WorkKind, Handler>> = {
   [WORK_KINDS.OPS_INSIGHTS]: async (item, { settings, signal }) => {
     await captureBeforeInsights(item.subjectKey, settings);
     await runOpsInsights(item, settings, { signal });
+  },
+  [WORK_KINDS.BACKFILL_ESCALATION_ATTEMPTS]: async (item, { settings, signal }) => {
+    if ((await runEscalationAttemptBackfill(settings, { signal })) && !signal.aborted)
+      await enqueueWorkItems([{ kind: item.kind as WorkKind, subjectKey: item.subjectKey }]);
   },
 };
 
@@ -225,8 +271,19 @@ export async function scheduleOpsInsightsWork(
   );
   if (types.size === 0) return 0;
 
-  const random = options.random ?? Math.random;
+  // The backfill re-queues itself batch by batch; this only (re)starts it, until its cursor says done.
   let enqueued = 0;
+  if (
+    handlers[WORK_KINDS.BACKFILL_ESCALATION_ATTEMPTS] &&
+    enabledOpsInsightAreas(settings).includes('escalation') &&
+    (await prisma.intelligenceCursor.findUnique({ where: { name: ATTEMPT_BACKFILL_CURSOR } }))
+      ?.lastId !== ATTEMPT_BACKFILL_DONE
+  )
+    enqueued += await enqueueWorkItems([
+      { kind: WORK_KINDS.BACKFILL_ESCALATION_ATTEMPTS, subjectKey: ATTEMPT_BACKFILL_SUBJECT },
+    ]);
+
+  const random = options.random ?? Math.random;
   for (const type of types) {
     const due = await withDbBudget(settings, tx =>
       tx.$queryRaw<Array<{ id: string }>>(

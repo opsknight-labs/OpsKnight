@@ -20,6 +20,7 @@ import {
   isoWeekKey,
 } from './contract';
 import { renderDigestEmail } from './render';
+import { teamBriefsOrNone } from './team-brief';
 
 /** Recipients emailed per work item; the rest continue in the next item so no job runs long. */
 export const DIGEST_CHUNK_SIZE = 10;
@@ -145,7 +146,10 @@ async function sendDigestTo(
   if (!insights?.weekly) return false;
   // Only what this person may read; empty (and the section hidden) when operations insights are off.
   const ops = await listInsightsInbox(actor, { limit: DIGEST_OPS_INSIGHTS });
+  // Empty (and the section hidden) unless the small-helpers switch is on; see team-brief.ts.
+  const teamBriefs = await teamBriefsOrNone(actor, appUrl, now);
   const email = renderDigestEmail({
+    teamBriefs,
     weekKey,
     weekly: insights.weekly,
     recurring: insights.recurring,
