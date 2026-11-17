@@ -87,7 +87,14 @@ function Node({
       )}
     </g>
   );
-  return href ? <a href={href}>{body}</a> : body;
+  // Mouse shortcut only: the diagram is aria-hidden, so keyboard users reach these through the list.
+  return href ? (
+    <a href={href} tabIndex={-1}>
+      {body}
+    </a>
+  ) : (
+    body
+  );
 }
 
 export default function ServiceDependencyGraph({ data }: { data: ServiceDependencyNeighbourhood }) {
