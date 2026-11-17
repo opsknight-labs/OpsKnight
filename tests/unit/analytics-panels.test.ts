@@ -19,7 +19,8 @@ describe('Analytics panel structure', () => {
     const hooks = [
       'v2-panel-insights',
       'v2-panel-trends',
-      'v2-panel-heading',
+      // Section headings render through the shared SectionHeader component.
+      'SectionHeader',
       'distribution-grid',
       'distribution-card',
       'insights-panel',

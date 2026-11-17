@@ -1,5 +1,6 @@
 import { Book, Github, Globe, Heart, LifeBuoy, Mail } from 'lucide-react';
 import { APP_VERSION } from '@/lib/constants';
+import { requirePageAccess } from '@/lib/access/server';
 import {
   MobileIconTile,
   MobileListCard,
@@ -34,7 +35,8 @@ const RESOURCES = [
   },
 ];
 
-export default function MobileHelpPage() {
+export default async function MobileHelpPage() {
+  await requirePageAccess('/m/help');
   return (
     <div className="responsive-page space-y-5">
       <MobileSection
