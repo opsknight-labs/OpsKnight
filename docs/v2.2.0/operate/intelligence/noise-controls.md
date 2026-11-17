@@ -128,10 +128,12 @@ If an append or group target closed between the lookup and the write, the event 
 ## Capacity note
 
 Each SHADOW/ON evaluation adds one database round trip on the lookup pool (about 1 ms per event in local
-measurements), and each process that ingests keeps extra database connections open once any service is
-in SHADOW or ON: a quarter of its main pool, 2 to 8 (3 with the default pool of 10), or
-`PREPAGING_LOOKUP_POOL_SIZE` (1 to 32). Count them in your connection budget. A larger pool does not
-lower fail-open: each new connection is slow on first use. During a burst, or on a busy host, the 5 ms
+measurements). Ingestion sends it as soon as it knows the event opens a new incident, so it runs alongside
+the reads the event makes anyway instead of delaying it; the 5 ms deadline counts from that moment.
+Each process that ingests keeps extra database connections open once any service is in SHADOW or ON:
+a quarter of its main pool, 2 to 8 (3 with the default pool of 10), or `PREPAGING_LOOKUP_POOL_SIZE`
+(1 to 32). Count them in your connection budget. A larger pool does not lower fail-open: each new
+connection is slow on first use. During a burst, or on a busy host, the 5 ms
 budget can be exhausted, in which case the event pages normally and
 `opsknight_prepaging_fail_open_total{reason="deadline"}` rises; watch that counter after switching a
 service to SHADOW. Local measurements (`plans/intelligence-engine/certification/perf/README.md`) meet

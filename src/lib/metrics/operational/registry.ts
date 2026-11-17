@@ -231,6 +231,22 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
   },
   {
+    name: 'opsknight_intelligence_lane_mode',
+    help: '1 for where this instance runs the Intelligence lane: thread (its own worker thread) or in-process (the main thread)',
+    kind: 'gauge',
+    labels: ['mode'],
+    scope: 'instance',
+    estimatedMaxSeries: 2,
+  },
+  {
+    name: 'opsknight_intelligence_lane_thread_fallback',
+    help: '1 while an integrated instance runs the Intelligence lane in-process because the lane thread is unavailable or switched off (outside the ingestion latency contract), else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_intelligence_work_quarantined',
     help: 'Intelligence work items that died twice within a day and wait for an operator replay',
     kind: 'gauge',
@@ -2143,6 +2159,98 @@ export function runtimeOperationalMetrics() {
   return new Map(
     [...runtimeValues].map(([name, rows]) => [name, [...rows.values()].map(row => ({ ...row }))])
   );
+}
+
+/** A structured-cloneable copy of this thread's runtime metrics, for a worker thread to report them. */
+export interface RuntimeOperationalMetricState {
+  values: Array<[string, RuntimeRow[]]>;
+  histograms: Array<[string, HistogramRow[]]>;
+}
+
+export function exportRuntimeOperationalMetricState(): RuntimeOperationalMetricState {
+  return {
+    values: [...runtimeValues].map(([name, rows]) => [
+      name,
+      [...rows.values()].map(row => ({ labels: { ...row.labels }, value: row.value })),
+    ]),
+    histograms: [...runtimeHistograms].map(([name, rows]) => [
+      name,
+      [...rows.values()].map(row => ({
+        labels: { ...row.labels },
+        value: row.value,
+        count: row.count,
+        buckets: [...row.buckets],
+      })),
+    ]),
+  };
+}
+
+/**
+ * Folds what a worker thread recorded since its `previous` report into this thread's metrics: counters and
+ * histograms by difference, gauges by value. `previous` is null for a thread's first report. Unknown
+ * metric names and invalid labels are ignored, so a bad report can never break the scrape.
+ */
+export function mergeRuntimeOperationalMetricState(
+  previous: RuntimeOperationalMetricState | null,
+  next: RuntimeOperationalMetricState
+) {
+  const before = new Map<string, number>();
+  for (const [name, rows] of previous?.values ?? [])
+    for (const row of rows) before.set(`${name}\u0000${runtimeKey(row.labels)}`, row.value);
+  for (const [name, rows] of next.values) {
+    const definition = OPERATIONAL_METRICS.find(metric => metric.name === name);
+    if (!definition) continue;
+    for (const row of rows) {
+      try {
+        if (definition.kind === 'gauge') {
+          setOperationalGauge(definition.name, row.value, row.labels);
+        } else if (definition.kind === 'counter') {
+          const prior = before.get(`${name}\u0000${runtimeKey(row.labels)}`) ?? 0;
+          const delta = row.value - prior;
+          if (delta > 0) addOperationalMetric(definition.name, delta, row.labels);
+        }
+      } catch {
+        // Invalid labels for this metric: skip the row.
+      }
+    }
+  }
+  const histogramsBefore = new Map<string, HistogramRow>();
+  for (const [name, rows] of previous?.histograms ?? [])
+    for (const row of rows) histogramsBefore.set(`${name}\u0000${runtimeKey(row.labels)}`, row);
+  for (const [name, rows] of next.histograms) {
+    const definition = OPERATIONAL_METRICS.find(metric => metric.name === name);
+    if (!definition || definition.kind !== 'histogram') continue;
+    for (const row of rows) {
+      try {
+        assertLabels(definition.name, row.labels);
+      } catch {
+        continue;
+      }
+      const prior = histogramsBefore.get(`${name}\u0000${runtimeKey(row.labels)}`);
+      const count = row.count - (prior?.count ?? 0);
+      if (count <= 0) continue;
+      const target = runtimeHistograms.get(definition.name) ?? new Map<string, HistogramRow>();
+      const key = runtimeKey(row.labels);
+      const boundaries = definition.buckets ?? [];
+      const current = target.get(key) ?? {
+        labels: { ...row.labels },
+        value: 0,
+        count: 0,
+        buckets: boundaries.map(() => 0),
+      };
+      target.set(key, {
+        labels: current.labels,
+        value: current.value + Math.max(0, row.value - (prior?.value ?? 0)),
+        count: current.count + count,
+        buckets: boundaries.map(
+          (_, index) =>
+            (current.buckets.at(index) ?? 0) +
+            Math.max(0, (row.buckets.at(index) ?? 0) - (prior?.buckets.at(index) ?? 0))
+        ),
+      });
+      runtimeHistograms.set(definition.name, target);
+    }
+  }
 }
 
 export function clearRuntimeOperationalMetrics() {

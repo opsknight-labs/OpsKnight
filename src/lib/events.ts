@@ -18,6 +18,7 @@ import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { logger } from './logger';
 import {
+  beginIngestNoiseLookups,
   evaluateIngestNoiseControls,
   linkStormChild,
   recordIngestNoiseDecision,
@@ -50,6 +51,7 @@ import { resolveIncidentEngagement } from './incidents/engagement';
 import { reconcileIncidentEngagementAfterUrgencyChange } from './incidents/engagement-reconciliation';
 import { addOperationalMetric, observeOperationalHistogram } from './metrics/operational/registry';
 import { checkAlertFlapping } from './flapping';
+import { beginIngestionActivity } from './ingestion/activity';
 import { initializeEscalationExecution } from './escalation/repository';
 import { buildResponderRoutingFromAutomation } from './escalation/routing';
 import { captureResponderSnapshot } from './escalation/automation-snapshot';
@@ -178,7 +180,26 @@ async function reloadIncident(tx: Prisma.TransactionClient, incidentId: string) 
   return incident;
 }
 
+/**
+ * Applies one event. The in-process activity count lets background work sharing this process (the
+ * intelligence lane in `integrated`) back off during bursts; it costs two clock reads and never throws.
+ */
 export async function processEvent(
+  payload: EventPayload,
+  serviceId: string,
+  integrationId: string,
+  envelopeInput?: IntegrationEventEnvelope,
+  processingLease?: ProcessingLease
+) {
+  const endActivity = beginIngestionActivity();
+  try {
+    return await applyEvent(payload, serviceId, integrationId, envelopeInput, processingLease);
+  } finally {
+    endActivity();
+  }
+}
+
+async function applyEvent(
   payload: EventPayload,
   serviceId: string,
   integrationId: string,
@@ -390,6 +411,22 @@ export async function processEvent(
         return { action: 'deduplicated', incident: existingIncident };
       }
 
+      // This event opens a new incident. Send the pre-paging lookups now (dedicated pool, own deadline) so
+      // they overlap the reads below instead of holding this transaction's connection later. Nothing
+      // happens when the service's policy is OFF; the hook further down decides what the answers mean.
+      const noiseReceivedAt = processingLease ? envelope.receivedAt : new Date();
+      const noisePrefetch = isFlapping
+        ? null
+        : beginIngestNoiseLookups(
+            {
+              serviceId,
+              fingerprintHash: alertShape.fingerprintHash,
+              dedupKey: dedup_key,
+              receivedAt: noiseReceivedAt,
+            },
+            { integrationId }
+          );
+
       // Check if an out-of-order resolve event arrived recently (< 5 minutes ago) for this dedupKey
       const recentResolveAlert = await tx.alert.findFirst({
         where: {
@@ -429,7 +466,7 @@ export async function processEvent(
         resourceKey: alertShape.resourceKey,
         fingerprintHash: alertShape.fingerprintHash,
         dedupKey: dedup_key,
-        receivedAt: processingLease ? envelope.receivedAt : new Date(),
+        receivedAt: noiseReceivedAt,
       });
       // One pipeline (J1.5, per service, default OFF): an in-process lookup. OFF keeps today's order with
       // no extra await; SHADOW/ON evaluate the noise decision first (it does not depend on automation).
@@ -438,7 +475,10 @@ export async function processEvent(
       let noise =
         pipelineOrder === 'OFF'
           ? null
-          : await evaluateIngestNoiseControls(tx, noiseInput(), { integrationId });
+          : await evaluateIngestNoiseControls(tx, noiseInput(), {
+              integrationId,
+              prefetch: noisePrefetch,
+            });
       const noiseFirst = pipelineOrder === 'ON';
       let automation = noiseFirst
         ? null
@@ -560,7 +600,10 @@ export async function processEvent(
       if (pipelineOrder === 'OFF')
         noise = isFlapping
           ? null
-          : await evaluateIngestNoiseControls(tx, noiseInput(), { integrationId });
+          : await evaluateIngestNoiseControls(tx, noiseInput(), {
+              integrationId,
+              prefetch: noisePrefetch,
+            });
       let applied = noise?.apply ? noise : null;
       // SHADOW/ON: dropped and appended alerts get (or would get) no automation work.
       const skippedAutomation = (decision: IngestNoiseDecision) => {

@@ -114,6 +114,7 @@ jobs:
           TS_NODE_PROJECT=tsconfig.script.json node --conditions=react-server
           -r ts-node/register -r tsconfig-paths/register
           tests/load/intelligence-ingestion-ab.ts --repetitions 6 --events 300 --concurrency 16 --backlog 1500
+          --wait-for-quiet-ms 600000
           --output reports/intelligence-ingestion-ab.json
       - name: Upload the A/B report
         if: always()

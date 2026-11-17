@@ -93,6 +93,86 @@ describe('intelligence architecture boundaries', () => {
     expect(ingest).toMatch(/NOISE_CONTROL_REVERSAL_INTEGRATION_ID\) return null/);
   });
 
+  it('keeps the in-process ingestion activity signal free of I/O and intelligence code', () => {
+    // processEvent counts itself in and out so the lane can yield; that hook must stay a pure
+    // in-memory counter: no imports at all, no database, network, timers or awaits.
+    const source = read(join(root, 'src/lib/ingestion/activity.ts'));
+    expect(source).not.toMatch(/\bimport\b|\brequire\(/);
+    expect(source).not.toMatch(/prisma|fetch\(|setTimeout|setInterval|\bawait\b|\basync\b/);
+    // The lane reads the signal; ingestion never imports the lane's pacing or pool code.
+    const events = read(join(root, 'src/lib/events.ts'));
+    expect(events).toMatch(/from '\.\/ingestion\/activity'/);
+    expect(events).not.toMatch(/ingestion-yield|lane-pool|database-workload/);
+  });
+
+  it('keeps the integrated lane thread behind its host and its protocol free of the lane', () => {
+    const jobs = join(intelligenceDir, 'jobs');
+    // The thread entry is a bundle root (scripts/build-intelligence-lane-thread.mjs), never imported.
+    for (const file of [...sourceFiles(join(root, 'src')), ...sourceFiles(join(root, 'scripts'))]) {
+      if (file.endsWith('lane-thread-entry.ts')) continue;
+      expect(read(file), relative(root, file)).not.toMatch(/['"][^'"]*lane-thread-entry['"]/);
+    }
+    expect(read(join(root, 'scripts/build-intelligence-lane-thread.mjs'))).toMatch(
+      /src\/lib\/intelligence\/jobs\/lane-thread-entry\.ts/
+    );
+    // The host runs on the ingestion thread: it may know the lane's types, never load the lane itself.
+    const typeOnly = /^import type [^;]+ from '\.\/runner';$/m;
+    const host = read(join(jobs, 'lane-thread.ts'));
+    expect(host).toMatch(typeOnly);
+    expect(host).not.toMatch(/^import (?!type )[^;]*from '\.\/runner';$/m);
+    expect(host).not.toMatch(
+      /from '\.\/(?:indexer|discovery|work-queue|lane-pool)'|\/(?:similarity|correlation|ai)\//
+    );
+    // The protocol module is shared by both sides; on the main thread it must stay as light.
+    const channel = read(join(jobs, 'lane-thread-channel.ts'));
+    expect(channel).toMatch(typeOnly);
+    expect(channel).not.toMatch(/^import (?!type )[^;]*from '\.\/runner';$/m);
+    expect(channel).not.toMatch(/@\/lib\/prisma'/);
+    // Only the host starts a lane process, and only the host marks a process as the lane's. Nothing that
+    // holds a Prisma client runs in a worker thread: a thread that ends with queries in flight aborts the
+    // whole process (the library engine calls back into the destroyed thread; see lane-thread.ts).
+    for (const file of sourceFiles(join(root, 'src'))) {
+      const source = read(file);
+      const name = relative(root, file);
+      expect(source, name).not.toMatch(/worker_threads/);
+      if (/\bfork\(/.test(source)) expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
+      if (/(?<!function )intelligenceLaneThreadEnv\(/.test(source))
+        expect(name).toBe('src/lib/intelligence/jobs/lane-thread.ts');
+    }
+    // Ingestion never imports the thread or its protocol; the shared activity mirror lives in activity.ts.
+    const events = read(join(root, 'src/lib/events.ts'));
+    expect(events).not.toMatch(/lane-thread/);
+  });
+
+  it('never lets an integrated lane fall back to the main thread silently', () => {
+    // The stand-in (the disabled lane on the main thread) is wired only at startup.
+    for (const file of sourceFiles(join(root, 'src'))) {
+      const name = relative(root, file);
+      if (name === 'src/lib/intelligence/jobs/lane-stand-in.ts') continue;
+      if (/['"][^'"]*lane-stand-in['"]/.test(read(file)))
+        expect(name).toBe('src/instrumentation.ts');
+    }
+    // Startup decides the mode once, records it for health and /metrics, and warns about a fallback.
+    const instrumentation = read(join(root, 'src/instrumentation.ts'));
+    expect(instrumentation).toMatch(/planIntegratedLane\(role\)/);
+    expect(instrumentation).toMatch(
+      /setIntelligenceLaneMode\(\{ mode: 'in-process', fallbackReason: plan\.fallbackReason \}\)/
+    );
+    expect(instrumentation).toMatch(/if \(plan\.fallbackReason\) \{[\s\S]*?logger\.warn\(/);
+    expect(instrumentation).toMatch(/outside the ingestion latency contract/);
+    const metrics = read(join(intelligenceDir, 'metrics.ts'));
+    expect(metrics).toMatch(/opsknight_intelligence_lane_mode/);
+    expect(metrics).toMatch(/status\.fallbackReason/);
+    // Every way of building or starting from source produces the thread bundle; the image keeps its own step.
+    const pkg = JSON.parse(read(join(root, 'package.json'))) as { scripts: Record<string, string> };
+    const builder = 'node scripts/build-intelligence-lane-thread.mjs';
+    expect(pkg.scripts.postbuild).toBe(builder);
+    expect(pkg.scripts.prestart).toBe(`${builder} --optional`);
+    expect(pkg.scripts['prestart:prod']).toBe(`${builder} --optional`);
+    expect(pkg.scripts['build:scripts']).toContain(builder);
+    expect(read(join(root, 'Dockerfile'))).toMatch(/RUN npm run build:scripts/);
+  });
+
   it('keeps similarity, correlation and AI work out of the event outbox and job queue core', () => {
     for (const file of ['src/lib/event-outbox.ts', 'src/lib/jobs/queue.ts']) {
       expect(read(join(root, file))).not.toMatch(/@\/lib\/intelligence/);
@@ -665,5 +745,38 @@ describe('intelligence data model contracts', () => {
         .map(file => relative(intelligenceDir, file));
       expect(writers, String(pattern)).toEqual(allowed);
     }
+  });
+});
+
+describe('pre-paging lookups started early by ingestion', () => {
+  const events = readFileSync(join(root, 'src/lib/events.ts'), 'utf8');
+  const hook = readFileSync(join(intelligenceDir, 'noise-controls/ingest.ts'), 'utf8');
+
+  it('are sent after the dedup-key lock and the open-incident check, and before the hook reads them', () => {
+    const order = [
+      'await lockEventDedupKeys(tx,',
+      'await findOpenEventIncident(tx,',
+      'beginIngestNoiseLookups(',
+      'await evaluateIngestNoiseControls(',
+    ].map(marker => events.indexOf(marker, events.indexOf('async function applyEvent')));
+    expect(order.every(index => index > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(events.match(/beginIngestNoiseLookups\(/g)).toHaveLength(1);
+  });
+
+  it('never run on the event transaction and never refresh the snapshot', () => {
+    const body = hook.slice(
+      hook.indexOf('export function beginIngestNoiseLookups'),
+      hook.indexOf('function usablePrefetch')
+    );
+    expect(body.length).toBeGreaterThan(200);
+    expect(body).not.toMatch(/\btx\b/);
+    expect(body).not.toContain('getPrePagingSnapshot');
+    expect(body).toContain('peekPrePagingSnapshot()');
+    expect(body).toContain('getNoiseLookupClient(');
+  });
+
+  it('keep one deadline: the hook waits only for what is left of it', () => {
+    expect(hook).toContain('Math.max(0, deadlineMs - (performance.now() - prefetch.startedAt))');
   });
 });

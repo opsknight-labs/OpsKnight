@@ -249,6 +249,11 @@ export function automationIntelligenceContext(serviceId: string, at: Date) {
   });
 }
 
+/** The snapshot as it is right now. Starts no load: only the hook itself decides when to refresh. */
+export function peekPrePagingSnapshot(): PrePagingSnapshot | null {
+  return current;
+}
+
 /** Single-flight refresh. Failures keep the previous snapshot and are logged at debug level. */
 export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   if (loading) return loading;
@@ -366,6 +371,96 @@ interface PrefetchedRow {
   stormParent: string | null;
 }
 
+/** One lookup of the combined statement: its text split around the parameters, in order. */
+const DEDUP_PART = [
+  `(SELECT json_build_object('id', i."id", 'labels', f."labels") FROM "Alert" a
+        JOIN "Incident" i ON i."id" = a."incidentId"
+        LEFT JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
+        WHERE a."serviceId" = `,
+  ` AND a."fingerprintHash" = `,
+  `
+          AND a."createdAt" >= `,
+  `
+          AND i."status" IN ('OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED')
+        ORDER BY a."createdAt" DESC LIMIT 1)`,
+] as const;
+const STATUSES_PART = [
+  `(SELECT coalesce(json_agg(s."status" ORDER BY s."createdAt" DESC), '[]'::json) FROM (
+        SELECT "status", "createdAt" FROM "Alert"
+        WHERE "serviceId" = `,
+  ` AND "createdAt" >= `,
+  `
+          AND ("dedupKey" = `,
+  ` OR (`,
+  `::text IS NOT NULL AND "fingerprintHash" = `,
+  `))
+        ORDER BY "createdAt" DESC LIMIT `,
+  `) s)`,
+] as const;
+const STORM_COUNT_PART = [
+  `(SELECT count(*) FROM "Incident"
+        WHERE "serviceId" = ANY(`,
+  `::text[]) AND "createdAt" >= `,
+  `)`,
+] as const;
+const STORM_PARENT_PART = [
+  `(SELECT "id" FROM "Incident"
+        WHERE "serviceId" = ANY(`,
+  `::text[]) AND "createdAt" >= `,
+  `
+          AND "status" IN ('OPEN', 'ACKNOWLEDGED')
+        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)`,
+] as const;
+const NULL_PART = ['NULL'] as const;
+
+/** The statement text for each combination of enabled lookups, built once: it never depends on values. */
+const statementTexts = new Map<number, readonly string[]>();
+function statementText(dedup: boolean, flapping: boolean, storm: boolean): readonly string[] {
+  const key = (dedup ? 1 : 0) | (flapping ? 2 : 0) | (storm ? 4 : 0);
+  let text = statementTexts.get(key);
+  if (!text) {
+    const strings = ['SELECT '];
+    const append = (part: readonly string[], alias: string) => {
+      strings[strings.length - 1] += part[0];
+      strings.push(...part.slice(1));
+      strings[strings.length - 1] += alias;
+    };
+    append(dedup ? DEDUP_PART : NULL_PART, ' AS "dedup", ');
+    append(flapping ? STATUSES_PART : NULL_PART, ' AS "statuses", ');
+    append(storm ? STORM_COUNT_PART : NULL_PART, ' AS "stormCount", ');
+    append(storm ? STORM_PARENT_PART : NULL_PART, ' AS "stormParent"');
+    text = strings;
+    statementTexts.set(key, text);
+  }
+  return text;
+}
+
+/**
+ * The combined lookup statement for a plan. Text and parameter order are fixed per combination of
+ * enabled lookups, so an event only fills in its values (composing nested fragments per event showed up
+ * in the ingestion CPU profile).
+ */
+export function prefetchStatement(plan: PrePagingLookupPlan): Prisma.Sql {
+  const values: unknown[] = [];
+  if (plan.dedup) values.push(plan.serviceId, plan.dedup.fingerprintHash, plan.dedup.since);
+  if (plan.flapping)
+    values.push(
+      plan.serviceId,
+      plan.flapping.since,
+      plan.flapping.dedupKey,
+      plan.flapping.fingerprintHash,
+      plan.flapping.fingerprintHash,
+      plan.flapping.limit
+    );
+  if (plan.storm) {
+    const serviceIds = [...plan.storm.serviceIds];
+    values.push(serviceIds, plan.storm.since, serviceIds, plan.storm.since);
+  }
+  // The tag accepts any string list; called directly it does exactly what a template literal would.
+  const text = statementText(!!plan.dedup, !!plan.flapping, !!plan.storm);
+  return Prisma.sql(text as unknown as TemplateStringsArray, ...values);
+}
+
 function labelsOf(raw: unknown): Record<string, string> | null {
   return raw && typeof raw === 'object' && !Array.isArray(raw)
     ? Object.fromEntries(
@@ -379,51 +474,24 @@ function labelsOf(raw: unknown): Record<string, string> | null {
 /**
  * The same index-backed reads as `prismaLookups`, fetched in ONE round trip on first use and served from
  * memory afterwards. A call whose arguments differ from the plan falls back to its own query, so the
- * answers are always exactly what `prismaLookups` would return.
+ * answers are always exactly what `prismaLookups` would return. `start()` sends the statement ahead of
+ * first use (see `beginIngestNoiseLookups`).
  */
 export function prefetchedLookups(
   tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
   plan: PrePagingLookupPlan
-): PrePagingLookups {
+): PrePagingLookups & { start(): void } {
   const base = prismaLookups(tx);
-  const none = Prisma.sql`NULL`;
-  const dedup = plan.dedup
-    ? Prisma.sql`(SELECT json_build_object('id', i."id", 'labels', f."labels") FROM "Alert" a
-        JOIN "Incident" i ON i."id" = a."incidentId"
-        LEFT JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
-        WHERE a."serviceId" = ${plan.serviceId} AND a."fingerprintHash" = ${plan.dedup.fingerprintHash}
-          AND a."createdAt" >= ${plan.dedup.since}
-          AND i."status" IN ('OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED')
-        ORDER BY a."createdAt" DESC LIMIT 1)`
-    : none;
-  const statuses = plan.flapping
-    ? Prisma.sql`(SELECT coalesce(json_agg(s."status" ORDER BY s."createdAt" DESC), '[]'::json) FROM (
-        SELECT "status", "createdAt" FROM "Alert"
-        WHERE "serviceId" = ${plan.serviceId} AND "createdAt" >= ${plan.flapping.since}
-          AND ("dedupKey" = ${plan.flapping.dedupKey} OR (${plan.flapping.fingerprintHash}::text IS NOT NULL AND "fingerprintHash" = ${plan.flapping.fingerprintHash}))
-        ORDER BY "createdAt" DESC LIMIT ${plan.flapping.limit}) s)`
-    : none;
-  const stormCount = plan.storm
-    ? Prisma.sql`(SELECT count(*) FROM "Incident"
-        WHERE "serviceId" = ANY(${[...plan.storm.serviceIds]}::text[]) AND "createdAt" >= ${plan.storm.since})`
-    : none;
-  const stormParent = plan.storm
-    ? Prisma.sql`(SELECT "id" FROM "Incident"
-        WHERE "serviceId" = ANY(${[...plan.storm.serviceIds]}::text[]) AND "createdAt" >= ${plan.storm.since}
-          AND "status" IN ('OPEN', 'ACKNOWLEDGED')
-        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)`
-    : none;
   let fetched: Promise<PrefetchedRow> | null = null;
   const prefetch = () =>
-    (fetched ??= tx
-      .$queryRaw<PrefetchedRow[]>(
-        Prisma.sql`SELECT ${dedup} AS "dedup", ${statuses} AS "statuses",
-          ${stormCount} AS "stormCount", ${stormParent} AS "stormParent"`
-      )
-      .then(rows => rows[0]));
+    (fetched ??= tx.$queryRaw<PrefetchedRow[]>(prefetchStatement(plan)).then(rows => rows[0]));
   const sameScope = (a: readonly string[], b: readonly string[]) =>
     a.length === b.length && a.every((id, index) => id === b.at(index));
   return {
+    /** Sends the statement now instead of on first use. A failure surfaces on the lookup that reads it. */
+    start() {
+      prefetch().catch(() => undefined);
+    },
     async findOpenIncidentByFingerprint(serviceId, fingerprintHash, since) {
       const planned = plan.dedup;
       if (

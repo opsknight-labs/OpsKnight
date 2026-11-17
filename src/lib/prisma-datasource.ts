@@ -167,3 +167,101 @@ export function prePagingLookupPoolSize(
     return explicit;
   return Math.min(8, Math.max(2, Math.ceil(mainPoolSize / 4)));
 }
+
+/**
+ * Set (to `1`) only in the environment of the child process that runs the intelligence lane for an
+ * `integrated` process (see intelligence/jobs/lane-thread.ts). That process's Prisma client is the lane's
+ * own pool. Internal: operators never set it.
+ */
+export const INTELLIGENCE_LANE_THREAD_ENV = 'OPSKNIGHT_INTELLIGENCE_LANE_THREAD';
+
+export function isIntelligenceLaneThread(
+  value: string | undefined = process.env.OPSKNIGHT_INTELLIGENCE_LANE_THREAD
+): boolean {
+  return value === '1';
+}
+
+/** The environment of a lane thread: this process's, marked as the lane's (see `isIntelligenceLaneThread`). */
+export function intelligenceLaneThreadEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  data: object = {}
+): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    [INTELLIGENCE_LANE_THREAD_ENV]: '1',
+    [INTELLIGENCE_LANE_DATA_ENV]: JSON.stringify(data),
+  };
+}
+
+/** Extra data (JSON) a benchmark or test hands its own lane entry. Internal. */
+export const INTELLIGENCE_LANE_DATA_ENV = 'OPSKNIGHT_INTELLIGENCE_LANE_DATA';
+
+/** The extra data the parent gave this lane process (an empty object when none). */
+export function intelligenceLaneThreadData<T extends object>(
+  env: NodeJS.ProcessEnv = process.env
+): Partial<T> {
+  return JSON.parse(env[INTELLIGENCE_LANE_DATA_ENV] || '{}') as Partial<T>;
+}
+
+/** `next dev`: it recompiles the app but never the lane bundle, so the lane stays in-process there. */
+export function isNextDevelopment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === 'development';
+}
+
+/**
+ * `INTELLIGENCE_LANE_THREAD`: `off` keeps an `integrated` process's lane on its main thread; anything else
+ * (the default) runs it in a child process when the build includes the thread bundle.
+ */
+export function intelligenceLaneThreadMode(
+  value: string | undefined = process.env.INTELLIGENCE_LANE_THREAD
+): 'auto' | 'off' {
+  return value?.trim().toLowerCase() === 'off' ? 'off' : 'auto';
+}
+
+/** Connections the intelligence lane uses on its own when it shares a process with ingestion. */
+export const DEFAULT_INTELLIGENCE_LANE_POOL_SIZE = 10;
+/** A lane pool always keeps one connection beside a running handler (claims, lease renewal, cancel). */
+const MIN_INTELLIGENCE_LANE_POOL_SIZE = 2;
+const MAX_INTELLIGENCE_LANE_POOL_SIZE = 16;
+
+/**
+ * Size of the intelligence lane's own pool in a shared process (`integrated`, `worker`,
+ * `general-worker`). `0` keeps the lane on the process pool, the behaviour before the pool existed.
+ * The dedicated `intelligence-worker` role never uses it: the whole process is the lane there.
+ * Values that are not an integer between 0 and 16 fall back to the default; 1 is raised to 2.
+ */
+export function intelligenceLanePoolSize(
+  value: string | undefined = process.env.INTELLIGENCE_LANE_DATABASE_POOL_SIZE
+): number {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return DEFAULT_INTELLIGENCE_LANE_POOL_SIZE;
+  const parsed = Number(trimmed);
+  if (parsed === 0) return 0;
+  return parsed <= MAX_INTELLIGENCE_LANE_POOL_SIZE
+    ? Math.max(MIN_INTELLIGENCE_LANE_POOL_SIZE, parsed)
+    : DEFAULT_INTELLIGENCE_LANE_POOL_SIZE;
+}
+
+/** The lane pool reads the same datasource as the process, with its own connection limit. */
+export function configureIntelligenceLanePrismaDatasource(
+  rawUrl: string | undefined,
+  size: number,
+  transactionPooler = false
+): string | undefined {
+  const configured = configurePrismaDatasource(
+    rawUrl,
+    String(Math.max(MIN_INTELLIGENCE_LANE_POOL_SIZE, size)),
+    transactionPooler
+  );
+  if (!configured) return configured;
+  try {
+    // Named so operators can tell the lane's connections apart in pg_stat_activity.
+    const url = new URL(configured);
+    if (!url.searchParams.has('application_name')) {
+      url.searchParams.set('application_name', 'opsknight-intelligence-lane');
+    }
+    return url.toString();
+  } catch {
+    return configured;
+  }
+}

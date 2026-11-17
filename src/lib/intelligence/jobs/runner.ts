@@ -23,6 +23,9 @@ import {
 } from './discovery';
 import { indexIncident } from './indexer';
 import { KindBreaker } from './kind-breaker';
+import { laneConcurrency, resolveLanePool, runOnLanePool, type LanePoolPlan } from './lane-pool';
+import { IngestionYield } from './ingestion-yield';
+import type { IngestionActivitySnapshot } from '@/lib/ingestion/activity';
 import { listenForIntelligenceWake } from './wake-listener';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
@@ -262,6 +265,57 @@ export interface LaneState {
   saturatedLogged: boolean;
   /** Current retention batch size, adapted to how the last sweeps went; null until the first sweep. */
   retentionBatchSize: number | null;
+  /** Backs the lane off while ingestion in this process is busy (createLaneState sets it). */
+  ingestionYield?: IngestionYield;
+  /** Set once the lane has run enabled on its own pool in this process; later cycles start there. */
+  lanePoolOpened?: boolean;
+}
+
+/**
+ * How the lane observes the process it serves. In-process it reads this thread's ingestion activity and
+ * Prisma pool; a lane thread (see lane-thread-entry.ts) reads its parent process's, sent over IPC, and
+ * reports each cycle back to it.
+ */
+export interface LaneHost {
+  /** Ingestion activity the lane yields to (default: this thread's). */
+  activity?: () => IngestionActivitySnapshot;
+  /** Queries waiting for a connection on the pool ingestion uses (default: this thread's process pool). */
+  poolWaitingQueries?: () => Promise<number | null>;
+  /** Called after every cycle of the scheduled lane with its status. */
+  onCycle?: (status: LaneStatus) => void;
+  /**
+   * Set while this thread only stands in for a lane thread that is not running because intelligence is
+   * disabled (see lane-thread.ts). The scheduled lane calls it instead of working once settings say
+   * enabled, so an enabled lane never runs beside ingestion on this thread; disabled-time sweeps still run.
+   */
+  handOffWhenEnabled?: () => void;
+}
+
+let laneHost: LaneHost = {};
+
+/** Installs the host before `startIntelligenceLane`; a lane thread calls it once on start. */
+export function configureLaneHost(host: LaneHost): void {
+  laneHost = host;
+  lane.state.ingestionYield = new IngestionYield(host.activity);
+}
+
+/** Why an `integrated` lane runs on the main thread although the lane thread is the supported mode. */
+export type LaneFallbackReason = 'bundle-missing' | 'disabled-by-env';
+
+export interface LaneModeInfo {
+  /** Where this process runs (or, while intelligence is disabled, will run) its lane. */
+  mode: 'thread' | 'in-process';
+  /** Set only when `integrated` had to keep the lane beside ingestion; other roles never fall back. */
+  fallbackReason: LaneFallbackReason | null;
+}
+
+declare global {
+  var opsKnightIntelligenceLaneMode: LaneModeInfo | undefined;
+}
+
+/** Recorded once at startup by whoever starts the lane (instrumentation.ts). */
+export function setIntelligenceLaneMode(info: LaneModeInfo | undefined): void {
+  globalThis.opsKnightIntelligenceLaneMode = info;
 }
 
 export function createLaneState(): LaneState {
@@ -280,6 +334,7 @@ export function createLaneState(): LaneState {
     kinds: new KindBreaker(),
     saturatedLogged: false,
     retentionBatchSize: null,
+    ingestionYield: new IngestionYield(laneHost.activity),
   };
 }
 
@@ -323,6 +378,12 @@ export interface CycleDependencies {
   now?: () => number;
   getCriticalLagMs?: () => Promise<number>;
   getPoolWaitingQueries?: () => Promise<number | null>;
+  /** Where the cycle's database work runs; resolved from the process role and environment by default. */
+  lanePool?: LanePoolPlan;
+  /** Ends any pause for in-process ingestion early, so stopping the lane never waits on one. */
+  signal?: AbortSignal;
+  /** See `LaneHost.handOffWhenEnabled`. */
+  handOffWhenEnabled?: () => void;
 }
 
 class WorkTimeoutError extends Error {
@@ -433,14 +494,21 @@ async function processBatch(
   state: LaneState,
   capacity: number,
   lease: BatchLease,
-  now: () => number
+  now: () => number,
+  signal?: AbortSignal
 ) {
   const counts = { completed: 0, requeued: 0, failed: 0, lost: 0 };
   let next = 0;
-  const workers = Array.from({ length: Math.min(capacity, items.length) }, async () => {
+  const gate = state.ingestionYield;
+  const workers = Array.from({ length: Math.min(capacity, items.length) }, async (_, worker) => {
     while (next < items.length) {
+      // A burst that starts mid-batch narrows the batch to one worker; the claims it keeps are renewed
+      // before they run (processItem), so pacing never lets an item run twice.
+      if (worker > 0 && gate?.isYielding()) return;
       const item = items[next++];
+      const itemStartedAt = performance.now();
       const result = await processItem(item, settings, handlers, state, lease);
+      if (gate && next < items.length) await gate.pause(performance.now() - itemStartedAt, signal);
       if (result === 'completed') counts.completed += 1;
       else if (result === 'requeued') counts.requeued += 1;
       else if (result === 'failed') counts.failed += 1;
@@ -465,10 +533,69 @@ export async function runIntelligenceCycle(
   state: LaneState,
   dependencies: CycleDependencies = {}
 ): Promise<CycleResult> {
-  return withIntelligenceReadMemo(() => runCycle(state, dependencies));
+  const startedAt = performance.now();
+  const pausedBefore = state.ingestionYield?.pausedMs ?? 0;
+  const result = await withIntelligenceReadMemo(async () => {
+    if (dependencies.handOffWhenEnabled) {
+      // A failed read falls through: the cycle below reports it and retries as it always has.
+      const enabled = await getIntelligenceSettings().then(
+        settings => settings.enabled,
+        () => false
+      );
+      if (enabled) {
+        dependencies.handOffWhenEnabled();
+        return { ...EMPTY_RESULT, status: 'idle' as const, timedOut: state.timedOut.size };
+      }
+    }
+    const plan = dependencies.lanePool ?? resolveLanePool();
+    if (!plan.ownPool) return runCycle(state, dependencies, plan);
+    // Once the lane has run enabled in this process its pool is open, so every later cycle (settings read
+    // included) stays on it and never queues a lane statement on the pool ingestion uses.
+    if (state.lanePoolOpened) return runOnLanePool(plan, () => runCycle(state, dependencies, plan));
+    // Only an enabled lane moves onto its own pool, so a disabled install never opens it. The settings
+    // read is memoised for the cycle, so runCycle does not read the row again.
+    let enabled: boolean;
+    try {
+      enabled = (await getIntelligenceSettings()).enabled;
+    } catch (error) {
+      // The same outcome runCycle gives a failed settings read, without reading a second time.
+      logger.warn('[Intelligence] Cycle failed; will retry', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {
+        ...EMPTY_RESULT,
+        status: 'idle' as const,
+        timedOut: state.timedOut.size,
+        pausedKinds: state.kinds.pausedKinds((dependencies.now ?? Date.now)()),
+      };
+    }
+    if (!enabled) return runCycle(state, dependencies, plan);
+    state.lanePoolOpened = true;
+    return runOnLanePool(plan, () => runCycle(state, dependencies, plan));
+  });
+  // While ingestion in this process is busy, keep the lane's share of wall time bounded. The pause comes
+  // after the cycle, when no item, transaction or connection is held. A cycle that backed off for pool
+  // pressure did almost no work, so it waits at least the back-off floor: otherwise a caller looping on
+  // cycles would re-check pool metrics and settings many times a second during the burst.
+  if (
+    state.ingestionYield &&
+    (result.status === 'worked' || result.status === 'idle' || result.status === 'paused')
+  ) {
+    const pausedInCycle = state.ingestionYield.pausedMs - pausedBefore;
+    await state.ingestionYield.pause(
+      performance.now() - startedAt - pausedInCycle,
+      dependencies.signal,
+      result.status === 'paused' ? state.ingestionYield.backoffFloorMs : 0
+    );
+  }
+  return result;
 }
 
-async function runCycle(state: LaneState, dependencies: CycleDependencies): Promise<CycleResult> {
+async function runCycle(
+  state: LaneState,
+  dependencies: CycleDependencies,
+  plan: LanePoolPlan
+): Promise<CycleResult> {
   const handlers = dependencies.handlers ?? DEFAULT_HANDLERS;
   const now = dependencies.now ?? Date.now;
   const base = (): CycleResult => ({
@@ -706,14 +833,18 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
       });
     }
 
-    // Timed-out handlers that have not let go yet still hold connections: they keep their slots.
-    const capacity = settings.maxConcurrency - state.timedOut.size;
+    // Timed-out handlers that have not let go yet still hold connections: they keep their slots. On the
+    // lane's own pool, concurrency also stays below the pool size (see lane-pool.ts). While ingestion in
+    // this process is busy the lane runs one item per cycle (see ingestion-yield.ts).
+    const yielding = state.ingestionYield?.isYielding() ?? false;
+    const concurrency = yielding ? 1 : laneConcurrency(plan, settings.maxConcurrency);
+    const capacity = concurrency - state.timedOut.size;
     if (capacity <= 0) {
       if (!state.saturatedLogged) {
         state.saturatedLogged = true;
         logger.warn(
           '[Intelligence] Deferring new work until timed-out handlers release their connections',
-          { timedOut: state.timedOut.size, maxConcurrency: settings.maxConcurrency }
+          { timedOut: state.timedOut.size, maxConcurrency: concurrency }
         );
       }
       return {
@@ -729,7 +860,7 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
 
     const leaseMs = settings.maxJobMs * 2;
     const claimed = await claimWorkItems({
-      limit: settings.batchSize,
+      limit: yielding ? Math.min(settings.batchSize, concurrency) : settings.batchSize,
       leaseMs,
       excludeKinds: state.kinds.pausedKinds(now()),
     });
@@ -749,7 +880,8 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
       state,
       capacity,
       { claimedAt: performance.now(), leaseMs },
-      now
+      now,
+      dependencies.signal
     );
     return {
       ...base(),
@@ -789,10 +921,31 @@ export interface LaneStatus {
   timedOutInFlight: number;
   saturated: boolean;
   pausedKinds: string[];
+  /** True while the lane is backing off because ingestion in this process is busy. */
+  yieldingToIngestion?: boolean;
   /** Whether this replica turns wake hints into work; null when no listener session exists. */
   wakeLeader: boolean | null;
   /** Cumulative since process start; lets operators and benchmarks see real throughput. */
   totals: LaneTotals;
+  /** Present when the lane runs in a child process of this one (`integrated`; see lane-thread.ts). */
+  thread?: LaneThreadStatus;
+  /** Where the lane runs. `in-process` in `integrated` is a fallback outside the ingestion contract. */
+  mode?: 'thread' | 'in-process';
+  fallbackReason?: LaneFallbackReason | null;
+}
+
+export interface LaneThreadStatus {
+  /**
+   * `restarting` while a crashed thread waits to be started again; `parked` while intelligence is disabled
+   * and no thread exists (the disabled lane idles on the main thread until it is enabled).
+   */
+  state: 'starting' | 'running' | 'restarting' | 'stopping' | 'stopped' | 'parked';
+  /** Threads started after a crash since the lane started. */
+  restarts: number;
+  /** When the current thread started. */
+  startedAt: Date | null;
+  /** Fixed description of the last abnormal exit, if any; never an exception message. */
+  lastExit: string | null;
 }
 
 const lane: {
@@ -804,6 +957,8 @@ const lane: {
   lastCycleAt: Date | null;
   lastResult: CycleResult | null;
   totals: LaneTotals;
+  /** Aborted by stopIntelligenceLane so a cycle pausing for ingestion finishes promptly. */
+  stopping?: AbortController;
 } = {
   timer: null,
   active: null,
@@ -845,6 +1000,8 @@ const signalled = new Set<string>();
 let acceptingSignals = false;
 
 async function acceptWakeSignals(ids: string[]): Promise<void> {
+  // A stand-in for a parked lane thread never works: the thread's durable discovery picks the work up.
+  if (laneHost.handOffWhenEnabled) return;
   for (const id of ids) if (signalled.size < 1000) signalled.add(id);
   if (acceptingSignals) return;
   acceptingSignals = true;
@@ -852,17 +1009,34 @@ async function acceptWakeSignals(ids: string[]): Promise<void> {
     while (lane.running && signalled.size) {
       const batch = [...signalled].slice(0, 50);
       for (const id of batch) signalled.delete(id);
-      if (!(await getIntelligenceSettings()).enabled) {
+      // The settings read runs on the lane's pool too: a burst of wake hints arrives exactly when
+      // ingestion is busiest, and the lane must not queue on the pool processEvent uses.
+      // Like the cycle, a disabled install never opens the lane pool: until the lane has run enabled the
+      // one settings row is read on the process pool first.
+      const plan = resolveLanePool();
+      if (
+        plan.ownPool &&
+        !lane.state.lanePoolOpened &&
+        !(await getIntelligenceSettings()).enabled
+      ) {
         signalled.clear();
         break;
       }
-      await enqueueWorkItems(
-        batch.map(subjectKey => ({
-          kind: WORK_KINDS.INDEX_INCIDENT,
-          subjectKey,
-          priority: FIRST_INSIGHT_INDEX_PRIORITY,
-        }))
-      );
+      const enabled = await runOnLanePool(plan, async () => {
+        if (!(await getIntelligenceSettings()).enabled) return false;
+        await enqueueWorkItems(
+          batch.map(subjectKey => ({
+            kind: WORK_KINDS.INDEX_INCIDENT,
+            subjectKey,
+            priority: FIRST_INSIGHT_INDEX_PRIORITY,
+          }))
+        );
+        return true;
+      });
+      if (!enabled) {
+        signalled.clear();
+        break;
+      }
       wakeRequested = true;
       if (!lane.active) {
         if (lane.timer) clearTimeout(lane.timer);
@@ -893,7 +1067,11 @@ function schedule(delayMs: number) {
   if (!lane.running) return;
   lane.timer = setTimeout(() => {
     lane.timer = null;
-    lane.active = runIntelligenceCycle(lane.state)
+    lane.active = runIntelligenceCycle(lane.state, {
+      signal: lane.stopping?.signal,
+      getPoolWaitingQueries: laneHost.poolWaitingQueries,
+      handOffWhenEnabled: laneHost.handOffWhenEnabled,
+    })
       .then(result => {
         lane.lastCycleAt = new Date();
         lane.lastResult = result;
@@ -903,6 +1081,11 @@ function schedule(delayMs: number) {
         lane.totals.requeued += result.requeued;
         lane.totals.failed += result.failed;
         lane.totals.lost += result.lost;
+        try {
+          laneHost.onCycle?.(getLocalIntelligenceLaneStatus());
+        } catch {
+          // Reporting is best effort; the lane keeps running.
+        }
         schedule(jittered(nextDelayMs(result)));
       })
       // runIntelligenceCycle never throws, but a lane that dies silently is the worst outcome: keep it alive.
@@ -923,6 +1106,7 @@ export function startIntelligenceLane(options: { initialDelayMs?: number } = {})
   if (lane.running) return;
   lane.running = true;
   lane.startedAt = new Date();
+  lane.stopping = new AbortController();
   wakeListener = listenForIntelligenceWake(
     ids => {
       void acceptWakeSignals(ids);
@@ -936,6 +1120,7 @@ export function startIntelligenceLane(options: { initialDelayMs?: number } = {})
 /** Stops scheduling and waits for the in-flight cycle so shutdown never abandons claimed work. */
 export async function stopIntelligenceLane(): Promise<void> {
   lane.running = false;
+  lane.stopping?.abort();
   await wakeListener?.stop();
   wakeListener = undefined;
   signalled.clear();
@@ -944,7 +1129,30 @@ export async function stopIntelligenceLane(): Promise<void> {
   await lane.active;
 }
 
+declare global {
+  /** Set while the lane runs in a child process; the status it reports replaces the local one. */
+  var opsKnightIntelligenceLaneStatusSource: (() => LaneStatus) | undefined;
+}
+
+/** Lets lane-thread.ts report the thread's lane as this process's lane (undefined restores the local one). */
+export function setIntelligenceLaneStatusSource(source: (() => LaneStatus) | undefined): void {
+  globalThis.opsKnightIntelligenceLaneStatusSource = source;
+}
+
+/** This process's lane, wherever it runs: in this thread or in a lane thread. */
 export function getIntelligenceLaneStatus(): LaneStatus {
+  const status =
+    globalThis.opsKnightIntelligenceLaneStatusSource?.() ?? getLocalIntelligenceLaneStatus();
+  const recorded = globalThis.opsKnightIntelligenceLaneMode;
+  return {
+    ...status,
+    mode: recorded?.mode ?? (status.thread ? 'thread' : 'in-process'),
+    fallbackReason: recorded?.fallbackReason ?? null,
+  };
+}
+
+/** The lane scheduled in this thread. */
+export function getLocalIntelligenceLaneStatus(): LaneStatus {
   return {
     running: lane.running,
     startedAt: lane.startedAt,
@@ -960,6 +1168,7 @@ export function getIntelligenceLaneStatus(): LaneStatus {
     timedOutInFlight: lane.state.timedOut.size,
     saturated: lane.lastResult?.saturated ?? false,
     pausedKinds: lane.state.kinds.pausedKinds(),
+    yieldingToIngestion: lane.state.ingestionYield?.isYielding() ?? false,
     wakeLeader: wakeListener ? wakeListener.isLeader() : null,
     totals: { ...lane.totals },
   };

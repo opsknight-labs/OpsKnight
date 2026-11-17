@@ -1,0 +1,76 @@
+#!/usr/bin/env node
+/**
+ * Bundles the child-process entry of the intelligence lane (src/lib/intelligence/jobs/lane-thread-entry.ts)
+ * into scripts/dist/intelligence-lane-thread.cjs. An `integrated` process runs its lane in a process
+ * started from that file when it exists (see src/lib/intelligence/jobs/lane-thread.ts); without it the lane stays on the
+ * main thread. Packages stay external (the runtime image ships node_modules, including the generated
+ * Prisma client); application code under src/ is bundled.
+ *
+ * Every way of building or starting the app from source produces it: `npm run build` (postbuild),
+ * `npm start` / `npm run start:prod` (prestart, on every start, so pulled code is never run with an older lane) and `npm run build:scripts` (the Docker
+ * image). A process that still has no bundle warns at startup and reports the in-process fallback.
+ *
+ * Usage: node scripts/build-intelligence-lane-thread.mjs [--entry <file.ts>] [--outfile <file.cjs>]
+ *          [--optional]     exit 0 with a warning when the bundle cannot be built (no esbuild installed)
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+export const DEFAULT_ENTRY = 'src/lib/intelligence/jobs/lane-thread-entry.ts';
+export const DEFAULT_OUTFILE = 'scripts/dist/intelligence-lane-thread.cjs';
+
+/** Packages the runtime image installs (`npm ci --omit=dev`): these, and their subpaths, are required at runtime. */
+export function productionPackages() {
+  const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  return Object.keys({ ...pkg.dependencies, ...pkg.optionalDependencies }).sort();
+}
+
+export async function buildIntelligenceLaneThread({
+  entry = DEFAULT_ENTRY,
+  outfile = DEFAULT_OUTFILE,
+} = {}) {
+  // Loaded here so `--optional` can report a missing esbuild instead of failing at import time.
+  const { build } = await import('esbuild');
+  await build({
+    absWorkingDir: root,
+    entryPoints: [resolve(root, entry)],
+    outfile: resolve(root, outfile),
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node20',
+    external: productionPackages().flatMap(name => [name, `${name}/*`]),
+    tsconfig: resolve(root, 'tsconfig.json'),
+    // `server-only` guards Next.js client bundles; a server worker thread is not one.
+    alias: { 'server-only': resolve(root, 'scripts/perf/shims/server-only.js') },
+    sourcemap: 'linked',
+    logLevel: 'warning',
+    legalComments: 'none',
+  });
+  return resolve(root, outfile);
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  const args = process.argv.slice(2);
+  const option = name => {
+    const index = args.indexOf(name);
+    return index >= 0 ? args[index + 1] : undefined;
+  };
+  const outfile = option('--outfile') ?? DEFAULT_OUTFILE;
+  try {
+    const out = await buildIntelligenceLaneThread({ entry: option('--entry'), outfile });
+    console.log(`Built ${out}`);
+  } catch (error) {
+    if (!args.includes('--optional')) throw error;
+    console.warn(
+      `[Intelligence] The lane thread bundle could not be built (${error instanceof Error ? error.message : error}). ` +
+        (existsSync(resolve(root, outfile))
+          ? `The existing ${outfile} stays in use and may be older than this code. `
+          : 'An integrated process will run its intelligence lane in-process, outside the ingestion latency contract. ') +
+        'Run `npm run build` with dev dependencies installed to fix it.'
+    );
+  }
+}

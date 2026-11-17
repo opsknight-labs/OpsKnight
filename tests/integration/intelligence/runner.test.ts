@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { evaluatePause } from '@/lib/intelligence/jobs/backpressure';
 import { enqueueWorkItems } from '@/lib/intelligence/jobs/work-queue';
 import { DISCOVERY_SAFETY_LAG_MS } from '@/lib/intelligence/jobs/discovery';
+import { IngestionYield } from '@/lib/intelligence/jobs/ingestion-yield';
 import {
   DEFAULT_HANDLERS,
   createLaneState,
@@ -365,6 +366,171 @@ describe('intelligence cycle', () => {
     expect(peak).toBeLessThanOrEqual(2);
   });
 
+  it('runs lane work on its own pool in a shared process, and on the process pool otherwise', async () => {
+    await enable();
+    await enqueueWorkItems([
+      { kind: 'INDEX_INCIDENT', subjectKey: 'own-pool' },
+      { kind: 'INDEX_INCIDENT', subjectKey: 'shared-pool' },
+    ]);
+    const seen: Record<string, string> = {};
+    const handler: WorkHandler = async item => {
+      const [row] = await prisma.$queryRaw<Array<{ name: string }>>`
+        SELECT current_setting('application_name') AS name`;
+      seen[item.subjectKey] = row.name;
+    };
+    const [primary] = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT current_setting('application_name') AS name`;
+    await db.intelligenceWorkItem.updateMany({
+      where: { subjectKey: 'shared-pool' },
+      data: { scheduledAt: new Date(Date.now() + 60_000) },
+    });
+    // Default plan: the test process has the integrated role, so the lane has its own pool.
+    expect(
+      await runIntelligenceCycle(createLaneState(), {
+        getCriticalLagMs: noLag,
+        handlers: { INDEX_INCIDENT: handler },
+      })
+    ).toMatchObject({ completed: 1 });
+    await db.intelligenceWorkItem.updateMany({
+      where: { subjectKey: 'shared-pool' },
+      data: { scheduledAt: new Date(0) },
+    });
+    expect(
+      await runIntelligenceCycle(createLaneState(), {
+        getCriticalLagMs: noLag,
+        handlers: { INDEX_INCIDENT: handler },
+        lanePool: { ownPool: false, size: 0 },
+      })
+    ).toMatchObject({ completed: 1 });
+    expect(seen['own-pool']).toBe('opsknight-intelligence-lane');
+    expect(seen['shared-pool']).toBe(primary.name);
+    // Ingestion's pool is untouched by the lane's workload.
+    const [after] = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT current_setting('application_name') AS name`;
+    expect(after.name).toBe(primary.name);
+  });
+
+  it('runs one item at a time and paces itself while ingestion in this process is busy', async () => {
+    await enable({ maxConcurrency: 4, batchSize: 10 });
+    await enqueueWorkItems(
+      Array.from({ length: 6 }, (_, i) => ({
+        kind: 'INDEX_INCIDENT' as const,
+        subjectKey: `busy-${i}`,
+      }))
+    );
+    // A synthetic, constantly busy ingestion: eight events in flight on every reading.
+    const started = performance.now();
+    const source = () => {
+      const at = performance.now() - started + 1_000;
+      return { inFlight: 8, integralMs: 8 * at, at };
+    };
+    const slept: number[] = [];
+    const state = createLaneState();
+    state.ingestionYield = new IngestionYield(
+      source,
+      { sampleMs: 0, duty: 0.5, maxPauseMs: 40, pollMs: 10 },
+      async ms => {
+        slept.push(ms);
+        await new Promise(resolve => setTimeout(resolve, ms));
+      }
+    );
+    let active = 0;
+    let peak = 0;
+    const handler: WorkHandler = async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      active -= 1;
+    };
+    const result = await runIntelligenceCycle(state, {
+      getCriticalLagMs: noLag,
+      handlers: { INDEX_INCIDENT: handler },
+    });
+    expect(result).toMatchObject({ status: 'worked', claimed: 1, completed: 1 });
+    expect(peak).toBe(1);
+    expect(slept.length).toBeGreaterThan(0);
+    expect(state.ingestionYield.pausedMs).toBeGreaterThan(0);
+    // Queued work stays queued, untouched, for the next paced cycle.
+    expect(await db.intelligenceWorkItem.count({ where: { attempts: 0 } })).toBe(5);
+
+    // Once ingestion is quiet the lane returns to its configured concurrency and batch size.
+    const quiet = createLaneState();
+    const after = await runIntelligenceCycle(quiet, {
+      getCriticalLagMs: noLag,
+      handlers: { INDEX_INCIDENT: handler },
+    });
+    expect(after).toMatchObject({ claimed: 5, completed: 5 });
+    expect(peak).toBeGreaterThan(1);
+  });
+
+  it('reads settings on the lane pool once it has opened it, never again on the ingestion pool', async () => {
+    await enable();
+    // The process (ingestion) client; the lane's own pool is a different client.
+    const primary = globalThis.prismaGlobal!;
+    const spy = vi.spyOn(primary.intelligenceSettings, 'findUnique');
+    const state = createLaneState();
+    state.ingestionYield = undefined;
+    const dependencies = {
+      getCriticalLagMs: noLag,
+      getPoolWaitingQueries: async () => 0,
+      handlers: {},
+      lanePool: { ownPool: true, size: 4 },
+    };
+    try {
+      expect((await runIntelligenceCycle(state, dependencies)).status).toBe('idle');
+      // One pre-read decides whether to open the lane pool at all (a disabled install never opens it).
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(state.lanePoolOpened).toBe(true);
+      spy.mockClear();
+      for (let cycle = 0; cycle < 3; cycle += 1) await runIntelligenceCycle(state, dependencies);
+      expect(spy).not.toHaveBeenCalled();
+      // A lane that is switched off later still reads the flag on its own pool.
+      await db.intelligenceSettings.update({ where: { id: 'default' }, data: { enabled: false } });
+      expect((await runIntelligenceCycle(state, dependencies)).status).toBe('disabled');
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('waits the back-off floor after a pool-pressure pause while ingestion is busy, not a tight loop', async () => {
+    await enable();
+    const started = performance.now();
+    const busy = () => {
+      const at = performance.now() - started + 1_000;
+      return { inFlight: 8, integralMs: 8 * at, at };
+    };
+    const slept: number[] = [];
+    const state = createLaneState();
+    state.ingestionYield = new IngestionYield(
+      busy,
+      { sampleMs: 0, backoffFloorMs: 80, pollMs: 20 },
+      async ms => {
+        slept.push(ms);
+      }
+    );
+    const pressured = {
+      getCriticalLagMs: noLag,
+      getPoolWaitingQueries: async () => 3,
+      handlers: {},
+    };
+    expect((await runIntelligenceCycle(state, pressured)).status).toBe('paused');
+    expect(slept.reduce((sum, ms) => sum + ms, 0)).toBeGreaterThanOrEqual(80);
+
+    // With ingestion quiet the pause does not wait: production already waits 5 s after `paused`.
+    const quietSlept: number[] = [];
+    const quiet = createLaneState();
+    quiet.ingestionYield = new IngestionYield(
+      () => ({ inFlight: 0, integralMs: 0, at: performance.now() }),
+      { sampleMs: 0, backoffFloorMs: 80, pollMs: 20 },
+      async ms => {
+        quietSlept.push(ms);
+      }
+    );
+    expect((await runIntelligenceCycle(quiet, pressured)).status).toBe('paused');
+    expect(quietSlept).toEqual([]);
+  });
+
   it('never throws even if the database settings read fails', async () => {
     const spy = vi
       .spyOn(prisma.intelligenceSettings, 'findUnique')
@@ -417,4 +583,78 @@ it('expires saved chats even when the Intelligence engine has never been configu
     claimed: 0,
   });
   expect(await db.squireConversation.findUnique({ where: { id } })).toBeNull();
+});
+
+describe('a lane standing in for a parked lane thread', () => {
+  it('idles while disabled and never asks for the hand-off', async () => {
+    const handOff = vi.fn();
+    const result = await runIntelligenceCycle(createLaneState(), {
+      getCriticalLagMs: noLag,
+      handOffWhenEnabled: handOff,
+      handlers: {},
+    });
+    expect(result.status).toBe('disabled');
+    expect(handOff).not.toHaveBeenCalled();
+  });
+
+  it('hands off instead of working once intelligence is enabled', async () => {
+    await enable();
+    const service = await createTestService('stand-in');
+    const incident = await createTestIncident('stand-in incident', service.id);
+    await enqueueWorkItems([{ kind: 'INDEX_INCIDENT', subjectKey: incident.id, priority: 100 }]);
+    const handOff = vi.fn();
+    const handler = vi.fn(async () => {});
+    const state = createLaneState();
+    const result = await runIntelligenceCycle(state, {
+      getCriticalLagMs: noLag,
+      handOffWhenEnabled: handOff,
+      handlers: { INDEX_INCIDENT: handler as unknown as WorkHandler },
+    });
+    expect(handOff).toHaveBeenCalledTimes(1);
+    expect(handler).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: 'idle', claimed: 0, completed: 0 });
+    // Nothing was claimed and the lane pool of this thread was never opened: the thread owns the work.
+    expect(state.lanePoolOpened).toBeFalsy();
+    expect(await db.intelligenceWorkItem.count({ where: { claimedAt: { not: null } } })).toBe(0);
+  });
+});
+
+describe('lane mode in /metrics', () => {
+  it('reports where the lane runs and singles out an integrated fallback', async () => {
+    const { collectIntelligenceMetrics } = await import('@/lib/intelligence/metrics');
+    const { setIntelligenceLaneMode } = await import('@/lib/intelligence/jobs/runner');
+    startIntelligenceLane({ initialDelayMs: 60_000 });
+    try {
+      const pick = async () => {
+        const samples = await collectIntelligenceMetrics();
+        return {
+          mode: samples.filter(sample => sample.name === 'opsknight_intelligence_lane_mode'),
+          fallback: samples.find(
+            sample => sample.name === 'opsknight_intelligence_lane_thread_fallback'
+          )?.value,
+        };
+      };
+      // A worker role: in-process by design, not a fallback.
+      expect(await pick()).toEqual({
+        mode: [
+          { name: 'opsknight_intelligence_lane_mode', value: 1, labels: { mode: 'in-process' } },
+        ],
+        fallback: 0,
+      });
+      setIntelligenceLaneMode({ mode: 'in-process', fallbackReason: 'bundle-missing' });
+      expect(await pick()).toMatchObject({ fallback: 1 });
+      expect(getIntelligenceLaneStatus()).toMatchObject({
+        mode: 'in-process',
+        fallbackReason: 'bundle-missing',
+      });
+      setIntelligenceLaneMode({ mode: 'thread', fallbackReason: null });
+      expect(await pick()).toEqual({
+        mode: [{ name: 'opsknight_intelligence_lane_mode', value: 1, labels: { mode: 'thread' } }],
+        fallback: 0,
+      });
+    } finally {
+      setIntelligenceLaneMode(undefined);
+      await stopIntelligenceLane();
+    }
+  });
 });

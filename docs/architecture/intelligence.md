@@ -80,6 +80,76 @@ create a match by themselves, and the match percentage is a ranking signal, **no
 - **Time budgets.** Every work item has a wall-clock budget; every intelligence transaction sets a
   statement and lock timeout. Work that exceeds its budget is stopped and retried with backoff.
 - **Bounded concurrency, batch size and candidate counts** are all settings with enforced limits.
+- **Its own process in `integrated`.** A single-node `integrated` process runs the lane in a forked
+  child process (`src/lib/intelligence/jobs/lane-thread.ts`; status, metrics and settings still call it
+  the "lane thread"), with its own V8 heap, event loop and Prisma client. Measured, the lane's cost to ingestion in the same thread was not its JavaScript
+  (3.5 to 5 ms of CPU per burst) but what it shared with `processEvent`: Prisma response parsing,
+  allocation and the garbage-collection pauses they cause, which stop every in-flight event. In its
+  own process none of that lands on ingestion. It is a process and not a `worker_threads` Worker
+  because Prisma's library query engine calls back into the JavaScript environment that created the
+  client: a worker thread that ends (terminated, an uncaught error, out of memory) while its client has
+  queries or a transaction in flight aborts the whole process with SIGSEGV/SIGABRT, even after
+  `$disconnect()` (reproduced on Prisma 5.22 in 5 of 5 runs per scenario). A child process can die in
+  every one of those ways, 20 of 20 runs each, without touching its parent. The cost is a second Node
+  process (its own resident memory, roughly that of a small Node service plus a Prisma engine) while
+  intelligence is enabled. The process runs the same lane (wake listener, scheduler,
+  abortable budgets, generation fencing, quarantine, kind breaker, backpressure). Its whole Prisma
+  client is the lane's pool (`application_name` `opsknight-intelligence-lane`, size
+  `INTELLIGENCE_LANE_DATABASE_POOL_SIZE`, default 10), so the lane never takes an ingestion connection.
+  `processEvent`'s activity count is sent to the process over IPC (at once when a burst starts,
+  otherwise coalesced to at most one message per 10 ms; epoch clock), so it yields to ingestion as
+  below, and the host sends the ingestion pool's waiting-query count once a second while a lane process
+  exists, so the pool-pressure pause still protects that pool. The process reports its status and metrics at most once a second (`getIntelligenceLaneStatus()` and `/metrics`
+  are unchanged; the status gains a `thread` block). A thread that exits unexpectedly is restarted
+  with backoff (1 s doubling to 60 s, reset after five minutes of running), health is degraded until
+  it runs again, and work it had claimed is re-claimed after its lease. Stopping asks the thread to
+  stop its lane (aborting pauses, waiting for the in-flight cycle) and disconnect, and kills it after
+  30 s. A lane process exits when its parent's IPC channel closes, so it never outlives the server.
+  `worker`, `general-worker` and the dedicated `intelligence-worker` role are unchanged.
+- **The lane process exists only while intelligence is enabled.** `instrumentation.ts` starts the host with a
+  stand-in (`jobs/lane-stand-in.ts`): while settings say disabled, the ordinary lane idles on the main
+  thread as it did before the thread existed (one settings row per poll on the process pool, the
+  disabled-time sweeps), so a disabled install carries no second heap, Prisma engine or lane
+  connection. The stand-in never works enabled: the first cycle that reads settings as enabled calls
+  `LaneHost.handOffWhenEnabled`, the host stops the stand-in and starts the thread. A thread that
+  reports a `disabled` cycle is stopped and the lane is parked again (`thread.state` `parked`, health
+  `disabled`). Totals carry across both moves.
+- **Bundle build path.** The thread entry (`jobs/lane-thread-entry.ts`) is bundled to
+  `scripts/dist/intelligence-lane-thread.cjs` by `scripts/build-intelligence-lane-thread.mjs`. Every
+  build or start from source produces it: `npm run build` (`postbuild`), `npm start` and
+  `npm run start:prod` (`prestart`, rebuilt on every start so pulled code never runs an older lane,
+  never failing the start) and
+  `npm run build:scripts` (the Dockerfile, unchanged). The host looks for it under the working
+  directory (dev, `next start`, the Docker image) and, when the working directory is
+  `<root>/.next/standalone` (a standalone start from a checkout), under `<root>`.
+- **The in-process fallback is explicit.** If the bundle is missing or `INTELLIGENCE_LANE_THREAD=off`,
+  an `integrated` lane runs on the main thread beside ingestion. That configuration is outside the
+  ingestion contract (see the perf README for its measurements). Startup decides the mode once
+  (`planIntegratedLane`), logs one warning with the reason and the remedy, and records it
+  (`setIntelligenceLaneMode`): `getIntelligenceLaneStatus()` carries `mode` and `fallbackReason`, lane
+  health is `degraded` with a fixed reason once the lane is enabled, and `/metrics` exposes
+  `opsknight_intelligence_lane_mode{mode="thread"|"in-process"}` and
+  `opsknight_intelligence_lane_thread_fallback` (1 only for an `integrated` fallback; worker roles are
+  in-process by design and report 0).
+- **Its own pool in a shared process.** In `integrated`, `worker` and `general-worker` processes an
+  enabled lane runs its database work on a separate small Prisma pool (`application_name`
+  `opsknight-intelligence-lane`, at most `INTELLIGENCE_LANE_DATABASE_POOL_SIZE` connections, default
+  10, opened only as needed), so an analysis transaction never holds a connection `processEvent` is
+  queueing for. Handler concurrency stays two below that size. `INTELLIGENCE_LANE_DATABASE_POOL_SIZE=0`
+  restores the shared pool. The pool-pressure pause still watches the process pool. The dedicated
+  `intelligence-worker` role keeps its single pool.
+- **Yielding to in-process ingestion.** `processEvent` keeps an in-process count of events in flight
+  (two clock reads per event, no I/O). The lane starts yielding at once when two or more events are in
+  flight (the start of a burst), and otherwise when the average over at least 50 ms reaches one event.
+  The immediate trigger exists because the averaged signal alone engaged only after the first sample
+  window that covered the burst, so a cycle that started with the burst ran at full concurrency through
+  its first ~200 ms, which is where the remaining p99 cost of the lane thread sat. While yielding, the
+  lane runs one item per cycle and pauses after each item and cycle so it is active for at most 20% of
+  wall time (pauses capped at 1 s). It returns to full speed only after the load has stayed below 0.25
+  for one second. It never stops completely, and it holds no claim, transaction or connection while
+  paused (claims it already holds are renewed before they run). Nothing is ingested in a dedicated
+  `intelligence-worker`, so it never yields there. `getIntelligenceLaneStatus().yieldingToIngestion`
+  shows the state.
 
 ## Data and retention
 
@@ -152,6 +222,30 @@ LOG_LEVEL=error DATABASE_URL=postgresql://.../opsknight_bench \
   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
   tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 1500 --concurrency 12 --backlog 4000
 ```
+
+Each timed burst also records attribution data: event-loop delay and utilisation, process CPU,
+garbage-collection pauses, Prisma pool wait on the ingestion pool, engine-timed ingestion statements
+per event and sampled PostgreSQL wait events. The report records host load and the lane's pool plan.
+`--lane-mode thread` (the default) runs the candidate's lane in its own process through the production
+host, as `integrated` does; `--lane-mode in-process` runs it on the ingestion thread (the fallback
+configuration, measured separately and outside the contract). The storm drain takes the same flag
+(default `in-process`).
+
+The candidate is a **yielding** lane: during a burst the production lane backs off to one item at a
+time at a bounded duty cycle, so the gate measures ingestion beside a lane that backs off, not beside
+one at full speed. "Lane busy" therefore means lane handlers ran **inside** the timed burst (the union
+of handler spans clipped to the burst is above zero in every candidate run); the report gives that
+share of burst wall time per run (`laneBusyFractionOfBurst`).
+
+A run is judged only on a quiet host. The script samples the host from a worker thread every 3 s and
+marks the run `INVALID` (exit code 2, never a pass or a fail) unless the 1-minute load was below 4 at
+the start and never rose above 4 at any sample, no other heavy process (compiler, test runner, build,
+another load test, headless browser) was seen, and no gap between samples exceeded 15 s. The
+benchmark's own work counts toward that peak (about 0.3 to 1.2 on an 8-core laptop), so start it well
+below the limit. `--wait-for-quiet-ms <ms>` waits for a quiet host before the first arm. Invalid runs are discarded and repeated, never averaged in.
+`--cpu-profile-dir <dir>` writes a V8 profile of each timed burst, and `--no-lane-yield --no-gate`
+measures the lane without yielding (diagnosis only). The attribution behind the lane pool and the
+ingestion yield is in `plans/intelligence-engine/certification/perf/ingestion-p50-diagnosis-2026-11-09.md`.
 
 The database name must end in `_bench` or `_test` (the script truncates incident data). Results
 from a shared or loaded host are indicative only; the confidence intervals on tail latency are wide
@@ -916,9 +1010,13 @@ process. Its wake listener uses one additional session connection, accounted for
 Prisma pool. Pool contention is measured through Prisma's local engine metrics without acquiring
 another SQL connection; contention pauses the lane and requires two measured quiet samples before
 recovery. Paging-lag hysteresis remains independent. Missing pool telemetry is unknown, not a zero
-measurement. A single-node `integrated` install keeps the lane in-process; there, Settings →
-Intelligence should run with `maxConcurrency` 1 and `batchSize` 10 so analysis never competes with
-paging for more than one connection at a time.
+measurement. A single-node `integrated` install runs the lane in a child process of its own
+with its own heap and Prisma client; it uses its own small pool and backs off while ingestion is busy
+(see "Backpressure and budgets"). A shared process
+can therefore use up to `INTELLIGENCE_LANE_DATABASE_POOL_SIZE` more PostgreSQL connections while the
+lane is enabled and busy. Size `max_connections` for that, or set the variable lower. Lowering
+`maxConcurrency` and `batchSize` in Settings → Intelligence still reduces the lane's share of
+PostgreSQL further.
 
 ### Scale behaviour
 
@@ -995,7 +1093,22 @@ transaction (`noise-controls/ingest.ts`):
    (`noise-controls/lookup-client.ts`: two connections per process on the direct route, opened by the
    background snapshot refresh once a SHADOW/ON policy exists) whose connections start with
    `statement_timeout` and `lock_timeout` equal to the deadline: one round trip, and an abandoned or
-   failing lookup never touches the event transaction. A transaction-pooled (`pgbouncer=true`) or
+   failing lookup never touches the event transaction. On this route `processEvent` **sends the
+   statement early** (`beginIngestNoiseLookups`): as soon as the event is known to open a new incident,
+   after the dedup-key advisory lock and the open-incident check, so it overlaps the resolve-buffer,
+   policy, classification and automation reads the transaction makes before the hook. The reason is
+   queueing, not the round trip itself: while the hook waits, the event holds its connection from the
+   main pool, and with more events in flight than connections every millisecond of hold is paid again
+   by each event queued behind it (measured: about 1.5 ms of wait in the hook cost +2.1 to +3.5 ms p50
+   at concurrency 16). The hook reuses the answer only for the same event, instant, deadline and
+   snapshot object, otherwise it reads for itself; the deadline counts from the moment the statement
+   was sent, so the lookup never gets more than one deadline and the hook waits only for the rest. The
+   early start reads the same committed state the hook would (the event has written nothing these
+   lookups read), a few milliseconds sooner; events for one dedup key still read in order because the
+   lock is taken first. It uses `peekPrePagingSnapshot`, so only the hook starts snapshot refreshes and
+   cold-cache behaviour is unchanged. A lookup started for an event that then takes the buffered
+   out-of-order resolve path, or that a static control (window, suppression rule, orchestration)
+   decides, is wasted; it never touches the event. A transaction-pooled (`pgbouncer=true`) or
    missing datasource falls back to the **savepoint route**: the statement is issued lazily inside
    `SAVEPOINT opsknight_prepaging` with `set_config('statement_timeout', <deadline>, true)` and the
    savepoint is always rolled back (restoring the transaction's own timeout and clearing an aborted
@@ -1022,8 +1135,13 @@ changed) against everything OFF; results are under `plans/intelligence-engine/ce
 evaluations failing open. Every control ON together with the busy lane **fails** on p50 (+4.45 ms; the
 lane alone measured +1.61 and +2.41 ms), and the 10k burst over 1M history fails (+12.56 ms p50 /
 +17.45 ms p99, 28% fail-open at concurrency 16 on two lookup connections). No ingestion event failed in
-any run. Keep ON to services where the noise justifies it until the lane's in-process cost is reduced
-and the burst gate passes.
+any run.
+**Local status (2026-11-11, lane in its worker thread, lookups started early, host check with the peak
+rule):** every control ON with the busy lane **passes**, 3 of 3 valid invocations (p50 / p99 -0.08 /
+-17.62, +0.64 / -13.42, -0.29 / -10.20 ms), and so does the CI shape (3 of 3). The in-process fallback
+is outside the contract (it meets the latency limits only because the lane stops during a burst). The
+10k burst over 1M history was not re-measured, so keep ON to services where the noise justifies it
+until that burst gate passes.
 
 **Lookup pool size and fail-open per route (2026-11-17).** The pool has `PREPAGING_LOOKUP_POOL_SIZE`
 connections (1–32) or, by default, a quarter of the process's main pool, 2–8 (3 for the default pool of
