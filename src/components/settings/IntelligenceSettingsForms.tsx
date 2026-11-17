@@ -49,6 +49,7 @@ type SettingsValues = {
   feedbackRetentionDays: number;
   handoffSummaryEnabled: boolean;
   opsHelpersEnabled: boolean;
+  automationIntelligenceFieldsEnabled: boolean;
   revision: number;
 };
 
@@ -163,6 +164,26 @@ export function IntelligenceSettingsForm({
             drafts status-page updates from an incident, searches incidents, postmortems and
             runbooks from the command palette, and explains what moved a metric on analytics cards.
             Deterministic; nothing is created or published without a person.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${enabledId}-automation-fields`}
+          name="automationIntelligenceFieldsEnabled"
+          type="checkbox"
+          defaultChecked={settings.automationIntelligenceFieldsEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <div>
+          <label htmlFor={`${enabledId}-automation-fields`} className="text-sm font-medium">
+            Use intelligence signals in automation rules
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Adds In maintenance, Recent risky change, SLO burning, Flapping and Storm active as rule
+            conditions. Values come from a snapshot refreshed every 30 seconds; until it loads they
+            read as unknown and no rule matches on them.
           </p>
         </div>
       </div>

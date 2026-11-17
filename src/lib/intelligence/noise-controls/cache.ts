@@ -13,6 +13,13 @@ import {
 } from './contract';
 import { compileMatcher } from './matchers';
 import { warmNoiseLookupClient } from './lookup-client';
+import { loadServiceSignals } from '@/lib/automation/intelligence-signals';
+import {
+  EMPTY_SIGNALS,
+  inMaintenanceAt,
+  intelligenceContext,
+  type ServiceSignals,
+} from '@/lib/automation/context/intelligence';
 import type {
   CompiledPolicy,
   CompiledSuppressionRule,
@@ -100,6 +107,29 @@ export function compileSuppressionRule(row: {
   }
 }
 
+/**
+ * Evidence for the automation intelligence fields, only while that switch (and Intelligence) is on. Any
+ * failure leaves it null: automation then reads the fields as unknown, the rest of the snapshot is kept.
+ */
+async function loadAutomationSignals(
+  client: Client,
+  now: Date
+): Promise<Map<string, ServiceSignals> | null> {
+  try {
+    const settings = await client.intelligenceSettings.findUnique({
+      where: { id: 'default' },
+      select: { enabled: true, automationIntelligenceFieldsEnabled: true },
+    });
+    if (!settings?.enabled || !settings.automationIntelligenceFieldsEnabled) return null;
+    return await loadServiceSignals(client, { from: now, to: now });
+  } catch (error) {
+    logger.debug('[Intelligence] Automation signals unavailable; fields read as unknown', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
 export async function loadPrePagingSnapshot(
   client: Client = prisma,
   now: Date = new Date()
@@ -166,6 +196,7 @@ export async function loadPrePagingSnapshot(
   }
   return {
     loadedAt: now.getTime(),
+    serviceSignals: await loadAutomationSignals(client, now),
     policies: compiledPolicies,
     windows: windows.map<CompiledWindow>(row => ({
       id: row.id,
@@ -195,6 +226,25 @@ export function getPrePagingSnapshot(now: number = Date.now()): PrePagingSnapsho
   if (!current || now - current.loadedAt >= PREPAGING_LIMITS.cacheRefreshMs)
     void refreshPrePagingSnapshot();
   return current;
+}
+
+/**
+ * The automation intelligence fields for one service, from the snapshot alone (no query, no await).
+ * Cold snapshot or switch off → every field MISSING (unknown).
+ */
+export function automationIntelligenceContext(serviceId: string, at: Date) {
+  const snapshot = getPrePagingSnapshot();
+  const signals = snapshot?.serviceSignals;
+  if (!snapshot || !signals) return intelligenceContext({ signals: null, inMaintenance: null, at });
+  return intelligenceContext({
+    signals: signals.get(serviceId) ?? EMPTY_SIGNALS,
+    inMaintenance: inMaintenanceAt(
+      snapshot.windows,
+      { serviceId, teamId: snapshot.serviceTeams.get(serviceId) ?? null },
+      at
+    ),
+    at,
+  });
 }
 
 /** Single-flight refresh. Failures keep the previous snapshot and are logged at debug level. */

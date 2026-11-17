@@ -3,7 +3,7 @@ import type { EventPayload } from '@/lib/events';
 import { builtinContext } from './context/builtins';
 import { extractContextWithProvenance } from './context/extract';
 import { compareAutomationOutcomes } from './comparison';
-import { LIMITS, type CompiledSnapshot, type Route } from './contract';
+import { LIMITS, type CompiledSnapshot, type Context, type Route } from './contract';
 import { evaluateAutomation, type Evaluation } from './evaluator';
 import { evaluateConditions } from './evaluator/conditions';
 
@@ -24,6 +24,11 @@ export type ReplayEnvironment = {
   defaultPolicyId: string | null;
   /** Base classification per alert severity, resolved once per replay. */
   classify: (severity: string) => { priority: string | null; urgency: string };
+  /**
+   * The intelligence fields as they stood at an event's time, rebuilt from stored evidence. Absent when no
+   * rule reads them; the fields are then MISSING (unknown), exactly as live with the switch off.
+   */
+  intelligence?: (at: Date) => Context;
 };
 
 export type ReplayEvent = {
@@ -98,7 +103,8 @@ export type ReplaySummary = {
 export function replayContext(
   compiled: CompiledSnapshot,
   event: EventPayload,
-  environment: ReplayEnvironment
+  environment: ReplayEnvironment,
+  at?: string
 ) {
   const extracted = extractContextWithProvenance({
     fields: compiled.fields,
@@ -115,6 +121,8 @@ export function replayContext(
       source: event.payload.source,
     })
   );
+  if (environment.intelligence && at)
+    Object.assign(extracted.context, environment.intelligence(new Date(at)));
   return extracted;
 }
 
@@ -129,7 +137,7 @@ export function replayEvent(
   error: string | null;
 } {
   try {
-    const { context, normalization } = replayContext(compiled, event.event, environment);
+    const { context, normalization } = replayContext(compiled, event.event, environment, event.at);
     return {
       result: evaluateAutomation({
         version: compiled,

@@ -17,6 +17,7 @@ import {
 } from './contract';
 import { isLabelSubset, matchesAll, type CompiledMatcher } from './matchers';
 import { isWindowActiveAt } from './recurrence';
+import type { ServiceSignals } from '@/lib/automation/context/intelligence';
 
 /**
  * The pre-paging hook. It runs inside the ingestion transaction before an incident exists, so it is
@@ -83,6 +84,11 @@ export interface PrePagingSnapshot {
   serviceTeams: ReadonlyMap<string, string | null>;
   /** serviceId → approved dependency neighbourhood (itself included), for topology storms. */
   topology: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Per-service evidence for the automation intelligence fields (J1.4). Null while the switch is off,
+   * so automation reads those fields as MISSING (unknown).
+   */
+  serviceSignals?: ReadonlyMap<string, ServiceSignals> | null;
 }
 
 /** The bounded, index-backed reads the hook may make. Each must be a single indexed query. */

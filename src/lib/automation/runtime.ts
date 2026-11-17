@@ -18,6 +18,7 @@ import {
   observeOperationalHistogram,
 } from '@/lib/metrics/operational/registry';
 import { builtinContext } from './context/builtins';
+import { automationIntelligenceContext } from '@/lib/intelligence/noise-controls/cache';
 import { LIMITS, type Context } from './contract';
 import { extractContextWithProvenance } from './context/extract';
 import { getCachedCompiledVersion, loadCompiledVersion } from './cache';
@@ -138,12 +139,12 @@ export async function prepareAutomation(
   const servicePolicy =
     defaultPolicy !== undefined
       ? defaultPolicy
-      : (
+      : ((
           await tx.service.findUnique({
             where: { id: envelope.serviceId },
             select: { policy: { select: { id: true, name: true } } },
           })
-        )?.policy ?? null;
+        )?.policy ?? null);
   runtime.policyLookupMs = performance.now() - defaultPolicyLookupStarted;
   const engineStartedAt = performance.now();
   try {
@@ -176,10 +177,7 @@ export async function prepareAutomation(
       if (isPhaseChange || !position || (++guardCheckCounter & 3) === 0) {
         const now = performance.now();
         if (isPhaseChange) {
-          phaseDurations.set(
-            prevPhase,
-            (phaseDurations.get(prevPhase) ?? 0) + now - phaseStarted
-          );
+          phaseDurations.set(prevPhase, (phaseDurations.get(prevPhase) ?? 0) + now - phaseStarted);
           phaseStarted = now;
         }
         const elapsedMs = now - evalStart;
@@ -228,6 +226,9 @@ export async function prepareAutomation(
         source: envelope.event.payload.source,
       })
     );
+    // Snapshot lookup only (no query); skipped entirely unless a rule reads an intelligence field.
+    if (version.usesIntelligence)
+      Object.assign(context, automationIntelligenceContext(envelope.serviceId, evaluationAt));
     guard();
     const pureEvalStart = performance.now();
     const result = evaluateAutomation({
@@ -387,6 +388,11 @@ export async function prepareAutomation(
           source: envelope.event.payload.source,
         })
       );
+      if (candidateVersion.usesIntelligence)
+        Object.assign(
+          candidateContext,
+          automationIntelligenceContext(envelope.serviceId, evaluationAt)
+        );
       candGuard();
       const candidateResult = evaluateAutomation({
         version: candidateVersion,
@@ -739,7 +745,7 @@ export async function persistAutomation(
               ) VALUES (
                 ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
                 ${runtime.mode}::"AutomationMode",
-                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${result?.outcome.type ?? 'SERVICE_DEFAULT'}::"AutomationRouteType",
                 ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
                 ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
                 ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
@@ -779,7 +785,7 @@ export async function persistAutomation(
               ) VALUES (
                 ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
                 ${runtime.mode}::"AutomationMode",
-                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${result?.outcome.type ?? 'SERVICE_DEFAULT'}::"AutomationRouteType",
                 ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
                 ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
                 ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
@@ -833,7 +839,7 @@ export async function persistAutomation(
               ) VALUES (
                 ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
                 ${runtime.mode}::"AutomationMode",
-                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${result?.outcome.type ?? 'SERVICE_DEFAULT'}::"AutomationRouteType",
                 ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
                 ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
                 ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
@@ -865,7 +871,7 @@ export async function persistAutomation(
               ) VALUES (
                 ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
                 ${runtime.mode}::"AutomationMode",
-                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${result?.outcome.type ?? 'SERVICE_DEFAULT'}::"AutomationRouteType",
                 ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
                 ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
                 ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},

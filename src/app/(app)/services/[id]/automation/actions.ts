@@ -36,6 +36,7 @@ import {
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
+import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
 import type { OpsInsightView } from '@/lib/intelligence/ops-insights/contract';
 import { listInsightsForScope } from '@/lib/intelligence/ops-insights/view';
 import { normalizeValue } from '@/lib/automation/context/normalize';
@@ -516,9 +517,15 @@ export async function getAutomationArea(
   const insights = ['overview', 'rules'].includes(area)
     ? await readAutomationInsights(serviceId)
     : { items: [], canDecide: false, squireName: null };
+  const intelligenceSettings = ['rules', 'test'].includes(area)
+    ? await getIntelligenceSettings()
+    : null;
   return {
     enabled: await automationEnabled(),
     insights,
+    /** Intelligence fields join the condition picker only while their switch is on. */
+    intelligenceFieldsEnabled:
+      !!intelligenceSettings?.enabled && !!intelligenceSettings.automationIntelligenceFieldsEnabled,
     mode: config?.mode ?? 'DISABLED',
     activeVersionId: config?.activeVersionId ?? null,
     candidateVersionId: config?.candidateVersionId ?? null,
