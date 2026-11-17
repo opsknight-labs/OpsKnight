@@ -74,6 +74,8 @@ export async function saveIntelligenceSettings(
         feedbackRetentionDays: integer(form, 'feedbackRetentionDays'),
         handoffSummaryEnabled: form.get('handoffSummaryEnabled') === 'on',
         opsHelpersEnabled: form.get('opsHelpersEnabled') === 'on',
+        automationIntelligenceFieldsEnabled:
+          form.get('automationIntelligenceFieldsEnabled') === 'on',
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }

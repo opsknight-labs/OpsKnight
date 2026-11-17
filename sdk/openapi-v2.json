@@ -4689,6 +4689,12 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "preRoutingTrace": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

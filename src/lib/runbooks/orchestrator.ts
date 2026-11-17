@@ -87,6 +87,7 @@ const jobPayloadSchema = z.discriminatedUnion('kind', [
       incidentId: z.string().cuid(),
       sourceEventId: z.string().min(1).max(200),
       source: z.string().max(40).optional(),
+      attachRunbookIds: z.array(z.string().min(1).max(100)).max(20).optional(),
     })
     .strict(),
 ]);
@@ -1954,5 +1955,6 @@ export async function processRunbookJob(raw: unknown): Promise<void> {
   const { evaluateIncidentTriggers } = await import('./triggers');
   await evaluateIncidentTriggers(payload.incidentId, payload.sourceEventId, {
     source: payload.source,
+    attachRunbookIds: payload.attachRunbookIds,
   });
 }

@@ -6,7 +6,9 @@ import { getAutomationArea, automationAction } from '@/app/(app)/services/[id]/a
 import {
   builtinFields,
   emptySnapshot,
+  intelligenceFields,
   snapshotSchema,
+  usesIntelligenceFields,
   type Field,
   type Snapshot,
 } from '@/lib/automation/contract';
@@ -477,7 +479,12 @@ export default function AutomationWorkspace({
 
   const issues = useMemo(() => lint(draft), [draft]);
   const errorCount = useMemo(() => issues.filter(i => i.level === 'ERROR').length, [issues]);
-  const fields = useMemo(() => [...builtinFields, ...draft.fields], [draft.fields]);
+  // Intelligence fields appear while their switch is on, or when the draft already reads one.
+  const showIntelligence = !!status?.intelligenceFieldsEnabled || usesIntelligenceFields(draft);
+  const fields = useMemo(
+    () => [...builtinFields, ...(showIntelligence ? intelligenceFields : []), ...draft.fields],
+    [draft.fields, showIntelligence]
+  );
   const counts = useMemo(
     () =>
       review === 'LIVE'

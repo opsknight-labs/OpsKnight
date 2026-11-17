@@ -552,6 +552,8 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       finalPriority: { type: ['string', 'null'] },
       evaluationAt: date,
       createdAt: date,
+      /** Noise-control decisions made before automation routed the incident, as sentences. */
+      preRoutingTrace: { type: 'array', items: string() },
     },
     [
       'incidentId',

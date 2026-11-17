@@ -82,6 +82,8 @@ export type IntelligenceSettingsView = {
   runbookFixWindowMinutes: number;
   /** Small deterministic helpers: create-form suggestions, status drafts, palette knowledge search. */
   opsHelpersEnabled: boolean;
+  /** Intelligence fields as automation rule conditions, from the pre-paging snapshot. */
+  automationIntelligenceFieldsEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -109,6 +111,7 @@ const SETTINGS_SELECT = {
   opsInsightsNotificationsEnabled: true,
   runbookFixWindowMinutes: true,
   opsHelpersEnabled: true,
+  automationIntelligenceFieldsEnabled: true,
   revision: true,
 } as const;
 

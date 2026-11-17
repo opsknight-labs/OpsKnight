@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   permissions: vi.fn(),
   decision: vi.fn(),
   notifications: vi.fn(),
+  noise: vi.fn(),
 }));
 vi.mock('@/lib/rbac', () => ({
   assertCanViewIncident: mocks.visible,
@@ -17,6 +18,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     incidentAutomationDecision: { findUnique: mocks.decision },
     notification: { groupBy: mocks.notifications },
+    prePagingDecision: { findMany: mocks.noise },
   },
 }));
 
@@ -46,9 +48,40 @@ beforeEach(() => {
   mocks.permissions.mockResolvedValue(sensitive);
   mocks.notifications.mockResolvedValue([]);
   mocks.decision.mockResolvedValue(baseDecision);
+  mocks.noise.mockResolvedValue([]);
 });
 
 describe('IncidentAutomationCard at a glance', () => {
+  it('stays silent about noise controls when none decided anything', async () => {
+    expect(await renderCard()).not.toContain('Why did this route here?');
+  });
+
+  it('shows the noise decision and the automation route in one trace', async () => {
+    mocks.noise.mockResolvedValue([
+      {
+        control: 'ORCHESTRATION',
+        action: 'TRANSFORM',
+        mode: 'ON',
+        applied: true,
+        reason: 'Transformed by orchestration rules',
+        sourceName: null,
+        reversedAt: null,
+        evidence: {
+          pipeline: {
+            order: 'ON',
+            automation: { priority: 'P1', route: 'ESCALATION_POLICY', policyId: 'p' },
+            reroute: { serviceId: 's', serviceName: 'Payments', applied: true, reason: 'APPLIED' },
+          },
+        },
+      },
+    ]);
+    const html = await renderCard();
+    expect(html).toContain('Why did this route here?');
+    expect(html).toContain('Noise controls: Transformed by orchestration rules.');
+    expect(html).toContain('routed responders to service “Payments”');
+    expect(html).toContain('Then automation chose the route below.');
+  });
+
   it('shows the pinned policy route, priority change, rule, version and mode', async () => {
     const html = await renderCard();
     expect(html).toContain('id="incident-automation-decision-heading"');

@@ -5137,6 +5137,9 @@ model IntelligenceSettings {
   /// Small deterministic helpers (create-form suggestions, status-update drafts, knowledge search in the
   /// command palette, "why did this change" on analytics). Default off.
   opsHelpersEnabled           Boolean  @default(false)
+  /// Intelligence fields (inMaintenance, recentRiskyChange, sloBurning, flapping, stormActive) as
+  /// automation rule conditions, read from the 30 s pre-paging snapshot. Default off.
+  automationIntelligenceFieldsEnabled Boolean @default(false)
   revision                    Int      @default(1)
   updatedBy                   String?
   createdAt                   DateTime @default(now())
@@ -5531,6 +5534,9 @@ model NoiseControlPolicy {
   mode        NoiseControlMode @default(OFF)
   definition  Json
   revision    Int              @default(1)
+  /// One pipeline order: OFF (null) runs automation before the noise-control static decision, SHADOW
+  /// records what noise-first would decide, ON applies noise-first (reroute and attach included).
+  pipelineOrder NoiseControlMode?
   updatedById String?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt

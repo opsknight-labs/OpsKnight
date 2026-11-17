@@ -15,7 +15,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import IncidentAlertContextCard from './IncidentAlertContextCard';
-import { builtinFields, snapshotSchema } from '@/lib/automation/contract';
+import { builtinFields, intelligenceFields, snapshotSchema } from '@/lib/automation/contract';
+import { describeNoiseDecisions } from '@/lib/automation/presentation/pipeline-trace';
 import { decodeExplanation } from '@/lib/automation/explanation';
 import { toneChipClass, type ResponseTone } from '@/lib/incidents/response-presentation';
 import prisma from '@/lib/prisma';
@@ -75,6 +76,24 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
     include: { version: { select: { versionNumber: true, snapshot: true } } },
   });
   if (!decision) return null;
+  // One trace: what noise controls decided before automation chose the route (J1.5).
+  const noiseSteps = describeNoiseDecisions(
+    await prisma.prePagingDecision.findMany({
+      where: { incidentId },
+      orderBy: { createdAt: 'asc' },
+      take: 5,
+      select: {
+        control: true,
+        action: true,
+        mode: true,
+        applied: true,
+        reason: true,
+        sourceName: true,
+        reversedAt: true,
+        evidence: true,
+      },
+    })
+  );
   const notifications = await prisma.notification.groupBy({
     by: ['channel', 'status'],
     where: {
@@ -112,7 +131,9 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
         rule => rule.id === decision.matchedRouteRuleId && rule.phase === 'ROUTE'
       )
     : undefined;
-  const fieldLabels = new Map([...builtinFields, ...fields].map(field => [field.key, field.label]));
+  const fieldLabels = new Map(
+    [...builtinFields, ...intelligenceFields, ...fields].map(field => [field.key, field.label])
+  );
   const operators = new Map([
     ['EQ', 'equals'],
     ['NE', 'does not equal'],
@@ -214,6 +235,34 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
               </ul>
             )}
           </div>
+          {noiseSteps.length > 0 && (
+            <section
+              aria-labelledby="incident-route-trace-heading"
+              className="space-y-1 rounded-lg border border-border/60 bg-muted/15 p-2 sm:p-2.5"
+            >
+              <h3 id="incident-route-trace-heading" className="text-xs font-semibold">
+                Why did this route here?
+              </h3>
+              <ol className="space-y-1 text-xs text-muted-foreground">
+                {noiseSteps.map((step, index) => (
+                  <li key={index} className="flex gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60"
+                    />
+                    <span>{step.text}</span>
+                  </li>
+                ))}
+                <li className="flex gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                  />
+                  <span>Then automation chose the route below.</span>
+                </li>
+              </ol>
+            </section>
+          )}
           <dl className="grid min-w-0 gap-2 sm:grid-cols-3">
             <Fact label="Responder route">
               {decision.routeType === 'NO_ESCALATION'

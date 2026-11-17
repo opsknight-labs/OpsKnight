@@ -1,5 +1,11 @@
 /* eslint-disable security/detect-object-injection -- Keys are schema-validated or derived from compiled field definitions. */
-import { snapshotSchema, LIMITS, builtinFields, type CompiledSnapshot } from './contract';
+import {
+  snapshotSchema,
+  LIMITS,
+  builtinFields,
+  intelligenceFields,
+  type CompiledSnapshot,
+} from './contract';
 import { compilePath, forbiddenSegment } from './context/extract';
 import { normalizeValue, normalizedString } from './context/normalize';
 export type LintIssue = {
@@ -79,7 +85,7 @@ export function compileAutomation(raw: unknown): {
     level: LintIssue['level'] = 'ERROR'
   ) => issues.push({ level, code, message, ruleId });
   const fieldIds = new Set<string>();
-  const keys = new Set(builtinFields.map(f => f.key));
+  const keys = new Set([...builtinFields, ...intelligenceFields].map(f => f.key));
   const fields = snapshot.fields.map(field => {
     if (fieldIds.has(field.fieldId)) add('INVALID_FIELD', 'Field identities must be unique');
     fieldIds.add(field.fieldId);
@@ -118,7 +124,7 @@ export function compileAutomation(raw: unknown): {
       })),
     };
   });
-  const definitions = [...builtinFields, ...fields];
+  const definitions = [...builtinFields, ...intelligenceFields, ...fields];
   const ruleIds = new Set<string>();
   let catchAll = false;
   const priorPriorityRules: typeof snapshot.rules = [];

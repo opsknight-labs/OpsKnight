@@ -143,7 +143,7 @@ async function ruleStillCurrent(
 export async function evaluateIncidentTriggers(
   incidentId: string,
   sourceEventId: string,
-  options: { source?: unknown } = {}
+  options: { source?: unknown; attachRunbookIds?: string[] } = {}
 ) {
   const loaded = await loadRunbookIncidentContext(prisma, incidentId);
   if (!loaded) return { matched: 0, started: 0, suggested: 0 };
@@ -174,6 +174,7 @@ export async function evaluateIncidentTriggers(
   for await (const bindings of incidentRuleBatches(serviceId, evaluationSource)) {
     for (const binding of bindings) {
       let matchedTrigger: { id: string; revision: number; reason: string } | null = null;
+      let attachedOnly = false;
       let planSnapshot: Prisma.InputJsonValue | null = null;
       const versionId =
         binding.versionStrategy === 'PINNED'
@@ -197,6 +198,18 @@ export async function evaluateIncidentTriggers(
           }
           if (evaluation.status !== 'NOT_MATCHED') blocker ??= evaluation.reason;
         }
+        // Orchestration ATTACH_RUNBOOK reaches a runbook only through this service's binding, and only as
+        // a suggestion: it never starts an automatic run its trigger conditions did not allow.
+        attachedOnly =
+          !matchedTrigger &&
+          !!options.attachRunbookIds?.includes(binding.runbookId) &&
+          binding.triggers.length > 0;
+        if (attachedOnly)
+          matchedTrigger = {
+            id: binding.triggers[0].id,
+            revision: binding.triggers[0].revision,
+            reason: 'Attached by a noise-control orchestration rule',
+          };
         if (!matchedTrigger) {
           if (blocker) {
             skipped++;
@@ -262,7 +275,7 @@ export async function evaluateIncidentTriggers(
           bindingId: binding.id,
           runbookVersionId: versionId,
         });
-        if (binding.mode === 'SUGGESTED') {
+        if (binding.mode === 'SUGGESTED' || attachedOnly) {
           try {
             const created = await prisma.$transaction(async tx => {
               const incidentLock = await lockOpenIncidentForAutomation(tx, incidentId);

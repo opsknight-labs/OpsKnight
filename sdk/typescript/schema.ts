@@ -1010,6 +1010,7 @@ export type AutomationDecision = {
   finalPriority: string | null;
   evaluationAt: string;
   createdAt: string;
+  preRoutingTrace?: Array<string>;
 };
 export type AutomationObservation = {
   id: string;

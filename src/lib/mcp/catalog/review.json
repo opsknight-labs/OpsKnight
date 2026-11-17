@@ -1461,7 +1461,7 @@
     "tool": "automation_get_decision_trace",
     "title": "Get automation decision trace",
     "agentDescription": "List the route, escalation policy and priority automation chose for each of a service's incidents, one page at a time. Use to trace why an incident was routed or re-prioritised.",
-    "routeSha256": "0fbf3ccaee62d9aee36167400bfa844764082a4603692c954f5773baa47ebbae",
+    "routeSha256": "ff41eed1bb64cb53fc1adae8e78261675bc96fd1ed1b50da34a616973853c554",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "fd91ff4098e1b7ad1271af9ff7a86a565f13953291246185dff62d9b019e0ba3",

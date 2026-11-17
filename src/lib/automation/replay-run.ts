@@ -8,7 +8,10 @@ import { resolveIncidentClassification } from '@/lib/incidents/classification';
 import { withDbBudget } from '@/lib/intelligence/jobs/db-budget';
 import { validateAutomationSnapshot } from './authoring';
 import { compileAutomation } from './compiler';
-import { snapshotSchema } from './contract';
+import { snapshotSchema, usesIntelligenceFields } from './contract';
+import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
+import { loadServiceSignals } from './intelligence-signals';
+import { EMPTY_SIGNALS, inMaintenanceAt, intelligenceContext } from './context/intelligence';
 import {
   REPLAY_MAX_DAYS,
   REPLAY_MIN_DAYS,
@@ -200,6 +203,46 @@ export async function loadReplayEnvironment(
   };
 }
 
+/**
+ * The intelligence fields as they stood at each replayed event, rebuilt from stored evidence in one bounded
+ * read. With the switch off live traffic reads them as unknown, so replay does too (returns undefined).
+ */
+export async function loadReplayIntelligence(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  from: Date,
+  to: Date
+): Promise<ReplayEnvironment['intelligence']> {
+  const settings = await getIntelligenceSettings(tx);
+  if (!settings.enabled || !settings.automationIntelligenceFieldsEnabled) return undefined;
+  const [signals, windows, service] = await Promise.all([
+    loadServiceSignals(tx, { from, to, serviceId }),
+    tx.maintenanceWindow.findMany({
+      where: {
+        enabled: true,
+        scope: { in: ['SERVICE', 'TEAM', 'ALL'] },
+        startsAt: { lte: to },
+        OR: [{ recurrence: { not: null } }, { endsAt: { gte: from } }],
+      },
+      select: {
+        scope: true,
+        serviceId: true,
+        teamId: true,
+        startsAt: true,
+        endsAt: true,
+        recurrence: true,
+        endedAt: true,
+      },
+      take: 2_000,
+    }),
+    tx.service.findUnique({ where: { id: serviceId }, select: { teamId: true } }),
+  ]);
+  const own = signals.get(serviceId) ?? EMPTY_SIGNALS;
+  const scope = { serviceId, teamId: service?.teamId ?? null };
+  return at =>
+    intelligenceContext({ signals: own, inMaintenance: inMaintenanceAt(windows, scope, at), at });
+}
+
 /** Worker entry point. Failures land on the run row, so the job itself always completes. */
 export async function processAutomationReplay(runId: string) {
   const claimed = await prisma.intelligenceEvaluationRun.updateMany({
@@ -218,6 +261,10 @@ export async function processAutomationReplay(runId: string) {
     const environment = await withDbBudget({ maxDbMs: PAGE_DB_MS }, tx =>
       loadReplayEnvironment(tx, stored.serviceId, stored.integrationType)
     );
+    if (usesIntelligenceFields(compiled))
+      environment.intelligence = await withDbBudget({ maxDbMs: PAGE_DB_MS }, tx =>
+        loadReplayIntelligence(tx, stored.serviceId, run.windowStart, run.windowEnd)
+      );
     const result = await replayStoredEvents({
       compiled,
       serviceId: stored.serviceId,

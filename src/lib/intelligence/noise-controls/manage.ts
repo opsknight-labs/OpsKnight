@@ -52,6 +52,8 @@ export interface NoiseControlPolicyView {
   scopeKey: string;
   serviceId: string | null;
   mode: NoiseControlModeValue;
+  /** J1.5: OFF runs automation first; SHADOW records noise-first; ON applies it. */
+  pipelineOrder: NoiseControlModeValue;
   definition: NoiseControlDefinition;
   /** 0 when no row exists yet: defaults apply and the first save creates it. */
   revision: number;
@@ -74,6 +76,7 @@ export async function getNoiseControlPolicy(
       scopeKey: noiseScopeKey(serviceId),
       serviceId,
       mode: 'OFF',
+      pipelineOrder: 'OFF',
       definition: DEFAULT_NOISE_CONTROL_DEFINITION,
       revision: 0,
       updatedAt: null,
@@ -85,6 +88,7 @@ export async function getNoiseControlPolicy(
     scopeKey: row.scopeKey,
     serviceId: row.serviceId,
     mode: row.mode,
+    pipelineOrder: row.pipelineOrder ?? 'OFF',
     definition: row.definition as NoiseControlDefinition,
     revision: row.revision,
     updatedAt: row.updatedAt,
@@ -170,6 +174,7 @@ export async function assessNoiseReadiness(
 interface PublishRequest {
   serviceId: string | null;
   mode: NoiseControlModeValue;
+  pipelineOrder?: NoiseControlModeValue;
   definition: NoiseControlDefinition;
   expectedRevision: number;
   acknowledgeReadiness?: boolean;
@@ -210,6 +215,7 @@ async function publishPolicy(
       mode: request.mode,
       definition: request.definition as Prisma.InputJsonValue,
       updatedById: actor.actorId,
+      ...(request.pipelineOrder ? { pipelineOrder: request.pipelineOrder } : {}),
     };
     const row = previous
       ? await tx.noiseControlPolicy.update({
@@ -235,12 +241,14 @@ async function publishPolicy(
         oldValue: previous
           ? {
               mode: previous.mode,
+              pipelineOrder: previous.pipelineOrder ?? 'OFF',
               revision: previous.revision,
               versionNumber: replaced?.versionNumber ?? null,
             }
           : null,
         newValue: {
           mode: row.mode,
+          pipelineOrder: row.pipelineOrder ?? 'OFF',
           revision: row.revision,
           versionId: version.id,
           versionNumber: version.versionNumber,
@@ -259,6 +267,7 @@ async function publishPolicy(
     scopeKey: view.row.scopeKey,
     serviceId: view.row.serviceId,
     mode: view.row.mode,
+    pipelineOrder: view.row.pipelineOrder ?? 'OFF',
     definition: view.row.definition as NoiseControlDefinition,
     revision: view.row.revision,
     updatedAt: view.row.updatedAt,
@@ -280,6 +289,7 @@ export async function saveNoiseControlPolicy(
     {
       serviceId: parsed.serviceId ?? null,
       mode: parsed.mode,
+      pipelineOrder: parsed.pipelineOrder,
       definition: parsed.definition,
       expectedRevision: parsed.expectedRevision,
       acknowledgeReadiness: parsed.acknowledgeReadiness,
