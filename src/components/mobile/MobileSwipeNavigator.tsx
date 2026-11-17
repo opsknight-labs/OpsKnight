@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { MOBILE_NAV_ITEMS, MOBILE_MORE_ROUTES } from '@/components/mobile/mobileNavItems';
 import { isInteractiveMobileTarget } from '@/lib/mobile-interactive';
@@ -34,6 +34,22 @@ const resolveActiveIndex = (pathname: string) => {
   return -1;
 };
 
+const subscribeNever = () => () => {};
+
+// Captured once per page load so marking the hint as seen does not hide it mid-display.
+let hintEligibleSnapshot: boolean | null = null;
+function readHintEligible(): boolean {
+  if (hintEligibleSnapshot === null) {
+    try {
+      hintEligibleSnapshot =
+        'ontouchstart' in window && !window.localStorage.getItem(SWIPE_HINT_KEY);
+    } catch {
+      hintEligibleSnapshot = false;
+    }
+  }
+  return hintEligibleSnapshot;
+}
+
 export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorProps) {
   const router = useRouter();
   const pathname = usePathname() || '/m';
@@ -41,14 +57,11 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
   const isFocused = isFocusedMobileWorkflow(pathname);
 
   const [snapDirection, setSnapDirection] = useState<'left' | 'right' | null>(null);
-  const [showHint, setShowHint] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return Boolean('ontouchstart' in window && !window.localStorage.getItem(SWIPE_HINT_KEY));
-    } catch {
-      return false;
-    }
-  });
+  // Read after hydration (server snapshot is false) so SSR and the first client
+  // render agree; the hint then appears once for touch users who have not seen it.
+  const hintEligible = useSyncExternalStore(subscribeNever, readHintEligible, () => false);
+  const [hintDismissed, setHintDismissed] = useState(false);
+  const showHint = hintEligible && !hintDismissed;
   const startX = useRef(0);
   const startY = useRef(0);
   const tracking = useRef(false);
@@ -78,7 +91,7 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
 
   useEffect(() => {
     if (!showHint) return;
-    hintTimeout.current = setTimeout(() => setShowHint(false), SWIPE_HINT_MS);
+    hintTimeout.current = setTimeout(() => setHintDismissed(true), SWIPE_HINT_MS);
     return () => {
       if (hintTimeout.current) {
         clearTimeout(hintTimeout.current);
