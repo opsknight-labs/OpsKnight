@@ -1,4 +1,4 @@
-import { isDedicatedHttpRole } from './runtime-role';
+import { getOpsKnightProcessRole, isDedicatedHttpRole } from './runtime-role';
 
 const DEFAULT_POOL_SIZE = 10;
 
@@ -107,4 +107,63 @@ export function selectPrePagingLookupDatasourceUrl(
   }
 ): string | undefined {
   return env.DIRECT_DATABASE_URL ?? env.DATABASE_URL;
+}
+
+/** The role-specific pool size setting for this process, when one is set. */
+export function rolePoolSize(): string | undefined {
+  switch (getOpsKnightProcessRole()) {
+    case 'integrated':
+      return process.env.DATABASE_POOL_SIZE_INTEGRATED;
+    case 'web':
+    case 'http':
+      return process.env.DATABASE_POOL_SIZE_WEB;
+    case 'scheduler':
+      return process.env.DATABASE_POOL_SIZE_SCHEDULER;
+    case 'worker':
+      return process.env.DATABASE_POOL_SIZE_WORKER;
+    case 'general-worker':
+      return process.env.DATABASE_POOL_SIZE_GENERAL_WORKER;
+    case 'critical-worker':
+      return process.env.DATABASE_POOL_SIZE_CRITICAL_WORKER;
+    case 'bulk-worker':
+      return process.env.DATABASE_POOL_SIZE_BULK_WORKER;
+    case 'status-projector':
+      return process.env.DATABASE_POOL_SIZE_STATUS_PROJECTOR;
+    case 'runbook-worker':
+      return process.env.DATABASE_POOL_SIZE_RUNBOOK_WORKER;
+    case 'ingestion-worker':
+      return process.env.DATABASE_POOL_SIZE_INGESTION_WORKER;
+    case 'intelligence-worker':
+      return process.env.DATABASE_POOL_SIZE_INTELLIGENCE_WORKER;
+  }
+}
+
+/** The connection limit the primary Prisma client is configured with in this process. */
+export function primaryPoolSize(): number {
+  const configured = configurePrismaDatasource(
+    selectPrismaDatasourceUrl(getOpsKnightProcessRole()),
+    rolePoolSize() ?? process.env.DATABASE_POOL_SIZE
+  );
+  try {
+    return poolSize(new URL(configured ?? '').searchParams.get('connection_limit') ?? undefined);
+  } catch {
+    return DEFAULT_POOL_SIZE;
+  }
+}
+
+/**
+ * Pre-paging lookup connections per process: `PREPAGING_LOOKUP_POOL_SIZE` (1-32) when valid, otherwise a
+ * quarter of the main pool, 2-8. An event holds one lookup connection for about a millisecond and no more
+ * events can be in the hook than the main pool has connections. Measured at concurrency 16, fail-open came
+ * from cold connections and per-query client overhead, not from waiting for one: 16 connections failed
+ * open more often than 2-5, because each new connection is cold. See docs/architecture/intelligence.md.
+ */
+export function prePagingLookupPoolSize(
+  mainPoolSize: number,
+  configured: string | undefined = process.env.PREPAGING_LOOKUP_POOL_SIZE
+): number {
+  const explicit = Number(configured);
+  if (configured?.trim() && Number.isInteger(explicit) && explicit >= 1 && explicit <= 32)
+    return explicit;
+  return Math.min(8, Math.max(2, Math.ceil(mainPoolSize / 4)));
 }

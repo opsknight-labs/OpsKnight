@@ -203,7 +203,7 @@ export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   loading = loadPrePagingSnapshot()
     .then(snapshot => {
       current = snapshot;
-      if (needsLookups(snapshot)) void warmNoiseLookupClient();
+      if (needsLookups(snapshot)) void warmNoiseLookupClient(warmLookupStatement);
       return snapshot;
     })
     .catch(error => {
@@ -230,7 +230,7 @@ function needsLookups(snapshot: PrePagingSnapshot): boolean {
 export async function primePrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   current = null;
   const snapshot = await refreshPrePagingSnapshot();
-  if (snapshot && needsLookups(snapshot)) await warmNoiseLookupClient();
+  if (snapshot && needsLookups(snapshot)) await warmNoiseLookupClient(warmLookupStatement);
   return snapshot;
 }
 
@@ -294,6 +294,17 @@ export interface PrePagingLookupPlan {
   dedup: { fingerprintHash: string; since: Date } | null;
   flapping: { dedupKey: string; fingerprintHash: string | null; since: Date; limit: number } | null;
   storm: { serviceIds: readonly string[]; since: Date } | null;
+}
+
+/** The prefetch statement with every lookup, matching nothing: warms a fresh pool connection. */
+function warmLookupStatement(client: Pick<Prisma.TransactionClient, '$queryRaw'>) {
+  const since = new Date();
+  return prefetchedLookups(client, {
+    serviceId: '',
+    dedup: { fingerprintHash: '', since },
+    flapping: { dedupKey: '', fingerprintHash: null, since, limit: 1 },
+    storm: { serviceIds: [''], since },
+  }).findOpenIncidentByFingerprint('', '', since);
 }
 
 interface PrefetchedRow {

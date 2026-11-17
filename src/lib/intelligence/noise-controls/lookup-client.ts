@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import {
   configurePrismaDatasource,
+  prePagingLookupPoolSize,
+  primaryPoolSize,
   selectPrePagingLookupDatasourceUrl,
 } from '@/lib/prisma-datasource';
 import { PREPAGING_LIMITS } from './contract';
@@ -19,12 +21,11 @@ import { PREPAGING_LIMITS } from './contract';
  * Reads outside the event transaction see exactly what the transaction would (READ COMMITTED, and the
  * event has written nothing these lookups read before the hook runs).
  *
- * Two connections per process (on the direct route, `DIRECT_DATABASE_URL` when set, because poolers may
- * drop startup options). A datasource behind a transaction pooler (`pgbouncer=true`) or a missing one
+ * A quarter of the process's main pool, 2-8 connections, or `PREPAGING_LOOKUP_POOL_SIZE` (on the direct
+ * route, `DIRECT_DATABASE_URL` when set, because poolers may drop startup options). A datasource behind a transaction pooler (`pgbouncer=true`) or a missing one
  * keeps the lookups on the event transaction under a savepoint instead (`ingest.ts`).
  */
 
-const POOL_SIZE = 2;
 const MAX_DEADLINE_MS = 50;
 let deadlineOverrideMs: number | null = null;
 
@@ -83,7 +84,12 @@ export function noiseLookupDatasourceUrl(
   return url.toString();
 }
 
-let current: { client: PrismaClient; timeoutMs: number } | null = null;
+let current: {
+  client: PrismaClient;
+  timeoutMs: number;
+  poolSize: number;
+  warm?: Promise<void>;
+} | null = null;
 let unavailable = false;
 
 /**
@@ -93,14 +99,15 @@ let unavailable = false;
 export function getNoiseLookupClient(timeoutMs: number): PrismaClient | null {
   if (unavailable || routeOverride === 'transaction') return null;
   if (current?.timeoutMs === timeoutMs) return current.client;
-  const url = noiseLookupDatasourceUrl(selectPrePagingLookupDatasourceUrl(), timeoutMs, POOL_SIZE);
+  const poolSize = prePagingLookupPoolSize(primaryPoolSize());
+  const url = noiseLookupDatasourceUrl(selectPrePagingLookupDatasourceUrl(), timeoutMs, poolSize);
   if (!url) {
     unavailable = true;
     return null;
   }
   const previous = current?.client;
   const client = new PrismaClient({ datasourceUrl: url });
-  current = { client, timeoutMs };
+  current = { client, timeoutMs, poolSize };
   void previous?.$disconnect().catch(() => undefined);
   // Connect in the background; lookups made before it is ready fail open on the deadline.
   client.$connect().catch(error => {
@@ -115,9 +122,31 @@ export function getNoiseLookupClient(timeoutMs: number): PrismaClient | null {
  * Opens the pool ahead of the first event once a SHADOW or ON policy exists (called from the background
  * snapshot refresh, never from the hot path), so the first lookups do not fail open on connect time.
  */
-export async function warmNoiseLookupClient(): Promise<void> {
+export async function warmNoiseLookupClient(
+  probe: (client: PrismaClient) => Promise<unknown>
+): Promise<void> {
   const client = getNoiseLookupClient(lookupTimeoutMs(prePagingDeadlineMs()));
-  await client?.$connect().catch(() => undefined);
+  const pool = current;
+  if (!client || pool?.client !== client) return;
+  // Prisma opens pool connections on demand, and a lookup on a fresh connection (connect, then the
+  // backend's first read of these tables) cannot finish inside the deadline: at concurrency 16 every
+  // measured fail-open was on a cold connection. Concurrent probes, one per connection, warm them all
+  // once per pool; a probe the deadline-sized timeout cancels is retried.
+  pool.warm ??= client
+    .$connect()
+    .then(async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1)
+        await Promise.all(
+          Array.from({ length: pool.poolSize }, () => probe(client).catch(() => undefined))
+        );
+    })
+    .then(
+      () => undefined,
+      () => {
+        pool.warm = undefined; // retried on the next snapshot refresh
+      }
+    );
+  await pool.warm;
 }
 
 export async function disconnectNoiseLookupClient(): Promise<void> {
