@@ -24,6 +24,8 @@ export type DetailBreadcrumb = {
 
 export type DetailHeroBannerProps = {
   breadcrumb?: DetailBreadcrumb;
+  /** Custom breadcrumb trail rendered above the banner (e.g. `<Breadcrumbs>`); wins over `breadcrumb`. */
+  breadcrumbSlot?: ReactNode;
   tag?: string;
   title: string;
   subtitle?: ReactNode;
@@ -39,6 +41,7 @@ export type DetailHeroBannerProps = {
 
 export default function DetailHeroBanner({
   breadcrumb,
+  breadcrumbSlot,
   tag,
   title,
   subtitle,
@@ -55,7 +58,8 @@ export default function DetailHeroBanner({
   return (
     <header className={cn('space-y-4', className)}>
       {/* Breadcrumb Trail */}
-      {breadcrumb && (
+      {breadcrumbSlot}
+      {!breadcrumbSlot && breadcrumb && (
         <Link
           href={breadcrumb.href}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"

@@ -1,10 +1,7 @@
 'use client';
 
-import { ReactNode, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/shadcn/input';
-import { Button } from '@/components/ui/shadcn/button';
-import { X, RotateCcw } from 'lucide-react';
+import type { ReactNode } from 'react';
+import FilterBar from '@/components/patterns/FilterBar';
 
 export type SearchFilterBarProps = {
   searchValue?: string;
@@ -19,6 +16,7 @@ export type SearchFilterBarProps = {
   className?: string;
 };
 
+/** Single-row filter card; delegates to the shared `FilterBar` (`@/components/patterns`). */
 export default function SearchFilterBar({
   searchValue = '',
   onSearchChange,
@@ -30,92 +28,24 @@ export default function SearchFilterBar({
   searchDebounceMs = 0,
   className,
 }: SearchFilterBarProps) {
-  const [draftSearch, setDraftSearch] = useState(searchValue);
-  const skipNextDebounce = useRef(false);
-
-  const [syncedSearchValue, setSyncedSearchValue] = useState(searchValue);
-  if (syncedSearchValue !== searchValue) {
-    setSyncedSearchValue(searchValue);
-    setDraftSearch(searchValue);
-  }
-
-  useEffect(() => {
-    if (!onSearchChange || searchDebounceMs <= 0 || draftSearch === searchValue) return;
-    if (skipNextDebounce.current) {
-      skipNextDebounce.current = false;
-      return;
-    }
-
-    const timer = window.setTimeout(() => onSearchChange(draftSearch), searchDebounceMs);
-    return () => window.clearTimeout(timer);
-  }, [draftSearch, onSearchChange, searchDebounceMs, searchValue]);
-
-  const handleSearchChange = (value: string) => {
-    setDraftSearch(value);
-    if (searchDebounceMs <= 0) onSearchChange?.(value);
-  };
-
-  const clearSearch = () => {
-    setDraftSearch('');
-    skipNextDebounce.current = true;
-    onSearchChange?.('');
-  };
-
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-3 rounded-lg border border-ink-200/80 bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between',
-        className
-      )}
-    >
-      {/* Left: Search input & filter slots */}
-      <div className="flex flex-1 flex-col gap-2.5 sm:flex-row sm:items-center">
-        {onSearchChange && (
-          <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Input
-              type="text"
-              placeholder={searchPlaceholder}
-              value={draftSearch}
-              onChange={e => handleSearchChange(e.target.value)}
-              className="h-9 pr-8 text-xs sm:text-sm bg-ink-50/60 focus:bg-card transition-colors"
-              style={{ paddingRight: '2rem' }}
-            />
-            {draftSearch && (
-              <button
-                type="button"
-                onClick={clearSearch}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
-                aria-label="Clear search"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Filter dropdown slots */}
-        {filters && <div className="flex flex-wrap items-center gap-2">{filters}</div>}
-
-        {/* Reset button */}
-        {hasActiveFilters && onResetFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onResetFilters}
-            className="h-9 gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset</span>
-          </Button>
-        )}
-      </div>
-
-      {/* Right: Actions slot (e.g. Export CSV, Live badge, Create button) */}
-      {actions && (
-        <div className="flex shrink-0 items-center gap-2 justify-end pt-2 border-t border-ink-100 md:pt-0 md:border-t-0">
-          {actions}
-        </div>
-      )}
-    </div>
+    <FilterBar
+      search={
+        onSearchChange
+          ? {
+              value: searchValue,
+              onChange: onSearchChange,
+              placeholder: searchPlaceholder,
+              debounceMs: searchDebounceMs,
+            }
+          : undefined
+      }
+      filters={filters}
+      actions={actions}
+      hasActiveFilters={hasActiveFilters}
+      onClearAll={onResetFilters}
+      clearLabel="Reset"
+      className={className}
+    />
   );
 }

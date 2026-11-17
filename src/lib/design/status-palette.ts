@@ -97,3 +97,18 @@ export function urgencyTone(urgency: string | null | undefined): StatusTone | nu
       return null;
   }
 }
+
+/** Maps an incident priority (P1–P5) to its semantic tone; P5 and unknown values stay neutral. */
+export function priorityTone(priority: string | null | undefined): StatusTone | null {
+  switch ((priority ?? '').toUpperCase()) {
+    case 'P1':
+      return 'critical';
+    case 'P2':
+    case 'P3':
+      return 'elevated';
+    case 'P4':
+      return 'info';
+    default:
+      return null;
+  }
+}

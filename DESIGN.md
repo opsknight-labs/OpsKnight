@@ -341,17 +341,38 @@ badge, a dot or a tinted surface.
 Phases of the UI programme converge every screen on this vocabulary. Prefer the shared component over a
 local copy. If a variant is missing, add it to the shared component.
 
+Shared patterns live in `src/components/patterns/` (barrel: `@/components/patterns`); primitives live
+in `src/components/ui/shadcn/` and are canonical. The older `src/components/ui/{Button,Badge,Card,Input,
+Modal,Select}.tsx` are thin compatibility wrappers over shadcn that keep their original props
+(`variant="primary"`, `isLoading`, `leftIcon`, `label`/`error`…). Don't add call sites to them; use shadcn.
+
 ### PageHeader
 
-Title (`h1`, headline style), optional one-line description (`text-sm text-muted-foreground`, max 2xl),
-optional count/live badge, and actions on the right (one primary, others outline/ghost). Detail pages use
-`DetailHeroBanner` (inverse surface). Current implementations: `DirectoryPageHeader`, `SettingsPageHeader`.
+`PageHeader` (`patterns/PageHeader.tsx`) is the page `h1` on the always-dark hero surface. It is a
+cleaner API over `DetailHeroBanner`, which stays the implementation, so both render identically.
+
+- **Use for** every list and detail page header. Settings pages still use `SettingsPageHeader`; Phase 4
+  moves them by mapping `title/description/actions` onto the same props.
+- **Props:** `title`, `description`, `icon` (a lucide component, drawn in the standard tile, or any
+  node), `badges`, `primaryAction` (one, rightmost), `secondaryActions`, `stats` (`DetailStatItem[]`,
+  `statsPlacement` inline/bottom), `breadcrumbs` (`{label, href?}[]` → `<Breadcrumbs>` nav, last item
+  `aria-current="page"`, or a custom node), `alert`, `eyebrow` (legacy `tag`; leave it out on new pages).
+- **On the dark surface** default outline buttons and `text-primary` badges disappear. Use the exported
+  `pageHeaderActionClass` / `pageHeaderBadgeClass`.
+- `DirectoryPageHeader` and `RunbookPageHeader` now render through `PageHeader` (deprecated wrappers).
 
 ### FilterBar
 
-A single row under the header: search input first, then filter selects/segments, then "Clear" (ghost)
-once any filter is active. Filters live in the URL so views can be shared. On phones it collapses to search
-plus a "Filters" sheet. Current implementation: `SearchFilterBar`.
+`FilterBar` (`patterns/FilterBar.tsx`) is the filter card under the header.
+
+- **Props:** `title`/`description`/`icon` (optional title row; without it the bar is one compact row),
+  `search` (`{value, onChange, placeholder, label, debounceMs}`; debounced, with a clear button),
+  `filters` (slots, usually `<FilterField label htmlFor>` wrapping a select), `chips`
+  (`<FilterChip active onClick>` toggles with `aria-pressed`, or `<FilterChip onRemove>` active-filter
+  tokens), `hasActiveFilters` + `onClearAll` (+ `clearLabel`) for "Clear all", `advanced` content in a
+  collapsible "Advanced filters" section (`advancedActiveCount`, `defaultAdvancedOpen`), `actions`.
+- Keep filter state in the URL. On phones it stacks; the mobile app keeps its sheet.
+- `SearchFilterBar` delegates to it (single row, "Reset" label).
 
 ### DataTable
 
@@ -360,38 +381,64 @@ plus a "Filters" sheet. Current implementation: `SearchFilterBar`.
 Numbers and times are `tabular-nums`, right-aligned when compared. Pagination comes from
 `TablePaginationFooter`. On phones, use a card list, not a horizontally scrolling table.
 
-### StatusBadge
+### StatusBadge and SeverityBadge
 
-Pill (`rounded-full`, `text-2xs`/`text-xs`, `font-semibold`) on the tone's soft fill + deep text, with the
-dark pair. The tone always comes from `incidentStatusTone()` / `urgencyTone()`, never from an ad-hoc
-colour choice. An optional leading dot can pulse only for live, unacknowledged incidents.
+Pills (`rounded-full`, `text-2xs`/`text-xs`, `font-semibold`, sentence case) with an **icon and a
+label**, on the tone's soft fill with deep text and the dark pair (`/15` fill, `-300` text). Tones come
+only from `status-palette.ts`; the class recipes are in `patterns/status-tone.ts` (`toneClasses()`,
+which also gives the solid dot/accent-bar, hover border and left-rule colour for rows).
+
+- **`StatusBadge`** — `status` (TRIGGERED/OPEN → "Triggered", ACKNOWLEDGED, SNOOZED, RESOLVED;
+  SUPPRESSED and unknown values are neutral), `size` `xs|sm|md`, `label` override, `live` (pulsing
+  halo, only for live unacknowledged incidents; `motion-safe`).
+- **`SeverityBadge`** — `urgency` (HIGH/MEDIUM/LOW; `abbreviate` → "Med") or `priority` (P1–P5 via
+  `priorityTone()`; `showLabel` → "P1 · Crisis"), `size`, `hideIcon` (densest rows only, e.g. the live
+  dashboard). Screen readers hear "High urgency" / "Priority P1".
+- Neither sets `data-badge`, so Windows forced colours repaint them (border + icon + text survive).
+- `PriorityBadge`, `IncidentStatusBadge` and `IncidentUrgencyBadge` delegate to these. The generic
+  `incident/StatusBadge` remains for non-incident states (status pages, postmortems).
 
 ### RelativeTime
 
-Renders "3m ago" / "in 2h", `tabular-nums`, inside a `<time dateTime>`; hovering shows the absolute time
-with timezone. It updates on an interval and never re-renders the whole page.
+`<RelativeTime date />` (`patterns/RelativeTime.tsx`) renders `<time dateTime>` with `tabular-nums` and
+the absolute time + timezone (the user's, from `TimezoneContext`) in `title`.
+
+- **Props:** `date`, `format` (`short` "5m ago" / "in 2h" / "Nov 3" after a week — default; `long`
+  "5 minutes ago"; `narrow` "5m" ages for dense rows), `now` (an external clock; the component then
+  starts no timer, e.g. the live dashboard's tick), `timeZone` override, `fallback`.
+- Updates itself on a shared interval (30 s under an hour, 5 min under a day, then hourly), so a list
+  of rows runs at most three timers and only the `<time>` re-renders. `formatRelativeLabel()` is the
+  pure formatter.
 
 ### EmptyState
 
-Icon, a one-line title, one sentence on what this area is for, and the next action (button or link). A
-filtered-empty state offers "Clear filters" instead. Never just "No data". Component: `EmptyState`.
+`EmptyState` (`patterns/EmptyState.tsx`): `icon`, `title` (one line), `description` (what this area is
+for), `primaryAction` (alias `action`), `secondaryAction`, `helpLink` (`{href, label}`; external links
+open in a new tab), `variant` `dashed|card|simple`, `size`, `headingLevel`. A filtered-empty state offers
+"Clear filters" as its action. Never just "No data". `ui/EmptyState` re-exports it and
+`analytics/EmptyState` delegates to it.
 
 ### ErrorState
 
-Names the problem in plain words and offers recovery: "Try again" (refetch / `reset()`), plus a secondary
-link back. Shows the request/correlation ID when available. Component: `ErrorState`.
+`ErrorState` (`patterns/ErrorState.tsx`, `role="alert"`): `title` naming the problem, `message` with the
+recovery, `onRetry` (+ `retryText`, `isRetrying` spinner), `onGoBack` or `backHref`/`backLabel`,
+`errorCode` (request/correlation ID, selectable), `details` in a closed "Technical details" disclosure,
+`variant` `page` (route-level) or `inline` (inside a card). `ui/ErrorState` wraps it with the old props.
 
 ### Skeleton
 
-Loading shows skeletons in the shape of the final layout (header, filter row, table rows), not a spinner
-in the middle. Spinners are allowed only inside buttons and small inline refreshes. Components:
-`Skeleton`, `PageLoadingSkeleton`.
+Loading shows skeletons in the shape of the final layout, not a spinner in the middle. Spinners are
+allowed only inside buttons (`loading` on the shadcn Button) and small inline refreshes. Presets in
+`patterns/Skeletons.tsx`, each one `role="status"` region with a single "Loading…" label:
+`TableRowsSkeleton` (`rows`, `columns`, `showHeader`), `CardGridSkeleton` (`cards`, `columns`),
+`DetailPageSkeleton` (dark header band, tabs, main column + rail). Building blocks: shadcn `Skeleton`,
+`PageLoadingSkeleton`, `DetailHeroBannerSkeleton`.
 
 ### Buttons
 
 - **Shape:** `rounded-md`, height `h-10` (2.5rem; `sm` `h-9`, `lg` `h-11`, icon 2.5rem square; all rem, so they follow density), `text-sm font-medium`, 16px icons with `gap-2`. On phones, controls are at least 44px tall.
 - **Variants:** `default` (Action Slate, the one primary action), `destructive` (irreversible actions, always confirmed), `outline` (secondary), `secondary`, `ghost` (toolbar/tertiary), `link`.
-- **States:** hover darkens/tints, `focus-visible` 2px ring + 2px offset, active state, `disabled:opacity-50`, and loading shows an inline spinner while keeping the label and width.
+- **States:** hover darkens/tints, `focus-visible` 2px ring + 2px offset, `active:` deepens the fill, `disabled:opacity-50`, and `loading` shows a centred spinner while keeping the label's width (and sets `disabled` + `aria-busy`).
 - Source: `src/components/ui/shadcn/button.tsx`.
 
 ### Forms
