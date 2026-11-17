@@ -6,6 +6,8 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import { SERVICE_OBJECTIVE_CONTRACT } from '@/lib/slo/contract';
 import { ServiceObjectiveForm } from '@/components/settings/ServiceObjectiveForm';
+import ObjectiveBudgetForecast from '@/components/settings/ObjectiveBudgetForecast';
+import { getObjectiveForecasts } from '@/lib/slo/forecast-loader';
 
 export const revalidate = 0;
 export default async function ServiceObjectivesPage({
@@ -33,6 +35,7 @@ export default async function ServiceObjectivesPage({
     take: 26,
   });
   const admin = hasCapability(actor.role, CAPABILITIES.ADMIN_MANAGE);
+  const forecasts = await getObjectiveForecasts(actor, rows.slice(0, 25));
   return (
     <div className="space-y-6">
       <header>
@@ -70,6 +73,7 @@ export default async function ServiceObjectivesPage({
             · {row.windowType.replaceAll('_', ' ')}
           </p>
           {row.description && <p>{row.description}</p>}
+          {forecasts.get(row.id) && <ObjectiveBudgetForecast forecast={forecasts.get(row.id)!} />}
           {admin && (
             <>
               {SERVICE_OBJECTIVE_CONTRACT.metrics.some(metric => metric.id === row.metricType) && (
