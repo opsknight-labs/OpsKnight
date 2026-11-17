@@ -60,17 +60,17 @@ export function RunbookModuleNav({ summary, className, actions: _actions }: Runb
                 href={item.href}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'group relative flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg py-1 sm:py-1.5 px-3 text-xs font-medium transition-all duration-150 select-none cursor-pointer whitespace-nowrap shrink-0',
+                  'group relative flex min-h-9 items-center justify-center gap-1.5 sm:gap-2 rounded-lg py-1 sm:py-1.5 px-3 text-xs font-medium transition-colors duration-150 select-none cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
                   'border shadow-2xs',
                   isActive
                     ? 'bg-background text-foreground font-semibold border-primary/50 shadow-xs ring-2 ring-primary/20'
-                    : 'border-border/40 bg-background/50 text-muted-foreground/90 hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]'
+                    : 'border-border/40 bg-background/50 text-muted-foreground/90 hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs'
                 )}
               >
                 <Icon
                   aria-hidden="true"
                   className={cn(
-                    'h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:scale-110',
+                    'h-3.5 w-3.5 shrink-0',
                     isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'
                   )}
                 />
@@ -79,7 +79,7 @@ export function RunbookModuleNav({ summary, className, actions: _actions }: Runb
                 {item.count !== undefined && item.count !== null && (
                   <span
                     className={cn(
-                      'ml-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.25 text-[10px] font-semibold transition-colors tabular-nums',
+                      'ml-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-px text-2xs font-semibold transition-colors tabular-nums',
                       isActive
                         ? 'bg-primary/10 text-primary font-bold'
                         : item.live
@@ -101,7 +101,7 @@ export function RunbookModuleNav({ summary, className, actions: _actions }: Runb
                   <span
                     aria-label={`Health: ${item.healthIndicator.toLowerCase()}`}
                     className={cn(
-                      'ml-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.25 text-[10px] font-semibold',
+                      'ml-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-px text-2xs font-semibold',
                       item.healthIndicator === 'HEALTHY' &&
                         'border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
                       item.healthIndicator === 'DEGRADED' &&

@@ -9,7 +9,6 @@ import Link from 'next/link';
 import {
   Activity,
   AlertTriangle,
-  ArrowLeft,
   ArrowUpRight,
   CheckCircle2,
   Clock,
@@ -27,7 +26,8 @@ import {
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { RunbooksPageShell } from '@/components/runbooks/RunbooksPageShell';
+import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { ConfirmAction } from '@/components/runbooks/RunbookControls';
@@ -58,7 +58,11 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
   await requirePageAccess('/runbooks/executions/[id]');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
-  const [user, permissions] = await Promise.all([getCurrentUser(), getUserPermissions()]);
+  const [user, permissions, navigation] = await Promise.all([
+    getCurrentUser(),
+    getUserPermissions(),
+    getRunbookNavigationSummary(),
+  ]);
   const userTimeZone = getUserTimeZone(user);
   const canExecute = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_EXECUTE);
   const canApprove = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_APPROVE);
@@ -222,16 +226,16 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
   });
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Executions',
-          href: '/runbooks/executions',
-          current: runbookName,
-        }}
-        tag="Automation Execution"
-        title={runbookName}
-        icon={
+    <RunbooksPageShell
+      navigation={navigation}
+      header={{
+        breadcrumbs: [
+          { label: 'Runbooks', href: '/runbooks' },
+          { label: 'Executions', href: '/runbooks/executions' },
+          { label: runbookName },
+        ],
+        title: runbookName,
+        icon: (
           <div
             className={cn(
               'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border shadow-inner transition-transform',
@@ -243,13 +247,13 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                     ? 'border-rose-500/30 bg-rose-500/10 text-rose-400'
                     : execution.status === 'WAITING_APPROVAL'
                       ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-                      : 'border-zinc-700 bg-zinc-800 text-slate-300'
+                      : 'border-zinc-700 bg-zinc-800 text-zinc-300'
             )}
           >
             {execution.status === 'SUCCEEDED' ? (
               <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
             ) : execution.status === 'RUNNING' ? (
-              <Play className="h-6 w-6 animate-pulse" aria-hidden="true" />
+              <Play className="h-6 w-6 motion-safe:animate-pulse" aria-hidden="true" />
             ) : isFailure ? (
               <XCircle className="h-6 w-6" aria-hidden="true" />
             ) : execution.status === 'WAITING_APPROVAL' ? (
@@ -258,22 +262,22 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               <Workflow className="h-6 w-6" aria-hidden="true" />
             )}
           </div>
-        }
-        badges={
+        ),
+        badge: (
           <div className="flex flex-wrap items-center gap-1.5">
             <RunbookStatusBadge status={execution.status} />
             <Badge
               variant="outline"
-              className="border-white/20 bg-white/5 text-slate-300 font-mono text-[11px] font-normal shadow-2xs"
+              className="border-white/20 bg-white/5 text-zinc-300 font-mono text-[11px] font-normal shadow-2xs"
             >
               v{execution.runbookVersion.version}
             </Badge>
             <Badge
               variant="outline"
-              className="border-white/10 bg-white/5 text-ink-400 font-mono text-[11px] gap-1 shadow-2xs"
+              className="border-white/10 bg-white/5 text-zinc-400 font-mono text-[11px] gap-1 shadow-2xs"
               title={`Execution ID: ${execution.id}`}
             >
-              <Terminal className="h-3 w-3 text-ink-400" aria-hidden="true" />
+              <Terminal className="h-3 w-3 text-zinc-400" aria-hidden="true" />
               <span className="hidden sm:inline">ID: </span>
               {execution.id}
             </Badge>
@@ -287,9 +291,9 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               </Badge>
             )}
           </div>
-        }
-        subtitle={
-          <p className="text-xs text-slate-300 leading-relaxed">
+        ),
+        description: (
+          <p className="text-xs text-zinc-300 leading-relaxed">
             <span>
               Runbook{' '}
               <Link
@@ -299,17 +303,17 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 {runbookName}
               </Link>
             </span>
-            <span className="text-ink-500"> · </span>
+            <span className="text-zinc-500"> · </span>
             <span>Queued {fmt(execution.createdAt, 'at an unrecorded time')}</span>
             {execution.startedAt && (
               <>
-                <span className="text-ink-500"> · </span>
+                <span className="text-zinc-500"> · </span>
                 <span>Started {fmt(execution.startedAt, '')}</span>
               </>
             )}
           </p>
-        }
-        actions={
+        ),
+        actions: (
           <div className="flex flex-wrap items-center gap-2">
             <RunbookLiveRefresh
               enabled={isActive}
@@ -346,7 +350,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 variant={isFailure ? 'default' : 'outline'}
                 className={cn(
                   'gap-1.5 font-semibold shadow-xs',
-                  !isFailure && 'border-zinc-700 bg-zinc-800 text-slate-100 hover:bg-zinc-700'
+                  !isFailure && 'border-zinc-700 bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
                 )}
               >
                 <a href="#rerun">
@@ -360,7 +364,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 asChild
                 variant="outline"
                 size="sm"
-                className="gap-1.5 border-zinc-700 bg-zinc-800/80 text-slate-200 hover:bg-zinc-700 shadow-2xs"
+                className="gap-1.5 border-zinc-700 bg-zinc-800/80 text-zinc-200 hover:bg-zinc-700 shadow-2xs"
               >
                 <Link href={`/incidents/${execution.incident.id}?tab=runbooks`}>
                   Open incident
@@ -368,21 +372,10 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 </Link>
               </Button>
             )}
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-slate-300 hover:text-white hover:bg-white/5"
-            >
-              <Link href="/runbooks/executions">
-                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                All executions
-              </Link>
-            </Button>
           </div>
-        }
-        statsPlacement="bottom"
-        stats={[
+        ),
+        statsPlacement: 'bottom',
+        stats: [
           {
             label: 'Status',
             value: execution.status.replace(/_/g, ' '),
@@ -406,18 +399,18 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               execution.status === 'SUCCEEDED' ? (
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
               ) : execution.status === 'RUNNING' ? (
-                <Activity className="h-3.5 w-3.5 text-sky-400 animate-pulse" />
+                <Activity className="h-3.5 w-3.5 text-sky-400 motion-safe:animate-pulse" />
               ) : isFailure ? (
                 <XCircle className="h-3.5 w-3.5 text-rose-400" />
               ) : (
-                <Clock className="h-3.5 w-3.5 text-ink-400" />
+                <Clock className="h-3.5 w-3.5 text-zinc-400" />
               ),
           },
           {
             label: 'Progress',
             value: totalSteps > 0 ? `${completedSteps} of ${totalSteps} Steps` : '0 Steps',
             subtext: `${totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0}% completed`,
-            icon: <Workflow className="h-3.5 w-3.5 text-ink-400" />,
+            icon: <Workflow className="h-3.5 w-3.5 text-zinc-400" />,
           },
           {
             label: 'Duration',
@@ -443,9 +436,9 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 : 'Direct execution',
             icon: <Server className="h-3.5 w-3.5 text-indigo-400" />,
           },
-        ]}
-      />
-
+        ],
+      }}
+    >
       {waitingStep && (
         <section
           aria-label="Approval needed"
@@ -653,6 +646,6 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
           </SectionCard>
         </aside>
       </div>
-    </div>
+    </RunbooksPageShell>
   );
 }

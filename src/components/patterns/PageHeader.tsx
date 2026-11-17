@@ -1,5 +1,5 @@
 import { isValidElement, type ComponentType, type ReactNode } from 'react';
-import Link from 'next/link';
+import ListReturnLink from '@/components/layout/ListReturnLink';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import DetailHeroBanner, { type DetailStatItem } from '@/components/ui/DetailHeroBanner';
@@ -23,12 +23,12 @@ export function Breadcrumbs({ items, className }: { items: BreadcrumbItem[]; cla
                 />
               )}
               {crumb.href && !isLast ? (
-                <Link
+                <ListReturnLink
                   href={crumb.href}
                   className="truncate rounded-sm transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {crumb.label}
-                </Link>
+                </ListReturnLink>
               ) : (
                 <span
                   aria-current={isLast ? 'page' : undefined}

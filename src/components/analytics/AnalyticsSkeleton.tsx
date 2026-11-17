@@ -9,7 +9,8 @@ import { Skeleton } from '@/components/ui/shadcn/skeleton';
  */
 export default function AnalyticsSkeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
+    <div className="space-y-6" role="status" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading analytics</span>
       {/* Executive Summary — 8 large KPI cards in a 4-col grid */}
       <div className="v2-grid-4 mb-4">
         {Array.from({ length: 8 }).map((_, i) => (

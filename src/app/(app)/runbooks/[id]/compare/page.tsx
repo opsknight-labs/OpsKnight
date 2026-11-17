@@ -18,7 +18,8 @@ import {
   Server,
   SlidersHorizontal,
 } from 'lucide-react';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import { RunbooksPageShell } from '@/components/runbooks/RunbooksPageShell';
+import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
 import {
@@ -45,6 +46,7 @@ export default async function VersionComparePage({
   const query = await searchParams;
   const versionsPage = Math.max(1, Math.min(10000, Number(query.versionsPage) || 1));
 
+  const navigationPromise = getRunbookNavigationSummary();
   const runbook = await prisma.runbook.findUnique({
     where: { id },
     include: {
@@ -58,6 +60,7 @@ export default async function VersionComparePage({
   });
 
   if (!runbook) notFound();
+  const navigation = await navigationPromise;
 
   const selection = z.object({ base: z.string().cuid(), next: z.string().cuid() }).safeParse({
     base: query.base ?? runbook.versions[1]?.id,
@@ -66,15 +69,18 @@ export default async function VersionComparePage({
 
   if (!selection.success) {
     return (
-      <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-        <RunbookPageHeader
-          breadcrumbs={[
+      <RunbooksPageShell
+        navigation={navigation}
+        header={{
+          breadcrumbs: [
             { label: 'Runbooks', href: '/runbooks' },
             { label: runbook.name, href: `/runbooks/${id}?tab=versions` },
             { label: 'Compare' },
-          ]}
-          title={`${runbook.name} · Version comparison`}
-        />
+          ],
+          title: `${runbook.name} · Version comparison`,
+          icon: GitCompare,
+        }}
+      >
         <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-8 shadow-xs">
           <EmptyHint
             icon={GitCompare}
@@ -94,7 +100,7 @@ export default async function VersionComparePage({
             }
           />
         </div>
-      </div>
+      </RunbooksPageShell>
     );
   }
 
@@ -153,22 +159,24 @@ export default async function VersionComparePage({
   ));
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 pt-6 pb-16 md:px-6 md:py-8">
-      {/* Page Header */}
-      <RunbookPageHeader
-        breadcrumbs={[
+    <RunbooksPageShell
+      navigation={navigation}
+      className="pb-16 md:pb-8"
+      header={{
+        breadcrumbs: [
           { label: 'Runbooks', href: '/runbooks' },
           { label: runbook.name, href: `/runbooks/${id}?tab=versions` },
           { label: 'Compare' },
-        ]}
-        title={`${runbook.name} · Version comparison`}
-        badge={
+        ],
+        title: `${runbook.name} · Version comparison`,
+        icon: GitCompare,
+        badge: (
           <span className={pageHeaderBadgeClass}>
             v{impact.base.version} → v{impact.next.version}
           </span>
-        }
-        description={impact.warning}
-        actions={
+        ),
+        description: impact.warning,
+        actions: (
           <Button
             asChild
             variant="ghost"
@@ -180,9 +188,9 @@ export default async function VersionComparePage({
               Back to runbook
             </Link>
           </Button>
-        }
-      />
-
+        ),
+      }}
+    >
       {/* Version Selector Card */}
       <section
         aria-label="Choose versions"
@@ -476,6 +484,6 @@ export default async function VersionComparePage({
           )}
         </SectionCard>
       </div>
-    </div>
+    </RunbooksPageShell>
   );
 }

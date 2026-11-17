@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/RunbookPagination';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { RunbooksPageShell } from '@/components/runbooks/RunbooksPageShell';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
@@ -24,7 +24,6 @@ import {
   Users,
   Workflow,
 } from 'lucide-react';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import prisma from '@/lib/prisma';
@@ -404,11 +403,7 @@ export default async function RunbookDetailPage({
         successMessage="Draft created"
         className="w-full sm:w-auto"
       >
-        <SubmitButton
-          size="sm"
-          pendingLabel="Creating draft…"
-          className="w-full sm:w-auto bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs"
-        >
+        <SubmitButton size="sm" pendingLabel="Creating draft…" className="w-full sm:w-auto">
           <PencilLine className="h-4 w-4" aria-hidden="true" />
           Create next editable draft
         </SubmitButton>
@@ -541,22 +536,14 @@ export default async function RunbookDetailPage({
   ) : null;
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Canonical DetailHeroBanner */}
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Runbooks',
-          href: '/runbooks',
-          current: runbook.name,
-        }}
-        tag="Automation & Remediation Catalog"
-        title={runbook.name}
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Workflow className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        badges={
+    <RunbooksPageShell
+      as="main"
+      navigation={navigation}
+      header={{
+        breadcrumbs: [{ label: 'Runbooks', href: '/runbooks' }, { label: runbook.name }],
+        title: runbook.name,
+        icon: Workflow,
+        badge: (
           <>
             {runbook.publishedVersion && (
               <Badge
@@ -592,7 +579,7 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px] gap-1"
+                className="bg-zinc-800/80 text-zinc-300 border-zinc-700/80 text-[10px] gap-1"
               >
                 <Users className="h-3 w-3 text-ink-400" />
                 {runbook.ownerTeam.name}
@@ -601,7 +588,7 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-zinc-800/60 text-slate-400 border-zinc-700/60 text-[10px] gap-1"
+                className="bg-zinc-800/60 text-zinc-400 border-zinc-700/60 text-[10px] gap-1"
               >
                 <Users className="h-3 w-3" />
                 No owner team
@@ -610,16 +597,16 @@ export default async function RunbookDetailPage({
             <Badge
               variant="outline"
               size="xs"
-              className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px] font-mono gap-1"
+              className="bg-zinc-800/80 text-zinc-300 border-zinc-700/80 text-[10px] font-mono gap-1"
             >
               <Hash className="h-3 w-3 text-ink-400" />
               {runbook.slug}
             </Badge>
           </>
-        }
-        subtitle={
+        ),
+        description: (
           <div className="space-y-1.5">
-            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+            <p className="text-xs text-zinc-300 leading-relaxed max-w-3xl">
               {runbook.description ||
                 'Enterprise automated remediation runbook with guardrails, parameter bindings, and auditable history.'}
             </p>
@@ -629,7 +616,7 @@ export default async function RunbookDetailPage({
                   <Link
                     key={tag}
                     href={`/runbooks?tag=${encodeURIComponent(tag)}`}
-                    className="rounded-full bg-zinc-800/80 px-2.5 py-0.5 font-mono text-[10px] text-slate-300 border border-zinc-700/80 hover:bg-zinc-700/80 hover:text-white transition-colors"
+                    className="rounded-full bg-zinc-800/80 px-2.5 py-0.5 font-mono text-[10px] text-zinc-300 border border-zinc-700/80 hover:bg-zinc-700/80 hover:text-white transition-colors"
                   >
                     #{tag}
                   </Link>
@@ -637,8 +624,8 @@ export default async function RunbookDetailPage({
               </div>
             )}
           </div>
-        }
-        actions={
+        ),
+        actions: (
           <div className="flex flex-wrap items-center gap-2">
             {primaryAction}
             {canManage && (
@@ -674,9 +661,9 @@ export default async function RunbookDetailPage({
               }
             />
           </div>
-        }
-        statsPlacement="bottom"
-        stats={[
+        ),
+        statsPlacement: 'bottom',
+        stats: [
           {
             label: 'Live Version',
             value: runbook.publishedVersion ? `v${runbook.publishedVersion.version}` : 'None',
@@ -713,25 +700,23 @@ export default async function RunbookDetailPage({
             subtext: 'Across recorded runs',
             icon: <Activity className="h-4 w-4" />,
           },
-        ]}
-        alert={
-          isArchived ? (
-            <div
-              role="note"
-              className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200"
-            >
-              <Archive className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-semibold">This runbook is archived</p>
-                <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
-                  It can’t be edited, published or run. Execution history is preserved.
-                </p>
-              </div>
+        ],
+        alert: isArchived ? (
+          <div
+            role="note"
+            className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200"
+          >
+            <Archive className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-semibold">This runbook is archived</p>
+              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
+                It can’t be edited, published or run. Execution history is preserved.
+              </p>
             </div>
-          ) : undefined
-        }
-      />
-      <RunbookModuleNav summary={navigation} />
+          </div>
+        ) : undefined,
+      }}
+    >
       <DetailTabs
         defaultTab={
           typeof query.tab === 'string' &&
@@ -1055,6 +1040,6 @@ export default async function RunbookDetailPage({
           },
         ]}
       />
-    </main>
+    </RunbooksPageShell>
   );
 }

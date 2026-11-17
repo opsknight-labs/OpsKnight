@@ -130,7 +130,7 @@ export default async function RunbookSecretsPage({
           title="Create scoped secret"
           description="Grant the credential only to the Agent or pool that requires it."
           trigger={
-            <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs">
+            <Button>
               <Plus className="h-4 w-4" />
               <span>Create secret</span>
             </Button>

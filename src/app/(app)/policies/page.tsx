@@ -5,7 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { PageHeader } from '@/components/patterns';
 import { ShieldAlert, Server, Layers, HelpCircle, ArrowRight, Calendar, Users } from 'lucide-react';
 import PolicyCreateForm from '@/components/policies/PolicyCreateForm';
 import PolicyDirectoryList from '@/components/policies/PolicyDirectoryList';
@@ -108,7 +108,6 @@ export default async function PoliciesPage({
 
   const canManagePolicies = permissions.isAdmin;
 
-  // Aggregated stats
   const totalPolicies = allPoliciesCount;
 
   // Transform policies into directory items
@@ -130,62 +129,55 @@ export default async function PoliciesPage({
     })),
   }));
 
+  const createAction = canManagePolicies ? (
+    <PolicyCreateForm action={createPolicyAction} canCreate={canManagePolicies} />
+  ) : undefined;
+
+  const resourceLinkClass =
+    'flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header */}
-      <DetailHeroBanner
-        tag="Incident Response Routing"
+      <PageHeader
         title="Escalation Policies"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <ShieldAlert className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Define multi-tier responder routing, failover delays, and notification cadences when
-            critical incidents occur across your services.
-          </p>
-        }
+        icon={ShieldAlert}
+        description="Who gets paged for an incident, in what order, and how long to wait before paging the next responder."
+        primaryAction={createAction}
         stats={[
           {
-            label: 'Total Policies',
+            label: 'Policies',
             value: totalPolicies,
-            icon: <ShieldAlert className="h-3.5 w-3.5" />,
+            icon: <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
-            label: 'In Use',
+            label: 'In use',
             value: inUsePoliciesCount,
-            icon: <Server className="h-3.5 w-3.5 text-emerald-200" />,
-            valueClassName: inUsePoliciesCount > 0 ? 'text-emerald-200' : undefined,
+            icon: <Server className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
-            label: 'Total Steps',
+            label: 'Steps',
             value: totalStepsCount,
-            icon: <Layers className="h-3.5 w-3.5" />,
+            icon: <Layers className="h-3.5 w-3.5" aria-hidden="true" />,
           },
         ]}
         alert={
           errorCode === 'duplicate-policy' ? (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
-              An escalation policy with this name already exists. Please choose a unique name.
+            <div
+              role="alert"
+              className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300"
+            >
+              An escalation policy with this name already exists. Choose a unique name.
             </div>
           ) : undefined
         }
       />
 
-      {/* Interactive Dashed Expander Create Policy Form */}
-      {canManagePolicies && (
-        <PolicyCreateForm action={createPolicyAction} canCreate={canManagePolicies} />
-      )}
-
-      {/* Main Grid: Policy Directory & Sidebar Helper */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left 3 Cols: Policy Directory List */}
-        <div className="lg:col-span-3 space-y-4">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        <div className="space-y-4 lg:col-span-3">
           <PolicyDirectoryList
             policies={policyDirectoryItems}
             canManage={canManagePolicies}
+            createAction={createAction}
             pagination={{
               currentPage: pagination.page,
               totalPages: pagination.totalPages,
@@ -202,75 +194,59 @@ export default async function PoliciesPage({
           />
         </div>
 
-        {/* Right 1 Col: Quick Links & Documentation */}
-        <div className="space-y-4">
-          {/* Quick Guide */}
-          <Card className="border-ink-200/80 bg-card">
+        <aside className="space-y-4" aria-label="Escalation policy guidance">
+          <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <HelpCircle className="h-3.5 w-3.5 text-primary" />
-                Escalation Best Practices
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Escalation best practices
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-xs text-muted-foreground leading-relaxed">
+            <CardContent className="space-y-3 text-sm leading-relaxed text-muted-foreground">
               <p>
-                <strong className="text-foreground font-semibold">Tier 1:</strong> Start with
-                on-call schedules or primary on-call responders with a 0m initial delay.
+                <strong className="font-semibold text-foreground">Step 1:</strong> Page the on-call
+                schedule or primary responder immediately.
               </p>
               <p>
-                <strong className="text-foreground font-semibold">Tier 2:</strong> Escalate to
-                backup engineers or team leads after 5–10 minutes if unacknowledged.
+                <strong className="font-semibold text-foreground">Step 2:</strong> Escalate to a
+                backup engineer or team lead after 5–10 minutes without acknowledgement.
               </p>
               <p>
-                <strong className="text-foreground font-semibold">Tier 3:</strong> Route to entire
-                escalation teams or engineering directors after 15–30 minutes for critical outages.
+                <strong className="font-semibold text-foreground">Step 3:</strong> Page the whole
+                team or an engineering manager after 15–30 minutes for critical outages.
               </p>
             </CardContent>
           </Card>
 
-          {/* Quick Navigation Links */}
-          <Card className="border-ink-200/80 bg-card">
+          <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Connected Resources
-              </CardTitle>
+              <CardTitle className="text-sm font-semibold">Related</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Link
-                href="/services"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
-              >
+            <CardContent className="space-y-1 px-4 pb-4">
+              <Link href="/services" className={resourceLinkClass}>
                 <span className="flex items-center gap-2">
-                  <Server className="h-3.5 w-3.5 text-ink-500" />
-                  Services Directory
+                  <Server className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  Services
                 </span>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               </Link>
-
-              <Link
-                href="/schedules"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
-              >
+              <Link href="/schedules" className={resourceLinkClass}>
                 <span className="flex items-center gap-2">
-                  <Calendar className="h-3.5 w-3.5 text-ink-500" />
-                  On-Call Schedules
+                  <Calendar className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  On-call schedules
                 </span>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               </Link>
-
-              <Link
-                href="/teams"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
-              >
+              <Link href="/teams" className={resourceLinkClass}>
                 <span className="flex items-center gap-2">
-                  <Users className="h-3.5 w-3.5 text-ink-500" />
-                  Teams & Members
+                  <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  Teams
                 </span>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               </Link>
             </CardContent>
           </Card>
-        </div>
+        </aside>
       </div>
     </div>
   );

@@ -13,8 +13,9 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import EmptyState from '@/components/ui/EmptyState';
+import { EmptyState, PageHeader } from '@/components/patterns';
+import SectionHeader from '@/components/analytics/SectionHeader';
+import ReportsFilterBar, { type ReportsScope } from '@/components/reports/ReportsFilterBar';
 import {
   LayoutDashboard,
   Plus,
@@ -24,10 +25,10 @@ import {
   Users,
   Minus,
   ArrowRight,
+  SearchX,
   type LucideIcon,
 } from 'lucide-react';
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
-import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import DashboardCard from '@/components/reports/DashboardCard';
 import { requirePageAccess } from '@/lib/access/server';
 
@@ -46,7 +47,19 @@ const TEMPLATE_ICONS: Record<string, LucideIcon> = {
   minimal: Minus,
 };
 
-export default async function ReportsPage() {
+const SCOPES = ['all', 'mine', 'shared', 'templates'] as const;
+
+function matches(query: string, ...fields: Array<string | null | undefined>): boolean {
+  if (!query) return true;
+  const needle = query.toLowerCase();
+  return fields.some(field => field?.toLowerCase().includes(needle));
+}
+
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ q?: string; scope?: string }>;
+}) {
   await requirePageAccess('/reports');
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
@@ -66,7 +79,6 @@ export default async function ReportsPage() {
     redirect('/login?callbackUrl=/reports');
   }
 
-  const userTimeZone = getUserTimeZone(user);
   const userTeamIds = user.teamMemberships.map(m => m.teamId);
 
   // Fetch user's dashboards and shared team/public dashboards
@@ -95,189 +107,224 @@ export default async function ReportsPage() {
     }),
   ]);
 
+  const params = await searchParams;
+  const query = (params?.q ?? '').trim();
+  const scope: ReportsScope = SCOPES.includes(params?.scope as ReportsScope)
+    ? (params?.scope as ReportsScope)
+    : 'all';
+
+  const visibleTemplates = DASHBOARD_TEMPLATES.filter(t => matches(query, t.name, t.description));
+  const visibleMine = dashboards.filter(d => matches(query, d.name, d.description));
+  const visibleShared = sharedDashboards.filter(d =>
+    matches(query, d.name, d.description, d.user?.name, d.user?.email)
+  );
+  const showTemplates = scope === 'all' || scope === 'templates';
+  const showMine = scope === 'all' || scope === 'mine';
+  const showShared = scope === 'all' || scope === 'shared';
+  const hasFilters = Boolean(query) || scope !== 'all';
+  const nothingVisible =
+    (!showTemplates || visibleTemplates.length === 0) &&
+    (!showMine || visibleMine.length === 0) &&
+    (!showShared || visibleShared.length === 0);
+
+  const createAction = (
+    <Button asChild>
+      <Link href="/reports/executive/new">
+        <Plus aria-hidden="true" />
+        New dashboard
+      </Link>
+    </Button>
+  );
+
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header */}
-      <DetailHeroBanner
-        tag="Operational Analytics"
+      <PageHeader
         title="Reports & Dashboards"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <LayoutDashboard className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Build customizable executive dashboards, track reliability metrics, and visualize
-            operational performance widgets.
-          </p>
-        }
-        statsPlacement="bottom"
-        actions={
-          <Button
-            asChild
-            className="gap-2 shadow-sm font-semibold bg-background text-foreground hover:bg-background/90"
-          >
-            <Link href="/reports/executive/new">
-              <Plus className="h-4 w-4" />
-              Create Dashboard
-            </Link>
-          </Button>
-        }
+        icon={LayoutDashboard}
+        description="Executive and operational dashboards built from reliability metrics. Start from a template or build your own."
+        primaryAction={createAction}
         stats={[
           {
-            label: 'Dashboards',
-            value: dashboards.length + sharedDashboards.length,
-            icon: <LayoutDashboard className="h-3.5 w-3.5" />,
+            label: 'My dashboards',
+            value: dashboards.length,
+            icon: <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />,
+          },
+          {
+            label: 'Shared with me',
+            value: sharedDashboards.length,
+            icon: <Users className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
             label: 'Templates',
             value: DASHBOARD_TEMPLATES.length,
-            icon: <Sparkles className="h-3.5 w-3.5 text-amber-200" />,
-          },
-          {
-            label: 'Widget Types',
-            value: '30+',
-            icon: <Terminal className="h-3.5 w-3.5 text-emerald-200" />,
-          },
-          {
-            label: 'Customizations',
-            value: '∞',
-            icon: <Shield className="h-3.5 w-3.5 text-blue-200" />,
+            icon: <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />,
           },
         ]}
       />
 
-      {/* Templates Section */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-bold text-foreground">Dashboard Templates</h2>
-          </div>
-          <span className="text-xs text-muted-foreground">Click to preview or clone</span>
-        </div>
+      <ReportsFilterBar
+        query={query}
+        scope={scope}
+        counts={{
+          all: DASHBOARD_TEMPLATES.length + dashboards.length + sharedDashboards.length,
+          mine: dashboards.length,
+          shared: sharedDashboards.length,
+          templates: DASHBOARD_TEMPLATES.length,
+        }}
+      />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {DASHBOARD_TEMPLATES.map(template => {
-            const Icon = TEMPLATE_ICONS[template.id] || LayoutDashboard;
-            return (
-              <Link key={template.id} href={`/reports/executive?template=${template.id}`}>
-                <Card className="h-full hover:shadow-md hover:border-primary/50 transition-all cursor-pointer group bg-card">
-                  <CardHeader className="pb-3">
-                    <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center mb-2"
-                      style={{ backgroundColor: `${template.color}20` }}
-                    >
-                      <Icon className="h-5 w-5" style={{ color: template.color }} />
-                    </div>
-                    <CardTitle className="text-sm font-bold group-hover:text-primary transition-colors">
-                      {template.name}
-                    </CardTitle>
-                    <CardDescription className="text-xs line-clamp-2">
-                      {template.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{template.widgets.length} widgets</span>
-                      <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* My Dashboards Section */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">My Dashboards</h2>
-          {dashboards.length > 0 && (
-            <Link href="/reports/executive/new">
-              <Button variant="outline" size="sm" className="gap-1">
-                <Plus className="h-4 w-4" />
-                New Dashboard
-              </Button>
-            </Link>
+      {hasFilters && nothingVisible ? (
+        <EmptyState
+          icon={<SearchX />}
+          title="No dashboards match these filters"
+          description={
+            query
+              ? `Nothing matched “${query}”. Try a shorter search or another scope.`
+              : 'There is nothing in this scope yet.'
+          }
+          primaryAction={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/reports">Clear filters</Link>
+            </Button>
+          }
+        />
+      ) : (
+        <>
+          {showTemplates && visibleTemplates.length > 0 && (
+            <section aria-labelledby="reports-templates" className="space-y-4">
+              <SectionHeader
+                id="reports-templates"
+                icon={<Sparkles />}
+                title="Templates"
+                description="Ready-made layouts. Open one to preview it with live data, then clone it."
+              />
+              <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                {visibleTemplates.map(template => {
+                  const Icon = TEMPLATE_ICONS[template.id] || LayoutDashboard;
+                  return (
+                    <li key={template.id}>
+                      <Link
+                        href={`/reports/executive?template=${template.id}`}
+                        className="group block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        <Card className="h-full transition-[border-color,box-shadow] duration-150 group-hover:border-ink-300 group-hover:shadow-md">
+                          <CardHeader className="pb-3">
+                            <div
+                              aria-hidden="true"
+                              className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+                            >
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <CardTitle className="text-sm font-semibold group-hover:underline">
+                              {template.name}
+                            </CardTitle>
+                            <CardDescription className="line-clamp-2 text-xs">
+                              {template.description}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span className="tabular-nums">
+                                {template.widgets.length} widgets
+                              </span>
+                              <ArrowRight
+                                className="h-3 w-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+                                aria-hidden="true"
+                              />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           )}
-        </div>
 
-        {dashboards.length === 0 ? (
-          <EmptyState
-            icon={<LayoutDashboard className="h-6 w-6 text-muted-foreground/60" />}
-            title="No custom dashboards yet"
-            description="Create your first custom operational dashboard or start from an executive template."
-            action={
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <Button asChild size="sm">
-                  <Link href="/reports/executive/new">
-                    <Plus className="mr-1.5 h-4 w-4" />
-                    Create from scratch
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link href={`/reports/executive?template=executive-summary`}>
-                    <Sparkles className="mr-1.5 h-4 w-4" />
-                    Use template
-                  </Link>
-                </Button>
-              </div>
-            }
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {dashboards.map(dashboard => (
-              <DashboardCard
-                key={dashboard.id}
-                id={dashboard.id}
-                name={dashboard.name}
-                description={dashboard.description}
-                widgetCount={dashboard._count.widgets}
-                isDefault={dashboard.isDefault}
-                updatedAt={formatDateTime(dashboard.updatedAt, userTimeZone, {
-                  format: 'relative',
-                })}
+          {showMine && (
+            <section aria-labelledby="reports-mine" className="space-y-4">
+              <SectionHeader
+                id="reports-mine"
+                icon={<LayoutDashboard />}
+                title="My dashboards"
+                description="Dashboards you created. Only you can edit or delete them."
               />
-            ))}
-          </div>
-        )}
-      </section>
 
-      {/* Team & Shared Dashboards Section */}
-      {sharedDashboards.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-500" />
-              <h2 className="text-lg font-bold text-foreground">Team & Shared Dashboards</h2>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              Dashboards shared with your team or organization
-            </span>
-          </div>
+              {visibleMine.length === 0 ? (
+                query ? (
+                  <p className="text-sm text-muted-foreground">
+                    None of your dashboards match “{query}”.
+                  </p>
+                ) : (
+                  <EmptyState
+                    icon={<LayoutDashboard />}
+                    title="No dashboards yet"
+                    description="Build a dashboard from scratch, or open a template above and clone it to make it yours."
+                    primaryAction={createAction}
+                    secondaryAction={
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/reports/executive?template=executive-summary">
+                          <Sparkles aria-hidden="true" />
+                          Use a template
+                        </Link>
+                      </Button>
+                    }
+                  />
+                )
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {visibleMine.map(dashboard => (
+                    <DashboardCard
+                      key={dashboard.id}
+                      id={dashboard.id}
+                      name={dashboard.name}
+                      description={dashboard.description}
+                      widgetCount={dashboard._count.widgets}
+                      isDefault={dashboard.isDefault}
+                      updatedAt={dashboard.updatedAt}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {sharedDashboards.map(dashboard => (
-              <DashboardCard
-                key={dashboard.id}
-                id={dashboard.id}
-                name={dashboard.name}
-                description={dashboard.description}
-                widgetCount={dashboard._count.widgets}
-                isDefault={dashboard.isDefault}
-                ownerName={dashboard.user?.name || dashboard.user?.email || 'Team member'}
-                visibility={dashboard.visibility}
-                canDelete={false}
-                updatedAt={formatDateTime(dashboard.updatedAt, userTimeZone, {
-                  format: 'relative',
-                })}
+          {showShared && (sharedDashboards.length > 0 || scope === 'shared') && (
+            <section aria-labelledby="reports-shared" className="space-y-4">
+              <SectionHeader
+                id="reports-shared"
+                icon={<Users />}
+                title="Shared with me"
+                description="Dashboards your team or organization shared. You can view them; the owner edits them."
               />
-            ))}
-          </div>
-        </section>
+              {visibleShared.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {query
+                    ? `No shared dashboards match “${query}”.`
+                    : 'Nobody has shared a dashboard with you yet.'}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {visibleShared.map(dashboard => (
+                    <DashboardCard
+                      key={dashboard.id}
+                      id={dashboard.id}
+                      name={dashboard.name}
+                      description={dashboard.description}
+                      widgetCount={dashboard._count.widgets}
+                      isDefault={dashboard.isDefault}
+                      ownerName={dashboard.user?.name || dashboard.user?.email || 'Team member'}
+                      visibility={dashboard.visibility}
+                      canDelete={false}
+                      updatedAt={dashboard.updatedAt}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </>
       )}
     </div>
   );

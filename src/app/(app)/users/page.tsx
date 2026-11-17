@@ -20,15 +20,8 @@ import InviteUserModal from '@/components/users/InviteUserModal';
 import UserFilters from '@/components/users/UserFilters';
 import UserList from '@/components/users/UserList';
 import UserSortDropdown from '@/components/users/UserSortDropdown';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { PageHeader } from '@/components/patterns';
 import { Users, UserCheck, UserPlus, UserX } from 'lucide-react';
 import { isAppRole } from '@/lib/authorization';
 import { assertCanListUsers } from '@/lib/rbac';
@@ -205,131 +198,104 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   if (sortBy !== 'createdAt') baseParams.set('sortBy', sortBy);
   if (sortOrder !== 'desc') baseParams.set('sortOrder', sortOrder);
 
+  const hasFilters = Boolean(query || statusFilter || roleFilter || teamFilter);
+  const inviteAction = (
+    <RestrictedAction allowed={isAdmin} anyOf="admin.manage">
+      <InviteUserModal action={addUser} disabled={!isAdmin} label="Invite User" />
+    </RestrictedAction>
+  );
+
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header with 4-Stat Capsule */}
-      <DetailHeroBanner
-        tag="Team & Member Access"
+      <PageHeader
         title="Users & Responders"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Users className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Manage organization members, assign operational roles, configure paging channels, and
-            oversee on-call responder access.
-          </p>
-        }
+        icon={Users}
+        description="Organization members, their roles and team memberships, and who can be paged."
+        primaryAction={inviteAction}
         stats={[
           {
-            label: 'Total Users',
+            label: 'Users',
             value: stats.total,
-            icon: <Users className="h-3.5 w-3.5" />,
+            icon: <Users className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
             label: 'Active',
             value: stats.active,
-            icon: <UserCheck className="h-3.5 w-3.5 text-emerald-200" />,
-            valueClassName: stats.active > 0 ? 'text-emerald-200' : undefined,
+            icon: <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
             label: 'Invited',
             value: stats.invited,
-            icon: <UserPlus className="h-3.5 w-3.5 text-amber-200" />,
-            valueClassName: stats.invited > 0 ? 'text-amber-200' : undefined,
+            icon: <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
             label: 'Disabled',
             value: stats.disabled,
-            icon: <UserX className="h-3.5 w-3.5 text-rose-200" />,
-            valueClassName: stats.disabled > 0 ? 'text-rose-200' : undefined,
+            icon: <UserX className="h-3.5 w-3.5" aria-hidden="true" />,
           },
         ]}
       />
 
-      {/* Filters */}
-      <UserFilters teams={teams} />
+      <UserFilters teams={teams} actions={<UserSortDropdown />} />
 
-      {/* User List */}
-      <Card className="border-border/70 shadow-2xs">
-        <CardHeader className="p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-base font-bold">User Directory</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                {formatPaginationSummary(
-                  pagination.startItem,
-                  pagination.endItem,
-                  totalCount,
-                  'users'
-                )}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <UserSortDropdown />
-              <RestrictedAction allowed={isAdmin} anyOf="admin.manage">
-                <InviteUserModal
-                  action={addUser}
-                  disabled={!isAdmin}
-                  variant="topbar"
-                  label="Invite User"
-                />
-              </RestrictedAction>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-5 pt-0">
-          <UserList
-            users={users}
-            currentUserId={currentUserId}
-            isAdmin={isAdmin}
-            teams={teams}
-            passwordResetAvailable={authenticationMode !== 'SSO_REQUIRED'}
-            updateUserRole={updateUserRole}
-            addUserToTeam={addUserToTeam}
-            deactivateUser={deactivateUser}
-            reactivateUser={reactivateUser}
-            deleteUser={deleteUser}
-            generateInvite={generateInvite}
-            getUserDependencyReport={getUserDependencyReport}
-            bulkUpdateUsers={bulkUpdateUsers}
-          />
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between mt-6 pt-6 border-t gap-4">
-              <div className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
-              </div>
-              <div className="flex gap-2 flex-wrap justify-center">
-                <Link href={buildPaginationUrl(baseParams, 1)}>
-                  <Button variant="outline" size="sm" disabled={page === 1}>
-                    First
-                  </Button>
-                </Link>
-                <Link href={buildPaginationUrl(baseParams, Math.max(1, page - 1))}>
-                  <Button variant="outline" size="sm" disabled={page === 1}>
-                    <span className="hidden sm:inline">Previous</span>
-                    <span className="sm:hidden">Prev</span>
-                  </Button>
-                </Link>
-                <Link href={buildPaginationUrl(baseParams, Math.min(totalPages, page + 1))}>
-                  <Button variant="outline" size="sm" disabled={page === totalPages}>
-                    Next
-                  </Button>
-                </Link>
-                <Link href={buildPaginationUrl(baseParams, totalPages)}>
-                  <Button variant="outline" size="sm" disabled={page === totalPages}>
-                    Last
-                  </Button>
-                </Link>
-              </div>
-            </div>
+      <section aria-label="User directory" className="space-y-4">
+        <UserList
+          users={users}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          teams={teams}
+          hasFilters={hasFilters}
+          summary={formatPaginationSummary(
+            pagination.startItem,
+            pagination.endItem,
+            totalCount,
+            'users'
           )}
-        </CardContent>
-      </Card>
+          emptyAction={inviteAction}
+          passwordResetAvailable={authenticationMode !== 'SSO_REQUIRED'}
+          updateUserRole={updateUserRole}
+          addUserToTeam={addUserToTeam}
+          deactivateUser={deactivateUser}
+          reactivateUser={reactivateUser}
+          deleteUser={deleteUser}
+          generateInvite={generateInvite}
+          getUserDependencyReport={getUserDependencyReport}
+          bulkUpdateUsers={bulkUpdateUsers}
+        />
+
+        {totalPages > 1 && (
+          <nav
+            aria-label="Pagination"
+            className="flex flex-col items-center justify-between gap-3 border-t border-border pt-4 sm:flex-row"
+          >
+            <p className="text-sm tabular-nums text-muted-foreground">
+              Page {page} of {totalPages}
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {[
+                { label: 'First', target: 1, disabled: page === 1 },
+                { label: 'Previous', target: Math.max(1, page - 1), disabled: page === 1 },
+                {
+                  label: 'Next',
+                  target: Math.min(totalPages, page + 1),
+                  disabled: page === totalPages,
+                },
+                { label: 'Last', target: totalPages, disabled: page === totalPages },
+              ].map(item =>
+                item.disabled ? (
+                  <Button key={item.label} variant="outline" size="sm" disabled>
+                    {item.label}
+                  </Button>
+                ) : (
+                  <Button key={item.label} asChild variant="outline" size="sm">
+                    <Link href={buildPaginationUrl(baseParams, item.target)}>{item.label}</Link>
+                  </Button>
+                )
+              )}
+            </div>
+          </nav>
+        )}
+      </section>
     </div>
   );
 }

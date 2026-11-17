@@ -1,3 +1,4 @@
+import SectionHeader from './SectionHeader';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { incidentStatusColor } from '@/lib/design/status-palette';
 import { formatTimeMinutesMs } from '@/lib/time-format';
@@ -398,12 +399,12 @@ export default async function AnalyticsContent({
         </div>
       </div>
 
-      <div className="v2-section-header v2-panel-heading">
-        <h2 className="v2-section-title">
-          <LayoutDashboard className="w-5 h-5" /> Executive Summary
-        </h2>
-        <span className="text-xs text-muted-foreground">Highlights vs previous period</span>
-      </div>
+      <SectionHeader
+        className="mb-4"
+        icon={<LayoutDashboard />}
+        title="Executive Summary"
+        description="Highlights vs previous period"
+      />
 
       <section className="v2-grid-4 mb-4">
         <MetricCard
@@ -995,12 +996,12 @@ export default async function AnalyticsContent({
         </div>
       </section>
 
-      <div className="v2-section-header v2-panel-heading">
-        <h2 className="v2-section-title">
-          <BarChart3 className="w-5 h-5" /> Distribution &amp; Mix
-        </h2>
-        <span className="text-xs text-muted-foreground">Service, urgency, and status age</span>
-      </div>
+      <SectionHeader
+        className="mb-4"
+        icon={<BarChart3 />}
+        title="Distribution & Mix"
+        description="Service, urgency, and status age"
+      />
 
       <section className="distribution-grid mb-8">
         <div className="distribution-card">
@@ -1103,12 +1104,12 @@ export default async function AnalyticsContent({
         </div>
       </section>
 
-      <div className="v2-section-header v2-panel-heading">
-        <h2 className="v2-section-title">
-          <Users className="w-5 h-5" /> Ownership &amp; Reliability
-        </h2>
-        <span className="text-xs text-muted-foreground">On-call load and recurring incidents</span>
-      </div>
+      <SectionHeader
+        className="mb-4"
+        icon={<Users />}
+        title="Ownership & Reliability"
+        description="On-call load and recurring incidents"
+      />
 
       <section className="ownership-grid mb-8">
         <div className="ownership-card">
@@ -1250,12 +1251,12 @@ export default async function AnalyticsContent({
         </div>
       </section>
 
-      <div className="v2-section-header v2-panel-heading">
-        <h2 className="v2-section-title">
-          <Shield className="w-5 h-5" /> SLA &amp; Coverage
-        </h2>
-        <span className="text-xs text-muted-foreground">Targets, breaches, and scheduling</span>
-      </div>
+      <SectionHeader
+        className="mb-4"
+        icon={<Shield />}
+        title="SLA & Coverage"
+        description="Targets, breaches, and scheduling"
+      />
 
       <section className="sla-coverage-panel mb-8">
         <div className="sla-coverage-header">

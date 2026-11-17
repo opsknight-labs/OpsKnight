@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, type ReactNode } from 'react';
 import { UserCard } from './UserCard';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
@@ -22,9 +22,14 @@ import {
   MoreHorizontal,
   LayoutGrid,
   List,
+  SearchX,
+  Users as UsersIcon,
 } from 'lucide-react';
 import { notify as toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+import { EmptyState } from '@/components/patterns';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 
 type User = {
   id: string;
@@ -53,6 +58,12 @@ type Team = {
 
 type UserListProps = {
   users: User[];
+  /** True when search/filters narrow the list; switches the empty state to "Clear filters". */
+  hasFilters?: boolean;
+  /** Result summary shown in the list toolbar ("Showing 1–20 of 54 users"). */
+  summary?: string;
+  /** Next action for the first-run empty state (e.g. the invite button). */
+  emptyAction?: ReactNode;
   currentUserId: string;
   isAdmin: boolean;
   teams: Team[];
@@ -78,6 +89,9 @@ type UserListProps = {
 
 export default function UserList({
   users,
+  hasFilters = false,
+  summary,
+  emptyAction,
   currentUserId,
   isAdmin,
   passwordResetAvailable = true,
@@ -94,6 +108,8 @@ export default function UserList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const router = useRouter();
 
   const toggleUser = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -179,6 +195,7 @@ export default function UserList({
         <div className="sticky top-0 z-10 flex items-center justify-between p-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border rounded-md shadow-sm">
           <div className="flex items-center gap-3 px-2">
             <Checkbox
+              data-icon-button=""
               checked={allSelected}
               onCheckedChange={toggleAll}
               aria-label="Select all users"
@@ -210,7 +227,7 @@ export default function UserList({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => handleBulkAction('DELETE')}
+                onClick={() => setConfirmBulkDelete(true)}
                 className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:text-red-400 dark:focus:text-red-400 dark:focus:bg-red-500/10"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -222,51 +239,53 @@ export default function UserList({
       )}
 
       {users.length > 0 && selectedIds.size === 0 && (
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/20 rounded-xl border border-border/60">
-          {isAdmin ? (
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                checked={allSelected}
-                onCheckedChange={toggleAll}
-                aria-label="Select all users"
-              />
-              <span className="text-xs font-medium text-muted-foreground">Select all</span>
-            </div>
-          ) : (
-            <span className="text-xs font-medium text-muted-foreground">
-              {users.length} {users.length === 1 ? 'user' : 'users'}
-            </span>
-          )}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            {isAdmin && (
+              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Checkbox
+                  data-icon-button=""
+                  checked={allSelected}
+                  onCheckedChange={toggleAll}
+                  aria-label="Select all users on this page"
+                />
+                <span className="hidden sm:inline">Select all</span>
+              </label>
+            )}
+            <p className="truncate text-sm tabular-nums text-muted-foreground">
+              {summary ?? `${users.length} ${users.length === 1 ? 'user' : 'users'}`}
+            </p>
+          </div>
 
-          <div className="flex items-center gap-1 border border-border/60 rounded-lg p-0.5 bg-background shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              className={cn(
-                'p-1.5 rounded-md text-xs font-medium transition-all cursor-pointer',
-                viewMode === 'grid'
-                  ? 'bg-primary text-primary-foreground shadow-2xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-              aria-label="Grid view"
-              title="Grid View"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('list')}
-              className={cn(
-                'p-1.5 rounded-md text-xs font-medium transition-all cursor-pointer',
-                viewMode === 'list'
-                  ? 'bg-primary text-primary-foreground shadow-2xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-              aria-label="List view"
-              title="List View"
-            >
-              <List className="h-3.5 w-3.5" />
-            </button>
+          <div
+            role="group"
+            aria-label="Layout"
+            className="flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5"
+          >
+            {(
+              [
+                { mode: 'grid', label: 'Grid view', Icon: LayoutGrid },
+                { mode: 'list', label: 'List view', Icon: List },
+              ] as const
+            ).map(({ mode, label, Icon }) => (
+              <button
+                key={mode}
+                type="button"
+                data-icon-button=""
+                onClick={() => setViewMode(mode)}
+                aria-pressed={viewMode === mode}
+                aria-label={label}
+                title={label}
+                className={cn(
+                  'inline-flex h-8 w-8 items-center justify-center rounded-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  viewMode === mode
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                )}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -343,11 +362,38 @@ export default function UserList({
         })}
       </div>
 
-      {users.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          <p>No users found matching your filters.</p>
-        </div>
-      )}
+      {users.length === 0 &&
+        (hasFilters ? (
+          <EmptyState
+            icon={<SearchX />}
+            title="No users match these filters"
+            description="Check the spelling of the name or email, or widen the status, role and team filters."
+            primaryAction={
+              <Button variant="outline" size="sm" onClick={() => router.push('/users')}>
+                Clear filters
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={<UsersIcon />}
+            title="No users yet"
+            description="Invite the people who respond to incidents. Each user gets a role, team memberships and the channels they are paged on."
+            primaryAction={emptyAction}
+          />
+        ))}
+
+      <DeleteConfirmDialog
+        open={confirmBulkDelete}
+        onOpenChange={setConfirmBulkDelete}
+        title={`Delete ${selectedIds.size} ${selectedIds.size === 1 ? 'user' : 'users'}?`}
+        description="Deleted users lose access immediately and are removed from teams, schedules and escalation steps. This cannot be undone."
+        confirmText="Delete users"
+        onConfirm={async () => {
+          setConfirmBulkDelete(false);
+          await handleBulkAction('DELETE');
+        }}
+      />
     </div>
   );
 }

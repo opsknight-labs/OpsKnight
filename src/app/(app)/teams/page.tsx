@@ -2,12 +2,11 @@ import prisma from '@/lib/prisma';
 import { getUserPermissions, getViewableTeamWhere } from '@/lib/rbac';
 import { createTeam } from './actions';
 import TeamDirectoryList from '@/components/teams/TeamDirectoryList';
-import TeamStatsCapsule from '@/components/teams/TeamStatsCapsule';
 import TeamCreateForm from '@/components/TeamCreateForm';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import { Button } from '@/components/ui/shadcn/button';
-import { Users, Shield, ArrowUpRight, Sparkles, UserCheck } from 'lucide-react';
+import { PageHeader } from '@/components/patterns';
+import { Users, Shield, ArrowRight, HelpCircle, UserCheck, ShieldAlert } from 'lucide-react';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 import { Prisma } from '@prisma/client';
@@ -146,48 +145,59 @@ export default async function TeamsPage({
   });
 
   const canCreateTeam = permissions.isAdminOrResponder;
+  const createAction = canCreateTeam ? (
+    <TeamCreateForm action={createTeam} canCreate={canCreateTeam} />
+  ) : undefined;
+
+  const resourceLinkClass =
+    'flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  const setupSteps = [
+    {
+      title: 'Assign a team lead',
+      body: 'The lead owns the roster and can be targeted directly by escalation steps.',
+    },
+    {
+      title: 'Build the responder roster',
+      body: 'Add engineers with an explicit role: owner, admin or member.',
+    },
+    {
+      title: 'Connect owned services',
+      body: 'Services owned by the team route their incidents to it.',
+    },
+  ];
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      {/* Header Banner with Glassmorphic Stats Capsule */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
-              <Users className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                Organization &amp; Ownership
-              </p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-                Teams
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-300">
-                Manage team ownership, lead assignments, responder rosters, and service coverage.
-              </p>
-            </div>
-          </div>
+    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        title="Teams"
+        icon={Users}
+        description="Team ownership, leads, responder rosters and service coverage."
+        primaryAction={createAction}
+        stats={[
+          {
+            label: 'Teams',
+            value: allTeamsCount,
+            icon: <Users className="h-3.5 w-3.5" aria-hidden="true" />,
+          },
+          {
+            label: 'Members',
+            value: totalMembersCount,
+            icon: <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />,
+          },
+          {
+            label: 'Services',
+            value: totalServicesCount,
+            icon: <Shield className="h-3.5 w-3.5" aria-hidden="true" />,
+          },
+        ]}
+      />
 
-          <TeamStatsCapsule
-            totalTeams={allTeamsCount}
-            totalMembers={totalMembersCount}
-            totalServices={totalServicesCount}
-            configuredCount={configuredTeamsCount}
-          />
-        </div>
-      </div>
-
-      {/* Top Action: Create Team Dashed Expander */}
-      <TeamCreateForm action={createTeam} canCreate={canCreateTeam} />
-
-      {/* Main Grid: Directory + Sidebar */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
-        {/* Teams Directory List */}
-        <div className="xl:col-span-3 space-y-4">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        <div className="space-y-4 lg:col-span-3">
           <TeamDirectoryList
             teams={teams}
+            createAction={createAction}
             pagination={{
               currentPage: pagination.page,
               totalPages: pagination.totalPages,
@@ -204,96 +214,62 @@ export default async function TeamsPage({
           />
         </div>
 
-        {/* Sidebar: Guide & Quick Links */}
-        <aside className="space-y-4">
-          {/* Team Lifecycle & Best Practices Guide */}
-          <Card className="overflow-hidden border-border/70 shadow-xs">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
-                  <Sparkles className="h-3 w-3" />
-                </div>
-                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Team Lifecycle
-                </CardTitle>
-              </div>
+        <aside className="space-y-4" aria-label="Team guidance">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Setting up a team
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  1
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Assign Team Lead</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Designate an owner/lead to receive targeted escalation notifications.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  2
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Build Responder Roster</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Add engineers with explicit roles (Owner, Admin, Member) and channel
-                    preferences.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  3
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Connect Owned Services</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Link microservices and applications to automatically route incident alerts.
-                  </p>
-                </div>
-              </div>
+            <CardContent>
+              <ol className="space-y-3 text-sm">
+                {setupSteps.map((step, index) => (
+                  <li key={step.title} className="flex items-start gap-2.5">
+                    <span
+                      aria-hidden="true"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold tabular-nums text-muted-foreground"
+                    >
+                      {index + 1}
+                    </span>
+                    <div>
+                      <p className="font-medium text-foreground">{step.title}</p>
+                      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                        {step.body}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
             </CardContent>
           </Card>
 
-          {/* Quick Links */}
-          <Card className="overflow-hidden border-border/70 shadow-xs">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Quick Links
-              </CardTitle>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Related</CardTitle>
             </CardHeader>
-            <CardContent className="p-2 space-y-1">
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between h-8 text-xs font-medium"
-              >
-                <Link href="/users">
-                  <span className="flex items-center gap-2">
-                    <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                    All Responders
-                  </span>
-                  <ArrowUpRight className="h-3 w-3 opacity-60" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between h-8 text-xs font-medium"
-              >
-                <Link href="/services">
-                  <span className="flex items-center gap-2">
-                    <Shield className="h-3.5 w-3.5 text-muted-foreground" />
-                    Service Catalog
-                  </span>
-                  <ArrowUpRight className="h-3 w-3 opacity-60" />
-                </Link>
-              </Button>
+            <CardContent className="space-y-1 px-4 pb-4">
+              <Link href="/users" className={resourceLinkClass}>
+                <span className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  Users
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              </Link>
+              <Link href="/services" className={resourceLinkClass}>
+                <span className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  Services
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              </Link>
+              <Link href="/policies" className={resourceLinkClass}>
+                <span className="flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  Escalation policies
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              </Link>
             </CardContent>
           </Card>
         </aside>

@@ -33,7 +33,6 @@ export default function ActionItemJiraBadge({
   const [showLinkForm, setShowLinkForm] = useState(false);
   const [linkKey, setLinkKey] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [showActions, setShowActions] = useState(false);
   const [currentExternalIssue, setCurrentExternalIssue] = useState(externalIssue);
 
   const [syncedExternalIssue, setSyncedExternalIssue] = useState(externalIssue);
@@ -51,18 +50,17 @@ export default function ActionItemJiraBadge({
   // Preserve existing Jira references as read-only when Jira is disabled or unavailable.
   if (currentExternalIssue) {
     return (
-      <div
-        className="inline-flex items-center gap-1.5 group relative"
-        onClick={event => event.stopPropagation()}
-        onMouseEnter={() => setShowActions(true)}
-        onMouseLeave={() => setShowActions(false)}
-      >
+      <div className="group relative inline-flex items-center gap-1.5">
         <JiraReferenceBadge issue={currentExternalIssue} compact={compact} />
-        {showAnyAction && showActions && (
-          <div className="inline-flex items-center gap-0.5">
+        {showAnyAction && (
+          // Shown on hover, on keyboard focus and always on touch screens.
+          <div className="inline-flex items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
             {showSync && (
               <button
-                className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-ink-100 transition-colors"
+                type="button"
+                data-icon-button=""
+                aria-label={`Sync ${currentExternalIssue.key} status from Jira`}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 hover:bg-muted hover:text-foreground"
                 onClick={() => {
                   setError(null);
                   startTransition(async () => {
@@ -80,12 +78,18 @@ export default function ActionItemJiraBadge({
                 disabled={isPending}
                 title="Sync status"
               >
-                <RefreshCw className={`h-3 w-3 ${isPending ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  aria-hidden="true"
+                  className={`h-3 w-3 ${isPending ? 'motion-safe:animate-spin' : ''}`}
+                />
               </button>
             )}
             {showUnlink && (
               <button
-                className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-red-50 transition-colors dark:hover:bg-red-500/10"
+                type="button"
+                data-icon-button=""
+                aria-label={`Unlink ${currentExternalIssue.key}`}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 hover:bg-rose-50 hover:text-destructive dark:hover:bg-rose-500/10"
                 onClick={() => {
                   setError(null);
                   startTransition(async () => {
@@ -97,19 +101,22 @@ export default function ActionItemJiraBadge({
                       setError(res.error);
                     } else {
                       setCurrentExternalIssue(undefined);
-                      setShowActions(false);
                     }
                   });
                 }}
                 disabled={isPending}
                 title="Unlink"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="h-3 w-3" aria-hidden="true" />
               </button>
             )}
           </div>
         )}
-        {error && <span className="text-xs text-destructive">{error}</span>}
+        {error && (
+          <span role="alert" className="text-xs text-destructive">
+            {error}
+          </span>
+        )}
       </div>
     );
   }
@@ -133,8 +140,9 @@ export default function ActionItemJiraBadge({
 
   if (showLinkForm && showLink) {
     return (
-      <div className="inline-flex items-center gap-1.5" onClick={event => event.stopPropagation()}>
+      <div className="inline-flex items-center gap-1.5">
         <Input
+          aria-label="Jira issue key"
           value={linkKey}
           onChange={event => setLinkKey(event.target.value)}
           placeholder="KEY-123"
@@ -151,24 +159,36 @@ export default function ActionItemJiraBadge({
           }}
         />
         <Button
+          type="button"
           variant="ghost"
           size="icon"
+          data-icon-button=""
           className="h-6 w-6"
           onClick={handleLinkSubmit}
           disabled={isPending || !linkKey.trim()}
+          aria-label="Link Jira issue"
         >
-          {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+          {isPending ? (
+            <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden="true" />
+          ) : (
+            <Link2 className="h-3 w-3" aria-hidden="true" />
+          )}
         </Button>
-        {error && <span className="text-xs text-destructive">{error}</span>}
+        {error && (
+          <span role="alert" className="text-xs text-destructive">
+            {error}
+          </span>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="inline-flex items-center gap-1" onClick={event => event.stopPropagation()}>
+    <div className="inline-flex items-center gap-1">
       {showCreate && (
         <button
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-ink-300 px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors dark:hover:border-blue-500/30 dark:hover:text-blue-400 dark:hover:bg-blue-500/10"
+          type="button"
+          className="inline-flex h-6 items-center gap-1 rounded-full border border-dashed border-ink-300 px-2 text-2xs font-medium text-muted-foreground transition-colors duration-150 hover:border-ink-400 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           onClick={() => {
             setError(null);
             startTransition(async () => {
@@ -183,21 +203,32 @@ export default function ActionItemJiraBadge({
           disabled={isPending}
           title="Create Jira issue"
         >
-          {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+          {isPending ? (
+            <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden="true" />
+          ) : (
+            <Plus className="h-3 w-3" aria-hidden="true" />
+          )}
           Create Jira
         </button>
       )}
       {showLink && (
         <button
-          className="rounded p-0.5 text-muted-foreground hover:text-blue-600 transition-colors dark:hover:text-blue-400"
+          type="button"
+          data-icon-button=""
+          className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 hover:bg-muted hover:text-foreground"
           onClick={() => setShowLinkForm(true)}
           disabled={isPending}
           title="Link existing Jira issue"
+          aria-label="Link existing Jira issue"
         >
-          <Link2 className="h-3 w-3" />
+          <Link2 className="h-3 w-3" aria-hidden="true" />
         </button>
       )}
-      {error && <span className="text-xs text-destructive ml-1">{error}</span>}
+      {error && (
+        <span role="alert" className="ml-1 text-xs text-destructive">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

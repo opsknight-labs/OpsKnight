@@ -8,11 +8,10 @@ import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { dashboardUserReadWhere, incidentReadWhere } from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import ListReturnLink from '@/components/layout/ListReturnLink';
-import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, FileText } from 'lucide-react';
+import { Breadcrumbs, EmptyState, PageHeader } from '@/components/patterns';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { requirePageAccess } from '@/lib/access/server';
@@ -82,39 +81,53 @@ export default async function PostmortemPage({
     orderBy: { name: 'asc' },
   });
 
+  const container = 'mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8';
+  const incidentLink = (
+    <Link
+      href={`/incidents/${incidentId}`}
+      className="rounded-sm font-medium text-white underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+    >
+      {incidentContext.title}
+    </Link>
+  );
+
   if (!postmortem) {
+    const header = (
+      <PageHeader
+        breadcrumbs={
+          <Breadcrumbs
+            className="lg:hidden"
+            items={[{ label: 'Postmortems', href: '/postmortems' }, { label: 'New postmortem' }]}
+          />
+        }
+        title="New postmortem"
+        icon={FileText}
+        description={<>For incident {incidentLink}</>}
+      />
+    );
+
     if (incidentContext.status !== 'RESOLVED') {
       return (
-        <div className="p-6">
-          <Card className="text-center">
-            <CardContent className="py-8">
-              <h2 className="text-xl font-semibold mb-2">Incident Not Resolved</h2>
-              <p className="text-muted-foreground mb-4">
-                Postmortems can only be created for resolved incidents.
-              </p>
-              <Link href={`/incidents/${incidentId}`}>
-                <Button>View Incident</Button>
-              </Link>
-            </CardContent>
-          </Card>
+        <div className={container}>
+          {header}
+          <EmptyState
+            variant="card"
+            icon={<FileText />}
+            title="This incident is not resolved yet"
+            description="Postmortems are written once an incident is resolved, so the timeline and impact are complete. Resolve the incident first, then come back here."
+            primaryAction={
+              <Button asChild size="sm">
+                <Link href={`/incidents/${incidentId}`}>Open incident</Link>
+              </Button>
+            }
+          />
         </div>
       );
     }
 
     return (
-      <div className="p-6">
-        <div className="mb-6">
-          <ListReturnLink
-            href="/postmortems"
-            className="text-muted-foreground no-underline text-sm mb-2 inline-flex items-center gap-1 hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Postmortems
-          </ListReturnLink>
-          <h1 className="text-2xl font-bold mt-2">Create Postmortem</h1>
-          <p className="text-muted-foreground">For incident: {incidentContext.title}</p>
-        </div>
-
+      <div className={container}>
+        {header}
         {canEdit ? (
           <PostmortemForm
             incidentId={incidentId}
@@ -124,7 +137,7 @@ export default async function PostmortemPage({
           />
         ) : (
           <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
             <AlertDescription>
               You don&apos;t have permission to create postmortems.
             </AlertDescription>
@@ -135,36 +148,33 @@ export default async function PostmortemPage({
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <ListReturnLink
-          href="/postmortems"
-          className="text-muted-foreground no-underline text-sm mb-2 inline-flex items-center gap-1 hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Postmortems
-        </ListReturnLink>
-        <h1 className="text-2xl font-bold mt-2">{postmortem.title}</h1>
-        <p className="text-muted-foreground">
-          Postmortem for{' '}
-          <Link
-            href={`/incidents/${incidentId}`}
-            className="text-primary no-underline hover:underline"
-          >
-            {postmortem.incident.title}
-          </Link>
-        </p>
-      </div>
-
+    <div className={container}>
       {canView ? (
         editMode && canEdit ? (
-          <PostmortemForm
-            incidentId={incidentId}
-            initialData={postmortem}
-            users={users}
-            jiraCapability={jiraCapability}
-            incidentJiraIssues={incidentJiraIssues}
-          />
+          <>
+            <PageHeader
+              breadcrumbs={
+                <Breadcrumbs
+                  className="lg:hidden"
+                  items={[
+                    { label: 'Postmortems', href: '/postmortems' },
+                    { label: postmortem.title, href: `/postmortems/${incidentId}` },
+                    { label: 'Edit' },
+                  ]}
+                />
+              }
+              title={`Edit: ${postmortem.title}`}
+              icon={FileText}
+              description={<>Postmortem for {incidentLink}</>}
+            />
+            <PostmortemForm
+              incidentId={incidentId}
+              initialData={postmortem}
+              users={users}
+              jiraCapability={jiraCapability}
+              incidentJiraIssues={incidentJiraIssues}
+            />
+          </>
         ) : (
           <PostmortemDetailView
             postmortem={postmortem}
@@ -176,13 +186,29 @@ export default async function PostmortemPage({
           />
         )
       ) : (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            You don&apos;t have permission to view this postmortem. Only published postmortems are
-            publicly viewable.
-          </AlertDescription>
-        </Alert>
+        <>
+          <PageHeader
+            breadcrumbs={
+              <Breadcrumbs
+                className="lg:hidden"
+                items={[
+                  { label: 'Postmortems', href: '/postmortems' },
+                  { label: postmortem.title },
+                ]}
+              />
+            }
+            title={postmortem.title}
+            icon={FileText}
+            description={<>Postmortem for {incidentLink}</>}
+          />
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            <AlertDescription>
+              You don&apos;t have permission to view this postmortem. Only published postmortems are
+              visible to everyone.
+            </AlertDescription>
+          </Alert>
+        </>
       )}
     </div>
   );

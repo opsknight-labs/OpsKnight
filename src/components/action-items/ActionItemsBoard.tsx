@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Select,
@@ -28,8 +26,7 @@ import { ActionItemStatus } from '@prisma/client';
 import ActionItemJiraContext from '@/components/action-items/ActionItemJiraContext';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import DueDateBadge from '@/components/action-items/DueDateBadge';
-import SearchFilterBar from '@/components/ui/SearchFilterBar';
-import EmptyState from '@/components/ui/EmptyState';
+import { EmptyState, ErrorState, FilterBar, FilterField } from '@/components/patterns';
 import Pagination from '@/components/service/Pagination';
 import { exportToCsv } from '@/lib/export-csv';
 import { updateActionItemStatus } from '@/app/(app)/action-items/actions';
@@ -54,6 +51,11 @@ import {
   ChevronsUpDown,
   Check,
   Loader2,
+  UserRound,
+  FileText,
+  AlertTriangle,
+  SearchX,
+  ListChecks,
 } from 'lucide-react';
 
 export interface BoardActionItem extends ActionItem {
@@ -101,46 +103,14 @@ interface ActionItemCardProps {
 }
 
 const STATUS_CONFIG = {
-  OPEN: {
-    color: 'text-blue-600 dark:text-blue-400',
-    bgColor: 'bg-blue-500',
-    borderColor: 'border-blue-200/80 dark:border-blue-500/30',
-    hoverBorderColor: 'hover:border-blue-400',
-    dotGlow: 'shadow-[0_0_8px_rgba(59,130,246,0.6)]',
-    label: 'Open',
-    badgeVariant: 'info' as const,
-    icon: Circle,
-  },
-  IN_PROGRESS: {
-    color: 'text-amber-600 dark:text-amber-400',
-    bgColor: 'bg-amber-500',
-    borderColor: 'border-amber-200/80 dark:border-amber-500/30',
-    hoverBorderColor: 'hover:border-amber-400',
-    dotGlow: 'shadow-[0_0_8px_rgba(245,158,11,0.6)]',
-    label: 'In Progress',
-    badgeVariant: 'warning' as const,
-    icon: Clock,
-  },
+  OPEN: { color: 'text-blue-600 dark:text-blue-400', label: 'Open', icon: Circle },
+  IN_PROGRESS: { color: 'text-amber-600 dark:text-amber-400', label: 'In Progress', icon: Clock },
   COMPLETED: {
     color: 'text-emerald-600 dark:text-emerald-400',
-    bgColor: 'bg-emerald-500',
-    borderColor: 'border-emerald-200/80 dark:border-emerald-500/30',
-    hoverBorderColor: 'hover:border-emerald-400',
-    dotGlow: 'shadow-[0_0_8px_rgba(34,197,94,0.6)]',
     label: 'Completed',
-    badgeVariant: 'success' as const,
     icon: CheckCircle2,
   },
-  BLOCKED: {
-    color: 'text-rose-600 dark:text-rose-400',
-    bgColor: 'bg-rose-500',
-    borderColor: 'border-rose-200/80 dark:border-rose-500/30',
-    hoverBorderColor: 'hover:border-rose-400',
-    dotGlow: 'shadow-[0_0_8px_rgba(239,68,68,0.6)]',
-    label: 'Blocked',
-    badgeVariant: 'danger' as const,
-    icon: AlertOctagon,
-  },
+  BLOCKED: { color: 'text-rose-600 dark:text-rose-400', label: 'Blocked', icon: AlertOctagon },
 };
 
 const PRIORITY_CONFIG = {
@@ -188,6 +158,97 @@ function requireJiraCapability(
   return capability ?? DEFAULT_FALLBACK_CAPABILITY;
 }
 
+const STATUS_ORDER: ActionItemStatus[] = [
+  ActionItemStatus.OPEN,
+  ActionItemStatus.IN_PROGRESS,
+  ActionItemStatus.COMPLETED,
+  ActionItemStatus.BLOCKED,
+];
+
+/** Overlay link that makes the whole card open the postmortem; controls sit above it (z-10). */
+const CARD_LINK_CLASS =
+  'rounded-sm after:absolute after:inset-0 after:rounded-lg after:content-[""] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background group-hover:underline';
+
+function statusConfigFor(status: string) {
+  switch (status) {
+    case 'IN_PROGRESS':
+      return STATUS_CONFIG.IN_PROGRESS;
+    case 'COMPLETED':
+      return STATUS_CONFIG.COMPLETED;
+    case 'BLOCKED':
+      return STATUS_CONFIG.BLOCKED;
+    default:
+      return STATUS_CONFIG.OPEN;
+  }
+}
+
+function priorityConfigFor(priority: string) {
+  switch (priority) {
+    case 'HIGH':
+      return PRIORITY_CONFIG.HIGH;
+    case 'LOW':
+      return PRIORITY_CONFIG.LOW;
+    default:
+      return PRIORITY_CONFIG.MEDIUM;
+  }
+}
+
+function PriorityPill({ priority }: { priority: string }) {
+  const config = priorityConfigFor(priority);
+  return (
+    <span
+      className={cn(
+        'inline-flex h-5 items-center rounded-full border px-2 text-2xs font-semibold',
+        config.bgColor,
+        config.color
+      )}
+    >
+      {config.label} priority
+    </span>
+  );
+}
+
+function StatusMenu({
+  item,
+  onStatusChange,
+}: {
+  item: BoardActionItem;
+  onStatusChange: (itemId: string, status: ActionItemStatus) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          data-icon-button=""
+          className="relative z-10 h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label={`Change status of ${item.title}`}
+        >
+          <MoreVertical className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        {STATUS_ORDER.map(status => {
+          const config = statusConfigFor(status);
+          const Icon = config.icon;
+          return (
+            <DropdownMenuItem
+              key={status}
+              onClick={() => onStatusChange(item.id, status)}
+              disabled={item.status === status}
+              className="gap-2"
+            >
+              <Icon className={cn('h-3.5 w-3.5', config.color)} aria-hidden="true" />
+              <span>Set to {config.label}</span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function ActionItemCard({
   item,
   users,
@@ -197,44 +258,21 @@ function ActionItemCard({
   isUpdating = false,
   jiraCapability,
 }: ActionItemCardProps) {
-  const router = useRouter();
-  const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.OPEN;
-  const priorityConfig = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
   const inheritedIssues = item.incidentJiraIssues.filter(
     issue => issue.key !== item.externalIssue?.key
   );
 
   return (
-    <div
+    <article
+      aria-busy={isUpdating || undefined}
       className={cn(
-        'group p-3.5 bg-card rounded-lg border shadow-sm transition-all duration-200',
-        statusConfig.borderColor,
-        statusConfig.hoverBorderColor,
-        'hover:shadow-md hover:-translate-y-0.5 relative',
-        isUpdating && 'opacity-60 pointer-events-none'
+        'group relative rounded-lg border border-border bg-card p-3.5 shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-ink-300 hover:shadow-md',
+        isUpdating && 'pointer-events-none opacity-60'
       )}
-      onClick={() => router.push(`/postmortems/${item.incidentId}`)}
-      onKeyDown={event => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          router.push(`/postmortems/${item.incidentId}`);
-        }
-      }}
-      role="button"
-      tabIndex={0}
     >
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span
-            className={cn(
-              'px-1.5 py-0.5 rounded text-[11px] font-semibold border',
-              priorityConfig.bgColor,
-              priorityConfig.color
-            )}
-          >
-            {priorityConfig.label}
-          </span>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <PriorityPill priority={item.priority} />
           <DueDateBadge
             dueDate={item.dueDate}
             completedAt={item.completedAt}
@@ -242,70 +280,21 @@ function ActionItemCard({
             userTimeZone={userTimeZone}
           />
         </div>
-
-        {canManage && (
-          <div onClick={event => event.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground opacity-60 group-hover:opacity-100 transition-opacity"
-                  title="Change status"
-                >
-                  <MoreVertical className="h-3.5 w-3.5" />
-                  <span className="sr-only">Actions</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 text-xs">
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(item.id, ActionItemStatus.OPEN)}
-                  disabled={item.status === 'OPEN'}
-                  className="gap-2"
-                >
-                  <Circle className="h-3.5 w-3.5 text-blue-500" />
-                  <span>Set to Open</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(item.id, ActionItemStatus.IN_PROGRESS)}
-                  disabled={item.status === 'IN_PROGRESS'}
-                  className="gap-2"
-                >
-                  <Clock className="h-3.5 w-3.5 text-amber-500" />
-                  <span>Set to In Progress</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(item.id, ActionItemStatus.COMPLETED)}
-                  disabled={item.status === 'COMPLETED'}
-                  className="gap-2 text-emerald-600 focus:text-emerald-700 dark:text-emerald-400 dark:focus:text-emerald-300"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Mark Completed</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(item.id, ActionItemStatus.BLOCKED)}
-                  disabled={item.status === 'BLOCKED'}
-                  className="gap-2 text-rose-600 focus:text-rose-700 dark:text-rose-400 dark:focus:text-rose-300"
-                >
-                  <AlertOctagon className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-                  <span>Mark Blocked</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
+        {canManage && <StatusMenu item={item} onStatusChange={onStatusChange} />}
       </div>
 
-      <h4 className="text-sm font-semibold text-foreground mb-1 leading-snug line-clamp-2">
-        {item.title}
+      <h4 className="mb-1 line-clamp-2 text-sm font-semibold leading-snug text-foreground">
+        <Link href={`/postmortems/${item.incidentId}`} className={CARD_LINK_CLASS}>
+          {item.title}
+        </Link>
       </h4>
       {item.description && (
-        <p className="text-xs text-muted-foreground line-clamp-2 mb-2.5 leading-relaxed">
+        <p className="mb-2.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
           {item.description}
         </p>
       )}
 
-      <div className="mb-2.5 flex flex-col gap-1.5">
+      <div className="relative z-10 mb-2.5 flex flex-col gap-1.5">
         <IncidentJiraContext issues={inheritedIssues} compact />
         <ActionItemJiraContext
           actionItemId={item.id}
@@ -316,27 +305,27 @@ function ActionItemCard({
         />
       </div>
 
-      <div className="pt-2 border-t border-ink-100 flex flex-col gap-1 text-[11px] text-muted-foreground">
-        <div className="flex items-center justify-between">
-          <span className="font-medium text-foreground truncate max-w-[150px]">
-            👤 {getOwnerName(item.owner, users, item.ownerName)}
+      <div className="flex flex-col gap-1 border-t border-border pt-2 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-1 font-medium text-foreground">
+            <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="truncate">{getOwnerName(item.owner, users, item.ownerName)}</span>
           </span>
-          <span className="bg-ink-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-ink-700 truncate max-w-[100px]">
+          <span className="max-w-[110px] truncate rounded-sm bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
             {item.serviceName}
           </span>
         </div>
-        <div className="truncate text-ink-500">
-          From{' '}
+        <div className="truncate">
+          Incident{' '}
           <Link
-            href={`/postmortems/${item.incidentId}`}
-            className="hover:underline text-primary"
-            onClick={event => event.stopPropagation()}
+            href={`/incidents/${item.incidentId}`}
+            className="relative z-10 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {item.incidentTitle}
           </Link>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -365,6 +354,8 @@ export default function ActionItemsBoard({
   const [ownerOptions, setOwnerOptions] =
     useState<Array<{ id: string; name: string; email: string }>>(users);
   const [isSearchingOwners, setIsSearchingOwners] = useState(false);
+  const [ownerSearchError, setOwnerSearchError] = useState(false);
+  const [ownerSearchAttempt, setOwnerSearchAttempt] = useState(0);
   const jiraCapabilities = useMemo(
     () => new Map<string, JiraCapability>(Object.entries(jiraCapabilitiesByServiceId)),
     [jiraCapabilitiesByServiceId]
@@ -408,6 +399,7 @@ export default function ActionItemsBoard({
     if (!ownerSearch.trim()) {
       setOwnerOptions(users);
       setIsSearchingOwners(false);
+      setOwnerSearchError(false);
     } else {
       setIsSearchingOwners(true);
     }
@@ -427,6 +419,7 @@ export default function ActionItemsBoard({
         );
         if (!res.ok) throw new Error('Search failed');
         const data = await res.json();
+        setOwnerSearchError(false);
         const foundUsers = Array.isArray(data.users) ? data.users : [];
         const selected = users.find(u => u.id === selectedOwner);
         if (selected && !foundUsers.some((u: { id: string }) => u.id === selected.id)) {
@@ -435,8 +428,8 @@ export default function ActionItemsBoard({
           setOwnerOptions(foundUsers);
         }
       } catch (err) {
-        if (err instanceof Error && err.name !== 'AbortError') {
-          // Keep current options on error
+        if (!(err instanceof Error && err.name === 'AbortError')) {
+          setOwnerSearchError(true);
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -449,7 +442,7 @@ export default function ActionItemsBoard({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [ownerSearch, users, selectedOwner]);
+  }, [ownerSearch, users, selectedOwner, ownerSearchAttempt]);
 
   const handleStatusChange = async (itemId: string, newStatus: ActionItemStatus) => {
     setItems(previous =>
@@ -561,385 +554,407 @@ export default function ActionItemsBoard({
     startTransition(() => router.push('/action-items'));
   };
 
+  const emptyState = hasActiveFilters ? (
+    <EmptyState
+      icon={<SearchX />}
+      title="No action items match these filters"
+      description="Try another search term, or widen the status, owner and priority filters."
+      primaryAction={
+        <Button variant="outline" size="sm" onClick={handleReset}>
+          Clear filters
+        </Button>
+      }
+    />
+  ) : (
+    <EmptyState
+      icon={<ListChecks />}
+      title="No action items yet"
+      description="Action items are the follow-up work agreed in a postmortem. Add them to a postmortem and they show up here with an owner, a due date and a status."
+      primaryAction={
+        <Button asChild variant="outline" size="sm">
+          <Link href="/postmortems">Go to postmortems</Link>
+        </Button>
+      }
+    />
+  );
+
   return (
     <div className="space-y-4">
-      <SearchFilterBar
-        searchValue={search}
-        onSearchChange={val => {
-          setSearch(val);
-          startTransition(() => router.push(buildFilterUrl({ search: val })));
+      <FilterBar
+        search={{
+          value: search,
+          onChange: val => {
+            setSearch(val);
+            startTransition(() => router.push(buildFilterUrl({ search: val })));
+          },
+          debounceMs: 300,
+          placeholder: 'Search action items, postmortems or owners…',
+          label: 'Search action items',
         }}
-        searchDebounceMs={300}
-        searchPlaceholder="Search action items, postmortems, owners..."
         hasActiveFilters={hasActiveFilters}
-        onResetFilters={handleReset}
+        onClearAll={handleReset}
         filters={
           <>
-            <Select
-              value={selectedStatus || 'all'}
-              onValueChange={value => {
-                const next = value === 'all' ? '' : value;
-                setSelectedStatus(next);
-                startTransition(() => router.push(buildFilterUrl({ status: next })));
-              }}
-            >
-              <SelectTrigger className="h-9 w-[130px] bg-ink-50/60 text-xs">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="OPEN">Open</SelectItem>
-                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                <SelectItem value="COMPLETED">Completed</SelectItem>
-                <SelectItem value="BLOCKED">Blocked</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Popover open={ownerPopoverOpen} onOpenChange={setOwnerPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={ownerPopoverOpen}
-                  aria-label="Filter by owner"
-                  className="h-9 w-[150px] justify-between bg-ink-50/60 text-xs font-normal border-ink-200 hover:bg-ink-100/60"
+            <FilterField label="Status" htmlFor="action-items-filter-status">
+              <Select
+                value={selectedStatus || 'all'}
+                onValueChange={value => {
+                  const next = value === 'all' ? '' : value;
+                  setSelectedStatus(next);
+                  startTransition(() => router.push(buildFilterUrl({ status: next })));
+                }}
+              >
+                <SelectTrigger
+                  id="action-items-filter-status"
+                  className="h-9 w-full bg-background text-sm"
                 >
-                  <span className="truncate">
-                    {selectedOwner
-                      ? users.find(u => u.id === selectedOwner)?.name ||
-                        ownerOptions.find(u => u.id === selectedOwner)?.name ||
-                        'Owner'
-                      : 'All Owners'}
-                  </span>
-                  <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[240px] p-0" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder="Search owners..."
-                    value={ownerSearch}
-                    onValueChange={setOwnerSearch}
-                    className="h-8 text-xs"
-                  />
-                  <CommandList className="max-h-[220px]">
-                    {isSearchingOwners ? (
-                      <div className="flex items-center justify-center p-4 text-xs text-muted-foreground gap-2">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Searching owners...
-                      </div>
-                    ) : ownerOptions.length === 0 ? (
-                      <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
-                        No owners found.
-                      </CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        <CommandItem
-                          value="all"
-                          onSelect={() => {
-                            setSelectedOwner('');
-                            setOwnerPopoverOpen(false);
-                            startTransition(() => router.push(buildFilterUrl({ owner: '' })));
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="OPEN">Open</SelectItem>
+                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="COMPLETED">Completed</SelectItem>
+                  <SelectItem value="BLOCKED">Blocked</SelectItem>
+                </SelectContent>
+              </Select>
+            </FilterField>
+
+            <FilterField label="Owner" htmlFor="action-items-filter-owner">
+              <Popover open={ownerPopoverOpen} onOpenChange={setOwnerPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    id="action-items-filter-owner"
+                    role="combobox"
+                    aria-expanded={ownerPopoverOpen}
+                    className="h-9 w-full min-w-[10rem] justify-between bg-background text-sm font-normal"
+                  >
+                    <span className="truncate">
+                      {selectedOwner
+                        ? users.find(u => u.id === selectedOwner)?.name ||
+                          ownerOptions.find(u => u.id === selectedOwner)?.name ||
+                          'Owner'
+                        : 'All Owners'}
+                    </span>
+                    <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[240px] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Search owners..."
+                      value={ownerSearch}
+                      onValueChange={setOwnerSearch}
+                      className="h-8 text-xs"
+                    />
+                    <CommandList className="max-h-[220px]">
+                      {ownerSearchError && !isSearchingOwners ? (
+                        <ErrorState
+                          variant="inline"
+                          className="border-0 py-4"
+                          title="Couldn't search owners"
+                          message="Check your connection and try again."
+                          onRetry={() => {
+                            setOwnerSearchError(false);
+                            setIsSearchingOwners(true);
+                            setOwnerSearchAttempt(attempt => attempt + 1);
                           }}
-                          className="cursor-pointer text-xs flex items-center justify-between"
-                        >
-                          <span>All Owners</span>
-                          {!selectedOwner && (
-                            <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />
-                          )}
-                        </CommandItem>
-                        {ownerOptions.map(user => (
+                        />
+                      ) : isSearchingOwners ? (
+                        <div className="flex items-center justify-center p-4 text-xs text-muted-foreground gap-2">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Searching owners...
+                        </div>
+                      ) : ownerOptions.length === 0 ? (
+                        <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
+                          No owners found.
+                        </CommandEmpty>
+                      ) : (
+                        <CommandGroup>
                           <CommandItem
-                            key={user.id}
-                            value={user.id}
+                            value="all"
                             onSelect={() => {
-                              setSelectedOwner(user.id);
+                              setSelectedOwner('');
                               setOwnerPopoverOpen(false);
-                              startTransition(() =>
-                                router.push(buildFilterUrl({ owner: user.id }))
-                              );
+                              startTransition(() => router.push(buildFilterUrl({ owner: '' })));
                             }}
                             className="cursor-pointer text-xs flex items-center justify-between"
                           >
-                            <div className="flex flex-col min-w-0">
-                              <span className="truncate font-medium">{user.name}</span>
-                              {user.email && (
-                                <span className="truncate text-[10px] text-muted-foreground">
-                                  {user.email}
-                                </span>
-                              )}
-                            </div>
-                            {selectedOwner === user.id && (
+                            <span>All Owners</span>
+                            {!selectedOwner && (
                               <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />
                             )}
                           </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                          {ownerOptions.map(user => (
+                            <CommandItem
+                              key={user.id}
+                              value={user.id}
+                              onSelect={() => {
+                                setSelectedOwner(user.id);
+                                setOwnerPopoverOpen(false);
+                                startTransition(() =>
+                                  router.push(buildFilterUrl({ owner: user.id }))
+                                );
+                              }}
+                              className="cursor-pointer text-xs flex items-center justify-between"
+                            >
+                              <div className="flex flex-col min-w-0">
+                                <span className="truncate font-medium">{user.name}</span>
+                                {user.email && (
+                                  <span className="truncate text-[10px] text-muted-foreground">
+                                    {user.email}
+                                  </span>
+                                )}
+                              </div>
+                              {selectedOwner === user.id && (
+                                <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </FilterField>
 
-            <Select
-              value={selectedPriority || 'all'}
-              onValueChange={value => {
-                const next = value === 'all' ? '' : value;
-                setSelectedPriority(next);
-                startTransition(() => router.push(buildFilterUrl({ priority: next })));
-              }}
-            >
-              <SelectTrigger className="h-9 w-[130px] bg-ink-50/60 text-xs">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
-                <SelectItem value="HIGH">High</SelectItem>
-                <SelectItem value="MEDIUM">Medium</SelectItem>
-                <SelectItem value="LOW">Low</SelectItem>
-              </SelectContent>
-            </Select>
+            <FilterField label="Priority" htmlFor="action-items-filter-priority">
+              <Select
+                value={selectedPriority || 'all'}
+                onValueChange={value => {
+                  const next = value === 'all' ? '' : value;
+                  setSelectedPriority(next);
+                  startTransition(() => router.push(buildFilterUrl({ priority: next })));
+                }}
+              >
+                <SelectTrigger
+                  id="action-items-filter-priority"
+                  className="h-9 w-full bg-background text-sm"
+                >
+                  <SelectValue placeholder="All priorities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priorities</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </FilterField>
           </>
         }
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-ink-200 bg-ink-50/60 p-0.5">
-              <Link
-                href={buildFilterUrl({ view: 'board' })}
-                className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
-                  view === 'board'
-                    ? 'bg-card text-primary shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                aria-label="Board view"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                <span>Board</span>
-              </Link>
-              <Link
-                href={buildFilterUrl({ view: 'list' })}
-                className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
-                  view === 'list'
-                    ? 'bg-card text-primary shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                aria-label="List view"
-              >
-                <List className="h-3.5 w-3.5" />
-                <span>List</span>
-              </Link>
-            </div>
+            <nav
+              aria-label="Layout"
+              className="flex items-center rounded-md border border-border bg-background p-0.5"
+            >
+              {(
+                [
+                  { value: 'board', label: 'Board', Icon: LayoutGrid },
+                  { value: 'list', label: 'List', Icon: List },
+                ] as const
+              ).map(({ value, label, Icon }) => (
+                <Link
+                  key={value}
+                  href={buildFilterUrl({ view: value })}
+                  aria-current={view === value ? 'page' : undefined}
+                  className={cn(
+                    'flex h-8 items-center gap-1 rounded-sm px-2.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    view === value
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{label}</span>
+                </Link>
+              ))}
+            </nav>
             <Button
               variant="outline"
               size="sm"
               onClick={handleExportCsv}
               disabled={filteredItems.length === 0}
-              className="h-9 gap-1.5 text-xs shadow-sm hover:bg-ink-100"
+              className="h-9"
             >
-              <Download className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>Export CSV</span>
+              <Download aria-hidden="true" />
+              Export CSV
             </Button>
           </div>
         }
       />
 
       {view === 'board' ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Object.entries(groupedByStatus).map(([status, groupItems]) => {
-            const config = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG];
-            const StatusIcon = config.icon;
-            return (
-              <Card
-                key={status}
-                className={cn(
-                  'p-3.5 min-h-[480px] rounded-xl flex flex-col',
-                  'bg-ink-50/50 border-2',
-                  config.borderColor,
-                  'shadow-sm'
-                )}
-              >
-                <CardHeader className="p-0 mb-3 pb-2.5 border-b border-ink-200/70">
-                  <div className="flex items-center justify-between">
-                    <h3 className={cn('text-xs font-bold flex items-center gap-1.5', config.color)}>
-                      <StatusIcon className="h-3.5 w-3.5" />
-                      <span>{config.label}</span>
-                    </h3>
-                    <Badge variant={config.badgeVariant} size="xs" className="font-bold">
-                      {groupItems.length}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0 flex flex-col gap-2.5 flex-1 overflow-y-auto max-h-[75vh]">
-                  {groupItems.length === 0 ? (
-                    <div className="p-6 text-center text-muted-foreground text-xs italic">
-                      No items
-                    </div>
-                  ) : (
-                    groupItems.map(item => (
-                      <ActionItemCard
-                        key={item.id}
-                        item={item}
-                        users={users}
-                        userTimeZone={userTimeZone}
-                        canManage={canManage}
-                        onStatusChange={handleStatusChange}
-                        isUpdating={updatingId === item.id}
-                        jiraCapability={requireJiraCapability(jiraCapabilities, item.serviceId)}
-                      />
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {filteredItems.length === 0 ? (
-            <Card className="p-8 text-center bg-card border-ink-200 rounded-lg shadow-sm">
-              <EmptyState
-                icon={<LayoutGrid className="h-6 w-6 text-muted-foreground/60" />}
-                title="No action items found"
-                description={
-                  hasActiveFilters
-                    ? 'Try clearing or modifying your filter criteria.'
-                    : 'Preventative action items from postmortems will appear here.'
-                }
-              />
-            </Card>
-          ) : (
-            filteredItems.map(item => {
-              const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.OPEN;
-              const priorityConfig = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
-              const isUpdating = updatingId === item.id;
-              const jiraCapability = requireJiraCapability(jiraCapabilities, item.serviceId);
-              const inheritedIssues = item.incidentJiraIssues.filter(
-                issue => issue.key !== item.externalIssue?.key
-              );
-
+        filteredItems.length === 0 ? (
+          emptyState
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Object.entries(groupedByStatus).map(([status, groupItems]) => {
+              const config = statusConfigFor(status);
+              const StatusIcon = config.icon;
               return (
-                <Card
-                  key={item.id}
-                  className={cn(
-                    'p-4 rounded-lg cursor-pointer shadow-sm bg-card',
-                    'border-2 border-l-4 transition-all duration-200 ease-out',
-                    statusConfig.borderColor,
-                    'hover:shadow-md hover:translate-x-0.5',
-                    isUpdating && 'opacity-60 pointer-events-none'
-                  )}
-                  onClick={() => router.push(`/postmortems/${item.incidentId}`)}
-                  onKeyDown={event => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      router.push(`/postmortems/${item.incidentId}`);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
+                <section
+                  key={status}
+                  aria-labelledby={`action-items-column-${status}`}
+                  className="flex min-h-[320px] flex-col rounded-lg border border-border bg-muted/40 p-3"
                 >
-                  <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <Badge
-                          variant={statusConfig.badgeVariant}
-                          size="xs"
-                          className="font-semibold"
-                        >
-                          {statusConfig.label}
-                        </Badge>
-                        <span
-                          className={cn(
-                            'px-2 py-0.5 rounded text-xs font-semibold border',
-                            priorityConfig.bgColor,
-                            priorityConfig.color
-                          )}
-                        >
-                          {priorityConfig.label} Priority
-                        </span>
-                        <DueDateBadge
-                          dueDate={item.dueDate}
-                          completedAt={item.completedAt}
-                          status={item.status}
+                  <header className="mb-3 flex items-center justify-between border-b border-border pb-2.5">
+                    <h3
+                      id={`action-items-column-${status}`}
+                      className="flex items-center gap-1.5 text-sm font-semibold text-foreground"
+                    >
+                      <StatusIcon className={cn('h-4 w-4', config.color)} aria-hidden="true" />
+                      {config.label}
+                    </h3>
+                    <span className="rounded-full bg-background px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground ring-1 ring-inset ring-border">
+                      {groupItems.length}
+                    </span>
+                  </header>
+                  <div className="flex max-h-[75vh] flex-1 flex-col gap-2.5 overflow-y-auto">
+                    {groupItems.length === 0 ? (
+                      <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+                        Nothing {config.label.toLowerCase()}.
+                      </p>
+                    ) : (
+                      groupItems.map(item => (
+                        <ActionItemCard
+                          key={item.id}
+                          item={item}
+                          users={users}
                           userTimeZone={userTimeZone}
-                        />
-                      </div>
-                      <h3 className="text-base font-semibold mb-1 text-foreground">{item.title}</h3>
-                      <div className="flex flex-col gap-1.5">
-                        <IncidentJiraContext issues={inheritedIssues} compact />
-                        <ActionItemJiraContext
-                          actionItemId={item.id}
-                          externalIssue={item.externalIssue}
                           canManage={canManage}
-                          compact
-                          jiraCapability={jiraCapability}
+                          onStatusChange={handleStatusChange}
+                          isUpdating={updatingId === item.id}
+                          jiraCapability={requireJiraCapability(jiraCapabilities, item.serviceId)}
                         />
-                      </div>
-                      {item.description && (
-                        <p className="text-sm text-muted-foreground mt-1 mb-2">
-                          {item.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {canManage && (
-                      <div onClick={event => event.stopPropagation()} className="shrink-0">
-                        <Select
-                          value={item.status}
-                          onValueChange={value =>
-                            handleStatusChange(item.id, value as ActionItemStatus)
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-[130px] text-xs bg-ink-50">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent align="end">
-                            <SelectItem value="OPEN">Open</SelectItem>
-                            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                            <SelectItem value="COMPLETED">Completed</SelectItem>
-                            <SelectItem value="BLOCKED">Blocked</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      ))
                     )}
                   </div>
-
-                  <div className="flex gap-4 pt-2.5 border-t border-ink-100 text-xs text-muted-foreground flex-wrap items-center">
-                    <span>👤 {getOwnerName(item.owner, users, item.ownerName)}</span>
-                    <span>
-                      📋{' '}
-                      <Link
-                        href={`/postmortems/${item.incidentId}`}
-                        className="text-primary hover:underline font-medium"
-                        onClick={event => event.stopPropagation()}
-                      >
-                        {item.postmortemTitle}
-                      </Link>
-                    </span>
-                    <span>
-                      🔗{' '}
-                      <Link
-                        href={`/incidents/${item.incidentId}`}
-                        className="text-primary hover:underline font-medium"
-                        onClick={event => event.stopPropagation()}
-                      >
-                        {item.incidentTitle}
-                      </Link>
-                    </span>
-                    <span className="bg-ink-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-ink-700">
-                      {item.serviceName}
-                    </span>
-                  </div>
-                </Card>
+                </section>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )
+      ) : filteredItems.length === 0 ? (
+        emptyState
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {filteredItems.map(item => {
+            const statusConfig = statusConfigFor(item.status);
+            const StatusIcon = statusConfig.icon;
+            const isUpdating = updatingId === item.id;
+            const jiraCapability = requireJiraCapability(jiraCapabilities, item.serviceId);
+            const inheritedIssues = item.incidentJiraIssues.filter(
+              issue => issue.key !== item.externalIssue?.key
+            );
+
+            return (
+              <li
+                key={item.id}
+                aria-busy={isUpdating || undefined}
+                className={cn(
+                  'group relative rounded-lg border border-border bg-card p-4 shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-ink-300 hover:shadow-md',
+                  isUpdating && 'pointer-events-none opacity-60'
+                )}
+              >
+                <div className="mb-2 flex flex-col items-start justify-between gap-3 sm:flex-row">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 text-xs font-semibold',
+                          statusConfig.color
+                        )}
+                      >
+                        <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                        {statusConfig.label}
+                      </span>
+                      <PriorityPill priority={item.priority} />
+                      <DueDateBadge
+                        dueDate={item.dueDate}
+                        completedAt={item.completedAt}
+                        status={item.status}
+                        userTimeZone={userTimeZone}
+                      />
+                    </div>
+                    <h3 className="mb-1 text-base font-semibold text-foreground">
+                      <Link href={`/postmortems/${item.incidentId}`} className={CARD_LINK_CLASS}>
+                        {item.title}
+                      </Link>
+                    </h3>
+                    {item.description && (
+                      <p className="mb-2 mt-1 text-sm text-muted-foreground">{item.description}</p>
+                    )}
+                    <div className="relative z-10 flex flex-col gap-1.5">
+                      <IncidentJiraContext issues={inheritedIssues} compact />
+                      <ActionItemJiraContext
+                        actionItemId={item.id}
+                        externalIssue={item.externalIssue}
+                        canManage={canManage}
+                        compact
+                        jiraCapability={jiraCapability}
+                      />
+                    </div>
+                  </div>
+
+                  {canManage && (
+                    <div className="relative z-10 shrink-0">
+                      <Select
+                        value={item.status}
+                        onValueChange={value =>
+                          handleStatusChange(item.id, value as ActionItemStatus)
+                        }
+                      >
+                        <SelectTrigger
+                          className="h-8 w-[140px] bg-background text-xs"
+                          aria-label={`Status of ${item.title}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          {STATUS_ORDER.map(status => (
+                            <SelectItem key={status} value={status}>
+                              {statusConfigFor(status).label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-2.5 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
+                    {getOwnerName(item.owner, users, item.ownerName)}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                    {item.postmortemTitle}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                    <Link
+                      href={`/incidents/${item.incidentId}`}
+                      className="relative z-10 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {item.incidentTitle}
+                    </Link>
+                  </span>
+                  <span className="rounded-sm bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
+                    {item.serviceName}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      {pagination && (
+      {pagination && filteredItems.length > 0 && (
         <Pagination
           currentPage={pagination.currentPage}
           totalPages={pagination.totalPages}

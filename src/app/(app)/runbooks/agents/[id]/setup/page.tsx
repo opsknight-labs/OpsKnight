@@ -9,9 +9,8 @@ import { getAgentDistribution } from '@/lib/runbooks/distribution';
 import { getExecutionSigningKey } from '@/lib/runbooks/execution-signing';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { RunbooksPageShell } from '@/components/runbooks/RunbooksPageShell';
 import AgentSetupInstructions from '@/components/runbooks/AgentSetupInstructions';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/shadcn/alert';
@@ -68,40 +67,25 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
 
   if (agent.status === 'REVOKED') {
     return (
-      <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-        <DetailHeroBanner
-          breadcrumb={{
-            label: 'Agent Fleet',
-            href: '/runbooks/agents',
-            current: agent.name,
-          }}
-          tag="Execution Infrastructure"
-          title={agent.name}
-          icon={
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-              <Server className="h-6 w-6" aria-hidden="true" />
-            </div>
-          }
-          badges={
+      <RunbooksPageShell
+        as="main"
+        navigation={navigation}
+        header={{
+          breadcrumbs: [
+            { label: 'Runbooks', href: '/runbooks' },
+            { label: 'Agents', href: '/runbooks/agents' },
+            { label: agent.name },
+          ],
+          title: agent.name,
+          icon: Server,
+          badge: (
             <Badge variant="danger" size="xs" className="uppercase font-bold text-[10px] gap-1">
               <XCircle className="h-3 w-3" />
               Revoked
             </Badge>
-          }
-          actions={
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8"
-            >
-              <Link href="/runbooks/agents">
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Return to Fleet</span>
-              </Link>
-            </Button>
-          }
-        />
+          ),
+        }}
+      >
         <EmptyHint
           icon={ShieldX}
           title="This identity is revoked. Create a new enrollment to replace it."
@@ -113,7 +97,7 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
             </Button>
           }
         />
-      </main>
+      </RunbooksPageShell>
     );
   }
 
@@ -124,22 +108,18 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Flagship Hero Banner matching Services and Settings */}
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Agent Fleet',
-          href: '/runbooks/agents',
-          current: agent.name,
-        }}
-        tag="Execution Infrastructure"
-        title={agent.name}
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Server className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        badges={
+    <RunbooksPageShell
+      as="main"
+      navigation={navigation}
+      header={{
+        breadcrumbs: [
+          { label: 'Runbooks', href: '/runbooks' },
+          { label: 'Agents', href: '/runbooks/agents' },
+          { label: agent.name },
+        ],
+        title: agent.name,
+        icon: Server,
+        badge: (
           <>
             <Badge
               variant={
@@ -188,8 +168,8 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
                 : 'Direct Target'}
             </Badge>
           </>
-        }
-        subtitle={
+        ),
+        description: (
           <div className="space-y-1">
             <p className="text-xs text-primary-foreground/85 leading-relaxed max-w-3xl">
               Deployment manifests, secure runner handshake verification, and persistent identity
@@ -206,8 +186,34 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
                 : 'None recorded'}
             </p>
           </div>
-        }
-        stats={[
+        ),
+        actions: (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8 shadow-xs"
+            >
+              <Link href="/runbooks/agents">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>Agent Fleet</span>
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8 shadow-xs"
+            >
+              <Link href="/runbooks/agents/pools">
+                <Network className="h-3.5 w-3.5 text-primary" />
+                <span>Manage Pools</span>
+              </Link>
+            </Button>
+          </div>
+        ),
+        stats: [
           {
             label: 'Status',
             value: agent.status,
@@ -233,37 +239,9 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
             icon: <Network className="h-3.5 w-3.5" />,
             tooltip: agent.poolMemberships.map(m => m.pool.name).join(', '),
           },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8 shadow-xs"
-            >
-              <Link href="/runbooks/agents">
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Agent Fleet</span>
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8 shadow-xs"
-            >
-              <Link href="/runbooks/agents/pools">
-                <Network className="h-3.5 w-3.5 text-primary" />
-                <span>Manage Pools</span>
-              </Link>
-            </Button>
-          </div>
-        }
-      />
-
-      <RunbookModuleNav summary={navigation} />
-
+        ],
+      }}
+    >
       {/* Operational Context Notice Banner matching Services */}
       <Alert className="border-primary/20 bg-primary/5 dark:bg-primary/10 text-primary">
         <Info className="h-4 w-4 shrink-0 text-primary" />
@@ -314,6 +292,6 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
           </Link>
         </Button>
       </div>
-    </main>
+    </RunbooksPageShell>
   );
 }

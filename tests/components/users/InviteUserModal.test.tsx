@@ -17,7 +17,7 @@ describe('InviteUserModal', () => {
     fireEvent.click(trigger);
 
     // Modal header and content
-    expect(screen.getByText('Invite New User')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Invite user' })).toBeInTheDocument();
     expect(screen.getByTestId('user-create-form')).toBeInTheDocument();
 
     // Close button has proper accessibility labels and icon

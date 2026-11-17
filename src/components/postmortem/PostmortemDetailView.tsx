@@ -17,7 +17,9 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import UserAvatar from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
-import { Pencil, Globe, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Pencil, Globe, Eye, EyeOff, Sparkles, FileText } from 'lucide-react';
+import { Breadcrumbs, PageHeader, RelativeTime } from '@/components/patterns';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import { normalizeLegacyActionItems } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
@@ -256,6 +258,128 @@ export default function PostmortemDetailView({
     return [];
   };
 
+  const metaLine = (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span>
+        Created by{' '}
+        <strong className="font-medium text-zinc-100">
+          {postmortem.createdBy?.name || 'Responder'}
+        </strong>
+      </span>
+      <span aria-hidden="true">·</span>
+      <RelativeTime date={postmortem.createdAt} format="long" />
+      {postmortem.publishedAt && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>
+            Published <RelativeTime date={postmortem.publishedAt} format="long" />
+          </span>
+        </>
+      )}
+      {postmortem.incident.resolvedAt && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>
+            Incident resolved{' '}
+            {formatDateTime(postmortem.incident.resolvedAt, userTimeZone, { format: 'date' })}
+          </span>
+        </>
+      )}
+    </span>
+  );
+
+  const consoleHeader = (
+    <div className="space-y-3">
+      <PageHeader
+        breadcrumbs={
+          <Breadcrumbs
+            className="lg:hidden"
+            items={[{ label: 'Postmortems', href: '/postmortems' }, { label: postmortem.title }]}
+          />
+        }
+        title={postmortem.title}
+        icon={FileText}
+        badges={
+          <>
+            <span className={pageHeaderBadgeClass}>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  postmortem.status === 'PUBLISHED' && 'bg-emerald-400',
+                  postmortem.status === 'DRAFT' && 'bg-amber-400',
+                  postmortem.status !== 'PUBLISHED' &&
+                    postmortem.status !== 'DRAFT' &&
+                    'bg-zinc-400'
+                )}
+              />
+              {statusConfig.label}
+            </span>
+            <span className={pageHeaderBadgeClass}>
+              {isPublic ? (
+                <Globe className="h-3 w-3" aria-hidden="true" />
+              ) : (
+                <EyeOff className="h-3 w-3" aria-hidden="true" />
+              )}
+              {isPublic ? 'Public on status page' : 'Internal only'}
+            </span>
+          </>
+        }
+        description={
+          <div className="space-y-1">
+            <span className="block">
+              Postmortem for{' '}
+              <Link
+                href={`/incidents/${postmortem.incident.id}`}
+                className="rounded-sm font-medium text-white underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+              >
+                {postmortem.incident.title}
+              </Link>
+            </span>
+            {metaLine}
+          </div>
+        }
+        secondaryActions={
+          canEdit ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPreviewAsPublic(!previewAsPublic)}
+                aria-pressed={previewAsPublic}
+                className={pageHeaderActionClass}
+              >
+                {previewAsPublic ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                {previewAsPublic ? 'Internal view' : 'Preview customer view'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTogglePublic}
+                loading={isUpdatingPublic}
+                className={pageHeaderActionClass}
+              >
+                <Globe aria-hidden="true" />
+                {isPublic ? 'Make internal only' : 'Publish to status page'}
+              </Button>
+            </>
+          ) : undefined
+        }
+        primaryAction={
+          canEdit ? (
+            <Button asChild size="sm">
+              <Link href={`/postmortems/${incidentId}?edit=true`}>
+                <Pencil aria-hidden="true" />
+                Edit postmortem
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
+      <IncidentJiraContext issues={inheritedJiraIssues} />
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       {previewAsPublic && (
@@ -278,127 +402,94 @@ export default function PostmortemDetailView({
         </div>
       )}
 
-      <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md overflow-hidden relative border-ink-200">
-        <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle,rgba(211,47,47,0.05)_0%,transparent_70%)] rounded-full translate-x-[30%] -translate-y-[30%] pointer-events-none" />
+      {initialPublicView ? (
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md overflow-hidden relative border-ink-200">
+          <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle,rgba(211,47,47,0.05)_0%,transparent_70%)] rounded-full translate-x-[30%] -translate-y-[30%] pointer-events-none" />
 
-        <CardContent className="p-6 md:p-8">
-          <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-4 relative z-10">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
-                {isPublic ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30">
-                    <Globe className="h-3 w-3" />
-                    <span>Public on Status Page</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-ink-100 text-ink-600 border border-ink-200">
-                    <span>Internal Only</span>
-                  </span>
-                )}
-              </div>
-
-              <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight leading-tight mb-2">
-                {postmortem.title}
-              </h1>
-
-              <p className="text-sm text-muted-foreground">
-                Postmortem for{' '}
-                <Link
-                  href={effectivePublicView ? '#' : `/incidents/${postmortem.incident.id}`}
-                  className={cn(
-                    'text-primary font-semibold',
-                    effectivePublicView ? 'cursor-default text-muted-foreground' : 'hover:underline'
+          <CardContent className="p-6 md:p-8">
+            <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-4 relative z-10">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
+                  {isPublic ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30">
+                      <Globe className="h-3 w-3" />
+                      <span>Public on Status Page</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-ink-100 text-ink-600 border border-ink-200">
+                      <span>Internal Only</span>
+                    </span>
                   )}
-                >
-                  {postmortem.incident.title}
-                </Link>
-              </p>
-              <IncidentJiraContext issues={inheritedJiraIssues} className="mt-2" />
+                </div>
+
+                <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight leading-tight mb-2">
+                  {postmortem.title}
+                </h1>
+
+                <p className="text-sm text-muted-foreground">
+                  Postmortem for{' '}
+                  <Link
+                    href={effectivePublicView ? '#' : `/incidents/${postmortem.incident.id}`}
+                    className={cn(
+                      'text-primary font-semibold',
+                      effectivePublicView
+                        ? 'cursor-default text-muted-foreground'
+                        : 'hover:underline'
+                    )}
+                  >
+                    {postmortem.incident.title}
+                  </Link>
+                </p>
+                <IncidentJiraContext issues={inheritedJiraIssues} className="mt-2" />
+              </div>
             </div>
 
-            {canEdit && !initialPublicView && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPreviewAsPublic(!previewAsPublic)}
-                  className="h-9 gap-1.5 text-xs shadow-xs"
-                >
-                  {previewAsPublic ? (
-                    <>
-                      <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>Internal View</span>
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>Preview Customer View</span>
-                    </>
-                  )}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTogglePublic}
-                  disabled={isUpdatingPublic}
-                  className="h-9 gap-1.5 text-xs shadow-xs"
-                >
-                  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>{isPublic ? 'Make Internal Only' : 'Publish to Status Page'}</span>
-                </Button>
-
-                <Link href={`/postmortems/${incidentId}?edit=true`}>
-                  <Button size="sm" className="h-9 gap-1.5 text-xs font-semibold shadow-xs">
-                    <Pencil className="h-3.5 w-3.5" />
-                    <span>Edit Postmortem</span>
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-4 pt-4 border-t border-ink-200 text-xs text-muted-foreground flex-wrap items-center">
-            <span className="flex items-center gap-1.5">
-              {!effectivePublicView && postmortem.createdBy && (
-                <UserAvatar
-                  userId={postmortem.createdBy.id}
-                  name={postmortem.createdBy.name}
-                  gender={postmortem.createdBy.gender}
-                  size="xs"
-                />
+            <div className="flex gap-4 pt-4 border-t border-ink-200 text-xs text-muted-foreground flex-wrap items-center">
+              <span className="flex items-center gap-1.5">
+                {!effectivePublicView && postmortem.createdBy && (
+                  <UserAvatar
+                    userId={postmortem.createdBy.id}
+                    name={postmortem.createdBy.name}
+                    gender={postmortem.createdBy.gender}
+                    size="xs"
+                  />
+                )}
+                Created by{' '}
+                <strong className="text-foreground">
+                  {effectivePublicView
+                    ? 'Incident Response Team'
+                    : postmortem.createdBy?.name || 'Responder'}
+                </strong>
+              </span>
+              <span>•</span>
+              <span>{formatDateTime(postmortem.createdAt, userTimeZone, { format: 'date' })}</span>
+              {postmortem.publishedAt && (
+                <>
+                  <span>•</span>
+                  <span>
+                    Published{' '}
+                    {formatDateTime(postmortem.publishedAt, userTimeZone, { format: 'date' })}
+                  </span>
+                </>
               )}
-              Created by{' '}
-              <strong className="text-foreground">
-                {effectivePublicView
-                  ? 'Incident Response Team'
-                  : postmortem.createdBy?.name || 'Responder'}
-              </strong>
-            </span>
-            <span>•</span>
-            <span>{formatDateTime(postmortem.createdAt, userTimeZone, { format: 'date' })}</span>
-            {postmortem.publishedAt && (
-              <>
-                <span>•</span>
-                <span>
-                  Published{' '}
-                  {formatDateTime(postmortem.publishedAt, userTimeZone, { format: 'date' })}
-                </span>
-              </>
-            )}
-            {postmortem.incident.resolvedAt && (
-              <>
-                <span>•</span>
-                <span>
-                  Resolved{' '}
-                  {formatDateTime(postmortem.incident.resolvedAt, userTimeZone, { format: 'date' })}
-                </span>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              {postmortem.incident.resolvedAt && (
+                <>
+                  <span>•</span>
+                  <span>
+                    Resolved{' '}
+                    {formatDateTime(postmortem.incident.resolvedAt, userTimeZone, {
+                      format: 'date',
+                    })}
+                  </span>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        consoleHeader
+      )}
 
       {postmortem.summary && (
         <Card className="bg-card shadow-sm border-ink-200">
@@ -511,10 +602,7 @@ export default function PostmortemDetailView({
               return (
                 <div
                   key={item.id}
-                  className={cn(
-                    'p-3.5 bg-card rounded-lg border-2 border-l-4 shadow-2xs transition-all',
-                    statusCfg.border
-                  )}
+                  className="rounded-lg border border-border bg-card p-3.5 shadow-2xs"
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 min-w-0">

@@ -6,10 +6,10 @@ import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { dashboardUserReadWhere, incidentReadWhere } from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, FileText } from 'lucide-react';
+import { Breadcrumbs, EmptyState, PageHeader } from '@/components/patterns';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { requirePageAccess } from '@/lib/access/server';
@@ -29,9 +29,20 @@ export default async function CreatePostmortemPage() {
 
   if (!canCreate) {
     return (
-      <div className="p-6">
+      <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+        <PageHeader
+          breadcrumbs={
+            <Breadcrumbs
+              className="lg:hidden"
+              items={[{ label: 'Postmortems', href: '/postmortems' }, { label: 'New postmortem' }]}
+            />
+          }
+          title="New postmortem"
+          icon={FileText}
+          description="Pick a resolved incident, then record what happened, why, and what changes next."
+        />
         <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
           <AlertDescription>You don&apos;t have permission to create postmortems.</AlertDescription>
         </Alert>
       </div>
@@ -89,34 +100,31 @@ export default async function CreatePostmortemPage() {
   });
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <Link
-          href="/postmortems"
-          className="text-muted-foreground no-underline text-sm mb-2 inline-flex items-center gap-1 hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Postmortems
-        </Link>
-        <h1 className="text-2xl font-bold mt-2">Create Postmortem</h1>
-        <p className="text-muted-foreground">
-          Select a resolved incident and document the postmortem
-        </p>
-      </div>
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        breadcrumbs={
+          <Breadcrumbs
+            className="lg:hidden"
+            items={[{ label: 'Postmortems', href: '/postmortems' }, { label: 'New postmortem' }]}
+          />
+        }
+        title="New postmortem"
+        icon={FileText}
+        description="Pick a resolved incident, then record what happened, why, and what changes next."
+      />
 
       {resolvedIncidents.length === 0 ? (
-        <Card className="bg-gradient-to-br from-card to-ink-50 border-ink-200 shadow-md">
-          <CardContent className="py-8 text-center">
-            <h3 className="text-lg font-semibold mb-2">No Resolved Incidents Available</h3>
-            <p className="text-muted-foreground mb-4">
-              There are no resolved incidents without postmortems. Resolve an incident first to
-              create a postmortem.
-            </p>
-            <Link href="/incidents">
-              <Button>View Incidents</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <EmptyState
+          variant="card"
+          icon={<FileText />}
+          title="No resolved incidents need a postmortem"
+          description="Every resolved incident you can see already has a postmortem. Postmortems start from a resolved incident."
+          primaryAction={
+            <Button asChild size="sm">
+              <Link href="/incidents">View incidents</Link>
+            </Button>
+          }
+        />
       ) : (
         <PostmortemForm
           incidentId=""

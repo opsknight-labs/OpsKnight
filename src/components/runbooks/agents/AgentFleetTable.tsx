@@ -10,7 +10,7 @@ import { EmptyHint } from '../ui/primitives';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
 import { AgentCapabilitySummary } from './AgentCapabilitySummary';
 import { AgentDetailDrawer, type AgentItemData } from './AgentDetailDrawer';
-import { formatDateTime } from '@/lib/timezone';
+import { RelativeTime } from '@/components/patterns';
 
 export type AgentFleetTableProps = {
   agents: AgentItemData[];
@@ -71,15 +71,7 @@ function StatusDot({ status }: { status: string }) {
 
 function Heartbeat({ value, userTimeZone }: { value: string | null; userTimeZone: string }) {
   if (!value) return <span className="text-muted-foreground">Never</span>;
-  return (
-    <time
-      dateTime={value}
-      title={formatDateTime(value, userTimeZone, { format: 'datetime', includeTimeZone: true })}
-      suppressHydrationWarning
-    >
-      {formatDateTime(value, userTimeZone, { format: 'relative' })}
-    </time>
-  );
+  return <RelativeTime date={value} timeZone={userTimeZone} format="long" />;
 }
 
 function LabelChips({ labels, max = 3 }: { labels: unknown; max?: number }) {

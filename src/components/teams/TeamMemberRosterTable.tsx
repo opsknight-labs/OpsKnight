@@ -1,10 +1,10 @@
 'use client';
 
+import { TeamLeadMarker, TeamRoleBadge } from './TeamRoleBadge';
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Switch } from '@/components/ui/shadcn/switch';
@@ -69,29 +69,6 @@ type TeamMemberRosterTableProps = {
     userId: string | null
   ) => Promise<{ error?: string } | undefined>;
 };
-
-function getRoleBadge(role: string) {
-  switch (role) {
-    case 'OWNER':
-      return (
-        <Badge variant="info" size="xs" className="font-semibold text-[10px] px-1.5 py-0.2">
-          Owner
-        </Badge>
-      );
-    case 'ADMIN':
-      return (
-        <Badge variant="warning" size="xs" className="font-semibold text-[10px] px-1.5 py-0.2">
-          Admin
-        </Badge>
-      );
-    default:
-      return (
-        <Badge variant="secondary" size="xs" className="text-[10px] px-1.5 py-0.2">
-          Member
-        </Badge>
-      );
-  }
-}
 
 export default function TeamMemberRosterTable({
   members,
@@ -213,16 +190,18 @@ export default function TeamMemberRosterTable({
         <Input
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Filter members by name, email, or role..."
-          className="pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
+          placeholder="Filter members by name, email or role…"
+          aria-label="Filter team members"
+          className="h-9 pr-8 text-sm"
         />
         {searchQuery && (
           <button
             type="button"
             onClick={() => setSearchQuery('')}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear member filter"
+            className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         )}
       </div>
@@ -272,10 +251,10 @@ export default function TeamMemberRosterTable({
                       <span className="font-semibold text-foreground truncate">
                         {member.user.name}
                       </span>
-                      {getRoleBadge(member.role)}
+                      <TeamRoleBadge role={member.role} />
                       {(member.scimGrant || member.oidcGrant) && (
                         <span
-                          className="inline-flex items-center rounded px-1 text-[9px] font-semibold uppercase tracking-wider text-sky-700 bg-sky-500/10 ring-1 ring-inset ring-sky-500/20 dark:text-sky-300"
+                          className="inline-flex h-5 items-center rounded-full border border-border bg-muted/50 px-1.5 text-2xs font-medium text-muted-foreground"
                           title={
                             member.scimGrant
                               ? 'Added by a directory group. Removed automatically when they leave the group. Changing their team role makes the membership yours to manage.'
@@ -285,12 +264,7 @@ export default function TeamMemberRosterTable({
                           {member.scimGrant ? 'Directory' : 'SSO group'}
                         </span>
                       )}
-                      {isLead && (
-                        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1 py-0.2 rounded ring-1 ring-inset ring-primary/20">
-                          <Crown className="h-2.5 w-2.5" />
-                          Lead
-                        </span>
-                      )}
+                      {isLead && <TeamLeadMarker />}
                     </div>
                     <p className="text-[11px] text-muted-foreground truncate">
                       {member.user.email}

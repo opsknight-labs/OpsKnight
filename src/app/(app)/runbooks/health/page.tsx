@@ -6,8 +6,7 @@ import {
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { RunbooksPageShell } from '@/components/runbooks/RunbooksPageShell';
 import { Bot, Clock, HeartPulse, ListOrdered, Play, ShieldCheck } from 'lucide-react';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { RunbookLiveRefresh } from '@/components/runbooks/RunbookLiveRefresh';
@@ -226,35 +225,28 @@ export default async function RunbookHealthPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-3 sm:px-4 md:px-6 py-4 md:py-5">
-      <DetailHeroBanner
-        tag="System Surveillance & Diagnostics"
-        title="Automation Health"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <HeartPulse className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Continuous health surveillance across execution workers, queues, and agents.
-          </p>
-        }
-        badges={<RunbookStatusBadge status={health.health} context="health" />}
-        actions={
+    <RunbooksPageShell
+      navigation={navigation}
+      header={{
+        breadcrumbs: [{ label: 'Runbooks', href: '/runbooks' }, { label: 'Health' }],
+        title: 'Automation Health',
+        icon: HeartPulse,
+        badge: <RunbookStatusBadge status={health.health} context="health" />,
+        description: 'Continuous health surveillance across execution workers, queues, and agents.',
+        actions: (
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-zinc-300 font-medium tabular-nums shadow-xs"
               title={`Health evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone})`}
             >
-              <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
+              <Clock className="h-3 w-3 text-zinc-400" aria-hidden="true" />
               {userTimeZone}
             </span>
             <RunbookLiveRefresh enabled={true} intervalMs={20000} />
           </div>
-        }
-        statsPlacement="bottom"
-        stats={[
+        ),
+        statsPlacement: 'bottom',
+        stats: [
           {
             label: 'Active Executions',
             value: activeExecutions,
@@ -298,11 +290,9 @@ export default async function RunbookHealthPage() {
             valueClassName: attention ? 'text-amber-200 font-bold' : 'text-emerald-200 font-bold',
             subtext: attention ? 'Action required' : 'Zero tripped',
           },
-        ]}
-      />
-
-      <RunbookModuleNav summary={navigation} />
-
+        ],
+      }}
+    >
       <HealthAttentionPanel
         health={health.health}
         issues={issues}
@@ -324,6 +314,6 @@ export default async function RunbookHealthPage() {
         now={now}
         userTimeZone={userTimeZone}
       />
-    </div>
+    </RunbooksPageShell>
   );
 }

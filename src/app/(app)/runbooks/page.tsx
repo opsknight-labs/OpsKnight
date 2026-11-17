@@ -14,8 +14,9 @@ import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summari
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { RunbooksPageShell } from '@/components/runbooks/RunbooksPageShell';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
 import { ImportRunbookDialog } from '@/components/runbooks/detail/ImportRunbookDialog';
 import { LibraryFilterBar } from '@/components/runbooks/library/LibraryFilterBar';
@@ -150,29 +151,20 @@ export default async function RunbooksPage({
   const executionCount = navigation.activeExecutions ?? 'Unknown';
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-3 sm:px-4 md:px-6 py-4 md:py-5">
-      {/* Centralized Glassmorphic Hero Banner matching Services */}
-      <DetailHeroBanner
-        tag="Automation & Remediation Catalog"
-        title="Runbooks"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Workflow className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Version-controlled, safety-verified automated recovery workflows and diagnostics for
-            incident responders.
-          </p>
-        }
-        actions={
+    <RunbooksPageShell
+      navigation={navigation}
+      header={{
+        title: 'Runbooks',
+        icon: Workflow,
+        description:
+          'Versioned, safety-checked remediation workflows and diagnostics that responders can run during an incident.',
+        actions: (
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
+              className={cn(pageHeaderBadgeClass, 'hidden py-1 sm:inline-flex')}
               title={`All runbook library and execution timestamps reflect your profile timezone: ${userTimeZone}`}
             >
-              <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
+              <Clock className="h-3 w-3 text-zinc-400" aria-hidden="true" />
               {userTimeZone}
             </span>
             <RestrictedAction allowed={canManage} anyOf="runbook.manage">
@@ -182,9 +174,9 @@ export default async function RunbooksPage({
               </div>
             </RestrictedAction>
           </div>
-        }
-        statsPlacement="bottom"
-        stats={[
+        ),
+        statsPlacement: 'bottom',
+        stats: [
           {
             label: 'Total Runbooks',
             value: totalLibraryCount,
@@ -208,8 +200,8 @@ export default async function RunbooksPage({
           {
             label: 'Archived',
             value: archivedCount,
-            icon: <Archive className="h-3.5 w-3.5 text-slate-300" />,
-            valueClassName: archivedCount > 0 ? 'text-slate-300' : undefined,
+            icon: <Archive className="h-3.5 w-3.5 text-zinc-300" />,
+            valueClassName: archivedCount > 0 ? 'text-zinc-300' : undefined,
             href: '/runbooks?status=archived',
             active: filter.status === 'archived' || filter.tab === 'archived',
           },
@@ -229,12 +221,10 @@ export default async function RunbooksPage({
               typeof onlineAgents === 'number' && onlineAgents > 0 ? 'text-emerald-200' : undefined,
             href: '/runbooks/agents',
           },
-        ]}
-      />
-
-      <RunbookModuleNav summary={navigation} />
-
-      <div className="space-y-3.5 md:space-y-4">
+        ],
+      }}
+    >
+      <div className="space-y-4">
         {/* Search text is excluded from the key so typing keeps focus */}
         <LibraryFilterBar
           key={JSON.stringify({ ...query, q: undefined })}
@@ -317,6 +307,6 @@ export default async function RunbooksPage({
           </div>
         </div>
       </div>
-    </div>
+    </RunbooksPageShell>
   );
 }

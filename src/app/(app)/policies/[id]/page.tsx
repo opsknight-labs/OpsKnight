@@ -19,7 +19,7 @@ import {
   movePolicyStep,
   reorderPolicySteps,
 } from '../actions';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { Breadcrumbs, PageHeader } from '@/components/patterns';
 import {
   Card,
   CardContent,
@@ -179,7 +179,7 @@ export default async function PolicyDetailPage({
       <CardContent>
         {services.length === 0 ? (
           <div className="p-8 text-center rounded-xl border border-dashed border-ink-200 bg-ink-50/50 space-y-2">
-            <Server className="h-8 w-8 text-slate-300 mx-auto" />
+            <Server className="h-8 w-8 text-ink-300 mx-auto" />
             <h4 className="text-sm font-semibold text-foreground">No services attached</h4>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
               Attach services to this escalation policy so that when alerts fire on a service,
@@ -213,7 +213,7 @@ export default async function PolicyDetailPage({
                       <p className="text-[11px] text-ink-400 italic">No team assigned</p>
                     )}
                   </div>
-                  <ExternalLink className="h-3.5 w-3.5 text-slate-300 group-hover:text-primary shrink-0 ml-2 transition-colors" />
+                  <ExternalLink className="h-3.5 w-3.5 text-ink-300 group-hover:text-primary shrink-0 ml-2 transition-colors" />
                 </div>
               </Link>
             ))}
@@ -328,46 +328,40 @@ export default async function PolicyDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header */}
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Escalation Policies',
-          href: '/policies',
-          current: policy.name,
-        }}
-        tag="Incident Response Routing"
+      <PageHeader
+        breadcrumbs={
+          <Breadcrumbs
+            className="lg:hidden"
+            items={[{ label: 'Escalation Policies', href: '/policies' }, { label: policy.name }]}
+          />
+        }
         title={policy.name}
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <ShieldAlert className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            {policy.description || 'No description provided for this escalation policy.'}
-          </p>
-        }
+        icon={ShieldAlert}
+        description={policy.description || 'No description yet. Add one in Policy settings.'}
         stats={[
           {
             label: 'Steps',
             value: policy.steps.length,
-            icon: <Layers className="h-3.5 w-3.5" />,
+            icon: <Layers className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
             label: 'Services',
             value: services.length,
-            icon: <Server className="h-3.5 w-3.5" />,
+            icon: <Server className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
-            label: 'Cycle Time',
+            label: 'Cycle time',
             value: `~${totalDuration}m`,
-            icon: <Clock className="h-3.5 w-3.5" />,
+            icon: <Clock className="h-3.5 w-3.5" aria-hidden="true" />,
           },
         ]}
         alert={
           errorCode === 'duplicate-policy' ? (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium flex items-center gap-2 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
-              <AlertTriangle className="h-4 w-4" />
+            <div
+              role="alert"
+              className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300"
+            >
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
               An escalation policy with this name already exists.
             </div>
           ) : undefined

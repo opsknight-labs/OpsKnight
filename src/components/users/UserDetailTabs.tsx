@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamLeadMarker, TeamRoleBadge } from '@/components/teams/TeamRoleBadge';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -33,7 +34,6 @@ import {
   Flame,
   ArrowUpRight,
   Layers,
-  Crown,
   Copy,
   Check,
 } from 'lucide-react';
@@ -461,14 +461,10 @@ export default function UserDetailTabs({
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <CardTitle className="text-base font-bold group-hover:text-primary transition-colors">
+                          <CardTitle className="text-base font-semibold">
                             {membership.team.name}
                           </CardTitle>
-                          {isLead && (
-                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold gap-1">
-                              <Crown className="h-3 w-3 text-amber-500" /> Team Lead
-                            </Badge>
-                          )}
+                          {isLead && <TeamLeadMarker />}
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-2">
                           {membership.team.description || 'Dedicated incident engineering team'}
@@ -477,9 +473,9 @@ export default function UserDetailTabs({
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0 flex items-center justify-between border-t border-border/40 py-3 mt-auto bg-muted/10">
-                    <Badge variant="neutral" className="text-[10px] font-semibold uppercase">
-                      Role: {membership.role}
-                    </Badge>
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      Role <TeamRoleBadge role={membership.role} />
+                    </span>
                     <Button
                       asChild
                       variant="ghost"

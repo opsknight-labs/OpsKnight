@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/lib/toast';
 import DashboardGrid from '@/components/reports/DashboardGrid';
@@ -28,14 +27,11 @@ import {
   Share2,
   Copy,
   Save,
-  ChevronLeft,
   Clock,
-  Filter,
   Sparkles,
   Plus,
   Trash2,
   Loader2,
-  Pencil,
   Check,
   RotateCcw,
   Minimize2,
@@ -43,6 +39,11 @@ import {
   Tv,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FilterBar, FilterField, PageHeader } from '@/components/patterns';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
 import type { SerializedSLAMetrics } from '@/lib/sla';
 import type { DashboardTemplate } from '@/lib/reports/dashboard-templates';
 import type { WidgetDefinition } from '@/lib/reports/widget-registry';
@@ -84,6 +85,8 @@ type DashboardViewerProps = {
   layout?: { columns?: number; rowHeight?: number };
 };
 
+const subscribeNoop = () => () => {};
+
 const TIME_WINDOWS = [
   { value: '1', label: '24 hours' },
   { value: '3', label: '3 days' },
@@ -120,15 +123,13 @@ export default function DashboardViewer({
   const [savedBaseline, setSavedBaseline] = useState(widgets);
   const [localWidgets, setLocalWidgets] = useState(widgets);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // Share modal state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const initialVisibility =
     (savedDashboards.find(d => d.id === dashboardId)?.visibility as
-      | 'PRIVATE'
-      | 'TEAM'
-      | 'PUBLIC'
-      | undefined) || 'PRIVATE';
+      'PRIVATE' | 'TEAM' | 'PUBLIC' | undefined) || 'PRIVATE';
   const [currentVisibility, setCurrentVisibility] = useState<'PRIVATE' | 'TEAM' | 'PUBLIC'>(
     initialVisibility
   );
@@ -143,8 +144,31 @@ export default function DashboardViewer({
   // NOC / Kiosk presentation mode
   const [isKioskMode, setIsKioskMode] = useState(false);
 
-  // Sync state when dashboard/template changes
-  useEffect(() => {
+  // Reset local state when the dashboard/template props change (adjusting state during render).
+  const [syncedProps, setSyncedProps] = useState({
+    dashboardId,
+    currentTemplateId,
+    widgets,
+    dashboardName,
+    dashboardDescription,
+    savedDashboards,
+  });
+  if (
+    syncedProps.dashboardId !== dashboardId ||
+    syncedProps.currentTemplateId !== currentTemplateId ||
+    syncedProps.widgets !== widgets ||
+    syncedProps.dashboardName !== dashboardName ||
+    syncedProps.dashboardDescription !== dashboardDescription ||
+    syncedProps.savedDashboards !== savedDashboards
+  ) {
+    setSyncedProps({
+      dashboardId,
+      currentTemplateId,
+      widgets,
+      dashboardName,
+      dashboardDescription,
+      savedDashboards,
+    });
     setSavedBaseline(widgets);
     setLocalWidgets(widgets);
     setDashboardTitle(dashboardName);
@@ -153,16 +177,16 @@ export default function DashboardViewer({
     if (vis === 'PRIVATE' || vis === 'TEAM' || vis === 'PUBLIC') {
       setCurrentVisibility(vis);
     }
-  }, [dashboardId, currentTemplateId, widgets, dashboardName, dashboardDescription, savedDashboards]);
+  }
 
   // Auto-refresh timer with visibility detection
-  useEffect(() => {
-    if (autoRefreshInterval <= 0) {
-      setRefreshCountdown(0);
-      return;
-    }
+  const changeAutoRefresh = useCallback((seconds: number) => {
+    setAutoRefreshInterval(seconds);
+    setRefreshCountdown(seconds > 0 ? seconds : 0);
+  }, []);
 
-    setRefreshCountdown(autoRefreshInterval);
+  useEffect(() => {
+    if (autoRefreshInterval <= 0) return;
 
     const intervalId = setInterval(() => {
       // Pause countdown when document is in background to preserve resources
@@ -182,23 +206,13 @@ export default function DashboardViewer({
     return () => clearInterval(intervalId);
   }, [autoRefreshInterval, router]);
 
-  // Portal mount: track whether we are safely client-side so createPortal can run.
-  // Also lock document.body scroll to prevent the hidden content-shell from scrolling behind.
-  const [portalMounted, setPortalMounted] = useState(false);
-  const portalRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    // Create and attach the portal host div to body once on the client.
-    const el = document.createElement('div');
-    el.id = 'kiosk-portal-root';
-    document.body.appendChild(el);
-    portalRef.current = el;
-    setPortalMounted(true);
-    return () => {
-      document.body.removeChild(el);
-      portalRef.current = null;
-    };
-  }, []);
+  // The wallboard renders in a portal on document.body so `.content-shell`'s overflow never
+  // clips it; this is false during SSR and the first hydration pass.
+  const isClient = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
     // Lock body scroll when kiosk overlay is active so the app shell doesn't scroll behind it.
@@ -226,15 +240,18 @@ export default function DashboardViewer({
         })
       );
     };
-    updateClock();
+    const first = setTimeout(updateClock, 0);
     const id = setInterval(updateClock, 1000);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
   }, [isKioskMode]);
 
   const enterKioskMode = useCallback(async () => {
     setIsKioskMode(true);
     if (autoRefreshInterval === 0) {
-      setAutoRefreshInterval(60);
+      changeAutoRefresh(60);
     }
     try {
       if (
@@ -247,12 +264,16 @@ export default function DashboardViewer({
     } catch {
       // Browser permissions or security might reject requestFullscreen, ignore
     }
-  }, [autoRefreshInterval]);
+  }, [autoRefreshInterval, changeAutoRefresh]);
 
   const exitKioskMode = useCallback(async () => {
     setIsKioskMode(false);
     try {
-      if (typeof document !== 'undefined' && document.fullscreenElement && document.exitFullscreen) {
+      if (
+        typeof document !== 'undefined' &&
+        document.fullscreenElement &&
+        document.exitFullscreen
+      ) {
         await document.exitFullscreen();
       }
     } catch {
@@ -420,9 +441,7 @@ export default function DashboardViewer({
       }
     }
 
-    const basePath = dashboardId
-      ? `/reports/executive/${dashboardId}`
-      : '/reports/executive';
+    const basePath = dashboardId ? `/reports/executive/${dashboardId}` : '/reports/executive';
     return `${basePath}?${params.toString()}`;
   };
 
@@ -474,7 +493,8 @@ export default function DashboardViewer({
       setSavedBaseline(updatedWidgets);
       setLocalWidgets(updatedWidgets);
       if (data.dashboard?.name) setDashboardTitle(data.dashboard.name);
-      if (data.dashboard?.description !== undefined) setDashboardDesc(data.dashboard.description || '');
+      if (data.dashboard?.description !== undefined)
+        setDashboardDesc(data.dashboard.description || '');
       setIsEditing(false);
       notify.success('Dashboard saved successfully');
     } catch (error) {
@@ -485,10 +505,31 @@ export default function DashboardViewer({
     }
   };
 
+  const myDashboards = savedDashboards.filter(d => !currentUserId || d.userId === currentUserId);
+  const sharedWithMe = savedDashboards.filter(d => currentUserId && d.userId !== currentUserId);
+
+  const handleDeleteDashboard = async () => {
+    if (!dashboardId) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/dashboards/${dashboardId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error('Failed to delete dashboard');
+      }
+      setConfirmDeleteOpen(false);
+      router.push('/reports');
+    } catch (error) {
+      console.error('Failed to delete dashboard:', error);
+      notify.error('Failed to delete dashboard. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div
       className={cn(
-        'w-full px-4 py-6 space-y-6 transition-all print:p-0 print:space-y-4',
+        'mx-auto w-full max-w-[1600px] px-4 py-6 md:px-6 md:py-8 space-y-6 transition-all print:p-0 print:space-y-4',
         isEditing && 'pb-28'
       )}
     >
@@ -531,9 +572,8 @@ export default function DashboardViewer({
 
       {/* TV / NOC Wallboard Full-Screen Takeover — rendered via portal at document.body
           so it is NEVER clipped by overflow-y:auto on .content-shell */}
-      {portalMounted &&
+      {isClient &&
         isKioskMode &&
-        portalRef.current &&
         createPortal(
           <div
             role="region"
@@ -580,7 +620,8 @@ export default function DashboardViewer({
                   <span>•</span>
                   <span>
                     {currentFilters.teamId
-                      ? filterOptions.teams.find(t => t.id === currentFilters.teamId)?.name || 'Team'
+                      ? filterOptions.teams.find(t => t.id === currentFilters.teamId)?.name ||
+                        'Team'
                       : 'All Teams'}
                   </span>
                   <span>•</span>
@@ -618,29 +659,32 @@ export default function DashboardViewer({
                       <span>{autoRefreshInterval > 0 ? `${refreshCountdown}s` : 'Manual'}</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-200">
+                  <DropdownMenuContent
+                    align="end"
+                    className="bg-zinc-900 border-zinc-800 text-zinc-200"
+                  >
                     <div className="px-2 py-1 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
                       Auto-Refresh Interval
                     </div>
-                    <DropdownMenuItem onClick={() => setAutoRefreshInterval(0)}>
+                    <DropdownMenuItem onClick={() => changeAutoRefresh(0)}>
                       <span>Off (Manual)</span>
                       {autoRefreshInterval === 0 && (
                         <Check className="h-4 w-4 ml-auto text-primary" />
                       )}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setAutoRefreshInterval(30)}>
+                    <DropdownMenuItem onClick={() => changeAutoRefresh(30)}>
                       <span>Every 30 seconds</span>
                       {autoRefreshInterval === 30 && (
                         <Check className="h-4 w-4 ml-auto text-primary" />
                       )}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setAutoRefreshInterval(60)}>
+                    <DropdownMenuItem onClick={() => changeAutoRefresh(60)}>
                       <span>Every 1 minute</span>
                       {autoRefreshInterval === 60 && (
                         <Check className="h-4 w-4 ml-auto text-primary" />
                       )}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setAutoRefreshInterval(300)}>
+                    <DropdownMenuItem onClick={() => changeAutoRefresh(300)}>
                       <span>Every 5 minutes</span>
                       {autoRefreshInterval === 300 && (
                         <Check className="h-4 w-4 ml-auto text-primary" />
@@ -687,198 +731,151 @@ export default function DashboardViewer({
               />
             </div>
           </div>,
-          portalRef.current
+          document.body
         )}
 
-      {/* Header */}
-      <div
-        className={cn(
-          'relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6 transition-all print:hidden',
-          isKioskMode && 'py-3'
-        )}
-      >
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <Link
-              href="/reports"
-              className="mt-1 p-2 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700/80 transition-colors"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Link>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                {isTemplate && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-800/90 text-amber-400 border border-zinc-700/80">
-                    <Sparkles className="h-3 w-3" />
-                    Template
-                  </span>
-                )}
-              </div>
-              {isEditing && dashboardId ? (
-                <div className="space-y-2 mt-1 max-w-lg">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={dashboardTitle}
-                      onChange={e => setDashboardTitle(e.target.value)}
-                      className="text-xl md:text-2xl font-bold bg-black/40 border border-white/20 rounded-lg px-3 py-1.5 text-white w-full focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder-white/40 transition-all shadow-inner"
-                      placeholder="Dashboard title"
-                    />
-                    <Pencil className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 pointer-events-none" />
-                  </div>
-                  <input
-                    type="text"
-                    value={dashboardDesc}
-                    onChange={e => setDashboardDesc(e.target.value)}
-                    className="text-xs md:text-sm text-zinc-200 bg-black/40 border border-white/20 rounded-lg px-3 py-1.5 w-full focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder-white/40 transition-all shadow-inner"
-                    placeholder="Dashboard description"
-                  />
-                </div>
-              ) : (
-                <>
-                  <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                    {dashboardTitle}
-                  </h1>
-                  <p className="text-xs md:text-sm text-zinc-300 mt-1">{dashboardDesc}</p>
-                </>
-              )}
-            </div>
+      <PageHeader
+        className="print:hidden"
+        title={dashboardTitle || 'Untitled dashboard'}
+        icon={LayoutDashboard}
+        badges={
+          isTemplate ? (
+            <span className={pageHeaderBadgeClass}>
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              Template
+            </span>
+          ) : undefined
+        }
+        description={
+          <div className="space-y-1">
+            {dashboardDesc && <span className="block">{dashboardDesc}</span>}
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums text-zinc-400">
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                Updated {lastUpdated}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>{localWidgets.length} widgets</span>
+            </span>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {isTemplate && (
-              <Button
-                variant="secondary"
-                className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white font-semibold gap-2 shadow-xs transition-all"
-                onClick={handleCloneDashboard}
-                disabled={isCloning}
-              >
-                <Copy className="h-4 w-4" />
-                <span>{isCloning ? 'Cloning...' : 'Clone Dashboard'}</span>
-              </Button>
-            )}
-
-            {/* Auto-Refresh Control */}
+        }
+        secondaryActions={
+          <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
                   className={cn(
-                    'bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9',
-                    autoRefreshInterval > 0 &&
-                      'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
+                    pageHeaderActionClass,
+                    autoRefreshInterval > 0 && 'border-emerald-500/50 text-emerald-300'
                   )}
-                  title={
+                  aria-label={
                     autoRefreshInterval > 0
-                      ? `Auto-refreshing every ${autoRefreshInterval}s (Next in ${refreshCountdown}s)`
-                      : 'Set auto-refresh interval'
+                      ? `Auto-refresh every ${autoRefreshInterval} seconds, next in ${refreshCountdown} seconds`
+                      : 'Auto-refresh off'
                   }
                 >
                   <RefreshCw
+                    aria-hidden="true"
                     className={cn(
-                      'h-3.5 w-3.5',
-                      autoRefreshInterval > 0 && 'animate-spin [animation-duration:3s]'
+                      autoRefreshInterval > 0 &&
+                        'motion-safe:animate-spin motion-safe:[animation-duration:3s]'
                     )}
                   />
-                  <span>{autoRefreshInterval > 0 ? `${refreshCountdown}s` : 'Live'}</span>
+                  <span className="tabular-nums">
+                    {autoRefreshInterval > 0 ? `${refreshCountdown}s` : 'Live'}
+                  </span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Auto-Refresh Interval
+                <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                  Auto-refresh interval
                 </div>
-                <DropdownMenuItem onClick={() => setAutoRefreshInterval(0)}>
-                  <span>Off</span>
-                  {autoRefreshInterval === 0 && <Check className="h-4 w-4 ml-auto text-primary" />}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAutoRefreshInterval(30)}>
-                  <span>Every 30 seconds</span>
-                  {autoRefreshInterval === 30 && (
-                    <Check className="h-4 w-4 ml-auto text-primary" />
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAutoRefreshInterval(60)}>
-                  <span>Every 1 minute</span>
-                  {autoRefreshInterval === 60 && (
-                    <Check className="h-4 w-4 ml-auto text-primary" />
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAutoRefreshInterval(300)}>
-                  <span>Every 5 minutes</span>
-                  {autoRefreshInterval === 300 && (
-                    <Check className="h-4 w-4 ml-auto text-primary" />
-                  )}
-                </DropdownMenuItem>
+                {[
+                  { seconds: 0, label: 'Off' },
+                  { seconds: 30, label: 'Every 30 seconds' },
+                  { seconds: 60, label: 'Every 1 minute' },
+                  { seconds: 300, label: 'Every 5 minutes' },
+                ].map(option => (
+                  <DropdownMenuItem
+                    key={option.seconds}
+                    onClick={() => changeAutoRefresh(option.seconds)}
+                  >
+                    <span>{option.label}</span>
+                    {autoRefreshInterval === option.seconds && (
+                      <Check className="ml-auto h-4 w-4" aria-hidden="true" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Presentation Mode */}
             <Button
-              variant="secondary"
+              variant="outline"
               size="icon"
-              className={cn(
-                'bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white h-9 w-9',
-                isKioskMode && 'border-primary text-primary'
-              )}
+              data-icon-button=""
+              className={cn(pageHeaderActionClass, 'h-9 w-9')}
               onClick={toggleKioskMode}
+              aria-label={isKioskMode ? 'Exit presentation mode' : 'Presentation mode'}
               title={isKioskMode ? 'Exit Presentation Mode (Esc)' : 'Presentation Mode (Press F)'}
             >
-              {isKioskMode ? <Minimize2 className="h-4 w-4" /> : <Tv className="h-4 w-4" />}
+              {isKioskMode ? <Minimize2 aria-hidden="true" /> : <Tv aria-hidden="true" />}
             </Button>
 
-            {/* Export PDF Button */}
             <Button
-              variant="secondary"
+              variant="outline"
               size="sm"
-              className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9"
+              className={pageHeaderActionClass}
               onClick={handleExportPdf}
-              title="Print or Save as PDF"
+              title="Print or save as PDF"
             >
-              <Download className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Export PDF</span>
+              <Download aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">Export PDF</span>
             </Button>
 
-            {/* Share Button */}
             <Button
-              variant="secondary"
+              variant="outline"
               size="sm"
-              className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9"
+              className={pageHeaderActionClass}
               onClick={() => setIsShareModalOpen(true)}
               title="Share dashboard link"
             >
-              <Share2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Share</span>
+              <Share2 aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">Share</span>
             </Button>
-
+          </>
+        }
+        primaryAction={
+          <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="icon"
+                  data-icon-button=""
                   aria-label="Dashboard settings"
-                  className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white h-9 w-9"
+                  className={cn(pageHeaderActionClass, 'h-9 w-9')}
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setIsEditing(!isEditing)}>
-                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  <LayoutDashboard className="mr-2 h-4 w-4" aria-hidden="true" />
                   {isEditing ? 'Exit Edit Mode' : 'Edit Dashboard'}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={toggleKioskMode}>
-                  <Tv className="h-4 w-4 mr-2" />
+                  <Tv className="mr-2 h-4 w-4" aria-hidden="true" />
                   {isKioskMode ? 'Exit Presentation Mode' : 'Presentation Mode (F)'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleExportPdf}>
-                  <Download className="h-4 w-4 mr-2" />
+                  <Download className="mr-2 h-4 w-4" aria-hidden="true" />
                   Export as PDF
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setIsShareModalOpen(true)}>
-                  <Share2 className="h-4 w-4 mr-2" />
+                  <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
                   Share Dashboard
                 </DropdownMenuItem>
                 {!isTemplate && dashboardId && (
@@ -886,197 +883,223 @@ export default function DashboardViewer({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
-                      onClick={async () => {
-                        if (
-                          // eslint-disable-next-line no-alert
-                          !confirm(
-                            'Are you sure you want to delete this dashboard? This action cannot be undone.'
-                          )
-                        ) {
-                          return;
-                        }
-                        setIsDeleting(true);
-                        try {
-                          const response = await fetch(`/api/dashboards/${dashboardId}`, {
-                            method: 'DELETE',
-                          });
-                          if (!response.ok) {
-                            throw new Error('Failed to delete dashboard');
-                          }
-                          router.push('/reports');
-                        } catch (error) {
-                          console.error('Failed to delete dashboard:', error);
-                          notify.error('Failed to delete dashboard. Please try again.');
-                        } finally {
-                          setIsDeleting(false);
-                        }
-                      }}
+                      onSelect={() => setConfirmDeleteOpen(true)}
                       disabled={isDeleting}
                     >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      {isDeleting ? 'Deleting...' : 'Delete Dashboard'}
+                      <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                      {isDeleting ? 'Deleting…' : 'Delete Dashboard'}
                     </DropdownMenuItem>
                   </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            {isTemplate && (
+              <Button onClick={handleCloneDashboard} loading={isCloning}>
+                <Copy aria-hidden="true" />
+                {isCloning ? 'Cloning…' : 'Clone Dashboard'}
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      {isEditing && dashboardId && (
+        <section
+          aria-label="Dashboard details"
+          className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm sm:grid-cols-2 print:hidden"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="dashboard-title">Title</Label>
+            <Input
+              id="dashboard-title"
+              value={dashboardTitle}
+              onChange={e => setDashboardTitle(e.target.value)}
+              placeholder="Dashboard title"
+            />
           </div>
-        </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="dashboard-description">Description</Label>
+            <Input
+              id="dashboard-description"
+              value={dashboardDesc}
+              onChange={e => setDashboardDesc(e.target.value)}
+              placeholder="Dashboard description"
+            />
+          </div>
+        </section>
+      )}
 
-        {/* Status Bar */}
-        <div className="flex items-center gap-4 mt-4 text-sm opacity-80">
-          <span className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            Updated: {lastUpdated}
-          </span>
-          <span>•</span>
-          <span>{localWidgets.length} widgets</span>
-        </div>
-      </div>
-
-      {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-3 p-4 bg-card rounded-lg border print:hidden">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Filter className="h-4 w-4" />
-          <span>Filters:</span>
-        </div>
-
-        {/* Time Window */}
-        <Select
-          value={String(currentFilters.windowDays)}
-          onValueChange={value => handleFilterChange('window', value)}
-        >
-          <SelectTrigger className="w-[130px]" aria-label="Time range">
-            <SelectValue placeholder="Time range" />
-          </SelectTrigger>
-          <SelectContent>
-            {TIME_WINDOWS.map(w => (
-              <SelectItem key={w.value} value={w.value}>
-                {w.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Team Filter */}
-        <Select
-          value={currentFilters.teamId || 'ALL'}
-          onValueChange={value => handleFilterChange('teamId', value)}
-        >
-          <SelectTrigger className="w-[150px]" aria-label="Filter by team">
-            <SelectValue placeholder="All Teams" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Teams</SelectItem>
-            {filterOptions.teams.map(team => (
-              <SelectItem key={team.id} value={team.id}>
-                {team.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Service Filter */}
-        <Select
-          value={currentFilters.serviceId || 'ALL'}
-          onValueChange={value => handleFilterChange('serviceId', value)}
-        >
-          <SelectTrigger className="w-[150px]" aria-label="Filter by service">
-            <SelectValue placeholder="All Services" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Services</SelectItem>
-            {filterOptions.services.map(service => (
-              <SelectItem key={service.id} value={service.id}>
-                {service.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {Boolean(currentFilters.teamId || currentFilters.serviceId || currentFilters.windowDays !== 7) && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const basePath = dashboardId ? `/reports/executive/${dashboardId}` : '/reports/executive';
-              const params = new URLSearchParams();
-              if (currentTemplateId && !dashboardId) params.set('template', currentTemplateId);
-              const qs = params.toString();
-              router.push(`${basePath}${qs ? `?${qs}` : ''}`);
-            }}
-            className="text-xs h-9 px-2.5 text-muted-foreground hover:text-foreground gap-1.5"
-            title="Reset to default filters"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset</span>
-          </Button>
+      <FilterBar
+        className="print:hidden"
+        hasActiveFilters={Boolean(
+          currentFilters.teamId || currentFilters.serviceId || currentFilters.windowDays !== 7
         )}
+        clearLabel="Reset"
+        onClearAll={() => {
+          const basePath = dashboardId ? `/reports/executive/${dashboardId}` : '/reports/executive';
+          const params = new URLSearchParams();
+          if (currentTemplateId && !dashboardId) params.set('template', currentTemplateId);
+          const qs = params.toString();
+          router.push(`${basePath}${qs ? `?${qs}` : ''}`);
+        }}
+        filters={
+          <>
+            <FilterField label="Time window" htmlFor="executive-filter-window">
+              <Select
+                value={String(currentFilters.windowDays)}
+                onValueChange={value => handleFilterChange('window', value)}
+              >
+                <SelectTrigger
+                  id="executive-filter-window"
+                  className="h-9 w-full bg-background text-sm"
+                  aria-label="Time range"
+                >
+                  <SelectValue placeholder="Time range" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_WINDOWS.map(w => (
+                    <SelectItem key={w.value} value={w.value}>
+                      {w.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
 
-        {/* Dashboard & Template Selector */}
-        <div className="ml-auto">
-          <Select
-            value={dashboardId ? `saved:${dashboardId}` : `template:${currentTemplateId || 'executive-summary'}`}
-            onValueChange={value => {
-              const params = new URLSearchParams();
-              if (currentFilters.windowDays !== 7) params.set('window', String(currentFilters.windowDays));
-              if (currentFilters.teamId) params.set('teamId', currentFilters.teamId);
-              if (currentFilters.serviceId) params.set('serviceId', currentFilters.serviceId);
-              const qs = params.toString();
+            <FilterField label="Team" htmlFor="executive-filter-team">
+              <Select
+                value={currentFilters.teamId || 'ALL'}
+                onValueChange={value => handleFilterChange('teamId', value)}
+              >
+                <SelectTrigger
+                  id="executive-filter-team"
+                  className="h-9 w-full bg-background text-sm"
+                  aria-label="Filter by team"
+                >
+                  <SelectValue placeholder="All teams" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Teams</SelectItem>
+                  {filterOptions.teams.map(team => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
 
-              if (value.startsWith('saved:')) {
-                const targetId = value.replace('saved:', '');
-                router.push(`/reports/executive/${targetId}${qs ? `?${qs}` : ''}`);
-              } else if (value.startsWith('template:')) {
-                const targetTemplate = value.replace('template:', '');
-                params.set('template', targetTemplate);
-                router.push(`/reports/executive?${params.toString()}`);
-              }
-            }}
+            <FilterField label="Service" htmlFor="executive-filter-service">
+              <Select
+                value={currentFilters.serviceId || 'ALL'}
+                onValueChange={value => handleFilterChange('serviceId', value)}
+              >
+                <SelectTrigger
+                  id="executive-filter-service"
+                  className="h-9 w-full bg-background text-sm"
+                  aria-label="Filter by service"
+                >
+                  <SelectValue placeholder="All services" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Services</SelectItem>
+                  {filterOptions.services.map(service => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+          </>
+        }
+        actions={
+          <FilterField
+            label="Dashboard"
+            htmlFor="executive-dashboard-select"
+            className="min-w-[14rem]"
           >
-            <SelectTrigger className="w-[220px]" aria-label="Select dashboard">
-              <SelectValue placeholder="Select dashboard" />
-            </SelectTrigger>
-            <SelectContent>
-              {savedDashboards.filter(d => !currentUserId || d.userId === currentUserId).length > 0 && (
-                <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  My Dashboards
-                </div>
-              )}
-              {savedDashboards
-                .filter(d => !currentUserId || d.userId === currentUserId)
-                .map(d => (
+            <Select
+              value={
+                dashboardId
+                  ? `saved:${dashboardId}`
+                  : `template:${currentTemplateId || 'executive-summary'}`
+              }
+              onValueChange={value => {
+                const params = new URLSearchParams();
+                if (currentFilters.windowDays !== 7)
+                  params.set('window', String(currentFilters.windowDays));
+                if (currentFilters.teamId) params.set('teamId', currentFilters.teamId);
+                if (currentFilters.serviceId) params.set('serviceId', currentFilters.serviceId);
+                const qs = params.toString();
+
+                if (value.startsWith('saved:')) {
+                  const targetId = value.replace('saved:', '');
+                  router.push(`/reports/executive/${targetId}${qs ? `?${qs}` : ''}`);
+                } else if (value.startsWith('template:')) {
+                  const targetTemplate = value.replace('template:', '');
+                  params.set('template', targetTemplate);
+                  router.push(`/reports/executive?${params.toString()}`);
+                }
+              }}
+            >
+              <SelectTrigger
+                id="executive-dashboard-select"
+                className="h-9 w-full bg-background text-sm"
+                aria-label="Select dashboard"
+              >
+                <SelectValue placeholder="Select dashboard" />
+              </SelectTrigger>
+              <SelectContent>
+                {myDashboards.length > 0 && (
+                  <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                    My dashboards
+                  </div>
+                )}
+                {myDashboards.map(d => (
                   <SelectItem key={d.id} value={`saved:${d.id}`}>
                     {d.name}
                   </SelectItem>
                 ))}
 
-              {savedDashboards.filter(d => currentUserId && d.userId !== currentUserId).length > 0 && (
-                <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-1.5">
-                  Team & Shared
-                </div>
-              )}
-              {savedDashboards
-                .filter(d => currentUserId && d.userId !== currentUserId)
-                .map(d => (
+                {sharedWithMe.length > 0 && (
+                  <div className="mt-1.5 px-2 py-1 text-xs font-medium text-muted-foreground">
+                    Team &amp; shared
+                  </div>
+                )}
+                {sharedWithMe.map(d => (
                   <SelectItem key={d.id} value={`saved:${d.id}`}>
                     {d.name} ({d.visibility === 'TEAM' ? 'Team' : 'Public'})
                   </SelectItem>
                 ))}
 
-              <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-1.5">
-                Templates
-              </div>
-              {templates.map(t => (
-                <SelectItem key={t.id} value={`template:${t.id}`}>
-                  {t.name} (Template)
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+                <div className="mt-1.5 px-2 py-1 text-xs font-medium text-muted-foreground">
+                  Templates
+                </div>
+                {templates.map(t => (
+                  <SelectItem key={t.id} value={`template:${t.id}`}>
+                    {t.name} (Template)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+        }
+      />
+
+      <DeleteConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete dashboard"
+        description={
+          <>
+            Delete <strong>&quot;{dashboardTitle}&quot;</strong>? Its widgets and layout are removed
+            permanently.
+          </>
+        }
+        confirmText="Delete dashboard"
+        onConfirm={handleDeleteDashboard}
+      />
 
       {/* Dashboard Grid */}
       <DashboardGrid

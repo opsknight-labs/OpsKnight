@@ -141,7 +141,7 @@ export default function PolicyDirectoryCard({
                     )}
                   </div>
                   {idx < Math.min(policy.steps.length - 1, 3) && (
-                    <ArrowRight className="h-2.5 w-2.5 text-slate-300 shrink-0" />
+                    <ArrowRight className="h-2.5 w-2.5 text-ink-300 shrink-0" />
                   )}
                 </div>
               ))}

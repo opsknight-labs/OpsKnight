@@ -1,15 +1,15 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { NavigationSummary } from '@/lib/runbooks/presentation/contracts';
-import DetailHeroBanner, { type DetailStatItem } from '@/components/ui/DetailHeroBanner';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import type { DetailStatItem } from '@/components/ui/DetailHeroBanner';
+import { RunbooksPageShell } from '@/components/runbooks/RunbooksPageShell';
 import { FleetSubNav } from './FleetSubNav';
 import { Activity, Server, ShieldCheck } from 'lucide-react';
 
 export function FleetPageShell({
   title,
   description,
-  section: _section,
-  icon: Icon,
+  section,
+  icon: Icon = Server,
   actions,
   navigation,
   canManageSecrets,
@@ -18,6 +18,7 @@ export function FleetPageShell({
 }: {
   title: string;
   description: ReactNode;
+  /** Sub-section label for the breadcrumb trail (Pools, Secrets, Security); omit on the Agents root. */
   section?: string;
   icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
   actions?: ReactNode;
@@ -30,7 +31,7 @@ export function FleetPageShell({
     {
       label: 'Online Agents',
       value: navigation.onlineAgents ?? 0,
-      icon: <Server className="h-3.5 w-3.5 text-emerald-200" />,
+      icon: <Server className="h-3.5 w-3.5 text-emerald-200" aria-hidden="true" />,
       valueClassName:
         navigation.onlineAgents && navigation.onlineAgents > 0
           ? 'text-emerald-200 font-bold'
@@ -40,7 +41,7 @@ export function FleetPageShell({
     {
       label: 'Active Executions',
       value: navigation.activeExecutions ?? 0,
-      icon: <Activity className="h-3.5 w-3.5 text-sky-200" />,
+      icon: <Activity className="h-3.5 w-3.5 text-sky-200" aria-hidden="true" />,
       valueClassName:
         navigation.activeExecutions && navigation.activeExecutions > 0
           ? 'text-sky-200 font-bold'
@@ -50,7 +51,7 @@ export function FleetPageShell({
     {
       label: 'Fleet Health',
       value: navigation.health,
-      icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-200" />,
+      icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-200" aria-hidden="true" />,
       valueClassName:
         navigation.health === 'HEALTHY'
           ? 'text-emerald-200 font-bold'
@@ -61,38 +62,29 @@ export function FleetPageShell({
     },
   ];
 
+  const breadcrumbs = section
+    ? [
+        { label: 'Runbooks', href: '/runbooks' },
+        { label: 'Agents', href: '/runbooks/agents' },
+        { label: section },
+      ]
+    : [{ label: 'Runbooks', href: '/runbooks' }, { label: 'Agents' }];
+
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-3 sm:px-4 md:px-6 py-4 md:py-5">
-      <DetailHeroBanner
-        tag="Execution Infrastructure"
-        title={title}
-        icon={
-          Icon ? (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-              <Icon className="h-6 w-6" aria-hidden />
-            </div>
-          ) : (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-              <Server className="h-6 w-6" aria-hidden />
-            </div>
-          )
-        }
-        subtitle={
-          typeof description === 'string' ? (
-            <p className="text-xs text-primary-foreground/85 leading-relaxed">{description}</p>
-          ) : (
-            description
-          )
-        }
-        actions={actions}
-        statsPlacement="bottom"
-        stats={stats || defaultStats}
-      />
-      <RunbookModuleNav summary={navigation} />
-      <div className="space-y-4 md:space-y-5">
-        <FleetSubNav canManageSecrets={canManageSecrets} />
-        {children}
-      </div>
-    </div>
+    <RunbooksPageShell
+      navigation={navigation}
+      subNav={<FleetSubNav canManageSecrets={canManageSecrets} />}
+      header={{
+        breadcrumbs,
+        title,
+        icon: Icon,
+        description,
+        actions,
+        statsPlacement: 'bottom',
+        stats: stats || defaultStats,
+      }}
+    >
+      {children}
+    </RunbooksPageShell>
   );
 }

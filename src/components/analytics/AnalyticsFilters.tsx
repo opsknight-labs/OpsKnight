@@ -2,7 +2,6 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
-import { Label } from '@/components/ui/shadcn/label';
 import {
   Select,
   SelectContent,
@@ -10,15 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import { Button } from '@/components/ui/shadcn/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
-import { Filter, X, Activity, Shield, Briefcase, Clock, Users, Zap } from 'lucide-react';
+import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
 
 interface AnalyticsFiltersProps {
   teams: Array<{ id: string; name: string }>;
@@ -34,6 +25,16 @@ interface AnalyticsFiltersProps {
   };
 }
 
+const STATUS_OPTIONS = ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED', 'RESOLVED'];
+const URGENCY_OPTIONS = ['HIGH', 'MEDIUM', 'LOW'];
+const WINDOW_OPTIONS = [1, 3, 7, 14, 30, 60, 90, 180, 365];
+const DEFAULT_WINDOW = '7';
+
+const titleCase = (value: string) => value.charAt(0) + value.slice(1).toLowerCase();
+const windowLabel = (days: number | string) =>
+  `Last ${days} ${Number(days) === 1 ? 'day' : 'days'}`;
+const triggerClass = 'h-9 w-full bg-background text-sm';
+
 export default function AnalyticsFilters({
   teams,
   services,
@@ -42,15 +43,10 @@ export default function AnalyticsFilters({
 }: AnalyticsFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
-  const statusOptions = ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED', 'RESOLVED'];
-  const urgencyOptions = ['HIGH', 'MEDIUM', 'LOW'];
-  const windowOptions = [1, 3, 7, 14, 30, 60, 90, 180, 365];
-
-  const getUserName = (user: { name: string | null; email: string | null }) => {
-    return user.name || user.email || 'Unknown user';
-  };
+  const getUserName = (user: { name: string | null; email: string | null }) =>
+    user.name || user.email || 'Unknown user';
 
   const createQueryString = useCallback(
     (name: string, value: string) => {
@@ -67,7 +63,8 @@ export default function AnalyticsFilters({
 
   const handleFilterChange = (name: string, value: string) => {
     startTransition(() => {
-      router.push(`/analytics?${createQueryString(name, value)}`);
+      const qs = createQueryString(name, value);
+      router.push(qs ? `/analytics?${qs}` : '/analytics');
     });
   };
 
@@ -77,50 +74,76 @@ export default function AnalyticsFilters({
     });
   };
 
-  const hasFilters =
-    !!currentFilters.team ||
-    !!currentFilters.service ||
-    !!currentFilters.assignee ||
-    !!currentFilters.status ||
-    !!currentFilters.urgency ||
-    (currentFilters.window && currentFilters.window !== '7');
+  const isSet = (value?: string) => Boolean(value && value !== 'ALL');
+  const activeTokens: Array<{ key: string; label: string }> = [];
+  if (isSet(currentFilters.team)) {
+    const team = teams.find(t => t.id === currentFilters.team);
+    activeTokens.push({ key: 'team', label: `Team: ${team?.name ?? currentFilters.team}` });
+  }
+  if (isSet(currentFilters.service)) {
+    const service = services.find(s => s.id === currentFilters.service);
+    activeTokens.push({
+      key: 'service',
+      label: `Service: ${service?.name ?? currentFilters.service}`,
+    });
+  }
+  if (isSet(currentFilters.assignee)) {
+    const user = users.find(u => u.id === currentFilters.assignee);
+    activeTokens.push({
+      key: 'assignee',
+      label: `Assignee: ${user ? getUserName(user) : currentFilters.assignee}`,
+    });
+  }
+  if (isSet(currentFilters.status)) {
+    activeTokens.push({ key: 'status', label: `Status: ${titleCase(currentFilters.status!)}` });
+  }
+  if (isSet(currentFilters.urgency)) {
+    activeTokens.push({ key: 'urgency', label: `Urgency: ${titleCase(currentFilters.urgency!)}` });
+  }
+  if (currentFilters.window && currentFilters.window !== DEFAULT_WINDOW) {
+    activeTokens.push({ key: 'window', label: windowLabel(currentFilters.window) });
+  }
 
   return (
-    <Card className="mb-6">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-4 w-4" /> Filter Analytics
-            </CardTitle>
-            <CardDescription>Refine your analytics view</CardDescription>
-          </div>
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-muted-foreground hover:text-foreground"
-              onClick={clearFilters}
-              disabled={isPending}
+    <FilterBar
+      chips={
+        activeTokens.length > 0
+          ? activeTokens.map(token => (
+              <FilterChip key={token.key} onRemove={() => handleFilterChange(token.key, '')}>
+                {token.label}
+              </FilterChip>
+            ))
+          : undefined
+      }
+      hasActiveFilters={activeTokens.length > 0}
+      onClearAll={clearFilters}
+      filters={
+        <>
+          <FilterField label="Time window" htmlFor="analytics-filter-window">
+            <Select
+              value={currentFilters.window || DEFAULT_WINDOW}
+              onValueChange={val => handleFilterChange('window', val)}
             >
-              <X className="mr-1 h-3 w-3" /> Clear All
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">Team</Label>
+              <SelectTrigger id="analytics-filter-window" className={triggerClass}>
+                <SelectValue placeholder="Last 7 days" />
+              </SelectTrigger>
+              <SelectContent>
+                {WINDOW_OPTIONS.map(days => (
+                  <SelectItem key={days} value={`${days}`}>
+                    {windowLabel(days)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+
+          <FilterField label="Team" htmlFor="analytics-filter-team">
             <Select
               value={currentFilters.team || 'ALL'}
               onValueChange={val => handleFilterChange('team', val)}
             >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2 truncate">
-                  <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="All Teams" />
-                </div>
+              <SelectTrigger id="analytics-filter-team" className={triggerClass}>
+                <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All teams</SelectItem>
@@ -134,19 +157,15 @@ export default function AnalyticsFilters({
                   ))}
               </SelectContent>
             </Select>
-          </div>
+          </FilterField>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">Service</Label>
+          <FilterField label="Service" htmlFor="analytics-filter-service">
             <Select
               value={currentFilters.service || 'ALL'}
               onValueChange={val => handleFilterChange('service', val)}
             >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2 truncate">
-                  <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="All Services" />
-                </div>
+              <SelectTrigger id="analytics-filter-service" className={triggerClass}>
+                <SelectValue placeholder="All services" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All services</SelectItem>
@@ -160,21 +179,15 @@ export default function AnalyticsFilters({
                   ))}
               </SelectContent>
             </Select>
-          </div>
+          </FilterField>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">
-              Assignee
-            </Label>
+          <FilterField label="Assignee" htmlFor="analytics-filter-assignee">
             <Select
               value={currentFilters.assignee || 'ALL'}
               onValueChange={val => handleFilterChange('assignee', val)}
             >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2 truncate">
-                  <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="All Assignees" />
-                </div>
+              <SelectTrigger id="analytics-filter-assignee" className={triggerClass}>
+                <SelectValue placeholder="All assignees" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All assignees</SelectItem>
@@ -188,79 +201,47 @@ export default function AnalyticsFilters({
                   ))}
               </SelectContent>
             </Select>
-          </div>
+          </FilterField>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">Status</Label>
+          <FilterField label="Status" htmlFor="analytics-filter-status">
             <Select
               value={currentFilters.status || 'ALL'}
               onValueChange={val => handleFilterChange('status', val)}
             >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2 truncate">
-                  <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="All Statuses" />
-                </div>
+              <SelectTrigger id="analytics-filter-status" className={triggerClass}>
+                <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All statuses</SelectItem>
-                {statusOptions.map(status => (
+                {STATUS_OPTIONS.map(status => (
                   <SelectItem key={status} value={status}>
-                    {status}
+                    {titleCase(status)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FilterField>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">Urgency</Label>
+          <FilterField label="Urgency" htmlFor="analytics-filter-urgency">
             <Select
               value={currentFilters.urgency || 'ALL'}
               onValueChange={val => handleFilterChange('urgency', val)}
             >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2 truncate">
-                  <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="All Urgencies" />
-                </div>
+              <SelectTrigger id="analytics-filter-urgency" className={triggerClass}>
+                <SelectValue placeholder="All urgencies" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All urgencies</SelectItem>
-                {urgencyOptions.map(urgency => (
+                {URGENCY_OPTIONS.map(urgency => (
                   <SelectItem key={urgency} value={urgency}>
-                    {urgency}
+                    {titleCase(urgency)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">
-              Time Window
-            </Label>
-            <Select
-              value={currentFilters.window || '7'}
-              onValueChange={val => handleFilterChange('window', val)}
-            >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2 truncate">
-                  <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="Last 7 days" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {windowOptions.map(days => (
-                  <SelectItem key={days} value={`${days}`}>
-                    Last {days} {days === 1 ? 'day' : 'days'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          </FilterField>
+        </>
+      }
+    />
   );
 }

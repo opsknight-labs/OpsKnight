@@ -10,41 +10,41 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
-import { Plus, X, Loader2, AlertCircle, ShieldAlert } from 'lucide-react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/shadcn/dialog';
+import { Plus, AlertCircle } from 'lucide-react';
 import type { PolicyFormState } from '@/app/(app)/policies/actions';
 
 type PolicyCreateFormProps = {
   action: (prevState: PolicyFormState, formData: FormData) => Promise<PolicyFormState>;
   canCreate?: boolean;
+  /** Trigger label; the page header uses the default. */
+  label?: string;
 };
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending} className="gap-2 font-medium shadow-xs">
-      {pending ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Creating policy...
-        </>
-      ) : (
-        <>
-          <Plus className="h-4 w-4" />
-          Create Policy
-        </>
-      )}
+    <Button type="submit" loading={pending}>
+      <Plus aria-hidden="true" />
+      Create policy
     </Button>
   );
 }
 
-export default function PolicyCreateForm({ action, canCreate = true }: PolicyCreateFormProps) {
-  const [isOpen, setIsOpen] = useState(false);
+/** "New policy" button that opens the create dialog. Rendered as the page header's primary action. */
+export default function PolicyCreateForm({
+  action,
+  canCreate = true,
+  label = 'New policy',
+}: PolicyCreateFormProps) {
+  const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
   const { showToast } = useToast();
@@ -52,9 +52,9 @@ export default function PolicyCreateForm({ action, canCreate = true }: PolicyCre
   const handleAction = async (prevState: PolicyFormState, formData: FormData) => {
     const res = await action(prevState, formData);
     if (res?.success) {
-      showToast('Escalation policy created successfully', 'success');
+      showToast('Escalation policy created', 'success');
       formRef.current?.reset();
-      setIsOpen(false);
+      setOpen(false);
       if (res.policyId) {
         router.push(`/policies/${res.policyId}`);
       } else {
@@ -68,114 +68,68 @@ export default function PolicyCreateForm({ action, canCreate = true }: PolicyCre
 
   const [state, formAction] = useActionState(handleAction, { error: null, success: false });
 
-  if (!canCreate) {
-    return (
-      <Alert className="bg-muted/50">
-        <ShieldAlert className="h-4 w-4" />
-        <AlertDescription className="text-xs">
-          You do not have permission to create escalation policies. Admin role is required.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (!isOpen) {
-    return (
-      <Button
-        variant="outline"
-        className="w-full h-auto py-8 border-dashed border-2 hover:border-primary hover:bg-primary/5 flex flex-col items-center justify-center gap-2 group transition-all rounded-lg"
-        onClick={() => setIsOpen(true)}
-      >
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-          <Plus className="h-6 w-6" />
-        </div>
-        <div className="text-center">
-          <h3 className="font-semibold text-base text-foreground">Create New Escalation Policy</h3>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Define multi-tier responder routing, escalation delays, and notification rules
-          </p>
-        </div>
-      </Button>
-    );
-  }
+  if (!canCreate) return null;
 
   return (
-    <Card className="border-primary/20 shadow-lg relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 to-primary" />
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-base">Create New Escalation Policy</CardTitle>
-            <CardDescription className="text-xs">
-              Configure initial policy details. Escalation steps and responder targets can be
-              configured after creation.
-            </CardDescription>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsOpen(false)}
-            className="h-8 w-8 p-0 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-100 dark:border-zinc-700"
-            aria-label="Close policy creation form"
-            title="Close"
-          >
-            <X className="h-4 w-4 stroke-[2.25]" />
-          </Button>
-        </div>
-      </CardHeader>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus aria-hidden="true" />
+          {label}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New escalation policy</DialogTitle>
+          <DialogDescription>
+            Name the policy now. You add escalation steps and attach services after it is created.
+          </DialogDescription>
+        </DialogHeader>
 
-      <form ref={formRef} action={formAction}>
-        <CardContent className="space-y-4">
+        <form ref={formRef} action={formAction} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-xs font-medium text-foreground">
-              Policy Name <span className="text-destructive">*</span>
+            <Label htmlFor="policy-name">
+              Policy name <span className="text-destructive">*</span>
             </Label>
             <Input
-              id="name"
+              id="policy-name"
               name="name"
-              placeholder="e.g. Tier 1 Critical Production Response"
+              placeholder="e.g. Tier 1 production response"
               required
               maxLength={100}
-              className="text-xs"
+              autoFocus
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="description" className="text-xs font-medium text-foreground">
-              Description <span className="text-muted-foreground text-[10px]">(optional)</span>
+            <Label htmlFor="policy-description">
+              Description <span className="font-normal text-muted-foreground">(optional)</span>
             </Label>
             <Textarea
-              id="description"
+              id="policy-description"
               name="description"
-              placeholder="Describe when this policy should be used and which services it covers..."
+              placeholder="When should this policy be used, and which services does it cover?"
               maxLength={500}
-              className="resize-none text-xs"
-              rows={2}
+              className="resize-none"
+              rows={3}
             />
           </div>
 
           {state?.error && (
-            <Alert variant="destructive" className="py-2 text-xs">
-              <AlertCircle className="h-4 w-4" />
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
               <AlertDescription>{state.error}</AlertDescription>
             </Alert>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsOpen(false)}
-              className="text-xs"
-            >
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <SubmitButton />
-          </div>
-        </CardContent>
-      </form>
-    </Card>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

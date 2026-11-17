@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import SearchFilterBar from '@/components/ui/SearchFilterBar';
+import { FilterBar, FilterField } from '@/components/patterns';
 import { exportToCsv } from '@/lib/export-csv';
 import { Download } from 'lucide-react';
 
@@ -53,8 +53,9 @@ export default function PostmortemsFilters({
     }
     params.delete('page'); // Reset to page 1
 
+    const qs = params.toString();
     startTransition(() => {
-      router.push(`/postmortems?${params.toString()}`);
+      router.push(qs ? `/postmortems?${qs}` : '/postmortems');
     });
   };
 
@@ -93,43 +94,60 @@ export default function PostmortemsFilters({
   };
 
   return (
-    <SearchFilterBar
-      searchValue={currentSearch}
-      onSearchChange={val => updateParam('search', val)}
-      searchPlaceholder="Search postmortems, incidents, services..."
+    <FilterBar
+      search={{
+        value: currentSearch,
+        onChange: val => updateParam('search', val),
+        placeholder: 'Search postmortems, incidents or services…',
+        label: 'Search postmortems',
+        debounceMs: 300,
+      }}
       hasActiveFilters={hasActiveFilters}
-      onResetFilters={handleReset}
+      onClearAll={handleReset}
       filters={
         <>
-          <Select value={currentStatus || 'ALL'} onValueChange={val => updateParam('status', val)}>
-            <SelectTrigger className="h-9 w-[130px] bg-ink-50/60 text-xs">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Statuses</SelectItem>
-              <SelectItem value="PUBLISHED">Published</SelectItem>
-              <SelectItem value="DRAFT">Drafts</SelectItem>
-              <SelectItem value="ARCHIVED">Archived</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {services.length > 0 && (
+          <FilterField label="Status" htmlFor="postmortem-filter-status">
             <Select
-              value={currentServiceId || 'ALL'}
-              onValueChange={val => updateParam('serviceId', val)}
+              value={currentStatus || 'ALL'}
+              onValueChange={val => updateParam('status', val)}
             >
-              <SelectTrigger className="h-9 w-[150px] bg-ink-50/60 text-xs">
-                <SelectValue placeholder="Service" />
+              <SelectTrigger
+                id="postmortem-filter-status"
+                className="h-9 w-full bg-background text-sm"
+              >
+                <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All Services</SelectItem>
-                {services.map(svc => (
-                  <SelectItem key={svc.id} value={svc.id}>
-                    {svc.name}
-                  </SelectItem>
-                ))}
+                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="PUBLISHED">Published</SelectItem>
+                <SelectItem value="DRAFT">Draft</SelectItem>
+                <SelectItem value="ARCHIVED">Archived</SelectItem>
               </SelectContent>
             </Select>
+          </FilterField>
+
+          {services.length > 0 && (
+            <FilterField label="Service" htmlFor="postmortem-filter-service">
+              <Select
+                value={currentServiceId || 'ALL'}
+                onValueChange={val => updateParam('serviceId', val)}
+              >
+                <SelectTrigger
+                  id="postmortem-filter-service"
+                  className="h-9 w-full bg-background text-sm"
+                >
+                  <SelectValue placeholder="All services" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All services</SelectItem>
+                  {services.map(svc => (
+                    <SelectItem key={svc.id} value={svc.id}>
+                      {svc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
           )}
         </>
       }
@@ -139,10 +157,10 @@ export default function PostmortemsFilters({
           size="sm"
           onClick={handleExportCsv}
           disabled={postmortemsData.length === 0}
-          className="h-9 gap-1.5 text-xs shadow-sm hover:bg-ink-100"
+          className="h-9"
         >
-          <Download className="h-3.5 w-3.5 text-muted-foreground" />
-          <span>Export CSV</span>
+          <Download aria-hidden="true" />
+          Export CSV
         </Button>
       }
     />

@@ -21,7 +21,8 @@ import TeamMemberAddModal from '@/components/teams/TeamMemberAddModal';
 import TeamAssignServicesModal from '@/components/teams/TeamAssignServicesModal';
 import TeamLinkedPolicies from '@/components/teams/TeamLinkedPolicies';
 import TeamDetailTabs from '@/components/teams/TeamDetailTabs';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { Breadcrumbs, PageHeader } from '@/components/patterns';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import {
   Card,
   CardContent,
@@ -468,53 +469,43 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Header with Breadcrumbs & Hero Banner */}
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Teams',
-          href: '/teams',
-          current: team.name,
-        }}
-        tag="Team Workspace"
+      <PageHeader
+        breadcrumbs={
+          <Breadcrumbs
+            className="lg:hidden"
+            items={[{ label: 'Teams', href: '/teams' }, { label: team.name }]}
+          />
+        }
         badges={
           team.teamLead ? (
-            <span className="rounded-full bg-primary-foreground/20 px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
-              Lead: {team.teamLead.name}
-            </span>
-          ) : undefined
+            <span className={pageHeaderBadgeClass}>Lead: {team.teamLead.name}</span>
+          ) : (
+            <span className={pageHeaderBadgeClass}>No team lead</span>
+          )
         }
         title={team.name}
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Users className="h-5 w-5" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
-            {team.description || 'No mission description defined.'}
-          </p>
-        }
+        icon={Users}
+        description={team.description || 'No mission yet. Add one in Settings.'}
         stats={[
           {
             label: 'Members',
             value: team._count.members,
-            icon: <UserCheck className="h-3.5 w-3.5" />,
+            icon: <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
             label: 'Services',
             value: team._count.services,
-            icon: <Shield className="h-3.5 w-3.5" />,
+            icon: <Shield className="h-3.5 w-3.5" aria-hidden="true" />,
           },
           {
-            label: 'Incidents',
-            value: `${activeIncidentsCount} Active`,
+            label: 'Open incidents',
+            value: activeIncidentsCount,
             icon:
               activeIncidentsCount > 0 ? (
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-200" />
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
               ) : (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-100" />
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" aria-hidden="true" />
               ),
-            valueClassName: activeIncidentsCount > 0 ? 'text-amber-200' : 'text-emerald-100',
           },
         ]}
       />

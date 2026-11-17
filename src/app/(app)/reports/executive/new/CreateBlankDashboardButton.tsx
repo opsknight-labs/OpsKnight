@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { notify } from '@/lib/toast';
-import { Loader2 } from 'lucide-react';
 
 export default function CreateBlankDashboardButton() {
   const router = useRouter();
@@ -39,15 +38,8 @@ export default function CreateBlankDashboardButton() {
   };
 
   return (
-    <Button onClick={handleCreate} className="w-full" disabled={isCreating}>
-      {isCreating ? (
-        <>
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          Creating...
-        </>
-      ) : (
-        'Create Blank Dashboard'
-      )}
+    <Button onClick={handleCreate} className="w-full" loading={isCreating}>
+      Create blank dashboard
     </Button>
   );
 }

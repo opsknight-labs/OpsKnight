@@ -4,7 +4,6 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { assertCanViewUser, getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Mail,
   Building2,
@@ -16,7 +15,9 @@ import {
   Flame,
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { Breadcrumbs, PageHeader } from '@/components/patterns';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import UserDetailTabs from '@/components/users/UserDetailTabs';
 import UserProfileHeaderActions from '@/components/users/UserProfileHeaderActions';
 import { deleteUser, updateUserProfile } from '../actions';
@@ -49,6 +50,10 @@ function formatLocalTimeInTz(timeZone: string): string {
   } catch {
     return 'UTC';
   }
+}
+
+function formatRoleLabel(value: string): string {
+  return value.charAt(0) + value.slice(1).toLowerCase();
 }
 
 export default async function UserDetailPage({ params, searchParams }: UserDetailPageProps) {
@@ -195,13 +200,13 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Users',
-          href: '/users',
-          current: user.name,
-        }}
-        tag="User Profile"
+      <PageHeader
+        breadcrumbs={
+          <Breadcrumbs
+            className="lg:hidden"
+            items={[{ label: 'Users', href: '/users' }, { label: user.name }]}
+          />
+        }
         title={user.name}
         icon={
           <UserAvatar
@@ -210,72 +215,51 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
             avatarUrl={user.avatarUrl}
             gender={user.gender}
             size="xl"
-            className="shrink-0 ring-2 ring-primary-foreground/20 rounded-full"
+            className="shrink-0 rounded-full ring-2 ring-primary-foreground/20"
           />
         }
         badges={
           <>
-            <Badge
-              variant="outline"
-              size="xs"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 uppercase font-bold text-[10px]"
+            <span className={pageHeaderBadgeClass}>{formatRoleLabel(user.role)}</span>
+            <span
+              className={cn(
+                pageHeaderBadgeClass,
+                user.status === 'ACTIVE' && 'border-emerald-500/40 text-emerald-300',
+                user.status === 'INVITED' && 'border-amber-500/40 text-amber-300',
+                user.status === 'DISABLED' && 'border-rose-500/40 text-rose-300'
+              )}
             >
-              {user.role}
-            </Badge>
-            {user.status === 'ACTIVE' ? (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-emerald-500/20 text-emerald-100 border-emerald-400/30 font-medium text-[10px]"
-              >
-                Active
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-rose-500/20 text-rose-100 border-rose-400/30 font-medium text-[10px]"
-              >
-                {user.status}
-              </Badge>
-            )}
-            {isSelf && (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-primary-foreground/10 text-primary-foreground/80 border-primary-foreground/20 text-[10px]"
-              >
-                You
-              </Badge>
-            )}
+              {formatRoleLabel(user.status)}
+            </span>
+            {isSelf && <span className={pageHeaderBadgeClass}>You</span>}
           </>
         }
-        subtitle={
+        description={
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <a
               href={`mailto:${user.email}`}
-              className="flex items-center gap-1.5 hover:text-white hover:underline transition-colors"
+              className="flex items-center gap-1.5 rounded-sm transition-colors hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             >
-              <Mail className="h-3.5 w-3.5 opacity-80" />
+              <Mail className="h-3.5 w-3.5 opacity-80" aria-hidden="true" />
               <span>{user.email}</span>
             </a>
 
             {user.jobTitle && (
               <span className="flex items-center gap-1.5">
-                <Briefcase className="h-3.5 w-3.5 opacity-80" />
+                <Briefcase className="h-3.5 w-3.5 opacity-80" aria-hidden="true" />
                 <span>{user.jobTitle}</span>
               </span>
             )}
 
             {user.department && (
               <span className="flex items-center gap-1.5">
-                <Building2 className="h-3.5 w-3.5 opacity-80" />
+                <Building2 className="h-3.5 w-3.5 opacity-80" aria-hidden="true" />
                 <span>{user.department}</span>
               </span>
             )}
 
-            <span className="flex items-center gap-1.5 bg-primary-foreground/10 px-2 py-0.5 rounded border border-primary-foreground/15">
-              <Clock className="h-3 w-3 opacity-80" />
+            <span className="flex items-center gap-1.5 tabular-nums" title="Local time">
+              <Clock className="h-3.5 w-3.5 opacity-80" aria-hidden="true" />
               <span>{localTimeStr}</span>
             </span>
           </div>
@@ -302,7 +286,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
             icon: <ShieldAlert className="h-3.5 w-3.5" />,
           },
         ]}
-        actions={
+        primaryAction={
           <UserProfileHeaderActions
             user={{
               id: user.id,

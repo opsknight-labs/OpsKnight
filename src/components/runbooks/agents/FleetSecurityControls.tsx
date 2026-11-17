@@ -439,13 +439,9 @@ export function ArtifactRetentionForm({
         </label>
       </div>
 
-      <div className="pt-2">
-        <SubmitButton
-          variant="destructive"
-          disabled={!confirmed}
-          className="w-full h-9 text-xs font-semibold rounded-xl shadow-xs cursor-pointer"
-        >
-          <ShieldAlert className="h-3.5 w-3.5 mr-1.5" />
+      <div className="flex justify-end pt-2">
+        <SubmitButton variant="destructive" disabled={!confirmed} className="w-full sm:w-auto">
+          <ShieldAlert aria-hidden="true" />
           Save Artifact Retention Policy
         </SubmitButton>
       </div>

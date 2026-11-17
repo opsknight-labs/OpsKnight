@@ -71,9 +71,10 @@ export default function SortableEscalationStepItem(props: SortableEscalationStep
         <div
           {...attributes}
           {...listeners}
-          className="absolute left-0 top-1/2 -translate-y-1/2 p-2 cursor-grab active:cursor-grabbing text-slate-300 hover:text-ink-500 transition-colors opacity-0 group-hover/sortable:opacity-100"
+          aria-label="Drag to reorder step"
+          className="absolute left-0 top-1/2 -translate-y-1/2 cursor-grab rounded-sm p-2 text-ink-300 opacity-0 transition-[color,opacity] duration-150 hover:text-ink-500 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing group-hover/sortable:opacity-100 [@media(hover:none)]:opacity-100"
         >
-          <GripVertical className="h-4 w-4" />
+          <GripVertical className="h-4 w-4" aria-hidden="true" />
         </div>
       )}
 

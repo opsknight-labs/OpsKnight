@@ -26,13 +26,7 @@ export function EnrollAgentSheet({
       title="Enroll an Agent"
       description="Single-use enrollment tokens expire after 15 minutes. The private key never leaves the Agent."
       trigger={
-        <Button
-          variant={variant}
-          className={cn(
-            !variant && 'gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs',
-            className
-          )}
-        >
+        <Button variant={variant} className={cn(!variant && 'gap-1.5', className)}>
           {!variant && <Plus className="h-4 w-4" />}
           <span>{label}</span>
         </Button>

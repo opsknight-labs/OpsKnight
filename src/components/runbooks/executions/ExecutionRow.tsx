@@ -14,10 +14,11 @@ import { Button } from '@/components/ui/shadcn/button';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
 import { ExecutionProgressBar } from './ExecutionProgressBar';
 import { formatDateTime } from '@/lib/timezone';
+import { RelativeTime } from '@/components/patterns';
 import { TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import { isTerminalExecutionStatus, type RunbookExecutionStatus } from '@/lib/runbooks/types';
 import { cn } from '@/lib/utils';
-import { executionDurationSeconds, formatDurationSeconds, formatRelativeTime } from './format';
+import { executionDurationSeconds, formatDurationSeconds } from './format';
 import type { ExecutionItemData } from './ExecutionDetailDrawer';
 
 /** Shared by the row and the list's sticky header so columns always align. */
@@ -158,9 +159,11 @@ export function ExecutionRow({
           </span>
         </Cell>
         <Cell label="Started" className="order-4 lg:order-none">
-          <span className="tabular-nums" title={startedAbsolute}>
-            {nowIso ? formatRelativeTime(startedValue, nowIso) : startedAbsolute}
-          </span>
+          {nowIso ? (
+            <RelativeTime date={startedValue} now={Date.parse(nowIso)} timeZone={userTimeZone} />
+          ) : (
+            <span className="tabular-nums">{startedAbsolute}</span>
+          )}
         </Cell>
         <Cell label="Duration" className="order-5 lg:order-none">
           <span className="tabular-nums">{duration}</span>

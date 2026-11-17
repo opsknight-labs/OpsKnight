@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { dashboardUserReadWhere, postmortemReadWhere } from '@/lib/authorization-filters';
 import ActionItemsBoard, { type BoardActionItem } from '@/components/action-items/ActionItemsBoard';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { PageHeader } from '@/components/patterns';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
@@ -254,58 +254,44 @@ export default async function ActionItemsPage({
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <DetailHeroBanner
-        tag="Postmortem Follow-Up"
+      <PageHeader
         title="Action Items"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <CheckSquare className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Track preventive action items, assign ownership, manage SLAs, and prevent incident
-            recurrence.
-          </p>
-        }
+        icon={CheckSquare}
+        description="Follow-up work from postmortems: who owns it, when it is due, and what stops the incident from happening again."
         statsPlacement="bottom"
         stats={[
           {
             label: 'Total',
             value: stats.total,
-            icon: <CheckSquare className="h-3.5 w-3.5" />,
+            icon: <CheckSquare className="h-3.5 w-3.5" aria-hidden="true" />,
             href: buildStatUrl(undefined),
             active: !status,
           },
           {
             label: 'Open',
             value: stats.open,
-            icon: <Circle className="h-3.5 w-3.5 text-blue-200" />,
-            valueClassName: stats.open > 0 ? 'text-blue-200' : undefined,
+            icon: <Circle className="h-3.5 w-3.5 text-blue-300" aria-hidden="true" />,
             href: buildStatUrl('OPEN'),
             active: status === 'OPEN',
           },
           {
             label: 'In Progress',
             value: stats.inProgress,
-            icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
-            valueClassName: stats.inProgress > 0 ? 'text-amber-200' : undefined,
+            icon: <Clock className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />,
             href: buildStatUrl('IN_PROGRESS'),
             active: status === 'IN_PROGRESS',
           },
           {
             label: 'Completed',
             value: stats.completed,
-            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
-            valueClassName: stats.completed > 0 ? 'text-emerald-200' : undefined,
+            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" aria-hidden="true" />,
             href: buildStatUrl('COMPLETED'),
             active: status === 'COMPLETED',
           },
           {
             label: 'Blocked',
             value: stats.blocked,
-            icon: <AlertOctagon className="h-3.5 w-3.5 text-rose-200" />,
-            valueClassName: stats.blocked > 0 ? 'text-rose-200' : undefined,
+            icon: <AlertOctagon className="h-3.5 w-3.5 text-rose-300" aria-hidden="true" />,
             href: buildStatUrl('BLOCKED'),
             active: status === 'BLOCKED',
           },

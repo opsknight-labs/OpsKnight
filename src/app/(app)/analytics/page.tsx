@@ -5,7 +5,6 @@ import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import prisma from '@/lib/prisma';
 import AnalyticsFilters from '@/components/analytics/AnalyticsFilters';
-import FilterChips from '@/components/analytics/FilterChips';
 import AnalyticsContent from '@/components/analytics/AnalyticsContent';
 import AnalyticsSkeleton from '@/components/analytics/AnalyticsSkeleton';
 import { buildAnalyticsExportUrl } from '@/lib/analytics-export';
@@ -15,7 +14,9 @@ import {
   serviceReadWhere,
   teamReadWhere,
 } from '@/lib/authorization-filters';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { PageHeader } from '@/components/patterns';
+import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
+import { Button } from '@/components/ui/shadcn/button';
 import AnalyticsRefreshButton from '@/components/analytics/AnalyticsRefreshButton';
 import { BarChart3, Download } from 'lucide-react';
 import { resolveAccessContext } from '@/lib/access-context';
@@ -118,70 +119,33 @@ export default async function AnalyticsV2Page({
   ].join('|');
 
   return (
-    <div className="w-full px-4 py-6 space-y-6 [zoom:0.8] pb-16 sm:pb-20 analytics-v2">
-      {/* Centralized Hero Header */}
-      <DetailHeroBanner
-        tag="Incident Intelligence"
+    <div className="analytics-v2 mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 pb-16 md:px-6 md:py-8 sm:pb-20">
+      <PageHeader
         title="Analytics & Insights"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800/80 text-white border border-slate-700/80 shadow-xs">
-            <BarChart3 className="h-6 w-6 text-rose-500" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <div className="space-y-2">
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Incident health, SLA performance, and on-call readiness
-            </p>
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              <span className="bg-slate-900/80 px-2.5 py-0.5 rounded-md border border-slate-800/90 text-[10px] font-medium text-slate-300">
-                Coverage outlook
-              </span>
-              <span className="bg-slate-900/80 px-2.5 py-0.5 rounded-md border border-slate-800/90 text-[10px] font-medium text-slate-300">
-                SLA compliance
-              </span>
-              <span className="bg-slate-900/80 px-2.5 py-0.5 rounded-md border border-slate-800/90 text-[10px] font-medium text-slate-300">
-                Ownership load
-              </span>
-              <span className="bg-slate-900/80 px-2.5 py-0.5 rounded-md border border-slate-800/90 text-[10px] font-medium text-slate-300">
-                Service health
-              </span>
-            </div>
-          </div>
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800/90 text-slate-200">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Live Operations
-              </span>
-            </div>
-
-            <AnalyticsRefreshButton />
-
-            {hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT) && (
-              <a
-                href={exportUrl}
-                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white shadow-xs transition-all text-xs font-semibold"
-              >
-                <Download className="w-3.5 h-3.5" />
+        icon={BarChart3}
+        description="Incident volume, SLA performance, ownership load and on-call readiness for the selected window."
+        secondaryActions={<AnalyticsRefreshButton />}
+        primaryAction={
+          hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT) ? (
+            <Button asChild variant="outline" size="sm" className={pageHeaderActionClass}>
+              <a href={exportUrl}>
+                <Download aria-hidden="true" />
                 Export
               </a>
-            )}
-          </div>
+            </Button>
+          ) : undefined
         }
       />
 
       {accessContext.mode !== 'GLOBAL' && (
-        <div className="rounded-lg border border-slate-700/80 bg-slate-900/70 px-4 py-3 text-sm text-slate-300">
-          <strong className="text-white">
+        <div
+          role="note"
+          className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground"
+        >
+          <strong className="font-semibold text-foreground">
             {accessContext.mode === 'NONE'
               ? 'No data in your access scope'
-              : 'Analytics — Your Scope'}
+              : 'Analytics — your scope'}
           </strong>
           <span className="ml-2">
             {accessContext.mode === 'NONE'
@@ -191,7 +155,6 @@ export default async function AnalyticsV2Page({
         </div>
       )}
 
-      {/* Filter bar — fast queries, renders before heavy metrics */}
       <AnalyticsFilters
         teams={teams}
         services={servicesForFilter}
@@ -206,37 +169,26 @@ export default async function AnalyticsV2Page({
         }}
       />
 
-      <div className="analytics-context analytics-context-compact">
-        <FilterChips
-          filters={{
-            team: teamId ?? 'ALL',
-            service: effectiveServiceId ?? 'ALL',
-            assignee: assigneeId ?? 'ALL',
-            status: statusFilter ?? 'ALL',
-            urgency: urgencyFilter ?? 'ALL',
-          }}
-          teams={teams}
-          services={servicesForFilter}
-          users={users}
-        />
-      </div>
-
-      {/* Heavy metrics stream in via Suspense. The key changes when filters
+      {/* The dense metric panels were designed at 80% scale; the header and filters stay at
+          the console's normal size so they match every other page. */}
+      <div className="[zoom:0.8] space-y-6">
+        {/* Heavy metrics stream in via Suspense. The key changes when filters
           change, which forces React to show the skeleton fallback again
           while the new data loads — much smoother than freezing on stale
           numbers or popping to a blank page. */}
-      <Suspense key={suspenseKey} fallback={<AnalyticsSkeleton />}>
-        <AnalyticsContent
-          teamId={teamId}
-          actor={actor}
-          serviceId={effectiveServiceId}
-          assigneeId={assigneeId}
-          statusFilter={statusFilter}
-          urgencyFilter={urgencyFilter}
-          windowDays={windowDays}
-          userTimeZone={userTimeZone}
-        />
-      </Suspense>
+        <Suspense key={suspenseKey} fallback={<AnalyticsSkeleton />}>
+          <AnalyticsContent
+            teamId={teamId}
+            actor={actor}
+            serviceId={effectiveServiceId}
+            assigneeId={assigneeId}
+            statusFilter={statusFilter}
+            urgencyFilter={urgencyFilter}
+            windowDays={windowDays}
+            userTimeZone={userTimeZone}
+          />
+        </Suspense>
+      </div>
     </div>
   );
 }

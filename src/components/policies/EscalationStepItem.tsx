@@ -158,13 +158,13 @@ export default function EscalationStepItem({
         {/* Card Content */}
         <div
           className={cn(
-            'flex-1 group relative rounded-xl border bg-card shadow-xs transition-all',
+            'min-w-0 flex-1 group relative rounded-xl border bg-card shadow-xs transition-all',
             'hover:shadow-md hover:border-ink-300',
             'border-ink-200'
           )}
         >
-          <div className="flex items-center justify-between p-3.5 md:p-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 md:p-4">
+            <div className="flex min-w-0 items-center gap-4">
               {/* Avatar/Icon */}
               <div className="flex-shrink-0">
                 {step.targetType === 'USER' && step.targetUser ? (
@@ -183,7 +183,7 @@ export default function EscalationStepItem({
               </div>
 
               {/* Info */}
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm font-bold text-ink-900 leading-tight">{label}</div>
                 <div className="text-xs text-ink-500 mt-0.5">{subLabel}</div>
               </div>

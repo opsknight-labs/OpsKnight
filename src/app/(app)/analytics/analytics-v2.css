@@ -3799,7 +3799,7 @@
 /* Dark Mode Overrides */
 [data-theme='dark'] .glass-panel,
 .dark .glass-panel {
-    background: rgba(24, 24, 27, 0.6);
+    background: hsl(var(--ui-card) / 0.6);
     border-color: rgba(255, 255, 255, 0.08);
     /* More subtle border */
     backdrop-filter: blur(16px) saturate(180%);
@@ -3807,28 +3807,28 @@
 }
 
 [data-theme='dark'] .glass-panel:hover {
-    background: rgba(24, 24, 27, 0.8);
+    background: hsl(var(--ui-card) / 0.8);
     border-color: rgba(255, 255, 255, 0.15);
 }
 
 [data-theme='dark'] .v2-gauge-card,
 [data-theme='dark'] .v2-heatmap-container {
-    background: rgba(39, 39, 42, 0.4);
+    background: hsl(var(--ui-muted) / 0.4);
     border-color: rgba(255, 255, 255, 0.05);
 }
 
 [data-theme='dark'] text {
-    fill: #cbd5e1;
+    fill: hsl(var(--ui-muted-foreground));
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-heading {
-    background: linear-gradient(135deg, rgba(24, 24, 27, 0.6), rgba(24, 24, 27, 0.3));
-    border-color: rgba(148, 163, 184, 0.2);
+    background: linear-gradient(135deg, hsl(var(--ui-card) / 0.6), hsl(var(--ui-card) / 0.3));
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-card {
-    background: linear-gradient(160deg, rgba(24, 24, 27, 0.92), rgba(39, 39, 42, 0.82));
-    border-color: rgba(148, 163, 184, 0.16);
+    background: linear-gradient(160deg, hsl(var(--ui-card) / 0.92), hsl(var(--ui-muted) / 0.82));
+    border-color: hsl(var(--ui-muted-foreground) / 0.16);
     box-shadow: 0 18px 32px rgba(0, 0, 0, 0.35);
 }
 
@@ -3849,30 +3849,30 @@
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-card .chart-header {
-    background: rgba(24, 24, 27, 0.6);
-    border-bottom-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.6);
+    border-bottom-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-insights {
-    background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 55%), linear-gradient(145deg, rgba(24, 24, 27, 0.9), rgba(39, 39, 42, 0.75));
-    border-color: rgba(148, 163, 184, 0.16);
+    background: linear-gradient(145deg, hsl(var(--ui-card) / 0.9), hsl(var(--ui-muted) / 0.75));
+    border-color: hsl(var(--ui-muted-foreground) / 0.16);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-insights-item,
 [data-theme='dark'] .analytics-v2 .v2-panel-trends-block,
 [data-theme='dark'] .analytics-v2 .analytics-narrative-item {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-surface {
-    background: linear-gradient(180deg, rgba(24, 24, 27, 0.94), rgba(39, 39, 42, 0.82));
-    border-color: rgba(148, 163, 184, 0.16);
+    background: linear-gradient(180deg, hsl(var(--ui-card) / 0.94), hsl(var(--ui-muted) / 0.82));
+    border-color: hsl(var(--ui-muted-foreground) / 0.16);
 }
 
 [data-theme='dark'] .analytics-v2 .v2-panel-surface-header {
-    background: rgba(24, 24, 27, 0.75);
-    border-bottom-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.75);
+    border-bottom-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .analytics-panel-meta>div,
@@ -3889,22 +3889,22 @@
 [data-theme='dark'] .analytics-v2 .activity-meta>div,
 [data-theme='dark'] .analytics-v2 .service-health-chip,
 [data-theme='dark'] .analytics-v2 .analytics-insights-summary-item {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-coverage-panel,
 [data-theme='dark'] .analytics-v2 .sla-summary-panel,
 [data-theme='dark'] .analytics-v2 .sla-service-panel {
-    background: linear-gradient(145deg, rgba(24, 24, 27, 0.94), rgba(39, 39, 42, 0.82));
-    border-color: rgba(148, 163, 184, 0.18);
+    background: linear-gradient(145deg, hsl(var(--ui-card) / 0.94), hsl(var(--ui-muted) / 0.82));
+    border-color: hsl(var(--ui-muted-foreground) / 0.18);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-coverage-header,
 [data-theme='dark'] .analytics-v2 .sla-summary-header,
 [data-theme='dark'] .analytics-v2 .sla-service-header {
-    background: rgba(24, 24, 27, 0.8);
-    border-bottom-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.8);
+    border-bottom-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-coverage-chips span,
@@ -3914,106 +3914,106 @@
 [data-theme='dark'] .analytics-v2 .sla-coverage-stats>div,
 [data-theme='dark'] .analytics-v2 .sla-summary-grid>div,
 [data-theme='dark'] .analytics-v2 .sla-service-row {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-coverage-track,
 [data-theme='dark'] .analytics-v2 .sla-service-row-bar {
-    background: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-compliance-panel {
-    background: linear-gradient(145deg, rgba(24, 24, 27, 0.94), rgba(39, 39, 42, 0.82));
-    border-color: rgba(148, 163, 184, 0.18);
+    background: linear-gradient(145deg, hsl(var(--ui-card) / 0.94), hsl(var(--ui-muted) / 0.82));
+    border-color: hsl(var(--ui-muted-foreground) / 0.18);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-compliance-header {
-    background: rgba(24, 24, 27, 0.8);
-    border-bottom-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.8);
+    border-bottom-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-compliance-meta span,
 [data-theme='dark'] .analytics-v2 .sla-compliance-card {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .sla-compliance-bar {
-    background: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .dist-services-meta>div,
 [data-theme='dark'] .analytics-v2 .dist-services-row,
 [data-theme='dark'] .analytics-v2 .dist-age-row,
 [data-theme='dark'] .analytics-v2 .dist-urgency-card {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .dist-bar,
 [data-theme='dark'] .analytics-v2 .dist-urgency-bar {
-    background: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .distribution-card,
 [data-theme='dark'] .analytics-v2 .distribution-row {
-    background: rgba(24, 24, 27, 0.88);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.88);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .distribution-bar,
 [data-theme='dark'] .analytics-v2 .distribution-urgency-bar {
-    background: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .operational-card,
 [data-theme='dark'] .analytics-v2 .operational-status-row,
 [data-theme='dark'] .analytics-v2 .operational-metrics>div {
-    background: rgba(24, 24, 27, 0.88);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.88);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .operational-chart {
-    background: rgba(24, 24, 27, 0.8);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.8);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .operational-status-bar {
-    background: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-heat-strip-row {
-    background: rgba(148, 163, 184, 0.1);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.1);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-heat-strip-cell {
-    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
+    box-shadow: inset 0 0 0 1px hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-heat-strip-empty {
-    border-color: rgba(148, 163, 184, 0.2);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .insights-panel,
 [data-theme='dark'] .analytics-v2 .trends-panel,
 [data-theme='dark'] .analytics-v2 .insights-panel-row,
 [data-theme='dark'] .analytics-v2 .trends-panel-stat {
-    background: rgba(24, 24, 27, 0.88);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.88);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .insights-panel-header,
 [data-theme='dark'] .analytics-v2 .trends-panel-header {
-    background: rgba(24, 24, 27, 0.75);
-    border-bottom-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.75);
+    border-bottom-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .insights-panel-badges span,
 [data-theme='dark'] .analytics-v2 .trends-panel-badges span,
 [data-theme='dark'] .analytics-v2 .insights-panel-row-tag {
-    background: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .trends-badge-mtta {
@@ -4033,18 +4033,18 @@
 
 [data-theme='dark'] .analytics-v2 .insights-panel-icon,
 [data-theme='dark'] .analytics-v2 .trends-panel-icon {
-    background: rgba(148, 163, 184, 0.15);
-    color: #e2e8f0;
+    background: hsl(var(--ui-muted-foreground) / 0.15);
+    color: hsl(var(--ui-foreground));
 }
 
 [data-theme='dark'] .analytics-v2 .insights-panel-footer {
-    background: rgba(24, 24, 27, 0.75);
-    border-top-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.75);
+    border-top-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-line-chart-surface {
-    background: linear-gradient(180deg, rgba(24, 24, 27, 0.9), rgba(39, 39, 42, 0.75));
-    border-color: rgba(148, 163, 184, 0.2);
+    background: linear-gradient(180deg, hsl(var(--ui-card) / 0.9), hsl(var(--ui-muted) / 0.75));
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .status-mix-bar,
@@ -4055,68 +4055,68 @@
 [data-theme='dark'] .analytics-v2 .urgency-mix-bar,
 [data-theme='dark'] .analytics-v2 .sla-kpi-bar,
 [data-theme='dark'] .analytics-v2 .resolution-bar-track {
-    background: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .ownership-card,
 [data-theme='dark'] .analytics-v2 .ownership-row,
 [data-theme='dark'] .analytics-v2 .ownership-kpi {
-    background: rgba(24, 24, 27, 0.88);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.88);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .ownership-bar,
 [data-theme='dark'] .analytics-v2 .ownership-share-track {
-    background: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-shell {
-    background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 55%), linear-gradient(145deg, rgba(24, 24, 27, 0.94), rgba(39, 39, 42, 0.82));
-    border-color: rgba(148, 163, 184, 0.18);
+    background: linear-gradient(145deg, hsl(var(--ui-card) / 0.94), hsl(var(--ui-muted) / 0.82));
+    border-color: hsl(var(--ui-muted-foreground) / 0.18);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-header {
-    background: rgba(24, 24, 27, 0.75);
-    border-bottom-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.75);
+    border-bottom-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-meta-card,
 [data-theme='dark'] .analytics-v2 .service-health-filter,
 [data-theme='dark'] .analytics-v2 .service-health-card {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-sort select {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.25);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.25);
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-meta-card.is-critical {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(24, 24, 27, 0.85));
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), hsl(var(--ui-card) / 0.85));
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-meta-card.is-degraded {
-    background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(24, 24, 27, 0.85));
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), hsl(var(--ui-card) / 0.85));
 }
 
 [data-theme='dark'] .analytics-v2 .service-health-meta-card.is-healthy {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(24, 24, 27, 0.85));
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), hsl(var(--ui-card) / 0.85));
 }
 
 [data-theme='dark'] .analytics-v2 .activity-panel {
-    background: rgba(24, 24, 27, 0.9);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.9);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .activity-github-header {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .activity-github-heatmap {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(148, 163, 184, 0.2);
+    background: hsl(var(--ui-card) / 0.85);
+    border-color: hsl(var(--ui-muted-foreground) / 0.2);
 }
 
 [data-theme='dark'] .analytics-v2 .activity-github-legend-swatch span {

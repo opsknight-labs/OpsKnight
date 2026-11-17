@@ -15,8 +15,7 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { getRerunBlockedReason } from '@/lib/runbooks/rerun';
 import { ExecutionStatusChips } from '@/components/runbooks/executions/ExecutionStatusChips';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { RunbooksPageShell } from '@/components/runbooks/RunbooksPageShell';
 import { Activity, CheckCircle2, Clock, Play, ShieldAlert, XCircle } from 'lucide-react';
 import { ExecutionFilterBar } from '@/components/runbooks/executions/ExecutionFilterBar';
 import { ExecutionList } from '@/components/runbooks/executions/ExecutionList';
@@ -187,35 +186,33 @@ export default async function RunbookExecutionsPage({
   });
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-3 sm:px-4 md:px-6 py-4 md:py-5">
-      <DetailHeroBanner
-        tag="Automation Execution Engine"
-        title="Executions"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Play className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
+    <RunbooksPageShell
+      navigation={navigation}
+      navClassName="static"
+      header={{
+        breadcrumbs: [{ label: 'Runbooks', href: '/runbooks' }, { label: 'Executions' }],
+        title: 'Executions',
+        icon: Play,
+        description: (
           <p className="text-xs text-primary-foreground/85 leading-relaxed">
             Every runbook run across services and incidents, with live status, approvals, and
             outcomes. As of{' '}
             {formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })}.
           </p>
-        }
-        actions={
+        ),
+        actions: (
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-zinc-300 font-medium tabular-nums shadow-xs"
               title={`All execution timestamps reflect your profile timezone: ${userTimeZone}`}
             >
-              <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
+              <Clock className="h-3 w-3 text-zinc-400" aria-hidden="true" />
               {userTimeZone}
             </span>
           </div>
-        }
-        statsPlacement="bottom"
-        stats={[
+        ),
+        statsPlacement: 'bottom',
+        stats: [
           {
             label: 'Running',
             value: summary.running,
@@ -248,12 +245,9 @@ export default async function RunbookExecutionsPage({
             href: '/runbooks/executions?status=SUCCEEDED&timeRange=24h',
             active: status === 'SUCCEEDED',
           },
-        ]}
-      />
-
-      {/* Static here so the execution table header can own the sticky slot. */}
-      <RunbookModuleNav summary={navigation} className="static" />
-
+        ],
+      }}
+    >
       <ExecutionFilterBar key={JSON.stringify(query)} query={query}>
         <ExecutionStatusChips query={query} counts={countsByStatus} selected={status ?? null} />
       </ExecutionFilterBar>
@@ -269,6 +263,6 @@ export default async function RunbookExecutionsPage({
       />
 
       <RunbookPagination page={page} total={total} query={query} />
-    </div>
+    </RunbooksPageShell>
   );
 }

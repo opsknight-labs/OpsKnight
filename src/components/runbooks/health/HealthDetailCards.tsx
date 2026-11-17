@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
 import { formatDateTime } from '@/lib/timezone';
+import { RelativeTime } from '@/components/patterns';
 
 export type HealthDetailCardsProps = {
   localWorker: {
@@ -517,12 +518,18 @@ export function HealthDetailCards({
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground tabular-nums">
                     <span className="inline-flex items-center gap-1.5">
                       <Clock className="h-3 w-3 text-muted-foreground/60" aria-hidden="true" />
-                      {agent.lastHeartbeatAt
-                        ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, {
-                            format: 'datetime',
-                            includeTimeZone: true,
-                          })
-                        : 'Heartbeat never received'}
+                      {agent.lastHeartbeatAt ? (
+                        <span>
+                          Last heartbeat{' '}
+                          <RelativeTime
+                            date={agent.lastHeartbeatAt}
+                            timeZone={userTimeZone}
+                            format="long"
+                          />
+                        </span>
+                      ) : (
+                        'Heartbeat never received'
+                      )}
                     </span>
                     <span className="inline-flex items-center gap-1.5 text-muted-foreground/80">
                       <span>•</span>

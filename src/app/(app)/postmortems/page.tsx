@@ -10,11 +10,10 @@ import {
 } from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { PageHeader } from '@/components/patterns';
 import { FileText, CheckCircle2, Clock, Archive, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import PostmortemsListTable from '@/components/postmortem/PostmortemsListTable';
-import { getUserTimeZone } from '@/lib/timezone';
 
 import PostmortemsFilters from '@/components/postmortem/PostmortemsFilters';
 import { parsePageParam, parseEnumValue } from '@/lib/pagination-parser';
@@ -51,16 +50,6 @@ export default async function PostmortemsPage({
   ]);
   const canCreate = permissions.isResponderOrAbove;
 
-  // Get user timezone for date formatting
-  const email = session?.user?.email ?? null;
-  const user = email
-    ? await prisma.user.findUnique({
-        where: { email },
-        select: { timeZone: true },
-      })
-    : null;
-  const userTimeZone = getUserTimeZone(user ?? undefined);
-
   // Get resolved incidents without postmortems for quick create
   const resolvedIncidentsWithoutPostmortems = canCreate
     ? await prisma.incident.findMany({
@@ -86,77 +75,65 @@ export default async function PostmortemsPage({
     prisma.postmortem.count({ where: { AND: [postmortemAccess, { status: 'ARCHIVED' }] } }),
   ]);
 
+  const pendingCount = resolvedIncidentsWithoutPostmortems.length;
+  const createAction =
+    canCreate && pendingCount > 0 ? (
+      <Button asChild>
+        <Link href="/postmortems/create">
+          <Plus aria-hidden="true" />
+          New postmortem
+          <span
+            className="rounded-full bg-primary-foreground/15 px-1.5 text-xs font-semibold tabular-nums"
+            aria-label={`${pendingCount} resolved incidents without a postmortem`}
+          >
+            {pendingCount}
+          </span>
+        </Link>
+      </Button>
+    ) : undefined;
+  const hasFilters = Boolean(status || search || serviceId);
+
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header */}
-      <DetailHeroBanner
-        tag="Incident Learning"
+      <PageHeader
         title="Postmortems"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <FileText className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Learn from incidents, document root-cause analyses, track incident timelines, and build
-            resilient systems.
-          </p>
-        }
+        icon={FileText}
+        description="What happened during resolved incidents, why it happened, and what the team is changing so it does not happen again."
+        primaryAction={createAction}
         statsPlacement="bottom"
-        actions={
-          canCreate && resolvedIncidentsWithoutPostmortems.length > 0 ? (
-            <Button
-              asChild
-              className="gap-2 shadow-sm font-semibold bg-white text-zinc-950 hover:bg-zinc-100"
-            >
-              <Link href="/postmortems/create">
-                <Plus className="h-4 w-4" />
-                Create Postmortem
-                <span className="ml-1 rounded bg-zinc-950/10 px-1.5 py-0.5 text-xs font-bold text-zinc-950 tabular-nums">
-                  {resolvedIncidentsWithoutPostmortems.length}
-                </span>
-              </Link>
-            </Button>
-          ) : undefined
-        }
         stats={[
           {
-            label: 'Total',
+            label: 'All',
             value: totalCount,
-            icon: <FileText className="h-3.5 w-3.5" />,
+            icon: <FileText className="h-3.5 w-3.5" aria-hidden="true" />,
             href: '/postmortems',
             active: !status,
           },
           {
             label: 'Published',
             value: publishedCount,
-            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
-            valueClassName: publishedCount > 0 ? 'text-emerald-200' : undefined,
+            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" aria-hidden="true" />,
             href: '/postmortems?status=PUBLISHED',
             active: status === 'PUBLISHED',
           },
           {
             label: 'Drafts',
             value: draftCount,
-            icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
-            valueClassName: draftCount > 0 ? 'text-amber-200' : undefined,
+            icon: <Clock className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />,
             href: '/postmortems?status=DRAFT',
             active: status === 'DRAFT',
           },
           {
             label: 'Archived',
             value: archivedCount,
-            icon: <Archive className="h-3.5 w-3.5 text-slate-200" />,
-            valueClassName: archivedCount > 0 ? 'text-slate-200' : undefined,
+            icon: <Archive className="h-3.5 w-3.5" aria-hidden="true" />,
             href: '/postmortems?status=ARCHIVED',
             active: status === 'ARCHIVED',
           },
         ]}
       />
 
-      <div className="space-y-4 md:space-y-6">
-        {/* Unified Search & Filters Toolbar */}
+      <div className="space-y-4">
         <PostmortemsFilters
           currentStatus={status}
           currentSearch={search}
@@ -165,12 +142,12 @@ export default async function PostmortemsPage({
           postmortemsData={postmortems}
         />
 
-        {/* Postmortems List */}
         <PostmortemsListTable
           postmortems={postmortems}
           pagination={pagination}
-          userTimeZone={userTimeZone}
           canManage={canCreate}
+          hasFilters={hasFilters}
+          createAction={createAction}
         />
       </div>
     </div>

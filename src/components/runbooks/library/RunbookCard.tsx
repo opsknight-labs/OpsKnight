@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
 import { Pill } from '../ui/primitives';
 import { formatDateTime } from '@/lib/timezone';
-import { formatRelativeShort } from '@/lib/mobile-time';
+import { RelativeTime } from '@/components/patterns';
 import { cn } from '@/lib/utils';
 
 export type RunbookCardData = {
@@ -82,16 +82,7 @@ export function RunbookCard({
         <span className="inline-flex items-center gap-1.5">
           <span className="sr-only">Last run:</span>
           <RunbookStatusBadge status={lastExec.status} size="sm" context="execution" />
-          <time
-            dateTime={lastExec.createdAt}
-            title={formatDateTime(lastExec.createdAt, userTimeZone, {
-              format: 'datetime',
-              includeTimeZone: true,
-            })}
-            suppressHydrationWarning
-          >
-            {formatRelativeShort(lastExec.createdAt, userTimeZone)}
-          </time>
+          <RelativeTime date={lastExec.createdAt} timeZone={userTimeZone} />
         </span>
       ) : (
         <span className="inline-flex items-center gap-1.5">
