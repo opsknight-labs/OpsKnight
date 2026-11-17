@@ -134,9 +134,19 @@ describe('IncidentsListTable', () => {
       />
     );
 
-    // Ack button is visible for OPEN incident
-    const ackBtn = screen.getByTitle('Acknowledge Incident');
-    expect(ackBtn).toBeDefined();
+    // Triggered rows offer both single-incident actions, each named for its incident
+    expect(
+      screen.getByRole('button', { name: 'Acknowledge incident: Database connection issue' })
+    ).toBeDefined();
+    expect(
+      screen.getByRole('button', { name: 'Resolve incident: Database connection issue' })
+    ).toBeDefined();
+
+    // The title is the row's single primary link; no control is nested inside another
+    const link = screen.getByRole('link', { name: 'Database connection issue' });
+    expect(link).toHaveAttribute('href', '/incidents/inc-open-1');
+    expect(link.closest('li')?.getAttribute('role')).toBeNull();
+    expect(link.querySelector('button, a, input')).toBeNull();
 
     // Relative timestamp is rendered with the absolute time on hover
     const created = screen.getByText('5m ago');
@@ -260,8 +270,9 @@ describe('IncidentsListTable', () => {
     // No select page button
     expect(screen.queryByRole('button', { name: /select all incidents/i })).toBeNull();
 
-    // No quick Ack button
-    expect(screen.queryByTitle('Acknowledge Incident')).toBeNull();
+    // No quick Ack/Resolve buttons
+    expect(screen.queryByRole('button', { name: /acknowledge incident/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /resolve incident/i })).toBeNull();
 
     // Key presses have no effect in readOnly mode
     fireEvent.keyDown(window, { key: 'j' });

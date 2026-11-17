@@ -51,20 +51,24 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
   const hasResponders = uniqueUsers.length > 0;
 
   return (
-    <Link href={`/schedules/${schedule.id}`} className="group block focus-visible:outline-none">
-      <Card className="h-full border-border/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+    <Link
+      href={`/schedules/${schedule.id}`}
+      className="group block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      <Card className="h-full border-border transition-colors duration-150 group-hover:border-ink-300 group-hover:bg-muted/40">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15 transition-colors">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"
+                aria-hidden="true"
+              >
                 <Calendar className="h-4 w-4" />
               </div>
-              <CardTitle className="truncate text-base font-semibold transition-colors group-hover:text-primary">
-                {schedule.name}
-              </CardTitle>
+              <CardTitle className="truncate text-base font-semibold">{schedule.name}</CardTitle>
             </div>
             <Badge variant="outline" size="xs" className="gap-1.5 shrink-0">
-              <Clock className="h-3 w-3 text-muted-foreground" />
+              <Clock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
               {schedule.timeZone}
             </Badge>
           </div>
@@ -100,7 +104,7 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
                   />
                 ))}
                 {uniqueUsers.length > 3 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground ring-1.5 ring-background">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-2xs font-semibold tabular-nums text-muted-foreground ring-1.5 ring-background">
                     +{uniqueUsers.length - 3}
                   </span>
                 )}

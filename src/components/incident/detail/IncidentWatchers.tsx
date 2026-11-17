@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
+import { railCardClass } from './RailSection';
 
 type Watcher = {
   id: string;
@@ -192,29 +193,15 @@ export default function IncidentWatchers({
   const countsSummary = summaryParts.join(' · ') || `${watchers.length} Subscribed`;
 
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-zinc-900 dark:border-zinc-800 transition-all',
-        className
-      )}
-    >
+    <div className={cn(railCardClass, className)}>
       {/* Header: Clean, generous, NO clipping. Title has full room. */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
-            <Bell className="h-4 w-4 shrink-0" />
-          </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 whitespace-nowrap">
-              Subscribers
-            </h3>
-            <Badge
-              variant="secondary"
-              className="text-[10px] h-4.5 px-1.5 font-semibold text-slate-600 bg-slate-100 dark:bg-zinc-800 dark:text-zinc-400 shrink-0"
-            >
-              {watchers.length}
-            </Badge>
-          </div>
+      <div className="flex min-h-11 items-center justify-between gap-2 border-b border-border px-4 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Bell className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <h2 className="truncate text-sm font-semibold text-foreground">Subscribers</h2>
+          <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-muted px-1.5 text-2xs font-semibold tabular-nums text-muted-foreground">
+            {watchers.length}
+          </span>
         </div>
 
         {/* Header Action: Only '+ Add' button. Clean & uncrowded. */}
@@ -226,9 +213,9 @@ export default function IncidentWatchers({
                 variant="outline"
                 size="sm"
                 title="Add teammate as subscriber"
-                className="h-7 px-2.5 text-xs font-semibold gap-1 border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 shadow-2xs shrink-0"
+                className="h-7 shrink-0 gap-1 px-2.5 text-xs font-semibold shadow-2xs"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Add</span>
               </Button>
             </PopoverTrigger>

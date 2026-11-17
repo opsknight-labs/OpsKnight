@@ -35,13 +35,18 @@ type CoverageTimelineProps = {
   timeZone: string;
 };
 
+// On-call is Royal Violet (DESIGN.md Signal Rule). Effective coverage is the solid bar; layers are
+// violet tints told apart by shade, never by a status hue. Bar text keeps AA contrast in both themes.
 const LAYER_COLORS = [
-  { bg: 'bg-indigo-500' },
-  { bg: 'bg-emerald-500' },
-  { bg: 'bg-amber-500' },
-  { bg: 'bg-rose-500' },
-  { bg: 'bg-sky-500' },
+  { bg: 'bg-violet-200 dark:bg-violet-500/35', text: 'text-violet-950 dark:text-violet-50' },
+  {
+    bg: 'bg-violet-50 ring-1 ring-inset ring-violet-300 dark:bg-violet-400/15 dark:ring-violet-400/40',
+    text: 'text-violet-900 dark:text-violet-100',
+  },
+  { bg: 'bg-violet-300 dark:bg-violet-600/45', text: 'text-violet-950 dark:text-violet-50' },
 ];
+const EFFECTIVE_COLOR = { bg: 'bg-violet-700', text: 'text-white' };
+const OVERRIDE_OUTLINE = 'outline outline-2 -outline-offset-2 outline-dashed outline-current';
 
 type TimelineRow = {
   id: string;
@@ -138,7 +143,7 @@ export default function CoverageTimeline({
         description:
           index === 0 ? 'Priority and overrides applied' : 'Concurrent effective coverage',
         shifts: lane,
-        color: { bg: 'bg-primary' },
+        color: EFFECTIVE_COLOR,
         effective: true,
       });
     });
@@ -148,7 +153,7 @@ export default function CoverageTimeline({
         label: index === 0 ? 'Also on call' : 'Additional on-call',
         description: 'Additive override coverage',
         shifts: lane,
-        color: { bg: 'bg-emerald-500' },
+        color: EFFECTIVE_COLOR,
         effective: true,
       });
     });
@@ -158,7 +163,7 @@ export default function CoverageTimeline({
         label: 'Effective on-call',
         description: 'No effective coverage',
         shifts: [],
-        color: { bg: 'bg-amber-500' },
+        color: { bg: 'bg-amber-500', text: 'text-white' },
         effective: true,
       });
     }
@@ -254,11 +259,11 @@ export default function CoverageTimeline({
                     const leftPercent = (startMinutes / (dayDurationMs / 60000)) * 100;
                     const widthPercent =
                       ((endMinutes - startMinutes) / (dayDurationMs / 60000)) * 100;
-                    const blockColor = row.effective
-                      ? 'bg-primary dark:bg-zinc-600'
-                      : shift.source === 'override'
-                        ? 'bg-amber-500'
-                        : row.color.bg;
+                    const blockColor = cn(
+                      row.color.bg,
+                      row.color.text,
+                      (shift.source === 'override' || shift.isAdditiveOverride) && OVERRIDE_OUTLINE
+                    );
                     return (
                       <TooltipProvider key={`${row.id}-${shift.id}`} delayDuration={100}>
                         <Tooltip>
@@ -274,7 +279,7 @@ export default function CoverageTimeline({
                               }}
                             >
                               {widthPercent > 8 && (
-                                <Avatar className="h-5 w-5 shrink-0 ring-1 ring-white/30">
+                                <Avatar className="h-5 w-5 shrink-0 ring-1 ring-white/40">
                                   <AvatarImage
                                     src={
                                       shift.userAvatar ||
@@ -284,13 +289,13 @@ export default function CoverageTimeline({
                                       )
                                     }
                                   />
-                                  <AvatarFallback className="bg-white/20 text-[8px] text-white">
+                                  <AvatarFallback className="bg-white/30 text-[8px] text-inherit">
                                     {shift.userName.charAt(0)}
                                   </AvatarFallback>
                                 </Avatar>
                               )}
                               {widthPercent > 15 && (
-                                <span className="truncate text-[10px] font-medium text-white">
+                                <span className="truncate text-2xs font-medium">
                                   {shift.userName.split(' ')[0]}
                                 </span>
                               )}
@@ -319,16 +324,17 @@ export default function CoverageTimeline({
                   })}
                   {isMounted && (
                     <div
-                      className="absolute bottom-0 top-0 z-10 w-0.5 bg-red-500"
+                      className="absolute bottom-0 top-0 z-10 w-0.5 bg-foreground"
                       style={{ left: `${currentHourPosition}%` }}
+                      aria-hidden="true"
                     >
-                      <div className="absolute -left-1 -top-0.5 h-2 w-2 rounded-full bg-red-500" />
+                      <div className="absolute -left-1 -top-0.5 h-2 w-2 rounded-full bg-foreground ring-2 ring-background" />
                     </div>
                   )}
                 </div>
               </div>
             ))}
-            <div className="grid grid-cols-[108px_minmax(0,1fr)] border-t bg-muted/20 text-[9px] text-muted-foreground sm:grid-cols-[150px_minmax(0,1fr)]">
+            <div className="grid grid-cols-[108px_minmax(0,1fr)] border-t bg-muted/20 text-2xs tabular-nums text-muted-foreground sm:grid-cols-[150px_minmax(0,1fr)]">
               <div className="border-r" />
               <div className="relative flex h-5">
                 {hourMarkers.map(hour => (
@@ -349,8 +355,9 @@ export default function CoverageTimeline({
       </div>
 
       {rows.length > 0 && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Effective rows show who owns the escalation; layer rows show the underlying coverage.
+          Dashed outlines mark overrides.
         </p>
       )}
     </div>

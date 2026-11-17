@@ -42,6 +42,8 @@ import {
   type LiveSort,
 } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard, type LiveDensity } from './LiveDashboardProvider';
+import ErrorState from '@/components/patterns/ErrorState';
+import { TableRowsSkeleton } from '@/components/patterns/Skeletons';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { LIVE_ROW_GRID, LIVE_ROW_GRID_TV, LiveIncidentRow } from './LiveIncidentRow';
 import { LiveActiveFilters, LiveToolbar, type LiveDirectoryOption } from './LiveFilterBar';
@@ -701,14 +703,28 @@ export default function LiveIncidentsPanel({
         data-testid="live-incidents-scroll"
       >
         {snapshot === null && loading ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-            <RefreshCw className="h-4 w-4 motion-safe:animate-spin" aria-hidden />
-            Loading live incidents…
-          </div>
+          <TableRowsSkeleton
+            rows={8}
+            columns={5}
+            showHeader={false}
+            label="Loading live incidents"
+            className="rounded-none border-0"
+          />
         ) : snapshot === null ? (
-          <div className="py-10 text-center text-xs text-muted-foreground" role="alert">
-            Live incidents are unavailable. Retrying automatically.
-          </div>
+          <ErrorState
+            variant="inline"
+            title="Live incidents couldn’t load"
+            message={
+              health === 'offline'
+                ? 'You appear to be offline. The dashboard will reconnect when the network returns.'
+                : 'The live snapshot request failed. It retries automatically; you can also retry now.'
+            }
+            onRetry={refresh}
+            retryText="Retry now"
+            backHref="/incidents"
+            backLabel="Open incident list"
+            className="m-3 border-dashed sm:m-4"
+          />
         ) : incidents.length === 0 ? (
           <div
             className="flex h-full min-h-[12rem] flex-col items-center justify-center py-10 text-center"

@@ -6,12 +6,13 @@ import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList'
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
+import PageHeader from '@/components/patterns/PageHeader';
 import {
+  AlertTriangle,
   Calendar,
   Layers3,
   Users,
   CheckCircle2,
-  Sparkles,
   Network,
   ArrowUpRight,
 } from 'lucide-react';
@@ -143,65 +144,33 @@ export default async function SchedulesPage({
   const canManageSchedules = permissions.isAdminOrResponder;
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      {/* Header with Glassmorphic Stats Capsule */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
-              <Calendar className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                On-call schedules
-              </p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-                Schedules
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-300">
-                Manage rotation layers, shifts, on-call responders, and coverage calendars.
-              </p>
-            </div>
-          </div>
-
-          {/* Frosted Glassmorphism 3-column stats capsule */}
-          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs lg:min-w-[340px]">
-            <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Responders
-              </p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
-                <Users className="h-3.5 w-3.5" /> {totalUniqueResponders}
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg border-x border-zinc-800/80 px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Layers
-              </p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
-                <Layers3 className="h-3.5 w-3.5" /> {totalLayers}
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Status
-              </p>
-              <p
-                className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-bold ${
-                  hasConfiguredResponders ? 'text-emerald-400' : 'text-amber-400'
-                }`}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {hasConfiguredResponders ? 'Configured' : 'Needs setup'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Top Action: Create Schedule Dashed Expander */}
-      <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />
+    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        title="Schedules"
+        icon={Calendar}
+        description="Rotation layers, shifts and overrides that decide who is on call."
+        primaryAction={
+          <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />
+        }
+        stats={[
+          {
+            label: 'Responders',
+            value: totalUniqueResponders,
+            icon: <Users className="h-3.5 w-3.5" />,
+          },
+          { label: 'Layers', value: totalLayers, icon: <Layers3 className="h-3.5 w-3.5" /> },
+          {
+            label: 'Status',
+            value: hasConfiguredResponders ? 'Configured' : 'Needs setup',
+            icon: hasConfiguredResponders ? (
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+            ) : (
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-300" />
+            ),
+            valueClassName: hasConfiguredResponders ? 'text-emerald-300' : 'text-amber-300',
+          },
+        ]}
+      />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
@@ -220,7 +189,7 @@ export default async function SchedulesPage({
               configured: configuredSchedulesCount,
               needsSetup: needsSetupSchedulesCount,
             }}
-            currentSearch={searchQuery}
+            currentSearch={params?.q ?? params?.search ?? ''}
             currentStatus={statusFilter}
           />
         </div>
@@ -228,49 +197,44 @@ export default async function SchedulesPage({
         {/* Sidebar: Step Guide & Quick Links */}
         <aside className="space-y-4">
           {/* Clean Guidance Card */}
-          <Card className="overflow-hidden border-border/70 shadow-xs">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
-                  <Sparkles className="h-3 w-3" />
-                </div>
-                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Schedule Lifecycle
-                </CardTitle>
-              </div>
+          <Card className="overflow-hidden border-border shadow-xs">
+            <CardHeader className="border-b border-border px-4 py-3">
+              <CardTitle className="text-sm font-semibold text-foreground">
+                Setting up a schedule
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-50 text-2xs font-semibold tabular-nums text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                   1
                 </span>
                 <div>
                   <p className="font-semibold text-foreground">Rotation Layers</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                     Configure shift lengths (12h, 24h, weekly) and rotation start times.
                   </p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-50 text-2xs font-semibold tabular-nums text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                   2
                 </span>
                 <div>
                   <p className="font-semibold text-foreground">Assign Responders</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                     Add team members in rotation sequence with easy reordering.
                   </p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-50 text-2xs font-semibold tabular-nums text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                   3
                 </span>
                 <div>
                   <p className="font-semibold text-foreground">Link Escalation Policies</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                     Attach schedules to policy levels to route alerts to active on-call engineers.
                   </p>
                 </div>
@@ -279,11 +243,9 @@ export default async function SchedulesPage({
           </Card>
 
           {/* Quick Links */}
-          <Card className="overflow-hidden border-border/70 shadow-xs">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Quick Links
-              </CardTitle>
+          <Card className="overflow-hidden border-border shadow-xs">
+            <CardHeader className="border-b border-border px-4 py-3">
+              <CardTitle className="text-sm font-semibold text-foreground">Related</CardTitle>
             </CardHeader>
             <CardContent className="p-2 space-y-1">
               <Button

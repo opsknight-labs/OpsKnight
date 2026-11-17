@@ -41,9 +41,10 @@ export default function DeleteIntegrationButton({
           <Button
             variant="ghost"
             size="icon"
+            aria-label={`Delete integration ${integrationName}`}
             className="h-8 w-8 text-ink-400 hover:text-destructive hover:bg-destructive/10"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
           </Button>
         ) : (
           <Button

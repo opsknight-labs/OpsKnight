@@ -25,7 +25,7 @@ describe('IncidentQuickLinksCard', () => {
   it('renders standard service, policy, analytics, and team quick links', () => {
     render(<IncidentQuickLinksCard {...defaultProps} />);
 
-    expect(screen.getByText('Quick Links')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Quick links' })).toBeInTheDocument();
     expect(screen.getByText('Authentication API')).toBeInTheDocument();
     expect(screen.getByText('Current service default: Critical Escalation')).toBeInTheDocument();
     expect(screen.getByText('Incident Analytics')).toBeInTheDocument();
@@ -33,9 +33,21 @@ describe('IncidentQuickLinksCard', () => {
   });
 
   it('distinguishes the pinned incident policy from the current service default', () => {
-    render(<IncidentQuickLinksCard {...defaultProps} incidentPolicy={{ id: 'pinned', name: 'Original Route' }} pinnedPolicy />);
-    expect(screen.getByRole('link', { name: /Original Route/ })).toHaveAttribute('href', '/policies/pinned');
-    expect(screen.getByRole('link', { name: /Current service default/ })).toHaveAttribute('href', '/policies/pol-1');
+    render(
+      <IncidentQuickLinksCard
+        {...defaultProps}
+        incidentPolicy={{ id: 'pinned', name: 'Original Route' }}
+        pinnedPolicy
+      />
+    );
+    expect(screen.getByRole('link', { name: /Original Route/ })).toHaveAttribute(
+      'href',
+      '/policies/pinned'
+    );
+    expect(screen.getByRole('link', { name: /Current service default/ })).toHaveAttribute(
+      'href',
+      '/policies/pol-1'
+    );
   });
 
   it('does not render any duplicate postmortem link in the sidebar quick links', () => {

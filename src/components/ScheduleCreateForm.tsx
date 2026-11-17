@@ -6,17 +6,19 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
 import TimeZoneSelect from './TimeZoneSelect';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/shadcn/dialog';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { Plus, X, Loader2, ShieldAlert, AlertCircle } from 'lucide-react';
+import { Plus, AlertCircle } from 'lucide-react';
 import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 
 type ScheduleCreateFormProps = {
@@ -27,18 +29,9 @@ type ScheduleCreateFormProps = {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending} className="gap-2 font-medium shadow-xs">
-      {pending ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Creating schedule...
-        </>
-      ) : (
-        <>
-          <Plus className="h-4 w-4" />
-          Create Schedule
-        </>
-      )}
+    <Button type="submit" loading={pending}>
+      {!pending && <Plus aria-hidden="true" />}
+      {pending ? 'Creating schedule…' : 'Create schedule'}
     </Button>
   );
 }
@@ -67,109 +60,61 @@ export default function ScheduleCreateForm({ action, canCreate }: ScheduleCreate
     success: false,
   });
 
-  if (!canCreate) {
-    return (
-      <Alert className="bg-muted/50">
-        <ShieldAlert className="h-4 w-4" />
-        <AlertDescription className="text-xs">
-          You do not have access to create schedules. Admin or Responder role is required.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (!isOpen) {
-    return (
-      <Button
-        variant="outline"
-        className="w-full h-auto py-8 border-dashed border-2 hover:border-primary hover:bg-primary/5 flex flex-col items-center justify-center gap-2 group transition-all rounded-lg"
-        onClick={() => setIsOpen(true)}
-      >
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-          <Plus className="h-6 w-6" />
-        </div>
-        <div className="text-center">
-          <h3 className="font-semibold text-base text-foreground">Create New Schedule</h3>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Define rotation name, base timezone, and on-call coverage
-          </p>
-        </div>
-      </Button>
-    );
-  }
+  if (!canCreate) return null;
 
   return (
-    <Card className="border-primary/20 shadow-lg relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 to-primary" />
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-base">Create New Schedule</CardTitle>
-            <CardDescription className="text-xs">
-              Define rotation name and base timezone. Layers and participants can be added after
-              creation.
-            </CardDescription>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          New schedule
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New schedule</DialogTitle>
+          <DialogDescription>
+            Name the rotation and pick its base time zone. Add layers and responders on the schedule
+            page after it is created.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form ref={formRef} action={formAction} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="schedule-name">
+              Schedule name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="schedule-name"
+              name="name"
+              placeholder="e.g. Primary SRE rotation"
+              required
+              maxLength={200}
+            />
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsOpen(false)}
-            className="h-8 w-8 p-0 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-100 dark:border-zinc-700"
-            aria-label="Close schedule creation form"
-            title="Close"
-          >
-            <X className="h-4 w-4 stroke-[2.25]" />
-          </Button>
-        </div>
-      </CardHeader>
 
-      <form ref={formRef} action={formAction}>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-xs font-medium text-foreground">
-                Schedule Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="name"
-                name="name"
-                placeholder="e.g. Primary SRE Rotation"
-                required
-                maxLength={200}
-                className="text-xs"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="timeZone" className="text-xs font-medium text-foreground">
-                Base Time Zone <span className="text-destructive">*</span>
-              </Label>
-              <TimeZoneSelect name="timeZone" defaultValue="UTC" />
-            </div>
+          <div className="space-y-1.5" role="group" aria-labelledby="schedule-timezone-label">
+            <Label id="schedule-timezone-label">
+              Base time zone <span className="text-destructive">*</span>
+            </Label>
+            <TimeZoneSelect name="timeZone" defaultValue="UTC" />
           </div>
 
           {state?.error && (
             <Alert variant="destructive" className="py-2 text-xs">
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
               <AlertDescription>{state.error}</AlertDescription>
             </Alert>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsOpen(false)}
-              className="text-xs"
-            >
+          <DialogFooter className="gap-2 border-t border-border pt-4 sm:gap-0">
+            <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
             <SubmitButton />
-          </div>
-        </CardContent>
-      </form>
-    </Card>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

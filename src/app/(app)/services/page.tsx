@@ -16,10 +16,9 @@ import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/uniqu
 import ServicesListTable from '@/components/service/ServicesListTable';
 import ServicesFilters from '@/components/service/ServicesFilters';
 import CreateServiceForm from '@/components/service/CreateServiceForm';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Card, CardContent } from '@/components/ui/shadcn/card';
+import PageHeader from '@/components/patterns/PageHeader';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import { Server, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
@@ -395,23 +394,25 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Banner */}
-      <DetailHeroBanner
-        tag="Infrastructure Directory"
+      <PageHeader
         title="Services"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Server className="h-6 w-6" aria-hidden="true" />
-          </div>
+        icon={Server}
+        description="Service health, ownership and incident routing. Active counts exclude snoozed and suppressed incidents."
+        primaryAction={
+          canCreateService ? (
+            <CreateServiceForm teams={teams} policies={policies} createAction={createService} />
+          ) : undefined
         }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Monitor real-time service health, SLA compliance, and incident response routing.
-          </p>
+        alert={
+          errorCode === 'duplicate-service' ? (
+            <InlineNotice tone="error" title="Service not created">
+              A service with this name already exists. Choose a unique name and try again.
+            </InlineNotice>
+          ) : undefined
         }
         stats={[
           {
-            label: 'Total Services',
+            label: 'Total',
             value: totalServices,
             icon: <Server className="h-3.5 w-3.5" />,
           },
@@ -436,34 +437,10 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         ]}
       />
 
-      <div className="space-y-4 md:space-y-5">
-        {/* Error Alert */}
-        {errorCode === 'duplicate-service' && (
-          <Alert variant="destructive">
-            <XCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>
-              A service with this name already exists. Please choose a unique name.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Create Service */}
-        {canCreateService ? (
-          <CreateServiceForm teams={teams} policies={policies} createAction={createService} />
-        ) : (
-          <Alert className="bg-muted/50">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Access Restricted</AlertTitle>
-            <AlertDescription>
-              You do not have access to create services. Admin or Responder role required.
-            </AlertDescription>
-          </Alert>
-        )}
-
+      <div className="space-y-4">
         {/* Filters */}
         <ServicesFilters
-          currentSearch={searchQuery}
+          currentSearch={typeof params?.search === 'string' ? params.search : ''}
           currentStatus={statusFilter}
           currentTeam={teamFilter}
           currentSort={sortBy}
@@ -495,13 +472,6 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
             itemsPerPage: ITEMS_PER_PAGE,
           }}
         />
-
-        <Card className="bg-muted/40 border-dashed">
-          <CardContent className="p-5 text-sm text-muted-foreground">
-            Service health reflects real-time monitoring and incident activity. Active counts
-            exclude snoozed and suppressed incidents.
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

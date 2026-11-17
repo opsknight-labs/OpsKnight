@@ -35,7 +35,10 @@ import {
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { cn } from '@/lib/utils';
+import PageHeader, { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { BADGE_BASE_CLASS, badgeSizeClass } from '@/components/patterns/StatusBadge';
+import { toneClasses } from '@/components/patterns/status-tone';
 import EmptyState from '@/components/ui/EmptyState';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
@@ -78,6 +81,7 @@ import {
   Bell,
   ChevronDown,
   Wrench,
+  ArrowUpRight,
 } from 'lucide-react';
 
 // Custom Components
@@ -239,6 +243,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     // The service is viewable but this user cannot change its configuration.
   }
   const canManageResponsePolicy = canManageService;
+  // Slack, Teams and Jira connections are workspace-wide; only admins can open that page.
+  const canManageWorkspaceIntegrations = hasCapability(actor.role, CAPABILITIES.ADMIN_MANAGE);
 
   const { calculateActorSLAMetrics, calculateActorMultiServiceUptime } =
     await import('@/lib/actor-metrics');
@@ -781,17 +787,35 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   // --- TAB 3: INTEGRATIONS & WEBHOOKS CONTENT ---
   const integrationsContent = (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <h3 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            Configured Ingest Integrations ({service.integrations?.length || 0})
-          </h3>
-          <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
-            Connect your monitoring tools, APM providers, and alert sources to trigger incidents
-            automatically.
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <Zap className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Alert integrations
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-2xs font-semibold tabular-nums text-muted-foreground">
+              {service.integrations?.length || 0}
+            </span>
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Monitoring tools and alert sources that open incidents on this service. Outbound
+            webhooks live under{' '}
+            <Link
+              href={`/services/${id}?tab=notifications`}
+              className="rounded-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Notifications
+            </Link>
+            .
           </p>
         </div>
+        {canManageWorkspaceIntegrations && (
+          <Button asChild variant="outline" size="sm" className="shrink-0">
+            <Link href="/settings/integrations">
+              Workspace integrations
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </Button>
+        )}
       </div>
 
       {service.integrations && service.integrations.length > 0 ? (
@@ -887,6 +911,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           </div>
                           <Input
                             readOnly
+                            aria-label="Events API endpoint"
                             value={webhookUrl}
                             className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
                           />
@@ -901,6 +926,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           </div>
                           <Input
                             readOnly
+                            aria-label="Routing key"
                             value={integration.key}
                             className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
                           />
@@ -919,14 +945,16 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                               <span>Quick Test (Working cURL)</span>
                             </div>
                             <div className="flex items-center gap-2">
+                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+                            </div>
+                          </summary>
+                          <div className="relative border-t border-border/70 bg-zinc-950 p-2 text-zinc-200">
+                            <div className="absolute right-1.5 top-1.5">
                               <CopyButton
                                 text={`curl -X POST ${webhookUrl} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Token token=${integration.key}" \\\n  -d '{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
                                 className="h-5 px-1.5 text-[10px]"
                               />
-                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
                             </div>
-                          </summary>
-                          <div className="border-t border-border/70 bg-zinc-950 p-2 text-zinc-200">
                             <pre className="overflow-x-auto text-[10px] font-mono leading-relaxed select-all">
                               <span className="text-purple-400">curl</span> -X POST {webhookUrl} \
                               <br />
@@ -936,7 +964,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                               </span>{' '}
                               \<br />
                               &nbsp; -H{' '}
-                              <span className="text-green-400">
+                              <span className="text-emerald-400">
                                 &quot;Authorization: Token token={integration.key.substring(0, 10)}
                                 ...&quot;
                               </span>{' '}
@@ -1303,91 +1331,75 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header */}
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Services',
-          href: '/services',
-          current: service.name,
-        }}
-        tag="Service Reliability"
+      <PageHeader
+        breadcrumbs={[{ label: 'Services', href: '/services' }, { label: service.name }]}
         title={service.name}
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Server className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
+        icon={Server}
         badges={
           <>
-            <Badge
-              variant={
-                dynamicStatus === 'OPERATIONAL'
-                  ? 'success'
-                  : dynamicStatus === 'DEGRADED'
-                    ? 'warning'
-                    : dynamicStatus === 'CRITICAL'
-                      ? 'danger'
-                      : 'secondary'
-              }
-              size="xs"
-              className="uppercase font-bold text-[10px] gap-1"
+            <span
+              className={cn(
+                BADGE_BASE_CLASS,
+                badgeSizeClass('xs'),
+                toneClasses(
+                  dynamicStatus === 'OPERATIONAL'
+                    ? 'ok'
+                    : dynamicStatus === 'DEGRADED'
+                      ? 'elevated'
+                      : dynamicStatus === 'CRITICAL'
+                        ? 'critical'
+                        : null
+                ).soft
+              )}
             >
-              {dynamicStatus === 'OPERATIONAL' && <CheckCircle2 className="h-3 w-3" />}
-              {dynamicStatus === 'DEGRADED' && <AlertTriangle className="h-3 w-3" />}
-              {dynamicStatus === 'CRITICAL' && <XCircle className="h-3 w-3" />}
-              {dynamicStatus === 'UNKNOWN' && <AlertCircle className="h-3 w-3" />}
-              {dynamicStatus === 'UNKNOWN' ? 'Unavailable' : dynamicStatus}
-            </Badge>
+              {dynamicStatus === 'OPERATIONAL' && <CheckCircle2 aria-hidden="true" />}
+              {dynamicStatus === 'DEGRADED' && <AlertTriangle aria-hidden="true" />}
+              {dynamicStatus === 'CRITICAL' && <XCircle aria-hidden="true" />}
+              {dynamicStatus === 'UNKNOWN' && <AlertCircle aria-hidden="true" />}
+              {dynamicStatus === 'UNKNOWN'
+                ? 'Status unavailable'
+                : dynamicStatus === 'OPERATIONAL'
+                  ? 'Operational'
+                  : dynamicStatus === 'DEGRADED'
+                    ? 'Degraded'
+                    : 'Critical'}
+            </span>
 
             {activeMaintenance && (
-              <Badge variant="info" size="xs" className="uppercase font-bold text-[10px] gap-1">
-                <Wrench className="h-3 w-3" aria-hidden="true" />
+              <span
+                className={cn(BADGE_BASE_CLASS, badgeSizeClass('xs'), toneClasses('info').soft)}
+              >
+                <Wrench aria-hidden="true" />
                 In maintenance until {activeMaintenance.endsLabel}
-              </Badge>
+              </span>
             )}
 
             {service.team && (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
-              >
-                <Users className="h-3 w-3 mr-1 text-ink-400" />
+              <span className={pageHeaderBadgeClass}>
+                <Users className="h-3 w-3 text-zinc-400" aria-hidden="true" />
                 {service.team.name}
-              </Badge>
+              </span>
             )}
 
-            {service.slaTier && (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
-              >
-                {service.slaTier}
-              </Badge>
-            )}
+            {service.slaTier && <span className={pageHeaderBadgeClass}>{service.slaTier}</span>}
 
             {service.region && (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
-              >
-                <Globe className="h-3 w-3 mr-1 text-ink-400" />
+              <span className={pageHeaderBadgeClass}>
+                <Globe className="h-3 w-3 text-zinc-400" aria-hidden="true" />
                 {service.region}
-              </Badge>
+              </span>
             )}
           </>
         }
-        subtitle={
-          <div className="space-y-1">
-            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+        description={
+          <span className="block space-y-1">
+            <span className="block max-w-3xl">
               {service.description || 'No description provided for this service.'}
-            </p>
-            <p className="text-[11px] text-ink-400">
-              30-day reliability metrics • Active incident count excludes snoozed alerts
-            </p>
-          </div>
+            </span>
+            <span className="block text-xs text-zinc-400">
+              30-day reliability metrics · Active incident count excludes snoozed alerts
+            </span>
+          </span>
         }
         stats={[
           {

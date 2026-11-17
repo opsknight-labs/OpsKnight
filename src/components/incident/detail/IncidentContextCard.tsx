@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { railCardClass } from './RailSection';
 import {
   incidentContextReasonLabel,
   toneChipClass,
@@ -247,17 +248,14 @@ export default function IncidentContextCard({
   return (
     <section
       aria-labelledby="incident-context-heading"
-      className={cn(
-        'min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card text-sm text-card-foreground shadow-2xs',
-        className
-      )}
+      className={cn(railCardClass, 'text-sm', className)}
     >
-      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/80 bg-muted/20 px-3 py-2 sm:px-3.5">
+      <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
         <h2
           id="incident-context-heading"
-          className="flex items-center gap-1.5 text-xs font-semibold tracking-tight"
+          className="flex items-center gap-2 text-sm font-semibold text-foreground"
         >
-          <Fingerprint className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <Fingerprint className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           Incident context
         </h2>
         <span

@@ -1,6 +1,5 @@
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import prisma from '@/lib/prisma';
-import Link from 'next/link';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import {
   dashboardUserReadWhere,
@@ -20,8 +19,17 @@ import {
 } from '@/lib/incidents-query';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import type { IncidentUrgency } from '@prisma/client';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from 'lucide-react';
+import PageHeader from '@/components/patterns/PageHeader';
+import CreateIncidentButton from '@/components/incident/CreateIncidentButton';
+import {
+  AlertTriangle,
+  User,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Plus,
+  ShieldOff,
+} from 'lucide-react';
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
@@ -207,57 +215,23 @@ export default async function IncidentsPage({
     createdBefore: params.createdBefore,
   };
 
-  const drilldownScope = [
-    currentStatus
-      ? `Status: ${currentStatus === 'OPEN' ? 'Triggered' : currentStatus.toLowerCase()}`
-      : currentFilter !== 'all'
-        ? currentFilter === 'mine'
-          ? 'Filter: Mine'
-          : `Status: ${
-              currentFilter === 'all_open'
-                ? 'Active'
-                : currentFilter === 'resolved'
-                  ? 'Resolved'
-                  : currentFilter === 'snoozed'
-                    ? 'Snoozed'
-                    : currentFilter === 'suppressed'
-                      ? 'Suppressed'
-                      : currentFilter === 'open'
-                        ? 'Triggered'
-                        : currentFilter === 'acknowledged'
-                          ? 'Acknowledged'
-                          : currentFilter === 'muted'
-                            ? 'Muted'
-                            : currentFilter
-            }`
-        : null,
-    currentAssignee
-      ? currentAssignee.toLowerCase() === 'unassigned'
-        ? 'Assignee: Unassigned'
-        : 'Assignee: Specific responder'
-      : null,
-    currentServiceId ? 'Service: Specific service' : null,
-    validCreatedAfter ? `Created after: ${validCreatedAfter.toISOString().slice(0, 10)}` : null,
-    validCreatedBefore ? `Created before: ${validCreatedBefore.toISOString().slice(0, 10)}` : null,
-  ].filter((value): value is string => Boolean(value));
-
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header with 5-Stat Drilldown Pills */}
-      <DetailHeroBanner
-        tag="Real-Time Response Center"
+      <PageHeader
         title="Incidents"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <AlertTriangle className="h-6 w-6" aria-hidden="true" />
-          </div>
+        icon={AlertTriangle}
+        description={
+          validCreatedAfter || validCreatedBefore
+            ? 'Counts are scoped to the selected creation period.'
+            : 'Triage, acknowledge and resolve incidents across your services.'
         }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            {validCreatedAfter || validCreatedBefore
-              ? 'Counts scoped to the selected incident creation period'
-              : 'Monitor real-time outages, coordinate incident triage, manage on-call assignments, and restore services.'}
-          </p>
+        primaryAction={
+          canCreateIncident ? (
+            <CreateIncidentButton size="sm">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Create incident
+            </CreateIncidentButton>
+          ) : undefined
         }
         stats={[
           {
@@ -302,8 +276,8 @@ export default async function IncidentsPage({
           {
             label: 'Suppressed',
             value: suppressedCount,
-            icon: <ShieldOff className="h-3.5 w-3.5 text-slate-200" />,
-            valueClassName: suppressedCount > 0 ? 'text-slate-200' : undefined,
+            icon: <ShieldOff className="h-3.5 w-3.5 text-zinc-200" />,
+            valueClassName: suppressedCount > 0 ? 'text-zinc-200' : undefined,
             href: isSuppressedActive
               ? buildIncidentListHref({ ...baseDrilldown, filter: 'all' })
               : buildIncidentListHref({ ...baseDrilldown, filter: 'suppressed' }),
@@ -312,21 +286,13 @@ export default async function IncidentsPage({
         ]}
       />
 
-      {drilldownScope.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
-          <span className="font-semibold text-foreground">Metric drill-down:</span>
-          <span className="text-muted-foreground">{drilldownScope.join(' · ')}</span>
-          <Link href="/incidents" className="ml-auto font-semibold text-primary hover:underline">
-            Clear scope
-          </Link>
-        </div>
-      )}
-
-      {/* Single-column layout with inline filters */}
-      <div className="space-y-4 md:space-y-5">
-        {/* Filters Panel */}
+      <div className="space-y-4">
         <IncidentsFilters
           currentFilter={currentFilter}
+          currentStatus={currentStatus}
+          currentAssignee={currentAssignee}
+          createdAfter={params.createdAfter}
+          createdBefore={params.createdBefore}
           currentSort={currentSort}
           currentPriority={currentPriority}
           currentUrgency={currentUrgency}
@@ -335,15 +301,14 @@ export default async function IncidentsPage({
           currentServiceId={currentServiceId}
           teams={allTeams}
           services={allServices}
-          canCreateIncident={canCreateIncident}
         />
 
-        {/* List */}
         <RealtimeProvider>
           <IncidentsListTable
             incidents={incidents}
             users={users}
             canManageIncidents={permissions.isResponderOrAbove}
+            canCreateIncident={canCreateIncident}
             emptyState={
               accessContext.mode === 'NONE'
                 ? {

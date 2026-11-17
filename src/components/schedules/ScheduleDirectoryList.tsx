@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ScheduleCard from '@/components/ScheduleCard';
-import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { X, Calendar, Loader2 } from 'lucide-react';
-import EmptyState from '@/components/ui/EmptyState';
+import { Calendar, Loader2, SearchX } from 'lucide-react';
+import EmptyState from '@/components/patterns/EmptyState';
+import FilterBar, { FilterChip } from '@/components/patterns/FilterBar';
 import Pagination from '@/components/service/Pagination';
 
 type ScheduleItem = {
@@ -51,18 +52,13 @@ export default function ScheduleDirectoryList({
 }: ScheduleDirectoryListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState(currentSearch);
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setSearchQuery(currentSearch);
-  }, [currentSearch]);
 
   const updateFilters = (newParams: { q?: string; status?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
     if (newParams.q !== undefined) {
-      const trimmed = newParams.q.trim();
-      if (trimmed) params.set('q', trimmed);
+      // Keep the raw text: trimming here would eat the space the user is still typing.
+      if (newParams.q.trim()) params.set('q', newParams.q);
       else params.delete('q');
       params.delete('search');
     }
@@ -77,11 +73,6 @@ export default function ScheduleDirectoryList({
     });
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateFilters({ q: searchQuery });
-  };
-
   const totalCount = filterCounts?.total ?? pagination?.totalItems ?? schedules.length;
   const configuredCount = filterCounts?.configured ?? 0;
   const needsSetupCount = filterCounts?.needsSetup ?? 0;
@@ -90,127 +81,104 @@ export default function ScheduleDirectoryList({
   if (totalCount === 0 && !hasActiveFilter) {
     return (
       <EmptyState
-        icon={<Calendar className="h-6 w-6 text-primary" />}
-        title="Welcome to Schedules"
-        description="On-call schedules define rotation shifts, layers, and responders. Create your first schedule above to get started."
+        icon={<Calendar />}
+        title="No schedules yet"
+        description="A schedule decides who is on call and when. Create one with “New schedule”, add a rotation layer and responders, then attach it to an escalation policy."
+        secondaryAction={
+          <Button asChild variant="outline" size="sm">
+            <Link href="/policies">Escalation policies</Link>
+          </Button>
+        }
         size="lg"
       />
     );
   }
 
   return (
-    <div className="space-y-3.5">
-      {/* Search & Filter Toolbar */}
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-        {/* Search bar */}
-        <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md">
-          <Input
-            value={searchQuery}
-            onChange={e => {
-              const val = e.target.value;
-              setSearchQuery(val);
-              if (val === '') {
-                updateFilters({ q: '' });
-              }
-            }}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                updateFilters({ q: searchQuery });
-              }
-            }}
-            placeholder="Search schedules by name, responder, or timezone..."
-            className="pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
-            style={{ paddingRight: '2rem' }}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                updateFilters({ q: '' });
-              }}
-              aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+    <div className="space-y-4">
+      <FilterBar
+        search={{
+          value: currentSearch,
+          onChange: value => updateFilters({ q: value }),
+          placeholder: 'Search by name, responder or time zone',
+          label: 'Search schedules',
+          debounceMs: 300,
+        }}
+        chips={
+          <>
+            <FilterChip
+              active={currentStatus === 'all'}
+              count={totalCount}
+              onClick={() => updateFilters({ status: 'all' })}
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </form>
-
-        {/* Status filter chips */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => updateFilters({ status: 'all' })}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-              currentStatus === 'all'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
-                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            All ({totalCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => updateFilters({ status: 'configured' })}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-              currentStatus === 'configured'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
-                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            Configured ({configuredCount})
-          </button>
-          {needsSetupCount > 0 && (
-            <button
-              type="button"
-              onClick={() => updateFilters({ status: 'needs-setup' })}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                currentStatus === 'needs-setup'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
-              }`}
+              All
+            </FilterChip>
+            <FilterChip
+              active={currentStatus === 'configured'}
+              count={configuredCount}
+              onClick={() =>
+                updateFilters({ status: currentStatus === 'configured' ? 'all' : 'configured' })
+              }
             >
-              Needs setup ({needsSetupCount})
-            </button>
-          )}
-          {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-1" />}
-        </div>
-      </div>
+              Configured
+            </FilterChip>
+            {(needsSetupCount > 0 || currentStatus === 'needs-setup') && (
+              <FilterChip
+                active={currentStatus === 'needs-setup'}
+                count={needsSetupCount}
+                onClick={() =>
+                  updateFilters({
+                    status: currentStatus === 'needs-setup' ? 'all' : 'needs-setup',
+                  })
+                }
+              >
+                Needs setup
+              </FilterChip>
+            )}
+          </>
+        }
+        hasActiveFilters={hasActiveFilter}
+        onClearAll={() => updateFilters({ q: '', status: 'all' })}
+        actions={
+          isPending ? (
+            <span
+              role="status"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden="true" />
+              Updating…
+            </span>
+          ) : undefined
+        }
+      />
 
-      {/* Grid or Empty Search State */}
       {schedules.length === 0 ? (
         <EmptyState
-          icon={<Calendar className="h-6 w-6 text-muted-foreground/60" />}
-          title="No matching schedules"
+          icon={<SearchX />}
+          title="No schedules match these filters"
           description={
             currentSearch
-              ? `No schedules matched "${currentSearch}". Try a different search term.`
+              ? `Nothing matched “${currentSearch}”. Try a responder name or a time zone.`
               : 'No schedules match the selected filter.'
           }
           action={
-            currentSearch || currentStatus !== 'all' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  updateFilters({ q: '', status: 'all' });
-                }}
-                className="text-xs h-8"
-              >
-                Reset filters
-              </Button>
-            ) : undefined
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateFilters({ q: '', status: 'all' })}
+            >
+              Clear filters
+            </Button>
           }
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Schedules">
           {schedules.map((schedule, index) => (
-            <ScheduleCard key={schedule.id} schedule={schedule} index={index} />
+            <li key={schedule.id} className="min-w-0">
+              <ScheduleCard schedule={schedule} index={index} />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {pagination && (

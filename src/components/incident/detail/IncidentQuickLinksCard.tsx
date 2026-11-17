@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Compass, Server, ShieldAlert, BarChart2, Users, ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RailSectionHeader, railCardClass } from './RailSection';
 
 export type IncidentQuickLinksCardProps = {
   incidentId: string;
@@ -39,24 +40,8 @@ export default function IncidentQuickLinksCard({
   routePrefix = '',
 }: IncidentQuickLinksCardProps) {
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-zinc-900 dark:border-zinc-800 transition-all',
-        className
-      )}
-    >
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
-            <Compass className="h-4 w-4 shrink-0" />
-          </div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 whitespace-nowrap">
-            Quick Links
-          </h3>
-        </div>
-        <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">Resources</span>
-      </div>
+    <div className={cn(railCardClass, className)}>
+      <RailSectionHeader icon={<Compass />} title="Quick links" />
 
       {/* Links List */}
       <div className="p-3 space-y-2">

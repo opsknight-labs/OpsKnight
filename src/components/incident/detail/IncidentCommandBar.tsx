@@ -328,8 +328,10 @@ export default function IncidentCommandBar({
       </div>
 
       <div
-        className="hidden sm:flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-card px-3.5 py-2 shadow-2xs transition-all text-card-foreground"
+        className="hidden items-center justify-between gap-3 rounded-xl border border-border bg-card px-3.5 py-2 text-card-foreground shadow-2xs sm:flex md:sticky md:top-2 md:z-30 md:shadow-sm"
         data-command-bar
+        role="region"
+        aria-label="Incident actions"
       >
         <div className="flex items-center gap-2.5 flex-wrap min-w-0">
           {hasAnyIntegrations && (
@@ -434,9 +436,13 @@ export default function IncidentCommandBar({
         {canAct && (
           <div className="flex items-center gap-2 shrink-0">
             {isResolved ? (
-              <Link href={postmortemHref}>
-                <Button size="sm" className="h-8 gap-1.5 px-3.5 shadow-2xs text-xs font-semibold">
-                  <FileText className="h-3.5 w-3.5" />
+              <Button
+                asChild
+                size="sm"
+                className="h-8 gap-1.5 px-3.5 text-xs font-semibold shadow-2xs"
+              >
+                <Link href={postmortemHref}>
+                  <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>
                     {postmortemExists
                       ? 'View Postmortem'
@@ -444,8 +450,8 @@ export default function IncidentCommandBar({
                         ? 'Create Postmortem'
                         : 'View Postmortem'}
                   </span>
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             ) : (
               <>
                 {showAcknowledge && (
@@ -453,9 +459,9 @@ export default function IncidentCommandBar({
                     <Button
                       type="submit"
                       size="sm"
-                      className="h-8 gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-2xs text-xs transition-colors"
+                      className="h-8 gap-1.5 px-3.5 text-xs font-semibold shadow-2xs"
                     >
-                      <Check className="h-3.5 w-3.5" />
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
                       <span>Acknowledge</span>
                     </Button>
                   </form>
@@ -495,19 +501,19 @@ export default function IncidentCommandBar({
       {canAct && (
         <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur-md px-3 py-2.5 flex items-center gap-2 pb-[calc(0.625rem+env(safe-area-inset-bottom))] text-card-foreground shadow-lg">
           {isResolved ? (
-            <Link href={postmortemHref} className="flex-1">
-              <Button className="w-full h-11 gap-2 text-sm font-semibold">
-                <FileText className="h-4 w-4" />
+            <Button asChild className="h-11 flex-1 gap-2 text-sm font-semibold">
+              <Link href={postmortemHref}>
+                <FileText className="h-4 w-4" aria-hidden="true" />
                 <span>{postmortemExists ? 'View Postmortem' : 'Postmortem'}</span>
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           ) : (
             <>
               {showAcknowledge && (
                 <form action={onAcknowledge} className="flex-1 min-w-0">
                   <Button
                     type="submit"
-                    className="w-full h-11 gap-2 bg-gradient-to-r from-emerald-600 to-emerald-600 text-white text-sm font-semibold truncate"
+                    className="h-11 w-full gap-2 truncate text-sm font-semibold"
                   >
                     <Check className="h-4 w-4 shrink-0" />
                     <span className="truncate">Acknowledge</span>

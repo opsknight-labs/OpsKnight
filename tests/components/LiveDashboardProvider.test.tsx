@@ -469,6 +469,28 @@ describe('LiveDashboardProvider', () => {
     });
   });
 
+  it('retries an unloaded dashboard on mount and shows loading again on a manual retry', async () => {
+    fetchMock.mockImplementation(() => Promise.reject(new Error('db down')));
+    render(
+      <LiveDashboardProvider initialSnapshot={null} currentUserId="me">
+        <Probe />
+      </LiveDashboardProvider>
+    );
+    await flush(300);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(holder.current!.snapshot).toBeNull();
+    expect(holder.current!.loading).toBe(false);
+    expect(holder.current!.syncError).toBe(true);
+
+    fetchMock.mockImplementation(() => respond(snapshot(['a'])));
+    act(() => holder.current!.refresh());
+    expect(holder.current!.loading).toBe(true);
+    await flush(300);
+    expect(screen.getByTestId('ids').textContent).toBe('a');
+    expect(holder.current!.loading).toBe(false);
+    expect(holder.current!.syncError).toBe(false);
+  });
+
   it('buffers updates while paused and applies them on resume', async () => {
     mount();
     act(() => holder.current!.togglePaused());

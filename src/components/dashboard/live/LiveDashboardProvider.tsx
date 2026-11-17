@@ -706,6 +706,12 @@ export function LiveDashboardProvider({
     scheduleReconcile();
   }, [revision, changeCount, scheduleReconcile]);
 
+  // The server render could not read a snapshot: try once from the client straight away instead
+  // of waiting for the first realtime signal or the safety interval.
+  useEffect(() => {
+    if (!snapshotRef.current) void reconcileRef.current('manual');
+  }, []);
+
   // Every (re)connect may have missed changes: re-fetch canonical state.
   useEffect(() => {
     if (connectionEpoch === 0) return;
@@ -810,7 +816,11 @@ export function LiveDashboardProvider({
     }
   }, []);
 
-  const refresh = useCallback(() => void reconcileRef.current('manual'), []);
+  const refresh = useCallback(() => {
+    // With nothing on screen yet, show the loading state while the retry runs.
+    if (!snapshotRef.current) setLoading(true);
+    void reconcileRef.current('manual');
+  }, []);
 
   const togglePin = useCallback(
     (id: string) => {

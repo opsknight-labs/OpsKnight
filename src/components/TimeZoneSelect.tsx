@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { getAllTimeZones } from '@/lib/timezone';
 import { Check, ChevronsUpDown, Globe2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -46,19 +46,18 @@ export default function TimeZoneSelect({
 
   // Group timezones by region (e.g., America, Europe) and add a "Common" group
   const groupedTimeZones = useMemo(() => {
-    const groups: Record<string, typeof zones> = {};
+    const groups = new Map<string, typeof zones>();
 
     zones.forEach(zone => {
       const parts = zone.value.split('/');
       const region = parts.length > 1 ? parts[0] : 'Others';
-      if (!groups[region]) {
-        groups[region] = [];
-      }
-      groups[region].push(zone);
+      const group = groups.get(region) ?? [];
+      group.push(zone);
+      groups.set(region, group);
     });
 
     // Sort regions alphabetically
-    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [zones]);
 
   const commonValues = Array.from(
@@ -87,9 +86,11 @@ export default function TimeZoneSelect({
   );
 
   // Sync value if props change
-  useEffect(() => {
+  const [syncedDefault, setSyncedDefault] = useState(defaultValue);
+  if (syncedDefault !== defaultValue) {
+    setSyncedDefault(defaultValue);
     setValue(defaultValue);
-  }, [defaultValue]);
+  }
 
   const handleSelect = (currentValue: string) => {
     setValue(currentValue);
@@ -134,6 +135,7 @@ export default function TimeZoneSelect({
             variant="outline"
             role="combobox"
             aria-expanded={open}
+            aria-label={`Time zone: ${value ? selectedLabel : 'not selected'}`}
             className="w-full justify-between font-normal"
             disabled={disabled}
           >
@@ -236,6 +238,7 @@ function matchesSearch(zone: ZoneOption, rawQuery: string): boolean {
   const haystack = tokens.join(' ');
 
   // exact word match (avoids “Indian/” zones for query “india”)
+  // eslint-disable-next-line security/detect-non-literal-regexp -- the query is escaped by escapeRegExp
   const wordBoundary = new RegExp(`\\b${escapeRegExp(query)}\\b`, 'i');
   if (wordBoundary.test(haystack)) return true;
 

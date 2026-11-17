@@ -397,7 +397,7 @@ export default async function IncidentDetailScreen({
       className={
         presentation === 'mobile'
           ? 'responsive-page w-full space-y-3 pb-24'
-          : 'responsive-page w-full space-y-4 px-3 py-4 sm:space-y-6 sm:px-4 sm:py-6'
+          : 'responsive-page w-full space-y-4 px-3 pb-24 pt-4 sm:space-y-6 sm:px-4 sm:py-6'
       }
     >
       {presentation === 'mobile' ? (
@@ -464,7 +464,7 @@ export default async function IncidentDetailScreen({
             <div className="mb-2.5 flex min-w-0 items-center justify-between gap-3">
               <ListReturnLink
                 href={backHref}
-                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>{backLabel}</span>
@@ -722,7 +722,10 @@ export default async function IncidentDetailScreen({
             </aside>
           </>
         ) : (
-          <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
+          <aside
+            aria-label="Incident details"
+            className="min-w-0 space-y-4 lg:col-span-4 2xl:col-span-3"
+          >
             {contextContent}
             {watchersContent}
             {customFieldsContent}

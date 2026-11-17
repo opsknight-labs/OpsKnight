@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -27,25 +35,34 @@ import {
   bulkUpdateStatus,
 } from '@/app/(app)/incidents/bulk-actions';
 import { useToast } from '@/hooks/use-product-notification';
+import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import Pagination from './Pagination';
 
 import EscalationStatusBadge from './EscalationStatusBadge';
 import StatusBadge from '@/components/patterns/StatusBadge';
 import SeverityBadge from '@/components/patterns/SeverityBadge';
 import RelativeTime from '@/components/patterns/RelativeTime';
-import { toneClasses } from '@/components/patterns/status-tone';
-import { incidentStatusTone } from '@/lib/design/status-palette';
+import EmptyState from '@/components/patterns/EmptyState';
 import AssigneeSection from './AssigneeSection';
 import ResolveIncidentModal, { type ResolvingIncidentData } from './ResolveIncidentModal';
 import SLABreachWarningBadge from './SLABreachWarningBadge';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useIncidentSlaState } from '@/hooks/useIncidentSlaState';
-import EmptyState from '@/components/ui/EmptyState';
+import {
+  mergeRealtimeIncidents,
+  newIncidentsLabel,
+  type IncidentRealtimeFilter,
+} from './incidents-realtime';
+import { INCIDENT_SEARCH_LABEL } from './IncidentsFilters';
 import {
   AlertTriangle,
+  ArrowUp,
+  Check,
   CheckCircle2,
   MoreHorizontal,
   PauseCircle,
+  Plus,
+  SearchX,
   ShieldOff,
   ShieldCheck,
   Eye,
@@ -56,6 +73,8 @@ import {
   FileSpreadsheet,
   Loader2,
 } from 'lucide-react';
+
+export { matchesRealtimeFilter } from './incidents-realtime';
 
 type IncidentsListTableProps = {
   incidents: IncidentListItem[];
@@ -68,6 +87,8 @@ type IncidentsListTableProps = {
     role?: string;
   }>;
   canManageIncidents: boolean;
+  /** Shows "Create incident" in the first-run empty state. */
+  canCreateIncident?: boolean;
   pagination?: {
     currentPage: number;
     totalPages: number;
@@ -78,241 +99,17 @@ type IncidentsListTableProps = {
   showExport?: boolean;
   readOnly?: boolean;
   emptyState?: { title: string; description: string };
-  realtimeFilter?: {
-    filter?: string;
-    actorId?: string;
-    status?: string;
-    serviceId?: string;
-    assignee?: string;
-    urgency?: string;
-    priority?: string;
-    teamId?: string;
-    search?: string;
-    createdAfter?: string;
-    createdBefore?: string;
-    sort?: string;
-  };
+  realtimeFilter?: IncidentRealtimeFilter;
 };
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 type BulkActionMode = 'reassign' | 'priority' | 'snooze' | 'urgency' | 'status' | null;
 
-function statusTone(status: IncidentStatus) {
-  return toneClasses(incidentStatusTone(status));
-}
+/** URL params that only shape the view, never which incidents match. */
+const NON_FILTER_PARAMS = new Set(['page', 'sort']);
 
-function parseRealtimeIncident(raw: Record<string, unknown>): IncidentListItem {
-  const rawService =
-    raw.service && typeof raw.service === 'object'
-      ? (raw.service as Record<string, unknown>)
-      : null;
-  const rawTeam =
-    raw.team && typeof raw.team === 'object' ? (raw.team as Record<string, unknown>) : null;
-  const rawAssignee =
-    raw.assignee && typeof raw.assignee === 'object'
-      ? (raw.assignee as Record<string, unknown>)
-      : null;
-
-  return {
-    id: String(raw.id),
-    title: String(raw.title || 'Untitled Incident'),
-    status: (raw.status as IncidentListItem['status']) || 'OPEN',
-    escalationStatus: typeof raw.escalationStatus === 'string' ? raw.escalationStatus : null,
-    currentEscalationStep:
-      typeof raw.currentEscalationStep === 'number' ? raw.currentEscalationStep : null,
-    nextEscalationAt: raw.nextEscalationAt
-      ? new Date(raw.nextEscalationAt as string | number | Date)
-      : null,
-    priority: typeof raw.priority === 'string' ? raw.priority : null,
-    urgency: (raw.urgency as IncidentListItem['urgency']) || 'HIGH',
-    createdAt: raw.createdAt ? new Date(raw.createdAt as string | number | Date) : new Date(),
-    updatedAt: raw.updatedAt ? new Date(raw.updatedAt as string | number | Date) : undefined,
-    acknowledgedAt: raw.acknowledgedAt
-      ? new Date(raw.acknowledgedAt as string | number | Date)
-      : null,
-    resolvedAt: raw.resolvedAt ? new Date(raw.resolvedAt as string | number | Date) : null,
-    assigneeId: typeof raw.assigneeId === 'string' ? raw.assigneeId : null,
-    teamId: typeof raw.teamId === 'string' ? raw.teamId : null,
-    slaAckTargetMs: typeof raw.slaAckTargetMs === 'number' ? raw.slaAckTargetMs : null,
-    slaResolveTargetMs: typeof raw.slaResolveTargetMs === 'number' ? raw.slaResolveTargetMs : null,
-    slaTargetSource: typeof raw.slaTargetSource === 'string' ? raw.slaTargetSource : null,
-    slaTargetCapturedAt: raw.slaTargetCapturedAt
-      ? new Date(raw.slaTargetCapturedAt as string)
-      : null,
-    slaPausedMs: typeof raw.slaPausedMs === 'number' ? raw.slaPausedMs : 0,
-    slaPauseStartedAt: raw.slaPauseStartedAt ? new Date(raw.slaPauseStartedAt as string) : null,
-    slaAckElapsedMs: typeof raw.slaAckElapsedMs === 'number' ? raw.slaAckElapsedMs : null,
-    slaResolveElapsedMs:
-      typeof raw.slaResolveElapsedMs === 'number' ? raw.slaResolveElapsedMs : null,
-    service: {
-      id: typeof rawService?.id === 'string' ? rawService.id : 'unknown',
-      name: typeof rawService?.name === 'string' ? rawService.name : 'Unknown Service',
-    },
-    team: rawTeam
-      ? {
-          id: String(rawTeam.id),
-          name: String(rawTeam.name || 'Team'),
-        }
-      : null,
-    assignee: rawAssignee
-      ? {
-          id: String(rawAssignee.id),
-          name: String(rawAssignee.name || 'Unassigned'),
-          email: String(rawAssignee.email || ''),
-          avatarUrl: typeof rawAssignee.avatarUrl === 'string' ? rawAssignee.avatarUrl : null,
-        }
-      : null,
-  };
-}
-
-const STATUS_SORT_WEIGHT: Record<string, number> = {
-  OPEN: 1,
-  ACKNOWLEDGED: 2,
-  SNOOZED: 3,
-  SUPPRESSED: 4,
-  RESOLVED: 5,
-};
-
-const PRIORITY_SORT_WEIGHT: Record<string, number> = {
-  P1: 1,
-  P2: 2,
-  P3: 3,
-  P4: 4,
-  P5: 5,
-};
-
-function sortIncidents(items: IncidentListItem[], sort: string = 'newest'): IncidentListItem[] {
-  return [...items].sort((a, b) => {
-    if (sort === 'oldest') {
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return timeA - timeB;
-    }
-    if (sort === 'updated') {
-      const timeA = a.updatedAt
-        ? new Date(a.updatedAt).getTime()
-        : a.createdAt
-          ? new Date(a.createdAt).getTime()
-          : 0;
-      const timeB = b.updatedAt
-        ? new Date(b.updatedAt).getTime()
-        : b.createdAt
-          ? new Date(b.createdAt).getTime()
-          : 0;
-      return timeB - timeA;
-    }
-    if (sort === 'status') {
-      const sA = STATUS_SORT_WEIGHT[a.status] ?? 99;
-      const sB = STATUS_SORT_WEIGHT[b.status] ?? 99;
-      if (sA !== sB) return sA - sB;
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return timeB - timeA;
-    }
-    if (sort === 'priority') {
-      const pA = a.priority ? (PRIORITY_SORT_WEIGHT[a.priority] ?? 99) : 999;
-      const pB = b.priority ? (PRIORITY_SORT_WEIGHT[b.priority] ?? 99) : 999;
-      if (pA !== pB) return pA - pB;
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return timeB - timeA;
-    }
-    // Default: 'newest' (createdAt desc)
-    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return timeB - timeA;
-  });
-}
-
-export function matchesRealtimeFilter(
-  raw: Record<string, unknown>,
-  filter: NonNullable<IncidentsListTableProps['realtimeFilter']>
-): boolean {
-  const status = typeof raw.status === 'string' ? raw.status : '';
-  const assigneeId = typeof raw.assigneeId === 'string' ? raw.assigneeId : null;
-  const serviceId =
-    raw.service &&
-    typeof raw.service === 'object' &&
-    typeof (raw.service as Record<string, unknown>).id === 'string'
-      ? String((raw.service as Record<string, unknown>).id)
-      : '';
-  const filterName = filter.filter?.toLowerCase();
-  if (
-    filterName === 'mine' &&
-    (assigneeId !== filter.actorId || !['OPEN', 'ACKNOWLEDGED'].includes(status))
-  )
-    return false;
-  if (
-    (filterName === 'all_open' || filterName === 'critical_focus') &&
-    filter.status === undefined &&
-    !['OPEN', 'ACKNOWLEDGED'].includes(status)
-  )
-    return false;
-  if (filterName === 'critical_focus' && raw.urgency !== 'HIGH' && raw.priority !== 'P1')
-    return false;
-  if (filterName === 'muted' && !['SNOOZED', 'SUPPRESSED'].includes(status)) return false;
-  // Mirrors the server: the default view leaves out alerts held by a maintenance window.
-  if (
-    (!filterName || filterName === 'all') &&
-    !filter.status &&
-    status === 'SUPPRESSED' &&
-    typeof raw.maintenanceWindowId === 'string'
-  )
-    return false;
-  const namedStatus =
-    filterName === 'open'
-      ? 'OPEN'
-      : filterName === 'acknowledged'
-        ? 'ACKNOWLEDGED'
-        : filterName === 'resolved'
-          ? 'RESOLVED'
-          : filterName === 'snoozed'
-            ? 'SNOOZED'
-            : filterName === 'suppressed'
-              ? 'SUPPRESSED'
-              : null;
-  if (namedStatus && status !== namedStatus) return false;
-  // ACTIVE is a dashboard pseudo-status (OPEN + ACKNOWLEDGED), never a stored value.
-  if (filter.status === 'ACTIVE') {
-    if (!['OPEN', 'ACKNOWLEDGED'].includes(status)) return false;
-  } else if (filter.status && status !== filter.status) return false;
-  if (filter.serviceId && serviceId !== filter.serviceId) return false;
-  if (
-    filter.assignee !== undefined &&
-    assigneeId !== (filter.assignee.toLowerCase() === 'unassigned' ? null : filter.assignee)
-  )
-    return false;
-  if (filter.urgency && filter.urgency !== 'all' && raw.urgency !== filter.urgency.toUpperCase())
-    return false;
-  if (filter.priority && filter.priority !== 'all' && raw.priority !== filter.priority)
-    return false;
-  if (
-    filter.teamId &&
-    filter.teamId !== 'all' &&
-    filter.teamId !== 'mine' &&
-    raw.teamId !== filter.teamId
-  )
-    return false;
-  const createdAt = raw.createdAt
-    ? new Date(raw.createdAt as string | number | Date).getTime()
-    : Number.NaN;
-  if (
-    filter.createdAfter &&
-    (!Number.isFinite(createdAt) || createdAt < new Date(filter.createdAfter).getTime())
-  )
-    return false;
-  if (
-    filter.createdBefore &&
-    (!Number.isFinite(createdAt) || createdAt > new Date(filter.createdBefore).getTime())
-  )
-    return false;
-  if (filter.search) {
-    const needle = filter.search.toLowerCase();
-    const searchable = `${raw.id ?? ''} ${raw.title ?? ''} ${raw.description ?? ''}`.toLowerCase();
-    if (!searchable.includes(needle)) return false;
-  }
-  return true;
-}
+const bulkSelectClass =
+  'h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function IncidentListSlaBadge({ incident }: { incident: IncidentListItem }) {
   const state = useIncidentSlaState(incident);
@@ -323,6 +120,7 @@ export default function IncidentsListTable({
   incidents,
   users,
   canManageIncidents,
+  canCreateIncident = false,
   pagination,
   title,
   showExport = true,
@@ -334,6 +132,7 @@ export default function IncidentsListTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
+  const { openCreateIncident } = useCreateIncidentModal();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkActionMode>(null);
@@ -345,14 +144,17 @@ export default function IncidentsListTable({
   // Local displayed list for instant optimistic real-time updates
   const [displayedIncidents, setDisplayedIncidents] = useState<IncidentListItem[]>(incidents);
   const [prevIncidents, setPrevIncidents] = useState<IncidentListItem[]>(incidents);
+  // Matching incidents that arrived in realtime but are not on this page / in this sort window.
+  const [offscreenNewIds, setOffscreenNewIds] = useState<ReadonlySet<string>>(new Set());
   if (prevIncidents !== incidents) {
     setPrevIncidents(incidents);
     setDisplayedIncidents(incidents);
+    setOffscreenNewIds(new Set());
   }
 
-  const displayedIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));
+  const displayedRef = useRef<IncidentListItem[]>(incidents);
   useEffect(() => {
-    displayedIncidentIdsRef.current = new Set(displayedIncidents.map(incident => incident.id));
+    displayedRef.current = displayedIncidents;
   }, [displayedIncidents]);
 
   const handleStatusChange = useCallback(
@@ -389,7 +191,7 @@ export default function IncidentsListTable({
 
   // Keyboard navigation focus index & global G sequence coordination
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const rowRefs = useRef<Map<number, HTMLLIElement>>(new Map());
   const lastGTimeRef = useRef<number>(0);
 
   const mountedAtRef = useRef<number>(0);
@@ -400,102 +202,88 @@ export default function IncidentsListTable({
   }, []);
   const isPageOne = !pagination || pagination.currentPage === 1;
   const maxItems = pagination?.itemsPerPage ?? Math.max(incidents.length, 15);
-  const activeSort = realtimeFilter.sort || 'newest';
+  // Callers often pass the filter inline; key the effect on its content, not its identity.
+  const realtimeFilterKey = JSON.stringify(realtimeFilter);
+  const realtimeFilterRef = useRef(realtimeFilter);
+  useEffect(() => {
+    realtimeFilterRef.current = realtimeFilter;
+  });
 
   useEffect(() => {
     if (!recentIncidents || recentIncidents.length === 0) return;
 
-    const newIncomingItems: IncidentListItem[] = [];
-    const updatedItems: Record<string, unknown>[] = [];
-    const candidateNewIds: string[] = [];
-
-    for (const item of recentIncidents) {
-      const id = typeof item.id === 'string' ? item.id : null;
-      if (!id) continue;
-
-      if (!displayedIncidentIdsRef.current.has(id)) {
-        if (isPageOne && matchesRealtimeFilter(item, realtimeFilter)) {
-          candidateNewIds.push(id);
-          newIncomingItems.push(parseRealtimeIncident(item));
-        }
-      } else {
-        updatedItems.push(item);
+    const { list, insertedIds, offscreenIds } = mergeRealtimeIncidents(
+      displayedRef.current,
+      recentIncidents,
+      {
+        filter: realtimeFilterRef.current,
+        isPageOne,
+        maxItems,
+        // Same 60s grace as the arrival highlight, for clock skew against the server.
+        newSince: (mountedAtRef.current || Date.now()) - 60_000,
       }
+    );
+
+    if (list !== displayedRef.current) {
+      displayedRef.current = list;
+      setDisplayedIncidents(list);
     }
 
-    if (newIncomingItems.length === 0 && updatedItems.length === 0) return;
-
-    let newlyRetainedIds: string[] = [];
-
-    setDisplayedIncidents(prev => {
-      const updatedMap = new Map(updatedItems.map(u => [String(u.id), u]));
-
-      // 1. In-place updates for currently displayed items
-      let nextList = prev
-        .map(item => {
-          const update = updatedMap.get(item.id);
-          if (!update) return item;
-          if (!matchesRealtimeFilter(update, realtimeFilter)) {
-            return null;
-          }
-          return parseRealtimeIncident(update);
-        })
-        .filter((item): item is IncidentListItem => item !== null);
-
-      // 2. Incorporate candidate new items (only on page 1)
-      if (newIncomingItems.length > 0) {
-        const currentIds = new Set(nextList.map(item => item.id));
-        const trulyNew = newIncomingItems.filter(item => !currentIds.has(item.id));
-        nextList = [...nextList, ...trulyNew];
-      }
-
-      // 3. Maintain strict chronological / configured sort order
-      nextList = sortIncidents(nextList, activeSort);
-
-      // 4. Bounded window: keep top maxItems
-      if (nextList.length > maxItems) {
-        nextList = nextList.slice(0, maxItems);
-      }
-
-      // 5. Track which candidate new IDs are actually visible in the retained slice
-      const retainedIdSet = new Set(nextList.map(item => item.id));
-      newlyRetainedIds = candidateNewIds.filter(id => {
-        if (!retainedIdSet.has(id)) return false;
-        // Only pulse emerald if the item was created recently (session or within 60s)
-        const found = nextList.find(item => item.id === id);
-        if (!found) return false;
-        const createdMs = found.createdAt ? new Date(found.createdAt).getTime() : 0;
-        return createdMs >= mountedAtRef.current - 60_000;
-      });
-
-      return nextList;
+    setOffscreenNewIds(prev => {
+      const visible = new Set(list.map(item => item.id));
+      const next = new Set([...prev].filter(id => !visible.has(id)));
+      offscreenIds.forEach(id => next.add(id));
+      if (next.size === prev.size && [...next].every(id => prev.has(id))) return prev;
+      return next;
     });
 
-    if (newlyRetainedIds.length > 0) {
+    if (insertedIds.length > 0) {
       setHighlightedIncidentIds(prev => {
         const next = new Set(prev);
-        newlyRetainedIds.forEach(id => next.add(id));
+        insertedIds.forEach(id => next.add(id));
         return next;
       });
 
       const timer = setTimeout(() => {
         setHighlightedIncidentIds(prev => {
           const next = new Set(prev);
-          newlyRetainedIds.forEach(id => next.delete(id));
+          insertedIds.forEach(id => next.delete(id));
           return next;
         });
       }, 4500);
 
       return () => clearTimeout(timer);
     }
-  }, [recentIncidents, realtimeFilter, isPageOne, maxItems, activeSort]);
+  }, [recentIncidents, realtimeFilterKey, isPageOne, maxItems]);
 
   useEffect(() => {
-    if (focusedIndex !== null) {
-      const el = rowRefs.current.get(focusedIndex);
-      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (focusedIndex === null) return;
+    const row = rowRefs.current.get(focusedIndex);
+    const link = row?.querySelector<HTMLAnchorElement>('a[data-row-link]');
+    // J/K move real focus so the row's focus ring and screen readers follow along.
+    if (link && document.activeElement !== link && !row?.contains(document.activeElement)) {
+      link.focus({ preventScroll: true });
     }
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    row?.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
   }, [focusedIndex]);
+
+  // User-initiated: the realtime effect above never refreshes the route by itself.
+  const showNewIncidents = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('page');
+    const query = params.toString();
+    const target = query ? `/incidents?${query}` : '/incidents';
+    startTransition(() => {
+      if (searchParams.has('page')) router.push(target);
+      else router.refresh();
+    });
+  }, [router, searchParams]);
+
+  const hasActiveFilters = useMemo(
+    () => [...searchParams.keys()].some(key => !NON_FILTER_PARAMS.has(key)),
+    [searchParams]
+  );
 
   const totalItems = pagination?.totalItems ?? displayedIncidents.length;
   const showingFrom =
@@ -661,7 +449,9 @@ export default function IncidentsListTable({
       }
 
       if (e.key === '/') {
-        const searchInput = document.getElementById('incident-search');
+        const searchInput = document.querySelector<HTMLInputElement>(
+          `input[aria-label="${INCIDENT_SEARCH_LABEL}"]`
+        );
         if (searchInput) {
           e.preventDefault();
           searchInput.focus();
@@ -800,16 +590,36 @@ export default function IncidentsListTable({
   };
 
   const headerTitle = title ?? 'Incident list';
+  const newCount = offscreenNewIds.size;
+  const newLabel = newIncidentsLabel(newCount);
+
+  const openIncident = (event: ReactMouseEvent, id: string) => {
+    // New-tab and modified clicks leave this page as it is.
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
+    setNavigatingId(id);
+  };
+
+  const bulkCancel = (
+    <Button variant="secondary" size="sm" onClick={() => setBulkAction(null)}>
+      Cancel
+    </Button>
+  );
 
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
-      {/* Sticky Command Bar (Bulk Actions) */}
+    <section
+      aria-label={headerTitle}
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
+    >
+      {/* Sticky command bar (bulk actions) */}
       {!readOnly && (selectedCount > 0 || bulkAction) && (
-        <div className="sticky top-0 z-20 border-b border-white/15 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
-          <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="sticky top-0 z-20 border-b border-border bg-primary text-primary-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="text-sm font-semibold">{selectedCount} selected</div>
-              <div className="hidden sm:block text-xs opacity-90">Tip: Shift + click for range</div>
+              <div className="text-sm font-semibold tabular-nums" aria-live="polite">
+                {selectedCount} selected
+              </div>
+              <div className="hidden text-xs opacity-90 sm:block">Tip: Shift + click for range</div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -817,7 +627,7 @@ export default function IncidentsListTable({
                 <div className="flex items-center gap-2">
                   <select
                     onChange={e => e.target.value && handleBulkAction('reassign', e.target.value)}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className={bulkSelectClass}
                     aria-label="Select assignee for bulk reassignment"
                     defaultValue=""
                   >
@@ -830,9 +640,7 @@ export default function IncidentsListTable({
                       </option>
                     ))}
                   </select>
-                  <Button variant="secondary" size="sm" onClick={() => setBulkAction(null)}>
-                    Cancel
-                  </Button>
+                  {bulkCancel}
                 </div>
               )}
 
@@ -840,7 +648,7 @@ export default function IncidentsListTable({
                 <div className="flex items-center gap-2">
                   <select
                     onChange={e => handleBulkAction('priority', e.target.value)}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className={bulkSelectClass}
                     aria-label="Select priority for bulk update"
                     defaultValue=""
                   >
@@ -854,9 +662,7 @@ export default function IncidentsListTable({
                     <option value="P4">P4 - Low</option>
                     <option value="P5">P5 - Info</option>
                   </select>
-                  <Button variant="secondary" size="sm" onClick={() => setBulkAction(null)}>
-                    Cancel
-                  </Button>
+                  {bulkCancel}
                 </div>
               )}
 
@@ -867,7 +673,7 @@ export default function IncidentsListTable({
                       const mins = Number(e.target.value);
                       if (mins) handleBulkAction('snooze', mins);
                     }}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className={bulkSelectClass}
                     aria-label="Select snooze duration"
                     defaultValue=""
                   >
@@ -881,9 +687,7 @@ export default function IncidentsListTable({
                     <option value="480">8 hours</option>
                     <option value="1440">24 hours</option>
                   </select>
-                  <Button variant="secondary" size="sm" onClick={() => setBulkAction(null)}>
-                    Cancel
-                  </Button>
+                  {bulkCancel}
                 </div>
               )}
 
@@ -891,20 +695,18 @@ export default function IncidentsListTable({
                 <div className="flex items-center gap-2">
                   <select
                     onChange={e => e.target.value && handleBulkAction('urgency', e.target.value)}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className={bulkSelectClass}
                     aria-label="Select urgency"
                     defaultValue=""
                   >
                     <option value="" disabled>
                       Urgency
                     </option>
-                    <option value="HIGH">HIGH</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="LOW">LOW</option>
+                    <option value="HIGH">High</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="LOW">Low</option>
                   </select>
-                  <Button variant="secondary" size="sm" onClick={() => setBulkAction(null)}>
-                    Cancel
-                  </Button>
+                  {bulkCancel}
                 </div>
               )}
 
@@ -912,22 +714,20 @@ export default function IncidentsListTable({
                 <div className="flex items-center gap-2">
                   <select
                     onChange={e => e.target.value && handleBulkAction('status', e.target.value)}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className={bulkSelectClass}
                     aria-label="Select status"
                     defaultValue=""
                   >
                     <option value="" disabled>
                       Status
                     </option>
-                    <option value="OPEN">TRIGGERED (OPEN)</option>
-                    <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
-                    <option value="RESOLVED">RESOLVED</option>
-                    <option value="SNOOZED">SNOOZED</option>
-                    <option value="SUPPRESSED">SUPPRESSED</option>
+                    <option value="OPEN">Triggered</option>
+                    <option value="ACKNOWLEDGED">Acknowledged</option>
+                    <option value="RESOLVED">Resolved</option>
+                    <option value="SNOOZED">Snoozed</option>
+                    <option value="SUPPRESSED">Suppressed</option>
                   </select>
-                  <Button variant="secondary" size="sm" onClick={() => setBulkAction(null)}>
-                    Cancel
-                  </Button>
+                  {bulkCancel}
                 </div>
               )}
 
@@ -944,7 +744,7 @@ export default function IncidentsListTable({
 
                   <Button
                     size="sm"
-                    className="bg-white text-primary hover:bg-white/90"
+                    className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
                     disabled={isPending}
                     onClick={() => handleBulkAction('resolve')}
                   >
@@ -1017,12 +817,11 @@ export default function IncidentsListTable({
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {/* Smart hint */}
                   {(selectedMeta.hasSnoozed || selectedMeta.hasSuppressed) && (
-                    <div className="hidden lg:block text-xs opacity-90 ml-2">
-                      Selected contains {selectedMeta.hasSnoozed ? 'SNOOZED' : ''}
-                      {selectedMeta.hasSnoozed && selectedMeta.hasSuppressed ? ' + ' : ''}
-                      {selectedMeta.hasSuppressed ? 'SUPPRESSED' : ''}
+                    <div className="ml-2 hidden text-xs opacity-90 lg:block">
+                      Selection includes {selectedMeta.hasSnoozed ? 'snoozed' : ''}
+                      {selectedMeta.hasSnoozed && selectedMeta.hasSuppressed ? ' and ' : ''}
+                      {selectedMeta.hasSuppressed ? 'suppressed' : ''} incidents
                     </div>
                   )}
                 </>
@@ -1033,82 +832,85 @@ export default function IncidentsListTable({
       )}
 
       {/* Header */}
-      <div className="px-4 md:px-5 py-3.5 border-b border-border/60 flex flex-wrap justify-between items-center gap-3">
-        <div className="min-w-[220px]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-5">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">
-              {headerTitle}
-            </span>
+            <h2 className="text-sm font-semibold text-foreground">{headerTitle}</h2>
             {isConnected && (
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 motion-safe:animate-ping" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 </span>
                 Live
               </span>
             )}
           </div>
-          <div className="text-sm text-muted-foreground mt-0.5">
+          <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
             Showing{' '}
-            <span className="font-semibold text-foreground">
-              {showingFrom}-{showingTo}
+            <span className="font-medium text-foreground">
+              {showingFrom}–{showingTo}
             </span>{' '}
-            of <span className="font-semibold text-foreground">{totalItems}</span>
-          </div>
+            of <span className="font-medium text-foreground">{totalItems}</span>
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Subtle keyboard shortcuts guide */}
           {!readOnly && (
-            <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-muted-foreground/70 mr-1 select-none">
+            <div
+              className="mr-1 hidden select-none items-center gap-1.5 text-xs text-muted-foreground xl:flex"
+              aria-label="Keyboard shortcuts"
+            >
               <span>Shortcuts:</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-                J
-              </kbd>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-                K
-              </kbd>
-              <span>nav</span>
-              <span className="opacity-40">&middot;</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-                X
-              </kbd>
-              <span>select</span>
-              <span className="opacity-40">&middot;</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-                A
-              </kbd>
-              <span>ack</span>
-              <span className="opacity-40">&middot;</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-                R
-              </kbd>
-              <span>resolve</span>
-              <span className="opacity-40">&middot;</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-                /
-              </kbd>
-              <span>search</span>
+              {(
+                [
+                  ['J', 'K', 'nav'],
+                  ['X', null, 'select'],
+                  ['A', null, 'ack'],
+                  ['R', null, 'resolve'],
+                  ['/', null, 'search'],
+                ] as const
+              ).map(([first, second, label], idx) => (
+                <span key={label} className="inline-flex items-center gap-1">
+                  {idx > 0 && (
+                    <span aria-hidden="true" className="opacity-40">
+                      &middot;
+                    </span>
+                  )}
+                  <kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-2xs">
+                    {first}
+                  </kbd>
+                  {second && (
+                    <kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-2xs">
+                      {second}
+                    </kbd>
+                  )}
+                  <span>{label}</span>
+                </span>
+              ))}
             </div>
           )}
-          {isManageable && (
+          {isManageable && displayedIncidents.length > 0 && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={toggleSelectAllOnPage}
-              className="h-8 gap-1.5 text-xs font-medium border-border/80 hover:bg-accent cursor-pointer"
-              aria-label="Select all incidents on page"
+              className="h-8 gap-1.5 text-xs"
+              aria-label={
+                selectedIds.size === displayedIncidents.length
+                  ? 'Clear selection'
+                  : 'Select all incidents on page'
+              }
             >
-              {selectedIds.size === displayedIncidents.length && displayedIncidents.length > 0 ? (
+              {selectedIds.size === displayedIncidents.length ? (
                 <>
-                  <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  <XCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                   <span>Clear selection</span>
                 </>
               ) : (
                 <>
-                  <CheckSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                  <CheckSquare className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                   <span>Select page</span>
                 </>
               )}
@@ -1122,25 +924,19 @@ export default function IncidentsListTable({
                   variant="outline"
                   size="sm"
                   aria-label="Export incidents"
-                  className="h-8 gap-1.5 text-xs font-medium border-border/80 hover:bg-accent cursor-pointer"
+                  className="h-8 gap-1.5 text-xs"
                 >
-                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Download className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                   <span>Export</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-xl">
-                <DropdownMenuItem
-                  onSelect={() => handleExport('csv')}
-                  className="text-xs cursor-pointer py-1.5"
-                >
-                  <Download className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onSelect={() => handleExport('csv')} className="text-xs">
+                  <Download className="mr-2 h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                   <span>CSV (.csv)</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => handleExport('xlsx')}
-                  className="text-xs cursor-pointer py-1.5"
-                >
-                  <FileSpreadsheet className="mr-2 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <DropdownMenuItem onSelect={() => handleExport('xlsx')} className="text-xs">
+                  <FileSpreadsheet className="mr-2 h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                   <span>Excel (.xlsx)</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -1149,32 +945,82 @@ export default function IncidentsListTable({
         </div>
       </div>
 
+      {/* Realtime arrivals that are not on this page or in this sort window */}
+      <div role="status" aria-live="polite" aria-atomic="true">
+        {newCount > 0 && (
+          <div className="flex justify-center border-b border-border bg-muted/40 px-4 py-2">
+            <button
+              type="button"
+              onClick={showNewIncidents}
+              data-testid="new-incidents-pill"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 text-xs font-medium text-blue-800 shadow-xs transition-colors duration-150 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/20"
+            >
+              <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="tabular-nums">{newLabel}</span>
+              <span aria-hidden="true" className="opacity-60">
+                —
+              </span>
+              <span className="font-semibold underline-offset-2">Show</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Content */}
-      <div className="p-3 md:p-4 lg:p-5">
+      <div className="p-3 md:p-4">
         {displayedIncidents.length === 0 ? (
-          <EmptyState
-            icon={<AlertTriangle className="h-6 w-6" />}
-            title={emptyState?.title ?? 'No incidents found'}
-            description={
-              emptyState?.description ??
-              'There are no incidents matching your active filter criteria. Try adjusting or clearing filters to see more results.'
-            }
-            action={
-              <Button asChild variant="outline" size="sm">
-                <Link href="/incidents">Clear all filters</Link>
-              </Button>
-            }
-          />
+          hasActiveFilters ? (
+            <EmptyState
+              icon={<SearchX />}
+              title="No incidents match these filters"
+              description="Nothing in your scope matches the current search and filters. Clear them to see every incident."
+              action={
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/incidents">Clear filters</Link>
+                </Button>
+              }
+            />
+          ) : emptyState ? (
+            <EmptyState
+              icon={<AlertTriangle />}
+              title={emptyState.title}
+              description={emptyState.description}
+            />
+          ) : (
+            <EmptyState
+              icon={<CheckCircle2 />}
+              title="No incidents yet"
+              description="Incidents open when a service's integration sends an alert, or when a responder declares one. They will appear here in real time."
+              action={
+                canCreateIncident ? (
+                  <Button size="sm" onClick={() => openCreateIncident()}>
+                    <Plus aria-hidden="true" />
+                    Create incident
+                  </Button>
+                ) : undefined
+              }
+              secondaryAction={
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/services">Connect a service</Link>
+                </Button>
+              }
+            />
+          )
         ) : (
-          <div className="flex flex-col gap-3">
+          <ul
+            className="flex flex-col gap-2"
+            aria-label={`${headerTitle}, ${totalItems} incidents`}
+          >
             {displayedIncidents.map((incident, idx) => {
               const incidentStatus = incident.status as IncidentStatus;
               const isSelected = !readOnly && selectedIds.has(incident.id);
               const isFocused = !readOnly && focusedIndex === idx;
               const isNewlyIncoming = highlightedIncidentIds.has(incident.id);
+              const canAck = isManageable && incidentStatus === 'OPEN';
+              const canResolve = isManageable && incidentStatus !== 'RESOLVED';
 
               return (
-                <div
+                <li
                   key={incident.id}
                   ref={el => {
                     if (el) {
@@ -1183,142 +1029,110 @@ export default function IncidentsListTable({
                       rowRefs.current.delete(idx);
                     }
                   }}
+                  onFocus={() => {
+                    if (!readOnly && focusedIndex !== idx) setFocusedIndex(idx);
+                  }}
+                  data-incident-row={incident.id}
+                  data-status={incidentStatus.toLowerCase()}
                   className={cn(
-                    'group relative rounded-2xl border bg-card transition-all duration-150 overflow-hidden',
-                    'hover:shadow-md hover:-translate-y-[1px]',
-                    'focus-within:ring-2 focus-within:ring-primary/20',
-                    'border-border',
-                    statusTone(incidentStatus).hoverBorder,
-                    isSelected && 'ring-1 ring-primary/30 border-primary/50 bg-primary/5',
-                    isFocused && 'ring-2 ring-primary/60 border-primary/70 shadow-sm bg-accent/25',
+                    'group relative rounded-lg border border-border bg-card transition-colors duration-150',
+                    'hover:border-ink-300 hover:bg-muted/40',
+                    isSelected && 'border-primary/50 bg-primary/5',
+                    isFocused && 'border-ink-400 bg-muted/40',
                     isNewlyIncoming &&
-                      'ring-2 ring-emerald-500/70 bg-emerald-500/[0.08] shadow-sm shadow-emerald-500/20 animate-pulse',
-                    navigatingId === incident.id && 'opacity-70 pointer-events-none'
+                      'border-blue-300 bg-blue-50/60 dark:border-blue-500/40 dark:bg-blue-500/10',
+                    navigatingId === incident.id && 'opacity-70'
                   )}
-                  onClick={e => {
-                    const target = e.target as HTMLElement;
-                    if (target.closest('[data-no-row-nav="true"]')) return;
-                    setNavigatingId(incident.id);
-                    startTransition(() => {
-                      router.push(`/incidents/${incident.id}`);
-                    });
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setNavigatingId(incident.id);
-                      startTransition(() => {
-                        router.push(`/incidents/${incident.id}`);
-                      });
-                    }
-                  }}
                 >
-                  {/* Left status indicator pill */}
-                  <div
-                    className={cn(
-                      'absolute left-0 top-3 bottom-3 w-1 rounded-r-full transition-all duration-200',
-                      statusTone(incidentStatus).solid,
-                      isSelected
-                        ? 'w-1.5 opacity-100'
-                        : 'opacity-80 group-hover:opacity-100 group-hover:w-1.25'
-                    )}
-                  />
-
-                  {/* Loading overlay */}
                   {navigatingId === incident.id && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/70 backdrop-blur-[1px] rounded-2xl">
-                      <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 shadow-sm">
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                        <span className="text-sm font-medium text-primary">Opening...</span>
-                      </div>
+                    <div
+                      className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-card/70"
+                      role="status"
+                    >
+                      <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm">
+                        <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
+                        Opening…
+                      </span>
                     </div>
                   )}
-                  <div className="flex gap-3 items-center pl-4 pr-3.5 py-3.5 md:py-4">
-                    {isManageable && (
-                      <div data-no-row-nav="true" className="shrink-0 flex items-center">
+
+                  <div className="flex flex-col gap-3 px-3.5 py-3 sm:flex-row sm:items-center md:px-4">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      {isManageable && (
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onClick={e => e.stopPropagation()}
                           onChange={e => {
-                            // capture shift
                             const shiftKey = (e.nativeEvent as unknown as MouseEvent).shiftKey;
                             toggleSelectWithRange(incident.id, idx, shiftKey);
                           }}
-                          className="w-4 h-4 rounded border-border text-primary focus:ring-primary/40 focus:ring-offset-0 cursor-pointer transition-colors"
+                          className="relative z-10 mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-border accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           aria-label={`Select incident ${incident.title}`}
                         />
-                      </div>
-                    )}
+                      )}
 
-                    {/* Main layout: compact, scannable rows */}
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Link
-                          href={`/incidents/${incident.id}`}
-                          data-no-row-nav="true"
-                          onClick={e => e.stopPropagation()}
-                          className="font-bold text-sm md:text-base text-foreground leading-snug group-hover:text-primary transition-colors truncate block"
-                        >
-                          {incident.title}
-                        </Link>
-
-                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                          {isNewlyIncoming && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 animate-pulse">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              LIVE
-                            </span>
-                          )}
-                          <StatusBadge
-                            status={incidentStatus}
-                            size="xs"
-                            live={incidentStatus === 'OPEN'}
-                          />
-                          <SeverityBadge priority={incident.priority} size="xs" />
-                          <IncidentListSlaBadge incident={incident} />
-                          <SeverityBadge urgency={incident.urgency} size="xs" />
-                          {incident.escalationStatus && (
-                            <EscalationStatusBadge
-                              status={incident.escalationStatus}
-                              currentStep={incident.currentEscalationStep}
-                              nextEscalationAt={incident.nextEscalationAt}
-                              size="sm"
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                          {/* The title link covers the whole row (stretched link), so the row is
+                              clickable without nesting controls inside another control. */}
+                          <Link
+                            href={`/incidents/${incident.id}`}
+                            data-row-link
+                            onClick={e => openIncident(e, incident.id)}
+                            className="min-w-0 max-w-full truncate text-sm font-semibold leading-snug text-foreground after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring md:text-base"
+                          >
+                            {incident.title}
+                          </Link>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {isNewlyIncoming && (
+                              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-2xs font-semibold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                                New
+                              </span>
+                            )}
+                            <StatusBadge
+                              status={incidentStatus}
+                              size="xs"
+                              live={incidentStatus === 'OPEN'}
                             />
-                          )}
+                            <SeverityBadge priority={incident.priority} size="xs" />
+                            <SeverityBadge urgency={incident.urgency} size="xs" />
+                            <IncidentListSlaBadge incident={incident} />
+                            {incident.escalationStatus && (
+                              <EscalationStatusBadge
+                                status={incident.escalationStatus}
+                                currentStep={incident.currentEscalationStep}
+                                nextEscalationAt={incident.nextEscalationAt}
+                                size="sm"
+                              />
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                           <Link
                             href={`/services/${incident.service.id}`}
-                            data-no-row-nav="true"
-                            onClick={e => e.stopPropagation()}
-                            className="text-primary font-semibold hover:underline truncate max-w-[240px]"
+                            className="relative z-10 max-w-[240px] truncate rounded-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             {incident.service.name}
                           </Link>
-
-                          <span className="opacity-40">&middot;</span>
-
-                          <span className="font-mono text-muted-foreground/80">
+                          <span aria-hidden="true" className="opacity-40">
+                            &middot;
+                          </span>
+                          <span className="font-mono tabular-nums">
                             #{incident.id.slice(-5).toUpperCase()}
                           </span>
-
-                          <span className="opacity-40">&middot;</span>
-
+                          <span aria-hidden="true" className="opacity-40">
+                            &middot;
+                          </span>
                           <RelativeTime
                             date={incident.createdAt}
-                            className="cursor-help transition-colors hover:text-foreground underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+                            className="relative z-10 cursor-help underline decoration-muted-foreground/40 decoration-dotted underline-offset-2"
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 pl-1">
+                    <div className="relative z-10 flex shrink-0 flex-wrap items-center gap-2 pl-7 sm:pl-0">
                       <AssigneeSection
                         assignee={incident.assignee}
                         incidentId={incident.id}
@@ -1330,183 +1144,186 @@ export default function IncidentsListTable({
                         teamId={incident.teamId}
                       />
 
-                      {/* Quick triage actions */}
-                      {isManageable && incidentStatus === 'OPEN' && (
+                      {canAck && (
                         <Button
                           size="sm"
                           variant="outline"
-                          data-no-row-nav="true"
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleStatusChange(incident.id, 'ACKNOWLEDGED');
-                          }}
+                          onClick={() => handleStatusChange(incident.id, 'ACKNOWLEDGED')}
                           disabled={isPending}
-                          className="inline-flex h-7 px-2.5 text-xs font-semibold gap-1 border-blue-500/40 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300 cursor-pointer shadow-2xs shrink-0"
-                          title="Acknowledge Incident"
+                          aria-label={`Acknowledge incident: ${incident.title}`}
+                          className="h-11 gap-1 px-3 text-xs font-semibold sm:h-8"
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>Ack</span>
+                          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Acknowledge</span>
                         </Button>
                       )}
 
-                      {isManageable && incidentStatus === 'ACKNOWLEDGED' && (
+                      {canResolve && (
                         <Button
                           size="sm"
                           variant="outline"
-                          data-no-row-nav="true"
-                          onClick={e => {
-                            e.stopPropagation();
+                          onClick={() =>
                             setResolvingIncident({
                               id: incident.id,
                               title: incident.title,
                               service: incident.service,
-                            });
-                          }}
+                            })
+                          }
                           disabled={isPending}
-                          className="inline-flex h-7 px-2.5 text-xs font-semibold gap-1 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300 cursor-pointer shadow-2xs shrink-0"
-                          title="Resolve Incident"
+                          aria-label={`Resolve incident: ${incident.title}`}
+                          className="h-11 gap-1 border-emerald-300 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200 sm:h-8"
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                           <span>Resolve</span>
                         </Button>
                       )}
 
                       {isManageable && (
-                        <div data-no-row-nav="true" className="shrink-0">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7.5 w-7.5 p-0 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground border border-border/60 transition-colors"
-                                onClick={e => e.stopPropagation()}
-                                aria-label="Incident actions"
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-11 w-11 p-0 text-muted-foreground hover:text-foreground sm:h-8 sm:w-8"
+                              aria-label={`More actions for ${incident.title}`}
+                            >
+                              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/incidents/${incident.id}`}
+                                className="flex items-center gap-2"
                               >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
+                                <Eye className="h-4 w-4 text-muted-foreground" aria-hidden />
+                                View details
+                              </Link>
+                            </DropdownMenuItem>
 
-                            <DropdownMenuContent align="end" className="w-52">
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/incidents/${incident.id}`}
-                                  onClick={e => e.stopPropagation()}
-                                  className="flex items-center gap-2"
-                                >
-                                  <Eye className="h-4 w-4 text-slate-500" />
-                                  View details
-                                </Link>
+                            <DropdownMenuSeparator />
+
+                            {incident.status !== 'RESOLVED' && (
+                              <DropdownMenuItem
+                                onSelect={e => {
+                                  e.preventDefault();
+                                  setResolvingIncident({
+                                    id: incident.id,
+                                    title: incident.title,
+                                    service: incident.service,
+                                  });
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <CheckCircle2
+                                  className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+                                  aria-hidden
+                                />
+                                Resolve
                               </DropdownMenuItem>
+                            )}
 
-                              <DropdownMenuSeparator />
-
-                              {incident.status !== 'RESOLVED' && (
+                            {incident.status !== 'ACKNOWLEDGED' &&
+                              incident.status !== 'RESOLVED' &&
+                              incident.status !== 'SUPPRESSED' && (
                                 <DropdownMenuItem
                                   onSelect={e => {
                                     e.preventDefault();
-                                    setResolvingIncident({
-                                      id: incident.id,
-                                      title: incident.title,
-                                      service: incident.service,
-                                    });
+                                    handleStatusChange(incident.id, 'ACKNOWLEDGED');
                                   }}
                                   className="flex items-center gap-2"
                                 >
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                  Resolve
+                                  <CheckCircle2
+                                    className="h-4 w-4 text-amber-600 dark:text-amber-400"
+                                    aria-hidden
+                                  />
+                                  Acknowledge
                                 </DropdownMenuItem>
                               )}
 
-                              {incident.status !== 'ACKNOWLEDGED' &&
-                                incident.status !== 'RESOLVED' &&
-                                incident.status !== 'SUPPRESSED' && (
-                                  <DropdownMenuItem
-                                    onSelect={e => {
-                                      e.preventDefault();
-                                      handleStatusChange(incident.id, 'ACKNOWLEDGED');
-                                    }}
-                                    className="flex items-center gap-2"
-                                  >
-                                    <CheckCircle2 className="h-4 w-4 text-amber-600" />
-                                    Acknowledge
-                                  </DropdownMenuItem>
-                                )}
+                            {incident.status === 'ACKNOWLEDGED' && (
+                              <DropdownMenuItem
+                                onSelect={e => {
+                                  e.preventDefault();
+                                  handleStatusChange(incident.id, 'OPEN');
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <Circle className="h-4 w-4 text-muted-foreground" aria-hidden />
+                                Unacknowledge
+                              </DropdownMenuItem>
+                            )}
 
-                              {incident.status === 'ACKNOWLEDGED' && (
-                                <DropdownMenuItem
-                                  onSelect={e => {
-                                    e.preventDefault();
-                                    handleStatusChange(incident.id, 'OPEN');
-                                  }}
-                                  className="flex items-center gap-2"
-                                >
-                                  <Circle className="h-4 w-4 text-slate-500" />
-                                  Unacknowledge
-                                </DropdownMenuItem>
-                              )}
+                            {incident.status !== 'SNOOZED' && incident.status !== 'RESOLVED' && (
+                              <DropdownMenuItem
+                                onSelect={e => {
+                                  e.preventDefault();
+                                  handleStatusChange(incident.id, 'SNOOZED');
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <PauseCircle
+                                  className="h-4 w-4 text-muted-foreground"
+                                  aria-hidden
+                                />
+                                Snooze
+                              </DropdownMenuItem>
+                            )}
 
-                              {incident.status !== 'SNOOZED' && incident.status !== 'RESOLVED' && (
-                                <DropdownMenuItem
-                                  onSelect={e => {
-                                    e.preventDefault();
-                                    handleStatusChange(incident.id, 'SNOOZED');
-                                  }}
-                                  className="flex items-center gap-2"
-                                >
-                                  <PauseCircle className="h-4 w-4 text-slate-600" />
-                                  Snooze
-                                </DropdownMenuItem>
-                              )}
+                            {incident.status === 'SNOOZED' && (
+                              <DropdownMenuItem
+                                onSelect={e => {
+                                  e.preventDefault();
+                                  handleStatusChange(incident.id, 'OPEN');
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <CheckCircle2
+                                  className="h-4 w-4 text-muted-foreground"
+                                  aria-hidden
+                                />
+                                Unsnooze
+                              </DropdownMenuItem>
+                            )}
 
-                              {incident.status === 'SNOOZED' && (
-                                <DropdownMenuItem
-                                  onSelect={e => {
-                                    e.preventDefault();
-                                    handleStatusChange(incident.id, 'OPEN');
-                                  }}
-                                  className="flex items-center gap-2"
-                                >
-                                  <CheckCircle2 className="h-4 w-4 text-slate-600" />
-                                  Unsnooze
-                                </DropdownMenuItem>
-                              )}
+                            {incident.status !== 'SUPPRESSED' && incident.status !== 'RESOLVED' && (
+                              <DropdownMenuItem
+                                onSelect={e => {
+                                  e.preventDefault();
+                                  handleStatusChange(incident.id, 'SUPPRESSED');
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <ShieldOff className="h-4 w-4 text-muted-foreground" aria-hidden />
+                                Suppress
+                              </DropdownMenuItem>
+                            )}
 
-                              {incident.status !== 'SUPPRESSED' &&
-                                incident.status !== 'RESOLVED' && (
-                                  <DropdownMenuItem
-                                    onSelect={e => {
-                                      e.preventDefault();
-                                      handleStatusChange(incident.id, 'SUPPRESSED');
-                                    }}
-                                    className="flex items-center gap-2"
-                                  >
-                                    <ShieldOff className="h-4 w-4 text-rose-600" />
-                                    Suppress
-                                  </DropdownMenuItem>
-                                )}
-
-                              {incident.status === 'SUPPRESSED' && (
-                                <DropdownMenuItem
-                                  onSelect={e => {
-                                    e.preventDefault();
-                                    handleStatusChange(incident.id, 'OPEN');
-                                  }}
-                                  className="flex items-center gap-2"
-                                >
-                                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                                  Unsuppress
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                            {incident.status === 'SUPPRESSED' && (
+                              <DropdownMenuItem
+                                onSelect={e => {
+                                  e.preventDefault();
+                                  handleStatusChange(incident.id, 'OPEN');
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <ShieldCheck
+                                  className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+                                  aria-hidden
+                                />
+                                Unsuppress
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </div>
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
       </div>
 
@@ -1528,6 +1345,6 @@ export default function IncidentsListTable({
           if (!open) setResolvingIncident(null);
         }}
       />
-    </div>
+    </section>
   );
 }

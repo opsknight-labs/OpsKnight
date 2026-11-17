@@ -18,6 +18,8 @@ type PaginationProps = {
   totalItems: number;
   itemsPerPage: number;
   itemLabel?: string;
+  /** Plural form when it is not itemLabel + 's' (e.g. "policies"). */
+  itemLabelPlural?: string;
 };
 
 export default function Pagination({
@@ -26,7 +28,9 @@ export default function Pagination({
   totalItems,
   itemsPerPage,
   itemLabel = 'service',
+  itemLabelPlural,
 }: PaginationProps) {
+  const noun = (count: number) => (count === 1 ? itemLabel : (itemLabelPlural ?? `${itemLabel}s`));
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -48,8 +52,8 @@ export default function Pagination({
     return (
       <div className="flex items-center justify-between px-4 py-4 border-t border-ink-200 bg-ink-50 rounded-b-xl">
         <span className="text-sm text-muted-foreground">
-          Showing <span className="font-medium text-foreground">{totalItems}</span> {itemLabel}
-          {totalItems !== 1 ? 's' : ''}
+          Showing <span className="font-medium text-foreground">{totalItems}</span>{' '}
+          {noun(totalItems)}
         </span>
       </div>
     );
@@ -95,8 +99,7 @@ export default function Pagination({
       <div className="text-sm text-muted-foreground">
         Showing <span className="font-medium text-foreground">{startItem}</span> to{' '}
         <span className="font-medium text-foreground">{endItem}</span> of{' '}
-        <span className="font-medium text-foreground">{totalItems}</span> {itemLabel}
-        {totalItems !== 1 ? 's' : ''}
+        <span className="font-medium text-foreground">{totalItems}</span> {noun(totalItems)}
       </div>
 
       <div className="flex items-center gap-1">
@@ -104,6 +107,7 @@ export default function Pagination({
           variant="outline"
           size="icon"
           className="h-8 w-8 hidden sm:flex"
+          aria-label="First page"
           disabled={currentPage === 1}
           asChild={currentPage !== 1}
         >
@@ -120,6 +124,7 @@ export default function Pagination({
           variant="outline"
           size="icon"
           className="h-8 w-8"
+          aria-label="Previous page"
           disabled={currentPage === 1}
           asChild={currentPage !== 1}
         >
@@ -158,6 +163,8 @@ export default function Pagination({
                   isCurrentPage ? 'pointer-events-none' : 'hover:bg-ink-100'
                 )}
                 asChild={!isCurrentPage}
+                aria-current={isCurrentPage ? 'page' : undefined}
+                aria-label={`Page ${pageNum}`}
               >
                 {isCurrentPage ? pageNum : <Link href={buildPageUrl(pageNum)}>{pageNum}</Link>}
               </Button>
@@ -169,6 +176,7 @@ export default function Pagination({
           variant="outline"
           size="icon"
           className="h-8 w-8"
+          aria-label="Next page"
           disabled={currentPage === totalPages}
           asChild={currentPage !== totalPages}
         >
@@ -185,6 +193,7 @@ export default function Pagination({
           variant="outline"
           size="icon"
           className="h-8 w-8 hidden sm:flex"
+          aria-label="Last page"
           disabled={currentPage === totalPages}
           asChild={currentPage !== totalPages}
         >

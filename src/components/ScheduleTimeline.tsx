@@ -42,44 +42,32 @@ type ScheduleTimelineProps = {
 // On-call layers carry the Royal Violet shift identity (AGENTS.md "Status Color
 // Semantics"). Hues that mean incident state (rose, amber, emerald) are kept out
 // so a layer is never mistaken for a triggered/acknowledged/resolved signal.
+// Layers are violet tints told apart by shade (dark text); the effective schedule is the solid bar.
 const LAYER_COLORS = [
   {
-    bg: 'from-violet-500 to-violet-600',
+    bg: 'bg-violet-200 dark:bg-violet-500/35',
+    barText: 'text-violet-950 dark:text-violet-50',
     light: 'bg-violet-500/10',
     text: 'text-violet-700 dark:text-violet-300',
     ring: 'ring-violet-400',
   },
   {
-    bg: 'from-indigo-500 to-indigo-600',
-    light: 'bg-indigo-500/10',
-    text: 'text-indigo-700 dark:text-indigo-300',
-    ring: 'ring-indigo-400',
+    bg: 'bg-violet-50 ring-1 ring-inset ring-violet-300 dark:bg-violet-400/15 dark:ring-violet-400/40',
+    barText: 'text-violet-900 dark:text-violet-100',
+    light: 'bg-violet-500/10',
+    text: 'text-violet-800 dark:text-violet-200',
+    ring: 'ring-violet-500',
   },
   {
-    bg: 'from-sky-500 to-sky-600',
-    light: 'bg-sky-500/10',
-    text: 'text-sky-700 dark:text-sky-300',
-    ring: 'ring-sky-400',
-  },
-  {
-    bg: 'from-fuchsia-500 to-fuchsia-600',
-    light: 'bg-fuchsia-500/10',
-    text: 'text-fuchsia-700 dark:text-fuchsia-300',
-    ring: 'ring-fuchsia-400',
-  },
-  {
-    bg: 'from-purple-500 to-purple-600',
-    light: 'bg-purple-500/10',
-    text: 'text-purple-700 dark:text-purple-300',
-    ring: 'ring-purple-400',
-  },
-  {
-    bg: 'from-cyan-500 to-cyan-600',
-    light: 'bg-cyan-500/10',
-    text: 'text-cyan-700 dark:text-cyan-300',
-    ring: 'ring-cyan-400',
+    bg: 'bg-violet-300 dark:bg-violet-600/45',
+    barText: 'text-violet-950 dark:text-violet-50',
+    light: 'bg-violet-500/10',
+    text: 'text-violet-700 dark:text-violet-300',
+    ring: 'ring-violet-400',
   },
 ];
+
+const OVERRIDE_OUTLINE = 'outline outline-2 -outline-offset-2 outline-dashed outline-current';
 
 export default function ScheduleTimeline({
   shifts,
@@ -247,7 +235,8 @@ export default function ScheduleTimeline({
               variant={showFinalSchedule ? 'secondary' : 'outline'}
               className={cn(
                 'h-7 px-2.5 text-xs gap-1.5',
-                showFinalSchedule && 'bg-foreground text-background hover:bg-foreground/90'
+                showFinalSchedule &&
+                  'bg-violet-700 text-white hover:bg-violet-700/90 dark:bg-violet-600 dark:hover:bg-violet-600/90'
               )}
             >
               <Shield className="h-3 w-3" />
@@ -418,9 +407,10 @@ export default function ScheduleTimeline({
                                 <div
                                   className={cn(
                                     'absolute h-12 rounded-xl flex items-center gap-2 px-3 cursor-pointer transition-all duration-200',
-                                    'bg-gradient-to-r shadow-md hover:shadow-lg hover:scale-[1.02] hover:-translate-y-0.5',
+                                    'shadow-xs hover:shadow-sm',
                                     color.bg,
-                                    isOverride && 'ring-2 ring-orange-400 ring-offset-2'
+                                    color.barText,
+                                    isOverride && OVERRIDE_OUTLINE
                                   )}
                                   style={{
                                     left: `${leftPercent}%`,
@@ -439,15 +429,15 @@ export default function ScheduleTimeline({
                                     name={shift.userName}
                                     size="sm"
                                     className="ring-2 ring-white/40 shadow-sm"
-                                    fallbackClassName="bg-white/30 text-white"
+                                    fallbackClassName="bg-white/40 text-inherit"
                                   />
                                   {widthPercent > 8 && (
                                     <div className="min-w-0 flex-1">
-                                      <div className="text-xs font-semibold text-white truncate">
+                                      <div className="truncate text-xs font-semibold">
                                         {shift.userName}
                                       </div>
                                       {widthPercent > 15 && (
-                                        <div className="text-[10px] text-white/80 flex items-center gap-1 truncate">
+                                        <div className="flex items-center gap-1 truncate text-2xs tabular-nums opacity-80">
                                           <Clock className="h-2.5 w-2.5" />
                                           {formatDateTime(shift.start, timeZone, {
                                             format: 'time',
@@ -461,11 +451,6 @@ export default function ScheduleTimeline({
                                         </div>
                                       )}
                                     </div>
-                                  )}
-                                  {isOverride && (
-                                    <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-orange-500 border-2 border-white flex items-center justify-center">
-                                      <span className="text-[8px] font-bold text-white">!</span>
-                                    </span>
                                   )}
                                 </div>
                               </TooltipTrigger>
@@ -510,7 +495,7 @@ export default function ScheduleTimeline({
                                       {shift.layerName}
                                     </span>
                                     {isOverride && (
-                                      <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:text-orange-300">
+                                      <span className="rounded-sm border border-dashed border-violet-400 bg-violet-50 px-1.5 py-0.5 text-2xs font-medium text-violet-800 dark:border-violet-400/60 dark:bg-violet-500/10 dark:text-violet-200">
                                         Override
                                       </span>
                                     )}
@@ -534,7 +519,7 @@ export default function ScheduleTimeline({
               <div className="relative">
                 {/* Final Schedule Label */}
                 <div className="px-3 py-2 z-20 relative">
-                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-background shadow-xs">
+                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-2.5 py-1 text-2xs font-semibold text-white shadow-xs">
                     <Shield className="h-3 w-3" />
                     Effective On-Call
                   </div>
@@ -582,8 +567,8 @@ export default function ScheduleTimeline({
                             <div
                               className={cn(
                                 'absolute h-12 rounded-xl flex items-center gap-2 px-3 cursor-pointer transition-all duration-200',
-                                'bg-gradient-to-r from-foreground/85 to-foreground shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5',
-                                'ring-2 ring-foreground/25'
+                                'bg-violet-700 shadow-sm hover:shadow-md',
+                                'ring-2 ring-violet-300 dark:ring-violet-400/60'
                               )}
                               style={{
                                 left: `${leftPercent}%`,
@@ -671,22 +656,20 @@ export default function ScheduleTimeline({
           {/* Legend */}
           {shiftsByLayer.length > 0 && (
             <div className="flex flex-wrap items-center gap-4 border-t bg-muted/20 p-4">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Layers:
-              </span>
+              <span className="text-xs font-medium text-foreground">Layers</span>
               {[...layerColorMap.entries()].map(([layer, color]) => (
                 <div key={layer} className="flex items-center gap-2">
-                  <div className={cn('h-3 w-3 rounded-md bg-gradient-to-r shadow-xs', color.bg)} />
+                  <div className={cn('h-3 w-3 rounded-md shadow-xs', color.bg)} />
                   <span className="text-xs font-medium text-muted-foreground">{layer}</span>
                 </div>
               ))}
               <div className="ml-4 flex items-center gap-2 border-l pl-4">
-                <div className="h-3 w-3 rounded-md bg-orange-500 ring-2 ring-orange-500/20" />
+                <div className="h-3 w-3 rounded-md bg-violet-200 text-violet-900 outline outline-2 -outline-offset-2 outline-dashed outline-current dark:bg-violet-500/35 dark:text-violet-100" />
                 <span className="text-xs font-medium text-muted-foreground">Override</span>
               </div>
               {showFinalSchedule && finalScheduleBlocks.length > 0 && (
                 <div className="ml-4 flex items-center gap-2 border-l pl-4">
-                  <div className="h-3 w-3 rounded-md bg-foreground ring-2 ring-foreground/20" />
+                  <div className="h-3 w-3 rounded-md bg-violet-700 ring-2 ring-violet-300 dark:ring-violet-400/60" />
                   <span className="text-xs font-medium text-muted-foreground">
                     Effective On-Call
                   </span>

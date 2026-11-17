@@ -54,6 +54,7 @@ export default function IntegrationStatusToggle({
             checked={enabled}
             onCheckedChange={handleToggle}
             disabled={loading}
+            aria-label="Integration active"
             className="data-[state=checked]:bg-emerald-500 scale-75 origin-right"
           />
           <Badge

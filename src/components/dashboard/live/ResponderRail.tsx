@@ -393,7 +393,7 @@ export function OpsPulsePanel() {
 
         <section className="px-4 py-3" data-testid="pulse-attention">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="dash-eyebrow flex items-center gap-1.5">
+            <h3 className="dash-heading-sm flex items-center gap-1.5">
               Needs attention
               {attention.length > 0 && (
                 <span className="rounded-full bg-rose-500/15 px-1.5 text-[10px] font-bold text-rose-700 dark:text-rose-300 font-mono">
@@ -404,7 +404,7 @@ export function OpsPulsePanel() {
             <button
               type="button"
               onClick={() => setQuery({ sort: 'attention', view: 'active' })}
-              className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Sort feed
             </button>
@@ -445,10 +445,10 @@ export function OpsPulsePanel() {
 
         <section className="px-4 py-3" data-testid="services-at-risk">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="dash-eyebrow">Hotspots</h3>
+            <h3 className="dash-heading-sm">Hotspots</h3>
             <Link
               href="/services"
-              className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Services →
             </Link>
@@ -516,10 +516,10 @@ export function OpsPulsePanel() {
 
         <section className="px-4 py-3" data-testid="pulse-coverage">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="dash-eyebrow">On call now</h3>
+            <h3 className="dash-heading-sm">On call now</h3>
             <Link
               href="/schedules"
-              className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Schedules →
             </Link>

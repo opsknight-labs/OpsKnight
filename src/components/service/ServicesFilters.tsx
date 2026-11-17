@@ -2,8 +2,6 @@
 
 import { useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Input } from '@/components/ui/shadcn/input';
-import { Label } from '@/components/ui/shadcn/label';
 import {
   Select,
   SelectContent,
@@ -11,16 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
-import { Filter, X, Activity, Users, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import FilterBar, { FilterChip, FilterField } from '@/components/patterns/FilterBar';
+import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 type ServicesFiltersProps = {
   currentSearch?: string;
@@ -29,6 +19,16 @@ type ServicesFiltersProps = {
   currentSort?: string;
   teams: Array<{ id: string; name: string }>;
 };
+
+const STATUS_CHIPS = [
+  { value: 'OPERATIONAL', label: 'Operational', icon: <CheckCircle2 /> },
+  { value: 'DEGRADED', label: 'Degraded', icon: <AlertTriangle /> },
+  { value: 'CRITICAL', label: 'Critical', icon: <XCircle /> },
+] as const;
+
+const triggerClass = 'h-9 w-full bg-background text-sm sm:min-w-[10rem]';
+// Two selects per row on phones, natural width from `sm`.
+const fieldClass = 'min-w-[7.5rem] flex-1 sm:flex-none';
 
 export default function ServicesFilters({
   currentSearch = '',
@@ -40,11 +40,13 @@ export default function ServicesFilters({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const teamValue = currentTeam || 'all';
 
   const updateParams = useCallback(
     (updates: Record<string, string>) => {
       const currentQuery = searchParams.toString();
       const params = new URLSearchParams(currentQuery);
+      params.delete('page');
 
       Object.entries(updates).forEach(([key, value]) => {
         if (value === 'all' || value === '' || value === 'name_asc') {
@@ -74,101 +76,50 @@ export default function ServicesFilters({
   const hasActiveFilters =
     currentSearch !== '' ||
     currentStatus !== 'all' ||
-    currentTeam !== 'all' ||
+    teamValue !== 'all' ||
     currentSort !== 'name_asc';
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-4 w-4" /> Filter Services
-            </CardTitle>
-            <CardDescription>Find services by name, team, status, or tier</CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                onClick={clearFilters}
-                disabled={isPending}
-              >
-                <X className="mr-1 h-3 w-3" /> Clear All
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Quick Filters */}
-        <div className="flex flex-wrap gap-2">
-          <Badge
-            variant={currentStatus === 'all' ? 'default' : 'outline'}
-            size="sm"
-            className="cursor-pointer hover:bg-primary/90 hover:text-primary-foreground transition-colors"
+    <FilterBar
+      search={{
+        value: currentSearch,
+        onChange: value => updateParams({ search: value.trim() === '' ? '' : value }),
+        placeholder: 'Search services by name or description',
+        label: 'Search services',
+        debounceMs: 300,
+      }}
+      chips={
+        <>
+          <FilterChip
+            active={currentStatus === 'all'}
             onClick={() => updateParams({ status: 'all' })}
           >
-            All services
-          </Badge>
-          <Badge
-            variant={currentStatus === 'OPERATIONAL' ? 'success' : 'outline'}
-            size="sm"
-            className="cursor-pointer hover:bg-emerald-100 hover:text-emerald-800 transition-colors dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300"
-            onClick={() =>
-              updateParams({ status: currentStatus === 'OPERATIONAL' ? 'all' : 'OPERATIONAL' })
-            }
-          >
-            <CheckCircle2 className="mr-1 h-3 w-3" /> Operational
-          </Badge>
-          <Badge
-            variant={currentStatus === 'DEGRADED' ? 'warning' : 'outline'}
-            size="sm"
-            className="cursor-pointer hover:bg-yellow-100 hover:text-yellow-800 transition-colors dark:hover:bg-yellow-500/15 dark:hover:text-yellow-300"
-            onClick={() =>
-              updateParams({ status: currentStatus === 'DEGRADED' ? 'all' : 'DEGRADED' })
-            }
-          >
-            <AlertTriangle className="mr-1 h-3 w-3" /> Degraded
-          </Badge>
-          <Badge
-            variant={currentStatus === 'CRITICAL' ? 'danger' : 'outline'}
-            size="sm"
-            className="cursor-pointer hover:bg-red-100 hover:text-red-800 transition-colors dark:hover:bg-red-500/15 dark:hover:text-red-300"
-            onClick={() =>
-              updateParams({ status: currentStatus === 'CRITICAL' ? 'all' : 'CRITICAL' })
-            }
-          >
-            <XCircle className="mr-1 h-3 w-3" /> Critical
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Search */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase">Search</Label>
-            <div className="relative">
-              <Input
-                placeholder="Search by name..."
-                value={currentSearch}
-                onChange={e => updateParams({ search: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Team Filter */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
-              <Users className="h-3 w-3" /> Team
-            </Label>
-            <Select value={currentTeam} onValueChange={value => updateParams({ team: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Teams" />
+            All
+          </FilterChip>
+          {STATUS_CHIPS.map(chip => {
+            const active = currentStatus === chip.value;
+            return (
+              <FilterChip
+                key={chip.value}
+                active={active}
+                icon={chip.icon}
+                onClick={() => updateParams({ status: active ? 'all' : chip.value })}
+              >
+                {chip.label}
+              </FilterChip>
+            );
+          })}
+        </>
+      }
+      filters={
+        <>
+          <FilterField label="Team" htmlFor="service-filter-team" className={fieldClass}>
+            <Select value={teamValue} onValueChange={value => updateParams({ team: value })}>
+              <SelectTrigger id="service-filter-team" className={triggerClass}>
+                <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Teams</SelectItem>
+                <SelectItem value="all">All teams</SelectItem>
                 {teams.map(team => (
                   <SelectItem key={team.id} value={team.id}>
                     {team.name}
@@ -176,59 +127,37 @@ export default function ServicesFilters({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FilterField>
 
-          {/* Status Filter (Dropdown backup) */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
-              <Activity className="h-3 w-3" /> Status
-            </Label>
-            <Select value={currentStatus} onValueChange={value => updateParams({ status: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="OPERATIONAL">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                    Operational
-                  </div>
-                </SelectItem>
-                <SelectItem value="DEGRADED">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-yellow-500" />
-                    Degraded
-                  </div>
-                </SelectItem>
-                <SelectItem value="CRITICAL">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-red-500" />
-                    Critical
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Sort */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase">Sort By</Label>
+          <FilterField label="Sort" htmlFor="service-filter-sort" className={fieldClass}>
             <Select value={currentSort} onValueChange={value => updateParams({ sort: value })}>
-              <SelectTrigger>
+              <SelectTrigger id="service-filter-sort" className={triggerClass}>
                 <SelectValue placeholder="Sort order" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="name_asc">Name (A-Z)</SelectItem>
-                <SelectItem value="name_desc">Name (Z-A)</SelectItem>
-                <SelectItem value="status">Status Health</SelectItem>
-                <SelectItem value="incidents_desc">Most Incidents</SelectItem>
-                <SelectItem value="incidents_asc">Least Incidents</SelectItem>
+                <SelectItem value="name_asc">Name (A–Z)</SelectItem>
+                <SelectItem value="name_desc">Name (Z–A)</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+                <SelectItem value="incidents_desc">Most incidents</SelectItem>
+                <SelectItem value="incidents_asc">Fewest incidents</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          </FilterField>
+        </>
+      }
+      hasActiveFilters={hasActiveFilters}
+      onClearAll={clearFilters}
+      actions={
+        isPending ? (
+          <span
+            role="status"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+          >
+            <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden="true" />
+            Updating…
+          </span>
+        ) : undefined
+      }
+    />
   );
 }

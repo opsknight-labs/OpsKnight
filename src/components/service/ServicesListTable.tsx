@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,9 +22,13 @@ import {
   Shield,
   Users,
   Loader2,
+  SearchX,
   Server,
+  Wrench,
 } from 'lucide-react';
-import EmptyState from '@/components/ui/EmptyState';
+import EmptyState from '@/components/patterns/EmptyState';
+import { BADGE_BASE_CLASS, badgeSizeClass } from '@/components/patterns/StatusBadge';
+import { toneClasses } from '@/components/patterns/status-tone';
 import Pagination from '@/components/service/Pagination';
 
 export type ServiceListItem = {
@@ -56,42 +59,36 @@ type ServicesListTableProps = {
   };
 };
 
-const statusAccentClass: Record<string, string> = {
-  OPERATIONAL: 'border-l-emerald-500',
-  DEGRADED: 'border-l-yellow-500',
-  CRITICAL: 'border-l-red-500',
-  UNKNOWN: 'border-l-ink-300',
-};
+const SERVICE_STATUS_META = {
+  operational: { label: 'Operational', tone: 'ok', icon: CheckCircle2 },
+  degraded: { label: 'Degraded', tone: 'elevated', icon: AlertTriangle },
+  critical: { label: 'Critical', tone: 'critical', icon: XCircle },
+} as const;
+
+function serviceStatusMeta(status: string) {
+  switch (status) {
+    case 'OPERATIONAL':
+      return SERVICE_STATUS_META.operational;
+    case 'DEGRADED':
+      return SERVICE_STATUS_META.degraded;
+    case 'CRITICAL':
+      return SERVICE_STATUS_META.critical;
+    default:
+      return null;
+  }
+}
 
 function ServiceStatusBadge({ status }: { status: string }) {
-  if (status === 'OPERATIONAL') {
-    return (
-      <Badge variant="success" size="sm" className="gap-1 pl-1 pr-2">
-        <CheckCircle2 className="h-3 w-3 fill-emerald-500 text-white" />
-        Operational
-      </Badge>
-    );
-  }
-  if (status === 'DEGRADED') {
-    return (
-      <Badge variant="warning" size="sm" className="gap-1 pl-1 pr-2">
-        <AlertTriangle className="h-3 w-3 fill-yellow-500 text-white" />
-        Degraded
-      </Badge>
-    );
-  }
-  if (status === 'CRITICAL') {
-    return (
-      <Badge variant="danger" size="sm" className="gap-1 pl-1 pr-2">
-        <XCircle className="h-3 w-3 fill-red-500 text-white" />
-        Critical
-      </Badge>
-    );
-  }
+  const meta = serviceStatusMeta(status);
+  const Icon = meta?.icon;
   return (
-    <Badge variant="neutral" size="sm">
-      Unknown
-    </Badge>
+    <span
+      data-status={status.toLowerCase()}
+      className={cn(BADGE_BASE_CLASS, badgeSizeClass('sm'), toneClasses(meta?.tone).soft)}
+    >
+      {Icon && <Icon className="shrink-0" strokeWidth={2.25} aria-hidden="true" />}
+      <span>{meta?.label ?? 'Unknown'}</span>
+    </span>
   );
 }
 
@@ -101,9 +98,11 @@ export default function ServicesListTable({
   pagination,
   emptyState,
 }: ServicesListTableProps) {
-  const router = useRouter();
-  const [, startTransition] = useTransition();
+  const searchParams = useSearchParams();
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  const hasActiveFilters = [...searchParams.keys()].some(
+    key => key !== 'page' && key !== 'error' && key !== 'sort'
+  );
 
   const totalItems = pagination?.totalItems ?? services.length;
   const showingFrom =
@@ -117,31 +116,29 @@ export default function ServicesListTable({
     : services.length;
 
   return (
-    <div className="rounded-xl border border-ink-200 bg-card shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="px-4 md:px-5 py-3.5 bg-card border-b border-ink-200 flex flex-wrap justify-between items-center gap-3">
-        <div className="min-w-[220px]">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-ink-500 font-extrabold">
+    <section
+      aria-labelledby="service-directory-heading"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-5">
+        <div className="min-w-0">
+          <h2 id="service-directory-heading" className="text-sm font-semibold text-foreground">
             Service directory
-          </div>
-          <div className="text-sm text-ink-600 mt-0.5">
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
             Showing{' '}
-            <span className="font-semibold text-ink-900">
-              {showingFrom}-{showingTo}
+            <span className="font-medium text-foreground">
+              {showingFrom}–{showingTo}
             </span>{' '}
-            of <span className="font-semibold text-ink-900">{totalItems}</span>
-          </div>
-          <div className="text-[11px] text-ink-500 mt-1">
-            Active incident counts exclude snoozed and suppressed incidents.
-          </div>
+            of <span className="font-medium text-foreground">{totalItems}</span>
+          </p>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="p-3 md:p-4 lg:p-5 bg-card">
+      <div className="p-3 md:p-4">
         {services.some(service => service.metricDataState === 'unavailable') && (
           <div
-            className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+            className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
             role="alert"
           >
             Live service incident statistics are unavailable. Zero counts are hidden until metrics
@@ -149,167 +146,162 @@ export default function ServicesListTable({
           </div>
         )}
         {services.length === 0 ? (
-          <EmptyState
-            icon={<Server className="h-6 w-6 text-muted-foreground" />}
-            title={emptyState?.title ?? 'No services found'}
-            description={
-              emptyState?.description ??
-              'Try adjusting your search query or filters to find services.'
-            }
-            size="md"
-          />
+          hasActiveFilters ? (
+            <EmptyState
+              icon={<SearchX />}
+              title="No services match these filters"
+              description="Nothing in your scope matches the current search and filters."
+              action={
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/services">Clear filters</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={<Server />}
+              title={emptyState?.title ?? 'No services yet'}
+              description={
+                emptyState?.description ??
+                (canManageServices
+                  ? 'A service is anything that can raise an incident: an API, a queue, a database. Use “New service” above to add the first one, then connect an integration.'
+                  : 'Services appear here once an administrator or responder creates them.')
+              }
+            />
+          )
         ) : (
-          <div className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-2" aria-labelledby="service-directory-heading">
             {services.map(service => (
-              <div
+              <li
                 key={service.id}
                 className={cn(
-                  'group relative rounded-2xl border bg-card shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-all',
-                  'hover:shadow-md hover:-translate-y-[1px]',
-                  'focus-within:ring-2 focus-within:ring-primary/20',
-                  'border-ink-200',
-                  statusAccentClass[service.dynamicStatus] ?? 'border-l-ink-300',
-                  'border-l-4',
-                  navigatingId === service.id && 'opacity-70 pointer-events-none'
+                  'group relative rounded-lg border border-border bg-card transition-colors duration-150 hover:border-ink-300 hover:bg-muted/40',
+                  navigatingId === service.id && 'opacity-70'
                 )}
-                onClick={e => {
-                  const target = e.target as HTMLElement;
-                  if (target.closest('[data-no-row-nav="true"]')) return;
-                  setNavigatingId(service.id);
-                  startTransition(() => {
-                    router.push(`/services/${service.id}`);
-                  });
-                }}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setNavigatingId(service.id);
-                    startTransition(() => {
-                      router.push(`/services/${service.id}`);
-                    });
-                  }
-                }}
               >
-                {/* Loading overlay */}
                 {navigatingId === service.id && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[1px] rounded-2xl">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span className="text-sm font-medium text-primary">Opening...</span>
-                    </div>
+                  <div
+                    role="status"
+                    className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-card/70"
+                  >
+                    <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm">
+                      <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
+                      Opening…
+                    </span>
                   </div>
                 )}
-                <div className="flex gap-4 items-start p-3 md:p-4">
-                  {/* Icon/Avatar Placeholder if needed, or just status indicator */}
-
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="flex flex-col gap-2 px-3.5 py-3 sm:flex-row sm:items-center sm:gap-4 md:px-4">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <Link
                         href={`/services/${service.id}`}
-                        data-no-row-nav="true"
-                        className="block font-extrabold text-ink-900 leading-tight truncate text-base hover:text-primary transition-colors"
+                        onClick={e => {
+                          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)
+                            return;
+                          setNavigatingId(service.id);
+                        }}
+                        className="min-w-0 max-w-full truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring md:text-base"
                       >
                         {service.name}
                       </Link>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ServiceStatusBadge status={service.dynamicStatus} />
-                        {service.maintenanceTitle && (
-                          <Badge variant="info" size="xs" title={service.maintenanceTitle}>
-                            In maintenance
-                          </Badge>
-                        )}
-                      </div>
+                      <ServiceStatusBadge status={service.dynamicStatus} />
+                      {service.maintenanceTitle && (
+                        <span
+                          title={service.maintenanceTitle}
+                          className={cn(
+                            BADGE_BASE_CLASS,
+                            badgeSizeClass('xs'),
+                            toneClasses('info').soft
+                          )}
+                        >
+                          <Wrench className="shrink-0" aria-hidden="true" />
+                          In maintenance
+                        </span>
+                      )}
                     </div>
 
-                    <p className="text-sm text-ink-500 line-clamp-1 max-w-3xl">
+                    <p className="line-clamp-1 max-w-3xl text-sm text-muted-foreground">
                       {service.description || 'No description provided.'}
                     </p>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-ink-500 font-medium">
-                        {service.team && (
-                          <div className="flex items-center gap-1.5 text-ink-600 bg-ink-100 px-2 py-1 rounded-md">
-                            <Users className="h-3 w-3" />
-                            {service.team.name}
-                          </div>
-                        )}
-
-                        {service.region && (
-                          <div className="flex items-center gap-1.5">
-                            <Globe className="h-3 w-3 opacity-70" />
-                            {service.region}
-                          </div>
-                        )}
-
-                        {service.slaTier && (
-                          <div className="flex items-center gap-1.5">
-                            <Shield className="h-3 w-3 opacity-70" />
-                            {service.slaTier}
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-1.5 ml-1">
-                          {service.metricDataState === 'unavailable' ? (
-                            <span className="text-amber-700 font-semibold dark:text-amber-300">
-                              Metrics unavailable
-                            </span>
-                          ) : service.openIncidentCount > 0 ? (
-                            <span className="text-red-600 font-semibold dark:text-red-400">
-                              {service.openIncidentCount} active incidents
-                            </span>
-                          ) : (
-                            <span className="text-emerald-600 dark:text-emerald-400">
-                              No active incidents
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div data-no-row-nav="true" className="flex items-center gap-2">
-                        {canManageServices && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 rounded-full bg-ink-50 hover:bg-ink-100 border border-ink-200"
-                                onClick={e => e.stopPropagation()}
-                              >
-                                <MoreHorizontal className="h-4 w-4 text-ink-600" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/services/${service.id}`}
-                                  className="flex items-center gap-2 cursor-pointer"
-                                >
-                                  <Eye className="h-4 w-4 text-ink-500" />
-                                  View Details
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/services/${service.id}/settings`}
-                                  className="flex items-center gap-2 cursor-pointer"
-                                >
-                                  <Settings className="h-4 w-4 text-ink-500" />
-                                  Settings
-                                </Link>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      {service.team && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Users className="h-3 w-3" aria-hidden="true" />
+                          {service.team.name}
+                        </span>
+                      )}
+                      {service.region && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Globe className="h-3 w-3" aria-hidden="true" />
+                          {service.region}
+                        </span>
+                      )}
+                      {service.slaTier && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Shield className="h-3 w-3" aria-hidden="true" />
+                          {service.slaTier}
+                        </span>
+                      )}
                     </div>
                   </div>
+
+                  <div className="relative z-10 flex shrink-0 items-center gap-3 text-xs">
+                    {service.metricDataState === 'unavailable' ? (
+                      <span className="font-medium text-amber-700 dark:text-amber-300">
+                        Metrics unavailable
+                      </span>
+                    ) : service.openIncidentCount > 0 ? (
+                      <Link
+                        href={`/incidents?serviceId=${service.id}&filter=all_open`}
+                        className="rounded-sm font-semibold tabular-nums text-rose-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-rose-300"
+                      >
+                        {service.openIncidentCount} active{' '}
+                        {service.openIncidentCount === 1 ? 'incident' : 'incidents'}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">No active incidents</span>
+                    )}
+
+                    {canManageServices && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-11 w-11 p-0 text-muted-foreground hover:text-foreground sm:h-8 sm:w-8"
+                            aria-label={`Actions for ${service.name}`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem asChild>
+                            <Link
+                              href={`/services/${service.id}`}
+                              className="flex items-center gap-2"
+                            >
+                              <Eye className="h-4 w-4 text-muted-foreground" aria-hidden />
+                              View details
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link
+                              href={`/services/${service.id}/settings`}
+                              className="flex items-center gap-2"
+                            >
+                              <Settings className="h-4 w-4 text-muted-foreground" aria-hidden />
+                              Settings
+                            </Link>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
         {pagination && (
@@ -322,6 +314,6 @@ export default function ServicesListTable({
           />
         )}
       </div>
-    </div>
+    </section>
   );
 }

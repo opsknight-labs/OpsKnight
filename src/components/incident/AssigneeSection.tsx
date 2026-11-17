@@ -257,57 +257,62 @@ export default function AssigneeSection({
   }
 
   // List/Detail Variant - Display as Card/Row Item
+  const summary = (
+    <>
+      {assignee ? (
+        <>
+          <UserAvatar
+            userId={assignee.id}
+            name={assignee.name}
+            gender={assignee.gender}
+            avatarUrl={assignee.avatarUrl}
+            size="xs"
+            className="border-border/80"
+          />
+          <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
+            {assignee.name.split(' ')[0]}
+          </span>
+        </>
+      ) : team ? (
+        <>
+          <div className="w-6 h-6 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-200/80 dark:border-indigo-800/60">
+            <UsersIcon className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
+            {team.name}
+          </span>
+        </>
+      ) : (
+        <>
+          <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center border border-border/80 text-muted-foreground">
+            <User className="h-3 w-3" />
+          </div>
+          <span className="text-sm italic text-muted-foreground">Unassigned</span>
+        </>
+      )}
+    </>
+  );
+  const rowClass = 'flex items-center gap-2 px-2 py-1 -ml-2 rounded-lg transition-colors';
+
+  if (!canManage) return <div className={rowClass}>{summary}</div>;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild disabled={!canManage}>
-        <div
-          data-no-row-nav="true"
-          onClick={e => e.stopPropagation()}
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Assignee: ${assignee ? assignee.name : team ? team.name : 'Unassigned'}. Change assignee`}
           className={cn(
-            'flex items-center gap-2 px-2 py-1 -ml-2 rounded-lg transition-colors',
-            canManage ? 'cursor-pointer hover:bg-muted/60' : 'cursor-default'
+            rowClass,
+            'cursor-pointer hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
           )}
-          role="button"
-          tabIndex={canManage ? 0 : -1}
         >
-          {assignee ? (
-            <>
-              <UserAvatar
-                userId={assignee.id}
-                name={assignee.name}
-                gender={assignee.gender}
-                avatarUrl={assignee.avatarUrl}
-                size="xs"
-                className="border-border/80"
-              />
-              <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
-                {assignee.name.split(' ')[0]}
-              </span>
-            </>
-          ) : team ? (
-            <>
-              <div className="w-6 h-6 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-200/80 dark:border-indigo-800/60">
-                <UsersIcon className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
-                {team.name}
-              </span>
-            </>
-          ) : (
-            <>
-              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center border border-border/80 text-muted-foreground">
-                <User className="h-3 w-3" />
-              </div>
-              <span className="text-sm italic text-muted-foreground">Unassigned</span>
-            </>
-          )}
-        </div>
+          {summary}
+        </button>
       </PopoverTrigger>
-      {canManage && (
-        <PopoverContent className="p-0 w-64" align="start">
-          {ReassignContent}
-        </PopoverContent>
-      )}
+      <PopoverContent className="p-0 w-64" align="start">
+        {ReassignContent}
+      </PopoverContent>
     </Popover>
   );
 }

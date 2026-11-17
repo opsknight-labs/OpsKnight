@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -13,92 +14,98 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
-import { Plus, X, Lightbulb, Zap } from 'lucide-react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/shadcn/dialog';
+import { Plus } from 'lucide-react';
 import EscalationPolicyCombobox from '@/components/service/EscalationPolicyCombobox';
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" loading={pending}>
+      {!pending && <Plus aria-hidden="true" />}
+      {pending ? 'Creating service…' : 'Create service'}
+    </Button>
+  );
+}
 
 type CreateServiceFormProps = {
   teams: Array<{ id: string; name: string }>;
   policies: Array<{ id: string; name: string }>;
-  createAction: (formData: FormData) => void;
+  createAction: (formData: FormData) => Promise<void> | void;
+  /** Classes for the trigger button (e.g. when placed on the dark page header). */
+  triggerClassName?: string;
 };
 
 export default function CreateServiceForm({
   teams,
   policies,
   createAction,
+  triggerClassName,
 }: CreateServiceFormProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [teamId, setTeamId] = useState('');
   const [slaTier, setSlaTier] = useState('');
   const [escalationPolicyId, setEscalationPolicyId] = useState('');
 
-  if (!isOpen) {
-    return (
-      <Button
-        variant="outline"
-        className="w-full h-auto py-8 border-dashed border-2 hover:border-primary hover:bg-primary/5 flex flex-col gap-2 group transition-all"
-        onClick={() => setIsOpen(true)}
-      >
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-          <Plus className="h-6 w-6" />
-        </div>
-        <div className="text-center">
-          <h3 className="font-semibold text-lg">Create New Service</h3>
-          <p className="text-muted-foreground text-sm">
-            Add a new service to monitor and manage incidents
-          </p>
-        </div>
-      </Button>
-    );
-  }
+  const reset = () => {
+    setTeamId('');
+    setSlaTier('');
+    setEscalationPolicyId('');
+  };
+
+  // The server action redirects back to the list (or to `?error=`); close either way.
+  const submit = async (formData: FormData) => {
+    try {
+      await createAction(formData);
+    } finally {
+      setIsOpen(false);
+      reset();
+    }
+  };
 
   return (
-    <Card className="border-primary/20 shadow-lg relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 to-primary" />
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <CardTitle>Create New Service</CardTitle>
-            <CardDescription>
-              Configure basic settings for your new service. Additional options available after
-              creation.
-            </CardDescription>
-          </div>
-          <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-8 w-8">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardHeader>
-
-      <form action={createAction}>
-        <input type="hidden" name="teamId" value={teamId === 'unassigned' ? '' : teamId} />
-        <input type="hidden" name="slaTier" value={slaTier} />
-        <input
-          type="hidden"
-          name="escalationPolicyId"
-          value={escalationPolicyId === 'none' ? '' : escalationPolicyId}
-        />
-        <CardContent className="grid gap-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className={triggerClassName}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          New service
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>New service</DialogTitle>
+          <DialogDescription>
+            Name the service and choose who owns it. Integrations, notifications and webhooks are
+            set up from the service page after it is created.
+          </DialogDescription>
+        </DialogHeader>
+        <form action={submit} className="space-y-5">
+          <input type="hidden" name="teamId" value={teamId === 'unassigned' ? '' : teamId} />
+          <input type="hidden" name="slaTier" value={slaTier} />
+          <input
+            type="hidden"
+            name="escalationPolicyId"
+            value={escalationPolicyId === 'none' ? '' : escalationPolicyId}
+          />
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="name">
-                Service Name <span className="text-destructive">*</span>
+              <Label htmlFor="service-name">
+                Service name <span className="text-destructive">*</span>
               </Label>
-              <Input id="name" name="name" required placeholder="e.g. API Gateway" />
+              <Input id="service-name" name="name" required placeholder="e.g. API Gateway" />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="teamId">Owner Team</Label>
+              <Label htmlFor="service-team">Owner team</Label>
               <Select value={teamId} onValueChange={setTeamId}>
-                <SelectTrigger>
+                <SelectTrigger id="service-team">
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
@@ -113,18 +120,18 @@ export default function CreateServiceForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="service-description">Description</Label>
               <Input
-                id="description"
+                id="service-description"
                 name="description"
                 placeholder="Brief description of the service"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="region">Region</Label>
+              <Label htmlFor="service-region">Region</Label>
               <Input
-                id="region"
+                id="service-region"
                 name="region"
                 list="regions-list"
                 placeholder="Select or enter region"
@@ -157,19 +164,19 @@ export default function CreateServiceForm({
                 <option value="ME (Middle East)" />
                 <option value="AF (Africa)" />
               </datalist>
-              <p className="text-[0.8rem] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Optional. Used to display impacted regions.
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="slaTier">Service Tier</Label>
+              <Label htmlFor="service-tier">Service tier</Label>
               <p className="text-xs text-muted-foreground">
                 Informational service classification. Does not control incident response SLA.
               </p>
               <Select value={slaTier} onValueChange={setSlaTier}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Tier" />
+                <SelectTrigger id="service-tier">
+                  <SelectValue placeholder="Select tier" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Platinum">Platinum (99.99%)</SelectItem>
@@ -179,21 +186,13 @@ export default function CreateServiceForm({
                   <SelectItem value="Internal">Internal (Best Effort)</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[0.8rem] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Optional. Defines availability expectations.
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="escalationPolicyId" className="flex items-center gap-2">
-                Escalation Policy
-                <span
-                  className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground cursor-help"
-                  title="Defines who gets notified when incidents occur"
-                >
-                  ?
-                </span>
-              </Label>
+              <Label htmlFor="createServiceEscalationPolicyId">Escalation policy</Label>
               <EscalationPolicyCombobox
                 policies={policies}
                 value={escalationPolicyId}
@@ -202,35 +201,26 @@ export default function CreateServiceForm({
                 name=""
                 placeholder="No escalation policy"
               />
-              <div className="text-[0.8rem] text-muted-foreground">
-                <Link href="/policies" className="text-primary hover:underline font-medium">
+              <p className="text-xs text-muted-foreground">
+                Decides who is paged when an incident opens.{' '}
+                <Link
+                  href="/policies"
+                  className="rounded-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   Manage policies
                 </Link>
-              </div>
+              </p>
             </div>
           </div>
 
-          <Alert className="bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300">
-            <Lightbulb className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <AlertTitle className="text-amber-800 font-semibold flex items-center gap-2 dark:text-amber-300">
-              Pro Tip: Notifications
-            </AlertTitle>
-            <AlertDescription className="text-amber-800/90 mt-1 dark:text-amber-300">
-              Once created, navigate to service settings to configure Slack, Microsoft Teams, and
-              webhook notifications.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-
-        <CardFooter className="flex justify-end gap-3 bg-muted/40 p-4">
-          <Button variant="ghost" onClick={() => setIsOpen(false)} type="button">
-            Cancel
-          </Button>
-          <Button type="submit">
-            <Zap className="mr-2 h-4 w-4" /> Create Service
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+          <DialogFooter className="gap-2 border-t border-border pt-4 sm:gap-0">
+            <Button variant="ghost" onClick={() => setIsOpen(false)} type="button">
+              Cancel
+            </Button>
+            <SubmitButton />
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

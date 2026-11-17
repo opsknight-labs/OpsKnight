@@ -41,6 +41,7 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
 import { describeBinding } from '@/lib/runbooks/presentation/binding-contract';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { Breadcrumbs } from '@/components/patterns/PageHeader';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import RuleConfigurationCheck from '@/components/runbooks/RuleConfigurationCheck';
@@ -181,12 +182,16 @@ export default async function AutomationRulePage({
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <DetailHeroBanner
         statsPlacement="bottom"
-        breadcrumb={{
-          label: rule.service?.name ?? 'Service Automations',
-          href: configureHref,
-          current: ruleName,
-        }}
-        tag="AUTOMATION RULE · SERVICE PROTECTOR"
+        breadcrumbSlot={
+          <Breadcrumbs
+            items={[
+              { label: 'Services', href: '/services' },
+              { label: rule.service?.name ?? 'Service', href: `/services/${input.id}` },
+              { label: 'Runbooks', href: configureHref },
+              { label: ruleName },
+            ]}
+          />
+        }
         badges={
           <div className="flex flex-wrap items-center gap-1.5">
             <RuleStatusPill kind={statusKind} />

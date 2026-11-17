@@ -43,7 +43,7 @@ import ScheduleLinkedPolicies, {
   type LinkedPolicy,
 } from '@/components/schedules/ScheduleLinkedPolicies';
 import DeleteScheduleCard from '@/components/schedules/DeleteScheduleCard';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import PageHeader from '@/components/patterns/PageHeader';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -723,24 +723,11 @@ export default async function ScheduleDetailPage({
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Schedules',
-          href: '/schedules',
-          current: schedule.name,
-        }}
-        tag="On-call schedule"
+      <PageHeader
+        breadcrumbs={[{ label: 'Schedules', href: '/schedules' }, { label: schedule.name }]}
         title={schedule.name}
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Calendar className="h-5 w-5" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
-            {viewModel.summary}
-          </p>
-        }
+        icon={Calendar}
+        description={viewModel.summary}
         stats={[
           {
             label: 'Responders',
@@ -756,7 +743,7 @@ export default async function ScheduleDetailPage({
             label: 'Status',
             value: viewModel.coverageGap ? 'Gap' : 'Covered',
             icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-            valueClassName: viewModel.coverageGap ? 'text-amber-100' : 'text-emerald-100',
+            valueClassName: viewModel.coverageGap ? 'text-amber-200' : 'text-emerald-200',
           },
         ]}
       />

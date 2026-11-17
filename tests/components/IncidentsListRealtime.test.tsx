@@ -1,15 +1,18 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IncidentListItem } from '@/types/incident-list';
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
+  push: vi.fn(),
+  searchParams: new URLSearchParams(),
   realtime: { recentIncidents: [] as Record<string, unknown>[], isConnected: true },
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: mocks.refresh, push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
+  useSearchParams: () => mocks.searchParams,
+  usePathname: () => '/incidents',
 }));
 vi.mock('@/contexts/TimezoneContext', () => ({ useTimezone: () => ({ userTimeZone: 'UTC' }) }));
 vi.mock('@/components/ToastProvider', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
@@ -51,6 +54,8 @@ const existing: IncidentListItem = {
 describe('IncidentsListTable realtime projection', () => {
   beforeEach(() => {
     mocks.refresh.mockClear();
+    mocks.push.mockClear();
+    mocks.searchParams = new URLSearchParams();
     mocks.realtime.recentIncidents = [];
   });
 
@@ -309,5 +314,106 @@ describe('IncidentsListTable realtime projection', () => {
     >;
     expect(matchesRealtimeFilter(later, { createdAfter: '2026-01-01T00:00:00Z' })).toBe(true);
     expect(matchesRealtimeFilter(later, { createdBefore: new Date().toISOString() })).toBe(false);
+  });
+
+  describe('new incidents pill', () => {
+    const arrival = (id: string, extra: Record<string, unknown> = {}) => ({
+      ...existing,
+      id,
+      title: `Arrival ${id}`,
+      createdAt: new Date(),
+      service: { id: 'service-a', name: 'Service A' },
+      ...extra,
+    });
+
+    it('announces matching arrivals that are not on this page and returns to page 1', () => {
+      mocks.searchParams = new URLSearchParams('urgency=HIGH&page=2');
+      const props = {
+        incidents: [existing],
+        users: [],
+        canManageIncidents: false,
+        readOnly: true,
+        pagination: { currentPage: 2, totalPages: 2, totalItems: 51, itemsPerPage: 50 },
+        realtimeFilter: { urgency: 'HIGH' },
+      };
+      const { rerender } = render(<IncidentsListTable {...props} />);
+      expect(screen.queryByTestId('new-incidents-pill')).toBeNull();
+
+      mocks.realtime.recentIncidents = [
+        arrival('new-1'),
+        arrival('new-2'),
+        arrival('low-urgency', { urgency: 'LOW' }),
+      ];
+      rerender(<IncidentsListTable {...props} />);
+
+      // Not inserted into page 2; counted once each, filtered by the active view.
+      expect(screen.queryByText('Arrival new-1')).toBeNull();
+      const pill = screen.getByTestId('new-incidents-pill');
+      expect(pill).toHaveTextContent('2 new incidents');
+      expect(pill).toHaveTextContent('Show');
+      expect(pill.closest('[aria-live="polite"]')).not.toBeNull();
+
+      fireEvent.click(pill);
+      expect(mocks.push).toHaveBeenCalledWith('/incidents?urgency=HIGH');
+    });
+
+    it('counts arrivals pushed out of the page window by the active sort', () => {
+      const props = {
+        incidents: [existing],
+        users: [],
+        canManageIncidents: false,
+        readOnly: true,
+        pagination: { currentPage: 1, totalPages: 1, totalItems: 1, itemsPerPage: 1 },
+        realtimeFilter: { sort: 'oldest' },
+      };
+      const { rerender } = render(<IncidentsListTable {...props} />);
+      mocks.realtime.recentIncidents = [arrival('late')];
+      rerender(<IncidentsListTable {...props} />);
+
+      expect(screen.getByText(existing.title)).toBeInTheDocument();
+      expect(screen.queryByText('Arrival late')).toBeNull();
+      const pill = screen.getByTestId('new-incidents-pill');
+      expect(pill).toHaveTextContent('1 new incident');
+
+      // Already on page 1: "Show" re-reads the page instead of navigating.
+      fireEvent.click(pill);
+      expect(mocks.refresh).toHaveBeenCalled();
+      expect(mocks.push).not.toHaveBeenCalled();
+    });
+
+    it('stays hidden when arrivals fit on page 1 or are old updates', () => {
+      const props = {
+        incidents: [existing],
+        users: [],
+        canManageIncidents: false,
+        readOnly: true,
+        realtimeFilter: { serviceId: 'service-a' },
+      };
+      const { rerender } = render(<IncidentsListTable {...props} />);
+      mocks.realtime.recentIncidents = [
+        arrival('fits'),
+        arrival('historic', { createdAt: new Date('2025-01-01T00:00:00Z') }),
+      ];
+      rerender(<IncidentsListTable {...props} />);
+      expect(screen.getByText('Arrival fits')).toBeInTheDocument();
+      expect(screen.queryByTestId('new-incidents-pill')).toBeNull();
+    });
+
+    it('clears once the server list is refreshed', () => {
+      const props = {
+        incidents: [existing],
+        users: [],
+        canManageIncidents: false,
+        readOnly: true,
+        pagination: { currentPage: 2, totalPages: 2, totalItems: 51, itemsPerPage: 50 },
+      };
+      const { rerender } = render(<IncidentsListTable {...props} />);
+      mocks.realtime.recentIncidents = [arrival('new-1')];
+      rerender(<IncidentsListTable {...props} />);
+      expect(screen.getByTestId('new-incidents-pill')).toBeInTheDocument();
+
+      rerender(<IncidentsListTable {...props} incidents={[{ ...existing }]} />);
+      expect(screen.queryByTestId('new-incidents-pill')).toBeNull();
+    });
   });
 });

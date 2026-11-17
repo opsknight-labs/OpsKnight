@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
-import { ChevronLeft, AlertCircle, Webhook } from 'lucide-react';
+import PageHeader from '@/components/patterns/PageHeader';
+import { AlertCircle, Webhook } from 'lucide-react';
 import { assertCanModifyService } from '@/lib/rbac';
 import { requirePageAccess } from '@/lib/access/server';
 
@@ -56,51 +57,22 @@ export default async function NewWebhookPage({
 
   return (
     <main className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-        <Link
-          href="/services"
-          className="hover:text-foreground transition-colors flex items-center gap-1"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-          Services
-        </Link>
-        <span className="opacity-40">/</span>
-        <Link
-          href={`/services/${id}?tab=notifications`}
-          className="hover:text-foreground transition-colors"
-        >
-          {service.name}
-        </Link>
-        <span className="opacity-40">/</span>
-        <Link
-          href={`/services/${id}?tab=notifications`}
-          className="hover:text-foreground transition-colors"
-        >
-          Notifications
-        </Link>
-        <span className="opacity-40">/</span>
-        <span className="font-medium text-foreground">Add Webhook</span>
-      </div>
-
-      <div className="relative overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-gradient-to-r from-card via-card to-primary/5 p-5 sm:p-6 shadow-xs">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
-            <Webhook className="h-6 w-6" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-              Outbound Notification
-            </span>
-            <h1 className="mt-1.5 text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">
-              Add Webhook Integration
-            </h1>
-            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              Configure real-time incident event delivery to an external webhook for{' '}
-              <strong className="text-foreground">{service.name}</strong>
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Services', href: '/services' },
+          { label: service.name, href: `/services/${id}` },
+          { label: 'Notifications', href: `/services/${id}?tab=notifications` },
+          { label: 'Add webhook' },
+        ]}
+        title="Add webhook"
+        icon={Webhook}
+        description={
+          <>
+            Send incident events from <strong className="text-white">{service.name}</strong> to an
+            external endpoint in real time.
+          </>
+        }
+      />
 
       <div className="max-w-3xl">
         {errorCode === 'duplicate-webhook' && (

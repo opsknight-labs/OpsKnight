@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useViewportFill } from '@/hooks/useViewportFill';
 import { useLiveDashboard } from './LiveDashboardProvider';
 import { IncidentInspector } from './IncidentInspector';
+import { TableRowsSkeleton } from '@/components/patterns/Skeletons';
 
 /**
  * Above-the-fold operations area. On desktop it is sized to exactly the visible viewport so the
@@ -14,6 +15,7 @@ export default function DashboardCockpit({ feed, rail }: { feed: ReactNode; rail
   const { ref, height } = useViewportFill<HTMLDivElement>();
   const {
     snapshot,
+    loading,
     incidents,
     selectedIncidentId,
     selectedIncident: providerSelectedIncident,
@@ -63,6 +65,23 @@ export default function DashboardCockpit({ feed, rail }: { feed: ReactNode; rail
             onAssignSelf={assignIncidentToMe}
             onClose={() => selectIncident(null)}
           />
+        ) : snapshot === null ? (
+          // Without a snapshot the rail would read as "all clear"; show its real state instead.
+          loading ? (
+            <TableRowsSkeleton
+              rows={5}
+              columns={2}
+              showHeader={false}
+              label="Loading responder overview"
+            />
+          ) : (
+            <section
+              aria-label="Responder overview"
+              className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground"
+            >
+              Queue, hotspots and on-call coverage appear once live data loads.
+            </section>
+          )
         ) : (
           rail
         )}
