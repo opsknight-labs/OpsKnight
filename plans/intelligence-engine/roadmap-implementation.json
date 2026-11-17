@@ -288,19 +288,23 @@
         "Migrations 20261111210050_ops_insights, 20261111210100_metric_rollup_subject_index, 20261111210200_runbook_execution_completed_index and 20261111230000_ai_result_cache (expand-only); new tables registered in the privacy registry and the data-processing inventory; User.opsInsightDecisions is SET_NULL on delete",
         "K controls (all opt-in): capability routing defaults through spend controls (small model for classify, tool hops and phrasing, strong model for diagnosis and postmortems; an administrator's route still wins), a background AI allocation of the daily budget (default 30%, shed first), per-service daily cap on AI-written proactive notes, degradation from 80% of a budget (small model, shorter answers, background AI paused) and basic mode at 100%; phraseInsights rewords one scope's insights in one cached structured call only when a reader expands 'Explain in plain words'",
         "J1 automation: replay of a draft against 7 to 30 days of stored alerts (REST and the review dialog), rule-health insights (never matched, shadowed, unmapped field, overridden by responders, policy never acknowledged), mined rule suggestions that open the editor pre-filled, Squire automation tools (explain routing, explain a rule, draft a rule as a NAVIGATE proposal; never saves or publishes)",
-        "J2 escalation: EscalationStepAttempt captured in the escalation commit path, acknowledgement attributed to the step, ops.escalation.step_outcome rollup source, policy insights (step never acknowledged, night timeouts, always skipped with reason, p75 wait suggestion, one person on every step, unused policy), per-step line and Insights tab on the policy page; npm run backfill:escalation-attempts rebuilds 90 days (approximate, never feeds the night insight)",
+        "J2 escalation: EscalationStepAttempt captured in the escalation commit path, acknowledgement attributed to the step, ops.escalation.step_outcome rollup source, policy insights (step never acknowledged, night timeouts, always skipped with reason, p75 wait suggestion, one person on every step, unused policy), per-step line and Insights tab on the policy page; a resumable BACKFILL_ESCALATION_ATTEMPTS lane job rebuilds 90 days from timeline text while escalation insights are on (approximate, never feeds the night insight)",
         "J3 on-call: OnCallCoverageDay snapshot captured per schedule day (after overrides), load and fairness from ops.pages.user_hour (Jain index, night and weekend pages), schedule insights (gap, same person primary and backup, unfair) and person insights (load, night, busy next shift), Load & fairness tab and My on-call load card; npm run backfill:oncall-coverage",
         "J4 postmortems: repeat-cause producer, recurrence strip (mounted in the incident insights inspector during integration), evidence-filled drafts, action-item suggestions with duplicate detection, postmortem checklist",
         "J5 runbooks: runbook health from ops.runbook.run and ops.runbook.step_outcome (failure rate, unused, failing step, always-retried step, repeated follow-up notes), missing runbook from hand-resolved recurring problems, configurable fix window (IntelligenceSettings.runbookFixWindowMinutes), runbook weight proposals computed by the worker",
         "J6 notifications: acknowledgement capture per notification, personal and service noise reports from ops.pages.user_service and ops.pages.service, opt-in bundling of low-urgency pages (NotificationPreference.bundleLowUrgencyPages)",
         "J7 helpers (IntelligenceSettings.opsHelpersEnabled, default off): create-incident suggestions, status-update drafts, knowledge results in the command palette, 'why did this change' on analytics cards, operations insights in the weekly digest, a CI guard on median Squire evaluation prompt tokens per case",
-        "Integration (wip/intel-ops-integrated on Workstream I): eleven producers registered once, one switch per area, slice migrations 20261113020000 to 20261113110000 apply cleanly after the base with no new drift; boundary test updated for K phrasing and spend tiers"
+        "Integration (wip/intel-ops-integrated on Workstream I): eleven producers registered once, one switch per area, slice migrations 20261113020000 to 20261113110000 apply cleanly after the base with no new drift; boundary test updated for K phrasing and spend tiers",
+        "J1.4 intelligence fields as automation conditions (IntelligenceSettings.automationIntelligenceFieldsEnabled, default off): inMaintenance, recentRiskyChange, sloBurning, flapping, stormActive read from the 30 s pre-paging snapshot with no per-event query; MISSING on a cold snapshot; replay rebuilds them from stored evidence",
+        "J1.5 one pipeline, one trace (NoiseControlPolicy.pipelineOrder, null = OFF): SHADOW records the noise-first automation comparison in evidence.pipeline, ON runs automation after the noise decision (REROUTE_SERVICE pins the target policy, ATTACH_RUNBOOK suggests bound runbooks); 'Why did this route here?' on the incident automation card and preRoutingTrace on the decisions REST route",
+        "J1 mining: team hand-offs become 'use escalation policy' suggestions when exactly one live policy pages that team first (producer v2, capped at 1000 groups / 2000 incidents)",
+        "J7 weekly team brief in the digest (opsHelpersEnabled plus operations insights): per team, incidents this week vs last from rollups and the top 3 open insights, scoped readers, optional cached phrasing (callSite background, prompt digest.team-brief v1)",
+        "R4 engine: pre-paging lookup pool sized from the main pool (PREPAGING_LOOKUP_POOL_SIZE, default a quarter of it, 2-8) with every connection warmed; savepoint opened before the deadline; opsknight_prepaging_lookups_total{route,outcome}; runbook weight fit as a fenced FIT_RUNBOOK_WEIGHTS lane item with an input-hash skip; impact card shows downstream SLO burn and affected status-page subscribers (METRICS_READ_ALL)",
+        "Integrated lane runs in a child process (crash isolation) with its own pool, burst-start yield and early pre-paging lookups overlapping the event transaction's reads (wip/intel-ingest-gate)",
+        "UI verification: tests/e2e/intelligence-ops.spec.ts covers the intelligence surfaces at 1280 and 390 px, light and dark, with axe and 44 px targets; touch-target, contrast, dark-mode and keyboard-scroll fixes on those surfaces",
+        "Final integration (wip/intel-final-int): j1-hot, j7-rest, r4-engine, ui-verify and ingest-gate merged; tsc clean, architecture suite 485/485, no new schema drift vs base, slice integration files 229/229, ingestion suite 118/118"
       ],
       "remaining": [
-        "J1.4 and J1.5 (intelligence fields and pipeline order at ingestion) wait for the ingestion gate (plan R3, SHADOW comparison and ingestion A/B first)",
-        "Mined automation rules are per service only; team- and policy-level rule mining was not built in J1",
-        "Team brief (J7) was not delivered by the helpers slice",
-        "Escalation history before the upgrade is a manual script (npm run backfill:escalation-attempts), approximate and not run automatically; on-call coverage history likewise (npm run backfill:oncall-coverage)",
         "On-call load counts a person's pages in every rotation they belong to (a notification does not record its schedule)",
         "Responder-correction detection matches priority changes on message text (no dedicated event type)",
         "Maintenance-window risk in the busy-next-shift insight covers one-off windows only; recurring windows are not expanded",
@@ -309,7 +313,13 @@
         "POLICY insight scope uses the ESCALATION_POLICY_READ authorization check rather than a ReadWhere helper, because none exists for policies",
         "Non-Claude model families are charged the full input rate for cache-read and cache-write tokens; per-family cache rates were not added",
         "The postmortem recurrence strip shows only when the incident inspector opens (it has no strip chip or section of its own)",
-        "Full unit suite, full typecheck, build and Playwright e2e for the integrated branch run in the landing script, not in this integration"
+        "Full unit suite, full typecheck, build and Playwright e2e for the integrated branch run in the landing script, not in this integration",
+        "J1.4/J1.5 ingestion A/B (pipeline order shadow/on, automation intelligence) not run; benchmark flags exist in tests/load/intelligence-ingestion-ab.ts",
+        "J1.5 rolling deploy: older workers reject attachRunbookIds on EVALUATE_TRIGGER (only once a service sets pipeline order ON); ATTACH_RUNBOOK binding-to-suggestion has no end-to-end test",
+        "J1.4 flapping field reads recorded noise-control FLAPPING decisions only (not legacy checkAlertFlapping); the automation Test tab supplies no intelligence values",
+        "Escalation attempt backfill reads timeline text only (job payloads are deleted after 7 days); policy-level rule mining covers team hand-offs only (no policy-change event exists); on-call coverage history is still a manual script (npm run backfill:oncall-coverage)",
+        "Lane bundle in the Docker image is wired (postbuild and build:scripts write scripts/dist, which the image copies) but no Docker build was run to prove the child process starts there",
+        "SettingsTopNav is not rendered anywhere, so 'Intelligence in the top nav' is unreachable; settings pages render at zoom 0.95; service 'Recurring problems' shows raw templates"
       ],
       "verification": "2026-11-16 integration of K and J1 to J7 on Workstream I (0d662b41f): 70 slice unit, component and architecture files (819 tests) passed, including intelligence-boundaries, design-system-contract, the MCP tools contract and the API v2 authorization matrix; 30 slice integration files (328 tests) passed on a fresh pgvector pg16 database after two test fixes (boundary rules for K and J5, scripted eval cases for the J1 tools); prisma validate, migrate deploy and migrate diff (no drift beyond the base's pre-existing drift)"
     },
@@ -397,10 +407,7 @@
   "mascot_integration": {
     "source": "User-supplied Downloads/OpsKnightSquire.tsx and opsknight-squire.svg (2026-11-06 11:47)",
     "states": 9,
-    "variants": [
-      "full",
-      "avatar"
-    ],
+    "variants": ["full", "avatar"],
     "verified": [
       "54 focused component tests passed",
       "Browser: desktop, 390px mobile, dark mode, basic-mode history",
@@ -482,10 +489,7 @@
   "local_runtime_recovery": {
     "verified_at": "2026-11-06",
     "restart": "User explicitly approved Docker Desktop restart; hung Docker app processes restarted without deleting containers or volumes.",
-    "restored_containers": [
-      "opsknight-intel-dev",
-      "opsknight-intel-roadmap-test"
-    ],
+    "restored_containers": ["opsknight-intel-dev", "opsknight-intel-roadmap-test"],
     "other_containers": "Other containers, including mcp939-testdb, were not individually operated and remain stopped after the engine restart.",
     "demo_url": "http://localhost:3100",
     "login": "HTTP 200; root redirects to the local login path with callbackUrl.",
