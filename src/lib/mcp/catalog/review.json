@@ -1426,22 +1426,22 @@
     "risk": "R1",
     "reason": "Not exposed yet: replay queues a background job over stored alerts. Assistants explain routing with automation_get_decision_trace and preview drafts with simulateAutomation.",
     "tool": null,
-    "routeSha256": "87314b75041425818f9df896afe17f7b5629b9de942f403f09368083663691eb",
+    "routeSha256": "a07f75faac6b35f6812f3e9331c24c69b39f04abe64255880a0483e62b6f088f",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "7aec3d2698554cc992d8dcef97ec5797fb482a5c90c7e8e2dc1bc004725e810c",
-    "actions": ["automation.read"]
+    "contractSha256": "2fed4322a6fc73e8bda56a2aab9d3d2651ac12de59d9319986e184fc27173034",
+    "actions": ["automation.read", "incident.read"]
   },
   "getAutomationReplay": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R0",
     "reason": "Not exposed yet: it only reads runs started by startAutomationReplay, which is not exposed.",
     "tool": null,
-    "routeSha256": "87314b75041425818f9df896afe17f7b5629b9de942f403f09368083663691eb",
+    "routeSha256": "a07f75faac6b35f6812f3e9331c24c69b39f04abe64255880a0483e62b6f088f",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "9f9195488e072b08cb1b2d7a843c76a0d9ea7e0a93a97bdc6966dd4b9b984fad",
-    "actions": ["automation.read"]
+    "contractSha256": "f2ee3a3230f1d7b698165cd44d7c8afae040cc7d410795165c8b32f12d4764a4",
+    "actions": ["automation.read", "incident.read"]
   },
   "restoreAutomationDraft": {
     "status": "APPROVAL_REQUIRED",
