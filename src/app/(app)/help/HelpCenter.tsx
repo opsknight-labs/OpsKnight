@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { EmptyState, PageHeader } from '@/components/patterns';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import {
   Card,
   CardContent,
@@ -21,7 +22,6 @@ import {
   HelpCircle,
   CheckCircle2,
   ChevronDown,
-  Sparkles,
   ArrowRight,
   Radio,
   Server,
@@ -36,6 +36,7 @@ import {
   Layers,
   Activity,
   X,
+  Keyboard,
 } from 'lucide-react';
 import { APP_VERSION } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -45,8 +46,6 @@ type DocTopic = {
   title: string;
   description: string;
   icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
   href: string;
   details: string[];
 };
@@ -58,8 +57,6 @@ const DOC_TOPICS: DocTopic[] = [
     description:
       'Docker Compose recipes, Helm charts, environment variables, PostgreSQL schemas, and persistent volume configuration.',
     icon: Server,
-    iconBg: 'bg-blue-500/10 dark:bg-blue-500/20',
-    iconColor: 'text-blue-600 dark:text-blue-400',
     href: 'https://opsknight.com/docs',
     details: [
       'Docker Compose & Kubernetes deployment',
@@ -73,8 +70,6 @@ const DOC_TOPICS: DocTopic[] = [
     description:
       'Ingest alerts from Prometheus Alertmanager, Datadog, AWS CloudWatch, Grafana, Sentry, and custom JSON payloads.',
     icon: Radio,
-    iconBg: 'bg-amber-500/10 dark:bg-amber-500/20',
-    iconColor: 'text-amber-600 dark:text-amber-400',
     href: 'https://opsknight.com/docs',
     details: [
       'Payload schema & deduplication keys',
@@ -88,8 +83,6 @@ const DOC_TOPICS: DocTopic[] = [
     description:
       'Configure bidirectional Slack and Microsoft Teams bots for automated war-room channel creation and responder paging.',
     icon: MessageSquare,
-    iconBg: 'bg-purple-500/10 dark:bg-purple-500/20',
-    iconColor: 'text-purple-600 dark:text-purple-400',
     href: 'https://opsknight.com/docs',
     details: [
       'Slack App manifest & Event Subscriptions setup',
@@ -103,8 +96,6 @@ const DOC_TOPICS: DocTopic[] = [
     description:
       'Automate incident management, programmatic responder schedules, on-call queries, and SCIM directory synchronization.',
     icon: KeyRound,
-    iconBg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
     href: 'https://opsknight.com/docs',
     details: [
       'Bearer token authentication & scoping',
@@ -226,102 +217,52 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
   }, [selectedCategory, searchQuery]);
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 md:px-6 md:py-8">
-      {/* Top Centralized Hero Banner matching Users/Action-Items/Incidents pages */}
-      <DetailHeroBanner
-        tag="Documentation & Resources"
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
         title="Help Center"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <HelpCircle className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        badges={
-          <Badge
-            variant="outline"
-            className="text-[10px] font-mono font-medium border-white/20 text-white/90 bg-white/10"
-          >
-            {APP_VERSION}
-          </Badge>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Official documentation, self-hosting guides, system health diagnostics, FAQs, and
-            open-source maintainer support.
-          </p>
-        }
-        actions={
-          <div className="flex items-center gap-2.5 flex-wrap">
+        icon={HelpCircle}
+        description="Documentation, self-hosting guides, answers to common questions and how to reach the maintainers."
+        badges={<span className={cn(pageHeaderBadgeClass, 'font-mono')}>{APP_VERSION}</span>}
+        secondaryActions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
+              className={cn('gap-2', pageHeaderActionClass)}
+            >
+              <Keyboard className="h-4 w-4" aria-hidden="true" />
+              Keyboard shortcuts
+              <kbd className="rounded border border-zinc-600 px-1 font-mono text-2xs">?</kbd>
+            </Button>
             <Button
               variant="outline"
               size="sm"
               asChild
-              className="gap-2 h-9 border-pink-500/40 hover:border-pink-500/60 bg-pink-500/10 hover:bg-pink-500/20 text-pink-200 transition-all shadow-2xs cursor-pointer"
+              className={cn('gap-2', pageHeaderActionClass)}
             >
               <a
                 href="https://github.com/sponsors/Dushyant-rahangdale"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <Heart className="h-4 w-4 text-pink-400 fill-pink-400" />
-                <span className="font-semibold text-white">Sponsor</span>
+                <Heart className="h-4 w-4" aria-hidden="true" />
+                Sponsor
+                <span className="sr-only">(opens in a new tab)</span>
               </a>
             </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
-              className="gap-1.5 text-xs h-9 border-white/20 bg-white/10 hover:bg-white/15 text-white shadow-2xs cursor-pointer"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-blue-300" />
-              <span>Hotkeys</span>
-              <kbd className="font-mono text-[10px] bg-white/15 px-1 rounded border border-white/20 text-white">
-                ?
-              </kbd>
-            </Button>
-
-            <Button
-              size="sm"
-              asChild
-              className="gap-2 h-9 shadow-2xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
-            >
-              <a href="https://opsknight.com/docs" target="_blank" rel="noopener noreferrer">
-                <Book className="h-4 w-4" />
-                <span>Docs</span>
-                <ExternalLink className="h-3 w-3 opacity-70" />
-              </a>
-            </Button>
-          </div>
+          </>
         }
-        statsPlacement="bottom"
-        stats={[
-          {
-            label: 'Documentation',
-            value: `${DOC_TOPICS.length} Guides`,
-            icon: <Book className="h-3.5 w-3.5 text-blue-200" />,
-            href: 'https://opsknight.com/docs',
-          },
-          {
-            label: 'Status',
-            value: 'Operational',
-            icon: <Activity className="h-3.5 w-3.5 text-emerald-200" />,
-            valueClassName: 'text-emerald-200',
-            href: '/status',
-          },
-          {
-            label: 'Curated FAQs',
-            value: `${FAQS.length} Answers`,
-            icon: <HelpCircle className="h-3.5 w-3.5 text-amber-200" />,
-            valueClassName: 'text-amber-200',
-          },
-          {
-            label: 'Release',
-            value: APP_VERSION,
-            icon: <Radio className="h-3.5 w-3.5 text-purple-200" />,
-            valueClassName: 'text-purple-200',
-          },
-        ]}
+        primaryAction={
+          <Button size="sm" asChild className="gap-2">
+            <a href="https://opsknight.com/docs" target="_blank" rel="noopener noreferrer">
+              <Book className="h-4 w-4" aria-hidden="true" />
+              Documentation
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+          </Button>
+        }
       />
 
       {mcpEntry}
@@ -330,10 +271,10 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
       <section className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">
               Documentation & Platform Diagnostics
             </h2>
-            <p className="text-xs sm:text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Official technical documentation, deployment guides, and live operational diagnostic
               tools.
             </p>
@@ -357,32 +298,24 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
             {DOC_TOPICS.map(topic => {
               const Icon = topic.icon;
               return (
-                <Card
-                  key={topic.id}
-                  className="flex flex-col border-border/80 bg-card/80 backdrop-blur-xs hover:border-border transition-all duration-150 shadow-2xs group"
-                >
+                <Card key={topic.id} className="flex flex-col">
                   <CardHeader className="p-4 pb-2">
                     <div className="flex items-center justify-between mb-2">
-                      <div
-                        className={cn(
-                          'flex h-9 w-9 items-center justify-center rounded-xl border border-border/40 shadow-2xs',
-                          topic.iconBg,
-                          topic.iconColor
-                        )}
-                      >
-                        <Icon className="h-4.5 w-4.5" />
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
+                        <Icon className="h-5 w-5" aria-hidden="true" />
                       </div>
                       <a
                         href={topic.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <span>Docs</span>
-                        <ExternalLink className="h-3 w-3" />
+                        <span className="sr-only">: {topic.title} (opens in a new tab)</span>
+                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
                       </a>
                     </div>
-                    <CardTitle className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                    <CardTitle className="text-sm font-semibold text-foreground">
                       {topic.title}
                     </CardTitle>
                     <CardDescription className="text-xs leading-relaxed line-clamp-2">
@@ -396,7 +329,10 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                           key={idx}
                           className="flex items-center gap-2 text-xs text-muted-foreground"
                         >
-                          <CheckCircle2 className="h-3 w-3 text-primary/70 shrink-0" />
+                          <CheckCircle2
+                            className="h-3 w-3 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
                           <span className="truncate">{detail}</span>
                         </div>
                       ))}
@@ -408,12 +344,12 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
           </div>
 
           {/* System & Diagnostics Card (4 cols, full height match) */}
-          <Card className="lg:col-span-4 flex flex-col justify-between border-border/80 bg-card/80 backdrop-blur-xs hover:border-border transition-all duration-150 shadow-2xs">
+          <Card className="flex flex-col justify-between lg:col-span-4">
             <div>
               <CardHeader className="p-5 pb-3">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
-                    <Activity className="h-5 w-5" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
+                    <Activity className="h-5 w-5" aria-hidden="true" />
                   </div>
                   <Badge variant="outline" className="text-2xs font-mono text-muted-foreground">
                     {APP_VERSION}
@@ -423,63 +359,59 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                   System & Diagnostics
                 </CardTitle>
                 <CardDescription className="text-xs leading-relaxed">
-                  Real-time infrastructure health checks, system event logs, and public status
-                  monitor.
+                  Health checks, system logs and the public status page.
                 </CardDescription>
               </CardHeader>
 
               <CardContent className="p-5 pt-0">
                 <div className="space-y-3 pt-2 border-t border-border/60 text-xs">
                   <div className="flex items-center justify-between text-muted-foreground py-1">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Public Status</span>
-                    </div>
+                    <span>Public status</span>
                     <Link
                       href="/status"
-                      className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                      className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      Status Page
-                      <ExternalLink className="h-3 w-3" />
+                      Status page
+                      <ArrowRight className="h-3 w-3" aria-hidden="true" />
                     </Link>
                   </div>
 
                   {isAdmin ? (
                     <>
                       <div className="flex items-center justify-between text-muted-foreground py-1 border-t border-border/40">
-                        <span>Instance Health</span>
+                        <span>Instance health</span>
                         <Link
                           href="/settings/system/health"
-                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          Health Checks
-                          <ArrowRight className="h-3 w-3" />
+                          Health checks
+                          <ArrowRight className="h-3 w-3" aria-hidden="true" />
                         </Link>
                       </div>
                       <div className="flex items-center justify-between text-muted-foreground py-1 border-t border-border/40">
-                        <span>Platform Logs</span>
+                        <span>Platform logs</span>
                         <Link
                           href="/system-logs"
-                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          System Logs
-                          <ArrowRight className="h-3 w-3" />
+                          System logs
+                          <ArrowRight className="h-3 w-3" aria-hidden="true" />
                         </Link>
                       </div>
                     </>
                   ) : (
                     <>
                       <div className="flex items-center justify-between text-muted-foreground py-1 border-t border-border/40">
-                        <span>Keyboard Hotkeys</span>
+                        <span>Keyboard shortcuts</span>
                         <button
                           type="button"
                           onClick={() =>
                             window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))
                           }
-                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
+                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          View Overlay
-                          <kbd className="font-mono text-[10px] bg-muted px-1 rounded border">
+                          Show sheet
+                          <kbd className="rounded border border-border bg-muted px-1 font-mono text-2xs">
                             ?
                           </kbd>
                         </button>
@@ -490,10 +422,10 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                           href="https://opsknight.com/docs"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          Online Docs
-                          <ExternalLink className="h-3 w-3" />
+                          Online docs
+                          <ExternalLink className="h-3 w-3" aria-hidden="true" />
                         </a>
                       </div>
                     </>
@@ -522,42 +454,54 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
       {/* Frequently Asked Questions with Clean Sidebar Layout */}
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
             Frequently Asked Questions
           </h2>
-          <p className="text-xs sm:text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Curated answers organized by category, with search and troubleshooting guides.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* FAQ Sidebar (3 cols on large screens) */}
-          <div className="lg:col-span-3.5 xl:col-span-3 space-y-4">
+          <div className="space-y-4 lg:col-span-4 xl:col-span-3">
             {/* Search Box */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
               <Input
-                type="text"
+                type="search"
+                aria-label="Search frequently asked questions"
                 placeholder="Search FAQs…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-8.5 pr-8 h-9 text-xs bg-card shadow-2xs"
+                className="h-9 bg-card pl-9 pr-8 text-sm [&::-webkit-search-cancel-button]:hidden"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-0.5 rounded cursor-pointer"
+                  data-icon-button
+                  className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Clear search"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               )}
             </div>
 
             {/* Category Navigation */}
-            <div className="rounded-xl border border-border/80 bg-card p-1.5 space-y-1 shadow-2xs">
-              <div className="px-2.5 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <div
+              role="group"
+              aria-labelledby="faq-categories-label"
+              className="space-y-1 rounded-lg border border-border bg-card p-1.5 shadow-sm"
+            >
+              <div
+                id="faq-categories-label"
+                className="px-2.5 py-1 text-xs font-medium text-muted-foreground"
+              >
                 Categories
               </div>
               {FAQ_CATEGORIES.map(category => {
@@ -572,6 +516,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                   <button
                     key={category.id}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => {
                       setSelectedCategory(category.id);
                       const firstMatch =
@@ -581,16 +526,17 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                       if (firstMatch) setOpenFaqId(firstMatch.id);
                     }}
                     className={cn(
-                      'w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all text-left cursor-pointer',
+                      'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       isSelected
-                        ? 'bg-primary text-primary-foreground shadow-2xs font-semibold'
+                        ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                     )}
                   >
                     <div className="flex items-center gap-2.5 truncate">
                       <Icon
+                        aria-hidden="true"
                         className={cn(
-                          'h-3.5 w-3.5 shrink-0',
+                          'h-4 w-4 shrink-0',
                           isSelected ? 'text-primary-foreground' : 'text-muted-foreground'
                         )}
                       />
@@ -599,7 +545,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                     <Badge
                       variant="outline"
                       className={cn(
-                        'text-[10px] px-1.5 py-0 h-4 font-mono ml-2 shrink-0 border-0',
+                        'ml-2 h-5 shrink-0 border-0 px-1.5 py-0 text-2xs tabular-nums',
                         isSelected
                           ? 'bg-primary-foreground/20 text-primary-foreground'
                           : 'bg-muted text-muted-foreground'
@@ -613,12 +559,12 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
             </div>
 
             {/* Sidebar Support Callout */}
-            <div className="rounded-xl border border-border/80 bg-muted/30 p-4 space-y-2 shadow-2xs">
-              <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                <MessageCircle className="h-4 w-4 text-primary" />
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <MessageCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <span>Can&apos;t find an answer?</span>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="text-xs leading-relaxed text-muted-foreground">
                 Connect with the open-source maintainers on GitHub Discussions for troubleshooting
                 help.
               </p>
@@ -626,19 +572,20 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                 href="https://github.com/opsknight-labs/OpsKnight/discussions"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium pt-1"
+                className="inline-flex items-center gap-1 rounded-sm pt-1 text-xs font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span>Ask Maintainers</span>
-                <ExternalLink className="h-3 w-3" />
+                <span>Ask the maintainers</span>
+                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">(opens in a new tab)</span>
               </a>
             </div>
           </div>
 
           {/* FAQ Content Area (9 cols on large screens) */}
-          <div className="lg:col-span-8.5 xl:col-span-9 space-y-3">
+          <div className="space-y-3 lg:col-span-8 xl:col-span-9">
             {/* Header info bar */}
             <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
-              <span>
+              <span aria-live="polite">
                 Showing{' '}
                 <strong className="text-foreground font-semibold">{filteredFaqs.length}</strong>{' '}
                 {filteredFaqs.length === 1 ? 'question' : 'questions'}
@@ -666,7 +613,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                     setSelectedCategory('all');
                     setSearchQuery('');
                   }}
-                  className="text-xs text-primary hover:underline cursor-pointer"
+                  className="rounded-sm text-xs font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Reset filters
                 </button>
@@ -674,27 +621,23 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
             </div>
 
             {filteredFaqs.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border/80 p-8 text-center text-muted-foreground bg-card/40">
-                <HelpCircle className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
-                <p className="text-xs font-medium text-foreground">
-                  No questions match your current filter
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-1 max-w-sm mx-auto">
-                  Try adjusting your search terms, select &quot;All Topics&quot;, or ask the
-                  maintainers directly on GitHub.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedCategory('all');
-                    setSearchQuery('');
-                  }}
-                  className="mt-3 text-xs h-8 cursor-pointer"
-                >
-                  Clear search &amp; filters
-                </Button>
-              </div>
+              <EmptyState
+                icon={<HelpCircle />}
+                title="No questions match your search"
+                description="Try other words, pick All topics, or ask the maintainers on GitHub."
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCategory('all');
+                      setSearchQuery('');
+                    }}
+                  >
+                    Clear search and filters
+                  </Button>
+                }
+              />
             ) : (
               filteredFaqs.map(faq => {
                 const isOpen = openFaqId === faq.id;
@@ -702,45 +645,54 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                   <div
                     key={faq.id}
                     className={cn(
-                      'overflow-hidden rounded-xl border bg-card transition-all duration-150 shadow-2xs',
-                      isOpen
-                        ? 'border-primary/40 shadow-xs'
-                        : 'border-border/80 hover:border-border'
+                      'overflow-hidden rounded-lg border bg-card shadow-sm transition-colors duration-150',
+                      isOpen ? 'border-ink-300' : 'border-border'
                     )}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setOpenFaqId(isOpen ? null : faq.id)}
-                      className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors hover:bg-muted/40 cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5 pr-3 min-w-0">
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-mono shrink-0 bg-muted/60 text-muted-foreground border-border/70"
-                        >
-                          {faq.categoryLabel}
-                        </Badge>
-                        <span className="text-xs sm:text-sm font-semibold text-foreground truncate sm:whitespace-normal">
-                          {faq.question}
-                        </span>
-                      </div>
-                      <ChevronDown
-                        className={cn(
-                          'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
-                          isOpen ? 'rotate-180 text-foreground' : ''
-                        )}
-                      />
-                    </button>
+                    <h3>
+                      <button
+                        type="button"
+                        id={`${faq.id}-trigger`}
+                        aria-expanded={isOpen}
+                        aria-controls={`${faq.id}-panel`}
+                        onClick={() => setOpenFaqId(isOpen ? null : faq.id)}
+                        className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      >
+                        <div className="flex items-center gap-2.5 pr-3 min-w-0">
+                          <Badge
+                            variant="outline"
+                            className="hidden shrink-0 border-border bg-muted/60 text-2xs text-muted-foreground sm:inline-flex"
+                          >
+                            {faq.categoryLabel}
+                          </Badge>
+                          <span className="text-xs sm:text-sm font-semibold text-foreground truncate sm:whitespace-normal">
+                            {faq.question}
+                          </span>
+                        </div>
+                        <ChevronDown
+                          aria-hidden="true"
+                          className={cn(
+                            'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none',
+                            isOpen ? 'rotate-180 text-foreground' : ''
+                          )}
+                        />
+                      </button>
+                    </h3>
 
                     {isOpen && (
-                      <div className="border-t border-border/50 px-4 py-3.5 text-xs text-muted-foreground bg-muted/10 leading-relaxed space-y-3 animate-in fade-in-0 duration-150">
-                        <p className="text-foreground/90">{faq.answer}</p>
+                      <div
+                        id={`${faq.id}-panel`}
+                        role="region"
+                        aria-labelledby={`${faq.id}-trigger`}
+                        className="space-y-3 border-t border-border bg-muted/10 px-4 py-3.5 text-sm leading-relaxed text-muted-foreground"
+                      >
+                        <p className="max-w-prose text-foreground">{faq.answer}</p>
                         <div className="flex items-center justify-between pt-1 border-t border-border/40">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {faq.tags.map(tag => (
                               <span
                                 key={tag}
-                                className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-muted-foreground"
+                                className="rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground"
                               >
                                 #{tag}
                               </span>
@@ -750,10 +702,11 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                             href="https://opsknight.com/docs"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline shrink-0 ml-2"
+                            className="ml-2 inline-flex shrink-0 items-center gap-1 rounded-sm text-xs font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
-                            <span>Read in Docs</span>
-                            <ExternalLink className="h-2.5 w-2.5" />
+                            <span>Read in docs</span>
+                            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                            <span className="sr-only">(opens in a new tab)</span>
                           </a>
                         </div>
                       </div>
@@ -767,16 +720,13 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
       </section>
 
       {/* Open Source Community & Maintainer Support Card */}
-      <Card className="border-border/80 bg-gradient-to-br from-card via-card to-muted/20 shadow-xs overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between p-6 sm:p-7 gap-6">
           <div className="max-w-xl space-y-2">
-            <div className="flex items-center gap-2 text-primary font-semibold text-xs uppercase tracking-wider">
-              <Github className="h-4 w-4" />
-              <span>Open Source Project</span>
-            </div>
-            <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
-              Facing challenges or need assistance?
-            </h3>
+            <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
+              <Github className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              Need help from the maintainers?
+            </h2>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               OpsKnight is a free and open-source tool. If you encounter bugs, configuration issues,
               or deployment hurdles, you can reach out to the project maintainers on GitHub. The
@@ -785,49 +735,39 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
           </div>
 
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="gap-2 text-xs h-9 border-pink-500/30 hover:border-pink-500/50 hover:bg-pink-500/10 text-foreground transition-all shadow-2xs cursor-pointer"
-            >
+            <Button variant="outline" size="sm" asChild className="gap-2">
               <a
                 href="https://github.com/sponsors/Dushyant-rahangdale"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <Heart className="h-3.5 w-3.5 text-pink-500 fill-pink-500" />
+                <Heart className="h-4 w-4" aria-hidden="true" />
                 <span>Sponsor</span>
               </a>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="gap-2 text-xs h-9 shadow-2xs cursor-pointer"
-            >
+            <Button variant="outline" size="sm" asChild className="gap-2">
               <a
                 href="https://github.com/opsknight-labs/OpsKnight/discussions"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <MessageCircle className="h-3.5 w-3.5 text-primary" />
-                <span>Ask Maintainers</span>
+                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                <span>Ask the maintainers</span>
               </a>
             </Button>
-            <Button size="sm" asChild className="gap-2 text-xs h-9 shadow-2xs cursor-pointer">
+            <Button size="sm" asChild className="gap-2">
               <a
                 href="https://github.com/opsknight-labs/OpsKnight/issues"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <AlertCircle className="h-3.5 w-3.5" />
+                <AlertCircle className="h-4 w-4" aria-hidden="true" />
                 <span>GitHub Issues</span>
               </a>
             </Button>
           </div>
         </div>
       </Card>
-    </main>
+    </div>
   );
 }

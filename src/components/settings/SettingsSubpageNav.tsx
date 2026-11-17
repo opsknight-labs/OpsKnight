@@ -1,92 +1,43 @@
 'use client';
 
-import React from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { SETTINGS_NAV_SECTIONS } from '@/components/settings/navConfig';
+import { Breadcrumbs, type BreadcrumbItem } from '@/components/patterns/PageHeader';
+import { buildSettingsBreadcrumbs } from '@/components/settings/settings-breadcrumbs';
 import SettingsSearchTrigger from '@/components/settings/SettingsSearchTrigger';
+import { cn } from '@/lib/utils';
 
-export default function SettingsSubpageNav() {
+/**
+ * The breadcrumb row above every settings page header, with the settings-only search on the
+ * right. Rendered by `SettingsPageHeader`; returns nothing on the settings home.
+ */
+export default function SettingsSubpageNav({
+  currentLabel,
+  trail,
+  showSearch = true,
+}: {
+  /** Label for the last crumb on a detail route (usually the page title). */
+  currentLabel?: string;
+  /** Crumbs after the settings page (e.g. a status page name). */
+  trail?: BreadcrumbItem[];
+  showSearch?: boolean;
+}) {
   const pathname = usePathname();
+  if (!pathname || pathname === '/settings') return null;
 
-  // Do not render breadcrumbs on the settings overview page itself
-  if (!pathname || pathname === '/settings') {
-    return null;
-  }
-
-  // Find the current item and section from navConfig — use longest prefix match
-  // to ensure /settings/notifications/operations wins over /settings/notifications
-  let currentItem = null;
-  let currentSection = null;
-  let bestMatchLength = -1;
-
-  for (const section of SETTINGS_NAV_SECTIONS) {
-    for (const item of section.items) {
-      const isExact = pathname === item.href;
-      const isPrefix = item.href !== '/settings' && pathname.startsWith(`${item.href}/`);
-      if (isExact || isPrefix) {
-        if (item.href.length > bestMatchLength) {
-          bestMatchLength = item.href.length;
-          currentItem = item;
-          currentSection = section;
-        }
-      }
-    }
-  }
-
-  const isDeepChild = Boolean(currentItem && pathname !== currentItem.href);
-  const pageTitle = currentItem?.label ?? 'Settings Detail';
-  const sectionTitle = currentSection?.label;
+  const crumbs = buildSettingsBreadcrumbs(pathname, { currentLabel, trail });
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-5 mb-6 border-b border-border/60">
-      <nav
-        aria-label="Breadcrumb"
-        className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap"
-      >
-        <Link
-          href="/settings"
-          className="inline-flex items-center gap-1.5 font-medium hover:text-foreground transition-colors group"
-        >
-          <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-          <span>Settings</span>
-        </Link>
-
-        {sectionTitle && (
-          <>
-            <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-            <span className="text-muted-foreground/70 hidden md:inline">{sectionTitle}</span>
-          </>
+    <div className="flex items-center justify-between gap-3">
+      <Breadcrumbs
+        items={crumbs}
+        className={cn(
+          // Touch-target min-heights on phones make links taller than the text; keep it centred.
+          'flex-1 [&_a]:inline-flex [&_a]:items-center',
+          // On phones the section crumb is dropped so the trail stays on one line.
+          crumbs.length > 2 && '[&_li:nth-child(2)]:hidden md:[&_li:nth-child(2)]:flex'
         )}
-
-        {isDeepChild ? (
-          <>
-            <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-            <Link
-              href={currentItem?.href || '/settings'}
-              className="font-medium hover:text-foreground transition-colors"
-            >
-              {pageTitle}
-            </Link>
-            <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-            <span className="font-semibold text-foreground truncate max-w-[240px] sm:max-w-none">
-              Detail
-            </span>
-          </>
-        ) : (
-          <>
-            <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-            <span className="font-semibold text-foreground truncate max-w-[240px] sm:max-w-none">
-              {pageTitle}
-            </span>
-          </>
-        )}
-      </nav>
-
-      <div className="flex items-center gap-2">
-        <SettingsSearchTrigger />
-      </div>
+      />
+      {showSearch && <SettingsSearchTrigger className="shrink-0" />}
     </div>
   );
 }

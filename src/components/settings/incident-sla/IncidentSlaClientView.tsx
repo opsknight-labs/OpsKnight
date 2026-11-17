@@ -14,13 +14,13 @@ import {
   Target,
   ShieldCheck,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import IncidentSlaPolicySettings from '@/components/incident-sla/IncidentSlaPolicySettings';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
 import ResponsePolicyOperations from '@/components/incident-sla/ResponsePolicyOperations';
 
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 
@@ -125,54 +125,26 @@ export default function IncidentSlaClientView({
 
   return (
     <div className="space-y-6 pb-12 w-full">
-      {/* Canonical DetailHeroBanner */}
-      <DetailHeroBanner
-        tag="Governance & SLA Architecture"
+      <SettingsPageHeader
         title="Incident SLAs & Response Policies"
-        subtitle="Define acknowledgement and resolution targets, provider alert severity normalization, and operational support windows."
-        icon={
-          <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
-            <ShieldCheck className="h-7 w-7" />
-          </div>
-        }
+        description="Define acknowledgement and resolution targets, provider alert severity normalization, and operational support windows."
+        icon={ShieldCheck}
         badges={
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
-            >
-              Active · SLA v{policy?.version ?? 0}
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-bold uppercase tracking-wider font-mono"
-            >
-              Workspace Scope
-            </Badge>
-          </div>
+          <span className={cn(pageHeaderBadgeClass, 'border-emerald-500/40 text-emerald-300')}>
+            Active · SLA v{policy?.version ?? 0}
+          </span>
         }
-        actions={
-          <div className="flex items-center gap-2">
+        secondaryActions={
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+              className={cn('gap-2', pageHeaderActionClass)}
             >
               <Link href="/services">
-                <Layers className="h-3.5 w-3.5" />
+                <Layers className="h-4 w-4" aria-hidden="true" />
                 Services
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
-            >
-              <Link href="/settings">
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Settings Hub
               </Link>
             </Button>
           </div>
@@ -193,7 +165,7 @@ export default function IncidentSlaClientView({
           {
             label: 'Services Inheriting',
             value: `${inheritingCount} / ${serviceCount}`,
-            icon: <Layers className="h-3.5 w-3.5" />,
+            icon: <Layers className="h-4 w-4" aria-hidden="true" />,
             subtext: 'Workspace policy bound',
           },
           {

@@ -1,10 +1,11 @@
 import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { ServiceIntegrationsLink } from '@/components/settings/integrations/ServiceIntegrationsLink';
+import { IntegrationStatusBadge } from '@/components/settings/integrations/IntegrationStatus';
 import { JiraLogo } from '@/components/common/BrandLogos';
-import { Shield, Globe, Mail, Lock, CheckCircle2, XCircle } from 'lucide-react';
+import { Globe, Mail, Lock } from 'lucide-react';
 import JiraIntegrationPage from '@/components/settings/JiraIntegrationPage';
 import { getAppUrl } from '@/lib/app-url';
 import { requirePageAccess } from '@/lib/access/server';
@@ -57,40 +58,16 @@ export default async function GlobalJiraIntegrationPage() {
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="ATLASSIAN WORKSPACE INTEGRATION"
+      <SettingsPageHeader
+        icon={JiraLogo}
         title="Jira Integration"
-        subtitle="Connect Atlassian Jira Cloud or Data Center to turn incidents and postmortem action items into tracked engineering issues."
+        description="Connect Atlassian Jira Cloud or Data Center to turn incidents and postmortem action items into tracked engineering issues."
         badges={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
-            >
-              <Shield className="h-3 w-3 mr-1" />
-              Admin Only
-            </Badge>
-            <Badge
-              variant="outline"
-              className={`text-[10px] font-semibold ${
-                isConnected
-                  ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-100'
-                  : 'border-white/20 bg-white/10 text-primary-foreground/80'
-              }`}
-            >
-              {isConnected ? (
-                <>
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Connected & Active
-                </>
-              ) : (
-                <>
-                  <XCircle className="h-3 w-3 mr-1" />
-                  {config?.baseUrl ? 'Disabled' : 'Not Configured'}
-                </>
-              )}
-            </Badge>
-          </div>
+          <IntegrationStatusBadge
+            onDark
+            state={isConnected ? 'connected' : 'not_connected'}
+            label={isConnected ? 'Connected' : config?.baseUrl ? 'Turned off' : 'Not connected'}
+          />
         }
         statsPlacement="bottom"
         stats={[
@@ -137,6 +114,7 @@ export default async function GlobalJiraIntegrationPage() {
         isAdmin={permissions.isAdmin}
         appUrl={await getAppUrl()}
       />
+      <ServiceIntegrationsLink description="Map each service to a Jira project and issue type on the service's Settings tab." />
     </div>
   );
 }

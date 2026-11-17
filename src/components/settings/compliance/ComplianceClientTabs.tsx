@@ -14,7 +14,6 @@ import {
   FileCode,
   ShieldAlert,
   Activity,
-  SlidersHorizontal,
   Database,
   Key,
 } from 'lucide-react';
@@ -22,7 +21,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import type {
   ComplianceControl,
   ControlStatus,
@@ -341,57 +341,27 @@ export default function ComplianceClientTabs({
 
   return (
     <div className="space-y-6 pb-12 w-full">
-      {/* Canonical DetailHeroBanner */}
-      <DetailHeroBanner
-        tag="Security Posture & Compliance Frameworks"
+      <SettingsPageHeader
         title="Security & Compliance"
-        subtitle="Read-only readiness diagnostics across SOC 2, ISO 27001, HIPAA, GDPR, CRA, and workspace security controls."
-        icon={
-          <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
-            <ShieldCheck className="h-7 w-7" />
-          </div>
-        }
+        description="Read-only readiness diagnostics across SOC 2, ISO 27001, HIPAA, GDPR, CRA, and workspace security controls."
+        icon={ShieldCheck}
         badges={
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
-            >
-              Repository Baseline: {overall.IMPLEMENTED}/{totalControls}
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Enterprise Governance
-            </Badge>
-          </div>
+          <span className={cn(pageHeaderBadgeClass, 'tabular-nums')}>
+            {`Repository baseline: ${overall.IMPLEMENTED}/${totalControls}`}
+          </span>
         }
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
-            >
-              <Link href="/audit">
-                <Activity className="h-3.5 w-3.5" />
-                Audit Log
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
-            >
-              <Link href="/settings">
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Settings Hub
-              </Link>
-            </Button>
-          </div>
+        secondaryActions={
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className={cn('gap-2', pageHeaderActionClass)}
+          >
+            <Link href="/audit">
+              <Activity className="h-4 w-4" aria-hidden="true" />
+              Audit log
+            </Link>
+          </Button>
         }
         stats={[
           {

@@ -1,5 +1,9 @@
 import { linkMicrosoftTeamsAccount } from './actions';
 import { requirePageAccess } from '@/lib/access/server';
+import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import { Button } from '@/components/ui/shadcn/button';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 
 export default async function LinkChatOpsPage({
   searchParams,
@@ -9,21 +13,23 @@ export default async function LinkChatOpsPage({
   await requirePageAccess('/settings/chatops/link');
   const { token = '' } = await searchParams;
   return (
-    <main className="mx-auto max-w-xl space-y-6 p-8">
-      <h1 className="font-display text-2xl font-semibold">Link Microsoft Teams</h1>
-      <p className="text-sm text-muted-foreground">
-        Confirm that the Microsoft Teams account which opened this link belongs to your signed-in
-        OpsKnight user.
-      </p>
-      <form action={linkMicrosoftTeamsAccount}>
-        <input type="hidden" name="token" value={token} />
-        <button
-          type="submit"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          Link account
-        </button>
-      </form>
-    </main>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <SettingsPageHeader
+        title="Link Microsoft Teams"
+        icon={MicrosoftTeamsLogo}
+        description="Connect the Teams account that opened this link to your OpsKnight user, so actions you take in Teams are recorded as you."
+        hideSearch
+      />
+      <SettingsSection
+        title="Confirm the account link"
+        description="Only continue if you opened this link from your own Microsoft Teams account."
+        contentClassName="py-4"
+      >
+        <form action={linkMicrosoftTeamsAccount}>
+          <input type="hidden" name="token" value={token} />
+          <Button type="submit">Link account</Button>
+        </form>
+      </SettingsSection>
+    </div>
   );
 }

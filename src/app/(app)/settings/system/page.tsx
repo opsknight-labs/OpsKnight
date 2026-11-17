@@ -8,7 +8,8 @@ import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
 import AppUrlSettings from '@/components/settings/AppUrlSettings';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import RetentionPolicySettings from '@/components/settings/RetentionPolicySettings';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import SystemSettingsTabs from '@/components/settings/SystemSettingsTabs';
 import SystemOverviewTab from '@/components/settings/SystemOverviewTab';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
@@ -26,7 +27,10 @@ import {
   Layers,
   Terminal,
   UserCheck,
+  Settings,
 } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
 import { getScimConfig } from '@/lib/scim';
@@ -140,7 +144,12 @@ export default async function SystemSettingsPage() {
   }
   if (!loaded) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
+        <SettingsPageHeader
+          icon={Settings}
+          title="System Settings"
+          description="Application-wide configuration and defaults."
+        />
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>System settings are unavailable</AlertTitle>
@@ -155,10 +164,10 @@ export default async function SystemSettingsPage() {
   if (loaded.kind === 'forbidden') {
     return (
       <div className="space-y-6">
-        <DetailHeroBanner
-          tag="SYSTEM ADMINISTRATION"
+        <SettingsPageHeader
+          icon={Settings}
           title="System Settings"
-          subtitle="Application-wide configuration and defaults."
+          description="Application-wide configuration and defaults."
         />
         <Alert variant="destructive">
           <Shield className="h-4 w-4" />
@@ -461,21 +470,15 @@ export default async function SystemSettingsPage() {
   );
 
   const encryptionBadge = env.encryptionKey ? (
-    <Badge
-      variant="outline"
-      className="border-emerald-400/60 bg-emerald-400/15 text-emerald-100 text-[10px] font-semibold"
-    >
-      <CheckCircle2 className="h-3 w-3 mr-1" />
-      Encryption Key Set
-    </Badge>
+    <span className={cn(pageHeaderBadgeClass, 'border-emerald-500/40 text-emerald-300')}>
+      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+      Encryption key set
+    </span>
   ) : (
-    <Badge
-      variant="outline"
-      className="border-rose-400/60 bg-rose-400/15 text-rose-100 text-[10px] font-semibold"
-    >
-      <XCircle className="h-3 w-3 mr-1" />
-      Encryption Key Missing
-    </Badge>
+    <span className={cn(pageHeaderBadgeClass, 'border-rose-500/40 text-rose-300')}>
+      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+      Encryption key missing
+    </span>
   );
 
   const overviewTab = (
@@ -497,30 +500,23 @@ export default async function SystemSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="SYSTEM ADMINISTRATION"
+      <SettingsPageHeader
+        icon={Settings}
         title="System Settings"
-        subtitle="Core application configuration — App URL, SSO, data retention, and environment."
-        badges={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
-            >
-              <Shield className="h-3 w-3 mr-1" />
-              Admin Only
-            </Badge>
-            {encryptionBadge}
-          </div>
-        }
-        actions={
-          <Link
-            href="/system-logs"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-foreground/15 hover:bg-primary-foreground/25 text-primary-foreground text-xs font-semibold transition-colors"
+        description="Core application configuration — App URL, SSO, data retention, and environment."
+        badges={encryptionBadge}
+        secondaryActions={
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className={cn('gap-2', pageHeaderActionClass)}
           >
-            <Terminal className="h-3.5 w-3.5" />
-            <span>View System Logs</span>
-          </Link>
+            <Link href="/system-logs">
+              <Terminal className="h-4 w-4" aria-hidden="true" />
+              View system logs
+            </Link>
+          </Button>
         }
         statsPlacement="bottom"
         stats={[

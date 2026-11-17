@@ -4,6 +4,9 @@ import { useMemo, useState } from 'react';
 import { Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
+import { PageHeader } from '@/components/patterns';
+import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import { KEYBOARD_SHORTCUTS } from '@/lib/keyboard-shortcuts';
 import {
   SHORTCUT_CATEGORY_COPY,
@@ -22,29 +25,31 @@ export default function ShortcutsPage() {
   const filtered = useMemo(() => filterShortcuts(searchQuery), [searchQuery]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 py-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
-            Keyboard shortcuts
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        title="Keyboard Shortcuts"
+        icon={Keyboard}
+        description={
+          <>
             Press{' '}
-            <kbd className="rounded border border-border bg-muted px-1 font-mono text-xs text-foreground">
+            <kbd className="rounded border border-zinc-600 px-1 font-mono text-xs text-zinc-100">
               ?
             </kbd>{' '}
             on any console page for the quick sheet. Shortcuts pause while you type in a field.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          className="shrink-0 gap-2"
-          onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
-        >
-          <Keyboard className="h-4 w-4" aria-hidden="true" />
-          Open quick sheet
-        </Button>
-      </header>
+          </>
+        }
+        secondaryActions={
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn('gap-2', pageHeaderActionClass)}
+            onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
+          >
+            <Keyboard className="h-4 w-4" aria-hidden="true" />
+            Open quick sheet
+          </Button>
+        }
+      />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Input
@@ -61,7 +66,7 @@ export default function ShortcutsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card">
+        <div className="rounded-lg border border-border bg-card shadow-sm">
           <ShortcutsEmpty query={searchQuery.trim()} />
         </div>
       ) : (
@@ -73,7 +78,7 @@ export default function ShortcutsPage() {
               <section
                 key={category}
                 aria-labelledby={`shortcut-group-${category}`}
-                className="rounded-lg border border-border bg-card p-4"
+                className="rounded-lg border border-border bg-card p-4 shadow-sm"
               >
                 <h2
                   id={`shortcut-group-${category}`}

@@ -4,9 +4,8 @@ import { redirect } from 'next/navigation';
 import { assertAdmin } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import CustomFieldsConfig, { type CustomField } from '@/components/CustomFieldsConfig';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { SlidersHorizontal, Asterisk, Columns, Database } from 'lucide-react';
 import { requirePageAccess } from '@/lib/access/server';
 
@@ -60,32 +59,10 @@ export default async function CustomFieldsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Centralized Glassmorphic Hero Banner */}
-      <DetailHeroBanner
-        tag="Incident Metadata & Taxonomy"
+      <SettingsPageHeader
         title="Custom Fields"
-        subtitle="Define structured metadata attributes, validation rules, and incident table columns."
-        icon={
-          <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
-            <SlidersHorizontal className="h-8 w-8" />
-          </div>
-        }
-        badges={
-          <>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Enterprise Metadata
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-xs"
-            >
-              {totalFields} {totalFields === 1 ? 'Field' : 'Fields'} Defined
-            </Badge>
-          </>
-        }
+        description="Define structured metadata attributes, validation rules, and incident table columns."
+        icon={SlidersHorizontal}
         stats={[
           {
             label: 'Total Fields',

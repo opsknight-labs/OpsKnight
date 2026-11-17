@@ -1,11 +1,12 @@
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import NotificationHistory from '@/components/settings/NotificationHistory';
 import { History, BellRing, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { requirePageAccess } from '@/lib/access/server';
 
 export default async function NotificationHistoryPage() {
@@ -22,32 +23,11 @@ export default async function NotificationHistoryPage() {
   return (
     <div className="space-y-6">
       {/* 1. Shaded Top Hero Banner */}
-      <DetailHeroBanner
-        tag="Your Account Activity"
+      <SettingsPageHeader
         title="Delivery History & Logs"
-        subtitle="Personal audit trail of outbound alerts, emails, and push notifications sent to you — not workspace-wide. Scoped to your account only."
-        icon={
-          <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
-            <History className="h-7 w-7" />
-          </div>
-        }
-        badges={
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Audit Stream
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
-            >
-              Live Telemetry
-            </Badge>
-          </div>
-        }
-        actions={
+        description="Personal audit trail of outbound alerts, emails, and push notifications sent to you — not workspace-wide. Scoped to your account only."
+        icon={History}
+        primaryAction={
           canManageProviders || canViewOperations ? (
             <div className="flex items-center gap-2">
               {canManageProviders && (
@@ -55,10 +35,10 @@ export default async function NotificationHistoryPage() {
                   variant="outline"
                   size="sm"
                   asChild
-                  className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+                  className={cn('gap-2', pageHeaderActionClass)}
                 >
                   <Link href="/settings/notifications">
-                    <BellRing className="h-3.5 w-3.5" />
+                    <BellRing className="h-4 w-4" aria-hidden="true" />
                     Configure Providers
                   </Link>
                 </Button>
@@ -68,10 +48,10 @@ export default async function NotificationHistoryPage() {
                   variant="outline"
                   size="sm"
                   asChild
-                  className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+                  className={cn('gap-2', pageHeaderActionClass)}
                 >
                   <Link href="/settings/notifications/operations">
-                    <Activity className="h-3.5 w-3.5" />
+                    <Activity className="h-4 w-4" aria-hidden="true" />
                     Delivery Operations
                   </Link>
                 </Button>

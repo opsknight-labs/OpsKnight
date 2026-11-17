@@ -14,6 +14,6 @@ describe('EventLifecycleBadge', () => {
 
   it('renders badge for triggered incident', () => {
     render(<EventLifecycleBadge message="Incident triggered by high latency" />);
-    expect(screen.getByText('TRIGGER')).toBeInTheDocument();
+    expect(screen.getByText('Triggered')).toBeInTheDocument();
   });
 });

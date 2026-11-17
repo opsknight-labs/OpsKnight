@@ -12,7 +12,7 @@ import {
 } from '@/lib/access/requests';
 import { roleLabel, type AppRole } from '@/lib/authorization';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import {
   ListEmpty,
@@ -123,19 +123,14 @@ export default async function AccessRequestsPage({
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="Access"
+      <SettingsPageHeader
         title="Access requests"
-        subtitle={
+        description={
           isOrgAdmin
             ? 'Review role and team requests from across your organization.'
             : 'Review requests to join the teams you own or administer.'
         }
-        icon={
-          <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
-            <Inbox className="h-8 w-8" />
-          </div>
-        }
+        icon={Inbox}
         stats={[
           {
             label: 'Waiting',

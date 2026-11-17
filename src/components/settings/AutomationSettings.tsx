@@ -1,6 +1,8 @@
 'use client';
+
+import { notify } from '@/lib/toast';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, RotateCw, Workflow } from 'lucide-react';
+import { AlertTriangle, Loader2, RotateCw, Workflow } from 'lucide-react';
 import {
   saveAutomationSettings,
   type SaveAutomationSettingsResult,
@@ -99,6 +101,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
       setEnabled(next.automationEnabled);
       setRetention(String(next.automationTraceRetentionDays));
       setFeedback({ kind: 'saved' });
+      notify.success('Automation settings saved', { id: 'settings:automation:saved' });
     } catch {
       setFeedback(UNEXPECTED_FEEDBACK);
     } finally {
@@ -154,7 +157,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
           <span
             className={cn(
               'h-1.5 w-1.5 rounded-full',
-              saved.automationEnabled ? 'bg-emerald-600' : 'bg-slate-400'
+              saved.automationEnabled ? 'bg-emerald-600' : 'bg-ink-400'
             )}
             aria-hidden="true"
           />
@@ -251,13 +254,9 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             {busy ? 'Saving…' : 'Save automation settings'}
           </Button>
-          <p role="status" className="min-h-5 text-sm">
-            {feedback?.kind === 'saved' && (
-              <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
-                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                Automation settings saved.
-              </span>
-            )}
+          {/* Visible confirmation is the toast; this keeps the outcome in the form for screen readers. */}
+          <p role="status" className="sr-only">
+            {feedback?.kind === 'saved' && 'Automation settings saved.'}
           </p>
         </div>
         {feedback?.kind === 'error' && (

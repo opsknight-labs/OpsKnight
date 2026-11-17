@@ -3,9 +3,11 @@
 import React, { useRef, useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import DetailHeroBanner, { type DetailStatItem } from '@/components/ui/DetailHeroBanner';
+import { type DetailStatItem } from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import UserAvatar from '@/components/UserAvatar';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import { AvatarPicker } from '@/components/settings/AvatarPicker';
 import { useAvatarUpdater } from '@/hooks/useUserAvatar';
 import { updateProfile } from '@/app/(app)/settings/actions';
@@ -29,6 +31,11 @@ type ProfileHeroBannerProps = {
   stats: DetailStatItem[];
   localTime: string;
 };
+
+function formatLabel(value: string): string {
+  const lower = value.toLowerCase().replace(/_/g, ' ');
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
 
 export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHeroBannerProps) {
   const router = useRouter();
@@ -103,96 +110,85 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
 
   return (
     <>
-      <DetailHeroBanner
-        tag="Personal Account"
+      <SettingsPageHeader
         title={displayName}
         icon={
-          <div
-            className="relative group cursor-pointer shrink-0"
-            onClick={() => setPickerOpen(true)}
-            title="Click to customize avatar or upload photo"
-          >
-            <UserAvatar
-              userId={user.id}
-              name={displayName}
-              avatarUrl={currentAvatarUrl}
-              gender={user.gender}
-              size="2xl"
-              className="shrink-0 ring-4 ring-primary-foreground/20 rounded-full shadow-xl transition-all duration-200 group-hover:ring-primary-foreground/40 group-hover:scale-102"
-            />
-
-            {/* Sleek Camera Overlay */}
-            <div className="absolute inset-0 rounded-full flex flex-col items-center justify-center bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[1.5px]">
-              {isUploading ? (
-                <Loader2 className="h-6 w-6 text-white animate-spin" />
-              ) : (
-                <>
-                  <Camera className="h-5 w-5 text-white drop-shadow-md" />
-                  <span className="text-[9px] font-semibold text-white tracking-wider uppercase mt-0.5">
-                    Change
-                  </span>
-                </>
-              )}
-            </div>
-
-            {/* Corner Camera Badge */}
-            <div className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-primary-foreground text-primary flex items-center justify-center shadow-md border-2 border-primary transition-transform group-hover:scale-110">
-              <Camera className="h-3 w-3" />
-            </div>
-
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              disabled={isUploading}
+              aria-label="Change avatar or upload a photo"
+              className="group relative block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+            >
+              <UserAvatar
+                userId={user.id}
+                name={displayName}
+                avatarUrl={currentAvatarUrl}
+                gender={user.gender}
+                size="2xl"
+                className="shrink-0 rounded-full shadow-xl ring-4 ring-primary-foreground/20 transition-shadow duration-200 group-hover:ring-primary-foreground/40"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+              >
+                {isUploading ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-white" />
+                ) : (
+                  <Camera className="h-5 w-5 text-white" />
+                )}
+              </span>
+              <span
+                aria-hidden="true"
+                className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-zinc-900 bg-zinc-100 text-zinc-900 shadow-md"
+              >
+                <Camera className="h-3 w-3" />
+              </span>
+            </button>
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
               accept="image/*"
               className="hidden"
+              tabIndex={-1}
+              aria-hidden="true"
               disabled={isUploading}
             />
           </div>
         }
         badges={
           <>
-            <Badge
-              variant="outline"
-              size="xs"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 uppercase font-bold text-[10px] tracking-wider"
-            >
-              {user.role}
-            </Badge>
-
-            {user.lastOidcSync ? (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-emerald-500/20 text-emerald-100 border-emerald-400/30 font-medium text-[10px] gap-1"
+            <span className={pageHeaderBadgeClass}>{formatLabel(user.role)}</span>
+            <span className={pageHeaderBadgeClass}>
+              {user.lastOidcSync ? (
+                <>
+                  <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                  Synced from SSO
+                </>
+              ) : (
+                'Local account'
+              )}
+            </span>
+            {user.status && (
+              <span
+                className={cn(
+                  pageHeaderBadgeClass,
+                  user.status === 'ACTIVE' && 'border-emerald-500/40 text-emerald-300'
+                )}
               >
-                <RefreshCw className="h-2.5 w-2.5" /> SSO Synced
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-primary-foreground/10 text-primary-foreground/90 border-primary-foreground/20 text-[10px]"
-              >
-                Direct Account
-              </Badge>
+                {formatLabel(user.status)}
+              </span>
             )}
-
-            <Badge
-              variant="outline"
-              size="xs"
-              className="bg-emerald-500/20 text-emerald-100 border-emerald-400/30 text-[10px]"
-            >
-              Active
-            </Badge>
           </>
         }
-        subtitle={
+        description={
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-primary-foreground/80 mt-1">
             {user.email && (
               <a
                 href={`mailto:${user.email}`}
-                className="inline-flex items-center gap-1.5 font-mono hover:text-primary-foreground transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-sm hover:text-primary-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
               >
                 <Mail className="h-3.5 w-3.5 shrink-0 opacity-70" />
                 {user.email}
@@ -213,7 +209,7 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
               </span>
             )}
 
-            <span className="inline-flex items-center gap-1.5 font-mono bg-primary-foreground/10 px-2 py-0.5 rounded border border-primary-foreground/15">
+            <span className="inline-flex items-center gap-1.5 tabular-nums">
               <Clock className="h-3.5 w-3.5 shrink-0 opacity-70" />
               {localTime}
             </span>
@@ -230,7 +226,10 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         trigger={null}
-        onUploadClick={() => { setPickerOpen(false); setTimeout(() => fileInputRef.current?.click(), 100); }}
+        onUploadClick={() => {
+          setPickerOpen(false);
+          setTimeout(() => fileInputRef.current?.click(), 100);
+        }}
       />
     </>
   );

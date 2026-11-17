@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { getUserPermissions } from '@/lib/rbac';
 import { listPrivacyRequests } from '@/lib/privacy/requests';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import PrivacyRequestsBoard from '@/components/settings/privacy/PrivacyRequestsBoard';
 import { requirePageAccess } from '@/lib/access/server';
 
@@ -47,16 +47,10 @@ export default async function PrivacyRequestsPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <DetailHeroBanner
-        breadcrumb={{ label: 'Settings', href: '/settings', current: 'Privacy Requests' }}
-        tag="Data subject access requests"
+      <SettingsPageHeader
         title="Privacy Requests"
-        subtitle="Receive, verify, and fulfil data subject requests. Access, Portability, and Erasure are automated in this release; other request types require manual review."
-        icon={
-          <div className="rounded-2xl border border-primary-foreground/25 bg-primary-foreground/15 p-3.5 text-primary-foreground">
-            <ShieldCheck className="h-8 w-8" />
-          </div>
-        }
+        description="Receive, verify, and fulfil data subject requests. Access, Portability, and Erasure are automated in this release; other request types require manual review."
+        icon={ShieldCheck}
         stats={[
           { label: 'Total requests', value: String(requestCounts[0]) },
           {

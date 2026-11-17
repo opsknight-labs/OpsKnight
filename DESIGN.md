@@ -351,8 +351,10 @@ Modal,Select}.tsx` are thin compatibility wrappers over shadcn that keep their o
 `PageHeader` (`patterns/PageHeader.tsx`) is the page `h1` on the always-dark hero surface. It is a
 cleaner API over `DetailHeroBanner`, which stays the implementation, so both render identically.
 
-- **Use for** every list and detail page header. Settings pages still use `SettingsPageHeader`; Phase 4
-  moves them by mapping `title/description/actions` onto the same props.
+- **Use for** every list and detail page header. Settings pages use `SettingsPageHeader`
+  (`settings/layout/SettingsPageHeader.tsx`): the same props plus `trail` (crumbs after the settings
+  page) and `hideSearch`. It derives the breadcrumb row (Settings › Section › Page) from
+  `settings/navConfig.ts` and puts the settings-only search on the right of it.
 - **Props:** `title`, `description`, `icon` (a lucide component, drawn in the standard tile, or any
   node), `badges`, `primaryAction` (one, rightmost), `secondaryActions`, `stats` (`DetailStatItem[]`,
   `statsPlacement` inline/bottom), `breadcrumbs` (`{label, href?}[]` → `<Breadcrumbs>` nav, last item
@@ -433,6 +435,45 @@ allowed only inside buttons (`loading` on the shadcn Button) and small inline re
 `TableRowsSkeleton` (`rows`, `columns`, `showHeader`), `CardGridSkeleton` (`cards`, `columns`),
 `DetailPageSkeleton` (dark header band, tabs, main column + rail). Building blocks: shadcn `Skeleton`,
 `PageLoadingSkeleton`, `DetailHeroBannerSkeleton`.
+
+### Mobile (`/m`)
+
+The responder app is its own shell (`src/app/(mobile)/m/mobile-shell.css`): app bar (route title as
+the `h1`, 44px back/search/status actions) → content → bottom nav, each a fixed grid row with
+safe-area insets. Pages compose `src/components/mobile/MobileList.tsx` instead of local markup:
+`MobileListMeta` (count line), `MobileSection` (h2 + "View all"), `MobileListCard`/`MobileListRow`
+(divided card of ≥56px rows), `MobileIncidentRow`, `MobileDetailHeader` (detail `h1`, badges, facts)
+and `MobileToneBadge` (palette pill for non-incident states). Loading uses the presets in
+`MobileSkeleton.tsx`, errors `MobileRouteError`/`MobileUnavailableState` (ErrorState + Retry).
+Forms end in a sticky `.mobile-action-bar`; filters open as a bottom sheet. Inputs are 16px and every
+action is at least 44×44px, including in landscape (the shell keeps a 16px root on touch devices).
+The PWA manifest uses the brand dark `#09090b` for `theme_color` and `background_color` (a manifest
+cannot vary by scheme); the runtime `<meta name="theme-color">` follows the active theme.
+
+### Settings pages
+
+- **Frame:** `SettingsShell` gives the page width and gutters; each page renders `SettingsPageHeader`
+  then its content. In-page tabs stay under the header. Loading is `SettingsPageSkeleton`
+  (`form` / `table` / `cards`), errors are the route's `ErrorState` boundary.
+- **Sections:** `SettingsSection` is a labelled `section` card: `h2` title, one-line description,
+  right-aligned `action`, content and an optional muted `footer` (save bar). `tone="danger"` frames
+  irreversible actions. Rows inside use `SettingsRow` (label + help text left, control right; `error`
+  shows inline validation, and `settingsRowDescribedBy()` gives the control its `aria-describedby`).
+- **Feedback:** saves confirm with `notify` toasts; keep only field errors inline. Destructive
+  actions (delete, revoke, unsubscribe, archive) always open `DeleteConfirmDialog` / `AlertDialog`
+  that names the object and the consequence.
+- **Integrations:** `IntegrationStatusBadge` (`connected` / `not_connected` / `error`, `onDark` for
+  the header) is the one state vocabulary for the hub (`/settings/integrations`), the settings home
+  and each provider page.
+
+### Log tables
+
+Audit log, Event logs and System logs share `components/audit/LogTable.tsx`: `FilterBar` with
+labelled `FilterField`s → `LogTableCard` (table or `EmptyState`, with "Clear filters" when filtered)
+→ `LogPagination` (`TablePaginationFooter` in a labelled `nav`). Times are `LogTimestamp`
+(`RelativeTime` plus the absolute time underneath), identifiers are `MonoId` (monospace, named copy
+button). Rows are not click targets; open details with an explicit button. Loading is
+`LogPageSkeleton`.
 
 ### Buttons
 
