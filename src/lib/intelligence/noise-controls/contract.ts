@@ -232,6 +232,8 @@ export const noiseControlPolicyInputSchema = z
   .object({
     serviceId: id.nullable().optional(),
     mode: z.enum(NOISE_CONTROL_MODES),
+    /** J1.5 pipeline order; omitted keeps the saved value (default OFF). */
+    pipelineOrder: z.enum(NOISE_CONTROL_MODES).optional(),
     definition: noiseControlDefinitionSchema,
     /** 0 when creating; the saved revision otherwise. */
     expectedRevision: z.number().int().min(0),

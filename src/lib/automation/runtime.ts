@@ -18,7 +18,7 @@ import {
   observeOperationalHistogram,
 } from '@/lib/metrics/operational/registry';
 import { builtinContext } from './context/builtins';
-import { automationIntelligenceContext } from '@/lib/intelligence/noise-controls/cache';
+import { automationIntelligenceContext } from '@/lib/intelligence/ingest-hooks';
 import { LIMITS, type Context } from './contract';
 import { extractContextWithProvenance } from './context/extract';
 import { getCachedCompiledVersion, loadCompiledVersion } from './cache';
@@ -91,6 +91,8 @@ export type RuntimeEvaluation = {
   decisionBytes?: number;
   observations: ReturnType<typeof discoverFields>;
   normalization: ReturnType<typeof extractContextWithProvenance>['normalization'];
+  /** J1.5 (pipeline order ON): an orchestration reroute applied through the automation route. */
+  orchestration?: { reroute: { serviceId: string; serviceName: string; policyId: string } };
 };
 export async function prepareAutomation(
   tx: Prisma.TransactionClient,
@@ -566,6 +568,7 @@ export async function persistAutomation(
     normalization: runtime.normalization,
     policyName: runtime.policyName,
     destinationNames,
+    ...(runtime.orchestration ? { orchestration: runtime.orchestration } : {}),
     ...(runtime.candidateVersionId
       ? {
           candidate: {
@@ -600,6 +603,7 @@ export async function persistAutomation(
         writes: compactSummaryWrites(result?.writes),
         supplementalActions: result?.supplementalActions ?? [],
         outcome: result?.outcome ?? { type: 'SERVICE_DEFAULT' },
+        ...(runtime.orchestration ? { orchestration: runtime.orchestration } : {}),
       },
       MAX_AUTOMATION_DECISION_BYTES
     );
@@ -666,6 +670,7 @@ export async function persistAutomation(
           diagnosticLevel: 'COMPACT',
           policyName: runtime.policyName,
           destinationNames,
+          ...(runtime.orchestration ? { orchestration: runtime.orchestration } : {}),
           actual,
           fallbackReason: runtime.fallbackReason,
           shadowDifferent: runtime.shadowDifferent,

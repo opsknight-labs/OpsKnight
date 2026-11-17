@@ -58,12 +58,14 @@ export function compilePolicy(row: {
   definition: unknown;
   activeVersionId?: string | null;
   activeVersion?: { policyRevision: number } | null;
+  pipelineOrder?: 'OFF' | 'SHADOW' | 'ON' | null;
 }): CompiledPolicy {
   const definition = parseDefinition(row.definition);
   return {
     scopeKey: row.scopeKey,
     serviceId: row.serviceId,
     mode: row.mode,
+    pipelineOrder: row.mode === 'OFF' ? 'OFF' : (row.pipelineOrder ?? 'OFF'),
     revision: row.revision,
     // Only a version published at this exact revision describes what is running; a stale pointer (a row
     // rewritten by a replica that predates versioning) yields null until the backfill captures it.

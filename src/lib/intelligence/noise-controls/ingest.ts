@@ -50,6 +50,22 @@ export interface IngestNoiseDecision extends PrePagingDecisionResult {
   allowHighUrgency: boolean;
 }
 
+export { automationIntelligenceContext } from './cache';
+
+/**
+ * The pipeline order for a new alert (J1.5): an in-process map lookup, no await, no query. OFF unless the
+ * service's (or global) policy is active and opted in; a reversal re-ingest always keeps today's order.
+ */
+export function noisePipelineOrder(
+  serviceId: string,
+  integrationId: string
+): 'OFF' | 'SHADOW' | 'ON' {
+  if (integrationId === NOISE_CONTROL_REVERSAL_INTEGRATION_ID) return 'OFF';
+  const snapshot = getPrePagingSnapshot();
+  const policy = snapshot ? resolvePolicy(snapshot, serviceId) : null;
+  return policy?.pipelineOrder ?? 'OFF';
+}
+
 /** The reads `evaluatePrePagingControls` will make, computed exactly as it computes them. */
 export function lookupPlan(
   input: PrePagingInput,

@@ -113,6 +113,7 @@ export async function savePolicyAction(
       {
         serviceId: optional(form, 'serviceId') ?? null,
         mode: text(form, 'mode'),
+        pipelineOrder: optional(form, 'pipelineOrder'),
         definition,
         expectedRevision: integer(form, 'expectedRevision', 0),
         acknowledgeReadiness: flag(form, 'acknowledgeReadiness'),

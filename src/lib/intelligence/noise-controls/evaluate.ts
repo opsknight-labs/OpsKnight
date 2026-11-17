@@ -36,6 +36,8 @@ export interface CompiledPolicy {
   scopeKey: string;
   serviceId: string | null;
   mode: NoiseControlModeValue;
+  /** J1.5: OFF runs automation first (today's order); SHADOW records noise-first; ON applies it. */
+  pipelineOrder?: NoiseControlModeValue;
   revision: number;
   /** The published version this compiled policy came from (null until the scope is backfilled). */
   versionId?: string | null;

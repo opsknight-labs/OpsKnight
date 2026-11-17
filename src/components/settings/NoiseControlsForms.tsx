@@ -234,6 +234,26 @@ export function NoisePolicyForm({
               <option value="ON">ON (apply)</option>
             </select>
           </div>
+          <div className="space-y-1">
+            <label htmlFor={`${id}-pipeline`} className={labelClass}>
+              Run before automation
+            </label>
+            <select
+              id={`${id}-pipeline`}
+              name="pipelineOrder"
+              aria-describedby={`${id}-pipeline-help`}
+              className={fieldClass}
+              defaultValue={policy.pipelineOrder}
+            >
+              <option value="OFF">OFF (automation first)</option>
+              <option value="SHADOW">SHADOW (record the difference)</option>
+              <option value="ON">ON (noise controls first)</option>
+            </select>
+            <p id={`${id}-pipeline-help`} className="text-xs text-muted-foreground">
+              Noise controls first: automation sees transformed severity, urgency and labels, skips
+              dropped and appended alerts, and orchestration reroutes and runbook attachments apply.
+            </p>
+          </div>
           <label className="flex items-end gap-2 pb-2 text-sm">
             <input type="checkbox" name="allowHighUrgency" defaultChecked={d.allowHighUrgency} />
             Let dedup, flapping and storms touch HIGH urgency

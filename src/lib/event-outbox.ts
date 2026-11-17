@@ -402,7 +402,13 @@ export type RunbookEvaluationSource = 'MONITORING' | 'MANUAL';
  */
 export async function enqueueIncidentCreatedRunbookEvaluation(
   tx: Prisma.TransactionClient,
-  input: { incidentId: string; status: IncidentStatus; source: RunbookEvaluationSource }
+  input: {
+    incidentId: string;
+    status: IncidentStatus;
+    source: RunbookEvaluationSource;
+    /** Orchestration ATTACH_RUNBOOK (pipeline order ON): suggest these through the service's bindings. */
+    attachRunbookIds?: string[];
+  }
 ): Promise<boolean> {
   if (input.status !== 'OPEN') return false;
   await tx.backgroundJob.create({
@@ -416,6 +422,7 @@ export async function enqueueIncidentCreatedRunbookEvaluation(
         incidentId: input.incidentId,
         sourceEventId: crypto.randomUUID(),
         source: input.source,
+        ...(input.attachRunbookIds?.length ? { attachRunbookIds: input.attachRunbookIds } : {}),
       },
     },
   });

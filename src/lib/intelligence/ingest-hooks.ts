@@ -8,5 +8,7 @@ export {
   evaluateIngestNoiseControls,
   recordIngestNoiseDecision,
   linkStormChild,
+  noisePipelineOrder,
+  automationIntelligenceContext,
   type IngestNoiseDecision,
 } from './noise-controls/ingest';

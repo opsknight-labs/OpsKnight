@@ -5,6 +5,13 @@ import {
   recordAutomationMetrics,
   type IntegrationEventEnvelope,
 } from './automation/runtime';
+import {
+  applyOrchestrationReroute,
+  noiseFirstInputs,
+  outcomeOf,
+  reevaluateNoiseFirst,
+  rerouteBlocker,
+} from './automation/pipeline';
 import { Prisma, IncidentUrgency } from '@prisma/client';
 import type { ProcessingLease } from './ingestion/contract';
 import { ingestionConfig } from './ingestion/config';
@@ -14,6 +21,7 @@ import {
   evaluateIngestNoiseControls,
   linkStormChild,
   recordIngestNoiseDecision,
+  noisePipelineOrder,
   signalIntelligenceIncident,
   type IngestNoiseDecision,
 } from './intelligence/ingest-hooks';
@@ -126,7 +134,8 @@ function noiseDecisionMessages(
   decision: IngestNoiseDecision,
   classifiedUrgency: IncidentUrgency,
   effectiveUrgency: IncidentUrgency,
-  holdUntil: Date | null
+  holdUntil: Date | null,
+  noiseFirst = false
 ): string[] {
   const control = decision.control ?? 'NOISE';
   const messages: string[] = [];
@@ -144,7 +153,9 @@ function noiseDecisionMessages(
     ].filter(Boolean);
     if (deferred.length)
       messages.push(
-        `Orchestration also asked to ${deferred.join(' and ')}; not applied at ingestion.`
+        noiseFirst
+          ? `Orchestration also asked to ${deferred.join(' and ')}; handed to automation routing and the service's runbook bindings (see "Why did this route here?").`
+          : `Orchestration also asked to ${deferred.join(' and ')}; not applied at ingestion.`
       );
     for (const note of transform.notes ?? []) messages.push(`Orchestration note: ${note}`);
   }
@@ -408,8 +419,31 @@ export async function processEvent(
         publishedPolicies.classification
       );
       const urgency = classification.urgency;
-      const automation = await prepareAutomation(tx, envelope, classification, service.policy);
-      const finalPriority = automation?.finalPriority ?? classification.priority;
+      const noiseInput = () => ({
+        serviceId,
+        source: normalizedSource,
+        summary: sanitizedTitle,
+        severity: alertShape.severity,
+        urgency,
+        labels: alertShape.labels,
+        resourceKey: alertShape.resourceKey,
+        fingerprintHash: alertShape.fingerprintHash,
+        dedupKey: dedup_key,
+        receivedAt: processingLease ? envelope.receivedAt : new Date(),
+      });
+      // One pipeline (J1.5, per service, default OFF): an in-process lookup. OFF keeps today's order with
+      // no extra await; SHADOW/ON evaluate the noise decision first (it does not depend on automation).
+      const pipelineOrder =
+        recentResolveAlert || isFlapping ? 'OFF' : noisePipelineOrder(serviceId, integrationId);
+      let noise =
+        pipelineOrder === 'OFF'
+          ? null
+          : await evaluateIngestNoiseControls(tx, noiseInput(), { integrationId });
+      const noiseFirst = pipelineOrder === 'ON';
+      let automation = noiseFirst
+        ? null
+        : await prepareAutomation(tx, envelope, classification, service.policy);
+      let finalPriority = automation?.finalPriority ?? classification.priority;
 
       // Creation is not a lifecycle transition. A buffered upstream resolve may
       // legitimately create the incident directly in its terminal state.
@@ -523,25 +557,19 @@ export async function processEvent(
       // Pre-paging noise controls (per-service, default OFF). OFF is one in-process map lookup; SHADOW
       // and ON make at most a few index-backed reads under one shared deadline and fail open on any
       // error, timeout or cold cache. Only ON decisions change what happens below.
-      let noise = isFlapping
-        ? null
-        : await evaluateIngestNoiseControls(
-            tx,
-            {
-              serviceId,
-              source: normalizedSource,
-              summary: sanitizedTitle,
-              severity: alertShape.severity,
-              urgency,
-              labels: alertShape.labels,
-              resourceKey: alertShape.resourceKey,
-              fingerprintHash: alertShape.fingerprintHash,
-              dedupKey: dedup_key,
-              receivedAt: processingLease ? envelope.receivedAt : new Date(),
-            },
-            { integrationId }
-          );
+      if (pipelineOrder === 'OFF')
+        noise = isFlapping
+          ? null
+          : await evaluateIngestNoiseControls(tx, noiseInput(), { integrationId });
       let applied = noise?.apply ? noise : null;
+      // SHADOW/ON: dropped and appended alerts get (or would get) no automation work.
+      const skippedAutomation = (decision: IngestNoiseDecision) => {
+        if (pipelineOrder !== 'OFF')
+          decision.evidence = {
+            ...decision.evidence,
+            pipeline: { order: pipelineOrder, automation: 'SKIPPED' },
+          };
+      };
       if (applied?.transform && applied.action !== 'DROP') {
         const { severity, labels } = applied.transform;
         alertShapeOverride = {
@@ -553,6 +581,7 @@ export async function processEvent(
       if (applied?.action === 'DROP') {
         // Dropped alerts are still stored (unlinked) so the decision can be reviewed and reversed.
         const alert = await persistAlert();
+        skippedAutomation(applied);
         await recordIngestNoiseDecision(tx, applied, {
           serviceId,
           alertId: alert.id,
@@ -623,6 +652,7 @@ export async function processEvent(
             ),
           },
         });
+        skippedAutomation(applied);
         await recordIngestNoiseDecision(tx, applied, {
           serviceId,
           alertId: alert.id,
@@ -648,6 +678,86 @@ export async function processEvent(
         applied?.action === 'HOLD' && applied.holdUntil && effectiveUrgency !== 'HIGH'
           ? applied.holdUntil
           : null;
+
+      // One pipeline (J1.5). ON: automation runs now, on what the noise decision transformed, and an
+      // orchestration reroute/attach is applied. SHADOW: the same re-evaluation, pure and recorded only.
+      let attachRunbookIds: string[] | undefined;
+      let pipeline: Record<string, unknown> | null = null;
+      if (noiseFirst) {
+        const transform = applied?.transform;
+        const inputs = noiseFirstInputs(envelope, classification, transform, effectiveUrgency);
+        automation = await prepareAutomation(
+          tx,
+          inputs.envelope,
+          inputs.classification,
+          service.policy
+        );
+        finalPriority = automation?.finalPriority ?? classification.priority;
+        const reroute =
+          transform?.serviceId && transform.serviceId !== serviceId
+            ? await applyOrchestrationReroute(tx, automation, transform.serviceId)
+            : null;
+        attachRunbookIds = transform?.runbookIds?.length ? transform.runbookIds : undefined;
+        pipeline = {
+          order: 'ON',
+          automation: automation
+            ? outcomeOf(
+                automation.fallbackReason ? null : automation.result,
+                automation.basePriority,
+                service.escalationPolicyId
+              )
+            : null,
+          ...(reroute ? { reroute } : {}),
+          ...(attachRunbookIds ? { attachRunbookIds } : {}),
+        };
+      } else if (
+        pipelineOrder === 'SHADOW' &&
+        (noise?.action === 'DROP' || noise?.action === 'APPEND')
+      ) {
+        // A shadow drop/append that was not applied: noise-first would have skipped automation.
+        pipeline = { order: 'SHADOW', automation: 'SKIPPED' };
+      } else if (pipelineOrder === 'SHADOW' && noise) {
+        // Compared as if the noise decision were applied, whatever its own mode.
+        const transform = noise.transform;
+        const decidedUrgency =
+          noise.action === 'DOWNGRADE' && noise.urgency
+            ? noise.urgency
+            : (transform?.urgency ?? urgency);
+        const inputs = noiseFirstInputs(envelope, classification, transform, decidedUrgency);
+        const changed = inputs.envelope !== envelope || inputs.classification !== classification;
+        const actual = automation?.fallbackReason ? null : (automation?.result ?? null);
+        const wouldBe = changed
+          ? reevaluateNoiseFirst(automation, inputs.envelope, inputs.classification)
+          : actual;
+        const before = automation
+          ? outcomeOf(actual, automation.basePriority, service.escalationPolicyId)
+          : null;
+        const after =
+          automation && wouldBe
+            ? outcomeOf(wouldBe, automation.basePriority, service.escalationPolicyId)
+            : null;
+        pipeline = {
+          order: 'SHADOW',
+          automation: before
+            ? {
+                actual: before,
+                noiseFirst: after,
+                different:
+                  !!after &&
+                  (after.priority !== before.priority || after.policyId !== before.policyId),
+              }
+            : null,
+          ...(transform?.serviceId && transform.serviceId !== serviceId
+            ? {
+                reroute: {
+                  serviceId: transform.serviceId,
+                  wouldApply: !rerouteBlocker(automation),
+                },
+              }
+            : {}),
+          ...(transform?.runbookIds?.length ? { attachRunbookIds: transform.runbookIds } : {}),
+        };
+      }
 
       // Initial OPEN/SUPPRESSED state is creation policy, not a transition of an
       // existing incident, so it intentionally remains in the ingestion path.
@@ -683,7 +793,9 @@ export async function processEvent(
             : `Incident triggered via API from ${normalizedSource}`;
       const creationMessages = [
         truncateString(creationMessage, 1_000),
-        ...(applied ? noiseDecisionMessages(applied, urgency, effectiveUrgency, holdUntil) : []),
+        ...(applied
+          ? noiseDecisionMessages(applied, urgency, effectiveUrgency, holdUntil, noiseFirst)
+          : []),
       ];
       const newIncident = await tx.incident.create({
         data: {
@@ -871,9 +983,11 @@ export async function processEvent(
         incidentId: newIncident.id,
         status: newIncident.status,
         source: 'MONITORING',
+        ...(attachRunbookIds ? { attachRunbookIds } : {}),
       });
 
       if (noise) {
+        if (pipeline) noise.evidence = { ...noise.evidence, pipeline };
         // SHADOW and ON decisions are both recorded against the alert they were made for.
         const alert = await tx.alert.findFirst({
           where: { incidentId: newIncident.id },
