@@ -346,3 +346,67 @@ describe('suggested rules mined from history', () => {
     expect((await db.opsInsight.findMany()).map(r => r.key)).toEqual([]);
   });
 });
+
+describe('team hand-offs mined into policy routes', () => {
+  it('suggests routing through the policy that pages the team people keep handing incidents to', async () => {
+    await switchOn();
+    const dba = await createTestTeam('DBA');
+    const shared = await createTestTeam('Shared');
+    const own = await db.escalationPolicy.create({ data: { name: 'Service default' } });
+    const dbaPolicy = await db.escalationPolicy.create({
+      data: {
+        name: 'DBA first',
+        steps: { create: [{ stepOrder: 0, targetType: 'TEAM', targetTeamId: dba.id }] },
+      },
+    });
+    // The shared team is paged first by two policies: no single route to suggest.
+    for (const name of ['Shared A', 'Shared B'])
+      await db.escalationPolicy.create({
+        data: {
+          name,
+          steps: { create: [{ stepOrder: 0, targetType: 'TEAM', targetTeamId: shared.id }] },
+        },
+      });
+    const service = await createTestService('Orders');
+    await db.service.update({ where: { id: service.id }, data: { escalationPolicyId: own.id } });
+
+    const handOff = async (
+      index: number,
+      source: string,
+      team: { id: string; name: string } | null
+    ) => {
+      const at = new Date(Date.now() - 3 * DAY - index * MINUTE);
+      await incident(service.id, index, { at, payload: { source, severity: 'warning' } });
+      if (!team) return;
+      const row = await db.incident.findFirstOrThrow({
+        where: { serviceId: service.id, title: `incident ${index}` },
+      });
+      await db.incident.update({ where: { id: row.id }, data: { teamId: team.id } });
+      await db.incidentEvent.create({
+        data: {
+          incidentId: row.id,
+          type: 'ASSIGNMENT',
+          message: `Incident assigned to team: ${team.name}`,
+          createdAt: new Date(at.getTime() + 10 * MINUTE),
+        },
+      });
+    };
+    let index = 0;
+    for (; index < 10; index++) await handOff(index, 'postgres', dba);
+    for (; index < 20; index++) await handOff(index, 'queue', shared);
+    for (; index < 40; index++) await handOff(index, 'web', null);
+
+    expect(await run(service.id, 'automation.suggested_rule')).toBe('computed');
+    const rows = await db.opsInsight.findMany();
+    expect(rows.map(row => row.key)).toEqual([`rule:severity=&source=postgres>team:${dba.id}`]);
+    expect(rows[0].title).toBe(
+      "Suggested rule: route through the team's policy when source is postgres"
+    );
+    expect(JSON.stringify(rows)).not.toContain('DBA first');
+    const href = new URL(rows[0].draftHref!, 'https://app.example');
+    expect(parseSuggestedRule(href.searchParams.get(SUGGESTED_RULE_PARAM))).toMatchObject({
+      conditions: [{ fieldKey: 'source', operator: 'EQ', value: 'postgres' }],
+      policyId: dbaPolicy.id,
+    });
+  });
+});

@@ -73,6 +73,56 @@ describe('mineAutomationRules', () => {
       []
     );
   });
+
+  it('mines team hand-offs into a route through the one policy paging that team first', () => {
+    const teamGroup = (source: string, incidents: number, teamTo: Record<string, number>) => ({
+      ...group(null, source, incidents),
+      teamTo,
+    });
+    const groups = [teamGroup('postgres', 10, { dba: 9 }), teamGroup('web', 30, {})];
+    // Without a policy for the team there is nothing a rule could do.
+    expect(mineAutomationRules(groups)).toEqual([]);
+    const [suggestion, ...rest] = mineAutomationRules(groups, { teamPolicies: { dba: 'pol-dba' } });
+    expect(rest).toEqual([]);
+    expect(suggestion).toMatchObject({
+      key: 'severity=&source=postgres>team:dba',
+      teamId: 'dba',
+      incidents: 10,
+      corrected: 9,
+      rule: {
+        name: 'Route to a policy when source is postgres',
+        conditions: [{ fieldKey: 'source', operator: 'EQ', value: 'postgres' }],
+        policyId: 'pol-dba',
+      },
+    });
+    expect(suggestion.rule.priority).toBeUndefined();
+    // An existing route rule silences it; a priority rule with the same conditions does not.
+    const existing = new Set([
+      ruleSignature({ conditions: suggestion.rule.conditions, priority: 'P1' }),
+    ]);
+    expect(
+      mineAutomationRules(groups, { teamPolicies: { dba: 'pol-dba' }, existing })
+    ).toHaveLength(1);
+    existing.add(ruleSignature({ conditions: suggestion.rule.conditions, policyId: 'pol-dba' }));
+    expect(mineAutomationRules(groups, { teamPolicies: { dba: 'pol-dba' }, existing })).toEqual([]);
+  });
+
+  it('applies the support and confidence thresholds to hand-offs too', () => {
+    const teamPolicies = { dba: 'pol-dba' };
+    const handOffs = (incidents: number, handed: number) => [
+      { ...group(null, 'postgres', incidents), teamTo: { dba: handed } },
+    ];
+    expect(mineAutomationRules(handOffs(8, 4), { teamPolicies })).toEqual([]); // support < 5
+    expect(mineAutomationRules(handOffs(100, 10), { teamPolicies })).toEqual([]); // low confidence
+    expect(mineAutomationRules(handOffs(12, 12), { teamPolicies })).toHaveLength(1);
+  });
+
+  it('reads at most maxGroups groups, the largest first', () => {
+    const groups = [group('critical', 'web', 20, { P1: 18 }), group('a', 'b', 50)];
+    expect(mineAutomationRules(groups)).not.toEqual([]);
+    // Only the larger, uncorrected group is read: nothing to suggest.
+    expect(mineAutomationRules(groups, { limits: { maxGroups: 1 } })).toEqual([]);
+  });
 });
 
 describe('suggested rule links', () => {

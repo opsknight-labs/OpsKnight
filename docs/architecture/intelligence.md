@@ -1702,12 +1702,17 @@ for people who may read automation.
 **Suggested rules** (`learning/automation-mining.ts`, `producers/automation-suggested-rules.ts`, kind
 `automation.suggested_rule`). One grouped statement over the newest 2,000 settled public incidents of the
 last 30 days (`idx_incident_sla_by_service`, opening alert on `idx_alert_incident_cursor`) counts, per
-(opening severity, source), how many incidents a person changed to each priority. `mineAutomationRules`
-suggests "severity/source → priority" when at least 5 incidents support it (of at least 8 with those
-facts) and the Wilson lower bound (`recommendations/wilson.ts`) is at least 0.5; at most 5, skipping rules
-the active version or draft already has. Only public incidents are mined, so evidence never carries a value
-some viewer of the service could not read. Team and policy corrections are not mined (automation has no
-team action and a policy change after creation is not recorded). The insight's `draftHref` is
+(opening severity, source), how many incidents a person changed to each priority and how many a person
+handed to a team (an `ASSIGNMENT` event "Incident assigned to team:" and the incident's final `teamId`),
+capped at 1,000 groups (`AUTOMATION_MINING.maxGroups`, largest first). `mineAutomationRules` suggests
+"severity/source → priority" or "severity/source → route through policy P" when at least 5 incidents
+support it (of at least 8 with those facts) and the Wilson lower bound (`recommendations/wilson.ts`) is at
+least 0.5; at most 5, skipping rules the active version or draft already has. A team hand-off becomes a
+`USE_ESCALATION_POLICY` suggestion only when exactly one live policy pages that team at its first step and
+it is not the service's own policy (two bounded `EscalationRule` reads, only when hand-offs exist);
+automation has no team action, and this is the only policy change a person makes after creation, so it is
+how policy corrections are mined. Only public incidents are mined, so evidence never carries a value some
+viewer of the service could not read. The insight's `draftHref` is
 `/services/{id}?tab=automation&suggestedRule=…` (`suggested-rule.ts`): the workspace shows the rule and
 nothing joins the draft until a person adds it; publishing goes through the review and its replay step.
 

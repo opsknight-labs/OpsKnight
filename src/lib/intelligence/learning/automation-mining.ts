@@ -8,29 +8,37 @@ type Priority = (typeof PRIORITIES)[number];
 /**
  * Suggested automation rules mined from history (plan J1.3). Pure: no clock, database or model.
  *
- * The question: when incidents with the same opening facts (alert severity, alert source) keep having their
- * priority changed by a person to the same value, a rule setting that priority would have saved the
- * correction. An association "facts → priority" is suggested when enough incidents support it (`support`,
- * the corrected ones) and the Wilson lower bound of corrected / all-with-those-facts clears `minConfidence`,
- * the same bound the runbook ranker uses so 3 of 3 never outranks 47 of 50.
- *
- * Team and escalation-policy changes are not mined: automation has no team action, and a policy change after
- * creation is not recorded anywhere a query could read it.
+ * The question: when incidents with the same opening facts (alert severity, alert source) keep being
+ * corrected by a person the same way, a rule doing that when the incident opens would have saved the
+ * correction. Two corrections are mined:
+ * - priority: a person changed the priority; the rule sets it.
+ * - team: a person handed the incident to a team; the rule routes it through the escalation policy whose
+ *   first step pages that team (`teamPolicies`, resolved by the loader). A team with no such policy, or
+ *   more than one, is not suggested: automation has no team action and guessing a policy would mislead.
+ *   This is also the only policy change that can be mined, as nothing lets a person change an incident's
+ *   policy after creation.
+ * An association "facts -> correction" is suggested when enough incidents support it (`support`, the
+ * corrected ones) and the Wilson lower bound of corrected / all-with-those-facts clears `minConfidence`, the
+ * same bound the runbook ranker uses so 3 of 3 never outranks 47 of 50. Input is bounded: at most
+ * `maxGroups` groups are read, largest first.
  */
 export const AUTOMATION_MINING = {
   minSupport: 5,
   minIncidents: 8,
   minConfidence: 0.5,
   maxSuggestions: 5,
+  maxGroups: 1000,
 } as const;
 
-/** Incidents grouped by their opening facts and where a person took the priority, from the loader. */
+/** Incidents grouped by their opening facts and how a person corrected them, from the loader. */
 export interface MiningGroup {
   severity: string | null;
   source: string | null;
   incidents: number;
   /** Corrections by final priority: incidents in the group a person changed to that priority. */
   correctedTo: Partial<Record<Priority, number>>;
+  /** Hand-offs by final team id: incidents in the group a person assigned to that team. */
+  teamTo?: Record<string, number>;
 }
 
 export interface MinedRuleSuggestion {
@@ -40,6 +48,8 @@ export interface MinedRuleSuggestion {
   incidents: number;
   corrected: number;
   confidence: number;
+  /** Set for a team hand-off suggestion: the team the routed policy pages first. */
+  teamId?: string;
 }
 
 type Facts = { severity?: string; source?: string };
@@ -59,59 +69,74 @@ const factsKey = (facts: Facts) => FIELDS.map(field => `${field}=${facts[field] 
 const covers = (general: Facts, specific: Facts) =>
   FIELDS.every(field => general[field] === undefined || general[field] === specific[field]);
 
+/** A correction: `id` is the key suffix; the rule action is a priority or a policy. */
+type Target = { id: string; priority?: Priority; policyId?: string; teamId?: string };
+type Corrections = Map<string, { target: Target; count: number }>;
+
+function addCorrection(corrections: Corrections, target: Target, count: number): void {
+  const entry = corrections.get(target.id) ?? { target, count: 0 };
+  entry.count += count;
+  corrections.set(target.id, entry);
+}
+
 export function mineAutomationRules(
   groups: readonly MiningGroup[],
   options: {
     /** Signatures of rules that already exist (`ruleSignature`), so they are not suggested again. */
     existing?: ReadonlySet<string>;
+    /** Team id -> the one policy whose first step pages that team; teams missing here are not suggested. */
+    teamPolicies?: Readonly<Record<string, string>>;
     limits?: Partial<typeof AUTOMATION_MINING>;
   } = {}
 ): MinedRuleSuggestion[] {
   const limits = { ...AUTOMATION_MINING, ...options.limits };
-  const totals = new Map<
-    string,
-    { facts: Facts; incidents: number; correctedTo: Map<Priority, number> }
-  >();
-  for (const group of groups) {
+  const bounded = [...groups].sort((a, b) => b.incidents - a.incidents).slice(0, limits.maxGroups);
+  const totals = new Map<string, { facts: Facts; incidents: number; corrections: Corrections }>();
+  for (const group of bounded) {
     for (const facts of antecedents(group)) {
       const key = factsKey(facts);
-      const entry = totals.get(key) ?? { facts, incidents: 0, correctedTo: new Map() };
+      const entry = totals.get(key) ?? { facts, incidents: 0, corrections: new Map() };
       entry.incidents += group.incidents;
       for (const [priority, count] of Object.entries(group.correctedTo) as Array<
         [Priority, number]
       >)
-        entry.correctedTo.set(priority, (entry.correctedTo.get(priority) ?? 0) + count);
+        addCorrection(entry.corrections, { id: priority, priority }, count);
+      for (const [teamId, count] of Object.entries(group.teamTo ?? {})) {
+        const policyId = options.teamPolicies?.[teamId];
+        if (policyId)
+          addCorrection(entry.corrections, { id: `team:${teamId}`, policyId, teamId }, count);
+      }
       totals.set(key, entry);
     }
   }
 
-  const candidates: Array<MinedRuleSuggestion & { facts: Facts; priority: Priority }> = [];
-  for (const { facts, incidents, correctedTo } of totals.values()) {
+  const candidates: Array<MinedRuleSuggestion & { facts: Facts; target: string }> = [];
+  for (const { facts, incidents, corrections } of totals.values()) {
     if (incidents < limits.minIncidents) continue;
-    for (const [priority, corrected] of correctedTo) {
+    for (const { target, count: corrected } of corrections.values()) {
       if (corrected < limits.minSupport) continue;
       const confidence = wilsonLowerBound(corrected, incidents);
       if (confidence < limits.minConfidence) continue;
-      const rule = suggestionRule(facts, priority);
       candidates.push({
-        key: `${factsKey(facts)}>${priority}`,
-        rule,
+        key: `${factsKey(facts)}>${target.id}`,
+        rule: suggestionRule(facts, target),
         incidents,
         corrected,
         confidence: Math.round(confidence * 100) / 100,
+        ...(target.teamId ? { teamId: target.teamId } : {}),
         facts,
-        priority,
+        target: target.id,
       });
     }
   }
 
-  // The most general association wins: a narrower one setting the same priority adds nothing.
+  // The most general association wins: a narrower one making the same correction adds nothing.
   const kept = candidates.filter(
     candidate =>
       !candidates.some(
         other =>
           other !== candidate &&
-          other.priority === candidate.priority &&
+          other.target === candidate.target &&
           covers(other.facts, candidate.facts) &&
           Object.keys(other.facts).length < Object.keys(candidate.facts).length
       )
@@ -123,16 +148,18 @@ export function mineAutomationRules(
       (a, b) => b.confidence - a.confidence || b.corrected - a.corrected || (a.key < b.key ? -1 : 1)
     )
     .slice(0, limits.maxSuggestions)
-    .map(({ facts: _facts, priority: _priority, ...suggestion }) => suggestion);
+    .map(({ facts: _facts, target: _target, ...suggestion }) => suggestion);
 }
 
-function suggestionRule(facts: Facts, priority: Priority): SuggestedRule {
+function suggestionRule(facts: Facts, target: Target): SuggestedRule {
   const conditions = FIELDS.flatMap(field =>
     facts[field] === undefined
       ? []
       : [{ fieldKey: field, operator: 'EQ' as const, value: facts[field] as string }]
   );
-  const rule = { conditions, priority };
+  const rule = target.priority
+    ? { conditions, priority: target.priority }
+    : { conditions, policyId: target.policyId };
   return { name: defaultSuggestionName(rule), ...rule };
 }
 
@@ -140,9 +167,11 @@ function suggestionRule(facts: Facts, priority: Priority): SuggestedRule {
 export function ruleSignature(rule: {
   conditions: ReadonlyArray<{ fieldKey: string; operator: string; value?: unknown }>;
   priority?: string;
+  policyId?: string;
 }): string {
   const conditions = rule.conditions
     .map(c => `${c.fieldKey}|${c.operator}|${String(c.value ?? '').toLowerCase()}`)
     .sort();
-  return `${conditions.join('&')}>${rule.priority ?? ''}`;
+  const action = rule.priority ?? (rule.policyId ? `policy:${rule.policyId}` : '');
+  return `${conditions.join('&')}>${action}`;
 }
