@@ -26,6 +26,7 @@
  *   npx ts-node -r tsconfig-paths/register --project tsconfig.script.json \
  *     tests/load/intelligence-ingestion-ab.ts --repetitions 8 --events 300 --concurrency 16 --backlog 400 \
  *     [--noise-controls on] [--noise-lookups pool|transaction] [--no-lane] [--history 1000000] \
+ *     [--pipeline-order shadow|on] [--automation-intelligence on] \
  *     [--max-p99-delta-ms 10] [--max-p50-delta-ms 2] [--output reports/ingestion-ab.json] [--no-gate]
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -53,6 +54,8 @@ import {
   setNoiseLookupRoute,
 } from '../../src/lib/intelligence/noise-controls/lookup-client';
 import { runtimeOperationalMetrics } from '../../src/lib/metrics/operational/registry';
+import { checksum as automationChecksum } from '../../src/lib/automation/cache';
+import { INTELLIGENCE_FIELD_KEYS } from '../../src/lib/automation/contract';
 import {
   comparePaired,
   judgeHigherIsWorse,
@@ -72,6 +75,13 @@ interface Options {
   noiseControls: boolean;
   /** Where the hook's reads run: the dedicated lookup pool (default) or the event transaction. */
   noiseLookups: 'pool' | 'transaction';
+  /** J1.5: the candidate's noise policies also run noise-first (needs --noise-controls on). */
+  pipelineOrder: 'OFF' | 'SHADOW' | 'ON';
+  /**
+   * J1.4: both arms run LIVE automation with one never-matching rule; the candidate's rule reads every
+   * intelligence field (switch on, signals in the snapshot), the baseline's an equivalent built-in field.
+   */
+  automationIntelligence: boolean;
   /** Candidate arm runs the busy intelligence lane (default). */
   lane: boolean;
   /** Resolved incidents (one alert each) seeded per arm before the burst. 0 = none. */
@@ -135,9 +145,19 @@ function parseOptions(argv: string[]): Options {
   const history = historyAt >= 0 ? Number(argv[historyAt + 1]) : 0;
   if (!Number.isInteger(history) || history < 0)
     throw new Error('--history must be a non-negative integer');
+  const orderAt = argv.indexOf('--pipeline-order');
+  const pipelineOrder = (orderAt >= 0 ? argv[orderAt + 1] : 'off').toUpperCase();
+  if (pipelineOrder !== 'OFF' && pipelineOrder !== 'SHADOW' && pipelineOrder !== 'ON')
+    throw new Error('--pipeline-order must be off, shadow or on');
+  const noiseControls = noiseAt >= 0 && argv[noiseAt + 1] === 'on';
+  if (pipelineOrder !== 'OFF' && !noiseControls)
+    throw new Error('--pipeline-order needs --noise-controls on');
+  const intelligenceAt = argv.indexOf('--automation-intelligence');
   return {
-    noiseControls: noiseAt >= 0 && argv[noiseAt + 1] === 'on',
+    noiseControls,
     noiseLookups,
+    pipelineOrder,
+    automationIntelligence: intelligenceAt >= 0 && argv[intelligenceAt + 1] === 'on',
     lane: !argv.includes('--no-lane'),
     history,
     repetitions: read('repetitions', 8),
@@ -205,7 +225,7 @@ async function seedHistory(serviceIds: string[], count: number) {
  * count and parent) and every static matcher, yet nothing changes the outcome: the arms do the same work
  * apart from the hook. The bench events carry a unique label, so the label-subset dedup check never holds.
  */
-async function enableNoiseControls(serviceIds: string[]) {
+async function enableNoiseControls(serviceIds: string[], pipelineOrder: Options['pipelineOrder']) {
   const now = Date.now();
   for (const serviceId of serviceIds) {
     await prisma.noiseControlPolicy.create({
@@ -213,6 +233,7 @@ async function enableNoiseControls(serviceIds: string[]) {
         scopeKey: `service:${serviceId}`,
         serviceId,
         mode: 'ON',
+        pipelineOrder: pipelineOrder === 'OFF' ? null : pipelineOrder,
         definition: {
           schemaVersion: 1,
           contentDedup: { enabled: true, windowSeconds: 900, requireLabelSubset: true },
@@ -255,6 +276,74 @@ async function enableNoiseControls(serviceIds: string[]) {
   const snapshot = await primePrePagingSnapshot();
   if (!snapshot || snapshot.policies.size < serviceIds.length)
     throw new Error('Noise-control snapshot did not load');
+}
+
+/**
+ * LIVE automation on every bench service with one ENRICH rule that never matches. The candidate's rule
+ * reads all five intelligence fields (and its switch is on, so the snapshot carries signals); the
+ * baseline's reads built-in fields, so the arms differ only by the intelligence lookup. Needs Intelligence
+ * enabled (the lane, i.e. not --no-lane) for the candidate's snapshot to load signals.
+ */
+async function enableAutomation(serviceIds: string[], intelligence: boolean) {
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE "ServiceAutomationConfig", "AutomationVersion" CASCADE'
+  );
+  await prisma.systemSettings.upsert({
+    where: { id: 'default' },
+    create: { automationEnabled: true },
+    update: { automationEnabled: true },
+  });
+  await prisma.intelligenceSettings.update({
+    where: { id: 'default' },
+    data: { automationIntelligenceFieldsEnabled: intelligence },
+  });
+  const user = await prisma.user.upsert({
+    where: { email: 'ab-bench@opsknight.invalid' },
+    update: {},
+    create: { email: 'ab-bench@opsknight.invalid', name: 'A/B bench' },
+  });
+  const conditions = intelligence
+    ? INTELLIGENCE_FIELD_KEYS.map(fieldKey => ({
+        fieldKey,
+        operator: 'EQ' as const,
+        value: 'never',
+      }))
+    : ['priority', 'urgency', 'severity', 'integration', 'source'].map(fieldKey => ({
+        fieldKey,
+        operator: 'EQ' as const,
+        value: 'never',
+      }));
+  // Comparing a BOOLEAN field with a string never matches; the evaluator still reads every field.
+  const snapshot = {
+    schemaVersion: 1 as const,
+    fields: [],
+    rules: [
+      {
+        id: 'never',
+        name: 'Never matches',
+        phase: 'ENRICH' as const,
+        enabled: true,
+        conditions,
+        actions: [{ type: 'SET_PRIORITY' as const, value: 'P5' as const }],
+      },
+    ],
+  };
+  for (const serviceId of serviceIds) {
+    const version = await prisma.automationVersion.create({
+      data: {
+        serviceId,
+        versionNumber: 1,
+        snapshot,
+        compiledSnapshot: snapshot,
+        checksum: automationChecksum(snapshot),
+        publishedBy: user.id,
+        lintReport: [],
+      },
+    });
+    await prisma.serviceAutomationConfig.create({
+      data: { serviceId, mode: 'LIVE', activeVersionId: version.id },
+    });
+  }
 }
 
 function failOpenCounts(): Record<string, number> {
@@ -424,8 +513,13 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
   await setIntelligence(laneOn);
   if (options.history > 0) await seedHistory(serviceIds, options.history);
   await seedBacklog(serviceIds, options.backlog, laneOn);
-  if (arm === 'candidate' && options.noiseControls) await enableNoiseControls(serviceIds);
+  if (options.automationIntelligence) await enableAutomation(serviceIds, arm === 'candidate');
+  if (arm === 'candidate' && options.noiseControls)
+    await enableNoiseControls(serviceIds, options.pipelineOrder);
   else resetPrePagingSnapshot();
+  // The intelligence fields read the snapshot: load it in the candidate even without noise policies.
+  if (arm === 'candidate' && options.automationIntelligence && !options.noiseControls)
+    await primePrePagingSnapshot();
 
   const lane = laneOn ? busyCandidate() : null;
   // Warm connections and caches in both arms so neither pays cold-start cost inside the timed window.
@@ -562,6 +656,8 @@ async function main() {
     options,
     laneWasBusyInEveryCandidateRun: laneBusy,
     noiseControlsInCandidate: options.noiseControls,
+    pipelineOrderInCandidate: options.pipelineOrder,
+    automationIntelligence: options.automationIntelligence,
     noiseFailOpenInCandidate: candidate.reduce<Record<string, number>>((sum, sample) => {
       for (const [reason, value] of Object.entries(sample.noiseFailOpen))
         sum[reason] = (sum[reason] ?? 0) + value;
