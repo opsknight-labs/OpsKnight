@@ -110,7 +110,7 @@ export default function PolicyStepCreateForm({
               onValueChange={(val: 'USER' | 'TEAM' | 'SCHEDULE') => setTargetType(val)}
               disabled={isPending}
             >
-              <SelectTrigger className="bg-card">
+              <SelectTrigger aria-label="Target type" className="bg-card">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent>

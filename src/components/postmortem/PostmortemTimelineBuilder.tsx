@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -59,6 +59,7 @@ export default function PostmortemTimelineBuilder({
   events,
   onChange,
 }: PostmortemTimelineBuilderProps) {
+  const fieldId = useId();
   const { userTimeZone } = useTimezone();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newEvent, setNewEvent] = useState<Partial<TimelineEvent>>({
@@ -105,14 +106,14 @@ export default function PostmortemTimelineBuilder({
         <CardContent className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Event Type</Label>
+              <Label htmlFor={`${fieldId}-event-type`}>Event Type</Label>
               <Select
                 value={newEvent.type || 'DETECTION'}
                 onValueChange={value =>
                   setNewEvent({ ...newEvent, type: value as TimelineEvent['type'] })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id={`${fieldId}-event-type`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -125,8 +126,9 @@ export default function PostmortemTimelineBuilder({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Timestamp</Label>
+              <Label htmlFor={`${fieldId}-timestamp`}>Timestamp</Label>
               <Input
+                id={`${fieldId}-timestamp`}
                 type="datetime-local"
                 value={newEvent.timestamp || ''}
                 onChange={e => setNewEvent({ ...newEvent, timestamp: e.target.value })}
@@ -134,16 +136,18 @@ export default function PostmortemTimelineBuilder({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Title</Label>
+            <Label htmlFor={`${fieldId}-title`}>Title</Label>
             <Input
+              id={`${fieldId}-title`}
               placeholder="e.g., Incident detected by monitoring system"
               value={newEvent.title || ''}
               onChange={e => setNewEvent({ ...newEvent, title: e.target.value })}
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Description</Label>
+            <Label htmlFor={`${fieldId}-description`}>Description</Label>
             <Textarea
+              id={`${fieldId}-description`}
               rows={3}
               placeholder="Detailed description of what happened..."
               value={newEvent.description || ''}
@@ -151,8 +155,9 @@ export default function PostmortemTimelineBuilder({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Actor (Optional)</Label>
+            <Label htmlFor={`${fieldId}-actor`}>Actor (Optional)</Label>
             <Input
+              id={`${fieldId}-actor`}
               placeholder="Who or what triggered this event?"
               value={newEvent.actor || ''}
               onChange={e => setNewEvent({ ...newEvent, actor: e.target.value })}
@@ -206,14 +211,20 @@ export default function PostmortemTimelineBuilder({
                     </div>
                     <div className="flex gap-2">
                       <Button
+                        aria-label="Edit event"
                         variant="outline"
                         size="sm"
                         onClick={() => setEditingId(editingId === event.id ? null : event.id)}
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-4 h-4" aria-hidden="true" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => deleteEvent(event.id)}>
-                        <Trash2 className="w-4 h-4" />
+                      <Button
+                        aria-label="Delete event"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteEvent(event.id)}
+                      >
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -222,14 +233,14 @@ export default function PostmortemTimelineBuilder({
                   {editingId === event.id && (
                     <div className="mt-3 p-3 bg-ink-50 rounded-md flex flex-col gap-2">
                       <div className="space-y-1.5">
-                        <Label>Type</Label>
+                        <Label htmlFor={`${fieldId}-${event.id}-type`}>Type</Label>
                         <Select
                           value={event.type}
                           onValueChange={value =>
                             updateEvent(event.id, { type: value as TimelineEvent['type'] })
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger id={`${fieldId}-${event.id}-type`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -242,8 +253,9 @@ export default function PostmortemTimelineBuilder({
                         </Select>
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Timestamp</Label>
+                        <Label htmlFor={`${fieldId}-${event.id}-timestamp`}>Timestamp</Label>
                         <Input
+                          id={`${fieldId}-${event.id}-timestamp`}
                           type="datetime-local"
                           value={toLocalInputValue(event.timestamp)}
                           onChange={e =>
@@ -254,23 +266,26 @@ export default function PostmortemTimelineBuilder({
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Title</Label>
+                        <Label htmlFor={`${fieldId}-${event.id}-title`}>Title</Label>
                         <Input
+                          id={`${fieldId}-${event.id}-title`}
                           value={event.title}
                           onChange={e => updateEvent(event.id, { title: e.target.value })}
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Description</Label>
+                        <Label htmlFor={`${fieldId}-${event.id}-description`}>Description</Label>
                         <Textarea
+                          id={`${fieldId}-${event.id}-description`}
                           rows={2}
                           value={event.description}
                           onChange={e => updateEvent(event.id, { description: e.target.value })}
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Actor</Label>
+                        <Label htmlFor={`${fieldId}-${event.id}-actor`}>Actor</Label>
                         <Input
+                          id={`${fieldId}-${event.id}-actor`}
                           value={event.actor || ''}
                           onChange={e => updateEvent(event.id, { actor: e.target.value })}
                         />

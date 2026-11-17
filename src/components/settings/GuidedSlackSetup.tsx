@@ -250,8 +250,13 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                 </ol>
                 <div className="flex gap-2">
                   <Input value={redirectUri} readOnly className="font-mono text-sm" />
-                  <Button variant="outline" size="icon" onClick={handleCopyRedirectUri}>
-                    <Copy className="h-4 w-4" />
+                  <Button
+                    aria-label="Copy redirect URL"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyRedirectUri}
+                  >
+                    <Copy className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
               </div>

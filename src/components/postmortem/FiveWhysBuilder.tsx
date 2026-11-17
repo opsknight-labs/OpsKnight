@@ -148,13 +148,14 @@ export default function FiveWhysBuilder({
                       />
                       {steps.length > 1 && (
                         <Button
+                          aria-label={`Remove why #${idx + 1}`}
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveStep(idx)}
                           className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                         </Button>
                       )}
                     </div>

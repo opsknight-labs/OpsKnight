@@ -543,6 +543,7 @@ export default function ServiceSupportHoursSettings({
                       )}
 
                       <Button
+                        aria-label="Remove exception"
                         type="button"
                         variant="ghost"
                         size="sm"
@@ -554,7 +555,7 @@ export default function ServiceSupportHoursSettings({
                         }
                         className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10 ml-auto"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3 w-3" aria-hidden="true" />
                       </Button>
                     </div>
 

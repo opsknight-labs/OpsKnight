@@ -247,7 +247,6 @@ export default function JiraIntegrationPage({
         </div>
       )}
 
-
       <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
@@ -452,9 +451,14 @@ export default function JiraIntegrationPage({
           </p>
         </div>
         <div className="space-y-2">
-          <Label>Jira Cloud Webhook URL</Label>
+          <Label htmlFor="jiraCloudWebhookUrl">Jira Cloud Webhook URL</Label>
           <div className="flex gap-2">
-            <Input value={cloudWebhookUrl} readOnly className="font-mono text-xs" />
+            <Input
+              id="jiraCloudWebhookUrl"
+              value={cloudWebhookUrl}
+              readOnly
+              className="font-mono text-xs"
+            />
             <Button
               type="button"
               variant="outline"
@@ -466,9 +470,14 @@ export default function JiraIntegrationPage({
           </div>
         </div>
         <div className="space-y-2">
-          <Label>OpsKnight Webhook Endpoint</Label>
+          <Label htmlFor="jiraWebhookEndpoint">OpsKnight Webhook Endpoint</Label>
           <div className="flex gap-2">
-            <Input value={webhookUrl} readOnly className="font-mono text-xs" />
+            <Input
+              id="jiraWebhookEndpoint"
+              value={webhookUrl}
+              readOnly
+              className="font-mono text-xs"
+            />
             <Button type="button" variant="outline" onClick={() => copyValue(webhookUrl, 'base')}>
               <Copy className="h-4 w-4" />
               {copied === 'base' ? 'Copied' : 'Copy URL'}

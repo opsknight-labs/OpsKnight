@@ -145,7 +145,7 @@ export default function TeamMemberForm({
           onValueChange={setSelectedUserId}
           disabled={isPending || isSearching || selectableUsers.length === 0}
         >
-          <SelectTrigger>
+          <SelectTrigger aria-label="User to add">
             <SelectValue
               placeholder={selectableUsers.length === 0 ? 'No matching users' : 'Choose a user...'}
             />
@@ -179,6 +179,7 @@ export default function TeamMemberForm({
         </Label>
         <Select value={selectedRole} onValueChange={setSelectedRole} disabled={isPending}>
           <SelectTrigger
+            id="role"
             title={
               !canAssignOwnerAdmin
                 ? 'Admin or Team Owner access required to assign OWNER or ADMIN roles'

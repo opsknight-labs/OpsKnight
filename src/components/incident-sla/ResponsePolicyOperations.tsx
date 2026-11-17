@@ -563,6 +563,7 @@ export default function ResponsePolicyOperations({
                               End of day
                             </label>
                             <Button
+                              aria-label="Remove window"
                               type="button"
                               variant="ghost"
                               size="sm"
@@ -573,7 +574,7 @@ export default function ResponsePolicyOperations({
                                 )
                               }
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                             </Button>
                           </div>
                         );
@@ -730,6 +731,7 @@ export default function ResponsePolicyOperations({
                       </label>
                     </div>
                     <Button
+                      aria-label="Remove exception"
                       type="button"
                       variant="ghost"
                       size="sm"
@@ -740,7 +742,7 @@ export default function ResponsePolicyOperations({
                         )
                       }
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                     <Input
                       className="h-8 text-xs md:col-span-5"

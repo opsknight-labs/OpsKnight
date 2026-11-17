@@ -190,7 +190,7 @@ export default function UserEditModal({
                 User Role
               </Label>
               <Select value={role} onValueChange={setRole} disabled={!canManageRole || isPending}>
-                <SelectTrigger className="text-xs h-9">
+                <SelectTrigger aria-label="User role" className="text-xs h-9">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -228,7 +228,7 @@ export default function UserEditModal({
                 Time Zone
               </Label>
               <Select value={timeZone} onValueChange={setTimeZone} disabled={isPending}>
-                <SelectTrigger className="text-xs h-9">
+                <SelectTrigger aria-label="Time zone" className="text-xs h-9">
                   <SelectValue placeholder="Select timezone" />
                 </SelectTrigger>
                 <SelectContent className="max-h-[200px]">

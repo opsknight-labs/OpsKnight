@@ -379,7 +379,7 @@ export default function MobileNotificationsClient() {
                 'h-11 min-h-[44px] rounded-md px-3 text-sm font-medium tabular-nums transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 activeFilter === filter
                   ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                  : 'text-ink-600 hover:text-foreground'
               )}
               aria-pressed={activeFilter === filter}
             >

@@ -18,15 +18,18 @@ const badgeVariants = cva(
         info: 'border-transparent bg-gradient-to-r from-status-info-deep to-status-info text-white shadow-sm',
         success:
           'border-transparent bg-gradient-to-r from-status-ok-deep to-status-ok text-white shadow-sm',
+        // Amber stops at 700 so white label text keeps AA contrast across the whole fill.
         warning:
-          'border-transparent bg-gradient-to-r from-status-elevated-deep to-status-elevated text-white shadow-sm',
-        danger: 'border-transparent bg-gradient-to-r from-status-critical-deep to-status-critical text-white shadow-sm',
-        shift: 'border-transparent bg-gradient-to-r from-status-shift-deep to-status-shift text-white shadow-sm',
+          'border-transparent bg-gradient-to-r from-status-elevated-deep to-amber-700 text-white shadow-sm',
+        danger:
+          'border-transparent bg-gradient-to-r from-status-critical-deep to-status-critical text-white shadow-sm',
+        shift:
+          'border-transparent bg-gradient-to-r from-status-shift-deep to-status-shift text-white shadow-sm',
         // Sidebar variants - solid colors with white text for dark backgrounds
         'sidebar-danger': 'border-status-critical bg-status-critical text-white',
         'sidebar-info': 'border-status-info bg-status-info text-white',
         'sidebar-success': 'border-status-ok bg-status-ok text-white',
-        'sidebar-warning': 'border-status-elevated bg-status-elevated text-white',
+        'sidebar-warning': 'border-amber-700 bg-amber-700 text-white',
       },
       size: {
         xs: 'px-2 py-0.5 text-[10px]',

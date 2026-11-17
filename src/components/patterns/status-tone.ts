@@ -58,7 +58,8 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
     text: 'text-status-shift-deep dark:text-violet-300',
   },
   neutral: {
-    soft: 'border-border bg-muted text-muted-foreground',
+    // ink-600, not muted-foreground: muted text on the muted fill is only 4.3:1 in light mode.
+    soft: 'border-border bg-muted text-ink-600',
     solid: 'bg-ink-400',
     hoverBorder: 'hover:border-ink-300',
     borderLeft: 'border-l-ink-400',

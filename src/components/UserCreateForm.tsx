@@ -498,7 +498,10 @@ export default function UserCreateForm({ action, className = '', disabled = fals
             </Label>
             <input type="hidden" name="role" value={selectedRole} />
             <Select value={selectedRole} onValueChange={setSelectedRole} disabled={disabled}>
-              <SelectTrigger className="h-auto py-2 px-3 w-full bg-background border-input items-center min-w-0">
+              <SelectTrigger
+                id="role"
+                className="h-auto py-2 px-3 w-full bg-background border-input items-center min-w-0"
+              >
                 <div className="flex items-center gap-2.5 text-left min-w-0 flex-1">
                   {selectedRole === 'ADMIN' ? (
                     <div className="p-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-md shrink-0">

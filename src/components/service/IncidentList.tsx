@@ -186,9 +186,9 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
           const incidentStatus = incident.status;
 
           return (
+            // The title link is the keyboard/AT entry point; the card click is a pointer shortcut only.
             <div
               key={incident.id}
-              aria-label={`Incident: ${incident.title}`}
               className={cn(
                 'group relative rounded-2xl border bg-card text-card-foreground transition-all duration-150 overflow-hidden',
                 'hover:shadow-md hover:-translate-y-[1px]',
@@ -204,17 +204,6 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                 startTransition(() => {
                   router.push(`/incidents/${incident.id}`);
                 });
-              }}
-              role="button"
-              tabIndex={0}
-              onKeyDown={e => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setNavigatingId(incident.id);
-                  startTransition(() => {
-                    router.push(`/incidents/${incident.id}`);
-                  });
-                }
               }}
             >
               {/* Left status indicator pill */}

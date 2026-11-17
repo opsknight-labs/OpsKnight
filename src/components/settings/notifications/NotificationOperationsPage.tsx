@@ -233,7 +233,11 @@ function SummaryStrip({
         <span className="text-[11px] text-muted-foreground hidden sm:inline">
           Auto-refresh (15s)
         </span>
-        <Switch checked={autoRefresh} onCheckedChange={onAutoRefreshChange} />
+        <Switch
+          checked={autoRefresh}
+          onCheckedChange={onAutoRefreshChange}
+          aria-label="Auto-refresh every 15 seconds"
+        />
       </div>
     </div>
   );

@@ -40,14 +40,14 @@ export const SectionNav = memo(function SectionNav({
                 'group inline-flex min-h-8.5 shrink-0 flex-1 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:flex-none',
                 selected
                   ? 'bg-background text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:bg-background/50 hover:text-foreground'
+                  : 'text-ink-600 hover:bg-background/50 hover:text-foreground'
               )}
             >
               {Icon && (
                 <Icon
                   className={cn(
                     'h-3.5 w-3.5 transition-colors',
-                    selected ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                    selected ? 'text-primary' : 'text-ink-600 group-hover:text-foreground'
                   )}
                   aria-hidden="true"
                 />

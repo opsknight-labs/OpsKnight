@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useId } from 'react';
 import {
   upsertPostmortem,
   type PostmortemData,
@@ -198,6 +198,7 @@ export default function PostmortemForm({
   jiraCapability,
   incidentJiraIssues = [],
 }: PostmortemFormProps) {
+  const fieldId = useId();
   const router = useRouter();
   const { userTimeZone } = useTimezone();
   const [isPending, startTransition] = useTransition();
@@ -387,9 +388,9 @@ export default function PostmortemForm({
             </CardHeader>
             <CardContent>
               <div className="space-y-1.5">
-                <Label>Resolved Incident</Label>
+                <Label htmlFor={`${fieldId}-resolved-incident`}>Resolved Incident</Label>
                 <Select value={selectedIncidentId} onValueChange={setSelectedIncidentId}>
-                  <SelectTrigger>
+                  <SelectTrigger id={`${fieldId}-resolved-incident`}>
                     <SelectValue placeholder="Select a resolved incident..." />
                   </SelectTrigger>
                   <SelectContent>

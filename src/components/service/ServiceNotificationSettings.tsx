@@ -526,6 +526,8 @@ export default function ServiceNotificationSettings({
         {/* Hidden input for validation */}
         <input
           ref={selectRef}
+          aria-hidden="true"
+          aria-label="Slack channel"
           style={{ opacity: 0, height: 1, position: 'absolute' }}
           tabIndex={-1}
           required={
@@ -959,7 +961,10 @@ export default function ServiceNotificationSettings({
                                 value={selectedSlackChannel}
                                 onValueChange={handleSlackChannelChange}
                               >
-                                <SelectTrigger className="w-full text-xs h-8">
+                                <SelectTrigger
+                                  aria-label="Slack channel"
+                                  className="w-full text-xs h-8"
+                                >
                                   <SelectValue placeholder="Choose a channel..." />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1282,7 +1287,10 @@ export default function ServiceNotificationSettings({
                               setSelectedTeamsChannelId('');
                             }}
                           >
-                            <SelectTrigger className="text-xs h-8">
+                            <SelectTrigger
+                              aria-label="Microsoft Teams team"
+                              className="text-xs h-8"
+                            >
                               <SelectValue placeholder="Select a Team…" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1315,7 +1323,10 @@ export default function ServiceNotificationSettings({
                               value={selectedTeamsChannelId}
                               onValueChange={setSelectedTeamsChannelId}
                             >
-                              <SelectTrigger className="text-xs h-8">
+                              <SelectTrigger
+                                aria-label="Microsoft Teams channel"
+                                className="text-xs h-8"
+                              >
                                 <SelectValue placeholder="Select a channel…" />
                               </SelectTrigger>
                               <SelectContent>

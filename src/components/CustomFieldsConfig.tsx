@@ -405,17 +405,21 @@ export default function CustomFieldsConfig({
             />
             {searchQuery && (
               <button
+                aria-label="Clear search"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             )}
           </div>
 
           {/* Type Filter */}
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="h-9 text-xs w-[140px] bg-background">
+            <SelectTrigger
+              aria-label="Filter by field type"
+              className="h-9 text-xs w-[140px] bg-background"
+            >
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
@@ -430,7 +434,10 @@ export default function CustomFieldsConfig({
 
           {/* View Filter */}
           <Select value={viewFilter} onValueChange={v => setViewFilter(v as typeof viewFilter)}>
-            <SelectTrigger className="h-9 text-xs w-[140px] bg-background">
+            <SelectTrigger
+              aria-label="Filter by scope"
+              className="h-9 text-xs w-[140px] bg-background"
+            >
               <SelectValue placeholder="All Scopes" />
             </SelectTrigger>
             <SelectContent>

@@ -64,7 +64,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
               </h2>
               <Badge
                 variant="secondary"
-                className="px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                className="px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-ink-600"
               >
                 Beta
               </Badge>
@@ -157,7 +157,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
               </p>
             )}
             {!status.enabled && !publishBlockedReason && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 sm:text-right">
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 sm:text-right">
                 SHADOW and LIVE require global automation enabled.
               </p>
             )}

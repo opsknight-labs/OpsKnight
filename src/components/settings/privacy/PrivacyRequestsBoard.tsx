@@ -349,7 +349,7 @@ export default function PrivacyRequestsBoard({
                         setSubjectId('');
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Subject type">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -399,7 +399,7 @@ export default function PrivacyRequestsBoard({
                       value={requestType}
                       onValueChange={v => setRequestType(v as PrivacyRequestType)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Request type">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -465,11 +465,12 @@ export default function PrivacyRequestsBoard({
               />
               {searchQuery && (
                 <button
+                  aria-label="Clear search"
                   type="button"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -477,7 +478,7 @@ export default function PrivacyRequestsBoard({
               value={statusFilter}
               onValueChange={v => setStatusFilter(v as typeof statusFilter)}
             >
-              <SelectTrigger className="h-9 w-40 text-xs">
+              <SelectTrigger aria-label="Filter by status" className="h-9 w-40 text-xs">
                 <SelectValue placeholder="Status: All" />
               </SelectTrigger>
               <SelectContent>
@@ -492,7 +493,7 @@ export default function PrivacyRequestsBoard({
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={v => setTypeFilter(v as typeof typeFilter)}>
-              <SelectTrigger className="h-9 w-36 text-xs">
+              <SelectTrigger aria-label="Filter by type" className="h-9 w-36 text-xs">
                 <SelectValue placeholder="Type: All" />
               </SelectTrigger>
               <SelectContent>
@@ -633,7 +634,10 @@ export default function PrivacyRequestsBoard({
                           onValueChange={v => assign(req.id, v === 'unassigned' ? null : v)}
                           disabled={isPending}
                         >
-                          <SelectTrigger className="h-8 w-40 text-xs">
+                          <SelectTrigger
+                            aria-label={`Assignee for request ${req.id}`}
+                            className="h-8 w-40 text-xs"
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>

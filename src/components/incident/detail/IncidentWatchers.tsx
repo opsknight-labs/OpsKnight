@@ -326,7 +326,10 @@ export default function IncidentWatchers({
                     Subscriber Cadence
                   </label>
                   <Select value={selectedRole} onValueChange={setSelectedRole}>
-                    <SelectTrigger className="w-full bg-background h-9 text-xs border-slate-200 dark:border-zinc-700">
+                    <SelectTrigger
+                      aria-label="Subscriber cadence"
+                      className="w-full bg-background h-9 text-xs border-slate-200 dark:border-zinc-700"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

@@ -87,30 +87,40 @@ export default function ServiceHealthTable({
         <div className="service-health-filters">
           <button
             className={`service-health-filter ${statusFilter === null ? 'is-active' : ''}`}
+            type="button"
+            aria-pressed={statusFilter === null}
             onClick={() => setStatusFilter(null)}
           >
             All <strong>{totalServices}</strong>
           </button>
           <button
             className={`service-health-filter is-healthy ${statusFilter === 'Healthy' ? 'is-active' : ''}`}
+            type="button"
+            aria-pressed={statusFilter === 'Healthy'}
             onClick={() => setStatusFilter(statusFilter === 'Healthy' ? null : 'Healthy')}
           >
             <CheckCircle2 className="w-3.5 h-3.5" /> Healthy <strong>{counts.healthy}</strong>
           </button>
           <button
             className={`service-health-filter is-degraded ${statusFilter === 'Degraded' ? 'is-active' : ''}`}
+            type="button"
+            aria-pressed={statusFilter === 'Degraded'}
             onClick={() => setStatusFilter(statusFilter === 'Degraded' ? null : 'Degraded')}
           >
             <AlertTriangle className="w-3.5 h-3.5" /> Degraded <strong>{counts.degraded}</strong>
           </button>
           <button
             className={`service-health-filter is-critical ${statusFilter === 'Critical' ? 'is-active' : ''}`}
+            type="button"
+            aria-pressed={statusFilter === 'Critical'}
             onClick={() => setStatusFilter(statusFilter === 'Critical' ? null : 'Critical')}
           >
             <XCircle className="w-3.5 h-3.5" /> Critical <strong>{counts.critical}</strong>
           </button>
           <button
             className={`service-health-filter ${statusFilter === 'Unknown' ? 'is-active' : ''}`}
+            type="button"
+            aria-pressed={statusFilter === 'Unknown'}
             onClick={() => setStatusFilter(statusFilter === 'Unknown' ? null : 'Unknown')}
           >
             <AlertTriangle className="w-3.5 h-3.5" /> Unknown <strong>{counts.unknown}</strong>
@@ -118,7 +128,11 @@ export default function ServiceHealthTable({
         </div>
         <div className="service-health-sort">
           <span>Sort</span>
-          <select value={sortKey} onChange={event => setSortKey(event.target.value)}>
+          <select
+            aria-label="Sort services"
+            value={sortKey}
+            onChange={event => setSortKey(event.target.value)}
+          >
             {sortOptions.map(option => (
               <option key={option.value} value={option.value}>
                 {option.label}

@@ -209,11 +209,12 @@ function NoteImage({ src, alt }: { src: string; alt: string }) {
                 {alt || 'Image preview'}
               </span>
               <button
+                aria-label="Close image preview"
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             <div className="p-2 flex items-center justify-center max-h-[75vh] overflow-auto">

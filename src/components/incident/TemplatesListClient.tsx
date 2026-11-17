@@ -247,6 +247,7 @@ export default function TemplatesListClient({
               <span className="hidden sm:inline">Sort:</span>
             </div>
             <select
+              aria-label="Sort templates"
               value={sortBy}
               onChange={e => setSortBy(e.target.value as SortOption)}
               className="h-9 rounded-lg border border-border/70 bg-background/80 px-2.5 text-xs font-medium text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/20 cursor-pointer"

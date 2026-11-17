@@ -121,7 +121,7 @@ export default async function MobileAnalyticsPage({
                 'inline-flex min-h-11 min-w-12 items-center justify-center rounded-md px-3 text-sm font-medium tabular-nums transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 range === days
                   ? 'bg-card text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
+                  : 'text-ink-600 hover:text-foreground'
               )}
               aria-current={range === days ? 'page' : undefined}
               aria-label={`Last ${days} days`}

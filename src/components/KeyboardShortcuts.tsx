@@ -54,7 +54,13 @@ export default function KeyboardShortcuts({
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3 sm:px-6">
+        <div
+          // Focusable so keyboard users can scroll the list without a pointer.
+          tabIndex={0}
+          role="region"
+          aria-label="Shortcut list"
+          className="min-h-0 flex-1 overflow-y-auto px-5 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-6"
+        >
           {grouped.length === 0 ? (
             <ShortcutsEmpty query={searchQuery.trim()} />
           ) : (

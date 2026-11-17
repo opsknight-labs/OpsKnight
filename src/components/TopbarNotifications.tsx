@@ -529,49 +529,57 @@ export default function TopbarNotifications() {
           </div>
 
           <div className="flex-1 overflow-y-auto bg-zinc-50/50 dark:bg-zinc-950">
-            {loading ? (
-              <div className="flex h-48 items-center justify-center text-xs text-muted-foreground">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mr-2" />
-                Loading notifications...
-              </div>
-            ) : (
-              <>
-                <TabsContent value="all" className="m-0 border-0 h-full">
-                  <NotificationList
-                    items={notifications}
-                    onNavigate={onNavigate}
-                    onMarkAsRead={markAsRead}
-                  />
-                </TabsContent>
-                <TabsContent value="unread" className="m-0 border-0 h-full">
-                  <NotificationList
-                    items={unreadNotifications}
-                    onNavigate={onNavigate}
-                    onMarkAsRead={markAsRead}
-                    emptyMessage="No unread notifications"
-                    emptySub="You're caught up with all your alerts"
-                  />
-                </TabsContent>
-                <TabsContent value="incident" className="m-0 border-0 h-full">
-                  <NotificationList
-                    items={incidentNotifications}
-                    onNavigate={onNavigate}
-                    onMarkAsRead={markAsRead}
-                    emptyMessage="No incident alerts"
-                    emptySub="No recent incident notifications recorded"
-                  />
-                </TabsContent>
-                <TabsContent value="schedule" className="m-0 border-0 h-full">
-                  <NotificationList
-                    items={scheduleNotifications}
-                    onNavigate={onNavigate}
-                    onMarkAsRead={markAsRead}
-                    emptyMessage="No shift updates"
-                    emptySub="No recent on-call rotations or schedule changes"
-                  />
-                </TabsContent>
-              </>
-            )}
+            {/* Panels stay mounted while loading so every tab's aria-controls resolves. */}
+            <TabsContent value="all" className="m-0 border-0 h-full">
+              {loading ? (
+                <NotificationsLoading />
+              ) : (
+                <NotificationList
+                  items={notifications}
+                  onNavigate={onNavigate}
+                  onMarkAsRead={markAsRead}
+                />
+              )}
+            </TabsContent>
+            <TabsContent value="unread" className="m-0 border-0 h-full">
+              {loading ? (
+                <NotificationsLoading />
+              ) : (
+                <NotificationList
+                  items={unreadNotifications}
+                  onNavigate={onNavigate}
+                  onMarkAsRead={markAsRead}
+                  emptyMessage="No unread notifications"
+                  emptySub="You're caught up with all your alerts"
+                />
+              )}
+            </TabsContent>
+            <TabsContent value="incident" className="m-0 border-0 h-full">
+              {loading ? (
+                <NotificationsLoading />
+              ) : (
+                <NotificationList
+                  items={incidentNotifications}
+                  onNavigate={onNavigate}
+                  onMarkAsRead={markAsRead}
+                  emptyMessage="No incident alerts"
+                  emptySub="No recent incident notifications recorded"
+                />
+              )}
+            </TabsContent>
+            <TabsContent value="schedule" className="m-0 border-0 h-full">
+              {loading ? (
+                <NotificationsLoading />
+              ) : (
+                <NotificationList
+                  items={scheduleNotifications}
+                  onNavigate={onNavigate}
+                  onMarkAsRead={markAsRead}
+                  emptyMessage="No shift updates"
+                  emptySub="No recent on-call rotations or schedule changes"
+                />
+              )}
+            </TabsContent>
           </div>
         </Tabs>
 
@@ -604,5 +612,14 @@ export default function TopbarNotifications() {
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function NotificationsLoading() {
+  return (
+    <div className="flex h-48 items-center justify-center text-xs text-muted-foreground">
+      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mr-2" />
+      Loading notifications...
+    </div>
   );
 }

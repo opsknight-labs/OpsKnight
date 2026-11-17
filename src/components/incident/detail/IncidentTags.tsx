@@ -262,12 +262,13 @@ export default function IncidentTags({
                   <span>#{tag.name}</span>
                   {canManage && (
                     <button
+                      aria-label={`Remove tag ${tag.name}`}
                       type="button"
                       onClick={() => handleRemoveTag(tag.id, tag.name)}
                       disabled={isPending}
                       className="opacity-50 hover:opacity-100 p-0.5"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3 w-3" aria-hidden="true" />
                     </button>
                   )}
                 </span>

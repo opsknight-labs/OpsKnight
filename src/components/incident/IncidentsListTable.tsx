@@ -353,12 +353,17 @@ export default function IncidentsListTable({
     if (readOnly) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input, textarea, contentEditable, or inside a modal dialog
+      // Ignore if typing in a text field, contentEditable, or inside a modal dialog. Row checkboxes
+      // are inputs too, but J/K/X must keep working from them.
       const target = e.target as HTMLElement | null;
+      const isTextEntry =
+        target?.tagName === 'INPUT' &&
+        !['checkbox', 'radio', 'button'].includes((target as HTMLInputElement).type);
       if (
         target &&
-        (target.tagName === 'INPUT' ||
+        (isTextEntry ||
           target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
           target.isContentEditable ||
           (typeof target.closest === 'function' && target.closest('[role="dialog"]')))
       ) {
@@ -390,7 +395,7 @@ export default function IncidentsListTable({
 
       // Open focused incident
       if (e.key === 'Enter' || key === 'o') {
-        if (focused) {
+        if (focused && target?.tagName !== 'INPUT') {
           e.preventDefault();
           setNavigatingId(focused.id);
           startTransition(() => {

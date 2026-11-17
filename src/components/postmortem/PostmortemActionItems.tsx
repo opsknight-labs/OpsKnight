@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -50,6 +50,7 @@ export default function PostmortemActionItems({
   jiraCapability,
   incidentJiraIssues = [],
 }: PostmortemActionItemsProps) {
+  const fieldId = useId();
   const { userTimeZone } = useTimezone();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftItemIds, setDraftItemIds] = useState<Set<string>>(() => new Set());
@@ -132,22 +133,23 @@ export default function PostmortemActionItems({
         <CardContent className="flex flex-col gap-3">
           <div className="grid grid-cols-[2fr_1fr_1fr] gap-2">
             <div className="space-y-1.5">
-              <Label>Title</Label>
+              <Label htmlFor={`${fieldId}-title`}>Title</Label>
               <Input
+                id={`${fieldId}-title`}
                 placeholder="e.g., Add monitoring for service X"
                 value={newItem.title || ''}
                 onChange={e => setNewItem({ ...newItem, title: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Priority</Label>
+              <Label htmlFor={`${fieldId}-priority`}>Priority</Label>
               <Select
                 value={newItem.priority || 'MEDIUM'}
                 onValueChange={value =>
                   setNewItem({ ...newItem, priority: value as ActionItem['priority'] })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id={`${fieldId}-priority`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -160,14 +162,14 @@ export default function PostmortemActionItems({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Status</Label>
+              <Label htmlFor={`${fieldId}-status`}>Status</Label>
               <Select
                 value={newItem.status || 'OPEN'}
                 onValueChange={value =>
                   setNewItem({ ...newItem, status: value as ActionItem['status'] })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id={`${fieldId}-status`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -181,8 +183,9 @@ export default function PostmortemActionItems({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Description</Label>
+            <Label htmlFor={`${fieldId}-description`}>Description</Label>
             <Textarea
+              id={`${fieldId}-description`}
               rows={2}
               placeholder="Detailed description of the action item..."
               value={newItem.description || ''}
@@ -192,14 +195,14 @@ export default function PostmortemActionItems({
           <div className="grid grid-cols-2 gap-2">
             {users.length > 0 && (
               <div className="space-y-1.5">
-                <Label>Owner</Label>
+                <Label htmlFor={`${fieldId}-owner`}>Owner</Label>
                 <Select
                   value={newItem.owner || '_unassigned'}
                   onValueChange={value =>
                     setNewItem({ ...newItem, owner: value === '_unassigned' ? undefined : value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id={`${fieldId}-owner`}>
                     <SelectValue placeholder="Unassigned" />
                   </SelectTrigger>
                   <SelectContent>
@@ -214,8 +217,9 @@ export default function PostmortemActionItems({
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>Due Date</Label>
+              <Label htmlFor={`${fieldId}-due-date`}>Due Date</Label>
               <Input
+                id={`${fieldId}-due-date`}
                 type="date"
                 value={newItem.dueDate || ''}
                 onChange={e => setNewItem({ ...newItem, dueDate: e.target.value })}
@@ -315,14 +319,20 @@ export default function PostmortemActionItems({
                     </div>
                     <div className="flex gap-2">
                       <Button
+                        aria-label="Edit action item"
                         variant="outline"
                         size="sm"
                         onClick={() => setEditingId(editingId === item.id ? null : item.id)}
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-4 h-4" aria-hidden="true" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => deleteItem(item.id)}>
-                        <Trash2 className="w-4 h-4" />
+                      <Button
+                        aria-label="Delete action item"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteItem(item.id)}
+                      >
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -331,15 +341,17 @@ export default function PostmortemActionItems({
                   {editingId === item.id && (
                     <div className="mt-3 p-3 bg-ink-50 rounded-md flex flex-col gap-2">
                       <div className="space-y-1.5">
-                        <Label>Title</Label>
+                        <Label htmlFor={`${fieldId}-${item.id}-title`}>Title</Label>
                         <Input
+                          id={`${fieldId}-${item.id}-title`}
                           value={item.title}
                           onChange={e => updateItem(item.id, { title: e.target.value })}
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Description</Label>
+                        <Label htmlFor={`${fieldId}-${item.id}-description`}>Description</Label>
                         <Textarea
+                          id={`${fieldId}-${item.id}-description`}
                           rows={2}
                           value={item.description}
                           onChange={e => updateItem(item.id, { description: e.target.value })}
@@ -347,14 +359,14 @@ export default function PostmortemActionItems({
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1.5">
-                          <Label>Status</Label>
+                          <Label htmlFor={`${fieldId}-${item.id}-status`}>Status</Label>
                           <Select
                             value={item.status}
                             onValueChange={value =>
                               updateItem(item.id, { status: value as ActionItem['status'] })
                             }
                           >
-                            <SelectTrigger>
+                            <SelectTrigger id={`${fieldId}-${item.id}-status`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -367,14 +379,14 @@ export default function PostmortemActionItems({
                           </Select>
                         </div>
                         <div className="space-y-1.5">
-                          <Label>Priority</Label>
+                          <Label htmlFor={`${fieldId}-${item.id}-priority`}>Priority</Label>
                           <Select
                             value={item.priority}
                             onValueChange={value =>
                               updateItem(item.id, { priority: value as ActionItem['priority'] })
                             }
                           >
-                            <SelectTrigger>
+                            <SelectTrigger id={`${fieldId}-${item.id}-priority`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -391,7 +403,7 @@ export default function PostmortemActionItems({
                       </div>
                       {users.length > 0 && (
                         <div className="space-y-1.5">
-                          <Label>Owner</Label>
+                          <Label htmlFor={`${fieldId}-${item.id}-owner`}>Owner</Label>
                           <Select
                             value={item.owner || '_unassigned'}
                             onValueChange={value =>
@@ -400,7 +412,7 @@ export default function PostmortemActionItems({
                               })
                             }
                           >
-                            <SelectTrigger>
+                            <SelectTrigger id={`${fieldId}-${item.id}-owner`}>
                               <SelectValue placeholder="Unassigned" />
                             </SelectTrigger>
                             <SelectContent>
@@ -415,8 +427,9 @@ export default function PostmortemActionItems({
                         </div>
                       )}
                       <div className="space-y-1.5">
-                        <Label>Due Date</Label>
+                        <Label htmlFor={`${fieldId}-${item.id}-due-date`}>Due Date</Label>
                         <Input
+                          id={`${fieldId}-${item.id}-due-date`}
                           type="date"
                           value={
                             item.dueDate ? new Date(item.dueDate).toISOString().split('T')[0] : ''

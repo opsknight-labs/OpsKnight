@@ -157,7 +157,10 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
             }
           }}
         >
-          <SelectTrigger className="h-9 w-[145px] rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors">
+          <SelectTrigger
+            aria-label="Time range"
+            className="h-9 w-[145px] rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors"
+          >
             <Calendar className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
             <SelectValue placeholder="Time range" />
           </SelectTrigger>

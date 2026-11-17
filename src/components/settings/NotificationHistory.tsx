@@ -172,6 +172,7 @@ export default function NotificationHistory() {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncs with the history API; the loading flag is part of that fetch.
     fetchNotifications();
   }, [fetchNotifications]);
 
@@ -227,7 +228,10 @@ export default function NotificationHistory() {
       let hasMore = true;
 
       while (hasMore) {
-        const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(currentOffset) });
+        const params = new URLSearchParams({
+          limit: String(PAGE_LIMIT),
+          offset: String(currentOffset),
+        });
         if (filterChannel && filterChannel !== 'all') params.set('channel', filterChannel);
         if (filterStatus && filterStatus !== 'all') params.set('status', filterStatus);
         if (debouncedQuery) params.set('q', debouncedQuery);
@@ -562,7 +566,7 @@ export default function NotificationHistory() {
                 setOffset(0);
               }}
             >
-              <SelectTrigger className="h-8 text-xs bg-background">
+              <SelectTrigger aria-label="Filter by channel" className="h-8 text-xs bg-background">
                 <SelectValue placeholder="All Channels" />
               </SelectTrigger>
               <SelectContent>
@@ -585,7 +589,7 @@ export default function NotificationHistory() {
                 setOffset(0);
               }}
             >
-              <SelectTrigger className="h-8 text-xs bg-background">
+              <SelectTrigger aria-label="Filter by status" className="h-8 text-xs bg-background">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>

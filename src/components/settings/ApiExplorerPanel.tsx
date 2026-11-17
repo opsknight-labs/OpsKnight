@@ -343,16 +343,20 @@ export default function ApiExplorerPanel({
             />
             {searchQuery && (
               <button
+                aria-label="Clear search"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             )}
           </div>
 
           <Select value={selectedTag} onValueChange={setSelectedTag}>
-            <SelectTrigger className="h-9 text-xs w-[160px] bg-background">
+            <SelectTrigger
+              aria-label="Filter by category"
+              className="h-9 text-xs w-[160px] bg-background"
+            >
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
@@ -366,7 +370,10 @@ export default function ApiExplorerPanel({
           </Select>
 
           <Select value={selectedMethod} onValueChange={setSelectedMethod}>
-            <SelectTrigger className="h-9 text-xs w-[120px] bg-background">
+            <SelectTrigger
+              aria-label="Filter by method"
+              className="h-9 text-xs w-[120px] bg-background"
+            >
               <SelectValue placeholder="All Methods" />
             </SelectTrigger>
             <SelectContent>

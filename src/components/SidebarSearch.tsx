@@ -439,6 +439,11 @@ export default function SidebarSearch({ role = null }: SidebarSearchProps = {}) 
     openRef.current = open;
   }, [open]);
 
+  // cmdk hard-codes aria-expanded="true" on its input; mirror the popover's real state.
+  useEffect(() => {
+    inputRef.current?.setAttribute('aria-expanded', String(open));
+  }, [open]);
+
   // Keyboard shortcut handler. Window capture runs before Radix's dismiss handler, whose
   // re-render would otherwise detach a bubbling listener before Escape reaches it.
   useEffect(() => {
@@ -843,6 +848,8 @@ export default function SidebarSearch({ role = null }: SidebarSearchProps = {}) 
           <SearchFooter />
         </PopoverContent>
       </Popover>
+      {/* cmdk's input always points aria-controls at the list; keep an empty one mounted while closed. */}
+      {!open && <CommandList hidden />}
     </Command>
   );
 }

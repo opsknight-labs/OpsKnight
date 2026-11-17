@@ -120,7 +120,13 @@ export default function DetailHeroBanner({
               )}
             >
               {statsPlacement !== 'bottom' && stats.length > 0 && (
-                <div className="overflow-x-auto pb-1 scrollbar-none w-full sm:w-auto">
+                <div
+                  // Scrolls sideways on phones, so keyboard users need to be able to focus it.
+                  role="region"
+                  aria-label={`${title} summary`}
+                  tabIndex={0}
+                  className="overflow-x-auto pb-1 scrollbar-none w-full sm:w-auto rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                >
                   <div
                     className={cn(
                       'flex sm:grid gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs',

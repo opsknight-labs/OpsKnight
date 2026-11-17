@@ -58,9 +58,7 @@ function WidgetConfigForm({ widget, onClose, onSave }: WidgetConfigFormProps) {
         : ''
   );
   const [targetSla, setTargetSla] = useState<string>(
-    typeof widget.config?.targetSla === 'number'
-      ? String(widget.config.targetSla)
-      : ''
+    typeof widget.config?.targetSla === 'number' ? String(widget.config.targetSla) : ''
   );
 
   const handleApply = () => {
@@ -138,7 +136,7 @@ function WidgetConfigForm({ widget, onClose, onSave }: WidgetConfigFormProps) {
               Column Width
             </label>
             <Select value={String(width)} onValueChange={v => setWidth(Number(v))}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Column width">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -155,7 +153,7 @@ function WidgetConfigForm({ widget, onClose, onSave }: WidgetConfigFormProps) {
               Row Height
             </label>
             <Select value={String(height)} onValueChange={v => setHeight(Number(v))}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Row height">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -174,7 +172,7 @@ function WidgetConfigForm({ widget, onClose, onSave }: WidgetConfigFormProps) {
               Chart Visualization
             </label>
             <Select value={chartType} onValueChange={setChartType}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Chart visualization">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

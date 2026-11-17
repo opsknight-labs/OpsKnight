@@ -162,7 +162,7 @@ export default function EscalationStepEditModal({
               onValueChange={(val: 'USER' | 'TEAM' | 'SCHEDULE') => setTargetType(val)}
               disabled={isPending}
             >
-              <SelectTrigger className="text-xs h-9">
+              <SelectTrigger aria-label="Target type" className="text-xs h-9">
                 <SelectValue placeholder="Select target type" />
               </SelectTrigger>
               <SelectContent>
