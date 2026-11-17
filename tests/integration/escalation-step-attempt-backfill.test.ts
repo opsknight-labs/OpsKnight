@@ -1,3 +1,4 @@
+import { OPS_ROLLUPS } from '@/lib/metric-rollup';
 import { afterAll, beforeEach, expect, it } from 'vitest';
 import {
   testPrisma as db,
@@ -160,6 +161,10 @@ it('runs as a resumable lane job only while escalation insights are on, and stop
     await db.intelligenceWorkItem.count({ where: { kind: 'BACKFILL_ESCALATION_ATTEMPTS' } })
   ).toBe(1);
 
+  // The step-outcome rollup already sealed these days before the backfill wrote them.
+  const sealed = `${OPS_ROLLUPS.escalationStepOutcome}.watermark`;
+  await db.metricRollup.create({ data: { name: sealed, bucket: ago(1), count: 0, sum: 0 } });
+
   // One batch per call; the cursor survives between calls (a restart resumes where it stopped).
   let batches = 0;
   while (await runEscalationAttemptBackfill(on, { now: NOW })) batches += 1;
@@ -169,6 +174,8 @@ it('runs as a resumable lane job only while escalation insights are on, and stop
     where: { name: ATTEMPT_BACKFILL_CURSOR },
   });
   expect(cursor.lastId).toBe('');
+  // Finishing restarts the rollup, so the next pass rolls the whole window up again.
+  expect(await db.metricRollup.count({ where: { name: sealed } })).toBe(0);
 
   // Done: further runs read nothing new, and the scan no longer queues it.
   expect(await runEscalationAttemptBackfill(on, { now: NOW })).toBe(false);

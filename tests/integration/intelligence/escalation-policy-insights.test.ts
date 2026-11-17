@@ -47,7 +47,8 @@ async function switches(escalation: boolean) {
 
 /**
  * Known answers. Policy "Busy": step 1 (team Ada+Bob, immediately), step 2 (Bob, after 30 min), step 3
- * (Ada, after 10 min). Yesterday: 12 incidents acknowledged 3 min after step 1; 6 incidents that went through step 1 to
+ * (Ada, after 10 min). Two days ago (the step-outcome rollup waits a day for a day to settle): 12
+ * incidents acknowledged 3 min after step 1; 6 incidents that went through step 1 to
  * step 2 and were never acknowledged; 5 incidents where step 3 was skipped for want of a contact method.
  * Policy "Lonely": one step to Ada, no service, created 10 days ago.
  */
@@ -87,7 +88,9 @@ async function fixtures() {
 
   const today = new Date();
   const base = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - DAY + 13 * 60 * MIN
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) -
+      2 * DAY +
+      13 * 60 * MIN
   );
   const attempts: Array<Record<string, unknown>> = [];
   const attempt = (

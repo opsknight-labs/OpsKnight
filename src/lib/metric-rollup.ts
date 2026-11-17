@@ -1342,11 +1342,25 @@ export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>>
 /** Days a rollup waits after a day ends, for sources whose rows settle later (a resolution after a run). */
 export const OPS_ROLLUP_LAG_DAYS: Partial<Record<OpsRollupName, number>> = {
   [OPS_ROLLUPS.runbookRun]: 1,
+  // A late-evening page is acknowledged, or passed to the next step, after midnight. shortcut: a step
+  // delayed by more than a day still lands as SCHEDULED; raise the lag if long delays become common.
+  [OPS_ROLLUPS.escalationStepOutcome]: 1,
 };
 
 const OPS_ROLLUP_DAY_MS = 86_400_000;
 const OPS_ROLLUP_WRITE_CHUNK = 1000;
 const opsRollupWatermark = (name: OpsRollupName) => `${name}.watermark`;
+
+/**
+ * Makes the next `generateOpsRollups` recompute `name` over its whole lookback window, for a source whose
+ * past days changed (a backfill inserted rows behind the watermark). Run it in the writer's transaction.
+ */
+export async function restartOpsRollup(
+  tx: Pick<Prisma.TransactionClient, 'metricRollup'>,
+  name: OpsRollupName
+): Promise<void> {
+  await tx.metricRollup.deleteMany({ where: { name: opsRollupWatermark(name) } });
+}
 
 /**
  * Brings every operations rollup up to yesterday (UTC), one day per transaction, starting after its own

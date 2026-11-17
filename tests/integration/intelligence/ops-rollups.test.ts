@@ -140,9 +140,9 @@ describe('operations rollups', () => {
     const done = await generateOpsRollups(NOW, { force: true, lookbackDays: 7 });
     expect(done).toEqual({
       [OPS_ROLLUPS.pagesPerUserHour]: 7,
-      [OPS_ROLLUPS.escalationStepOutcome]: 7,
+      // Both lag a day: acknowledgements and resolutions of yesterday's pages and runs may still arrive.
+      [OPS_ROLLUPS.escalationStepOutcome]: 6,
       [OPS_ROLLUPS.runbookOutcome]: 7,
-      // Lags a day: yesterday's resolutions may still arrive.
       [OPS_ROLLUPS.runbookRun]: 6,
       [OPS_ROLLUPS.runbookStepOutcome]: 7,
       [OPS_ROLLUPS.automationRuleMatch]: 7,
@@ -289,7 +289,7 @@ describe('operations rollups', () => {
         attempt(quick.id, 0, 'NOTIFIED', at(1, '10:00:00')),
         attempt(reopened.id, 0, 'NOTIFIED', at(1, '12:00:00')),
         attempt(skipped.id, 0, 'SKIPPED', null, { skipReason: 'NO_ONE_ON_CALL' }),
-        // Today is not a complete day yet.
+        // Not settled yet: the outcome rollup waits a day after a day ends.
         attempt(skipped.id, 1, 'SKIPPED', null, {
           skipReason: 'NO_TARGET',
           createdAt: at(0, '01:00:00'),
@@ -297,7 +297,8 @@ describe('operations rollups', () => {
       ],
     });
 
-    await generateOpsRollups(NOW, { force: true, lookbackDays: 7 });
+    // A day later, yesterday has settled (an acknowledgement after midnight would still count).
+    await generateOpsRollups(new Date(NOW.getTime() + DAY), { force: true, lookbackDays: 7 });
     const tags = (step: number, outcome: string, hour: number, extra: object = {}) => ({
       step,
       outcome,

@@ -13,6 +13,7 @@
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { EscalationAttemptOutcome, EscalationSkipReason } from './step-attempts';
+import { OPS_ROLLUPS, restartOpsRollup } from '@/lib/metric-rollup';
 
 export const STEP_ATTEMPT_BACKFILL_DAYS = 90;
 /** Incidents per batch: one lane work item each. */
@@ -249,5 +250,7 @@ export async function backfillEscalationStepAttemptsBatch(
     create: { name: ATTEMPT_BACKFILL_CURSOR, ...next },
     update: next,
   });
+  // The rows just written sit on days the step-outcome rollup may already have sealed: roll them again.
+  if (!result.cursor) await restartOpsRollup(tx, OPS_ROLLUPS.escalationStepOutcome);
   return result.cursor !== null;
 }
