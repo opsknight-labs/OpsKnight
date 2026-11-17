@@ -328,11 +328,17 @@ test.describe.serial('intelligence responder workflows', () => {
       await expectAccessible(page, '#main-content');
     }
 
-    // Settings lists Intelligence as a first-class area, and it is the active tab here.
-    const settingsNav = page.getByRole('navigation', { name: 'Settings Navigation' });
+    // Intelligence is a first-class settings area: its breadcrumb leads back to it from every group page,
+    // and the settings hub lists it. (The settings shell renders the hub and breadcrumb, not a tab bar.)
     await expect(
-      settingsNav.getByRole('link', { name: 'Intelligence', exact: true })
+      page
+        .getByRole('navigation', { name: 'Breadcrumb' })
+        .getByRole('link', { name: 'Intelligence', exact: true })
     ).toHaveAttribute('href', '/settings/intelligence');
+    await page.goto('/settings');
+    await expect(
+      page.locator('#main-content a[href="/settings/intelligence"]').first()
+    ).toBeVisible();
 
     // Every earlier address still works and lands on the section that now holds its controls.
     const moved: Array<[string, string]> = [

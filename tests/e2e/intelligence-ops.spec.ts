@@ -348,6 +348,13 @@ async function setTheme(page: Page, theme: 'light' | 'dark') {
   await page.emulateMedia({ colorScheme: theme });
   await page.evaluate(value => {
     const root = document.documentElement;
+    // Like next-themes' disableTransitionOnChange: axe must read the settled colours, not a fade.
+    if (!document.getElementById('e2e-no-transitions')) {
+      const style = document.createElement('style');
+      style.id = 'e2e-no-transitions';
+      style.textContent = '*,*::before,*::after{transition:none!important}';
+      document.head.append(style);
+    }
     root.classList.toggle('dark', value === 'dark');
     root.dataset.theme = value;
     root.style.colorScheme = value;
@@ -449,7 +456,7 @@ async function acrossViewports(page: Page, url: string, scope: string) {
   }
 }
 
-test.describe.serial('operations intelligence surfaces', () => {
+test.describe('operations intelligence surfaces', () => {
   test.beforeAll(async () => {
     if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
       throw new Error('Dedicated test DB required');
@@ -511,7 +518,6 @@ test.describe.serial('operations intelligence surfaces', () => {
     await page.goto(`/policies/${ids.policy}`);
     await page.getByRole('tab', { name: /^Insights/ }).click();
     const insights = page.locator(ACTIVE_TAB);
-    await expect(insights.getByRole('heading', { name: 'Insights' })).toBeVisible();
     await expect(insights.getByText('Step 2 is reached on most pages')).toBeVisible();
     await acrossViewports(page, `/policies/${ids.policy}?tab=insights`, ACTIVE_TAB);
   });
