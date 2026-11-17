@@ -237,6 +237,9 @@ export async function getPostmortemAssistForActor(
       at: entry.at,
       title: entry.title,
       detail: entry.detail,
+      incidentId: entry.href?.startsWith('/incidents/')
+        ? entry.href.slice('/incidents/'.length)
+        : null,
     })),
     changes: (response?.changes ?? []).map(change => ({
       id: change.changeId,
@@ -279,5 +282,51 @@ export async function getPostmortemAssistForActor(
     recurrence,
     evidence,
     suggestions: suggestActionItems(evidence, existing),
+  };
+}
+
+/**
+ * Evidence for a draft that will be stored on `incidentId`'s postmortem: text from other incidents (titles,
+ * fixes, their postmortem title) is kept only when that incident is PUBLIC and shares a team with this one,
+ * so the saved postmortem does not show its readers incidents the drafter alone could see.
+ */
+export async function evidenceForStoredDraft(
+  incidentId: string,
+  evidence: PostmortemEvidence,
+  client: Client = prisma
+): Promise<PostmortemEvidence> {
+  const cited = [
+    ...evidence.axis.flatMap(entry => entry.incidentId ?? []),
+    ...evidence.upstreamIncidents.map(incident => incident.incidentId),
+    ...evidence.similarFixes.map(similar => similar.incidentId),
+    ...(evidence.recurrence?.lastPostmortem ? [evidence.recurrence.lastPostmortem.incidentId] : []),
+  ];
+  const rows = await client.incident.findMany({
+    where: { id: { in: [...new Set([incidentId, ...cited])] } },
+    select: { id: true, visibility: true, teamId: true, service: { select: { teamId: true } } },
+  });
+  const teamsOf = (row: (typeof rows)[number]) =>
+    [row.teamId, row.service.teamId].filter((team): team is string => team !== null);
+  const target = rows.find(row => row.id === incidentId);
+  const targetTeams = new Set(target ? teamsOf(target) : []);
+  const shared = new Set(
+    rows
+      .filter(
+        row =>
+          row.id === incidentId ||
+          (row.visibility === 'PUBLIC' && teamsOf(row).some(team => targetTeams.has(team)))
+      )
+      .map(row => row.id)
+  );
+  const recurrence = evidence.recurrence;
+  return {
+    ...evidence,
+    axis: evidence.axis.filter(entry => !entry.incidentId || shared.has(entry.incidentId)),
+    upstreamIncidents: evidence.upstreamIncidents.filter(item => shared.has(item.incidentId)),
+    similarFixes: evidence.similarFixes.filter(item => shared.has(item.incidentId)),
+    recurrence:
+      recurrence?.lastPostmortem && !shared.has(recurrence.lastPostmortem.incidentId)
+        ? { ...recurrence, lastPostmortem: { ...recurrence.lastPostmortem, title: '' } }
+        : recurrence,
   };
 }

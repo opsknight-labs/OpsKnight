@@ -16,6 +16,7 @@ import {
   repeatCauseProblemsSql,
 } from '@/lib/intelligence/ops-insights/producers/postmortem-repeat-cause';
 import {
+  evidenceForStoredDraft,
   getPostmortemAssistForActor,
   getPostmortemRecurrenceForActor,
 } from '@/lib/intelligence/postmortems/loaders';
@@ -24,6 +25,7 @@ import { Prisma } from '@prisma/client';
 import {
   createTestIncident,
   createTestService,
+  createTestTeam,
   createTestUser,
   resetDatabase,
   testPrisma as db,
@@ -351,5 +353,67 @@ describe('repeat cause with an overdue action item (lane producer)', () => {
       expect(text).toMatch(/idx_incident_fingerprint_(service_recent|problem)/);
       expect(text).not.toMatch(/"Node Type":\s*"Seq Scan"/);
     }
+  });
+});
+
+describe('evidence for a stored draft', () => {
+  it('cites only incidents that are public and share a team with the drafted incident', async () => {
+    const teamA = await createTestTeam('A');
+    const teamB = await createTestTeam('B');
+    const serviceA = await createTestService('A svc', teamA.id);
+    const serviceB = await createTestService('B svc', teamB.id);
+    const target = await createTestIncident('Target', serviceA.id);
+    const shared = await createTestIncident('Shared public', serviceA.id);
+    const secret = await createTestIncident('Private on A', serviceA.id, { visibility: 'PRIVATE' });
+    const elsewhere = await createTestIncident('Public on B', serviceB.id);
+    const at = new Date();
+    const upstream = (incidentId: string, title: string) => ({
+      incidentId,
+      title,
+      serviceName: 'x',
+      leadMinutes: 5,
+      accepted: true,
+    });
+    const filtered = await evidenceForStoredDraft(target.id, {
+      axis: [
+        { kind: 'ALERT', at, title: 'Alert', detail: null, incidentId: null },
+        {
+          kind: 'UPSTREAM_INCIDENT',
+          at,
+          title: 'Shared public',
+          detail: null,
+          incidentId: shared.id,
+        },
+        {
+          kind: 'UPSTREAM_INCIDENT',
+          at,
+          title: 'Public on B',
+          detail: null,
+          incidentId: elsewhere.id,
+        },
+      ],
+      changes: [],
+      upstreamIncidents: [
+        upstream(shared.id, 'Shared public'),
+        upstream(elsewhere.id, 'Public on B'),
+      ],
+      runbookRuns: [],
+      similarFixes: [
+        { incidentId: secret.id, title: 'Private on A', fix: 'secret fix' },
+        { incidentId: shared.id, title: 'Shared public', fix: 'restart' },
+      ],
+      recurrence: {
+        lastPostmortem: {
+          incidentId: secret.id,
+          title: 'Secret postmortem',
+          status: 'PUBLISHED',
+          createdAt: at,
+        },
+      } as never,
+    });
+    expect(filtered.axis.map(entry => entry.title)).toEqual(['Alert', 'Shared public']);
+    expect(filtered.upstreamIncidents.map(item => item.incidentId)).toEqual([shared.id]);
+    expect(filtered.similarFixes.map(item => item.incidentId)).toEqual([shared.id]);
+    expect(filtered.recurrence?.lastPostmortem).toMatchObject({ incidentId: secret.id, title: '' });
   });
 });

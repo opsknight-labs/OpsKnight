@@ -50,7 +50,14 @@ export interface EvidenceRunbookRun {
 
 export interface PostmortemEvidence {
   /** Entries of the intelligence time axis worth a line in the postmortem timeline. */
-  axis: Array<{ kind: string; at: Date; title: string; detail: string | null }>;
+  axis: Array<{
+    kind: string;
+    at: Date;
+    title: string;
+    detail: string | null;
+    /** The other incident an entry names (upstream, grouping), so a stored draft can leave it out. */
+    incidentId?: string | null;
+  }>;
   changes: EvidenceChange[];
   upstreamIncidents: EvidenceUpstreamIncident[];
   runbookRuns: EvidenceRunbookRun[];
@@ -73,8 +80,7 @@ const CHANGE_NOUN = new Map([
   ['INFRA', 'Infrastructure change'],
 ]);
 const changeNoun = (kind: string) => CHANGE_NOUN.get(kind) ?? 'Change';
-const lead = (minutes: number) =>
-  minutes <= 0 ? 'at onset' : `${minutes} min before onset`;
+const lead = (minutes: number) => (minutes <= 0 ? 'at onset' : `${minutes} min before onset`);
 const changeLine = (change: EvidenceChange) =>
   `${changeNoun(change.kind)} "${clip(change.summary, 160)}"${change.serviceName ? ` on ${change.serviceName}` : ''}, ${lead(change.leadMinutes)}`;
 const upstreamLine = (incident: EvidenceUpstreamIncident) =>
@@ -167,9 +173,11 @@ export function applyEvidenceToDraft<T extends DraftFields>(
   if (recurrence && recurrence.occurrences >= 2) {
     lessonLines.push(
       `This problem was seen ${recurrence.occurrences}${recurrence.capped ? '+' : ''} times in ${recurrence.windowDays} days.` +
-        (recurrence.lastPostmortem
-          ? ` Last postmortem: "${clip(recurrence.lastPostmortem.title, 120)}".`
-          : ' No earlier occurrence has a postmortem.') +
+        (!recurrence.lastPostmortem
+          ? ' No earlier occurrence has a postmortem.'
+          : recurrence.lastPostmortem.title
+            ? ` Last postmortem: "${clip(recurrence.lastPostmortem.title, 120)}".`
+            : ' An earlier occurrence has a postmortem.') +
         (recurrence.openActionItemCount > 0
           ? ` ${recurrence.openActionItemCount} action item${recurrence.openActionItemCount === 1 ? '' : 's'} from earlier occurrences ${recurrence.openActionItemCount === 1 ? 'is' : 'are'} still open.`
           : '')
@@ -206,8 +214,30 @@ export interface ExistingActionItem {
 }
 
 const STOP_WORDS = new Set([
-  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'are', 'was', 'not', 'our', 'all', 'any',
-  'add', 'make', 'use', 'new', 'into', 'its', 'has', 'have', 'can', 'will', 'should',
+  'the',
+  'and',
+  'for',
+  'with',
+  'from',
+  'that',
+  'this',
+  'are',
+  'was',
+  'not',
+  'our',
+  'all',
+  'any',
+  'add',
+  'make',
+  'use',
+  'new',
+  'into',
+  'its',
+  'has',
+  'have',
+  'can',
+  'will',
+  'should',
 ]);
 
 const titleTokens = (title: string): Set<string> =>
@@ -240,19 +270,23 @@ export function findDuplicateActionItem<T extends { title: string }>(
 const CAUSE_ACTION: Record<string, (subject: string) => { title: string; description: string }> = {
   DEPLOY: subject => ({
     title: `Add a pre-release check or canary for ${subject}`,
-    description: 'A deploy was confirmed as the cause. Catch this class of change before it reaches everyone.',
+    description:
+      'A deploy was confirmed as the cause. Catch this class of change before it reaches everyone.',
   }),
   CONFIG: subject => ({
     title: `Validate and stage configuration changes for ${subject}`,
-    description: 'A configuration change was confirmed as the cause. Add validation and a staged rollout.',
+    description:
+      'A configuration change was confirmed as the cause. Add validation and a staged rollout.',
   }),
   FEATURE_FLAG: subject => ({
     title: `Roll out feature flags gradually for ${subject}`,
-    description: 'A feature flag change was confirmed as the cause. Use a gradual rollout with a tested kill switch.',
+    description:
+      'A feature flag change was confirmed as the cause. Use a gradual rollout with a tested kill switch.',
   }),
   INFRA: subject => ({
     title: `Review the infrastructure change procedure for ${subject}`,
-    description: 'An infrastructure change was confirmed as the cause. Add a pre-check and a rollback plan.',
+    description:
+      'An infrastructure change was confirmed as the cause. Add a pre-check and a rollback plan.',
   }),
 };
 
@@ -291,7 +325,8 @@ export function suggestActionItems(
     proposals.push({
       key: `runbook-${run.id}`,
       title: `Fix runbook "${clip(run.name, 80)}"`,
-      description: 'The runbook was run during this incident and did not succeed. Find out why and correct it.',
+      description:
+        'The runbook was run during this incident and did not succeed. Find out why and correct it.',
       priority: 'MEDIUM',
       source: 'RUNBOOK',
     });
@@ -310,7 +345,10 @@ export function suggestActionItems(
   for (const proposal of proposals) {
     // Proposals share a template, so only an identical title is a repeat; word overlap is for people's titles.
     if (suggestions.some(item => item.title === proposal.title)) continue;
-    suggestions.push({ ...proposal, duplicateOf: findDuplicateActionItem(proposal.title, existing) });
+    suggestions.push({
+      ...proposal,
+      duplicateOf: findDuplicateActionItem(proposal.title, existing),
+    });
     if (suggestions.length === EVIDENCE_LIMITS.suggestions) break;
   }
   return suggestions;

@@ -19,7 +19,10 @@ import {
 } from '@/lib/action-items';
 import { logger } from '@/lib/logger';
 import { applyEvidenceToDraft } from '@/lib/intelligence/postmortems/evidence-draft';
-import { getPostmortemAssistForActor } from '@/lib/intelligence/postmortems/loaders';
+import {
+  evidenceForStoredDraft,
+  getPostmortemAssistForActor,
+} from '@/lib/intelligence/postmortems/loaders';
 import {
   parsePageParam,
   parsePageSizeParam,
@@ -557,7 +560,9 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
       timeZoneName: 'short',
       timeZone: tz,
     });
-    return applyEvidenceToDraft(draft, assist.evidence, at => clock.format(at));
+    // The draft is saved onto this incident's postmortem: cite only incidents its readers share.
+    const evidence = await evidenceForStoredDraft(incidentId, assist.evidence);
+    return applyEvidenceToDraft(draft, evidence, at => clock.format(at));
   } catch (error) {
     logger.warn('[Intelligence] postmortem evidence draft failed', {
       error: error instanceof Error ? error.name : 'error',
