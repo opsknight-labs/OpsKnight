@@ -10,12 +10,9 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
+import { recurredActionItemIds } from '@/lib/intelligence/helpers/action-item-suggest-loader';
 import { formatActionItemDueDate } from '@/lib/action-items';
-import {
-  parsePageParam,
-  calculatePaginationBounds,
-  parseEnumValue,
-} from '@/lib/pagination-parser';
+import { parsePageParam, calculatePaginationBounds, parseEnumValue } from '@/lib/pagination-parser';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +65,11 @@ export default async function ActionItemsPage({
       { description: { contains: searchQuery, mode: 'insensitive' } },
       { postmortem: { title: { contains: searchQuery, mode: 'insensitive' } } },
       { postmortem: { incident: { title: { contains: searchQuery, mode: 'insensitive' } } } },
-      { postmortem: { incident: { service: { name: { contains: searchQuery, mode: 'insensitive' } } } } },
+      {
+        postmortem: {
+          incident: { service: { name: { contains: searchQuery, mode: 'insensitive' } } },
+        },
+      },
       {
         owner: {
           OR: [
@@ -83,55 +84,41 @@ export default async function ActionItemsPage({
   const now = new Date();
 
   // Aggregate stats directly from database
-  const [
-    statusCounts,
-    overdueCount,
-    highPriorityCount,
-    totalCount,
-    seedUsers,
-    selectedOwnerUser,
-  ] = await Promise.all([
-    prisma.actionItem.groupBy({
-      by: ['status'],
-      where: baseWhere,
-      _count: { _all: true },
-    }),
-    prisma.actionItem.count({
-      where: {
-        AND: [
-          baseWhere,
-          { dueDate: { lt: now } },
-          { status: { not: 'COMPLETED' } },
-        ],
-      },
-    }),
-    prisma.actionItem.count({
-      where: {
-        AND: [
-          baseWhere,
-          { priority: 'HIGH' },
-          { status: { not: 'COMPLETED' } },
-        ],
-      },
-    }),
-    prisma.actionItem.count({ where: filterWhere }),
-    prisma.user.findMany({
-      where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
-      select: { id: true, name: true, email: true },
-      orderBy: [{ name: 'asc' }, { email: 'asc' }],
-      take: 25,
-    }),
-    owner
-      ? prisma.user.findFirst({
-          where: {
-            id: owner,
-            status: 'ACTIVE',
-            AND: [dashboardUserReadWhere(actor)],
-          },
-          select: { id: true, name: true, email: true },
-        })
-      : Promise.resolve(null),
-  ]);
+  const [statusCounts, overdueCount, highPriorityCount, totalCount, seedUsers, selectedOwnerUser] =
+    await Promise.all([
+      prisma.actionItem.groupBy({
+        by: ['status'],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
+      prisma.actionItem.count({
+        where: {
+          AND: [baseWhere, { dueDate: { lt: now } }, { status: { not: 'COMPLETED' } }],
+        },
+      }),
+      prisma.actionItem.count({
+        where: {
+          AND: [baseWhere, { priority: 'HIGH' }, { status: { not: 'COMPLETED' } }],
+        },
+      }),
+      prisma.actionItem.count({ where: filterWhere }),
+      prisma.user.findMany({
+        where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
+        select: { id: true, name: true, email: true },
+        orderBy: [{ name: 'asc' }, { email: 'asc' }],
+        take: 25,
+      }),
+      owner
+        ? prisma.user.findFirst({
+            where: {
+              id: owner,
+              status: 'ACTIVE',
+              AND: [dashboardUserReadWhere(actor)],
+            },
+            select: { id: true, name: true, email: true },
+          })
+        : Promise.resolve(null),
+    ]);
 
   const users =
     selectedOwnerUser && !seedUsers.some(u => u.id === selectedOwnerUser.id)
@@ -245,7 +232,11 @@ export default async function ActionItemsPage({
     skip: pagination.skip,
     take: pagination.take,
   });
-  const filteredItems = records.map(mapRecordToBoardItem);
+  const recurred = await recurredActionItemIds(records.map(record => record.id));
+  const filteredItems = records.map(record => ({
+    ...mapRecordToBoardItem(record),
+    causeRecurred: recurred.has(record.id),
+  }));
 
   const canManage = permissions.isResponderOrAbove;
   const jiraCapabilitiesByServiceId = await getJiraCapabilitiesByServiceIds(

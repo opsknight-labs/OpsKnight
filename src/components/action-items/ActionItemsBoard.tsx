@@ -54,6 +54,7 @@ import {
   ChevronsUpDown,
   Check,
   Loader2,
+  RotateCcw,
 } from 'lucide-react';
 
 export interface BoardActionItem extends ActionItem {
@@ -67,6 +68,20 @@ export interface BoardActionItem extends ActionItem {
   incidentJiraIssues: JiraIssueReference[];
   createdAt: Date;
   completedAt?: Date | string | null;
+  /** The incident's problem came back on its service after this item was written. */
+  causeRecurred?: boolean;
+}
+
+function CauseRecurredBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+      title="The problem behind this follow-up happened again on the same service after it was written"
+    >
+      <RotateCcw aria-hidden="true" className="h-3 w-3" />
+      Cause recurred
+    </span>
+  );
 }
 
 export interface ActionItemsBoardProps {
@@ -233,6 +248,7 @@ function ActionItemCard({
             status={item.status}
             userTimeZone={userTimeZone}
           />
+          {item.causeRecurred && <CauseRecurredBadge />}
         </div>
 
         {canManage && (
@@ -354,7 +370,8 @@ export default function ActionItemsBoard({
   const [selectedPriority, setSelectedPriority] = useState(filters.priority || '');
   const [ownerPopoverOpen, setOwnerPopoverOpen] = useState(false);
   const [ownerSearch, setOwnerSearch] = useState('');
-  const [ownerOptions, setOwnerOptions] = useState<Array<{ id: string; name: string; email: string }>>(users);
+  const [ownerOptions, setOwnerOptions] =
+    useState<Array<{ id: string; name: string; email: string }>>(users);
   const [isSearchingOwners, setIsSearchingOwners] = useState(false);
   const jiraCapabilities = useMemo(
     () => new Map<string, JiraCapability>(Object.entries(jiraCapabilitiesByServiceId)),
@@ -583,9 +600,9 @@ export default function ActionItemsBoard({
                 >
                   <span className="truncate">
                     {selectedOwner
-                      ? (users.find(u => u.id === selectedOwner)?.name ||
-                         ownerOptions.find(u => u.id === selectedOwner)?.name ||
-                         'Owner')
+                      ? users.find(u => u.id === selectedOwner)?.name ||
+                        ownerOptions.find(u => u.id === selectedOwner)?.name ||
+                        'Owner'
                       : 'All Owners'}
                   </span>
                   <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -621,7 +638,9 @@ export default function ActionItemsBoard({
                           className="cursor-pointer text-xs flex items-center justify-between"
                         >
                           <span>All Owners</span>
-                          {!selectedOwner && <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />}
+                          {!selectedOwner && (
+                            <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />
+                          )}
                         </CommandItem>
                         {ownerOptions.map(user => (
                           <CommandItem
@@ -630,14 +649,18 @@ export default function ActionItemsBoard({
                             onSelect={() => {
                               setSelectedOwner(user.id);
                               setOwnerPopoverOpen(false);
-                              startTransition(() => router.push(buildFilterUrl({ owner: user.id })));
+                              startTransition(() =>
+                                router.push(buildFilterUrl({ owner: user.id }))
+                              );
                             }}
                             className="cursor-pointer text-xs flex items-center justify-between"
                           >
                             <div className="flex flex-col min-w-0">
                               <span className="truncate font-medium">{user.name}</span>
                               {user.email && (
-                                <span className="truncate text-[10px] text-muted-foreground">{user.email}</span>
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  {user.email}
+                                </span>
                               )}
                             </div>
                             {selectedOwner === user.id && (
@@ -836,6 +859,7 @@ export default function ActionItemsBoard({
                           status={item.status}
                           userTimeZone={userTimeZone}
                         />
+                        {item.causeRecurred && <CauseRecurredBadge />}
                       </div>
                       <h3 className="text-base font-semibold mb-1 text-foreground">{item.title}</h3>
                       <div className="flex flex-col gap-1.5">
