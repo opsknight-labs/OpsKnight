@@ -187,7 +187,8 @@ test.describe.serial('intelligence on incidents and incident lists', () => {
   }) => {
     await page.goto(`/incidents/${childId}`);
     // The group is one slim line in the hero, not a card in the main column.
-    const line = page.getByTestId('incident-group-line');
+    // Streaming can leave a hidden copy of a server-rendered block for a moment: match the visible one.
+    const line = page.getByTestId('incident-group-line').filter({ visible: true });
     await expect(line).toContainText('Grouped under');
     await expect(
       line.getByRole('link', { name: `${ref(parentId)} Storm parent: database cluster degraded` })
@@ -209,7 +210,7 @@ test.describe.serial('intelligence on incidents and incident lists', () => {
     page,
   }) => {
     await page.goto(`/incidents/${parentId}`);
-    const line = page.getByTestId('incident-group-line');
+    const line = page.getByTestId('incident-group-line').filter({ visible: true });
     await expect(line).toContainText('Parent of 1 grouped incident and 1 grouped alert');
     await expectAccessible(page, '[data-testid="incident-group-line"]');
     await line.getByRole('link', { name: 'View group' }).click();
