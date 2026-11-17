@@ -49,16 +49,19 @@ export async function loadServiceSignals(
     client.$queryRaw<
       Array<{ serviceId: string; objectiveId: string; endAt: Date; breached: boolean }>
     >(Prisma.sql`
-      SELECT * FROM (
-        SELECT DISTINCT ON (s."objectiveId")
-          o."serviceId", s."objectiveId", s."periodEnd" AS "endAt", s."breached"
+      -- One index probe per objective on (objectiveId, periodEnd), not a read of its whole history.
+      SELECT o."serviceId", o."id" AS "objectiveId", s."endAt", s."breached"
+      FROM "ServiceObjective" o
+      CROSS JOIN LATERAL (
+        SELECT s."periodEnd" AS "endAt", s."breached"
         FROM "ServiceObjectiveSnapshot" s
-        JOIN "ServiceObjective" o ON o."id" = s."objectiveId"
-        WHERE o."serviceId" IS NOT NULL ${serviceSql}
-          AND (o."activeTo" IS NULL OR o."activeTo" > ${range.from})
+        WHERE s."objectiveId" = o."id"
           AND s."breached" IS NOT NULL AND s."periodEnd" < ${range.from}
-        ORDER BY s."objectiveId", s."periodEnd" DESC
-      ) latest
+        ORDER BY s."periodEnd" DESC
+        LIMIT 1
+      ) s
+      WHERE o."serviceId" IS NOT NULL ${serviceSql}
+        AND (o."activeTo" IS NULL OR o."activeTo" > ${range.from})
       UNION ALL
       SELECT o."serviceId", s."objectiveId", s."periodEnd" AS "endAt", s."breached"
       FROM "ServiceObjectiveSnapshot" s
