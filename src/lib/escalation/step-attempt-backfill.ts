@@ -129,22 +129,39 @@ export interface StepAttemptBackfillResult {
 }
 
 /**
- * One bounded batch: up to `batchSize` incidents after `cursor`, three statements (incidents, their
- * escalation events, one insert). Only events older than the first live-captured attempt are read.
+ * The backfill reads only events older than the first live-captured attempt. The scan steps over every
+ * approximate row already written (they are older), so a resumable run reads it once and keeps it.
  */
-export async function backfillEscalationStepAttempts(
+async function backfillUntil(
   prisma: PrismaClient | Prisma.TransactionClient,
-  options: { cursor?: StepAttemptBackfillCursor | null; batchSize?: number; now?: Date } = {}
-): Promise<StepAttemptBackfillResult> {
-  const now = options.now ?? new Date();
-  const batchSize = Math.max(1, Math.min(options.batchSize ?? STEP_ATTEMPT_BACKFILL_BATCH, 1000));
-  const since = new Date(now.getTime() - STEP_ATTEMPT_BACKFILL_DAYS * 86_400_000);
+  now: Date
+): Promise<Date> {
   const firstLive = await prisma.escalationStepAttempt.findFirst({
     where: { approximate: false },
     orderBy: { createdAt: 'asc' },
     select: { createdAt: true },
   });
-  const until = firstLive?.createdAt ?? now;
+  return firstLive?.createdAt ?? now;
+}
+
+/**
+ * One bounded batch: up to `batchSize` incidents after `cursor`, three statements (incidents, their
+ * escalation events, one insert). Only events older than the first live-captured attempt are read.
+ */
+export async function backfillEscalationStepAttempts(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  options: {
+    cursor?: StepAttemptBackfillCursor | null;
+    batchSize?: number;
+    now?: Date;
+    /** From `backfillUntil`; read here when omitted. */
+    until?: Date;
+  } = {}
+): Promise<StepAttemptBackfillResult> {
+  const now = options.now ?? new Date();
+  const batchSize = Math.max(1, Math.min(options.batchSize ?? STEP_ATTEMPT_BACKFILL_BATCH, 1000));
+  const since = new Date(now.getTime() - STEP_ATTEMPT_BACKFILL_DAYS * 86_400_000);
+  const until = options.until ?? (await backfillUntil(prisma, now));
 
   const after = options.cursor;
   const incidents = await prisma.incident.findMany({
@@ -224,6 +241,8 @@ export async function backfillEscalationStepAttempts(
 export const ATTEMPT_BACKFILL_CURSOR = 'escalation-attempt-backfill';
 /** Stored as the cursor's id once the window is walked: the backfill never runs again. */
 export const ATTEMPT_BACKFILL_DONE = '';
+/** Holds `until` (as watermarkAt) for the whole walk, read once on the first batch. */
+export const ATTEMPT_BACKFILL_UNTIL_CURSOR = `${ATTEMPT_BACKFILL_CURSOR}.until`;
 
 /**
  * One resumable batch: reads the saved keyset cursor, backfills one batch and saves the next cursor on the
@@ -238,9 +257,19 @@ export async function backfillEscalationStepAttemptsBatch(
     where: { name: ATTEMPT_BACKFILL_CURSOR },
   });
   if (saved?.lastId === ATTEMPT_BACKFILL_DONE) return false;
+  const kept = await tx.intelligenceCursor.findUnique({
+    where: { name: ATTEMPT_BACKFILL_UNTIL_CURSOR },
+    select: { watermarkAt: true },
+  });
+  const until = kept?.watermarkAt ?? (await backfillUntil(tx, options.now ?? new Date()));
+  if (!kept)
+    await tx.intelligenceCursor.create({
+      data: { name: ATTEMPT_BACKFILL_UNTIL_CURSOR, watermarkAt: until, lastId: '' },
+    });
   const result = await backfillEscalationStepAttempts(tx, {
     cursor: saved ? { createdAt: saved.watermarkAt.toISOString(), id: saved.lastId } : null,
     now: options.now,
+    until,
   });
   const next = result.cursor
     ? { watermarkAt: new Date(result.cursor.createdAt), lastId: result.cursor.id }

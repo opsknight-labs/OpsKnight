@@ -6,7 +6,10 @@ import {
   createTestService,
   createTestIncident,
 } from '../helpers/test-db';
-import { backfillEscalationStepAttempts } from '@/lib/escalation/step-attempt-backfill';
+import {
+  ATTEMPT_BACKFILL_UNTIL_CURSOR,
+  backfillEscalationStepAttempts,
+} from '@/lib/escalation/step-attempt-backfill';
 import {
   ATTEMPT_BACKFILL_CURSOR,
   OPS_INSIGHT_HANDLERS,
@@ -174,6 +177,11 @@ it('runs as a resumable lane job only while escalation insights are on, and stop
     where: { name: ATTEMPT_BACKFILL_CURSOR },
   });
   expect(cursor.lastId).toBe('');
+  // The window's end (no live attempts yet, so now) is read once and kept for every later batch.
+  const until = await db.intelligenceCursor.findUniqueOrThrow({
+    where: { name: ATTEMPT_BACKFILL_UNTIL_CURSOR },
+  });
+  expect(until.watermarkAt).toEqual(NOW);
   // Finishing restarts the rollup, so the next pass rolls the whole window up again.
   expect(await db.metricRollup.count({ where: { name: sealed } })).toBe(0);
 
