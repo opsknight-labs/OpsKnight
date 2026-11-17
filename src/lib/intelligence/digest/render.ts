@@ -1,4 +1,5 @@
 import type { RateAnomalyRow, RecurringProblem, WeeklySummary } from '../insights/service';
+import type { TeamBrief } from './team-brief';
 
 export interface DigestContent {
   weekKey: string;
@@ -8,6 +9,8 @@ export interface DigestContent {
   /** Open operations insights the recipient may read (already scoped and capped); empty hides the section. */
   opsInsights?: ReadonlyArray<{ scopeName: string; title: string; severity: string; url: string }>;
   opsInsightsUrl?: string;
+  /** Weekly reliability brief per team of the recipient (already scoped and capped); empty hides it. */
+  teamBriefs?: readonly TeamBrief[];
   insightsUrl: string;
   settingsUrl: string;
 }
@@ -63,6 +66,7 @@ export function renderDigestEmail(content: DigestContent): {
   const recurring = content.recurring.slice(0, MAX_ROWS);
   const anomalies = content.anomalies.slice(0, MAX_ROWS);
   const ops = (content.opsInsights ?? []).slice(0, MAX_ROWS);
+  const teams = (content.teamBriefs ?? []).slice(0, MAX_ROWS);
   const severityLabel = (severity: string) =>
     severity === 'INFO' ? '' : ` [${severity.toLowerCase()}]`;
   const subject = `OpsKnight Intelligence weekly digest (${content.weekKey})`;
@@ -94,6 +98,15 @@ export function renderDigestEmail(content: DigestContent): {
           '',
         ]
       : []),
+    ...teams.flatMap(team => [
+      `${team.teamName}: ${team.line}`,
+      ...(team.phrasing ? [team.phrasing] : []),
+      ...team.insights.map(
+        row => `- ${row.scopeName}: ${row.title}${severityLabel(row.severity)} ${row.url}`
+      ),
+      `Team page: ${team.url}`,
+      '',
+    ]),
     `Open Insights: ${content.insightsUrl}`,
     `Change or stop this email: ${content.settingsUrl}`,
     'This digest only reports; it never changes incidents or paging.',
@@ -142,6 +155,23 @@ ${list(
 )}${content.opsInsightsUrl ? `<p style="margin:4px 0 0;font-size:14px"><a href="${escapeHtml(content.opsInsightsUrl)}" style="color:#1d4ed8">All open insights</a></p>` : ''}`
     : ''
 }
+${teams
+  .map(
+    team => `<h2 style="font-size:16px;margin:20px 0 4px"><a href="${escapeHtml(team.url)}" style="color:#111827">${escapeHtml(team.teamName)}</a></h2>
+<p style="margin:0;font-size:14px">${escapeHtml(team.line)}</p>${team.phrasing ? `<p style="margin:4px 0 0;font-size:14px;color:#4b5563">${escapeHtml(team.phrasing)}</p>` : ''}
+${
+  team.insights.length > 0
+    ? list(
+        team.insights.map(
+          row =>
+            `<li><a href="${escapeHtml(row.url)}" style="color:#1d4ed8">${escapeHtml(row.scopeName)}</a>: ${escapeHtml(row.title)}${escapeHtml(severityLabel(row.severity))}</li>`
+        ),
+        ''
+      )
+    : ''
+}`
+  )
+  .join('')}
 <p style="margin:20px 0 0"><a href="${escapeHtml(content.insightsUrl)}" style="color:#1d4ed8">Open Insights</a></p>
 <p style="margin:16px 0 0;font-size:12px;color:#6b7280">This digest only reports; it never changes incidents or paging. <a href="${escapeHtml(content.settingsUrl)}" style="color:#6b7280">Change or stop this email</a>.</p>
 </body></html>`;

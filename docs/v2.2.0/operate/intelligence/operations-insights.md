@@ -240,6 +240,12 @@ insights, most severe first, with a link to each and to the full list on **Intel
 only insights for things they can open. The list is left out when there are none, or when operations
 insights are off.
 
+With **Show small helpers** also on, the digest adds a short reliability brief for each team the recipient
+belongs to (up to five): incidents in the last 7 days against the week before, how many insights are open
+on the team, its services and their escalation policies, the top three, and a link to the team page. When
+AI is on, one cached call per team adds a plain-language sentence or two on the same facts. A quiet team
+(no incidents in either week, nothing open) is left out.
+
 ## Small helpers
 
 A separate switch, **Settings → Intelligence → Show small helpers** (off by default), adds four helpers

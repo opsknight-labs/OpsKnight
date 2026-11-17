@@ -63,7 +63,7 @@ function toView(row: Row): OpsInsightView {
   return { ...row, evidence: evidence.success ? evidence.data : { facts: [] } };
 }
 
-const SCOPE_PATHS: Record<OpsInsightScopeType, string> = {
+export const SCOPE_PATHS: Record<OpsInsightScopeType, string> = {
   SERVICE: '/services',
   POLICY: '/policies',
   SCHEDULE: '/schedules',

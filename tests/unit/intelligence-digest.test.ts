@@ -6,6 +6,7 @@ import {
   isoWeekStart,
 } from '@/lib/intelligence/digest/contract';
 import { escapeHtml, renderDigestEmail } from '@/lib/intelligence/digest/render';
+import { teamBriefLine } from '@/lib/intelligence/digest/team-brief';
 
 describe('digest schedule', () => {
   it('computes ISO week keys, including year boundaries', () => {
@@ -112,5 +113,56 @@ describe('digest email', () => {
     expect(email.html).toContain('&lt;b&gt;svc-0&lt;/b&gt;</a>: No alerts for 3 days [critical]');
     expect(email.html).not.toContain('<b>svc');
     expect(email.html).toContain('href="https://ops.example.com/intelligence"');
+  });
+
+  it('adds a brief per team, escaped, with the team page link, and nothing when there are none', () => {
+    const base = {
+      weekKey: '2026-W25',
+      weekly,
+      recurring: [],
+      anomalies: [],
+      insightsUrl: 'https://ops.example.com/i',
+      settingsUrl: 'https://ops.example.com/s',
+    };
+    const without = renderDigestEmail(base);
+    expect(renderDigestEmail({ ...base, teamBriefs: [] })).toEqual(without);
+    const email = renderDigestEmail({
+      ...base,
+      teamBriefs: [
+        {
+          teamName: '<i>Payments</i>',
+          url: 'https://ops.example.com/teams/t1',
+          line: teamBriefLine({ incidents: 4, previousIncidents: 1, open: { WARNING: 1 } }),
+          phrasing: 'A calmer week.',
+          insights: [
+            {
+              scopeName: 'API',
+              title: 'Step 1 is never acknowledged',
+              severity: 'WARNING',
+              url: 'https://ops.example.com/policies/p1',
+            },
+          ],
+        },
+      ],
+    });
+    expect(email.text).toContain(
+      '<i>Payments</i>: 4 incidents in the last 7 days (1 the week before); 1 open insight (1 warning).'
+    );
+    expect(email.text).toContain('A calmer week.');
+    expect(email.text).toContain('Team page: https://ops.example.com/teams/t1');
+    expect(email.html).toContain('href="https://ops.example.com/teams/t1"');
+    expect(email.html).toContain('&lt;i&gt;Payments&lt;/i&gt;');
+    expect(email.html).not.toContain('<i>Payments');
+  });
+
+  it('states a team week deterministically', () => {
+    expect(teamBriefLine({ incidents: 1, previousIncidents: 0, open: {} })).toBe(
+      '1 incident in the last 7 days (0 the week before); no open insights.'
+    );
+    expect(
+      teamBriefLine({ incidents: 0, previousIncidents: 3, open: { INFO: 2, CRITICAL: 1 } })
+    ).toBe(
+      '0 incidents in the last 7 days (3 the week before); 3 open insights (1 critical, 2 info).'
+    );
   });
 });

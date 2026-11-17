@@ -86,7 +86,7 @@ export function mineAutomationRules(
     existing?: ReadonlySet<string>;
     /** Team id -> the one policy whose first step pages that team; teams missing here are not suggested. */
     teamPolicies?: Readonly<Record<string, string>>;
-    limits?: Partial<typeof AUTOMATION_MINING>;
+    limits?: Partial<Record<keyof typeof AUTOMATION_MINING, number>>;
   } = {}
 ): MinedRuleSuggestion[] {
   const limits = { ...AUTOMATION_MINING, ...options.limits };
