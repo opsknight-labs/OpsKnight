@@ -7,7 +7,7 @@ import {
   type IncidentSummaryState,
 } from '@/app/(app)/incidents/[id]/intelligence-actions';
 import PostSummaryAsNoteButton from '@/components/incident/intelligence/PostSummaryAsNoteButton';
-import { AI_LEAN_NOTICE } from '@/lib/intelligence/ai/contract';
+import { AI_LEAN_NOTICE } from '@/lib/intelligence/ai/notices';
 
 function List({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
