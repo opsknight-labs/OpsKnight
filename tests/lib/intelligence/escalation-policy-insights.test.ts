@@ -83,6 +83,7 @@ const base: EscalationPolicyInput = {
     { id: 'step-c', delayMinutes: 15 },
   ],
   soleResponder: false,
+  personalSteps: [false, false, false],
   outcomes: [],
 };
 const derive = (input: Partial<EscalationPolicyInput>) =>
@@ -104,6 +105,33 @@ describe('escalation policy insights (pure half)', () => {
     const items = derive({ outcomes: [stats(1, { paged: 6, timedOut: 6, dayPaged: 6 })] });
     expect(items.map(item => item.key)).toEqual(['never-acked:1']);
     expect(items[0].title).toBe('Step 2 was never acknowledged');
+  });
+
+  it("keeps a one-person step's acknowledgement record off the policy", () => {
+    const night = stats(0, {
+      paged: 26,
+      acked: 21,
+      timedOut: 5,
+      nightPaged: 6,
+      nightTimedOut: 4,
+      dayPaged: 20,
+      dayTimedOut: 1,
+      ackWithin: { 1: 21 },
+    });
+    const outcomes = [night, stats(1, { paged: 6, timedOut: 6, dayPaged: 6 })];
+    expect(derive({ outcomes }).map(item => item.key)).toEqual([
+      'night-timeouts',
+      'timeout:1',
+      'never-acked:1',
+    ]);
+    expect(derive({ outcomes, personalSteps: [true, true, false] })).toEqual([]);
+    // Skips say nothing about a person's answering, so they still show.
+    expect(
+      derive({
+        personalSteps: [true, true, true],
+        outcomes: [stats(1, { skipped: 7, reasons: { NO_ONE_ON_CALL: 7 } })],
+      }).map(item => item.key)
+    ).toEqual(['always-skipped:1']);
   });
 
   it('flags a step that is always skipped, with its reason', () => {

@@ -25,6 +25,11 @@ export interface EscalationPolicyInput {
   steps: Array<{ id: string; delayMinutes: number }>;
   /** Every step reaches the same single person. */
   soleResponder: boolean;
+  /**
+   * Per step: it can reach only one person, so its acknowledgement numbers are that person's own record
+   * (USER-scope data) and are not published on the policy.
+   */
+  personalSteps: boolean[];
   outcomes: StepOutcomeSummary[];
 }
 
@@ -44,7 +49,7 @@ export const SKIP_REASON_LABELS: Record<string, string> = {
   NO_CONTACT_METHOD: 'the people it targets have no contact method',
 };
 
-type Step = {
+export type PolicyStepTarget = {
   id: string;
   delayMinutes: number;
   targetType: 'USER' | 'TEAM' | 'SCHEDULE';
@@ -55,6 +60,18 @@ type Step = {
 };
 
 type Group = { id: string; people: number; only: string | null; lead: string | null };
+
+type Step = PolicyStepTarget;
+
+export const POLICY_STEP_TARGET_SELECT = {
+  id: true,
+  delayMinutes: true,
+  targetType: true,
+  targetUserId: true,
+  targetTeamId: true,
+  targetScheduleId: true,
+  notifyOnlyTeamLead: true,
+} as const;
 
 /** The one person a step can reach, or null when it can reach none or several. */
 function onlyPerson(step: Step, teams: Map<string, Group>, schedules: Map<string, Group>) {
@@ -69,11 +86,43 @@ function onlyPerson(step: Step, teams: Map<string, Group>, schedules: Map<string
   return schedule?.people === 1 ? schedule.only : null;
 }
 
+/**
+ * Per step, the one person it can reach (null when none or several): one grouped read each for the
+ * targeted teams and schedules.
+ */
+export async function policyStepPeople(
+  tx: Prisma.TransactionClient,
+  steps: readonly Step[]
+): Promise<Array<string | null>> {
+  const teamIds = [...new Set(steps.flatMap(step => step.targetTeamId ?? []))];
+  const scheduleIds = [...new Set(steps.flatMap(step => step.targetScheduleId ?? []))];
+  const teamRows = teamIds.length
+    ? await tx.$queryRaw<Group[]>(Prisma.sql`
+        SELECT t."id", t."teamLeadId" AS "lead", count(m."userId")::int AS "people",
+          min(m."userId") AS "only"
+        FROM "Team" t LEFT JOIN "TeamMember" m ON m."teamId" = t."id"
+        WHERE t."id" IN (${Prisma.join(teamIds)})
+        GROUP BY t."id", t."teamLeadId"`)
+    : [];
+  const scheduleRows = scheduleIds.length
+    ? await tx.$queryRaw<Group[]>(Prisma.sql`
+        SELECT l."scheduleId" AS "id", NULL AS "lead", count(DISTINCT u."userId")::int AS "people",
+          min(u."userId") AS "only"
+        FROM "OnCallLayer" l JOIN "OnCallLayerUser" u ON u."layerId" = l."id"
+        WHERE l."scheduleId" IN (${Prisma.join(scheduleIds)})
+        GROUP BY l."scheduleId"`)
+    : [];
+  const teams = new Map(teamRows.map(row => [row.id, row]));
+  const schedules = new Map(scheduleRows.map(row => [row.id, row]));
+  return steps.map(step => onlyPerson(step, teams, schedules));
+}
+
 export const escalationPolicyProducer: OpsInsightProducer<EscalationPolicyInput> = {
   kind: 'escalation.policy',
-  version: 1,
   area: 'escalation',
   scopeType: 'POLICY',
+
+  version: 2,
 
   async loadInput(scope, { tx, now }) {
     const policy = await tx.escalationPolicy.findUnique({
@@ -83,45 +132,16 @@ export const escalationPolicyProducer: OpsInsightProducer<EscalationPolicyInput>
         createdAt: true,
         steps: {
           orderBy: { stepOrder: 'asc' },
-          select: {
-            id: true,
-            delayMinutes: true,
-            targetType: true,
-            targetUserId: true,
-            targetTeamId: true,
-            targetScheduleId: true,
-            notifyOnlyTeamLead: true,
-          },
+          select: POLICY_STEP_TARGET_SELECT,
         },
       },
     });
     if (!policy || policy.archivedAt) return null;
     const steps = policy.steps as Step[];
-
-    const teamIds = [...new Set(steps.flatMap(step => step.targetTeamId ?? []))];
-    const scheduleIds = [...new Set(steps.flatMap(step => step.targetScheduleId ?? []))];
     // Sequential: one interactive transaction runs one statement at a time anyway.
     const services = await tx.service.count({ where: { escalationPolicyId: scope.id } });
-    const teamRows = teamIds.length
-      ? await tx.$queryRaw<Group[]>(Prisma.sql`
-          SELECT t."id", t."teamLeadId" AS "lead", count(m."userId")::int AS "people",
-            min(m."userId") AS "only"
-          FROM "Team" t LEFT JOIN "TeamMember" m ON m."teamId" = t."id"
-          WHERE t."id" IN (${Prisma.join(teamIds)})
-          GROUP BY t."id", t."teamLeadId"`)
-      : [];
-    const scheduleRows = scheduleIds.length
-      ? await tx.$queryRaw<Group[]>(Prisma.sql`
-          SELECT l."scheduleId" AS "id", NULL AS "lead", count(DISTINCT u."userId")::int AS "people",
-            min(u."userId") AS "only"
-          FROM "OnCallLayer" l JOIN "OnCallLayerUser" u ON u."layerId" = l."id"
-          WHERE l."scheduleId" IN (${Prisma.join(scheduleIds)})
-          GROUP BY l."scheduleId"`)
-      : [];
+    const people = await policyStepPeople(tx, steps);
     const outcomes = await loadPolicyStepOutcomes(scope.id, now, tx);
-    const teams = new Map(teamRows.map(row => [row.id, row]));
-    const schedules = new Map(scheduleRows.map(row => [row.id, row]));
-    const people = steps.map(step => onlyPerson(step, teams, schedules));
 
     return {
       policyId: scope.id,
@@ -130,6 +150,7 @@ export const escalationPolicyProducer: OpsInsightProducer<EscalationPolicyInput>
       steps: steps.map(step => ({ id: step.id, delayMinutes: step.delayMinutes })),
       soleResponder:
         people.length > 0 && people.every(person => person !== null && person === people[0]),
+      personalSteps: people.map(person => person !== null),
       outcomes: outcomes.steps,
     };
   },
@@ -145,8 +166,10 @@ export const escalationPolicyProducer: OpsInsightProducer<EscalationPolicyInput>
       // Steps that no longer exist (the policy was shortened) are not judged.
       if (outcome.step >= input.steps.length) continue;
       const name = label(outcome.step);
+      // A one-person step's acknowledgement numbers are that person's record: not published here.
+      const personal = input.personalSteps[outcome.step] ?? true;
 
-      if (outcome.paged >= MIN_PAGES && outcome.acked === 0) {
+      if (!personal && outcome.paged >= MIN_PAGES && outcome.acked === 0) {
         items.push({
           key: `never-acked:${outcome.step}`,
           severity: 'WARNING',
@@ -191,7 +214,7 @@ export const escalationPolicyProducer: OpsInsightProducer<EscalationPolicyInput>
         });
       }
 
-      if (outcome.step === 0 && outcome.nightPaged >= MIN_PAGES) {
+      if (!personal && outcome.step === 0 && outcome.nightPaged >= MIN_PAGES) {
         const nightRate = outcome.nightTimedOut / outcome.nightPaged;
         const dayRate = outcome.dayPaged > 0 ? outcome.dayTimedOut / outcome.dayPaged : 0;
         if (nightRate >= 0.5 && nightRate - dayRate >= 0.2) {
@@ -217,7 +240,13 @@ export const escalationPolicyProducer: OpsInsightProducer<EscalationPolicyInput>
       // The wait before the next step is that step's delay.
       const next = input.steps[outcome.step + 1];
       const p75 = ackMinutesQuantile(outcome, 0.75);
-      if (next && p75 !== null && outcome.acked >= MIN_ACKS_FOR_TIMEOUT && outcome.timedOut > 0) {
+      if (
+        !personal &&
+        next &&
+        p75 !== null &&
+        outcome.acked >= MIN_ACKS_FOR_TIMEOUT &&
+        outcome.timedOut > 0
+      ) {
         const suggested = Math.min(TIMEOUT_BOUNDS.max, Math.max(TIMEOUT_BOUNDS.min, p75));
         const saved = next.delayMinutes - suggested;
         if (saved >= 3 && suggested <= next.delayMinutes * 0.75) {

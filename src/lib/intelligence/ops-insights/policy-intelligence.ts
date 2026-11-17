@@ -6,11 +6,9 @@ import {
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
-import {
-  enabledOpsInsightAreas,
-  type OpsInsightView,
-} from './contract';
-import { listInsightsForScope } from './view';
+import { enabledOpsInsightAreas, type OpsInsightView } from './contract';
+import { listInsightsForScope, readableOpsInsightScopes } from './view';
+import { POLICY_STEP_TARGET_SELECT, policyStepPeople } from './producers/escalation-policy';
 import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
 import { ackMinutesQuantile, loadPolicyStepOutcomes } from '@/lib/escalation/step-outcomes';
 
@@ -36,7 +34,9 @@ const EMPTY: PolicyIntelligence = { insights: [], stepStats: {}, canDecide: fals
 /**
  * Everything the policy page shows from operations insights: stored insights (scoped by the policy read
  * permission inside `listInsightsForScope`) and the per-step strip from the daily rollup. Empty, at the
- * cost of one settings read, while escalation insights are off. Bounded: one insight read, one rollup read.
+ * cost of one settings read, while escalation insights are off. A step that can reach only one person shows
+ * its numbers only to readers of that person's load (themselves, their team owner, an admin).
+ * Bounded: one insight read, one rollup read, the step targets and one person-visibility read.
  */
 export async function loadPolicyIntelligence(
   actor: AuthorizationActor,
@@ -51,10 +51,25 @@ export async function loadPolicyIntelligence(
     return EMPTY;
   const insights = await listInsightsForScope(actor, { type: 'POLICY', id: policy.id });
   const { steps } = await loadPolicyStepOutcomes(policy.id, now);
+  const targets = await prisma.escalationRule.findMany({
+    where: { policyId: policy.id },
+    orderBy: { stepOrder: 'asc' },
+    select: POLICY_STEP_TARGET_SELECT,
+  });
+  const people = await policyStepPeople(prisma, targets);
+  const readablePeople = await readableOpsInsightScopes(
+    actor,
+    'USER',
+    people.filter((person): person is string => person !== null)
+  );
+  const personByStep = new Map(targets.map((target, index) => [target.id, people[index]]));
   const stepStats: Record<string, PolicyStepStat> = {};
   for (const outcome of steps) {
     const step = policy.steps.at(outcome.step);
     if (!step || outcome.paged === 0) continue;
+    const person = personByStep.get(step.id);
+    // Unknown step (edited meanwhile) or one person's record this reader may not see: not shown.
+    if (person === undefined || (person !== null && !readablePeople.has(person))) continue;
     stepStats[step.id] = {
       paged: outcome.paged,
       ackRate: outcome.acked / outcome.paged,

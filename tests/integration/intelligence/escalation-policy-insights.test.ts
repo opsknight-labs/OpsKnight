@@ -9,6 +9,7 @@ import { generateOpsRollups } from '@/lib/metric-rollup';
 import {
   createTestIncident,
   createTestService,
+  createTestTeam,
   createTestUser,
   resetDatabase,
   testPrisma as db,
@@ -45,20 +46,27 @@ async function switches(escalation: boolean) {
 }
 
 /**
- * Known answers. Policy "Busy": step 1 (Ada, immediately), step 2 (Bob, after 30 min), step 3 (Ada, after
- * 10 min). Yesterday: 12 incidents acknowledged 3 min after step 1; 6 incidents that went through step 1 to
+ * Known answers. Policy "Busy": step 1 (team Ada+Bob, immediately), step 2 (Bob, after 30 min), step 3
+ * (Ada, after 10 min). Yesterday: 12 incidents acknowledged 3 min after step 1; 6 incidents that went through step 1 to
  * step 2 and were never acknowledged; 5 incidents where step 3 was skipped for want of a contact method.
  * Policy "Lonely": one step to Ada, no service, created 10 days ago.
  */
 async function fixtures() {
   const ada = await createTestUser({ name: 'Ada', timeZone: 'UTC' });
   const bob = await createTestUser({ name: 'Bob', timeZone: 'UTC' });
+  const pair = await createTestTeam('Pair');
+  await db.teamMember.createMany({
+    data: [
+      { teamId: pair.id, userId: ada.id },
+      { teamId: pair.id, userId: bob.id },
+    ],
+  });
   const busy = await db.escalationPolicy.create({
     data: {
       name: 'Busy',
       steps: {
         create: [
-          { stepOrder: 0, delayMinutes: 0, targetType: 'USER', targetUserId: ada.id },
+          { stepOrder: 0, delayMinutes: 0, targetType: 'TEAM', targetTeamId: pair.id },
           { stepOrder: 1, delayMinutes: 30, targetType: 'USER', targetUserId: bob.id },
           { stepOrder: 2, delayMinutes: 10, targetType: 'USER', targetUserId: ada.id },
         ],
@@ -123,7 +131,7 @@ async function fixtures() {
   }
   await db.escalationStepAttempt.createMany({ data: attempts as never });
   await generateOpsRollups(new Date(), { force: true, lookbackDays: 3 });
-  return { busy, lonely, ada };
+  return { busy, lonely, ada, bob };
 }
 
 async function produce(policyId: string) {
@@ -148,7 +156,8 @@ describe('escalation policy insights', () => {
     });
     const keys = (scopeId: string) =>
       rows.filter(row => row.scopeId === scopeId).map(row => row.key);
-    expect(keys(busy.id)).toEqual(['always-skipped:2', 'never-acked:1', 'timeout:1']);
+    // Step 2 reaches only Bob: "never acknowledged" would be his own record, so it is not published.
+    expect(keys(busy.id)).toEqual(['always-skipped:2', 'timeout:1']);
     expect(keys(lonely.id)).toEqual(['single-person', 'unused']);
 
     const timeout = rows.find(row => row.key === 'timeout:1');
@@ -156,8 +165,6 @@ describe('escalation policy insights', () => {
     expect(timeout?.draftHref).toBe(
       `/policies/${busy.id}?tab=steps&suggestStep=${busy.steps[1].id}&suggestDelay=3`
     );
-    const neverAcked = rows.find(row => row.key === 'never-acked:1');
-    expect(neverAcked?.summary).toContain('6 pages');
     // Evidence is counts and labels only: no person's name or id.
     for (const row of rows) {
       expect(JSON.stringify(row.evidence)).not.toMatch(/Ada|Bob/);
@@ -168,10 +175,10 @@ describe('escalation policy insights', () => {
 
     const actor = await resolveUserActor(admin.id);
     const counts = await countOpenInsightsForScopes(actor!, 'POLICY', [busy.id, lonely.id]);
-    expect(counts.get(busy.id)).toEqual({ open: 3, highest: 'WARNING' });
+    expect(counts.get(busy.id)).toEqual({ open: 2, highest: 'WARNING' });
 
     const view = await loadPolicyIntelligence(actor!, busy);
-    expect(view.insights).toHaveLength(3);
+    expect(view.insights).toHaveLength(2);
     expect(view.stepStats[busy.steps[0].id]).toEqual({
       paged: 23,
       ackRate: 17 / 23,
@@ -179,6 +186,20 @@ describe('escalation policy insights', () => {
     });
     expect(view.stepStats[busy.steps[1].id]).toMatchObject({ paged: 6, ackRate: 0 });
     expect(view.stepStats[busy.steps[2].id]).toBeUndefined();
+  });
+
+  it("shows a one-person step only to readers of that person's load", async () => {
+    await switches(true);
+    const { busy, ada, bob } = await fixtures();
+    for (const user of [ada, bob])
+      await db.user.update({ where: { id: user.id }, data: { role: 'RESPONDER' } });
+    const shown = async (userId: string) =>
+      Object.keys(
+        (await loadPolicyIntelligence((await resolveUserActor(userId))!, busy)).stepStats
+      );
+    // Step 1 reaches a team of two; step 2 only Bob. Ada does not see Bob's numbers; Bob does.
+    expect(await shown(ada.id)).toEqual([busy.steps[0].id]);
+    expect((await shown(bob.id)).sort()).toEqual([busy.steps[0].id, busy.steps[1].id].sort());
   });
 
   it('is empty while escalation insights are off', async () => {
