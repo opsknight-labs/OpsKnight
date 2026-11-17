@@ -15,6 +15,11 @@ import {
   disconnectNoiseLookupClient,
   setNoiseLookupRoute,
 } from '@/lib/intelligence/noise-controls/lookup-client';
+import {
+  clearRuntimeOperationalMetrics,
+  runtimeOperationalMetrics,
+} from '@/lib/metrics/operational/registry';
+import { prePagingLookupPoolSize, primaryPoolSize } from '@/lib/prisma-datasource';
 import { createCentralNotificationIntent } from '@/lib/notification-control-plane';
 import {
   createTestService,
@@ -734,5 +739,86 @@ describe('fail-open', () => {
       { integrationId: 'x', snapshot }
     );
     expect(decision).toMatchObject({ control: 'CONTENT_DEDUP', action: 'APPEND', apply: true });
+  });
+
+  /**
+   * Measures fail-open at the production 5 ms deadline and concurrency 16 (the 10k-burst shape) on both
+   * routes, from the route metric. Rates depend on the host, so they are logged; what is asserted is the
+   * wiring: the pool opens no more connections than configured, and the metric counts every evaluation.
+   */
+  it('measures fail-open per route at concurrency 16 and sizes the pool from the main pool', async () => {
+    setPrePagingDeadlineMs(null);
+    const { service } = await setup();
+    incidentOf(await ingest(service.id));
+    await policy(service.id, 'ON', {
+      contentDedup: { enabled: true, requireLabelSubset: false },
+      storm: { enabled: true, threshold: 1_000 },
+    });
+    const snapshot = await primePrePagingSnapshot();
+    const { fingerprintHash } = await db.alert.findFirstOrThrow({
+      where: { serviceId: service.id },
+      select: { fingerprintHash: true },
+    });
+    const rounds = 20;
+    const concurrency = 16;
+    const evaluate = (tx: Prisma.TransactionClient) =>
+      evaluateIngestNoiseControls(
+        tx,
+        { ...input(service.id), fingerprintHash },
+        { integrationId: 'x', snapshot }
+      );
+    const lookups = () =>
+      Object.fromEntries(
+        (runtimeOperationalMetrics().get('opsknight_prepaging_lookups_total') ?? []).map(row => [
+          `${row.labels.route}:${row.labels.outcome}`,
+          row.value,
+        ])
+      );
+    const measure = async (route: 'pool' | 'transaction', poolSize?: string) => {
+      const previous = process.env.PREPAGING_LOOKUP_POOL_SIZE;
+      if (poolSize === undefined) delete process.env.PREPAGING_LOOKUP_POOL_SIZE;
+      else process.env.PREPAGING_LOOKUP_POOL_SIZE = poolSize;
+      try {
+        setNoiseLookupRoute(route);
+        await disconnectNoiseLookupClient();
+        await primePrePagingSnapshot(); // warms the pool the way the snapshot refresh does
+        clearRuntimeOperationalMetrics();
+        let connections = 0;
+        for (let round = 0; round < rounds; round += 1) {
+          await Promise.all(
+            Array.from({ length: concurrency }, () =>
+              route === 'pool'
+                ? evaluate(db as unknown as Prisma.TransactionClient)
+                : db.$transaction(tx => evaluate(tx), { timeout: 30_000 })
+            )
+          );
+          const [{ count }] = await db.$queryRawUnsafe<Array<{ count: number }>>(
+            `SELECT count(*)::int AS count FROM pg_stat_activity WHERE application_name = 'opsknight-prepaging'`
+          );
+          connections = Math.max(connections, count);
+        }
+        const counts = lookups();
+        const failOpen = counts[`${route}:fail_open`] ?? 0;
+        expect(failOpen + (counts[`${route}:ok`] ?? 0)).toBe(rounds * concurrency);
+        // The test setup silences console; the measurement goes to stderr so a run can record it.
+        process.stderr.write(
+          `[noise lookups] route=${route} pool=${poolSize ?? 'default'} fail-open ${failOpen}/${rounds * concurrency} (${((100 * failOpen) / (rounds * concurrency)).toFixed(1)}%), max connections ${connections}\n`
+        );
+        return { failOpen, connections };
+      } finally {
+        if (previous === undefined) delete process.env.PREPAGING_LOOKUP_POOL_SIZE;
+        else process.env.PREPAGING_LOOKUP_POOL_SIZE = previous;
+        setNoiseLookupRoute(null);
+        await disconnectNoiseLookupClient();
+      }
+    };
+
+    const two = await measure('pool', '2');
+    expect(two.connections).toBeLessThanOrEqual(2);
+    const derived = await measure('pool');
+    expect(derived.connections).toBeLessThanOrEqual(prePagingLookupPoolSize(primaryPoolSize()));
+    await measure('pool', '16');
+    const savepoint = await measure('transaction');
+    expect(savepoint.connections).toBe(0);
   });
 });

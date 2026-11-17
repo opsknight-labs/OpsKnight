@@ -26,7 +26,8 @@ import { getNoiseLookupClient, lookupTimeoutMs, prePagingDeadlineMs } from './lo
  *   never touches the event transaction. Behind a transaction pooler (or with no datasource) it runs on the
  *   event transaction inside a savepoint with the same server-side timeout, so an abandoned lookup can
  *   delay the transaction by at most one deadline and never leaves it aborted; the savepoint is always
- *   rolled back (the lookups only read). Three round trips inside the deadline, one after.
+ *   rolled back (the lookups only read). The savepoint and its timeout are opened before the deadline
+ *   starts, so only the read races it; one more round trip rolls back after.
  * - Any error, timeout or cold cache returns `null`: the caller pages exactly as it does without controls.
  */
 
@@ -89,12 +90,18 @@ export function lookupPlan(
 
 /**
  * The prefetched lookups on the dedicated pool (server-side timeout set per connection; nothing to
- * open or close), or on the event transaction inside a lazily opened, timeout-bounded savepoint.
+ * open or close), or on the event transaction inside a timeout-bounded savepoint opened before the deadline.
  */
 function boundedLookups(tx: Tx, deadlineMs: number, plan: PrePagingLookupPlan) {
   const timeoutMs = lookupTimeoutMs(deadlineMs);
   const pool = getNoiseLookupClient(timeoutMs);
-  if (pool) return { lookups: prefetchedLookups(pool, plan), async close() {} };
+  if (pool)
+    return {
+      route: 'pool' as const,
+      lookups: prefetchedLookups(pool, plan),
+      async prepare() {},
+      async close() {},
+    };
   const base = prefetchedLookups(tx, plan);
   let opening: Promise<void> | null = null;
   let closed = false;
@@ -127,7 +134,13 @@ function boundedLookups(tx: Tx, deadlineMs: number, plan: PrePagingLookupPlan) {
     },
   };
   return {
+    route: 'transaction' as const,
     lookups,
+    /**
+     * Opens the savepoint before the deadline starts: two round trips of setup that never wait on a lock,
+     * which otherwise used most of the 5 ms budget and failed the lookup open.
+     */
+    prepare: open,
     /** Statements on one transaction run in order, so this rollback waits for any abandoned lookup. */
     async close() {
       closed = true;
@@ -165,8 +178,9 @@ export async function evaluateIngestNoiseControls(
     const bounded = options.lookups
       ? null
       : boundedLookups(tx, deadlineMs, lookupPlan(input, policy, snapshot, now));
-    let decision: PrePagingDecisionResult;
+    let decision: PrePagingDecisionResult | null = null;
     try {
+      await bounded?.prepare();
       decision = await evaluatePrePagingControls(
         input,
         snapshot,
@@ -174,6 +188,12 @@ export async function evaluateIngestNoiseControls(
         { deadlineMs, now }
       );
     } finally {
+      // Per route, so the savepoint route's fail-open rate is visible; a thrown error counts as fail-open.
+      if (bounded)
+        addOperationalMetric('opsknight_prepaging_lookups_total', 1, {
+          route: bounded.route,
+          outcome: decision && !decision.failOpen ? 'ok' : 'fail_open',
+        });
       await bounded?.close();
     }
     if (decision.failOpen || decision.action === 'NONE' || decision.mode === 'OFF') return null;
