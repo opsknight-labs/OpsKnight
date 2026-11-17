@@ -266,11 +266,13 @@ async function seed() {
   // Stored insights, as the lane would write them. The scopes are marked freshly computed so the running
   // lane does not revisit them during the spec and resolve the fixture kind as one it no longer produces.
   await prisma.opsInsightScopeState.createMany({
-    data: [
-      { scopeType: 'POLICY', scopeId: escalation.id },
-      { scopeType: 'SCHEDULE', scopeId: schedule.id },
-      { scopeType: 'RUNBOOK', scopeId: runbook.id },
-    ].map(scope => ({ ...scope, inputHash: tag, computedAt: new Date() })),
+    data: (
+      [
+        { scopeType: 'POLICY', scopeId: escalation.id },
+        { scopeType: 'SCHEDULE', scopeId: schedule.id },
+        { scopeType: 'RUNBOOK', scopeId: runbook.id },
+      ] as const
+    ).map(scope => ({ ...scope, inputHash: tag, computedAt: new Date() })),
   });
   const insight = (
     scopeType: 'POLICY' | 'SCHEDULE' | 'RUNBOOK',
