@@ -162,8 +162,10 @@ export function IntelligenceSettingsForm({
           <p className="text-xs text-muted-foreground">
             Suggests a service, urgency and a likely duplicate while someone creates an incident,
             drafts status-page updates from an incident, searches incidents, postmortems and
-            runbooks from the command palette, and explains what moved a metric on analytics cards.
-            Deterministic; nothing is created or published without a person.
+            runbooks from the command palette, explains what moved a metric on analytics cards,
+            flags duplicate action items and suggests an owner, marks follow-ups whose cause came
+            back, forecasts error budgets on service objectives and lists incidents that followed a
+            change. Deterministic; nothing is created or published without a person.
           </p>
         </div>
       </div>
