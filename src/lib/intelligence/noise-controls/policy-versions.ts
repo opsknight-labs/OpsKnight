@@ -34,6 +34,7 @@ export interface PolicyRowForVersioning {
   scopeKey: string;
   serviceId: string | null;
   mode: NoiseControlModeValue;
+  pipelineOrder?: NoiseControlModeValue | null;
   definition: unknown;
   revision: number;
   activeVersionId: string | null;
@@ -66,6 +67,7 @@ async function appendVersion(
       serviceId: row.serviceId,
       versionNumber: await nextVersionNumber(tx, row.scopeKey),
       mode: row.mode,
+      pipelineOrder: row.pipelineOrder ?? null,
       definition: row.definition as Prisma.InputJsonValue,
       checksum: noiseVersionChecksum(row.mode, row.definition),
       policyRevision: row.revision,

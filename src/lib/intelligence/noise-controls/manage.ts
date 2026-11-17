@@ -300,8 +300,8 @@ export async function saveNoiseControlPolicy(
 }
 
 /**
- * Caller must authorize INTELLIGENCE_MANAGE. Publishes a clone of an earlier version (mode and
- * definition) as the newest version. The same compare-and-set and SHADOW→ON readiness gate apply, and a
+ * Caller must authorize INTELLIGENCE_MANAGE. Publishes a clone of an earlier version (mode,
+ * pipeline order and definition) as the newest version. The same compare-and-set and SHADOW→ON readiness gate apply, and a
  * version whose definition no longer validates against the current schema is refused.
  */
 export async function rollbackNoiseControlPolicy(
@@ -322,6 +322,8 @@ export async function rollbackNoiseControlPolicy(
     {
       serviceId,
       mode: source.mode,
+      // A version captured before pipelineOrder was recorded restores the default order.
+      pipelineOrder: source.pipelineOrder ?? 'OFF',
       definition: definition.data,
       expectedRevision: parsed.expectedRevision,
       acknowledgeReadiness: parsed.acknowledgeReadiness,

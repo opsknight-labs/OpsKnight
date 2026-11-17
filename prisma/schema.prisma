@@ -5561,6 +5561,8 @@ model NoiseControlPolicyVersion {
   schemaVersion   Int                   @default(1)
   mode            NoiseControlMode
   definition      Json
+  /// The live row's pipelineOrder when this version was published (null = OFF, or captured before it existed).
+  pipelineOrder   NoiseControlMode?
   checksum        String                @db.VarChar(64)
   /// NoiseControlPolicy.revision this version was published at.
   policyRevision  Int

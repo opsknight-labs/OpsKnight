@@ -273,6 +273,50 @@ describe('rollback', () => {
       )
     ).resolves.toMatchObject({ mode: 'ON', versionNumber: 3 });
   });
+
+  it('restores the pipeline order recorded on the version, so a noise-first change can be undone', async () => {
+    const { service, actor } = await setup();
+    const before = await saveNoiseControlPolicy(
+      {
+        serviceId: service.id,
+        mode: 'SHADOW',
+        definition: { schemaVersion: 1 },
+        expectedRevision: 0,
+      },
+      actor
+    );
+    const noiseFirst = await saveNoiseControlPolicy(
+      {
+        serviceId: service.id,
+        mode: 'SHADOW',
+        pipelineOrder: 'ON',
+        definition: { schemaVersion: 1 },
+        expectedRevision: 1,
+      },
+      actor
+    );
+    expect(noiseFirst.pipelineOrder).toBe('ON');
+    expect(
+      await db.noiseControlPolicyVersion.findUniqueOrThrow({ where: { id: noiseFirst.versionId! } })
+    ).toMatchObject({ pipelineOrder: 'ON' });
+
+    const restored = await rollbackNoiseControlPolicy(
+      { serviceId: service.id, versionId: before.versionId!, expectedRevision: 2 },
+      actor
+    );
+    expect(restored.pipelineOrder).toBe('OFF');
+    expect(
+      await db.noiseControlPolicy.findUniqueOrThrow({
+        where: { scopeKey: `service:${service.id}` },
+      })
+    ).toMatchObject({ pipelineOrder: 'OFF' });
+
+    const again = await rollbackNoiseControlPolicy(
+      { serviceId: service.id, versionId: noiseFirst.versionId!, expectedRevision: 3 },
+      actor
+    );
+    expect(again.pipelineOrder).toBe('ON');
+  });
 });
 
 describe('decisions reference the version they were evaluated against', () => {
