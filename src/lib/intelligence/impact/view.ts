@@ -1,5 +1,5 @@
 import 'server-only';
-import type { ServiceStatus } from '@prisma/client';
+import { Prisma, type ServiceStatus } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
@@ -16,11 +16,14 @@ import { downstreamDistances } from '../dependencies/graph';
  *
  * Scoping: the incident must be readable; downstream services are walked only through services the viewer can
  * read, so the view never reveals a dependency path through a hidden service; status components are listed
- * only for readable services; SLO burn is computed over every incident on the service, so it is shown only to
- * viewers with global metric visibility (the same rule as shared objective history).
+ * only for readable services; SLO burn (the service's, and the first few downstream services' with an
+ * availability objective) is computed over every incident on the service, and the subscriber count spans every
+ * subscriber of a page, so both are shown only to viewers with global metric visibility (the same rule as
+ * shared objective history).
  *
  * Bounded: the graph is the capped active-edge set (cached per request), the walk is depth- and node-capped,
- * and every query has a `take`.
+ * every query has a `take`, downstream burn is read for at most `maxDownstreamSlo` services, and each page's
+ * subscriber count stops at `subscriberCountCap` (on the (statusPageId, verified) index).
  */
 
 export const IMPACT_LIMITS = {
@@ -29,6 +32,8 @@ export const IMPACT_LIMITS = {
   maxCandidates: 200,
   maxDownstreamShown: 25,
   maxComponents: 25,
+  maxDownstreamSlo: 5,
+  subscriberCountCap: 10_000,
 } as const;
 
 export interface ImpactDownstreamService {
@@ -37,6 +42,16 @@ export interface ImpactDownstreamService {
   distance: number;
   status: ServiceStatus;
   openIncidents: number;
+  /** Its availability-objective burn; absent without global metric visibility or an objective. */
+  sloBurn?: BurnSeverity;
+}
+
+/** Verified, active subscribers of published pages who get updates for the affected components. */
+export interface ImpactSubscribers {
+  total: number;
+  /** A page reached `subscriberCountCap`, so `total` is a lower bound. */
+  capped: boolean;
+  pages: number;
 }
 
 export interface ImpactStatusComponent {
@@ -74,6 +89,8 @@ export interface IncidentImpactView {
   components: ImpactStatusComponent[];
   componentsTruncated: boolean;
   slo: ImpactSlo;
+  /** Absent without global metric visibility or a published page showing an affected component. */
+  subscribers?: ImpactSubscribers;
 }
 
 /** True when the view has nothing worth a card: no downstream services, no components, no SLO. */
@@ -127,7 +144,8 @@ export async function getIncidentImpactForActor(
 
   const shownIds = graph.downstream.map(service => service.id);
   const componentServiceIds = [...(graph.ownReadable ? [incident.serviceId] : []), ...shownIds];
-  const [open, components] = await Promise.all([
+  const globalMetrics = hasCapability(actor.role, CAPABILITIES.METRICS_READ_ALL);
+  const [open, components, downstreamBurn] = await Promise.all([
     shownIds.length === 0
       ? []
       : client.incident.groupBy({
@@ -153,6 +171,7 @@ export async function getIncidentImpactForActor(
             service: { select: { name: true, status: true } },
           },
         }),
+    globalMetrics ? loadDownstreamBurn(client, shownIds, now) : new Map<string, BurnSeverity>(),
   ]);
   const openBy = new Map(open.map(row => [row.serviceId, row._count._all]));
   const ordered = components
@@ -173,16 +192,92 @@ export async function getIncidentImpactForActor(
         Number(b.pageEnabled) - Number(a.pageEnabled) ||
         a.statusPageName.localeCompare(b.statusPageName)
     );
+  const publishedPages = [
+    ...new Set(ordered.filter(row => row.pageEnabled).map(row => row.statusPageId)),
+  ];
+  const subscribers =
+    globalMetrics && publishedPages.length > 0
+      ? await countSubscribers(client, publishedPages, componentServiceIds)
+      : undefined;
   return {
     serviceId: incident.serviceId,
-    downstream: graph.downstream.map(service => ({
-      ...service,
-      openIncidents: openBy.get(service.id) ?? 0,
-    })),
+    downstream: graph.downstream.map(service => {
+      const sloBurn = downstreamBurn.get(service.id);
+      return {
+        ...service,
+        openIncidents: openBy.get(service.id) ?? 0,
+        ...(sloBurn ? { sloBurn } : {}),
+      };
+    }),
     downstreamTruncated: graph.truncated,
     components: ordered,
     componentsTruncated: components.length > IMPACT_LIMITS.maxComponents,
     slo,
+    ...(subscribers ? { subscribers } : {}),
+  };
+}
+
+/** Burn for the nearest downstream services that have an availability objective (one indexed read, then two per service). */
+async function loadDownstreamBurn(
+  client: typeof prisma,
+  shownIds: string[],
+  now: Date
+): Promise<Map<string, BurnSeverity>> {
+  if (shownIds.length === 0) return new Map();
+  const withObjectives = await client.serviceObjective.findMany({
+    where: {
+      serviceId: { in: shownIds },
+      metricType: { in: ['UPTIME', 'AVAILABILITY'] },
+      activeFrom: { lte: now },
+      OR: [{ activeTo: null }, { activeTo: { gt: now } }],
+    },
+    distinct: ['serviceId'],
+    take: shownIds.length,
+    select: { serviceId: true },
+  });
+  const has = new Set(withObjectives.map(row => row.serviceId));
+  // `shownIds` is nearest first, so the cap keeps the closest services.
+  const picked = shownIds.filter(id => has.has(id)).slice(0, IMPACT_LIMITS.maxDownstreamSlo);
+  const burns = await Promise.all(picked.map(id => getSloBurn(id, now, client).catch(() => null)));
+  return new Map(
+    picked.flatMap((id, index) => {
+      const burn = burns.at(index);
+      return burn ? [[id, burn.severity] as const] : [];
+    })
+  );
+}
+
+/**
+ * Subscribers who receive updates for any affected component: active, verified, not unsubscribed, and
+ * subscribed to the whole page or to one of the affected services. Each page's count stops at the cap.
+ */
+async function countSubscribers(
+  client: typeof prisma,
+  pageIds: string[],
+  serviceIds: string[]
+): Promise<ImpactSubscribers> {
+  const cap = IMPACT_LIMITS.subscriberCountCap;
+  const rows = await client.$queryRaw<Array<{ n: number }>>(Prisma.sql`
+    SELECT (
+      SELECT count(*)::int FROM (
+        SELECT 1 FROM "StatusPageSubscription" s
+        WHERE s."statusPageId" = p.id AND s."verified" = true AND s."state" = 'ACTIVE'
+          AND s."unsubscribedAt" IS NULL
+          AND (
+            NOT EXISTS (SELECT 1 FROM "StatusPageSubscriptionService" x WHERE x."subscriptionId" = s."id")
+            OR EXISTS (
+              SELECT 1 FROM "StatusPageSubscriptionService" x
+              WHERE x."subscriptionId" = s."id" AND x."serviceId" = ANY(${serviceIds}::text[])
+            )
+          )
+        LIMIT ${cap + 1}
+      ) capped
+    ) AS n
+    FROM unnest(${pageIds}::text[]) AS p(id)`);
+  return {
+    total: rows.reduce((sum, row) => sum + Math.min(row.n, cap), 0),
+    capped: rows.some(row => row.n > cap),
+    pages: pageIds.length,
   };
 }
 
