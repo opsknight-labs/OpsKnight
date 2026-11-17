@@ -1037,7 +1037,7 @@ rounds on cold connections plus per-query client overhead under a burst. Two che
 
 - The pool is warmed once per client with the real prefetch statement (matching nothing), one concurrent
   probe per connection, three passes, from the background snapshot refresh. Pool route after the fix:
-  3–20% on 2 connections and 3–14% at the default size across runs (19–28% before, warmed with `$connect`
+  3–20% on 2 connections and 3–14% at the default size across runs (15–28% before, warmed with `$connect`
   only); the spread is host noise.
 - The savepoint route opens its savepoint and timeout before the deadline starts, so only the read races
   it: 38–41% fail-open before, 14% after. On that route, an event that matches a static control first now
