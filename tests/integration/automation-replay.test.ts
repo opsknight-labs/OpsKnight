@@ -2,6 +2,7 @@ import { beforeEach, expect, it } from 'vitest';
 import {
   createTestEscalationPolicy,
   createTestService,
+  createTestTeam,
   createTestUser,
   resetDatabase,
   testPrisma as db,
@@ -13,6 +14,7 @@ import { replayStoredEvents, type ReplayEnvironment } from '@/lib/automation/rep
 import {
   getAutomationReplay,
   loadReplayEnvironment,
+  replayIncidentScope,
   startAutomationReplay,
 } from '@/lib/automation/replay-run';
 import {
@@ -22,6 +24,16 @@ import {
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 
 const DAY = 86_400_000;
+const asActor = (
+  user: { id: string },
+  role: 'ADMIN' | 'USER' = 'ADMIN',
+  teamIds: string[] = []
+) => ({
+  id: user.id,
+  role,
+  status: 'ACTIVE' as const,
+  teamIds,
+});
 const now = new Date('2026-11-10T12:00:00.000Z');
 
 const draft = (policyId: string): Snapshot => ({
@@ -150,7 +162,14 @@ it('pages through stored incident-opening alerts with a keyset and reports what 
 
 it('runs as a background job, reuses an identical request and stays inside its service', async () => {
   const { actor, policy, service, other } = await seed();
-  const request = { serviceId: service.id, snapshot: draft(policy.id), days: 7, actorId: actor.id };
+  const request = {
+    serviceId: service.id,
+    snapshot: draft(policy.id),
+    days: 7,
+    actorId: actor.id,
+    incidentScope: null,
+  };
+  const admin = asActor(actor);
   const started = await db.$transaction(tx => startAutomationReplay(tx, { ...request, now }));
   expect(started).toMatchObject({ status: 'PENDING', progress: 0, result: null });
   const again = await db.$transaction(tx => startAutomationReplay(tx, { ...request, now }));
@@ -162,7 +181,7 @@ it('runs as a background job, reuses an identical request and stays inside its s
   expect(jobs).toHaveLength(1);
   await processAutomationJob(jobs[0].payload, jobs[0].id);
 
-  const finished = await getAutomationReplay(db, service.id, started.runId);
+  const finished = await getAutomationReplay(db, service.id, started.runId, admin);
   expect(finished).toMatchObject({
     status: 'COMPLETED',
     progress: 1,
@@ -173,11 +192,11 @@ it('runs as a background job, reuses an identical request and stays inside its s
     where: { id: started.runId },
   });
   expect(row.metrics).not.toHaveProperty('snapshot');
-  expect(await getAutomationReplay(db, other.id, started.runId)).toBeNull();
+  expect(await getAutomationReplay(db, other.id, started.runId, admin)).toBeNull();
 
   // A second delivery of the same job does nothing.
   await processAutomationJob(jobs[0].payload, jobs[0].id);
-  expect(await getAutomationReplay(db, service.id, started.runId)).toEqual(finished);
+  expect(await getAutomationReplay(db, service.id, started.runId, admin)).toEqual(finished);
 });
 
 it('refuses a draft that does not validate and never queues a job for it', async () => {
@@ -189,6 +208,7 @@ it('refuses a draft that does not validate and never queues a job for it', async
         snapshot: draft('missing-policy'),
         days: 7,
         actorId: actor.id,
+        incidentScope: null,
         now,
       })
     )
@@ -198,8 +218,9 @@ it('refuses a draft that does not validate and never queues a job for it', async
 
 it('is reachable over REST v2: 202 on start, status by run id, and not across services or scopes', async () => {
   const { policy, service, other } = await seed();
-  const reader = await createV2Credential(['automation:read']);
+  const reader = await createV2Credential(['automation:read', 'incidents:read']);
   const outsider = await createV2Credential(['incidents:read']);
+  const noIncidents = await createV2Credential(['automation:read']);
   const path = `/services/${service.id}/automation/replay`;
   const body = { snapshot: draft(policy.id), days: 7 };
 
@@ -236,6 +257,14 @@ it('is reachable over REST v2: 202 on start, status by run id, and not across se
     body
   );
   expect(denied.status).toBe(403);
+  // Replay results identify incidents, so automation read alone is not enough.
+  for (const response of [
+    await invokeV2(replayRoute, noIncidents.token, 'POST', path, { id: service.id }, body),
+    await invokeV2(replayStatusRoute, noIncidents.token, 'GET', `${path}?runId=${data.runId}`, {
+      id: service.id,
+    }),
+  ])
+    expect(response.status).toBe(403);
   expect(await db.backgroundJob.count()).toBe(1);
 });
 
@@ -305,4 +334,68 @@ it('reports what people changed afterwards on each replayed incident', async () 
   // A comment is not a change, even when its text starts like one.
   expect(later.get(incidents[3].id)).toMatchObject({ overriddenSoon: false });
   expect(later.size).toBe(6);
+});
+
+it('replays only the incidents the requester can read and re-checks examples when read', async () => {
+  const { policy } = await seed();
+  const team = await createTestTeam('Replay team');
+  const user = await createTestUser({ role: 'USER' });
+  await db.teamMember.create({ data: { userId: user.id, teamId: team.id } });
+  const service = await createTestService('Scoped', team.id);
+  const opened = async (index: number, visibility: 'PUBLIC' | 'PRIVATE') => {
+    const createdAt = new Date(now.getTime() - 3 * DAY + index * 1000);
+    const incident = await db.incident.create({
+      data: {
+        title: `s-${index}`,
+        serviceId: service.id,
+        status: 'OPEN',
+        urgency: 'HIGH',
+        visibility,
+        createdAt,
+      },
+    });
+    await db.alert.create({
+      data: {
+        serviceId: service.id,
+        incidentId: incident.id,
+        dedupKey: `s-${index}`,
+        createdAt,
+        payload: { summary: 'x', source: 'prom', severity: 'critical' },
+      },
+    });
+    return incident;
+  };
+  const visible = await opened(1, 'PUBLIC');
+  const hidden = await opened(2, 'PRIVATE');
+  const watched = await opened(3, 'PRIVATE');
+  await db.incidentWatcher.create({ data: { incidentId: watched.id, userId: user.id } });
+
+  const reader = asActor(user, 'USER', [team.id]);
+  const incidentScope = replayIncidentScope(reader);
+  expect(incidentScope).toEqual({ actorId: user.id, teamIds: [team.id] });
+  const started = await db.$transaction(tx =>
+    startAutomationReplay(tx, {
+      serviceId: service.id,
+      snapshot: draft(policy.id),
+      days: 7,
+      actorId: user.id,
+      incidentScope,
+      now,
+    })
+  );
+  const [job] = await db.backgroundJob.findMany({ where: { type: 'SCHEDULED_TASK' } });
+  await processAutomationJob(job.payload, job.id);
+  const finished = await getAutomationReplay(db, service.id, started.runId, reader);
+  expect(finished?.result).toMatchObject({ eventsEvaluated: 2 });
+  expect(finished?.result?.examples.map(example => example.incidentId).sort()).toEqual(
+    [visible.id, watched.id].sort()
+  );
+  expect(finished?.result?.examples.map(example => example.incidentId)).not.toContain(hidden.id);
+
+  // Losing access afterwards hides the example; another user cannot read the run at all.
+  await db.incidentWatcher.deleteMany({ where: { incidentId: watched.id } });
+  const later = await getAutomationReplay(db, service.id, started.runId, reader);
+  expect(later?.result?.examples.map(example => example.incidentId)).toEqual([visible.id]);
+  const someoneElse = await createTestUser({ role: 'ADMIN' });
+  expect(await getAutomationReplay(db, service.id, started.runId, asActor(someoneElse))).toBeNull();
 });

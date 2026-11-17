@@ -6,6 +6,8 @@ import { AppError } from '@/lib/errors/app-error';
 import { logger } from '@/lib/logger';
 import { resolveIncidentClassification } from '@/lib/incidents/classification';
 import { withDbBudget } from '@/lib/intelligence/jobs/db-budget';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { incidentReadWhere, incidentReadWhereParts } from '@/lib/authorization-filters';
 import { validateAutomationSnapshot } from './authoring';
 import { compileAutomation } from './compiler';
 import { snapshotSchema, usesIntelligenceFields } from './contract';
@@ -17,6 +19,7 @@ import {
   REPLAY_MIN_DAYS,
   replayStoredEvents,
   type ReplayEnvironment,
+  type ReplayIncidentScope,
   type ReplaySummary,
 } from './replay';
 
@@ -62,6 +65,11 @@ const storedSchema = z.object({
   inputHash: z.string(),
   integrationType: z.string().nullable(),
   progress: z.number(),
+  /** Null: the requester reads every incident. Absent on runs queued before scoping existed. */
+  incidentScope: z
+    .object({ actorId: z.string(), teamIds: z.array(z.string()) })
+    .nullable()
+    .optional(),
   snapshot: z.unknown().optional(),
   result: z.unknown().optional(),
 });
@@ -93,12 +101,24 @@ function view(row: RunRow, serviceId: string, now = Date.now()): AutomationRepla
   };
 }
 
+/**
+ * Which incidents a replay may read for this actor: null when it reads every incident. Throws (403)
+ * without incident read, because replay results identify incidents and test their alert payloads.
+ */
+export function replayIncidentScope(actor: AuthorizationActor): ReplayIncidentScope | null {
+  return incidentReadWhereParts(actor).global
+    ? null
+    : { actorId: actor.id, teamIds: [...actor.teamIds] };
+}
+
 /** Validates the snapshot and queues a replay; the caller has already authorized the service. */
 export async function startAutomationReplay(
   tx: Prisma.TransactionClient,
   input: z.infer<typeof automationReplayRequestSchema> & {
     serviceId: string;
     actorId: string | null;
+    /** From `replayIncidentScope`: the replay reads only the incidents the requester can read. */
+    incidentScope: ReplayIncidentScope | null;
     now?: Date;
   }
 ): Promise<AutomationReplayView> {
@@ -113,7 +133,14 @@ export async function startAutomationReplay(
   const integrationType = input.integrationType ?? null;
   const inputHash = createHash('sha256')
     .update(
-      JSON.stringify([input.serviceId, input.days, integrationType, input.snapshot, input.actorId])
+      JSON.stringify([
+        input.serviceId,
+        input.days,
+        integrationType,
+        input.snapshot,
+        input.actorId,
+        input.incidentScope,
+      ])
     )
     .digest('hex');
   // Bounded by the (kind, createdAt) index and the reuse window.
@@ -144,6 +171,7 @@ export async function startAutomationReplay(
         inputHash,
         integrationType,
         progress: 0,
+        incidentScope: input.incidentScope,
         snapshot: input.snapshot,
       } as Prisma.InputJsonObject,
     },
@@ -161,17 +189,35 @@ export async function startAutomationReplay(
   return view(run, input.serviceId, now.getTime())!;
 }
 
-/** Null when the run does not exist or belongs to another service. */
+/**
+ * Null when the run does not exist, belongs to another service or was requested by someone else.
+ * Examples are re-checked against the reader's incident visibility, which may have narrowed since.
+ */
 export async function getAutomationReplay(
-  client: Pick<Prisma.TransactionClient, 'intelligenceEvaluationRun'>,
+  client: Pick<Prisma.TransactionClient, 'intelligenceEvaluationRun' | 'incident'>,
   serviceId: string,
-  runId: string
+  runId: string,
+  actor: AuthorizationActor
 ): Promise<AutomationReplayView | null> {
   const row = await client.intelligenceEvaluationRun.findFirst({
-    where: { id: runId, kind: 'REPLAY' },
+    where: { id: runId, kind: 'REPLAY', createdById: actor.id },
     select: runSelect,
   });
-  return row ? view(row, serviceId) : null;
+  const replay = row ? view(row, serviceId) : null;
+  if (!replay?.result?.examples.length) return replay;
+  const ids = replay.result.examples.map(example => example.incidentId);
+  const readable = await client.incident.findMany({
+    where: { AND: [{ id: { in: ids } }, incidentReadWhere(actor)] },
+    select: { id: true },
+  });
+  const allowed = new Set(readable.map(incident => incident.id));
+  return {
+    ...replay,
+    result: {
+      ...replay.result,
+      examples: replay.result.examples.filter(example => allowed.has(example.incidentId)),
+    },
+  };
 }
 
 /** What every event in one replay shares: default policy, integration type and base classification. */
@@ -271,6 +317,7 @@ export async function processAutomationReplay(runId: string) {
       environment,
       windowStart: run.windowStart,
       windowEnd: run.windowEnd,
+      incidentScope: stored.incidentScope ?? null,
       run: work => withDbBudget({ maxDbMs: PAGE_DB_MS }, work),
       onProgress: async progress => {
         await prisma.$executeRaw`

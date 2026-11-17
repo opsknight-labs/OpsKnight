@@ -376,6 +376,21 @@ function toReplayEvent(row: Row, environment: ReplayEnvironment): ReplayEvent | 
 
 export type ReplayProgress = { scanned: number; evaluated: number; fraction: number };
 
+/** A non-global reader's incident scope (see `incidentReadWhereParts`). */
+export type ReplayIncidentScope = { actorId: string; teamIds: string[] };
+
+/** SQL mirror of `incidentReadWhere` for a scoped reader: assigned, watched, or PUBLIC on one of their teams. */
+function incidentScopeSql(scope: ReplayIncidentScope): Prisma.Sql {
+  const teams = scope.teamIds.length
+    ? Prisma.sql`(i."visibility" = 'PUBLIC' AND (i."teamId" IN (${Prisma.join(scope.teamIds)})
+        OR EXISTS (SELECT 1 FROM "Service" s WHERE s."id" = i."serviceId"
+          AND s."teamId" IN (${Prisma.join(scope.teamIds)}))))`
+    : Prisma.sql`FALSE`;
+  return Prisma.sql`AND (i."assigneeId" = ${scope.actorId}
+    OR EXISTS (SELECT 1 FROM "IncidentWatcher" w WHERE w."incidentId" = i."id" AND w."userId" = ${scope.actorId})
+    OR ${teams})`;
+}
+
 /**
  * Replays `compiled` over the service's stored incident-opening alerts in the window: keyset pages on
  * the (serviceId, createdAt) index, at most REPLAY_MAX_EVENTS rows, one bounded query per page.
@@ -387,6 +402,8 @@ export async function replayStoredEvents(input: {
   environment: ReplayEnvironment;
   windowStart: Date;
   windowEnd: Date;
+  /** Limits the replay to incidents this requester can read; null or absent reads every incident. */
+  incidentScope?: ReplayIncidentScope | null;
   run: <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) => Promise<T>;
   onProgress?: (progress: ReplayProgress) => Promise<void>;
   /** Sees every evaluated event, for callers that aggregate more than the summary holds. */
@@ -398,6 +415,7 @@ export async function replayStoredEvents(input: {
   const maxEvents = input.maxEvents ?? REPLAY_MAX_EVENTS;
   const accumulator = createReplayAccumulator(input.compiled, input.environment);
   const span = Math.max(1, input.windowEnd.getTime() - input.windowStart.getTime());
+  const visible = input.incidentScope ? incidentScopeSql(input.incidentScope) : Prisma.empty;
   let cursor: { createdAt: Date; id: string } | null = null;
   let scanned = 0;
   let evaluated = 0;
@@ -429,6 +447,7 @@ export async function replayStoredEvents(input: {
           AND a."createdAt" >= ${input.windowStart} AND a."createdAt" <= ${input.windowEnd}
           AND a."status" = 'TRIGGERED'
           AND i."createdAt" >= ${input.windowStart}
+          ${visible}
           AND NOT EXISTS (
             SELECT 1 FROM "Alert" earlier
             WHERE earlier."incidentId" = a."incidentId"

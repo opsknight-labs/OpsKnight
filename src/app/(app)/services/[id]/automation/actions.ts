@@ -31,6 +31,7 @@ import { readAutomationVersion } from '@/lib/automation/history';
 import {
   automationReplayRequestSchema,
   getAutomationReplay,
+  replayIncidentScope,
   startAutomationReplay,
 } from '@/lib/automation/replay-run';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
@@ -144,15 +145,20 @@ export async function automationAction(raw: unknown) {
       return { ok: true as const, data: await discardCandidate({ ...input, actorId: user.id }) };
     if (input.action === 'mode')
       return { ok: true as const, data: await changeMode({ ...input, actorId: user.id }) };
-    if (input.action === 'replay')
+    if (input.action === 'replay') {
+      // Replay results identify incidents: the replay reads only incidents this user can read.
+      const incidentScope = replayIncidentScope(await getCurrentAuthorizationActor());
       return {
         ok: true as const,
         data: await prisma.$transaction(tx =>
-          startAutomationReplay(tx, { ...input, actorId: user.id })
+          startAutomationReplay(tx, { ...input, actorId: user.id, incidentScope })
         ),
       };
+    }
     if (input.action === 'replayStatus') {
-      const replay = await getAutomationReplay(prisma, input.serviceId, input.runId);
+      const actor = await getCurrentAuthorizationActor();
+      replayIncidentScope(actor);
+      const replay = await getAutomationReplay(prisma, input.serviceId, input.runId, actor);
       if (!replay) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
       return { ok: true as const, data: replay };
     }
