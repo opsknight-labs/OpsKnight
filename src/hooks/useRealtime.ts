@@ -10,6 +10,7 @@ import {
   useMemo,
   useState,
   useRef,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import { usePathname } from 'next/navigation';
@@ -63,6 +64,17 @@ export type RealtimeIncident = Record<string, unknown>;
  */
 export type RealtimeMode = 'full' | 'signal';
 
+function subscribeOnlineStatus(onChange: () => void) {
+  window.addEventListener('online', onChange);
+  window.addEventListener('offline', onChange);
+  return () => {
+    window.removeEventListener('online', onChange);
+    window.removeEventListener('offline', onChange);
+  };
+}
+const getOnlineStatus = () => navigator.onLine;
+const getServerOnline = () => true;
+
 function useRealtimeConnection(mode: RealtimeMode) {
   const [isConnected, setIsConnected] = useState(false);
   const [metrics, setMetrics] = useState<RealtimeMetrics | null>(null);
@@ -78,6 +90,10 @@ function useRealtimeConnection(mode: RealtimeMode) {
   // from `revision` so route-refresh consumers are not triggered by every change.
   const [changeGeneration, setChangeGeneration] = useState<string | null>(null);
   const [changeCount, setChangeCount] = useState(0);
+  // When the stream dropped unexpectedly (error or network loss); null while healthy or while
+  // the stream is closed on purpose (hidden tab). Drives the Live / Reconnecting / Offline status.
+  const [outageStartedAt, setOutageStartedAt] = useState<number | null>(null);
+  const isOnline = useSyncExternalStore(subscribeOnlineStatus, getOnlineStatus, getServerOnline);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
@@ -102,10 +118,16 @@ function useRealtimeConnection(mode: RealtimeMode) {
       setReconnectTrigger(prev => prev + 1);
     };
 
-    const handleOnline = () => reconnect();
-    const handleOffline = () => disconnect();
+    const handleOnline = () => {
+      reconnect();
+    };
+    const handleOffline = () => {
+      setOutageStartedAt(previous => previous ?? Date.now());
+      disconnect();
+    };
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
+        setOutageStartedAt(null);
         disconnect();
         return;
       }
@@ -146,6 +168,7 @@ function useRealtimeConnection(mode: RealtimeMode) {
         eventSource.onopen = () => {
           if (!mounted) return;
           setIsConnected(true);
+          setOutageStartedAt(null);
           setError(null);
           reconnectAttempts.current = 0;
           lastEventAt.current = Date.now();
@@ -200,6 +223,9 @@ function useRealtimeConnection(mode: RealtimeMode) {
         eventSource.onerror = () => {
           if (!mounted || authorizationRevoked.current) return;
           setIsConnected(false);
+          if (document.visibilityState !== 'hidden') {
+            setOutageStartedAt(previous => previous ?? Date.now());
+          }
           eventSource.close();
           if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
           if (document.visibilityState === 'hidden' || !navigator.onLine) return;
@@ -249,6 +275,8 @@ function useRealtimeConnection(mode: RealtimeMode) {
     isRevoked,
     changeGeneration,
     changeCount,
+    outageStartedAt,
+    isOnline,
   };
 }
 

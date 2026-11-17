@@ -8,6 +8,7 @@ import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { dashboardUserReadWhere, incidentReadWhere } from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
+import ListReturnLink from '@/components/layout/ListReturnLink';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
@@ -103,13 +104,13 @@ export default async function PostmortemPage({
     return (
       <div className="p-6">
         <div className="mb-6">
-          <Link
+          <ListReturnLink
             href="/postmortems"
             className="text-muted-foreground no-underline text-sm mb-2 inline-flex items-center gap-1 hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Postmortems
-          </Link>
+          </ListReturnLink>
           <h1 className="text-2xl font-bold mt-2">Create Postmortem</h1>
           <p className="text-muted-foreground">For incident: {incidentContext.title}</p>
         </div>
@@ -136,13 +137,13 @@ export default async function PostmortemPage({
   return (
     <div className="p-6">
       <div className="mb-6">
-        <Link
+        <ListReturnLink
           href="/postmortems"
           className="text-muted-foreground no-underline text-sm mb-2 inline-flex items-center gap-1 hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Postmortems
-        </Link>
+        </ListReturnLink>
         <h1 className="text-2xl font-bold mt-2">{postmortem.title}</h1>
         <p className="text-muted-foreground">
           Postmortem for{' '}

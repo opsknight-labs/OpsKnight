@@ -8,9 +8,12 @@ const KeyboardShortcuts = dynamic(() => import('./KeyboardShortcuts'), { ssr: fa
 
 export default function GlobalKeyboardHandlerWrapper() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Stay mounted after the first open so the sheet can animate out and restore focus.
+  const [hasOpened, setHasOpened] = useState(false);
 
   // Memoize toggle handlers to prevent unnecessary re-renders
   const handleToggle = useCallback(() => {
+    setHasOpened(true);
     setShortcutsOpen(prev => !prev);
   }, []);
 
@@ -26,7 +29,7 @@ export default function GlobalKeyboardHandlerWrapper() {
   return (
     <>
       <GlobalKeyboardHandler onShortcutsToggle={handleToggle} />
-      {shortcutsOpen && <KeyboardShortcuts isOpen onClose={handleClose} />}
+      {hasOpened && <KeyboardShortcuts isOpen={shortcutsOpen} onClose={handleClose} />}
     </>
   );
 }

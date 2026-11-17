@@ -24,16 +24,20 @@ import {
   Loader2,
   CornerDownLeft,
   X,
-  LayoutDashboard,
   Server,
-  PieChart,
-  BarChart,
-  ListTodo,
   Sun,
   Moon,
   Monitor,
   Check,
+  HelpCircle,
+  Keyboard,
+  type LucideIcon,
 } from 'lucide-react';
+import { useAccess } from '@/components/access/AccessProvider';
+import { getAuthorizedNavItems } from '@/config/navigation';
+import { canAccessPath } from '@/lib/access/pages';
+import { getRoleCapabilities, isAppRole, type Capability } from '@/lib/authorization';
+import { GLOBAL_NAVIGATION_SHORTCUTS } from '@/lib/keyboard-shortcuts';
 import { useThemePreference } from '@/hooks/use-theme-preference';
 import type { ThemeChoice } from '@/lib/theme-preference';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -63,140 +67,160 @@ type NavigationPage = {
   title: string;
   subtitle: string;
   href: string;
-  icon: typeof Zap;
+  icon: LucideIcon;
   keywords: string[];
+  shortcut?: string;
 };
 
 const RECENT_SEARCHES_KEY = 'OpsKnight-recent-searches-v2';
 const MAX_RECENT_SEARCHES = 5;
 const TYPE_ORDER = ['incident', 'service', 'team', 'user', 'policy', 'postmortem'] as const;
 
-const NAVIGATION_PAGES: NavigationPage[] = [
-  {
-    id: 'nav-dashboard',
-    title: 'Dashboard',
-    subtitle: 'System overview & metrics',
-    href: '/',
-    icon: LayoutDashboard,
-    keywords: ['dashboard', 'overview', 'home', 'main', 'summary'],
-  },
-  {
-    id: 'nav-incidents',
-    title: 'Incidents',
-    subtitle: 'Active & resolved incidents',
-    href: '/incidents',
-    icon: Zap,
-    keywords: ['incidents', 'incident', 'alerts', 'outages', 'issues', 'tickets'],
-  },
-  {
-    id: 'nav-services',
-    title: 'Services',
-    subtitle: 'Service registry & status',
-    href: '/services',
-    icon: Server,
-    keywords: ['services', 'service', 'components', 'microservices', 'infrastructure', 'endpoints'],
-  },
-  {
-    id: 'nav-schedules',
-    title: 'Schedules',
-    subtitle: 'On-call shifts & rotations',
-    href: '/schedules',
-    icon: Calendar,
-    keywords: ['schedules', 'schedule', 'oncall', 'shifts', 'rotations', 'calendar', 'handoff'],
-  },
-  {
-    id: 'nav-policies',
-    title: 'Escalation Policies',
-    subtitle: 'Alert routing & escalation tiers',
-    href: '/policies',
-    icon: Shield,
-    keywords: ['policies', 'policy', 'escalation', 'routing', 'rules', 'tiers'],
-  },
-  {
-    id: 'nav-teams',
-    title: 'Teams',
-    subtitle: 'Team directory & rosters',
-    href: '/teams',
-    icon: Users,
-    keywords: ['teams', 'team', 'groups', 'squads', 'members'],
-  },
-  {
-    id: 'nav-users',
-    title: 'Users',
-    subtitle: 'User directory & access roles',
-    href: '/users',
-    icon: Users,
-    keywords: ['users', 'user', 'people', 'responders', 'accounts', 'members', 'directory'],
-  },
-  {
-    id: 'nav-analytics',
-    title: 'Analytics',
-    subtitle: 'MTTA, MTTR & SLA compliance trends',
-    href: '/analytics',
-    icon: PieChart,
-    keywords: ['analytics', 'metrics', 'mtta', 'mttr', 'sla', 'trends', 'insights', 'uptime'],
-  },
-  {
-    id: 'nav-reports',
-    title: 'Reports & Dashboards',
-    subtitle: 'Executive reports & reliability widgets',
-    href: '/reports',
-    icon: BarChart,
-    keywords: ['reports', 'report', 'dashboards', 'dashboard', 'executive', 'reliability'],
-  },
-  {
-    id: 'nav-postmortems',
-    title: 'Postmortems',
-    subtitle: 'Root cause analysis & lessons learned',
-    href: '/postmortems',
-    icon: FileText,
-    keywords: ['postmortems', 'postmortem', 'rca', 'retrospectives', 'lessons', 'incident reports'],
-  },
-  {
-    id: 'nav-action-items',
-    title: 'Action Items',
-    subtitle: 'Post-incident corrective actions',
-    href: '/action-items',
-    icon: ListTodo,
-    keywords: ['action items', 'action item', 'tasks', 'remediation', 'todos', 'followups'],
-  },
-  {
-    id: 'nav-settings',
-    title: 'Settings',
-    subtitle: 'Integrations, API keys & preferences',
-    href: '/settings',
-    icon: Wrench,
-    keywords: [
-      'settings',
-      'setting',
-      'configuration',
-      'integrations',
-      'api keys',
-      'slack',
-      'profile',
-    ],
-  },
+/** Subtitles and search keywords for "Go to" commands, keyed by nav href. */
+const NAVIGATION_META = new Map<string, { subtitle: string; keywords: string[] }>([
+  [
+    '/',
+    { subtitle: 'System overview & metrics', keywords: ['overview', 'home', 'main', 'summary'] },
+  ],
+  [
+    '/incidents',
+    {
+      subtitle: 'Active & resolved incidents',
+      keywords: ['incident', 'alerts', 'outages', 'issues', 'tickets'],
+    },
+  ],
+  [
+    '/services',
+    {
+      subtitle: 'Service registry & status',
+      keywords: ['service', 'components', 'microservices', 'infrastructure', 'endpoints'],
+    },
+  ],
+  [
+    '/runbooks',
+    {
+      subtitle: 'Automated remediation & executions',
+      keywords: ['runbook', 'automation', 'remediation', 'playbooks', 'agents', 'executions'],
+    },
+  ],
+  [
+    '/postmortems',
+    {
+      subtitle: 'Root cause analysis & lessons learned',
+      keywords: ['postmortem', 'rca', 'retrospectives', 'lessons', 'incident reports'],
+    },
+  ],
+  [
+    '/action-items',
+    {
+      subtitle: 'Post-incident corrective actions',
+      keywords: ['action item', 'tasks', 'remediation', 'todos', 'followups'],
+    },
+  ],
+  [
+    '/schedules',
+    {
+      subtitle: 'On-call shifts & rotations',
+      keywords: ['schedule', 'oncall', 'on-call', 'shifts', 'rotations', 'calendar', 'handoff'],
+    },
+  ],
+  [
+    '/policies',
+    {
+      subtitle: 'Alert routing & escalation tiers',
+      keywords: ['policy', 'escalation', 'routing', 'rules', 'tiers'],
+    },
+  ],
+  ['/teams', { subtitle: 'Team directory & rosters', keywords: ['team', 'groups', 'squads'] }],
+  [
+    '/users',
+    {
+      subtitle: 'User directory & access roles',
+      keywords: ['user', 'people', 'responders', 'accounts', 'members', 'directory'],
+    },
+  ],
+  [
+    '/analytics',
+    {
+      subtitle: 'MTTA, MTTR & SLA compliance trends',
+      keywords: ['metrics', 'mtta', 'mttr', 'sla', 'trends', 'insights', 'uptime'],
+    },
+  ],
+  [
+    '/reports',
+    {
+      subtitle: 'Executive reports & reliability widgets',
+      keywords: ['report', 'dashboards', 'executive', 'reliability'],
+    },
+  ],
+  [
+    '/audit',
+    { subtitle: 'Who changed what, and when', keywords: ['audit', 'history', 'compliance'] },
+  ],
+  [
+    '/events',
+    {
+      subtitle: 'Inbound alert events & payloads',
+      keywords: ['events', 'logs', 'alerts', 'payloads'],
+    },
+  ],
+  [
+    '/settings',
+    {
+      subtitle: 'Integrations, API keys & preferences',
+      keywords: ['setting', 'configuration', 'integrations', 'api keys', 'slack', 'profile'],
+    },
+  ],
+  [
+    '/help',
+    { subtitle: 'Guides & support', keywords: ['help', 'support', 'docs', 'documentation'] },
+  ],
+  [
+    '/shortcuts',
+    { subtitle: 'Every keyboard shortcut', keywords: ['keyboard', 'shortcuts', 'hotkeys', 'keys'] },
+  ],
+]);
+
+/** Pages outside the sidebar's main sections that the palette can still open. */
+const EXTRA_NAVIGATION: ReadonlyArray<{ href: string; label: string; icon: LucideIcon }> = [
+  { href: '/settings', label: 'Settings', icon: Wrench },
+  { href: '/help', label: 'Help', icon: HelpCircle },
+  { href: '/shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard },
 ];
 
+const NAV_SHORTCUT_KEYS = new Map<string, string>(
+  GLOBAL_NAVIGATION_SHORTCUTS.map(item => [item.href, `G ${item.key.toUpperCase()}`])
+);
+
+function buildNavigationPages(access: readonly Capability[] | string | null): NavigationPage[] {
+  const items = [...getAuthorizedNavItems(access), ...EXTRA_NAVIGATION];
+  const capabilities =
+    typeof access === 'string' ? (isAppRole(access) ? getRoleCapabilities(access) : []) : access;
+  return items
+    .filter(item => canAccessPath(item.href, capabilities ?? []))
+    .map(item => {
+      const meta = NAVIGATION_META.get(item.href);
+      return {
+        id: `nav-${item.href}`,
+        title: item.label,
+        subtitle: meta?.subtitle ?? '',
+        href: item.href,
+        icon: item.icon,
+        keywords: meta?.keywords ?? [],
+        shortcut: NAV_SHORTCUT_KEYS.get(item.href),
+      };
+    });
+}
+
+function matchesNavigation(page: NavigationPage, query: string): boolean {
+  return (
+    page.title.toLowerCase().includes(query) ||
+    page.subtitle.toLowerCase().includes(query) ||
+    page.keywords.some(keyword => keyword.includes(query))
+  );
+}
+
 const QUICK_ACTIONS = [
-  {
-    id: 'qa-incidents',
-    label: 'View all incidents',
-    query: 'incident',
-    icon: Zap,
-    category: 'Navigation',
-    description: 'Browse all incidents',
-    href: '/incidents',
-  },
-  {
-    id: 'qa-services',
-    label: 'View all services',
-    query: 'service',
-    icon: Server,
-    category: 'Navigation',
-    description: 'Manage services',
-    href: '/services',
-  },
   {
     id: 'qa-create',
     label: 'Create new incident',
@@ -322,7 +346,12 @@ function saveRecentSearchToStorage(searchQuery: string, resultCount?: number) {
   } catch {}
 }
 
-export default function SidebarSearch() {
+type SidebarSearchProps = {
+  /** Built-in role, used for "Go to" commands until the access snapshot is available. */
+  role?: string | null;
+};
+
+export default function SidebarSearch({ role = null }: SidebarSearchProps = {}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -346,6 +375,13 @@ export default function SidebarSearch() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Where focus was before ⌘K, so Escape can hand it back.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const { snapshot: access } = useAccess();
+  const navigationPages = useMemo(
+    () => buildNavigationPages(access?.capabilities ?? access?.role ?? role),
+    [access?.capabilities, access?.role, role]
+  );
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const router = useRouter();
@@ -398,22 +434,39 @@ export default function SidebarSearch() {
     };
   }, [query]);
 
-  // Keyboard shortcut handler
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
+  // Keyboard shortcut handler. Window capture runs before Radix's dismiss handler, whose
+  // re-render would otherwise detach a bubbling listener before Escape reaches it.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        const active = document.activeElement;
+        if (
+          active instanceof HTMLElement &&
+          active !== inputRef.current &&
+          active !== document.body
+        ) {
+          returnFocusRef.current = active;
+        }
         inputRef.current?.focus();
         setOpen(true);
       }
-      if (e.key === 'Escape' && open) {
+      if (e.key === 'Escape' && openRef.current) {
         setOpen(false);
-        inputRef.current?.blur();
+        const returnTo = returnFocusRef.current;
+        returnFocusRef.current = null;
+        if (returnTo?.isConnected) returnTo.focus();
+        else inputRef.current?.blur();
       }
     };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open]);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, []);
 
   const handleSelect = useCallback(
     (_value: string, item?: { href?: string; id?: string; query?: string }) => {
@@ -428,6 +481,7 @@ export default function SidebarSearch() {
         }
         setOpen(false);
         setQuery('');
+        returnFocusRef.current = null;
         inputRef.current?.blur();
       } else if (item?.query) {
         setQuery(item.query);
@@ -455,15 +509,9 @@ export default function SidebarSearch() {
   );
 
   const matchingNavigation = useMemo(() => {
-    if (query.trim().length < 2) return [];
-    const q = query.trim().toLowerCase();
-    return NAVIGATION_PAGES.filter(
-      page =>
-        page.title.toLowerCase().includes(q) ||
-        page.subtitle.toLowerCase().includes(q) ||
-        page.keywords.some(k => k.toLowerCase().includes(q))
-    );
-  }, [query]);
+    if (!normalizedQuery) return navigationPages;
+    return navigationPages.filter(page => matchesNavigation(page, normalizedQuery));
+  }, [navigationPages, normalizedQuery]);
 
   const groupedResults = useMemo(() => {
     const groups = new Map<string, SearchResult[]>();
@@ -490,8 +538,42 @@ export default function SidebarSearch() {
   const hasAnyResults =
     matchingNavigation.length > 0 || (!isLoading && totalRenderedResultsCount > 0);
 
+  const renderNavigationItem = (page: NavigationPage) => {
+    const Icon = page.icon;
+    return (
+      <CommandItem
+        key={page.id}
+        value={page.id}
+        onSelect={() => handleSelect(page.title, { href: page.href })}
+        className="aria-selected:bg-accent aria-selected:text-accent-foreground cursor-pointer"
+      >
+        <div className="flex items-center justify-center h-7 w-7 rounded-sm bg-muted/70 mr-3 shrink-0">
+          <Icon className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
+        </div>
+        <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+          <span className="font-medium text-sm">{page.title}</span>
+          {page.subtitle && (
+            <span className="text-2xs text-muted-foreground truncate">{page.subtitle}</span>
+          )}
+        </div>
+        {page.shortcut && (
+          <kbd
+            className="ml-2 hidden shrink-0 rounded border border-border bg-muted px-1.5 font-mono text-2xs text-muted-foreground sm:inline-block"
+            aria-label={`Shortcut ${page.shortcut}`}
+          >
+            {page.shortcut}
+          </kbd>
+        )}
+      </CommandItem>
+    );
+  };
+
   return (
-    <Command shouldFilter={false} className="overflow-visible bg-transparent border-0 shadow-none">
+    <Command
+      shouldFilter={false}
+      label="Search or go to a page"
+      className="overflow-visible bg-transparent border-0 shadow-none"
+    >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverAnchor asChild>
           <div
@@ -506,11 +588,11 @@ export default function SidebarSearch() {
               Redesign: Flex container mimicking the input style. 
               The actual input is transparent and sits next to the icon.
             */}
-            <div className="flex h-9 w-full items-center rounded-lg border border-zinc-800/90 bg-[#18181b]/90 px-3 focus-within:ring-1 focus-within:ring-zinc-600/70 focus-within:border-zinc-700 transition-all shadow-xs cursor-text">
+            <div className="flex h-9 w-full items-center rounded-lg border border-zinc-800/90 bg-[#18181b]/90 px-3 focus-within:ring-2 focus-within:ring-ring/60 focus-within:border-zinc-700 transition-all shadow-xs cursor-text">
               <SearchIcon className="mr-2 h-3.5 w-3.5 shrink-0 text-zinc-400" />
               <CommandPrimitive.Input
                 ref={inputRef}
-                placeholder="Search..."
+                placeholder="Search or go to…"
                 value={query}
                 onValueChange={val => {
                   setQuery(val);
@@ -568,6 +650,8 @@ export default function SidebarSearch() {
           align="center"
           sideOffset={8}
           onOpenAutoFocus={(e: Event) => e.preventDefault()} // Don't steal focus from input
+          // Focus is handed back by the Escape/select handlers, not to the input it opened from.
+          onCloseAutoFocus={(e: Event) => e.preventDefault()}
           onInteractOutside={e => {
             if (containerRef.current && containerRef.current.contains(e.target as Node)) {
               e.preventDefault();
@@ -585,10 +669,21 @@ export default function SidebarSearch() {
               </div>
             )}
 
-            {!isLoading && query.trim().length >= 2 && !hasAnyResults && !showThemeActions && (
+            {!isLoading && normalizedQuery.length > 0 && !hasAnyResults && !showThemeActions && (
               <CommandEmpty>
-                <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
-                  <p className="text-sm">No results found for &quot;{query}&quot;</p>
+                <div
+                  role="status"
+                  className="flex flex-col items-center justify-center gap-1 px-4 py-8 text-center"
+                >
+                  <SearchIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                  <p className="text-sm font-medium text-foreground">
+                    No results for “{query.trim()}”
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {normalizedQuery.length < 2
+                      ? 'Type at least 2 characters to search incidents, services and people.'
+                      : 'Try a different name, ID or page.'}
+                  </p>
                 </div>
               </CommandEmpty>
             )}
@@ -632,6 +727,11 @@ export default function SidebarSearch() {
                     </CommandItem>
                   ))}
                 </CommandGroup>
+                {navigationPages.length > 0 && (
+                  <CommandGroup heading="Go to">
+                    {navigationPages.map(renderNavigationItem)}
+                  </CommandGroup>
+                )}
               </>
             )}
 
@@ -671,28 +771,8 @@ export default function SidebarSearch() {
             {query.length > 0 && (
               <>
                 {matchingNavigation.length > 0 && (
-                  <CommandGroup heading="Navigation">
-                    {matchingNavigation.map(page => {
-                      const Icon = page.icon;
-                      return (
-                        <CommandItem
-                          key={page.id}
-                          value={`nav-${page.title}`}
-                          onSelect={() => handleSelect(page.title, { href: page.href })}
-                          className="aria-selected:bg-accent aria-selected:text-accent-foreground cursor-pointer"
-                        >
-                          <div className="flex items-center justify-center h-7 w-7 rounded-sm bg-muted/70 mr-3 shrink-0">
-                            <Icon className="h-3.5 w-3.5 opacity-70" />
-                          </div>
-                          <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
-                            <span className="font-medium text-sm">{page.title}</span>
-                            <span className="text-[10px] text-muted-foreground truncate">
-                              {page.subtitle}
-                            </span>
-                          </div>
-                        </CommandItem>
-                      );
-                    })}
+                  <CommandGroup heading="Go to">
+                    {matchingNavigation.map(renderNavigationItem)}
                   </CommandGroup>
                 )}
 

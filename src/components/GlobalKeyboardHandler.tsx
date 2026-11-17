@@ -4,6 +4,21 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { GLOBAL_NAVIGATION_SHORTCUTS } from '@/lib/keyboard-shortcuts';
+import { matchesRouteSegment } from '@/lib/navigation/active-nav';
+
+/** Text entry: keys belong to the field, not to shortcuts. */
+function isTypingTarget(target: HTMLElement | null): boolean {
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return true;
+  const role = target.getAttribute('role');
+  return role === 'textbox' || role === 'combobox' || role === 'searchbox';
+}
+
+/** The open dialog the key event comes from, if any; dialogs own the keyboard. */
+function closestDialog(target: HTMLElement | null): Element | null {
+  return target?.closest?.('[role="dialog"], [role="alertdialog"]') ?? null;
+}
 
 type KeyboardHandlerProps = {
   onShortcutsToggle: () => void;
@@ -40,11 +55,20 @@ export default function GlobalKeyboardHandler({ onShortcutsToggle }: KeyboardHan
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input/textarea
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (isTypingTarget(target)) return;
+      const dialog = closestDialog(target);
+
+      // ? toggles the shortcuts sheet from anywhere, including mid G-sequence and from inside
+      // the sheet itself, but not over another dialog.
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (dialog && !dialog.hasAttribute('data-shortcuts-sheet')) return;
+        e.preventDefault();
+        if (gPressedRef.current) setGPressed(false);
+        onShortcutsToggleRef.current();
         return;
       }
+      if (dialog) return;
 
       // G key for navigation (G+D, G+I, etc.)
       if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -69,12 +93,6 @@ export default function GlobalKeyboardHandler({ onShortcutsToggle }: KeyboardHan
         setGPressed(false);
       }
 
-      // ? key for shortcuts
-      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        onShortcutsToggleRef.current();
-      }
-
       // C or Cmd+C / Ctrl+C for Quick Create Menu
       if (e.key.toLowerCase() === 'c' && !e.altKey) {
         if (e.metaKey || e.ctrlKey) {
@@ -97,7 +115,7 @@ export default function GlobalKeyboardHandler({ onShortcutsToggle }: KeyboardHan
         !e.ctrlKey &&
         !e.metaKey &&
         !e.altKey &&
-        pathnameRef.current?.startsWith('/incidents')
+        matchesRouteSegment(pathnameRef.current ?? '', '/incidents')
       ) {
         e.preventDefault();
         openCreateIncidentRef.current();

@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
+import { Fragment, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { usePathname } from 'next/navigation';
-import { Fragment } from 'react';
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -18,152 +17,161 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
+import ListReturnLink from '@/components/layout/ListReturnLink';
+import { buildBreadcrumbs, currentEntityHref, type Crumb } from '@/lib/navigation/breadcrumbs';
+import {
+  getBreadcrumbLabels,
+  setBreadcrumbLabel,
+  subscribeBreadcrumbLabels,
+} from '@/lib/navigation/breadcrumb-labels';
 import { cn } from '@/lib/utils';
 
-export default function TopbarBreadcrumbs() {
-  const pathname = usePathname();
+const NO_LABELS: ReadonlyMap<string, string> = new Map();
+const getServerLabels = () => NO_LABELS;
 
-  // Don't show breadcrumbs on home page
-  if (pathname === '/') {
-    return null;
+/** Publish the current entity page's heading as its breadcrumb name. */
+function usePageHeadingLabel(pathname: string) {
+  useEffect(() => {
+    const entityHref = currentEntityHref(pathname);
+    const main = document.getElementById('main-content');
+    if (!entityHref || !main) return;
+
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const heading = main.querySelector('h1');
+      const text = heading?.textContent?.trim();
+      if (text) setBreadcrumbLabel(entityHref, text);
+    };
+    read();
+    const observer = new MutationObserver(() => {
+      if (!frame) frame = window.requestAnimationFrame(read);
+    });
+    observer.observe(main, { childList: true, subtree: true, characterData: true });
+    return () => {
+      observer.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [pathname]);
+}
+
+const linkClass =
+  'block truncate rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+function CrumbContent({ crumb }: { crumb: Crumb }) {
+  const title =
+    crumb.isEntity && crumb.label !== crumb.segment
+      ? `${crumb.label} (${crumb.segment})`
+      : crumb.label;
+
+  if (crumb.isCurrent) {
+    return (
+      <BreadcrumbPage
+        className={cn(
+          'block max-w-[14rem] truncate font-medium text-foreground xl:max-w-[18rem]',
+          crumb.isEntity && 'tabular-nums'
+        )}
+        title={title}
+      >
+        {crumb.label}
+      </BreadcrumbPage>
+    );
   }
 
-  const segments = pathname.split('/').filter(Boolean);
-
-  const breadcrumbs = segments.map((segment, index) => {
-    const href = '/' + segments.slice(0, index + 1).join('/');
-    const isId =
-      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
-        segment
-      ) ||
-      (segment.length >= 20 && /^[a-zA-Z0-9_-]+$/.test(segment)) ||
-      /^c[a-z0-9]{16,}$/i.test(segment);
-
-    const label = isId
-      ? segment
-      : segment
-          .split('-')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-
-    return {
-      href,
-      label,
-      isId,
-      isLast: index === segments.length - 1,
-    };
-  });
+  if (!crumb.isLink) {
+    return (
+      <span className="block max-w-[9rem] truncate text-muted-foreground" title={title}>
+        {crumb.label}
+      </span>
+    );
+  }
 
   return (
-    <Breadcrumb className="hidden md:flex">
-      <BreadcrumbList className="flex-nowrap whitespace-nowrap text-xs text-zinc-400">
-        <BreadcrumbItem>
-          <BreadcrumbLink
-            asChild
-            className="text-zinc-400 hover:text-zinc-100 transition-colors text-xs font-medium"
-          >
-            <Link href="/">Home</Link>
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-        {breadcrumbs.length > 2 ? (
+    <BreadcrumbLink asChild className={cn(linkClass, 'max-w-[9rem] xl:max-w-[12rem]')}>
+      <ListReturnLink href={crumb.href} title={title}>
+        {crumb.label}
+      </ListReturnLink>
+    </BreadcrumbLink>
+  );
+}
+
+export default function TopbarBreadcrumbs() {
+  const pathname = usePathname() || '/';
+  const labels = useSyncExternalStore(
+    subscribeBreadcrumbLabels,
+    getBreadcrumbLabels,
+    getServerLabels
+  );
+  usePageHeadingLabel(pathname);
+
+  const crumbs = useMemo(() => buildBreadcrumbs(pathname, labels), [pathname, labels]);
+  if (crumbs.length === 0) return null;
+
+  // Long trails keep the section and the last two crumbs; the middle folds into a menu.
+  const collapsed = crumbs.length > 3;
+  const head = collapsed ? crumbs.slice(0, 1) : crumbs;
+  const middle = collapsed ? crumbs.slice(1, -2) : [];
+  const tail = collapsed ? crumbs.slice(-2) : [];
+
+  return (
+    <Breadcrumb aria-label="Breadcrumb" className="min-w-0">
+      <BreadcrumbList className="flex-nowrap gap-1.5 whitespace-nowrap text-xs sm:gap-1.5">
+        {head.map((crumb, index) => (
+          <Fragment key={crumb.href}>
+            {index > 0 && (
+              <BreadcrumbSeparator className="text-muted-foreground/60 [&>svg]:size-3" />
+            )}
+            <BreadcrumbItem
+              className={cn('min-w-0', !crumb.isCurrent && 'min-w-[3.5rem] shrink-[4]')}
+            >
+              <CrumbContent crumb={crumb} />
+            </BreadcrumbItem>
+          </Fragment>
+        ))}
+        {collapsed && (
           <>
-            <Fragment>
-              <BreadcrumbSeparator className="text-zinc-600 [&>svg]:size-3" />
-              <BreadcrumbItem>
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="flex items-center gap-1 text-zinc-400 hover:text-zinc-100 transition-colors">
-                    <BreadcrumbEllipsis className="h-4 w-4 text-zinc-400 hover:text-zinc-100" />
-                    <span className="sr-only">Toggle menu</span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="bg-[#18181b] border-zinc-800 text-zinc-200 shadow-xl [&_a]:!text-zinc-200 [&_a:hover]:!text-white [&_a]:no-underline min-w-[120px]"
-                  >
-                    {breadcrumbs.slice(0, -2).map(breadcrumb => (
-                      <DropdownMenuItem
-                        key={breadcrumb.href}
-                        asChild
-                        className="focus:bg-zinc-800 focus:text-zinc-100 text-xs text-zinc-200 !text-zinc-200 cursor-pointer"
-                      >
-                        <Link
-                          href={breadcrumb.href}
-                          title={breadcrumb.label}
-                          className="text-zinc-200 hover:text-white !text-zinc-200 hover:!text-white block w-full transition-colors no-underline"
-                        >
-                          {breadcrumb.label}
-                        </Link>
+            <BreadcrumbSeparator className="text-muted-foreground/60 [&>svg]:size-3" />
+            <BreadcrumbItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className="flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Show ${middle.length} more ${middle.length === 1 ? 'level' : 'levels'}`}
+                >
+                  <BreadcrumbEllipsis className="h-4 w-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[10rem] max-w-[20rem]">
+                  {middle.map(crumb =>
+                    crumb.isLink ? (
+                      <DropdownMenuItem key={crumb.href} asChild className="text-xs">
+                        <ListReturnLink href={crumb.href} title={crumb.label}>
+                          <span className="truncate">{crumb.label}</span>
+                        </ListReturnLink>
                       </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </BreadcrumbItem>
-            </Fragment>
-            {breadcrumbs.slice(-2).map(breadcrumb => (
-              <Fragment key={breadcrumb.href}>
-                <BreadcrumbSeparator className="text-zinc-600 [&>svg]:size-3" />
-                <BreadcrumbItem>
-                  {breadcrumb.isLast ? (
-                    <BreadcrumbPage
-                      className={cn(
-                        'text-zinc-100 font-medium text-xs truncate max-w-[240px]',
-                        breadcrumb.isId &&
-                          'font-mono text-[11px] font-normal px-1.5 py-0.5 rounded bg-zinc-800/90 border border-zinc-700/70 text-zinc-200 tracking-tight'
-                      )}
-                      title={breadcrumb.label}
-                    >
-                      {breadcrumb.label}
-                    </BreadcrumbPage>
-                  ) : (
-                    <BreadcrumbLink
-                      asChild
-                      className={cn(
-                        'text-zinc-400 hover:text-zinc-100 transition-colors text-xs font-medium',
-                        breadcrumb.isId &&
-                          'font-mono text-[11px] px-1.5 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/60 text-zinc-300 hover:text-zinc-100'
-                      )}
-                    >
-                      <Link href={breadcrumb.href} title={breadcrumb.label}>
-                        {breadcrumb.label}
-                      </Link>
-                    </BreadcrumbLink>
+                    ) : (
+                      <DropdownMenuItem
+                        key={crumb.href}
+                        disabled
+                        className="text-xs"
+                        title={crumb.label}
+                      >
+                        <span className="truncate">{crumb.label}</span>
+                      </DropdownMenuItem>
+                    )
                   )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </BreadcrumbItem>
+            {tail.map(crumb => (
+              <Fragment key={crumb.href}>
+                <BreadcrumbSeparator className="text-muted-foreground/60 [&>svg]:size-3" />
+                <BreadcrumbItem
+                  className={cn('min-w-0', !crumb.isCurrent && 'min-w-[3.5rem] shrink-[4]')}
+                >
+                  <CrumbContent crumb={crumb} />
                 </BreadcrumbItem>
               </Fragment>
             ))}
           </>
-        ) : (
-          breadcrumbs.map(breadcrumb => (
-            <Fragment key={breadcrumb.href}>
-              <BreadcrumbSeparator className="text-zinc-600 [&>svg]:size-3" />
-              <BreadcrumbItem>
-                {breadcrumb.isLast ? (
-                  <BreadcrumbPage
-                    className={cn(
-                      'text-zinc-100 font-medium text-xs truncate max-w-[240px]',
-                      breadcrumb.isId &&
-                        'font-mono text-[11px] font-normal px-1.5 py-0.5 rounded bg-zinc-800/90 border border-zinc-700/70 text-zinc-200 tracking-tight'
-                    )}
-                    title={breadcrumb.label}
-                  >
-                    {breadcrumb.label}
-                  </BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink
-                    asChild
-                    className={cn(
-                      'text-zinc-400 hover:text-zinc-100 transition-colors text-xs font-medium',
-                      breadcrumb.isId &&
-                        'font-mono text-[11px] px-1.5 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/60 text-zinc-300 hover:text-zinc-100'
-                    )}
-                  >
-                    <Link href={breadcrumb.href} title={breadcrumb.label}>
-                      {breadcrumb.label}
-                    </Link>
-                  </BreadcrumbLink>
-                )}
-              </BreadcrumbItem>
-            </Fragment>
-          ))
         )}
       </BreadcrumbList>
     </Breadcrumb>

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import prisma from '@/lib/prisma';
 import OperationalStatus from '@/components/OperationalStatus';
 import { redirect } from 'next/navigation';
@@ -29,6 +30,8 @@ import { RouteAwareRealtimeProvider } from '@/hooks/useRealtime';
 import { IncidentAlertProvider } from '@/contexts/IncidentAlertContext';
 import GlobalIncidentBanner from '@/components/layout/GlobalIncidentBanner';
 import ContentScrollReset from '@/components/layout/ContentScrollReset';
+import ConnectionIndicator from '@/components/layout/ConnectionIndicator';
+import ListReturnTracker from '@/components/layout/ListReturnTracker';
 import { getAppShellContext, type AppShellContext } from '@/lib/app-shell-context';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import AuthenticatedClientProviders from '@/components/auth/AuthenticatedClientProviders';
@@ -125,31 +128,38 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   <RouteAwareRealtimeProvider>
                     <IncidentAlertProvider>
                       <GlobalKeyboardHandlerWrapper />
+                      <Suspense fallback={null}>
+                        <ListReturnTracker />
+                      </Suspense>
                       <SkipLinks />
                       <div className="app-shell flex min-h-screen flex-col">
                         <AppHeader>
-                          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
-                            <BrandLockup variant="header" />
-                            <div className="mx-0.5 h-4 w-px bg-slate-800 sm:mx-1" />
-                            <SidebarTrigger />
-                            <div className="hidden sm:block">
-                              <OperationalStatus
-                                tone={activeShell.systemStatus}
-                                label={activeShell.statusLabel}
-                                detail={activeShell.statusDetail}
-                                criticalCount={activeShell.incidentCounts.high}
-                                mediumCount={activeShell.incidentCounts.medium}
-                                lowCount={activeShell.incidentCounts.low}
-                              />
+                          {/* Only the breadcrumbs give way when the bar is tight. */}
+                          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3 lg:shrink">
+                            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                              <BrandLockup variant="header" />
+                              <div className="mx-0.5 h-4 w-px bg-slate-800 sm:mx-1" />
+                              <SidebarTrigger />
+                              <div className="hidden sm:block">
+                                <OperationalStatus
+                                  tone={activeShell.systemStatus}
+                                  label={activeShell.statusLabel}
+                                  detail={activeShell.statusDetail}
+                                  criticalCount={activeShell.incidentCounts.high}
+                                  mediumCount={activeShell.incidentCounts.medium}
+                                  lowCount={activeShell.incidentCounts.low}
+                                />
+                              </div>
                             </div>
-                            <div className="hidden xl:block">
+                            <div className="-m-1 hidden min-w-0 overflow-hidden p-1 lg:block">
                               <TopbarBreadcrumbs />
                             </div>
                           </div>
-                          <div className="mx-auto hidden max-w-md flex-1 items-center justify-center px-2 md:flex">
-                            <SidebarSearch />
+                          <div className="mx-auto hidden min-w-[10rem] max-w-md flex-1 items-center justify-center px-2 md:flex">
+                            <SidebarSearch role={userRole} />
                           </div>
                           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+                            <ConnectionIndicator />
                             <TopbarNotifications />
                             <QuickActions canCreate={canCreate} />
                             <TopbarUserMenu
@@ -179,7 +189,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                             <ContentScrollReset />
                             <ElevatedAccessBanner />
                             <GlobalIncidentBanner />
-                            <main id="main-content" className="page-shell">
+                            <main
+                              id="main-content"
+                              tabIndex={-1}
+                              className="page-shell focus:outline-none"
+                            >
                               {children}
                             </main>
                           </div>

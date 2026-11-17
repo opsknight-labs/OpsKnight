@@ -16,16 +16,16 @@ vi.mock('@/contexts/IncidentCreationModalContext', () => ({
 
 describe('SidebarSearch component', () => {
   it('renders search input with resilient styling classes', () => {
-    render(<SidebarSearch />);
-    const input = screen.getByPlaceholderText('Search...');
+    render(<SidebarSearch role="ADMIN" />);
+    const input = screen.getByRole('combobox', { name: 'Search or go to a page' });
     expect(input).toBeDefined();
     expect(input.className).toContain('search-input');
     expect(input.className).toContain('topbar-search-input');
   });
 
   it('displays matching navigation pages when searching', async () => {
-    render(<SidebarSearch />);
-    const input = screen.getByPlaceholderText('Search...');
+    render(<SidebarSearch role="ADMIN" />);
+    const input = screen.getByRole('combobox', { name: 'Search or go to a page' });
     fireEvent.change(input, { target: { value: 'users' } });
 
     await waitFor(() => {
@@ -35,8 +35,8 @@ describe('SidebarSearch component', () => {
   });
 
   it('displays matching navigation for incidents', async () => {
-    render(<SidebarSearch />);
-    const input = screen.getByPlaceholderText('Search...');
+    render(<SidebarSearch role="ADMIN" />);
+    const input = screen.getByRole('combobox', { name: 'Search or go to a page' });
     fireEvent.change(input, { target: { value: 'incidents' } });
 
     await waitFor(() => {
@@ -68,8 +68,8 @@ describe('SidebarSearch component', () => {
       }),
     } as unknown as Response);
 
-    render(<SidebarSearch />);
-    const input = screen.getByPlaceholderText('Search...');
+    render(<SidebarSearch role="ADMIN" />);
+    const input = screen.getByRole('combobox', { name: 'Search or go to a page' });
     fireEvent.change(input, { target: { value: 'database outage' } });
 
     await waitFor(() => {
@@ -81,13 +81,15 @@ describe('SidebarSearch component', () => {
   });
 
   it('opens and displays quick actions on the first click or focus without requiring a second click', async () => {
-    render(<SidebarSearch />);
-    const input = screen.getByPlaceholderText('Search...');
+    render(<SidebarSearch role="ADMIN" />);
+    const input = screen.getByRole('combobox', { name: 'Search or go to a page' });
     fireEvent.focus(input);
 
     await waitFor(() => {
       expect(screen.getByText('Quick Actions')).toBeDefined();
-      expect(screen.getByText('View all incidents')).toBeDefined();
+      expect(screen.getByText('Create new incident')).toBeDefined();
+      expect(screen.getByText('Go to')).toBeDefined();
+      expect(screen.getByText('Escalation Policies')).toBeDefined();
     });
   });
 
@@ -111,8 +113,8 @@ describe('SidebarSearch component', () => {
       }),
     } as unknown as Response);
 
-    render(<SidebarSearch />);
-    const input = screen.getByPlaceholderText('Search...');
+    render(<SidebarSearch role="ADMIN" />);
+    const input = screen.getByRole('combobox', { name: 'Search or go to a page' });
 
     // Type first query
     fireEvent.change(input, { target: { value: 'auth' } });
@@ -139,6 +141,42 @@ describe('SidebarSearch component', () => {
     resolveSecondQuery({
       ok: true,
       json: async () => ({ results: [] }),
+    });
+
+    global.fetch = originalFetch;
+  });
+
+  it('offers Go to commands only for pages the person can open', async () => {
+    render(<SidebarSearch role="USER" />);
+    const input = screen.getByRole('combobox', { name: 'Search or go to a page' });
+    fireEvent.focus(input);
+
+    await waitFor(() => {
+      expect(screen.getByText('Incidents')).toBeDefined();
+    });
+    expect(screen.queryByText('Escalation Policies')).toBeNull();
+    expect(screen.queryByText('Users')).toBeNull();
+  });
+
+  it('shows a visible no-results state for short and long queries', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [] }),
+    } as unknown as Response);
+
+    render(<SidebarSearch role="ADMIN" />);
+    const input = screen.getByRole('combobox', { name: 'Search or go to a page' });
+
+    fireEvent.change(input, { target: { value: '~' } });
+    await waitFor(() => {
+      expect(screen.getByText('No results for “~”')).toBeDefined();
+      expect(screen.getByText(/at least 2 characters/)).toBeDefined();
+    });
+
+    fireEvent.change(input, { target: { value: 'zzqqzz' } });
+    await waitFor(() => {
+      expect(screen.getByText('No results for “zzqqzz”')).toBeDefined();
     });
 
     global.fetch = originalFetch;

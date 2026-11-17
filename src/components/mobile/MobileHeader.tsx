@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import MobileHeaderAction from '@/components/mobile/MobileHeaderAction';
 import MobileQuickSwitcher from '@/components/mobile/MobileQuickSwitcher';
+import ConnectionIndicator from '@/components/layout/ConnectionIndicator';
 
 function getListTitle(pathname: string): string {
   switch (pathname) {
@@ -106,6 +107,7 @@ export default function MobileHeader({
       </div>
 
       <div className="mobile-header-actions">
+        <ConnectionIndicator variant="mobile" />
         {pathname === '/m/incidents' && canCreateIncident && (
           <MobileHeaderAction
             href="/m/incidents/create"

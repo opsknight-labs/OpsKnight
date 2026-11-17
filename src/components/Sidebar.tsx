@@ -38,6 +38,11 @@ import {
 } from '@/config/navigation';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useAccess } from '@/components/access/AccessProvider';
+import { getActiveNavHref, matchesRouteSegment } from '@/lib/navigation/active-nav';
+
+const STATUS_ROUTE = '/status';
+const SETTINGS_ROUTE = '/settings';
+const HELP_ROUTE = '/help';
 
 // Status page shape from sidebar-stats API
 export interface SidebarStatusPage {
@@ -106,7 +111,8 @@ export default function Sidebar({
   // Manual toggle state; accordion is also open when user is on any /status route
   const [statusPagesManuallyExpanded, setStatusPagesExpanded] = useState(false);
   // Derive expanded state — no useEffect needed, avoids cascading renders
-  const statusPagesExpanded = statusPagesManuallyExpanded || pathname.startsWith('/status');
+  const statusPagesExpanded =
+    statusPagesManuallyExpanded || matchesRouteSegment(pathname, STATUS_ROUTE);
 
   const isDesktopCollapsed = !isMobile && isCollapsed;
   const sidebarId = 'app-sidebar';
@@ -120,17 +126,25 @@ export default function Sidebar({
     }
   }, [pathname, closeMobile]);
 
-  const isActive = (path: string) => {
-    if (path === '/' && pathname === '/') return true;
-    if (path !== '/' && pathname.startsWith(path)) return true;
-    return false;
-  };
-
   // Centralized filtered and grouped items
-  const groupedItems = useMemo(() => {
-    const authorized = getAuthorizedNavItems(access?.capabilities ?? currentRole);
-    return groupNavItemsBySection(authorized);
-  }, [access?.capabilities, currentRole]);
+  const authorizedItems = useMemo(
+    () => getAuthorizedNavItems(access?.capabilities ?? currentRole),
+    [access?.capabilities, currentRole]
+  );
+  const groupedItems = useMemo(() => groupNavItemsBySection(authorizedItems), [authorizedItems]);
+
+  // One highlighted item: the closest segment match among everything the sidebar links to.
+  const activeHref = useMemo(
+    () =>
+      getActiveNavHref(pathname, [
+        ...authorizedItems.map(item => item.href),
+        STATUS_ROUTE,
+        SETTINGS_ROUTE,
+        HELP_ROUTE,
+      ]),
+    [pathname, authorizedItems]
+  );
+  const isActive = (path: string) => activeHref === path;
 
   // Determine the URL for a status page
   const statusPageHref = (page: SidebarStatusPage) => {
@@ -256,7 +270,7 @@ export default function Sidebar({
 
   // ─── Status Pages nav item (dynamic, conditional) ───────────────────────────
   const renderStatusPagesItem = () => {
-    const isOnStatusPage = pathname.startsWith('/status');
+    const isOnStatusPage = isActive(STATUS_ROUTE);
     const hasPages = statusPages.length > 0;
     const showManageLink = isStatusPageAdmin;
 
@@ -708,8 +722,12 @@ export default function Sidebar({
           {!isDesktopCollapsed && (
             <div className="grid grid-cols-4 gap-1 mt-2.5 pt-2 border-t border-white/5">
               <Link
-                href="/help"
-                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors"
+                href={HELP_ROUTE}
+                aria-current={isActive(HELP_ROUTE) ? 'page' : undefined}
+                className={cn(
+                  'flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors',
+                  isActive(HELP_ROUTE) && 'bg-white/10 text-white'
+                )}
                 title="Help & Support"
                 aria-label="Help & Support"
               >
@@ -725,8 +743,12 @@ export default function Sidebar({
                 <Keyboard className="h-3.5 w-3.5" />
               </button>
               <Link
-                href="/settings"
-                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors"
+                href={SETTINGS_ROUTE}
+                aria-current={isActive(SETTINGS_ROUTE) ? 'page' : undefined}
+                className={cn(
+                  'flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors',
+                  isActive(SETTINGS_ROUTE) && 'bg-white/10 text-white'
+                )}
                 title="Settings"
                 aria-label="Settings"
               >
@@ -749,8 +771,12 @@ export default function Sidebar({
               <Tooltip delayDuration={150}>
                 <TooltipTrigger asChild>
                   <Link
-                    href="/settings"
-                    className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors"
+                    href={SETTINGS_ROUTE}
+                    aria-current={isActive(SETTINGS_ROUTE) ? 'page' : undefined}
+                    className={cn(
+                      'flex items-center justify-center h-8 w-8 rounded-md hover:bg-white/10 text-ink-400 hover:text-white transition-colors',
+                      isActive(SETTINGS_ROUTE) && 'bg-white/10 text-white'
+                    )}
                     aria-label="Settings"
                   >
                     <Settings className="h-4 w-4" />
