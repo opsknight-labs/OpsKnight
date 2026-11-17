@@ -332,6 +332,7 @@ test.describe.serial('intelligence responder workflows', () => {
     // and the settings hub lists it. (The settings shell renders the hub and breadcrumb, not a tab bar.)
     await expect(
       page
+        .locator('#main-content')
         .getByRole('navigation', { name: 'Breadcrumb' })
         .getByRole('link', { name: 'Intelligence', exact: true })
     ).toHaveAttribute('href', '/settings/intelligence');
@@ -355,7 +356,8 @@ test.describe.serial('intelligence responder workflows', () => {
     for (const [from, to] of moved) {
       await page.goto(from);
       await expect(page).toHaveURL(url => `${url.pathname}${url.search}${url.hash}` === to);
-      await expect(page.locator(`#${to.split('#')[1]}`)).toBeVisible();
+      // The redirect can leave a hidden copy of the page in the DOM; the visible one is the answer.
+      await expect(page.locator(`#${to.split('#')[1]}`).filter({ visible: true })).toBeVisible();
     }
     // Alert quality has a single home in settings.
     await page.goto('/settings/intelligence/services#alert-quality');
@@ -406,9 +408,12 @@ test.describe.serial('intelligence responder workflows', () => {
         .toBe(percent);
       await page.reload();
       await expect(allocation).toHaveValue(String(percent));
+      // Usage lives on Evaluation & spend since the settings regroup (Workstream I3).
+      await page.goto('/settings/intelligence/evaluation#usage');
       await expect(page.locator('#main-content').getByText(/Background embedding:/)).toContainText(
         `${percent}% of the total allowance`
       );
+      await page.goto('/settings/intelligence/ai');
     }
     expect(
       (await prisma.aiSettings.findUniqueOrThrow({ where: { id: 'default' } })).dailyTokenBudget
@@ -882,10 +887,11 @@ test.describe.serial('intelligence responder workflows', () => {
     await mobileStrip.getByRole('link', { name: '1 similar', exact: true }).click();
     const mobileSheet = page.getByRole('dialog', { name: 'Insights' });
     await expect(mobileSheet).toHaveAttribute('data-layout', 'bottom-sheet');
-    await expect(mobileSheet.getByRole('link', { name: /last month/ })).toHaveAttribute(
-      'href',
-      `/m/incidents/${precedentId}`
-    );
+    await expect(
+      mobileSheet
+        .getByRole('region', { name: 'Similar past incidents' })
+        .getByRole('link', { name: /last month/ })
+    ).toHaveAttribute('href', `/m/incidents/${precedentId}`);
     await noHorizontalOverflow(page);
     await page.keyboard.press('Escape');
     await page.goto(`/incidents/${incidentId}`);

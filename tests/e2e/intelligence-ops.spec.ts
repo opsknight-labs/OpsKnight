@@ -49,6 +49,7 @@ async function cleanup() {
   await prisma.aiSettings.deleteMany({});
   await deleteGlobalPolicies();
   await prisma.opsInsight.deleteMany({ where: { key: { startsWith: prefix } } });
+  await prisma.opsInsightScopeState.deleteMany({ where: { inputHash: { startsWith: prefix } } });
   const services = { name: { startsWith: prefix } };
   await prisma.incident.deleteMany({ where: { service: services } });
   await prisma.changeEvent.deleteMany({ where: { service: services } });
@@ -262,7 +263,15 @@ async function seed() {
   });
   ids.schedule = schedule.id;
 
-  // Stored insights, as the lane would write them. Fixture kinds, so no producer resolves them meanwhile.
+  // Stored insights, as the lane would write them. The scopes are marked freshly computed so the running
+  // lane does not revisit them during the spec and resolve the fixture kind as one it no longer produces.
+  await prisma.opsInsightScopeState.createMany({
+    data: [
+      { scopeType: 'POLICY', scopeId: escalation.id },
+      { scopeType: 'SCHEDULE', scopeId: schedule.id },
+      { scopeType: 'RUNBOOK', scopeId: runbook.id },
+    ].map(scope => ({ ...scope, inputHash: tag, computedAt: new Date() })),
+  });
   const insight = (
     scopeType: 'POLICY' | 'SCHEDULE' | 'RUNBOOK',
     scopeId: string,
