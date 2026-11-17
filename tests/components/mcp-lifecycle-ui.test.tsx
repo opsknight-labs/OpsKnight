@@ -8,7 +8,10 @@ import McpUsageChart, { usageBucketLabel } from '@/components/settings/mcp/McpUs
 import McpAssistantsSection from '@/components/settings/mcp/sections/McpAssistantsSection';
 import type { McpClientRow, McpGrantRow } from '@/app/(app)/settings/integrations/mcp/queries';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/settings/integrations/mcp/assistants/client-1',
+}));
 vi.mock('@/lib/toast', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
 afterEach(() => {
   cleanup();
@@ -123,7 +126,8 @@ describe('Assistant detail', () => {
     expect(screen.getByText('Trusted')).toBeTruthy();
     expect(screen.getByText(/HTTPS client metadata document/)).toBeTruthy();
     expect(screen.getByText('https://claude.ai/api/mcp/auth_callback')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /All assistants/ }).getAttribute('href')).toBe(
+    // The breadcrumb trail replaces the old "All assistants" back link.
+    expect(screen.getByRole('link', { name: 'Assistants' }).getAttribute('href')).toBe(
       '/settings/integrations/mcp?tab=assistants'
     );
   });

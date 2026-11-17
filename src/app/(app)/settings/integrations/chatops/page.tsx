@@ -1,9 +1,9 @@
 import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Badge } from '@/components/ui/shadcn/badge';
-import { Shield, MessageSquare, Video, Archive, Users, Hash } from 'lucide-react';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { IntegrationStatusBadge } from '@/components/settings/integrations/IntegrationStatus';
+import { MessageSquare, Video, Archive, Hash } from 'lucide-react';
 import ChatOpsSettingsPage from '@/components/settings/ChatOpsSettingsPage';
 import { getGlobalWarRoomPolicy } from '@/lib/incident-collaboration/policy';
 import { requirePageAccess } from '@/lib/access/server';
@@ -60,33 +60,20 @@ export default async function GlobalChatOpsIntegrationPage() {
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="INCIDENT COLLABORATION"
+      <SettingsPageHeader
+        icon={MessageSquare}
         title="War Rooms & ChatOps"
-        subtitle="Centralize how OpsKnight creates and manages incident collaboration rooms across connected providers."
+        description="Centralize how OpsKnight creates and manages incident collaboration rooms across connected providers."
         badges={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
-            >
-              <Shield className="h-3 w-3 mr-1" />
-              Admin Only
-            </Badge>
-            <Badge
-              variant="outline"
-              className={`text-[10px] font-semibold ${
-                connectedProvidersCount > 0
-                  ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-100'
-                  : 'border-amber-400/60 bg-amber-400/15 text-amber-100'
-              }`}
-            >
-              <Users className="h-3 w-3 mr-1" />
-              {connectedProvidersCount === 0
-                ? 'No Providers Connected'
-                : `${connectedProvidersCount} Provider${connectedProvidersCount > 1 ? 's' : ''} Connected`}
-            </Badge>
-          </div>
+          <IntegrationStatusBadge
+            onDark
+            state={connectedProvidersCount > 0 ? 'connected' : 'not_connected'}
+            label={
+              connectedProvidersCount === 0
+                ? 'No chat provider connected'
+                : `${connectedProvidersCount} ${connectedProvidersCount === 1 ? 'provider' : 'providers'} connected`
+            }
+          />
         }
         statsPlacement="bottom"
         stats={[

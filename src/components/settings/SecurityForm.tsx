@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Lock } from 'lucide-react';
 import { isPasswordStrong } from '@/lib/password-strength';
+import { notify } from '@/lib/toast';
 
 type Props = {
   hasPassword: boolean;
@@ -57,6 +58,10 @@ export default function SecurityForm({ hasPassword }: Props) {
   // Sign out and redirect after successful password update
   useEffect(() => {
     if (state?.success) {
+      notify.success('Password updated', {
+        id: 'settings:security:password',
+        description: 'Signing you out so you can sign in with the new password.',
+      });
       const timer = setTimeout(async () => {
         await signOut({ callbackUrl: '/login' });
       }, 1800);
@@ -192,16 +197,6 @@ export default function SecurityForm({ hasPassword }: Props) {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      )}
-
-      {state?.success && (
-        <Alert className="bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <AlertDescription>
-            Password updated successfully. You will be automatically redirected to sign in with your
-            new credentials...
-          </AlertDescription>
         </Alert>
       )}
 

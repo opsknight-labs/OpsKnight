@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { ErrorState } from '@/components/patterns';
 import { logger } from '@/lib/logger';
+import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 
 export default function AuditLogError({
   error,
@@ -20,25 +21,13 @@ export default function AuditLogError({
   }, [error]);
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] justify-center px-4 py-12 md:px-6">
-      <section className="w-full max-w-lg rounded-xl border border-rose-200 bg-rose-50/60 p-6 text-center dark:border-rose-500/30 dark:bg-rose-500/10">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-500/15">
-          <AlertCircle className="h-6 w-6 text-rose-600 dark:text-rose-400" aria-hidden="true" />
-        </div>
-        <h1 className="mt-4 text-lg font-semibold text-ink-900">Audit log couldn&apos;t load</h1>
-        <p className="mt-1 text-sm text-ink-600">
-          Please try again. If this continues, an administrator can use the error details in System
-          Logs to investigate.
-        </p>
-        <button
-          type="button"
-          onClick={reset}
-          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-        >
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Try again
-        </button>
-      </section>
-    </main>
+    <ErrorState
+      title="Audit log couldn't load"
+      message={getUserFacingErrorMessage(error)}
+      errorCode={error.digest}
+      onRetry={reset}
+      backHref="/settings"
+      backLabel="Go to settings"
+    />
   );
 }

@@ -1,38 +1,45 @@
 import { getLogBuffer } from '@/lib/logger';
-import Link from 'next/link';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { Terminal, XCircle, AlertTriangle, Info, Bug } from 'lucide-react';
+import { PageHeader } from '@/components/patterns';
 import { requirePageAccess } from '@/lib/access/server';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import SystemLogsView, { type SystemLogRow } from './SystemLogsView';
 
 export const dynamic = 'force-dynamic';
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+const PAGE_SIZE = 50;
+
+function stringifyContext(context: unknown): string | null {
+  if (!context || typeof context !== 'object' || Object.keys(context).length === 0) return null;
+  try {
+    return JSON.stringify(context, null, 2);
+  } catch {
+    return '[Context could not be serialized]';
+  }
+}
 
 export default async function SystemLogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ level?: string; search?: string; component?: string }>;
+  searchParams: Promise<{ level?: string; search?: string; component?: string; page?: string }>;
 }) {
   // Admin-only; checked against the database role (not the session token) by the page rule.
   await requirePageAccess('/system-logs');
   const params = await searchParams;
 
-  // Get all logs from buffer (newest first)
+  // Newest first.
   const allLogs = (getLogBuffer(500) || []).reverse();
 
-  // Apply filters
   let filteredLogs = allLogs;
-
   if (params.level) {
     filteredLogs = filteredLogs.filter(log => log.level === params.level);
   }
-
   if (params.component) {
     const compFilter = params.component.toLowerCase();
     filteredLogs = filteredLogs.filter(log =>
       Boolean(log.component && log.component.toLowerCase().includes(compFilter))
     );
   }
-
   if (params.search) {
     const searchLower = params.search.toLowerCase();
     filteredLogs = filteredLogs.filter(
@@ -43,258 +50,90 @@ export default async function SystemLogsPage({
     );
   }
 
-  // Calculate stats
-  const stats = {
-    total: allLogs.length,
-    errors: allLogs.filter(l => l.level === 'error').length,
-    warnings: allLogs.filter(l => l.level === 'warn').length,
+  const pagination = calculatePaginationBounds({
+    totalItems: filteredLogs.length,
+    page: parsePageParam(params.page),
+    pageSize: PAGE_SIZE,
+  });
+
+  const rows: SystemLogRow[] = filteredLogs
+    .slice(pagination.skip, pagination.skip + pagination.take)
+    .map((log, index) => ({
+      key: `${log.timestamp}-${pagination.skip + index}`,
+      level: String(log.level || 'info'),
+      message: log.message ? String(log.message) : '',
+      timestamp: log.timestamp ?? '',
+      component: log.component ?? null,
+      duration: typeof log.duration === 'number' ? log.duration : null,
+      requestId: log.requestId ?? null,
+      userId: log.userId ?? null,
+      errorMessage: log.error?.message ?? null,
+      errorStack: log.error?.stack ?? null,
+      context: stringifyContext(log.context),
+    }));
+
+  const counts = {
+    error: allLogs.filter(l => l.level === 'error').length,
+    warn: allLogs.filter(l => l.level === 'warn').length,
     info: allLogs.filter(l => l.level === 'info').length,
     debug: allLogs.filter(l => l.level === 'debug').length,
   };
 
-  const levelConfig: Record<
-    LogLevel,
-    { variant: 'danger' | 'warning' | 'info' | 'neutral'; border: string; emoji: string }
-  > = {
-    error: { variant: 'danger', border: 'border-l-red-600', emoji: '❌' },
-    warn: { variant: 'warning', border: 'border-l-yellow-600', emoji: '⚠️' },
-    info: { variant: 'info', border: 'border-l-blue-600', emoji: 'ℹ️' },
-    debug: { variant: 'neutral', border: 'border-l-gray-600', emoji: '🔍' },
-  };
-
-  const fallbackConfig: {
-    variant: 'danger' | 'warning' | 'info' | 'neutral';
-    border: string;
-    emoji: string;
-  } = {
-    variant: 'info',
-    border: 'border-l-ink-400',
-    emoji: '📝',
-  };
+  const levelHref = (level: string) =>
+    params.level === level ? '/system-logs' : `/system-logs?level=${level}`;
 
   return (
-    <main className="p-6 max-w-[1600px] mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold tracking-tight mb-1">System Logs</h1>
-        <p className="text-sm text-muted-foreground">
-          Real-time application logging and error tracking
-        </p>
-      </div>
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
+        title="System Logs"
+        icon={Terminal}
+        description="Application logs from this server: errors, warnings and diagnostics. Kept in memory (last 500 entries) and cleared when the server restarts."
+        stats={[
+          {
+            label: 'Errors',
+            value: counts.error,
+            icon: <XCircle className="h-3.5 w-3.5" aria-hidden="true" />,
+            href: levelHref('error'),
+            active: params.level === 'error',
+            tooltip: 'Show only errors',
+          },
+          {
+            label: 'Warnings',
+            value: counts.warn,
+            icon: <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />,
+            href: levelHref('warn'),
+            active: params.level === 'warn',
+            tooltip: 'Show only warnings',
+          },
+          {
+            label: 'Info',
+            value: counts.info,
+            icon: <Info className="h-3.5 w-3.5" aria-hidden="true" />,
+            href: levelHref('info'),
+            active: params.level === 'info',
+            tooltip: 'Show only info',
+          },
+          {
+            label: 'Debug',
+            value: counts.debug,
+            icon: <Bug className="h-3.5 w-3.5" aria-hidden="true" />,
+            href: levelHref('debug'),
+            active: params.level === 'debug',
+            tooltip: 'Show only debug',
+          },
+        ]}
+      />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <Link href="/system-logs" className="glass-panel p-4 hover:shadow-md transition-shadow">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total</div>
-          <div className="text-2xl font-extrabold tracking-tight">{stats.total}</div>
-        </Link>
-        <Link
-          href="/system-logs?level=error"
-          className="glass-panel p-4 hover:shadow-md transition-shadow border-l-4 border-l-red-500"
-        >
-          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Errors</div>
-          <div className="text-2xl font-extrabold tracking-tight text-red-600 dark:text-red-400">
-            {stats.errors}
-          </div>
-        </Link>
-        <Link
-          href="/system-logs?level=warn"
-          className="glass-panel p-4 hover:shadow-md transition-shadow border-l-4 border-l-yellow-500"
-        >
-          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Warnings</div>
-          <div className="text-2xl font-extrabold tracking-tight text-yellow-600 dark:text-yellow-400">
-            {stats.warnings}
-          </div>
-        </Link>
-        <Link
-          href="/system-logs?level=info"
-          className="glass-panel p-4 hover:shadow-md transition-shadow border-l-4 border-l-blue-500"
-        >
-          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Info</div>
-          <div className="text-2xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400">
-            {stats.info}
-          </div>
-        </Link>
-        <Link
-          href="/system-logs?level=debug"
-          className="glass-panel p-4 hover:shadow-md transition-shadow border-l-4 border-l-gray-500"
-        >
-          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Debug</div>
-          <div className="text-2xl font-extrabold tracking-tight text-ink-600">{stats.debug}</div>
-        </Link>
-      </div>
-
-      {/* Filters */}
-      <div className="glass-panel p-4 mb-4">
-        <form method="GET" className="flex flex-wrap gap-3 items-center">
-          <div className="flex-1 min-w-[250px]">
-            <input
-              type="text"
-              name="search"
-              placeholder="🔍 Search messages, components, errors..."
-              defaultValue={params.search || ''}
-              className="w-full px-3 py-2 border border-border rounded-md text-sm"
-            />
-          </div>
-
-          <select
-            name="level"
-            defaultValue={params.level || ''}
-            className="px-3 py-2 border border-border rounded-md bg-card text-sm"
-          >
-            <option value="">All Levels</option>
-            <option value="error">❌ Errors</option>
-            <option value="warn">⚠️ Warnings</option>
-            <option value="info">ℹ️ Info</option>
-            <option value="debug">🔍 Debug</option>
-          </select>
-
-          <input
-            type="text"
-            name="component"
-            placeholder="Component"
-            defaultValue={params.component || ''}
-            className="px-3 py-2 border border-border rounded-md text-sm w-32"
-          />
-
-          <button
-            type="submit"
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90"
-          >
-            Filter
-          </button>
-
-          {(params.level || params.search || params.component) && (
-            <Link
-              href="/system-logs"
-              className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground underline"
-            >
-              Clear
-            </Link>
-          )}
-        </form>
-      </div>
-
-      <div className="glass-panel p-3 mb-2 flex items-center justify-between bg-muted/30">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {filteredLogs.length} {filteredLogs.length === 1 ? 'Log' : 'Logs'}
-        </span>
-        <span className="text-xs text-muted-foreground">Last 500 entries • Newest first</span>
-      </div>
-
-      {/* Logs List */}
-      <div className="flex flex-col gap-1.5">
-        {filteredLogs.length === 0 ? (
-          <div className="glass-panel p-16 text-center">
-            <div className="text-5xl mb-4 opacity-20">📋</div>
-            <p className="text-muted-foreground">
-              {allLogs.length === 0 ? 'No logs captured yet' : 'No logs match your current filters'}
-            </p>
-            {allLogs.length > 0 && (
-              <Link
-                href="/system-logs"
-                className="text-sm text-primary hover:underline mt-2 inline-block"
-              >
-                Clear filters to see all logs
-              </Link>
-            )}
-          </div>
-        ) : (
-          filteredLogs.map((log, index) => {
-            const config = levelConfig[log.level as LogLevel] || fallbackConfig;
-            const dateObj = new Date(log.timestamp);
-            const timeString = !isNaN(dateObj.getTime())
-              ? dateObj.toLocaleTimeString('en-US', {
-                  timeZone: 'UTC',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  hour12: false,
-                })
-              : log.timestamp || 'unknown';
-
-            return (
-              <details
-                key={`${log.timestamp}-${index}`}
-                className={`glass-panel p-3 cursor-pointer border-l-2 ${config.border} hover:shadow-sm transition-shadow`}
-              >
-                <summary className="flex items-start gap-3 list-none">
-                  <span className="text-base mt-0.5 flex-shrink-0">{config.emoji}</span>
-                  <div className="flex-1 min-w-0 overflow-hidden">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <Badge variant={config.variant} size="xs" className="uppercase">
-                        {log.level || 'info'}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground font-mono">{timeString}</span>
-                      {log.component && (
-                        <Badge variant="outline" size="xs" className="uppercase">
-                          {log.component}
-                        </Badge>
-                      )}
-                      {log.duration !== undefined && (
-                        <Badge variant="outline" size="xs" className="font-mono">
-                          {log.duration}ms
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-sm font-medium leading-snug truncate">
-                      {log.message || '(no message)'}
-                    </div>
-                    {log.error?.message && (
-                      <div className="mt-1 text-xs text-red-600 truncate dark:text-red-400">
-                        {log.error.message}
-                      </div>
-                    )}
-                  </div>
-                </summary>
-
-                <div className="mt-3 pt-3 border-t border-border/50 text-xs space-y-3">
-                  {log.context && Object.keys(log.context).length > 0 && (
-                    <div>
-                      <div className="font-semibold mb-1.5 text-muted-foreground uppercase tracking-wide">
-                        Context
-                      </div>
-                      <pre className="bg-muted/50 p-2.5 rounded-md overflow-auto text-[11px] leading-relaxed">
-                        {JSON.stringify(log.context, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-
-                  {log.error?.stack && (
-                    <div>
-                      <div className="font-semibold mb-1.5 text-muted-foreground uppercase tracking-wide">
-                        Stack Trace
-                      </div>
-                      <pre className="bg-red-50 p-2.5 rounded-md overflow-auto text-[10px] text-red-700 font-mono leading-relaxed border border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/30">
-                        {log.error.stack}
-                      </pre>
-                    </div>
-                  )}
-
-                  {(log.requestId || log.userId) && (
-                    <div className="flex gap-4 text-[11px] text-muted-foreground pt-2">
-                      {log.requestId && (
-                        <span>
-                          Request: <code className="bg-muted px-1 rounded">{log.requestId}</code>
-                        </span>
-                      )}
-                      {log.userId && (
-                        <span>
-                          User: <code className="bg-muted px-1 rounded">{log.userId}</code>
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </details>
-            );
-          })
-        )}
-      </div>
-
-      <div className="mt-4 p-3 bg-muted/30 rounded-md text-xs text-muted-foreground text-center">
-        💡 Logs are stored in memory (last 500 entries) and cleared on restart
-      </div>
-    </main>
+      <SystemLogsView
+        rows={rows}
+        totalCaptured={allLogs.length}
+        totalMatching={filteredLogs.length}
+        page={pagination.page}
+        pageSize={PAGE_SIZE}
+        currentLevel={params.level ?? ''}
+        currentSearch={params.search ?? ''}
+        currentComponent={params.component ?? ''}
+      />
+    </div>
   );
 }

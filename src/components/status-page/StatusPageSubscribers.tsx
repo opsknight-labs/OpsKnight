@@ -10,11 +10,12 @@ import {
   Trash2,
   X,
   Download,
-  Users,
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { notify } from '@/lib/toast';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { Badge } from '@/components/ui/shadcn/badge';
 import Button from '@/components/ui/Button';
 
@@ -59,7 +60,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [singleCandidateId, setSingleCandidateId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
 
   // Debounce search input by 300ms
   useEffect(() => {
@@ -118,15 +119,19 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
 
   useEffect(() => {
     const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetches from the server when the view changes.
     void fetchSubscribers(controller.signal);
     return () => controller.abort();
   }, [fetchSubscribers]);
 
-  // Clear selections whenever page or filter changes
-  useEffect(() => {
+  // Clear selections whenever page or filter changes (adjusting state during render).
+  const viewKey = `${page}|${limit}|${filter}|${debouncedSearch}`;
+  const [selectionViewKey, setSelectionViewKey] = useState(viewKey);
+  if (selectionViewKey !== viewKey) {
+    setSelectionViewKey(viewKey);
     setSelectedIds(new Set());
     setSingleCandidateId(null);
-  }, [page, limit, filter, debouncedSearch]);
+  }
 
   const activeSubscribersOnPage = useMemo(() => {
     return (data?.subscribers || []).filter(s => !s.unsubscribedAt);
@@ -163,13 +168,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
   };
 
   const handleSingleUnsubscribe = async (id: string) => {
-    if (singleCandidateId !== id) {
-      setSingleCandidateId(id);
-      return;
-    }
-
     setActionError(null);
-    setActionSuccess(null);
 
     try {
       const response = await fetch(
@@ -178,7 +177,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
       );
       if (response.ok) {
         setSingleCandidateId(null);
-        setActionSuccess('Subscriber successfully unsubscribed.');
+        notify.success('Subscriber unsubscribed');
         void fetchSubscribers();
       } else {
         const result = (await response.json()) as { error?: string };
@@ -193,7 +192,6 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
     if (selectedIds.size === 0) return;
 
     setActionError(null);
-    setActionSuccess(null);
     setIsBulkDeleting(true);
 
     try {
@@ -208,7 +206,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
 
       if (response.ok) {
         const result = await response.json();
-        setActionSuccess(result.message || `${selectedIds.size} subscribers unsubscribed.`);
+        notify.success(result.message || `${selectedIds.size} subscribers unsubscribed`);
         setSelectedIds(new Set());
         void fetchSubscribers();
       } else {
@@ -249,6 +247,28 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
 
   return (
     <div className="flex flex-col gap-4 text-foreground">
+      <DeleteConfirmDialog
+        open={singleCandidateId !== null}
+        onOpenChange={open => {
+          if (!open) setSingleCandidateId(null);
+        }}
+        title="Unsubscribe this subscriber?"
+        description={`${
+          data?.subscribers.find(sub => sub.id === singleCandidateId)?.email ?? 'This subscriber'
+        } stops receiving updates from this status page. They can subscribe again from the public page.`}
+        confirmText="Unsubscribe"
+        onConfirm={async () => {
+          if (singleCandidateId) await handleSingleUnsubscribe(singleCandidateId);
+        }}
+      />
+      <DeleteConfirmDialog
+        open={bulkConfirmOpen}
+        onOpenChange={setBulkConfirmOpen}
+        title={`Unsubscribe ${selectedIds.size} ${selectedIds.size === 1 ? 'subscriber' : 'subscribers'}?`}
+        description="They stop receiving updates from this status page. Each of them can subscribe again from the public page."
+        confirmText="Unsubscribe selected"
+        onConfirm={handleBulkUnsubscribe}
+      />
       {/* Alert Banners */}
       {actionError && (
         <div className="flex items-center gap-2 p-3 text-xs font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -259,22 +279,6 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
             onClick={() => setActionError(null)}
             className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-all cursor-pointer"
             aria-label="Dismiss error"
-            title="Dismiss"
-          >
-            <X className="w-3.5 h-3.5 stroke-[2.25]" />
-          </button>
-        </div>
-      )}
-
-      {actionSuccess && (
-        <div className="flex items-center gap-2 p-3 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{actionSuccess}</span>
-          <button
-            type="button"
-            onClick={() => setActionSuccess(null)}
-            className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 transition-all cursor-pointer"
-            aria-label="Dismiss message"
             title="Dismiss"
           >
             <X className="w-3.5 h-3.5 stroke-[2.25]" />
@@ -406,7 +410,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
               variant="danger"
               size="sm"
               isLoading={isBulkDeleting}
-              onClick={handleBulkUnsubscribe}
+              onClick={() => setBulkConfirmOpen(true)}
               leftIcon={<Trash2 className="w-3.5 h-3.5" />}
             >
               Unsubscribe selected ({selectedIds.size})
@@ -539,15 +543,12 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
                         {!isUnsubscribed ? (
                           <button
                             type="button"
-                            onClick={() => handleSingleUnsubscribe(subscriber.id)}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
-                              singleCandidateId === subscriber.id
-                                ? 'border-destructive bg-destructive text-destructive-foreground shadow-xs animate-pulse'
-                                : 'border-border/80 bg-background text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/10'
-                            }`}
+                            onClick={() => setSingleCandidateId(subscriber.id)}
+                            aria-label={`Unsubscribe ${subscriber.email}`}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
-                            <Trash2 className="w-3 h-3" />
-                            {singleCandidateId === subscriber.id ? 'Confirm?' : 'Unsubscribe'}
+                            <Trash2 className="h-3 w-3" aria-hidden="true" />
+                            Unsubscribe
                           </button>
                         ) : (
                           <span className="text-[11px] text-muted-foreground/60 italic">

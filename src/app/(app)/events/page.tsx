@@ -5,8 +5,8 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { getUserTimeZone } from '@/lib/timezone';
 import { Button } from '@/components/ui/shadcn/button';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Activity, Sparkles, Layers, Clock } from 'lucide-react';
+import { PageHeader } from '@/components/patterns';
+import { Activity, FlaskConical } from 'lucide-react';
 import { assertAdmin } from '@/lib/rbac';
 
 import EventsListTable from '@/components/events/EventsListTable';
@@ -82,59 +82,25 @@ export default async function EventLogsPage({ searchParams }: EventLogsPageProps
     take: pagination.take,
   });
 
-  const uniqueIncidents = new Set(events.map(e => e.incident.id)).size;
-  const uniqueServices = new Set(events.map(e => e.incident.service.name)).size;
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header */}
-      <DetailHeroBanner
-        tag="Audit & Telemetry"
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      <PageHeader
         title="Event Logs"
-        icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-            <Activity className="h-6 w-6" aria-hidden="true" />
-          </div>
-        }
-        subtitle={
-          <p className="text-xs text-primary-foreground/85 leading-relaxed">
-            Review real-time incident lifecycle events, alert state transitions, and responder audit
-            trail across all services.
-          </p>
-        }
-        statsPlacement="bottom"
-        actions={
-          <Button
-            asChild
-            className="gap-2 shadow-sm font-semibold bg-background text-foreground hover:bg-background/90"
-          >
+        icon={Activity}
+        description="Every incident lifecycle event across services: triggers, acknowledgements, escalations and resolutions."
+        primaryAction={
+          <Button asChild size="sm" className="gap-2">
             <Link href="/events/test">
-              <Sparkles className="h-4 w-4" />
-              Ingestion Simulator
+              <FlaskConical className="h-4 w-4" aria-hidden="true" />
+              Send a test event
             </Link>
           </Button>
         }
         stats={[
           {
-            label: 'Matching Events',
-            value: totalEvents,
-            icon: <Activity className="h-3.5 w-3.5" />,
-          },
-          {
-            label: 'Incidents on Page',
-            value: uniqueIncidents,
-            icon: <Layers className="h-3.5 w-3.5 text-rose-200" />,
-            valueClassName: uniqueIncidents > 0 ? 'text-rose-200' : undefined,
-          },
-          {
-            label: 'Services on Page',
-            value: uniqueServices,
-            icon: <Layers className="h-3.5 w-3.5 text-blue-200" />,
-            valueClassName: uniqueServices > 0 ? 'text-blue-200' : undefined,
-          },
-          {
-            label: 'Page',
-            value: `${page} of ${Math.max(1, Math.ceil(totalEvents / pageSize))}`,
-            icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
+            label: search || service ? 'Matching events' : 'Events',
+            value: totalEvents.toLocaleString(),
+            icon: <Activity className="h-3.5 w-3.5" aria-hidden="true" />,
           },
         ]}
       />
@@ -149,6 +115,6 @@ export default async function EventLogsPage({ searchParams }: EventLogsPageProps
         totalCount={totalEvents}
         pageSize={pageSize}
       />
-    </main>
+    </div>
   );
 }

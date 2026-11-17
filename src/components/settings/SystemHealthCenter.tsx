@@ -10,7 +10,8 @@ import {
   useSyncExternalStore,
 } from 'react';
 import Link from 'next/link';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import DetailTabs from '@/components/ui/DetailTabs';
 import EmptyState from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/shadcn/button';
@@ -340,49 +341,33 @@ export default function SystemHealthCenter({ initialReport }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Centralized DetailHeroBanner */}
-      <DetailHeroBanner
-        tag="DIAGNOSTICS & TELEMETRY"
+      <SettingsPageHeader
         title="System Health Center"
-        icon={
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-foreground/15 ring-2 ring-primary-foreground/20 backdrop-blur-sm">
-            <Activity className="h-6 w-6 text-primary-foreground" />
-          </div>
-        }
+        icon={Activity}
         badges={
           <>
-            <Badge
-              variant="outline"
-              size="xs"
+            <span
               className={cn(
-                'font-bold text-[10px] uppercase tracking-wide',
-                report.overall === 'healthy'
-                  ? 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30'
-                  : report.overall === 'degraded'
-                    ? 'bg-amber-500/20 text-amber-100 border-amber-400/30'
-                    : report.overall === 'unhealthy'
-                      ? 'bg-rose-500/20 text-rose-100 border-rose-400/30'
-                      : 'bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20'
+                pageHeaderBadgeClass,
+                report.overall === 'healthy' && 'border-emerald-500/40 text-emerald-300',
+                report.overall === 'degraded' && 'border-amber-500/40 text-amber-300',
+                report.overall === 'unhealthy' && 'border-rose-500/40 text-rose-300'
               )}
             >
               {overallConfig.label}
-            </Badge>
-            <Badge
-              variant="outline"
-              size="xs"
-              className="bg-primary-foreground/10 text-primary-foreground/90 border-primary-foreground/20 text-[10px]"
-            >
+            </span>
+            <span className={pageHeaderBadgeClass}>
               {report.overall === 'healthy'
-                ? 'All Core Systems Operational'
+                ? 'All core systems operational'
                 : report.overall === 'degraded'
-                  ? 'Operational with Warnings'
+                  ? 'Operational with warnings'
                   : report.overall === 'unhealthy'
-                    ? 'Critical Attention Required'
-                    : 'Insufficient Diagnostic Evidence'}
-            </Badge>
+                    ? 'Needs attention now'
+                    : 'Not enough evidence yet'}
+            </span>
           </>
         }
-        subtitle={
+        description={
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-primary-foreground/80">
             <span>
               Real-time operational diagnostic signals across PostgreSQL, queues, schedulers, and
@@ -425,7 +410,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
             subtext: 'Failures / missing evidence',
           },
         ]}
-        actions={
+        primaryAction={
           <div className="flex flex-wrap items-center gap-2">
             {/* Live Auto-Refresh Toggle + Countdown Badge */}
             <div className="flex items-center gap-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1 backdrop-blur-sm">

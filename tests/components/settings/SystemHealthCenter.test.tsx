@@ -203,7 +203,7 @@ describe('SystemHealthCenter', () => {
     render(<SystemHealthCenter initialReport={mockReport} />);
 
     expect(screen.getByRole('heading', { name: 'System Health Center' })).toBeInTheDocument();
-    expect(screen.getByText('Operational with Warnings')).toBeInTheDocument();
+    expect(screen.getByText('Operational with warnings')).toBeInTheDocument();
     expect(screen.getByText('24-Hour Recorded Signal Trend')).toBeInTheDocument();
     expect(screen.getByText('• 92.5% Signal Score')).toBeInTheDocument();
     expect(screen.getByText(/not an uptime SLO/i)).toBeInTheDocument();

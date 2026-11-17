@@ -93,8 +93,8 @@ export default function AuditDetailModal({
         <DialogHeader className="p-5 pr-14 border-b border-ink-100 bg-ink-50/50">
           <div className="flex items-center justify-between gap-3 pr-2">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              <DialogTitle className="text-base font-semibold">Audit Record Details</DialogTitle>
+              <ShieldCheck className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              <DialogTitle className="text-lg font-semibold">Audit Record Details</DialogTitle>
             </div>
             <AuditActionBadge action={log.action} />
           </div>
@@ -125,7 +125,7 @@ export default function AuditDetailModal({
                     size="sm"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-ink-200 flex items-center justify-center text-[0.65rem] font-semibold text-ink-600 shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-ink-200 flex items-center justify-center text-2xs font-semibold text-ink-600 shrink-0">
                     SYS
                   </div>
                 )}
@@ -142,7 +142,7 @@ export default function AuditDetailModal({
                       log.actor?.name || log.actorName || 'System'
                     )}
                   </div>
-                  <div className="text-[11px] text-muted-foreground truncate">
+                  <div className="text-xs text-muted-foreground truncate">
                     {log.actor?.email || log.actorEmail || 'system@opsknight.internal'}
                   </div>
                 </div>
@@ -157,7 +157,7 @@ export default function AuditDetailModal({
               </div>
               <div className="pt-0.5 min-w-0">
                 <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 min-w-0">
-                  <span className="bg-ink-200/70 px-1.5 py-0.5 rounded text-[11px] font-mono shrink-0">
+                  <span className="bg-ink-200/70 px-1.5 py-0.5 rounded text-xs font-mono shrink-0">
                     {log.entityType}
                   </span>
                   {entityHref ? (
@@ -178,7 +178,7 @@ export default function AuditDetailModal({
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-1 truncate">
+                <div className="text-xs text-muted-foreground mt-1 truncate">
                   Scope: {log.entityType.replace(/_/g, ' ').toLowerCase()}
                 </div>
               </div>
@@ -199,21 +199,24 @@ export default function AuditDetailModal({
               >
                 {copied ? (
                   <>
-                    <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <Check
+                      className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+                      aria-hidden="true"
+                    />
                     <span className="text-emerald-600 font-medium dark:text-emerald-400">
                       Copied!
                     </span>
                   </>
                 ) : (
                   <>
-                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                     <span>Copy JSON</span>
                   </>
                 )}
               </Button>
             </div>
 
-            <div className="relative rounded-lg border border-slate-200 bg-slate-900 text-slate-100 p-3.5 font-mono text-xs overflow-x-auto max-h-[280px]">
+            <div className="relative max-h-[280px] overflow-x-auto rounded-lg border border-border bg-muted/50 p-3.5 font-mono text-xs text-foreground">
               <pre className="whitespace-pre leading-relaxed">{formattedJson}</pre>
             </div>
           </div>

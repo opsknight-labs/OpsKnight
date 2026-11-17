@@ -1,5 +1,7 @@
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
+import { toneClasses, type ToneKey } from '@/components/patterns/status-tone';
+import { BADGE_BASE_CLASS, badgeSizeClass } from '@/components/patterns/StatusBadge';
 import { Eye, CheckCircle2, ArrowRightCircle, MessageSquare, Activity, Flame } from 'lucide-react';
 
 export type EventLifecycleBadgeProps = {
@@ -79,83 +81,33 @@ export function getEventCategory(message: string, type?: string | null): EventCa
   return 'general';
 }
 
-function EventLifecycleBadge({ message, type, className }: EventLifecycleBadgeProps) {
-  const category = getEventCategory(message, type);
+const CATEGORY_DISPLAY: Record<
+  EventCategory,
+  { label: string; tone: ToneKey; icon: typeof Activity }
+> = {
+  triggered: { label: 'Triggered', tone: 'critical', icon: Flame },
+  acknowledged: { label: 'Acknowledged', tone: 'elevated', icon: Eye },
+  resolved: { label: 'Resolved', tone: 'ok', icon: CheckCircle2 },
+  escalated: { label: 'Escalated', tone: 'info', icon: ArrowRightCircle },
+  note: { label: 'Note', tone: 'neutral', icon: MessageSquare },
+  general: { label: 'Event', tone: 'neutral', icon: Activity },
+};
 
-  switch (category) {
-    case 'triggered':
-      return (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30',
-            className
-          )}
-        >
-          <Flame className="h-3 w-3 text-rose-600 dark:text-rose-400" />
-          <span>TRIGGER</span>
-        </span>
-      );
-    case 'acknowledged':
-      return (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30',
-            className
-          )}
-        >
-          <Eye className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-          <span>ACK</span>
-        </span>
-      );
-    case 'resolved':
-      return (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30',
-            className
-          )}
-        >
-          <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-          <span>RESOLVED</span>
-        </span>
-      );
-    case 'escalated':
-      return (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30',
-            className
-          )}
-        >
-          <ArrowRightCircle className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-          <span>ESCALATED</span>
-        </span>
-      );
-    case 'note':
-      return (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-500/10 dark:text-purple-300 dark:border-purple-500/30',
-            className
-          )}
-        >
-          <MessageSquare className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-          <span>NOTE</span>
-        </span>
-      );
-    default:
-      return (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-ink-100 text-ink-700 border border-ink-200/80',
-            className
-          )}
-        >
-          <Activity className="h-3 w-3 text-ink-600" />
-          <span>EVENT</span>
-        </span>
-      );
-  }
+function EventLifecycleBadge({ message, type, className }: EventLifecycleBadgeProps) {
+  const { label, tone, icon: Icon } = CATEGORY_DISPLAY[getEventCategory(message, type)];
+  return (
+    <span
+      className={cn(
+        BADGE_BASE_CLASS,
+        badgeSizeClass('sm'),
+        toneClasses(tone === 'neutral' ? null : tone).soft,
+        className
+      )}
+    >
+      <Icon aria-hidden="true" />
+      {label}
+    </span>
+  );
 }
 
 export default memo(EventLifecycleBadge);

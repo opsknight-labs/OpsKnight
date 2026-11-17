@@ -459,14 +459,14 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
           </div>
         )}
 
-        <div className="mb-[1vh] flex items-center justify-between px-1 text-[clamp(11px,0.8vw,22px)] text-ink-400">
+        <div className="mb-[1vh] flex items-center justify-between px-1 text-[clamp(11px,0.8vw,22px)] text-zinc-400">
           <span
             className="font-semibold uppercase tracking-wider text-slate-300"
             data-testid="wallboard-view"
           >
             {liveViewLabel(query.view)}
             {cycle && hasCritical && (
-              <span className="font-normal normal-case text-ink-500"> · rotating views</span>
+              <span className="font-normal normal-case text-zinc-400"> · rotating views</span>
             )}
           </span>
           {cycle && hasCritical && (

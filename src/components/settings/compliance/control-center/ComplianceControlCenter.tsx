@@ -11,8 +11,9 @@ import {
   Key,
   GitCompare,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/shadcn/badge';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import { notify } from '@/lib/toast';
 import type { ComplianceControlCenterOverview } from '@/lib/compliance/control-center/types';
 import { ControlCenterOverview } from './ControlCenterOverview';
@@ -39,12 +40,7 @@ interface ComplianceControlCenterProps {
   readonly frameworks: readonly FrameworkCardItem[];
   readonly capabilities: ComplianceCapabilities;
   readonly initialTab?:
-    | 'overview'
-    | 'controls'
-    | 'drift'
-    | 'frameworks'
-    | 'evidence'
-    | 'operations';
+    'overview' | 'controls' | 'drift' | 'frameworks' | 'evidence' | 'operations';
 }
 
 export function ComplianceControlCenter({
@@ -159,31 +155,14 @@ export function ComplianceControlCenter({
 
   return (
     <div className="space-y-6 pb-12 w-full">
-      {/* Canonical DetailHeroBanner */}
-      <DetailHeroBanner
-        tag="Security Posture & Compliance Engine"
+      <SettingsPageHeader
         title="Compliance Control Center"
-        subtitle="Continuous runtime control telemetry, integrity-verified evidence, and versioned regulatory mapping."
-        icon={
-          <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
-            <ShieldCheck className="h-7 w-7" />
-          </div>
-        }
+        description="Continuous runtime control telemetry, integrity-verified evidence, and versioned regulatory mapping."
+        icon={ShieldCheck}
         badges={
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
-            >
-              Runtime Implemented: {overviewData.runtime.implemented}/{overviewData.runtime.total}
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Authoritative
-            </Badge>
-          </div>
+          <span className={cn(pageHeaderBadgeClass, 'tabular-nums')}>
+            {`Runtime implemented: ${overviewData.runtime.implemented}/${overviewData.runtime.total}`}
+          </span>
         }
       />
 

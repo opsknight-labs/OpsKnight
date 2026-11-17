@@ -20,7 +20,7 @@ import {
 } from '@/lib/access/requests';
 import { ROLE_DESCRIPTIONS, roleLabel, type Capability } from '@/lib/authorization';
 import { getUserTimeZone } from '@/lib/timezone';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -87,15 +87,10 @@ export default async function MyAccessPage() {
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="Account & Identity"
+      <SettingsPageHeader
         title="My access"
-        subtitle="What you can see and do in OpsKnight, why, and how to get more."
-        icon={
-          <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
-            <KeyRound className="h-8 w-8" />
-          </div>
-        }
+        description="What you can see and do in OpsKnight, why, and how to get more."
+        icon={KeyRound}
         badges={
           <>
             <Badge variant="outline" className={heroBadgeClass}>

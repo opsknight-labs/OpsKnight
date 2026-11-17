@@ -39,7 +39,10 @@ describe('AuditLogTable', () => {
     expect(screen.getByText('LOGIN_SUCCESS')).toBeInTheDocument();
     expect(screen.getByText('usr_1')).toBeInTheDocument();
 
-    const viewButton = screen.getByRole('button', { name: /view/i });
+    expect(screen.getByRole('navigation', { name: 'Audit log pages' })).toBeInTheDocument();
+    const viewButton = screen.getByRole('button', {
+      name: 'View details for LOGIN_SUCCESS by Dushyant',
+    });
     fireEvent.click(viewButton);
 
     expect(screen.getByText('Audit Record Details')).toBeInTheDocument();
@@ -57,6 +60,7 @@ describe('AuditLogTable', () => {
       />
     );
 
-    expect(screen.getByText('No matching audit entries')).toBeInTheDocument();
+    expect(screen.getByText('No audit entries match these filters')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Clear filters' })).toHaveAttribute('href', '/audit');
   });
 });

@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/rbac';
 import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import { Activity, BellRing, Radio } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { getEffectiveCapacity, getEffectiveWatermarks } from '@/lib/notification-capacity/resolver';
@@ -148,43 +149,26 @@ export default async function NotificationOperationsRoute() {
 
   return (
     <div className="space-y-6">
-      {/* Hero banner — server-rendered, always visible */}
-      <DetailHeroBanner
-        tag="Delivery Control Plane"
+      <SettingsPageHeader
         title="Notification Operations"
-        subtitle="Real-time delivery telemetry, queue health, error diagnostics, and recovery engine for all alert channels."
-        icon={
-          <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
-            <Activity className="h-7 w-7" />
-          </div>
-        }
+        description="Real-time delivery telemetry, queue health, error diagnostics, and recovery engine for all alert channels."
+        icon={Activity}
         badges={
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Live Telemetry
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-xs font-semibold"
-            >
-              {canManageOperations ? 'Admin Full Control' : 'Auditor Read-Only'}
-            </Badge>
-          </div>
+          <span className={pageHeaderBadgeClass}>
+            {canManageOperations ? 'Full control' : 'Read-only (auditor)'}
+          </span>
         }
-        actions={
-          <div className="flex items-center gap-2">
+        secondaryActions={
+          <div className="flex flex-wrap items-center gap-2">
             {canManageOperations && (
               <Button
                 variant="outline"
                 size="sm"
                 asChild
-                className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+                className={cn('gap-2', pageHeaderActionClass)}
               >
                 <Link href="/settings/notifications">
-                  <BellRing className="h-3.5 w-3.5" />
+                  <BellRing className="h-4 w-4" aria-hidden="true" />
                   Configure Providers
                 </Link>
               </Button>
@@ -193,10 +177,10 @@ export default async function NotificationOperationsRoute() {
               variant="outline"
               size="sm"
               asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+              className={cn('gap-2', pageHeaderActionClass)}
             >
               <Link href="/settings/notifications/history">
-                <Radio className="h-3.5 w-3.5" />
+                <Radio className="h-4 w-4" aria-hidden="true" />
                 Delivery History
               </Link>
             </Button>

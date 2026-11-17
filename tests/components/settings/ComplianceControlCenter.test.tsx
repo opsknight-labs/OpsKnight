@@ -5,6 +5,7 @@ import { ComplianceControlCenter } from '@/components/settings/compliance/contro
 import type { ComplianceControlCenterOverview } from '@/lib/compliance/control-center/types';
 
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/settings/security-compliance',
   useRouter: () => ({
     refresh: vi.fn(),
     push: vi.fn(),
@@ -156,7 +157,7 @@ describe('ComplianceControlCenter Component', () => {
     );
 
     expect(screen.getByText('Compliance Control Center')).toBeInTheDocument();
-    expect(screen.getByText('Runtime Implemented: 4/6')).toBeInTheDocument();
+    expect(screen.getByText('Runtime implemented: 4/6')).toBeInTheDocument();
 
     // Check all 5 tabs exist
     expect(screen.getByRole('button', { name: /^Overview/i })).toBeInTheDocument();

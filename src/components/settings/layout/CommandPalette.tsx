@@ -15,6 +15,7 @@ import { SETTINGS_NAV_SECTIONS, SettingsNavItem } from '@/components/settings/na
 import { Settings, ArrowRight } from 'lucide-react';
 import { useEffectiveCapabilities } from '@/components/access/AccessProvider';
 import { canAccessPath } from '@/lib/access/pages';
+import { OPEN_SETTINGS_SEARCH_EVENT } from '@/components/settings/SettingsSearchTrigger';
 
 type Props = {
   isAdmin?: boolean;
@@ -27,15 +28,9 @@ export function CommandPalette({ isAdmin, isResponderOrAbove, isAuditor }: Props
   const router = useRouter();
 
   React.useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen(open => !open);
-      }
-    };
-
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
+    const openSearch = () => setOpen(true);
+    window.addEventListener(OPEN_SETTINGS_SEARCH_EVENT, openSearch);
+    return () => window.removeEventListener(OPEN_SETTINGS_SEARCH_EVENT, openSearch);
   }, []);
 
   const capabilities = useEffectiveCapabilities({ isAdmin, isAuditor, isResponderOrAbove });
@@ -51,7 +46,10 @@ export function CommandPalette({ isAdmin, isResponderOrAbove, isAuditor }: Props
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search settings, integrations, parameters..." />
+      <CommandInput
+        aria-label="Search settings"
+        placeholder="Search settings, integrations, parameters…"
+      />
       <CommandList>
         <CommandEmpty>No settings found.</CommandEmpty>
         {SETTINGS_NAV_SECTIONS.filter(sec => sec.id !== 'overview').map(section => {
@@ -68,18 +66,21 @@ export function CommandPalette({ isAdmin, isResponderOrAbove, isAuditor }: Props
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="p-1 rounded-md bg-muted text-muted-foreground shrink-0">
-                      <Settings className="h-3.5 w-3.5" />
+                      <Settings className="h-3.5 w-3.5" aria-hidden="true" />
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className="text-xs font-semibold text-foreground truncate">
                         {item.label}
                       </span>
-                      <span className="text-[11px] text-muted-foreground truncate">
+                      <span className="text-xs text-muted-foreground truncate">
                         {item.description}
                       </span>
                     </div>
                   </div>
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-2" />
+                  <ArrowRight
+                    className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-2"
+                    aria-hidden="true"
+                  />
                 </CommandItem>
               ))}
             </CommandGroup>
