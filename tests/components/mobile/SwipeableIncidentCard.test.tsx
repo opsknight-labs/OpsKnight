@@ -37,4 +37,22 @@ describe('SwipeableIncidentCard', () => {
     fireEvent.click(ackButton);
     expect(onAcknowledge).toHaveBeenCalledWith('inc-123');
   });
+
+  it('offers a Snooze button as the accessible equivalent of the swipe-left gesture', () => {
+    const onSnooze = vi.fn();
+    render(<SwipeableIncidentCard incident={mockIncident} onSnooze={onSnooze} />);
+    fireEvent.click(screen.getByRole('button', { name: /snooze incident/i }));
+    expect(onSnooze).toHaveBeenCalledWith('inc-123');
+  });
+
+  it('shows no lifecycle buttons once the incident is acknowledged', () => {
+    render(
+      <SwipeableIncidentCard
+        incident={{ ...mockIncident, status: 'ACKNOWLEDGED' }}
+        onAcknowledge={vi.fn()}
+        onSnooze={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /acknowledge|snooze/i })).not.toBeInTheDocument();
+  });
 });

@@ -558,6 +558,20 @@ export default function IncidentCommandBar({
             <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
           </div>
           <div className="flex flex-col gap-2 py-2">
+            {showAcknowledge && showResolve && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-11 justify-start gap-2 border-emerald-300 text-sm font-medium text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-300"
+                onClick={() => {
+                  setShowMobileMore(false);
+                  setShowResolveModal(true);
+                }}
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                <span>Resolve incident</span>
+              </Button>
+            )}
             {!primaryJira && jiraCapability.canLink && (
               <Button
                 type="button"

@@ -2,11 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronRight, UsersRound } from 'lucide-react';
+import { AlertTriangle, UsersRound } from 'lucide-react';
 import { MobileSearchWithParams } from '@/components/mobile/MobileSearchParams';
 import MobileCachedDataNotice from '@/components/mobile/MobileCachedDataNotice';
-import EmptyState from '@/components/ui/EmptyState';
-import { Card } from '@/components/ui/shadcn/card';
+import {
+  MobileIconTile,
+  MobileListCard,
+  MobileListMeta,
+  MobileListRow,
+  MobileToneBadge,
+} from '@/components/mobile/MobileList';
+import EmptyState from '@/components/patterns/EmptyState';
+import { Button } from '@/components/ui/shadcn/button';
 import { readCache, writeCache } from '@/lib/mobile-cache';
 import { readMobileCacheStatus } from '@/lib/mobile-cache-status';
 import { haptics } from '@/lib/haptics';
@@ -65,46 +72,49 @@ export default function MobileTeamsClient({
   return (
     <div className="responsive-page space-y-4">
       <MobileCachedDataNotice savedAt={cachedAt} />
-      <div className="px-0.5 text-[11px] text-muted-foreground">
+      <MobileListMeta>
         {teams.length} {teams.length === 1 ? 'team' : 'teams'}
-      </div>
+      </MobileListMeta>
       <MobileSearchWithParams placeholder="Search teams" />
 
       {teams.length === 0 ? (
         <EmptyState
           icon={<UsersRound aria-hidden="true" />}
-          title={query ? 'No matching teams' : 'No teams available'}
-          description={query ? `Nothing matches “${query}”.` : 'Teams you can access will appear here.'}
+          title={query ? 'No matching teams' : 'No teams yet'}
+          description={
+            query
+              ? `Nothing matches “${query}”. Check the spelling or clear the search.`
+              : 'Teams own services and receive escalations. Create them from the desktop workspace.'
+          }
           size="sm"
+          action={
+            query ? (
+              <Button asChild variant="outline" size="lg" className="h-11 rounded-xl">
+                <Link href="/m/teams">Clear search</Link>
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
-        <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
-          {teams.map((team, index) => (
-            <Link
+        <MobileListCard label="Teams">
+          {teams.map(team => (
+            <MobileListRow
               key={team.id}
               href={appRoutes.team('mobile', team.id)}
               onClick={() => haptics.soft()}
-              className={`flex min-h-[68px] min-w-0 items-center gap-3 px-3.5 py-3 text-card-foreground transition-colors hover:bg-accent/40 ${index > 0 ? 'border-t border-border/70' : ''}`}
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">
-                {team.name.charAt(0).toUpperCase()}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold text-foreground">{team.name}</span>
-                <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-                  {team._count.members} {team._count.members === 1 ? 'member' : 'members'}
-                  {team._count.incidents > 0
-                    ? ` · ${team._count.incidents} active incident${team._count.incidents === 1 ? '' : 's'}`
-                    : ' · no active incidents'}
-                </span>
-              </span>
-              {team._count.incidents > 0 ? (
-                <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" aria-label="Active incidents" />
-              ) : null}
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            </Link>
+              leading={<MobileIconTile icon={UsersRound} />}
+              title={team.name}
+              subtitle={`${team._count.members} ${team._count.members === 1 ? 'member' : 'members'}`}
+              trailing={
+                team._count.incidents > 0 ? (
+                  <MobileToneBadge tone="critical" icon={AlertTriangle}>
+                    {team._count.incidents} active
+                  </MobileToneBadge>
+                ) : null
+              }
+            />
           ))}
-        </Card>
+        </MobileListCard>
       )}
     </div>
   );

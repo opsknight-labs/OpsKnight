@@ -1,10 +1,17 @@
 import prisma from '@/lib/prisma';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { CalendarClock, Monitor, PhoneCall, UsersRound } from 'lucide-react';
 import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { getDefaultAvatar } from '@/lib/avatar';
-import MobileCard from '@/components/mobile/MobileCard';
-import { ArrowLeft } from 'lucide-react';
+import {
+  MobileDetailHeader,
+  MobileIconTile,
+  MobileListCard,
+  MobileListRow,
+  MobileSection,
+  MobileToneBadge,
+} from '@/components/mobile/MobileList';
+import EmptyState from '@/components/patterns/EmptyState';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import { assertCanViewSchedule } from '@/lib/rbac';
 import { requirePageAccess } from '@/lib/access/server';
@@ -63,107 +70,120 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
   const totalParticipants = schedule.layers.reduce((acc, layer) => acc + layer.users.length, 0);
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      {/* Back Button */}
-      <Link
-        href="/m/schedules"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Schedules
-      </Link>
+    <div className="responsive-page space-y-4">
+      <MobileDetailHeader
+        leading={<MobileIconTile icon={CalendarClock} tone="shift" size="lg" />}
+        title={schedule.name}
+        badges={
+          currentOnCall.length > 0 ? (
+            <MobileToneBadge tone="shift" icon={PhoneCall}>
+              {currentOnCall.length} on call now
+            </MobileToneBadge>
+          ) : (
+            <MobileToneBadge tone={null}>Nobody on call</MobileToneBadge>
+          )
+        }
+        facts={[
+          {
+            label: 'Rotation layers',
+            value: schedule.layers.length,
+          },
+          { label: 'Participants', value: totalParticipants },
+          ...(schedule.timeZone ? [{ label: 'Time zone', value: schedule.timeZone }] : []),
+        ]}
+      />
 
-      {/* Schedule Header */}
-      <MobileCard padding="lg">
-        <div className="space-y-2">
-          <h1 className="text-lg font-bold text-[color:var(--text-primary)]">{schedule.name}</h1>
-          <p className="text-xs text-[color:var(--text-muted)]">
-            📅 {schedule.layers.length} layer{schedule.layers.length !== 1 ? 's' : ''} • 👥{' '}
-            {totalParticipants} participant{totalParticipants !== 1 ? 's' : ''}
-          </p>
-          {schedule.timeZone && (
-            <p className="text-[11px] text-[color:var(--text-muted)]">
-              🌍 Timezone: {schedule.timeZone}
-            </p>
-          )}
-        </div>
-
-        {/* Current On-Call */}
-        {currentOnCall.length > 0 && (
-          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-950/40">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-              CURRENTLY ON-CALL
-            </div>
-            <div className="mt-2 space-y-2">
-              {currentOnCall.map(responder => (
-                <div key={responder.id} className="flex items-center gap-2">
+      <MobileSection id="schedule-oncall" title="On call now">
+        {currentOnCall.length === 0 ? (
+          <EmptyState
+            icon={<PhoneCall aria-hidden="true" />}
+            title="Nobody is on call right now"
+            description="This schedule has a gap at the moment. Pages fall through to the next escalation step until a shift starts."
+            size="sm"
+            headingLevel="h3"
+          />
+        ) : (
+          <MobileListCard>
+            {currentOnCall.map(responder => (
+              <MobileListRow
+                key={responder.id}
+                leading={
                   <MobileAvatar
                     name={responder.name || responder.email}
-                    size="sm"
+                    size="md"
                     src={responder.avatarUrl || getDefaultAvatar(responder.gender, responder.id)}
                   />
-                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                    {responder.name || responder.email}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+                }
+                title={responder.name || responder.email}
+                trailing={
+                  <MobileToneBadge tone="shift" icon={PhoneCall}>
+                    On call
+                  </MobileToneBadge>
+                }
+              />
+            ))}
+          </MobileListCard>
         )}
-      </MobileCard>
+      </MobileSection>
 
-      {/* Layers Section */}
-      <div className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-          Rotation Layers
-        </h3>
-        <div className="flex flex-col gap-3">
-          {schedule.layers.map((layer, index) => (
-            <MobileCard key={layer.id} padding="md">
-              <div className="mb-3">
-                <div className="text-sm font-semibold text-[color:var(--text-primary)]">
-                  {layer.name || `Layer ${index + 1}`}
-                </div>
-                <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">
-                  ⏱️ {layer.rotationLengthHours}h rotation • {layer.users.length} participants
-                </div>
-              </div>
-
-              {/* Layer Participants */}
-              <div className="flex flex-col gap-2">
+      {schedule.layers.length === 0 ? (
+        <EmptyState
+          icon={<UsersRound aria-hidden="true" />}
+          title="No rotation layers"
+          description="Add a layer with responders in the desktop workspace to start paging people from this schedule."
+          size="sm"
+        />
+      ) : (
+        schedule.layers.map((layer, index) => (
+          <MobileSection
+            key={layer.id}
+            id={`schedule-layer-${layer.id}`}
+            title={layer.name || `Layer ${index + 1}`}
+            description={`${layer.rotationLengthHours}h rotation · ${layer.users.length} ${
+              layer.users.length === 1 ? 'participant' : 'participants'
+            }`}
+          >
+            {layer.users.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border px-3.5 py-3 text-sm text-muted-foreground">
+                No responders in this layer yet.
+              </p>
+            ) : (
+              <MobileListCard>
                 {layer.users.map((layerUser, userIndex) => (
-                  <div
+                  <MobileListRow
                     key={layerUser.id}
-                    className="flex items-center gap-2 rounded-lg bg-[color:var(--bg-secondary)] px-2.5 py-2"
-                  >
-                    <span className="w-6 text-[10px] font-semibold text-[color:var(--text-muted)]">
-                      #{userIndex + 1}
-                    </span>
-                    <MobileAvatar
-                      name={layerUser.user.name || layerUser.user.email}
-                      size="sm"
-                      src={
-                        layerUser.user.avatarUrl ||
-                        getDefaultAvatar(layerUser.user.gender, layerUser.user.id)
-                      }
-                    />
-                    <span className="text-sm text-[color:var(--text-primary)]">
-                      {layerUser.user.name || layerUser.user.email}
-                    </span>
-                  </div>
+                    leading={
+                      <span className="flex items-center gap-2.5">
+                        <span className="w-5 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                          {userIndex + 1}
+                        </span>
+                        <MobileAvatar
+                          name={layerUser.user.name || layerUser.user.email}
+                          size="sm"
+                          src={
+                            layerUser.user.avatarUrl ||
+                            getDefaultAvatar(layerUser.user.gender, layerUser.user.id)
+                          }
+                        />
+                      </span>
+                    }
+                    title={layerUser.user.name || layerUser.user.email}
+                  />
                 ))}
-              </div>
-            </MobileCard>
-          ))}
-        </div>
-      </div>
+              </MobileListCard>
+            )}
+          </MobileSection>
+        ))
+      )}
 
-      {/* View on Desktop Link */}
-      <div className="pt-2 text-center">
-        <Link href={`/schedules/${schedule.id}`} className="text-sm font-semibold text-primary">
-          View full schedule on desktop →
-        </Link>
-      </div>
+      <MobileListCard label="Desktop workspace">
+        <MobileListRow
+          href={`/schedules/${schedule.id}`}
+          leading={<MobileIconTile icon={Monitor} />}
+          title="Open full schedule"
+          subtitle="Overrides, calendar and layer editing on desktop"
+        />
+      </MobileListCard>
     </div>
   );
 }

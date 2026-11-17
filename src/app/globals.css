@@ -47,7 +47,9 @@ textarea:focus-visible {
 
 /* Premium Hover Effects */
 .hover-lift {
-  transition: transform var(--transition-base) var(--ease-out), box-shadow var(--transition-base) var(--ease-out);
+  transition:
+    transform var(--transition-base) var(--ease-out),
+    box-shadow var(--transition-base) var(--ease-out);
 }
 
 .hover-lift:hover {
@@ -109,7 +111,6 @@ textarea:focus-visible {
 
 /* Shake animation for error feedback */
 @keyframes shake {
-
   0%,
   100% {
     transform: translateX(0);
@@ -186,7 +187,6 @@ textarea:focus-visible {
 
 /* Pulse glow animation for Sentinel Eye */
 @keyframes pulse-glow {
-
   0%,
   100% {
     box-shadow: 0 0 30px rgba(6, 182, 212, 0.2);
@@ -194,14 +194,15 @@ textarea:focus-visible {
   }
 
   50% {
-    box-shadow: 0 0 50px rgba(6, 182, 212, 0.4), 0 0 80px rgba(6, 182, 212, 0.2);
+    box-shadow:
+      0 0 50px rgba(6, 182, 212, 0.4),
+      0 0 80px rgba(6, 182, 212, 0.2);
     transform: scale(1.02);
   }
 }
 
 /* Float particle animation for ambient effect */
 @keyframes float-particle {
-
   0%,
   100% {
     transform: translateY(0) translateX(0);
@@ -235,10 +236,12 @@ textarea:focus-visible {
 }
 
 .skeleton-wave {
-  background: linear-gradient(90deg,
-      var(--color-neutral-200) 0px,
-      var(--color-neutral-100) 40px,
-      var(--color-neutral-200) 80px);
+  background: linear-gradient(
+    90deg,
+    var(--color-neutral-200) 0px,
+    var(--color-neutral-100) 40px,
+    var(--color-neutral-200) 80px
+  );
   background-size: 200px 100%;
   animation: skeleton-wave 1.6s linear infinite;
 }
@@ -326,7 +329,7 @@ select option {
   z-index: 0;
 }
 
-.page-shell>* {
+.page-shell > * {
   position: relative;
   z-index: 1;
 }
@@ -418,8 +421,14 @@ select option {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background:
-    linear-gradient(135deg, var(--bg-primary) 0%, rgb(var(--ink-100)) 25%, rgb(var(--ink-100)) 50%, rgb(var(--ink-100)) 75%, var(--bg-primary) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--bg-primary) 0%,
+    rgb(var(--ink-100)) 25%,
+    rgb(var(--ink-100)) 50%,
+    rgb(var(--ink-100)) 75%,
+    var(--bg-primary) 100%
+  );
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -486,7 +495,6 @@ select option {
 }
 
 @keyframes float {
-
   0%,
   100% {
     transform: translate(0, 0) scale(1);
@@ -531,9 +539,18 @@ select option {
   inset: 0;
   border-radius: var(--radius-xl);
   padding: 1px;
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.1) 0%, rgba(71, 85, 105, 0.05) 50%, transparent 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  background: linear-gradient(
+    135deg,
+    rgba(30, 41, 59, 0.1) 0%,
+    rgba(71, 85, 105, 0.05) 50%,
+    transparent 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
@@ -653,7 +670,9 @@ select option {
   height: 6px;
   border-radius: 50%;
   background: var(--color-success);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6), 0 0 16px rgba(16, 185, 129, 0.3);
+  box-shadow:
+    0 0 8px rgba(16, 185, 129, 0.6),
+    0 0 16px rgba(16, 185, 129, 0.3);
   animation: pulse 2s ease-in-out infinite;
   position: relative;
 }
@@ -681,7 +700,6 @@ select option {
 }
 
 @keyframes pulse {
-
   0%,
   100% {
     opacity: 1;
@@ -699,7 +717,12 @@ select option {
   line-height: 1.15;
   font-weight: 800;
   margin-bottom: 0.875rem;
-  background: linear-gradient(135deg, hsl(var(--ui-card)) 0%, rgba(255, 255, 255, 0.9) 50%, rgb(var(--ink-50) / 0.95) 100%);
+  background: linear-gradient(
+    135deg,
+    hsl(var(--ui-card)) 0%,
+    rgba(255, 255, 255, 0.9) 50%,
+    rgb(var(--ink-50) / 0.95) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -853,7 +876,12 @@ select option {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(148, 163, 184, 0.15) 50%, transparent 100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.15) 50%,
+    transparent 100%
+  );
   pointer-events: none;
 }
 
@@ -1551,33 +1579,27 @@ select option {
 
 /* Touch-friendly improvements for mobile */
 @media (hover: none) and (pointer: coarse) {
-
   /* Ensure all interactive elements have minimum touch target size (44x44px) */
   button,
   a,
-  input[type="button"],
-  input[type="submit"],
-  input[type="checkbox"],
-  input[type="radio"],
+  input[type='button'],
+  input[type='submit'],
+  input[type='checkbox'],
+  input[type='radio'],
   select,
-  [role="button"],
-  [role="link"] {
+  [role='button'],
+  [role='link'] {
     min-height: 44px;
     min-width: 44px;
-    padding: var(--spacing-3) var(--spacing-4);
   }
 
-  /* Increase spacing between touch targets */
-  button+button,
-  a+a,
-  .touch-target+.touch-target {
-    margin-left: var(--spacing-3);
-  }
+  /* No blanket padding/margins here: element selectors would pad every link and button that
+     relies on its utilities (bottom-nav tabs, list rows, icon buttons) and push siblings apart. */
 
   /* Improve tap feedback */
   button:active,
   a:active,
-  [role="button"]:active {
+  [role='button']:active {
     transform: scale(0.98);
     opacity: 0.8;
   }
@@ -1588,7 +1610,6 @@ select option {
   select {
     font-size: 16px;
     /* Prevents zoom on iOS */
-    padding: var(--spacing-4);
   }
 }
 
@@ -1633,9 +1654,9 @@ select option {
     font-size: var(--font-size-sm);
   }
 
-  /* Card spacing on mobile */
-  .card,
-  [class*="card"] {
+  /* Card spacing on mobile. Only the legacy `.card` class: an attribute selector here also
+     matched Tailwind's `bg-card`/`text-card-foreground` and padded every surface on touch. */
+  .card {
     padding: var(--spacing-4);
     margin-bottom: var(--spacing-4);
   }
@@ -1723,8 +1744,7 @@ select option {
 }
 
 /* High DPI / Retina Displays */
-@media (-webkit-min-device-pixel-ratio: 2),
-(min-resolution: 192dpi) {
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
   .login-card {
     border-width: 0.5px;
   }
@@ -2581,7 +2601,9 @@ select option {
   position: sticky;
   top: 0;
   color: white;
-  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.08), inset -1px 0 0 rgba(255, 255, 255, 0.1);
+  box-shadow:
+    2px 0 20px rgba(0, 0, 0, 0.08),
+    inset -1px 0 0 rgba(255, 255, 255, 0.1);
   /* overflow: hidden; - Removed to allow toggle button to be visible outside */
   z-index: 1000;
 }
@@ -2858,7 +2880,7 @@ select option {
   padding: 0.85rem 1rem;
 }
 
-.directory-panel>* {
+.directory-panel > * {
   position: relative;
   z-index: 1;
 }
@@ -2912,7 +2934,9 @@ select option {
   padding: 0.5rem 0.625rem;
   font-size: 0.875rem;
   background: hsl(var(--ui-card));
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .filter-input:focus,
@@ -2938,7 +2962,7 @@ select option {
   display: none;
 }
 
-.bulk-actions-section>div {
+.bulk-actions-section > div {
   min-width: 220px;
 }
 
@@ -3105,7 +3129,9 @@ select option {
   font-size: 0.875rem;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3438,7 +3464,9 @@ select option {
   color: var(--text-primary);
   font-size: 0.85rem;
   font-weight: 600;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .topbar-dropdown-item:hover {
@@ -3531,8 +3559,7 @@ select option {
   border-radius: var(--radius-sm);
   border: 1px solid rgb(var(--ink-200) / 0.9);
   background: hsl(var(--ui-card));
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -3551,8 +3578,7 @@ select option {
 
 .user-menu-trigger:hover {
   border-color: rgb(var(--ink-400) / 0.6);
-  box-shadow:
-    0 4px 10px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
   transform: translateY(-1px);
   background: hsl(var(--ui-card));
 }
@@ -3563,8 +3589,7 @@ select option {
 
 .user-menu-trigger:active {
   transform: translateY(0) scale(0.99);
-  box-shadow:
-    0 2px 6px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
 
 .user-avatar-new {
@@ -3641,20 +3666,20 @@ select option {
   display: inline-block;
 }
 
-.user-role-badge[style*="background: #fef3c7"],
-.user-role-badge[style*="background:#fef3c7"] {
+.user-role-badge[style*='background: #fef3c7'],
+.user-role-badge[style*='background:#fef3c7'] {
   background: #fef9c3 !important;
   color: #713f12 !important;
   border-color: #facc15 !important;
 }
 
-.user-role-badge[style*="background: #dbeafe"] {
+.user-role-badge[style*='background: #dbeafe'] {
   background: #dbeafe !important;
   color: #1e40af !important;
   border-color: #3b82f6 !important;
 }
 
-.user-role-badge[style*="background: #f3f4f6"] {
+.user-role-badge[style*='background: #f3f4f6'] {
   background: rgb(var(--ink-100)) !important;
   color: rgb(var(--ink-600)) !important;
   border-color: rgb(var(--ink-400)) !important;

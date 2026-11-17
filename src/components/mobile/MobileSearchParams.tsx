@@ -1,12 +1,13 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Search } from 'lucide-react';
 import MobileSearch, { MobileFilterChip } from './MobileSearch';
 
 import { useRef, useState, useEffect } from 'react';
 
 // Helper to debounce manually if package not available
-function useDebounce<T extends (...args: any[]) => void>(callback: T, delay: number) {
+function useDebounce<A extends unknown[]>(callback: (...args: A) => void, delay: number) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -17,7 +18,7 @@ function useDebounce<T extends (...args: any[]) => void>(callback: T, delay: num
     };
   }, []);
 
-  return (...args: Parameters<T>) => {
+  return (...args: A) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => callback(...args), delay);
   };
@@ -35,9 +36,12 @@ export function MobileSearchWithParams({
   const currentQuery = searchParams.get('q') || '';
   const [term, setTerm] = useState(currentQuery);
 
-  useEffect(() => {
+  // Follow URL changes (back/forward, clear) by adjusting state during render, not in an effect.
+  const [syncedQuery, setSyncedQuery] = useState(currentQuery);
+  if (syncedQuery !== currentQuery) {
+    setSyncedQuery(currentQuery);
     setTerm(currentQuery);
-  }, [currentQuery]);
+  }
 
   const handleSearch = useDebounce((searchTerm: string) => {
     const params = new URLSearchParams(searchParams);
@@ -54,6 +58,7 @@ export function MobileSearchWithParams({
   return (
     <MobileSearch
       placeholder={placeholder}
+      leftIcon={<Search className="h-4 w-4" />}
       value={term}
       onChange={val => {
         setTerm(val);

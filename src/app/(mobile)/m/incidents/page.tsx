@@ -7,7 +7,7 @@ import { appRoutes } from '@/lib/app-routes';
 import { Plus, SearchX } from 'lucide-react';
 import MobileIncidentList, { type IncidentFilter } from '@/components/mobile/MobileIncidentList';
 import MobileIncidentFilters from '@/components/mobile/MobileIncidentFilters';
-import EmptyState from '@/components/ui/EmptyState';
+import EmptyState from '@/components/patterns/EmptyState';
 import { Button } from '@/components/ui/shadcn/button';
 import prisma from '@/lib/prisma';
 import { activeIncidentStatuses, mutedIncidentStatuses } from '@/lib/incident-status';
@@ -260,28 +260,36 @@ export default async function MobileIncidentsPage(props: {
       {incidents.length === 0 ? (
         <EmptyState
           icon={<SearchX aria-hidden="true" />}
-          title="No incidents found"
+          title={hasFilters ? 'No incidents match these filters' : 'No incidents yet'}
           description={
-            query ? `Nothing matches “${query}”.` : 'Change the filters or create a new incident.'
+            query
+              ? `Nothing matches “${query}”. Try fewer words or clear the filters.`
+              : hasFilters
+                ? 'Clear the filters to see every incident you can access.'
+                : 'Incidents appear here when a service pages or a responder declares one.'
           }
           size="sm"
           action={
-            <Button asChild size="lg" className="h-11 min-h-[44px] rounded-xl px-5">
-              <Link href="/m/incidents/create">
-                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                New incident
-              </Link>
-            </Button>
+            hasFilters ? (
+              <Button asChild size="lg" className="h-11 rounded-xl px-5">
+                <Link href="/m/incidents">Clear filters</Link>
+              </Button>
+            ) : (
+              <Button asChild size="lg" className="h-11 rounded-xl px-5">
+                <Link href="/m/incidents/create">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  New incident
+                </Link>
+              </Button>
+            )
           }
           secondaryAction={
             hasFilters ? (
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="h-11 min-h-[44px] rounded-xl px-4"
-              >
-                <Link href="/m/incidents">Clear filters</Link>
+              <Button asChild size="lg" variant="outline" className="h-11 rounded-xl px-4">
+                <Link href="/m/incidents/create">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  New incident
+                </Link>
               </Button>
             ) : undefined
           }
@@ -293,16 +301,19 @@ export default async function MobileIncidentsPage(props: {
       {totalPages > 1 && (
         <nav
           aria-label="Incident result navigation"
-          className="flex items-center justify-center gap-2 pt-1"
+          className="flex flex-wrap items-center justify-center gap-2 pt-1"
         >
+          <p className="w-full text-center text-xs tabular-nums text-muted-foreground">
+            Page {page} of {totalPages}
+          </p>
           {page > 1 && (
-            <Button asChild variant="outline" size="lg" className="h-11 min-h-[44px] rounded-xl">
-              <Link href={buildPageUrl(page - 1)}>Newer</Link>
+            <Button asChild variant="outline" size="lg" className="h-11 rounded-xl">
+              <Link href={buildPageUrl(page - 1)}>Newer incidents</Link>
             </Button>
           )}
           {page < totalPages && (
-            <Button asChild size="lg" className="h-11 min-h-[44px] rounded-xl px-5">
-              <Link href={buildPageUrl(page + 1)}>Load older incidents</Link>
+            <Button asChild variant="outline" size="lg" className="h-11 rounded-xl px-5">
+              <Link href={buildPageUrl(page + 1)}>Older incidents</Link>
             </Button>
           )}
         </nav>

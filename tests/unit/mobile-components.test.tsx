@@ -38,7 +38,7 @@ describe('Mobile Components', () => {
   describe('MobileUrgencyBadge', () => {
     it('renders HIGH urgency', () => {
       render(<MobileUrgencyBadge urgency="high" />);
-      expect(screen.getByText('high')).toBeInTheDocument();
+      expect(screen.getByText('High')).toBeInTheDocument();
     });
   });
 

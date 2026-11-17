@@ -96,16 +96,16 @@ export default function MobileServiceMaintenance({
       {active ? (
         <div
           role="status"
-          className="rounded-xl border border-status-info-border bg-status-info-soft p-3.5 text-status-info-deep"
+          className="rounded-xl border border-status-info-border/40 bg-status-info-soft p-3.5 text-status-info-deep dark:border-status-info/35 dark:bg-status-info/15 dark:text-blue-300"
         >
           <div className="flex min-w-0 items-start gap-2.5">
             <Wrench className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold">
+              <p className="text-sm font-semibold">
                 In maintenance until <MobileTime value={active.endsAt} format="short" />
               </p>
-              <p className="mt-0.5 break-words text-[12px] font-semibold">{active.title}</p>
-              <p className="mt-0.5 text-[11px]">
+              <p className="mt-0.5 break-words text-sm font-medium">{active.title}</p>
+              <p className="mt-0.5 text-xs tabular-nums">
                 {active.heldCount} alert{active.heldCount === 1 ? '' : 's'} held · nobody is paged
               </p>
             </div>
@@ -114,14 +114,14 @@ export default function MobileServiceMaintenance({
             (confirmEnd ? (
               // Ending early releases held alerts for paging, so a stray tap must not do it.
               <div className="mt-3 space-y-2">
-                <p className="text-[12px] font-semibold">
+                <p className="text-sm font-medium">
                   End now? Alerts still firing will start paging.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-11 rounded-xl bg-white text-status-info-deep hover:bg-white/80 hover:text-status-info-deep"
+                    className="h-11 rounded-xl border-status-info-border/40 bg-background text-foreground hover:bg-muted"
                     disabled={isPending}
                     onClick={() => setConfirmEnd(false)}
                   >
@@ -151,8 +151,7 @@ export default function MobileServiceMaintenance({
               <Button
                 type="button"
                 variant="outline"
-                // The info tokens are fixed light hues in both themes, so pin the button colours too.
-                className="mt-3 h-11 w-full rounded-xl border-status-info-border bg-white text-status-info-deep hover:bg-white/80 hover:text-status-info-deep"
+                className="mt-3 h-11 w-full rounded-xl border-status-info-border/40 bg-background text-foreground hover:bg-muted"
                 disabled={isPending}
                 aria-label={`End maintenance window ${active.title} now`}
                 onClick={() => setConfirmEnd(true)}
@@ -169,37 +168,39 @@ export default function MobileServiceMaintenance({
           />
           {next ? (
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold text-foreground">
+              <p className="text-sm font-semibold text-foreground">
                 Maintenance starts <MobileTime value={next.startsAt} format="short" />
               </p>
-              <p className="mt-0.5 break-words text-[12px] text-muted-foreground">{next.title}</p>
+              <p className="mt-0.5 break-words text-sm text-muted-foreground">{next.title}</p>
             </div>
           ) : (
-            <p className="text-[12px] text-muted-foreground">No maintenance scheduled.</p>
+            <p className="text-sm text-muted-foreground">No maintenance scheduled.</p>
           )}
         </div>
       )}
 
       {sorted.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <h2 className="px-3.5 pt-3 text-xs font-semibold text-foreground">Maintenance windows</h2>
+          <h2 className="px-3.5 pt-3 text-sm font-semibold text-foreground">Maintenance windows</h2>
           <ul className="mt-1">
             {sorted.slice(0, LIST_LIMIT).map((w, index) => (
               <li
                 key={w.id}
-                className={`flex min-h-11 min-w-0 items-center gap-2 px-3.5 py-2 text-[11px] ${index > 0 ? 'border-t border-border/70' : ''}`}
+                className={`flex min-h-11 min-w-0 items-center gap-2 px-3.5 py-2 text-xs ${index > 0 ? 'border-t border-border' : ''}`}
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-foreground">{w.title}</span>
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {w.title}
+                  </span>
                   <span className="block truncate text-muted-foreground">
                     <MobileTime value={w.startsAt} format="short" /> –{' '}
                     <MobileTime value={w.endsAt} format="short" />
                   </span>
                 </span>
                 <span
-                  className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                  className={`inline-flex h-5 shrink-0 items-center rounded-full border px-1.5 text-2xs font-semibold ${
                     w.phase === 'ACTIVE'
-                      ? 'border-status-info-border bg-status-info-soft text-status-info-deep'
+                      ? 'border-status-info-border/25 bg-status-info-soft text-status-info-deep dark:border-status-info/35 dark:bg-status-info/15 dark:text-blue-300'
                       : 'border-border bg-muted text-muted-foreground'
                   }`}
                 >
@@ -255,7 +256,7 @@ export default function MobileServiceMaintenance({
                 ))}
               </div>
             </fieldset>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Starts now. New alerts are held and nobody is paged until it ends.
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -291,7 +292,7 @@ export default function MobileServiceMaintenance({
         ))}
 
       {error && (
-        <p role="alert" className="text-[11px] font-semibold text-destructive">
+        <p role="alert" className="text-xs font-medium text-destructive">
           {error}
         </p>
       )}

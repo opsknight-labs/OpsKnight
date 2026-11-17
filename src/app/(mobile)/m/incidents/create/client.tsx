@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, ChevronDown, LayoutTemplate, WifiOff } from 'lucide-react';
 import MobileButton from '@/components/mobile/MobileButton';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { urgencyTone } from '@/lib/design/status-palette';
 import { cn } from '@/lib/utils';
 import { notify as toast } from '@/lib/toast';
 import { toUserFacingError } from '@/lib/user-facing-error';
@@ -49,9 +51,13 @@ type Draft = {
   assigneeId: string;
 };
 
-const FIELD_LABEL = 'text-xs font-semibold text-foreground';
+const FIELD_LABEL = 'text-sm font-medium text-foreground';
+const FIELD_HELP = 'text-xs text-muted-foreground';
 const CONTROL =
-  'min-h-[44px] h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20';
+  'min-h-[44px] h-[44px] w-full rounded-xl border border-input bg-card px-3 text-foreground outline-none transition-colors duration-150 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring';
+/** Card-style radio: the visually hidden input still drives the focus ring. */
+const RADIO_CARD =
+  'flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-medium transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background';
 const DRAFT_KEY = 'incident-create-draft';
 const DRAFT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
@@ -349,7 +355,7 @@ export default function MobileCreateIncidentClient({
       ) : null}
 
       {templates.length > 0 ? (
-        <section className="rounded-2xl border border-border bg-card p-3.5 shadow-sm">
+        <section className="rounded-xl border border-border bg-card p-3.5">
           <div className="mb-2 flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
@@ -357,13 +363,11 @@ export default function MobileCreateIncidentClient({
             <div className="min-w-0">
               <label
                 htmlFor="incident-template"
-                className="block text-sm font-semibold text-foreground"
+                className="block text-sm font-medium text-foreground"
               >
                 Incident template
               </label>
-              <p className="text-[11px] text-muted-foreground">
-                Optional · pre-fills the incident form
-              </p>
+              <p className={FIELD_HELP}>Optional · pre-fills the incident form</p>
             </div>
           </div>
           <div className="relative">
@@ -386,7 +390,7 @@ export default function MobileCreateIncidentClient({
             />
           </div>
           {selectedTemplate ? (
-            <div className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+            <div className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
               <span className="font-semibold text-foreground">{selectedTemplate.name}</span>
               {selectedTemplate.description ? ` · ${selectedTemplate.description}` : ''}
               <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
@@ -477,9 +481,7 @@ export default function MobileCreateIncidentClient({
 
         <fieldset className="space-y-2">
           <legend className={FIELD_LABEL}>Urgency</legend>
-          <p className="text-[11px] text-muted-foreground">
-            Controls responder notification behavior.
-          </p>
+          <p className={FIELD_HELP}>Controls how responders are notified.</p>
           <div className="grid grid-cols-3 gap-2">
             {(['HIGH', 'MEDIUM', 'LOW'] as const).map(value => (
               <UrgencyRadio
@@ -497,12 +499,13 @@ export default function MobileCreateIncidentClient({
           <label htmlFor="incident-priority" className={FIELD_LABEL}>
             Priority
           </label>
-          <p className="text-[11px] text-muted-foreground">
+          <p id="incident-priority-help" className={FIELD_HELP}>
             Optional business-impact classification, separate from paging urgency.
           </p>
           <div className="relative">
             <select
               id="incident-priority"
+              aria-describedby="incident-priority-help"
               value={priority}
               onChange={event => setPriority(event.target.value)}
               className={cn(CONTROL, 'appearance-none pr-10')}
@@ -523,7 +526,7 @@ export default function MobileCreateIncidentClient({
             />
           </div>
           {selectedPriorityDefinition ? (
-            <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+            <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-xs leading-relaxed text-muted-foreground">
               {selectedPriorityDefinition.description}
             </p>
           ) : null}
@@ -579,17 +582,17 @@ export default function MobileCreateIncidentClient({
           className="flex items-center gap-2 rounded-xl border border-destructive/25 bg-destructive/10 px-3.5 py-2.5 text-xs font-medium text-destructive"
           role="alert"
         >
-          <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+          <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
           <span>{error}</span>
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
+      <div className="mobile-action-bar grid grid-cols-2 gap-3">
         <MobileButton type="button" variant="secondary" fullWidth onClick={() => router.back()}>
           Cancel
         </MobileButton>
         <MobileButton type="submit" fullWidth loading={loading} disabled={offline || !draftReady}>
-          {loading ? 'Submitting…' : 'Create incident'}
+          {loading ? 'Creating…' : 'Create incident'}
         </MobileButton>
       </div>
     </form>
@@ -607,23 +610,13 @@ function UrgencyRadio({
   checked: boolean;
   onChange: () => void;
 }) {
-  const tone =
-    value === 'HIGH'
-      ? checked
-        ? 'border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-300'
-        : ''
-      : value === 'MEDIUM'
-        ? checked
-          ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-          : ''
-        : checked
-          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-          : '';
   return (
     <label
       className={cn(
-        'flex min-h-11 cursor-pointer items-center justify-center rounded-xl border px-2 text-xs font-semibold transition-colors',
-        checked ? tone : 'border-input bg-background text-muted-foreground hover:bg-accent'
+        RADIO_CARD,
+        checked
+          ? toneClasses(urgencyTone(value)).soft
+          : 'border-input bg-card text-muted-foreground hover:bg-muted'
       )}
     >
       <input
@@ -655,10 +648,10 @@ function VisibilityRadio({
   return (
     <label
       className={cn(
-        'flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-2 text-xs font-semibold transition-colors',
+        RADIO_CARD,
         checked
-          ? 'border-primary/50 bg-primary/10 text-primary'
-          : 'border-input bg-background text-muted-foreground hover:bg-accent'
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-input bg-card text-muted-foreground hover:bg-muted'
       )}
     >
       <input
@@ -670,7 +663,7 @@ function VisibilityRadio({
         className="sr-only"
       />
       <span>{label}</span>
-      {isDefault ? <span className="text-[9px] font-medium opacity-70">default</span> : null}
+      {isDefault ? <span className="text-xs font-normal opacity-80">(default)</span> : null}
     </label>
   );
 }

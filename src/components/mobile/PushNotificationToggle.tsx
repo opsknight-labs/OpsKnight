@@ -366,6 +366,7 @@ export default function PushNotificationToggle() {
   }, [preparePush]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads external Push/ServiceWorker state on mount
     void checkSupportAndState();
     const installed = () => void checkSupportAndState();
     const online = () => void checkSupportAndState();
@@ -755,7 +756,7 @@ export default function PushNotificationToggle() {
       }
     >
       <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
+      <p className="text-xs leading-relaxed text-muted-foreground">
         Push delivery is registered per device and remains separate from the lifetime of your
         interactive login session.
       </p>
@@ -775,7 +776,7 @@ export default function PushNotificationToggle() {
           <button
             type="button"
             onClick={() => void toggleDiagnostics()}
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-[11px] font-medium transition-colors"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
             aria-expanded={showDiagnostics}
           >
             {showDiagnostics ? (
@@ -786,13 +787,13 @@ export default function PushNotificationToggle() {
             <span>Diagnostics</span>
           </button>
           {showDiagnostics ? (
-            <div className="mt-2 rounded-md border border-border bg-muted/40 p-2.5 space-y-2 text-[11px] text-muted-foreground font-mono">
+            <div className="mt-2 rounded-md border border-border bg-muted/40 p-2.5 space-y-2 text-xs text-muted-foreground font-mono">
               <div className="flex items-center justify-between font-sans">
                 <span className="font-semibold text-foreground">Service Worker Health</span>
                 <button
                   type="button"
                   onClick={() => void copyDiagnostics()}
-                  className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
                 >
                   {diagnosticsCopied ? (
                     <>

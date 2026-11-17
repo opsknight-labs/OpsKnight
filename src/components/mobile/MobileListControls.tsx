@@ -24,9 +24,12 @@ export default function MobileListControls({
   const activeSort = searchParams.get('sort') || sortOptions[0]?.value || 'created_desc';
   const [term, setTerm] = useState(currentQuery);
 
-  useEffect(() => {
+  // Follow URL changes (back/forward, clear) by adjusting state during render, not in an effect.
+  const [syncedQuery, setSyncedQuery] = useState(currentQuery);
+  if (syncedQuery !== currentQuery) {
+    setSyncedQuery(currentQuery);
     setTerm(currentQuery);
-  }, [currentQuery]);
+  }
 
   const updateParams = useCallback(
     (updates: { q?: string; filter?: string | null; sort?: string }) => {
@@ -81,7 +84,7 @@ export default function MobileListControls({
 
         <div className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 shadow-sm">
           <label
-            className="shrink-0 text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground"
+            className="shrink-0 text-sm font-medium text-muted-foreground"
             htmlFor="mobile-sort"
           >
             Sort

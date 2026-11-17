@@ -47,4 +47,22 @@ describe('MobileHeader action geometry', () => {
     expect(back.className).toContain('h-11');
     expect(back.className).toContain('w-11');
   });
+
+  it('names the back target and returns from service automation to that service', () => {
+    mockPathname = '/m/services/svc-1/automation';
+    render(<MobileHeader systemStatus="ok" />);
+
+    expect(screen.getByRole('link', { name: 'Back to Service' })).toHaveAttribute(
+      'href',
+      '/m/services/svc-1'
+    );
+    expect(screen.getByText('Automation')).toBeInTheDocument();
+  });
+
+  it('exposes the list route title as the page heading', () => {
+    mockPathname = '/m/help';
+    render(<MobileHeader systemStatus="ok" />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Help' })).toBeInTheDocument();
+  });
 });

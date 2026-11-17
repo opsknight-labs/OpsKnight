@@ -112,7 +112,7 @@ export default function MobileBiometricToggle() {
         Hide responder data after the app is backgrounded and require the device authenticator to
         reveal it again.
       </p>
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
+      <p className="text-xs leading-relaxed text-muted-foreground">
         This is a local privacy control only. Server authentication, authorization, expiry and
         device revocation remain authoritative.
       </p>

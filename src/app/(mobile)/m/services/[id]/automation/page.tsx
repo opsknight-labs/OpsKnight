@@ -1,10 +1,11 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { hasCapability } from '@/lib/authorization';
 import AutomationShell from '@/components/automation/AutomationShell';
+import { Workflow } from 'lucide-react';
+import { MobileDetailHeader, MobileIconTile } from '@/components/mobile/MobileList';
 import { requirePageAccess } from '@/lib/access/server';
 export const dynamic = 'force-dynamic';
 export default async function MobileServiceAutomationPage({
@@ -24,17 +25,12 @@ export default async function MobileServiceAutomationPage({
   });
   if (!service) notFound();
   return (
-    <div className="responsive-page space-y-4 pb-12">
-      <header className="space-y-2">
-        <Link
-          className="inline-flex min-h-11 items-center text-sm underline"
-          href={`/m/services/${service.id}`}
-        >
-          ← Back to service
-        </Link>
-        <h1 className="text-lg font-semibold break-words">{service.name}</h1>
-        <p className="text-sm text-muted-foreground">Automation workspace</p>
-      </header>
+    <div className="responsive-page space-y-4">
+      <MobileDetailHeader
+        leading={<MobileIconTile icon={Workflow} size="lg" />}
+        title={service.name}
+        description="Automation workspace"
+      />
       <AutomationShell serviceId={service.id} mobile />
     </div>
   );

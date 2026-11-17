@@ -73,14 +73,16 @@ export default function MobileSearch({
           onFocus={() => setIsFocused(true)}
           onBlur={() => window.setTimeout(() => setIsFocused(false), 150)}
           placeholder={placeholder}
+          aria-label={placeholder.replace(/[.…]+$/, '')}
+          enterKeyHint="search"
           autoFocus={autoFocus}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
           className={cn(
-            'h-11 min-h-[44px] min-w-0 flex-1 rounded-xl border-input bg-background pr-11 text-foreground shadow-sm focus-visible:ring-ring',
-            leftIcon ? 'pl-9' : 'px-4'
+            'h-11 min-h-[44px] min-w-0 flex-1 rounded-xl border-input bg-card pr-12 text-foreground focus-visible:ring-ring',
+            leftIcon ? 'pl-10' : 'px-4'
           )}
         />
 
@@ -88,7 +90,7 @@ export default function MobileSearch({
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-1.5 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="absolute right-0.5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Clear search"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -143,7 +145,7 @@ export function MobileFilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         active
           ? 'border-primary bg-primary text-primary-foreground shadow-sm'
           : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground'
@@ -153,7 +155,7 @@ export function MobileFilterChip({
       {count !== undefined && (
         <span
           className={cn(
-            'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.65rem] font-bold tabular-nums',
+            'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs font-bold tabular-nums',
             active
               ? 'bg-primary-foreground/15 text-primary-foreground'
               : 'bg-muted text-muted-foreground'

@@ -56,7 +56,7 @@ const typeMeta: Record<ResultType, TypeMeta> = {
   incident: { label: 'Incident', tone: 'text-rose-600 dark:text-rose-400', Icon: AlertTriangle },
   service: { label: 'Service', tone: 'text-blue-600 dark:text-blue-400', Icon: Server },
   team: { label: 'Team', tone: 'text-teal-600 dark:text-teal-300', Icon: Users },
-  user: { label: 'User', tone: 'text-slate-600 dark:text-zinc-300', Icon: User },
+  user: { label: 'User', tone: 'text-muted-foreground', Icon: User },
   policy: { label: 'Policy', tone: 'text-amber-700 dark:text-amber-400', Icon: Shield },
   postmortem: { label: 'Postmortem', tone: 'text-purple-600 dark:text-purple-300', Icon: FileText },
 };
@@ -273,9 +273,7 @@ export default function MobileQuickSwitcher() {
                                   </span>
                                 ) : null}
                               </div>
-                              <span className="text-[10px] uppercase text-muted-foreground">
-                                {meta.label}
-                              </span>
+                              <span className="text-xs text-muted-foreground">{meta.label}</span>
                             </CommandItem>
                           );
                         })}
@@ -325,9 +323,7 @@ export default function MobileQuickSwitcher() {
                               </span>
                             ) : null}
                           </div>
-                          <span className="text-[10px] uppercase text-muted-foreground">
-                            {meta.label}
-                          </span>
+                          <span className="text-xs text-muted-foreground">{meta.label}</span>
                         </CommandItem>
                       );
                     })}

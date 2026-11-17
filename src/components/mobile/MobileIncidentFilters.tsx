@@ -6,13 +6,13 @@ import { Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/shadcn/sheet';
 import {
   Select,
   SelectContent,
@@ -147,14 +147,16 @@ export default function MobileIncidentFilters(props: Props) {
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="Search incidents"
+            aria-label="Search incidents"
             type="search"
+            enterKeyHint="search"
             autoComplete="off"
-            className="h-[44px] min-h-[44px] rounded-xl bg-card px-4 pr-10 text-sm shadow-none"
+            className="h-11 min-h-[44px] rounded-xl bg-card px-4 pr-12 shadow-none"
           />
           {query && (
             <button
               type="button"
-              className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => {
                 setQuery('');
                 submitSearch('');
@@ -176,14 +178,17 @@ export default function MobileIncidentFilters(props: Props) {
         >
           <Filter className="h-4 w-4" aria-hidden="true" />
           {count > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold text-white ring-2 ring-background">
+            <span
+              aria-hidden="true"
+              className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-critical-deep px-1 text-2xs font-bold tabular-nums text-white ring-2 ring-background"
+            >
               {count}
             </span>
           )}
         </Button>
       </div>
 
-      <div className="flex min-w-0 items-center justify-between gap-3 px-0.5 text-[11px] text-muted-foreground">
+      <div className="flex min-w-0 items-center justify-between gap-3 px-0.5 text-xs tabular-nums text-muted-foreground">
         <span>
           {props.totalCount} {props.totalCount === 1 ? 'incident' : 'incidents'}
         </span>
@@ -198,17 +203,17 @@ export default function MobileIncidentFilters(props: Props) {
         </span>
       </div>
 
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Filter incidents</DialogTitle>
-            <DialogDescription>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetContent side="bottom" className="mx-auto max-w-xl">
+          <SheetHeader className="pr-10 text-left">
+            <SheetTitle>Filter incidents</SheetTitle>
+            <SheetDescription>
               Keep the list focused on the incidents you can act on now.
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
           <div className="grid gap-4 py-1">
-            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+            <label className="grid gap-1.5 text-sm font-medium text-foreground">
               Status
               <Select
                 value={draft.filter}
@@ -230,7 +235,7 @@ export default function MobileIncidentFilters(props: Props) {
               </Select>
             </label>
 
-            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+            <label className="grid gap-1.5 text-sm font-medium text-foreground">
               Urgency
               <Select
                 value={draft.urgency}
@@ -248,7 +253,7 @@ export default function MobileIncidentFilters(props: Props) {
               </Select>
             </label>
 
-            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+            <label className="grid gap-1.5 text-sm font-medium text-foreground">
               Assignment
               <Select
                 value={draft.assignee}
@@ -266,7 +271,7 @@ export default function MobileIncidentFilters(props: Props) {
             </label>
 
             {props.services.length > 0 && (
-              <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
                 Service
                 <Select
                   value={draft.serviceId}
@@ -287,7 +292,7 @@ export default function MobileIncidentFilters(props: Props) {
               </label>
             )}
 
-            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+            <label className="grid gap-1.5 text-sm font-medium text-foreground">
               Sort
               <Select
                 value={draft.sort}
@@ -307,7 +312,7 @@ export default function MobileIncidentFilters(props: Props) {
             </label>
           </div>
 
-          <DialogFooter className="grid grid-cols-2 gap-2 sm:flex">
+          <SheetFooter className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:space-x-0">
             <Button
               type="button"
               variant="outline"
@@ -320,9 +325,9 @@ export default function MobileIncidentFilters(props: Props) {
             <Button type="button" size="lg" className="h-11 min-h-[44px]" onClick={apply}>
               Apply filters
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </section>
   );
 }

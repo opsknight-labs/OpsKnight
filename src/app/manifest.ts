@@ -8,8 +8,11 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Enterprise Incident Management & On-Call',
     start_url: '/m',
     display: 'standalone',
-    background_color: '#0f172a',
-    theme_color: '#0f172a',
+    // One value for both schemes (manifests cannot vary by colour scheme): the brand dark
+    // ground, so the launch splash never flashes white. The page's media-aware
+    // <meta name="theme-color"> takes over the browser chrome after first paint.
+    background_color: '#09090b',
+    theme_color: '#09090b',
     scope: '/',
     categories: ['business', 'productivity', 'utilities'],
     icons: [

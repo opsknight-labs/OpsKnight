@@ -30,13 +30,13 @@ function getVariantConfig(variant: ButtonVariant) {
       return {
         variant: 'default' as const,
         className:
-          'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500',
+          'bg-emerald-700 text-white hover:bg-emerald-800 active:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-800',
       };
     case 'warning':
       return {
         variant: 'default' as const,
         className:
-          'bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-700 dark:hover:bg-amber-600',
+          'bg-amber-700 text-white hover:bg-amber-800 active:bg-amber-900 dark:bg-amber-700 dark:hover:bg-amber-800',
       };
     case 'ghost':
       return { variant: 'ghost' as const, className: '' };
@@ -171,7 +171,7 @@ export function MobileIconButton({
         {icon}
       </MobileButton>
       {badge !== undefined && (
-        <span className="absolute -right-1 -top-1 flex h-5 min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[0.6rem] font-bold text-destructive-foreground">
+        <span className="absolute -right-1 -top-1 flex h-5 min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-2xs font-bold tabular-nums text-destructive-foreground">
           {badge}
         </span>
       )}

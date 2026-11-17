@@ -82,6 +82,22 @@
   --mobile-nav-height: 0px;
 }
 
+/* Without the bottom nav the scroll area reaches the home indicator. */
+.mobile-app[data-bottom-nav='absent'] .mobile-content {
+  padding-bottom: calc(var(--mobile-block) + 0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+/*
+ * The /m shell is a phone app. On touch devices keep the 16px density root in landscape
+ * too: a phone at 844x390 otherwise falls into the small-laptop 14px step and every
+ * rem-sized 44px target (h-11) shrinks to 38px.
+ */
+@media (pointer: coarse) {
+  html:has(.mobile-app) {
+    font-size: 16px;
+  }
+}
+
 .dark .mobile-app,
 [data-theme='dark'] .mobile-app {
   --bg-primary: #09090b;
@@ -101,7 +117,11 @@
   min-height: 0;
   height: 100%;
   margin-inline: auto;
-  padding: var(--mobile-block) var(--mobile-inline) calc(var(--mobile-block) + 0.75rem);
+  /* Landscape notches sit on the left/right edge; never let content run under them. */
+  --mobile-gutter-start: max(var(--mobile-inline), env(safe-area-inset-left, 0px));
+  --mobile-gutter-end: max(var(--mobile-inline), env(safe-area-inset-right, 0px));
+  padding: var(--mobile-block) var(--mobile-gutter-end) calc(var(--mobile-block) + 0.75rem)
+    var(--mobile-gutter-start);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -216,7 +236,7 @@
 }
 
 .mobile-header-brand {
-  min-width: 0;
+  min-width: 44px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
@@ -236,12 +256,15 @@
 
 .mobile-header-page-title {
   min-width: 0;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.95rem;
-  font-weight: 750;
-  letter-spacing: -0.015em;
+  font-family: var(--font-family-display);
+  font-size: 1.0625rem;
+  line-height: 1.625rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 /* Header action geometry now lives on MobileHeaderAction (Tailwind utility
@@ -259,7 +282,8 @@
   min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding-inline: max(0.35rem, env(safe-area-inset-left, 0px)) max(0.35rem, env(safe-area-inset-right, 0px));
+  padding-inline: max(0.35rem, env(safe-area-inset-left, 0px))
+    max(0.35rem, env(safe-area-inset-right, 0px));
   padding-top: 0.25rem;
   padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid hsl(var(--ui-border) / 0.9);
@@ -286,7 +310,10 @@
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
-  transition: color 140ms ease, background-color 140ms ease, transform 100ms ease;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    transform 100ms ease;
 }
 
 .mobile-nav-item.active {
@@ -294,7 +321,9 @@
   color: hsl(var(--ui-foreground));
 }
 
-.mobile-nav-item:active { transform: scale(0.98); }
+.mobile-nav-item:active {
+  transform: scale(0.98);
+}
 
 .mobile-nav-icon {
   position: relative;
@@ -314,9 +343,9 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: clamp(0.56rem, 2.2vw, 0.65rem);
-  line-height: 1.05;
-  font-weight: 650;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 600;
   text-align: center;
 }
 
@@ -372,9 +401,13 @@
 }
 
 .dark .mobile-network-banner.offline,
-[data-theme='dark'] .mobile-network-banner.offline { color: #fb7185; }
+[data-theme='dark'] .mobile-network-banner.offline {
+  color: #fb7185;
+}
 .dark .mobile-network-banner.slow,
-[data-theme='dark'] .mobile-network-banner.slow { color: #fbbf24; }
+[data-theme='dark'] .mobile-network-banner.slow {
+  color: #fbbf24;
+}
 
 .mobile-network-banner button {
   min-height: 36px;
@@ -415,10 +448,16 @@
   box-shadow: 0 16px 40px hsl(var(--ui-foreground) / 0.14);
 }
 
-.mobile-pwa-notice > div { min-width: 0; }
+.mobile-pwa-notice > div {
+  min-width: 0;
+}
 .mobile-pwa-notice strong,
-.mobile-pwa-notice span { display: block; }
-.mobile-pwa-notice strong { font-size: 0.8125rem; }
+.mobile-pwa-notice span {
+  display: block;
+}
+.mobile-pwa-notice strong {
+  font-size: 0.8125rem;
+}
 .mobile-pwa-notice span {
   margin-top: 0.125rem;
   color: hsl(var(--ui-muted-foreground));
@@ -446,8 +485,12 @@
   height: auto;
 }
 
-.mobile-swipe-navigator.snap-left { animation: mobileSnapLeft 160ms ease-out; }
-.mobile-swipe-navigator.snap-right { animation: mobileSnapRight 160ms ease-out; }
+.mobile-swipe-navigator.snap-left {
+  animation: mobileSnapLeft 160ms ease-out;
+}
+.mobile-swipe-navigator.snap-right {
+  animation: mobileSnapRight 160ms ease-out;
+}
 
 .mobile-swipe-hint {
   position: fixed;
@@ -464,18 +507,30 @@
   background: hsl(var(--ui-foreground) / 0.94);
   color: hsl(var(--ui-background));
   box-shadow: 0 10px 26px hsl(var(--ui-foreground) / 0.18);
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 @keyframes mobileSnapLeft {
-  from { transform: translateX(8px); opacity: 0.9; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(8px);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 @keyframes mobileSnapRight {
-  from { transform: translateX(-8px); opacity: 0.9; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(-8px);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 /* Interaction contract */
@@ -489,18 +544,84 @@
   min-height: 44px;
 }
 
+/* Disclosure summaries, standalone inline-flex links (back links, "View all") and text
+   fields are tap targets too; `:is()` so this out-ranks a shared component's `min-h-8`. */
+.mobile-app
+  main
+  :is(
+    summary,
+    a.inline-flex,
+    select,
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='hidden'])
+  ) {
+  min-height: 44px;
+}
+
 .mobile-app :where(button, [role='button'], input, select, textarea, a):focus-visible {
   outline: 2px solid hsl(var(--ui-ring));
   outline-offset: 2px;
 }
 
-.mobile-app :where(input, select, textarea) {
+/*
+ * iOS zooms any focused field under 16px. `!important` because the legacy compact-form
+ * rules in styles/layouts/topbar.css (`select:not(.login-card select)`, `input[type=text]
+ * :not(...)x5`) out-rank any utility and force 14px. The `html:has()` form also reaches
+ * portaled sheets and dialogs.
+ */
+.mobile-app :is(input, select, textarea),
+html:has(.mobile-app) [role='dialog'] :is(input, select, textarea) {
   max-width: 100%;
-  font-size: max(16px, 1rem);
+  font-size: max(16px, 1rem) !important;
+}
+
+/* Portaled overlays (Radix sheets/dialogs) live outside .mobile-app: give them the same
+   touch floor and keep bottom sheets clear of the home indicator. */
+html:has(.mobile-app) [role='dialog'] :is(button, [role='button'], [role='option'], a) {
+  min-height: 44px;
+}
+
+html:has(.mobile-app) [role='dialog'] > button[aria-label='Close panel'],
+html:has(.mobile-app) [role='dialog'] > button:has(> .sr-only) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+html:has(.mobile-app) [role='dialog'].inset-x-0.bottom-0 {
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 1.5rem);
+  overflow-y: auto;
+  padding-bottom: max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
+  padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+}
+
+/*
+ * Sticky action bar for forms and focused workflows: pinned to the bottom of the scroll
+ * area (thumb zone), spanning the content gutters, clear of the home indicator.
+ */
+.mobile-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  margin-inline: calc(-1 * var(--mobile-gutter-start)) calc(-1 * var(--mobile-gutter-end));
+  padding: 0.75rem var(--mobile-gutter-end) calc(0.75rem + env(safe-area-inset-bottom, 0px))
+    var(--mobile-gutter-start);
+  border-top: 1px solid hsl(var(--ui-border));
+  background: hsl(var(--ui-background) / 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.mobile-app .mobile-content:has(.mobile-action-bar) {
+  padding-bottom: 0;
 }
 
 @media (min-width: 640px) {
-  .mobile-content { padding-inline: 1.25rem; }
+  .mobile-content {
+    --mobile-gutter-start: max(1.25rem, env(safe-area-inset-left, 0px));
+    --mobile-gutter-end: max(1.25rem, env(safe-area-inset-right, 0px));
+  }
   .mobile-header {
     padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
     padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
@@ -508,16 +629,19 @@
 }
 
 @media (max-width: 359px) {
-  .mobile-header-brand span { display: none; }
+  .mobile-header-brand span {
+    display: none;
+  }
   .mobile-nav {
-    padding-inline: max(0.2rem, env(safe-area-inset-left, 0px)) max(0.2rem, env(safe-area-inset-right, 0px));
+    padding-inline: max(0.2rem, env(safe-area-inset-left, 0px))
+      max(0.2rem, env(safe-area-inset-right, 0px));
   }
   .mobile-nav-item {
     gap: 0.12rem;
   }
   .mobile-nav-label {
-    font-size: 0.56rem;
-    letter-spacing: -0.015em;
+    font-size: 0.625rem;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -526,9 +650,15 @@
     --mobile-header-height: 50px;
     --mobile-nav-height: 56px;
   }
-  .mobile-content { padding-top: 0.625rem; }
-  .mobile-nav-item { min-height: 44px; }
-  .mobile-nav-label { display: none; }
+  .mobile-content {
+    padding-top: 0.625rem;
+  }
+  .mobile-nav-item {
+    min-height: 44px;
+  }
+  .mobile-nav-label {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

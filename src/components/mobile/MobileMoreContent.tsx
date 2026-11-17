@@ -1,12 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import type { ComponentType } from 'react';
 import {
   BarChart3,
   BookOpen,
   CalendarClock,
-  ChevronRight,
   FileText,
   LogOut,
   Monitor,
@@ -24,7 +22,13 @@ import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { useUserAvatarContextSafe } from '@/contexts/UserAvatarContext';
 import PwaInstallCard from '@/components/mobile/PwaInstallCard';
 import MobileSignOutButton from '@/components/mobile/MobileSignOutButton';
-import { Card } from '@/components/ui/shadcn/card';
+import {
+  MobileIconTile,
+  MobileListCard,
+  MobileListRow,
+  MobileSection,
+  MobileToneBadge,
+} from '@/components/mobile/MobileList';
 import { APP_VERSION } from '@/lib/constants';
 import { useEffectiveCapabilities } from '@/components/access/AccessProvider';
 import { canAccessPath } from '@/lib/access/pages';
@@ -111,36 +115,13 @@ const account: NavigationItem[] = [
 ];
 
 function NavigationRow({ item }: { item: NavigationItem }) {
-  const Icon = item.icon;
   return (
-    <Link
+    <MobileListRow
       href={item.href}
-      className="flex min-h-[58px] items-center gap-3 px-3.5 py-2.5 text-card-foreground transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-    >
-      <Icon className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden={true} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold text-foreground">
-          {item.label}
-        </span>
-        {item.description && (
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-            {item.description}
-          </span>
-        )}
-      </span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </Link>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-2">
-      <h2 className="px-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        {title}
-      </h2>
-      {children}
-    </section>
+      leading={<MobileIconTile icon={item.icon} />}
+      title={item.label}
+      subtitle={item.description}
+    />
   );
 }
 
@@ -158,55 +139,57 @@ export default function MobileMoreContent({
   const effective = useEffectiveCapabilities({ role: isAppRole(upperRole) ? upperRole : 'USER' });
   const authorizedOperations = operations.filter(item => canAccessPath(item.href, effective));
 
+  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() : 'User';
+
   return (
     <div className="responsive-page space-y-5">
-      <section className="flex min-w-0 items-center gap-3 px-0.5 py-1">
-        <div className="shrink-0">
-          <MobileAvatar name={name} src={avatarUrl || undefined} size="lg" />
-        </div>
+      <section className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card p-4">
+        <MobileAvatar name={name} src={avatarUrl || undefined} size="lg" />
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-bold text-foreground">{name}</h1>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+          <h2 className="truncate text-base font-semibold text-foreground">{name}</h2>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
             {email || 'No email on file'}
           </p>
         </div>
-        <span className="shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-          {role}
-        </span>
+        <MobileToneBadge tone={null}>{roleLabel}</MobileToneBadge>
       </section>
 
-      <Section title="Operations">
-        <Card className="divide-y divide-border/70 overflow-hidden rounded-xl border-border bg-card shadow-none">
+      <MobileSection id="more-operations" title="Operations">
+        <MobileListCard>
           {authorizedOperations.map(item => (
             <NavigationRow key={item.href} item={item} />
           ))}
-        </Card>
-      </Section>
+        </MobileListCard>
+      </MobileSection>
 
-      <Section title="App & device">
+      <MobileSection id="more-device" title="App & device">
         <div className="space-y-2">
           <PwaInstallCard />
           <MobileThemeToggle />
           <MobileBiometricToggle />
           <PushNotificationToggle />
         </div>
-      </Section>
+      </MobileSection>
 
-      <Section title="Account & help">
-        <Card className="divide-y divide-border/70 overflow-hidden rounded-xl border-border bg-card shadow-none">
+      <MobileSection id="more-account" title="Account & help">
+        <MobileListCard>
           {account.map(item => (
             <NavigationRow key={item.href} item={item} />
           ))}
-          <MobileSignOutButton
-            icon={<LogOut className="h-[18px] w-[18px]" aria-hidden="true" />}
-            label="Sign out"
-            description="Sign out of OpsKnight on this device"
-            tone="red"
-          />
-        </Card>
-      </Section>
+          <li>
+            <MobileSignOutButton
+              icon={<LogOut className="h-4 w-4" aria-hidden="true" />}
+              label="Sign out"
+              description="Sign out of OpsKnight on this device"
+              tone="red"
+            />
+          </li>
+        </MobileListCard>
+      </MobileSection>
 
-      <p className="pb-1 text-center text-[10px] text-muted-foreground">OpsKnight {APP_VERSION}</p>
+      <p className="pb-1 text-center text-xs tabular-nums text-muted-foreground">
+        OpsKnight {APP_VERSION}
+      </p>
     </div>
   );
 }

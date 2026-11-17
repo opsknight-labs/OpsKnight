@@ -13,10 +13,10 @@ export default function MobileManualRefreshButton({ label = 'Refresh' }: { label
       onClick={() => void refreshContext.refresh()}
       disabled={refreshContext.isRefreshing}
       aria-label={label}
-      className="inline-flex items-center justify-center p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors disabled:opacity-50"
+      className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
     >
       <RefreshCw
-        className={`h-3.5 w-3.5 ${refreshContext.isRefreshing ? 'animate-spin text-primary' : ''}`}
+        className={`h-4 w-4 ${refreshContext.isRefreshing ? 'motion-safe:animate-spin text-foreground' : ''}`}
         aria-hidden="true"
       />
     </button>

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BellRing, CalendarClock, Check, ClipboardCheck, Server } from 'lucide-react';
-import EmptyState from '@/components/ui/EmptyState';
+import EmptyState from '@/components/patterns/EmptyState';
+import ErrorState from '@/components/patterns/ErrorState';
+import RelativeTime from '@/components/patterns/RelativeTime';
 import MobileCachedDataNotice from '@/components/mobile/MobileCachedDataNotice';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card } from '@/components/ui/shadcn/card';
@@ -13,7 +15,6 @@ import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDayLabel } from '@/lib/mobile-time';
-import MobileTime from '@/components/mobile/MobileTime';
 import { haptics } from '@/lib/haptics';
 import { useNotificationStream } from '@/hooks/useNotificationStream';
 import { fetchWithTimeout } from '@/lib/client-timeout';
@@ -97,6 +98,7 @@ export default function MobileNotificationsClient() {
   const [markingAll, setMarkingAll] = useState(false);
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(() => new Set());
   const [errorMessage, setErrorMessage] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [pollingRequired, setPollingRequired] = useState(
     () => typeof window !== 'undefined' && typeof EventSource === 'undefined'
   );
@@ -108,6 +110,7 @@ export default function MobileNotificationsClient() {
       if (showLoading) {
         setLoading(true);
         setErrorMessage('');
+        setLoadFailed(false);
       }
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         const cached = await readCache<NotificationResponse>(cacheKey);
@@ -144,13 +147,14 @@ export default function MobileNotificationsClient() {
         setUnreadCount(data.unreadCount);
         setCachedAt(null);
         setErrorMessage('');
+        setLoadFailed(false);
         await writeCache(cacheKey, data);
       } catch (error) {
         logger.warn('mobile.notifications.fetch_failed', {
           component: 'MobileNotificationsClient',
           error,
         });
-        if (showLoading) setErrorMessage('Unable to load alerts.');
+        if (showLoading) setLoadFailed(true);
       } finally {
         if (showLoading) setLoading(false);
       }
@@ -372,7 +376,7 @@ export default function MobileNotificationsClient() {
                 setActiveFilter(filter);
               }}
               className={cn(
-                'h-11 min-h-[44px] rounded-md px-3 text-[11px] font-semibold transition-colors',
+                'h-11 min-h-[44px] rounded-md px-3 text-sm font-medium tabular-nums transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 activeFilter === filter
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
@@ -387,7 +391,7 @@ export default function MobileNotificationsClient() {
           type="button"
           variant="ghost"
           size="lg"
-          className="h-11 min-h-[44px] px-2.5 text-[11px]"
+          className="h-11 min-h-[44px] px-2.5 text-sm"
           onClick={() => void handleMarkAllRead()}
           disabled={unreadCount === 0 || markingAll}
         >
@@ -415,14 +419,25 @@ export default function MobileNotificationsClient() {
           <NotificationSkeleton />
           <NotificationSkeleton />
         </Card>
+      ) : loadFailed && notifications.length === 0 ? (
+        <ErrorState
+          variant="inline"
+          title="Alerts could not load"
+          message="Check your connection and try again. New pages still reach you by push and SMS."
+          onRetry={() => void fetchNotifications(true)}
+        />
       ) : filteredNotifications.length === 0 ? (
         <EmptyState
           icon={<BellRing aria-hidden="true" />}
           title={activeFilter === 'unread' ? 'You are all caught up' : 'No alerts yet'}
-          description="Incident updates and responder alerts will appear here."
+          description={
+            activeFilter === 'unread'
+              ? 'Every alert has been read. Switch to All to see earlier ones.'
+              : 'Incident pages, on-call hand-offs and approvals you receive will appear here.'
+          }
           size="sm"
           action={
-            <Button type="button" size="sm" asChild>
+            <Button type="button" size="lg" variant="outline" className="h-11 rounded-xl" asChild>
               <Link href={appRoutes.incidents('mobile')}>View incidents</Link>
             </Button>
           }
@@ -431,9 +446,7 @@ export default function MobileNotificationsClient() {
         <div className="space-y-4">
           {groupedNotifications.map(group => (
             <section key={group.label} className="space-y-2">
-              <h2 className="px-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                {group.label}
-              </h2>
+              <h2 className="px-0.5 text-xs font-medium text-muted-foreground">{group.label}</h2>
               <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
                 {group.items.map((notification, index) => {
                   const meta = notificationType[notification.type];
@@ -462,7 +475,7 @@ export default function MobileNotificationsClient() {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="flex min-w-0 items-start gap-2">
-                            <span className="min-w-0 flex-1 break-words text-[13px] font-semibold leading-snug text-foreground">
+                            <span className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-foreground">
                               {notification.title}
                             </span>
                             {notification.unread ? (
@@ -472,20 +485,20 @@ export default function MobileNotificationsClient() {
                               />
                             ) : null}
                           </span>
-                          <span className="mt-1 line-clamp-2 block text-[11px] leading-relaxed text-muted-foreground">
+                          <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">
                             {notification.message}
                           </span>
-                          <span className="mt-1.5 flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
+                          <span className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                             <span>{meta.label}</span>
                             <span aria-hidden="true">·</span>
-                            <MobileTime value={notification.createdAt} format="relative-short" />
+                            <RelativeTime date={notification.createdAt} />
                           </span>
                         </span>
                       </Link>
                       {notification.unread ? (
                         <button
                           type="button"
-                          className="h-11 min-h-[44px] min-w-11 shrink-0 self-center rounded-lg px-2 text-[10px] font-semibold text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                          className="mr-1.5 h-11 min-h-[44px] min-w-11 shrink-0 self-center rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                           disabled={updatingIds.has(notification.id)}
                           onClick={() => void handleMarkRead(notification.id)}
                           aria-label={`Mark ${notification.title} as read`}

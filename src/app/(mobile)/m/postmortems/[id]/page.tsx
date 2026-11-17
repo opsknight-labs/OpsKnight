@@ -1,9 +1,17 @@
 import prisma from '@/lib/prisma';
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import MobileCard from '@/components/mobile/MobileCard';
+import { FileText, Siren } from 'lucide-react';
 import { appRoutes } from '@/lib/app-routes';
-import { ArrowLeft } from 'lucide-react';
+import {
+  MobileDetailHeader,
+  MobileIconTile,
+  MobileListCard,
+  MobileListRow,
+  MobileSection,
+  MobileToneBadge,
+} from '@/components/mobile/MobileList';
+import { postmortemStatusMeta } from '@/components/mobile/mobile-status-meta';
+import RelativeTime from '@/components/patterns/RelativeTime';
 import { getUserPermissions } from '@/lib/rbac';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
@@ -36,6 +44,7 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
     include: {
       incident: {
         select: {
+          id: true,
           title: true,
           service: { select: { name: true } },
           createdAt: true,
@@ -50,58 +59,60 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
     notFound();
   }
 
+  const status = postmortemStatusMeta(pm.status);
+
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      {/* Header */}
-      <div className="space-y-2">
-        <Link
-          href="/m/postmortems"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Postmortems
-        </Link>
+    <div className="responsive-page space-y-4">
+      <MobileDetailHeader
+        leading={<MobileIconTile icon={FileText} tone={status.tone} size="lg" />}
+        title={pm.incident.title}
+        badges={
+          <MobileToneBadge tone={status.tone} icon={status.icon}>
+            {status.label}
+          </MobileToneBadge>
+        }
+        facts={[
+          {
+            label: 'Author',
+            value: pm.createdBy?.name || pm.createdBy?.email || 'Deleted user',
+          },
+          { label: 'Service', value: pm.incident.service.name },
+          { label: 'Created', value: <RelativeTime date={pm.createdAt} /> },
+          {
+            label: 'Incident resolved',
+            value: <RelativeTime date={pm.incident.resolvedAt} fallback="Not resolved" />,
+          },
+        ]}
+      />
 
-        <div className="space-y-2">
-          <div
-            className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ${
-              pm.status === 'PUBLISHED'
-                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                : 'bg-[color:var(--bg-secondary)] text-[color:var(--text-secondary)]'
-            }`}
-          >
-            {pm.status}
-          </div>
-          <h1 className="text-lg font-bold text-[color:var(--text-primary)]">
-            Postmortem: {pm.incident.title}
-          </h1>
-          <div className="text-xs text-[color:var(--text-muted)]">
-            Author: {pm.createdBy?.name || pm.createdBy?.email || 'Deleted user'}
-          </div>
+      <MobileSection id="postmortem-summary" title="Executive summary">
+        <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed text-foreground">
+          {pm.summary ? (
+            <p className="whitespace-pre-wrap break-words">{pm.summary}</p>
+          ) : (
+            <p className="text-muted-foreground">No summary yet. The author adds it on desktop.</p>
+          )}
         </div>
-      </div>
+      </MobileSection>
 
-      <div className="flex flex-col gap-3">
-        <MobileCard>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-            Executive Summary
-          </h3>
-          <div className="text-sm leading-relaxed text-[color:var(--text-secondary)]">
-            {pm.summary || 'No summary provided.'}
-          </div>
-        </MobileCard>
+      <MobileSection id="postmortem-root-cause" title="Root cause">
+        <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed text-foreground">
+          {pm.rootCause ? (
+            <p className="whitespace-pre-wrap break-words">{pm.rootCause}</p>
+          ) : (
+            <p className="text-muted-foreground">No root cause analysis recorded yet.</p>
+          )}
+        </div>
+      </MobileSection>
 
-        <MobileCard>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-            Root Cause
-          </h3>
-          <div className="text-sm leading-relaxed text-[color:var(--text-secondary)]">
-            {pm.rootCause || 'No root cause analysis provided.'}
-          </div>
-        </MobileCard>
-
-        {/* Could add Lessons Learned, Timeline, etc here */}
-      </div>
+      <MobileListCard label="Related incident">
+        <MobileListRow
+          href={`/m/incidents/${pm.incident.id}`}
+          leading={<MobileIconTile icon={Siren} />}
+          title="Open the incident"
+          subtitle="Timeline, notes and responders"
+        />
+      </MobileListCard>
     </div>
   );
 }

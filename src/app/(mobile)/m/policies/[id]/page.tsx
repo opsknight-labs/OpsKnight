@@ -1,8 +1,15 @@
 import prisma from '@/lib/prisma';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import MobileCard from '@/components/mobile/MobileCard';
-import { ArrowLeft } from 'lucide-react';
+import { CalendarClock, Clock3, Server, ShieldCheck, User, UsersRound } from 'lucide-react';
+import {
+  MobileDetailHeader,
+  MobileIconTile,
+  MobileListCard,
+  MobileListRow,
+  MobileSection,
+  MobileToneBadge,
+} from '@/components/mobile/MobileList';
+import EmptyState from '@/components/patterns/EmptyState';
 import { assertCanViewPolicy, getUserPermissions } from '@/lib/rbac';
 import PolicyDependencies from '@/components/policies/PolicyDependencies';
 import { requirePageAccess } from '@/lib/access/server';
@@ -52,26 +59,19 @@ export default async function MobilePolicyDetailPage({ params, searchParams }: P
   const sortedSteps = Array.from(stepsMap.entries()).sort((a, b) => a[0] - b[0]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      {/* Header */}
-      <div className="space-y-2">
-        <Link
-          href="/m/policies"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Policies
-        </Link>
-
-        <div className="space-y-2">
-          <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)]">
-            {policy.name}
-          </h1>
-          {policy.description && (
-            <div className="text-xs text-[color:var(--text-muted)]">{policy.description}</div>
-          )}
-        </div>
-      </div>
+    <div className="responsive-page space-y-4">
+      <MobileDetailHeader
+        leading={<MobileIconTile icon={ShieldCheck} size="lg" />}
+        title={policy.name}
+        badges={
+          policy.archivedAt ? <MobileToneBadge tone={null}>Archived</MobileToneBadge> : undefined
+        }
+        description={policy.description || undefined}
+        facts={[
+          { label: 'Steps', value: sortedSteps.length },
+          { label: 'Services', value: policy.services.length },
+        ]}
+      />
 
       <PolicyDependencies
         page={Number((await searchParams)?.depPage ?? 1)}
@@ -81,82 +81,80 @@ export default async function MobilePolicyDetailPage({ params, searchParams }: P
         mobile
       />
 
-      {/* Steps */}
-      <div className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-          Escalation Steps
-        </h3>
-
+      <MobileSection id="policy-steps" title="Escalation steps" count={sortedSteps.length}>
         {sortedSteps.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--bg-secondary)] px-6 py-8 text-center text-xs text-[color:var(--text-muted)]">
-            No escalation steps defined.
-          </div>
+          <EmptyState
+            icon={<ShieldCheck aria-hidden="true" />}
+            title="No escalation steps"
+            description="Without steps nobody is paged. Add targets to this policy from the desktop workspace."
+            size="sm"
+            headingLevel="h3"
+          />
         ) : (
-          sortedSteps.map(([stepOrder, rules]) => (
-            <MobileCard key={stepOrder}>
-              <div className="mb-3 flex items-center gap-2 border-b border-[color:var(--border)] pb-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
-                  {stepOrder + 1}
-                </div>
-                <span className="text-sm font-semibold text-[color:var(--text-primary)]">
-                  {rules[0].delayMinutes > 0 ? `Wait ${rules[0].delayMinutes}m` : 'Immediately'}
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {rules.map(rule => (
-                  <div key={rule.id} className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--bg-secondary)] text-base">
-                      {rule.targetType === 'USER'
-                        ? '👤'
-                        : rule.targetType === 'SCHEDULE'
-                          ? '📅'
-                          : '👥'}
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-[color:var(--text-primary)]">
-                        {rule.targetType === 'USER' && rule.targetUser
-                          ? rule.targetUser.name || rule.targetUser.email
-                          : rule.targetType === 'SCHEDULE' && rule.targetSchedule
-                            ? rule.targetSchedule.name
-                            : rule.targetType === 'TEAM' && rule.targetTeam
-                              ? rule.targetTeam.name
-                              : 'Unknown Target'}
-                      </div>
-                      <div className="text-[11px] text-[color:var(--text-muted)]">
-                        {rule.targetType === 'USER'
-                          ? 'User'
-                          : rule.targetType === 'SCHEDULE'
-                            ? 'Schedule'
-                            : 'Team'}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </MobileCard>
-          ))
+          <ol className="space-y-3">
+            {sortedSteps.map(([stepOrder, rules], index) => (
+              <li key={stepOrder} className="space-y-1.5">
+                <p className="flex items-center gap-2 px-0.5 text-xs font-medium text-muted-foreground">
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 font-semibold tabular-nums text-foreground">
+                    {index + 1}
+                  </span>
+                  <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                  {rules[0].delayMinutes > 0
+                    ? `After ${rules[0].delayMinutes} min without acknowledgement`
+                    : 'Immediately'}
+                </p>
+                <MobileListCard label={`Step ${index + 1} targets`}>
+                  {rules.map(rule => {
+                    const target =
+                      rule.targetType === 'USER' && rule.targetUser
+                        ? {
+                            icon: User,
+                            name: rule.targetUser.name || rule.targetUser.email,
+                            kind: 'User',
+                          }
+                        : rule.targetType === 'SCHEDULE' && rule.targetSchedule
+                          ? {
+                              icon: CalendarClock,
+                              name: rule.targetSchedule.name,
+                              kind: 'On-call schedule',
+                            }
+                          : rule.targetType === 'TEAM' && rule.targetTeam
+                            ? { icon: UsersRound, name: rule.targetTeam.name, kind: 'Team' }
+                            : { icon: User, name: 'Unknown target', kind: rule.targetType };
+                    return (
+                      <MobileListRow
+                        key={rule.id}
+                        leading={
+                          <MobileIconTile
+                            icon={target.icon}
+                            tone={rule.targetType === 'SCHEDULE' ? 'shift' : null}
+                          />
+                        }
+                        title={target.name}
+                        subtitle={target.kind}
+                      />
+                    );
+                  })}
+                </MobileListCard>
+              </li>
+            ))}
+          </ol>
         )}
-      </div>
+      </MobileSection>
 
-      {/* Used By Services */}
       {policy.services.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-            Used by Services
-          </h3>
-          <div className="flex flex-wrap gap-2">
+        <MobileSection id="policy-services" title="Used by services" count={policy.services.length}>
+          <MobileListCard>
             {policy.services.map(service => (
-              <Link
+              <MobileListRow
                 key={service.id}
                 href={`/m/services/${service.id}`}
-                className="rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-secondary)] transition hover:bg-[color:var(--bg-secondary)]"
-              >
-                {service.name}
-              </Link>
+                leading={<MobileIconTile icon={Server} />}
+                title={service.name}
+              />
             ))}
-          </div>
-        </div>
+          </MobileListCard>
+        </MobileSection>
       )}
     </div>
   );

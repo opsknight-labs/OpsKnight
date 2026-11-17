@@ -37,13 +37,17 @@ export default function MobileSignOutButton({ icon, label, description }: Props)
       type="button"
       onClick={handleSignOut}
       disabled={isSigningOut}
-      className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left text-destructive transition-colors hover:bg-destructive/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      aria-busy={isSigningOut || undefined}
+      className="flex min-h-14 w-full items-center gap-3 px-3.5 py-3 text-left text-destructive transition-colors duration-150 hover:bg-destructive/5 active:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+      <span
+        aria-hidden="true"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive"
+      >
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{isSigningOut ? 'Signing out…' : label}</span>
+        <span className="block text-sm font-medium">{isSigningOut ? 'Signing out…' : label}</span>
         <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

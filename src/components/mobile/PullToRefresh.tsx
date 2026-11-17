@@ -286,19 +286,13 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
           </div>
           <span
             style={{
-              fontSize: '0.7rem',
-              fontWeight: 600,
+              fontSize: '0.75rem',
+              fontWeight: 500,
               color: isReady || refreshing ? accent : muted,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
               transition: 'color 0.2s ease',
             }}
           >
-            {refreshing
-              ? 'Refreshing fresh data…'
-              : isReady
-                ? 'Release to refresh'
-                : 'Pull to refresh'}
+            {refreshing ? 'Refreshing…' : isReady ? 'Release to refresh' : 'Pull to refresh'}
           </span>
         </div>
       </div>

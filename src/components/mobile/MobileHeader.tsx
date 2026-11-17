@@ -38,34 +38,76 @@ function getListTitle(pathname: string): string {
       return 'System health';
     case '/m/more':
       return 'More';
+    case '/m/help':
+      return 'Help';
     default:
       return 'OpsKnight';
   }
 }
 
 const DETAIL_ROUTES = [
-  { prefix: '/m/incidents/', title: 'Incident', backHref: '/m/incidents' },
-  { prefix: '/m/services/', title: 'Service', backHref: '/m/services' },
-  { prefix: '/m/schedules/', title: 'Schedule', backHref: '/m/schedules' },
-  { prefix: '/m/teams/', title: 'Team', backHref: '/m/teams' },
-  { prefix: '/m/users/', title: 'User', backHref: '/m/users' },
-  { prefix: '/m/policies/', title: 'Policy', backHref: '/m/policies' },
-  { prefix: '/m/postmortems/', title: 'Postmortem', backHref: '/m/postmortems' },
+  { prefix: '/m/incidents/', title: 'Incident', backHref: '/m/incidents', backLabel: 'Incidents' },
+  { prefix: '/m/services/', title: 'Service', backHref: '/m/services', backLabel: 'Services' },
+  { prefix: '/m/schedules/', title: 'Schedule', backHref: '/m/schedules', backLabel: 'On-call' },
+  { prefix: '/m/teams/', title: 'Team', backHref: '/m/teams', backLabel: 'Teams' },
+  { prefix: '/m/users/', title: 'User', backHref: '/m/users', backLabel: 'Users' },
+  { prefix: '/m/policies/', title: 'Policy', backHref: '/m/policies', backLabel: 'Policies' },
+  {
+    prefix: '/m/postmortems/',
+    title: 'Postmortem',
+    backHref: '/m/postmortems',
+    backLabel: 'Postmortems',
+  },
 ] as const;
+
+const SERVICE_AUTOMATION_ROUTE = /^\/m\/services\/([^/]+)\/automation\/?$/;
 
 type MobileHeaderProps = {
   systemStatus?: 'neutral' | 'ok' | 'warning' | 'danger';
   canCreateIncident?: boolean;
 };
 
-function routeContext(pathname: string) {
-  if (pathname === '/m') return { home: true, title: 'OpsKnight' } as const;
+type RouteContext =
+  | { home: true; title: string }
+  | {
+      home: false;
+      title: string;
+      backHref?: string;
+      backLabel?: string;
+      /** The app-bar title is the page heading (the page renders no h1 of its own). */
+      isPageHeading?: boolean;
+    };
+
+function routeContext(pathname: string): RouteContext {
+  if (pathname === '/m') return { home: true, title: 'OpsKnight' };
   if (pathname === '/m/incidents/create') {
-    return { home: false, title: 'New incident', backHref: '/m/incidents' } as const;
+    return {
+      home: false,
+      title: 'New incident',
+      backHref: '/m/incidents',
+      backLabel: 'Incidents',
+      isPageHeading: true,
+    };
+  }
+  const automation = SERVICE_AUTOMATION_ROUTE.exec(pathname);
+  if (automation) {
+    return {
+      home: false,
+      title: 'Automation',
+      backHref: `/m/services/${automation[1]}`,
+      backLabel: 'Service',
+    };
   }
   const detail = DETAIL_ROUTES.find(route => pathname.startsWith(route.prefix));
-  if (detail) return { home: false, title: detail.title, backHref: detail.backHref } as const;
-  return { home: false, title: getListTitle(pathname) } as const;
+  if (detail) {
+    return {
+      home: false,
+      title: detail.title,
+      backHref: detail.backHref,
+      backLabel: detail.backLabel,
+    };
+  }
+  return { home: false, title: getListTitle(pathname) };
 }
 
 export default function MobileHeader({
@@ -97,12 +139,16 @@ export default function MobileHeader({
             <MobileHeaderAction
               href={route.backHref}
               icon={<ArrowLeft className="h-5 w-5" aria-hidden="true" />}
-              label={`Back to ${route.backHref.split('/').pop() || 'previous page'}`}
+              label={`Back to ${route.backLabel ?? 'previous page'}`}
             />
-            <span className="mobile-header-page-title">{route.title}</span>
+            {route.isPageHeading ? (
+              <h1 className="mobile-header-page-title">{route.title}</h1>
+            ) : (
+              <span className="mobile-header-page-title">{route.title}</span>
+            )}
           </>
         ) : (
-          <span className="mobile-header-page-title">{route.title}</span>
+          <h1 className="mobile-header-page-title">{route.title}</h1>
         )}
       </div>
 
