@@ -3,6 +3,7 @@ import {
   assertSafeRegex,
   matcherSchema,
   noiseControlDefinitionSchema,
+  PREPAGING_LIMITS,
   type PrePagingInput,
 } from '@/lib/intelligence/noise-controls/contract';
 import {
@@ -405,6 +406,22 @@ describe('pre-paging evaluation', () => {
       T0
     );
     expect(stage.decision?.evidence).toMatchObject({ matchedRules: ['tag', 'drop-test'] });
+  });
+
+  it('caps attached runbooks at the limit the runbook trigger job accepts', async () => {
+    const orchestration: CompiledPolicy['orchestration'] = Array.from({ length: 5 }, (_, r) => ({
+      id: `attach-${r}`,
+      name: `Attach ${r}`,
+      conditions: [compileMatcher({ field: 'label', key: 'env', op: 'equals', value: 'prod' })],
+      actions: Array.from({ length: 6 }, (_, a) => ({
+        type: 'ATTACH_RUNBOOK' as const,
+        runbookId: `rb-${r}-${a}`,
+      })),
+    }));
+    const snap = snapshot({ policy: policy({ orchestration }) });
+    const decision = await evaluatePrePagingControls(input(), snap, quiet);
+    expect(decision.transform?.runbookIds).toHaveLength(PREPAGING_LIMITS.maxAttachRunbooks);
+    expect(decision.transform?.runbookIds?.[0]).toBe('rb-0-0');
   });
 
   it('appends to an open incident with the same content when the labels are a subset', async () => {

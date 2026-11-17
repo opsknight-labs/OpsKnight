@@ -267,7 +267,9 @@ export function decideStatic(
           transformed = true;
           break;
         case 'ATTACH_RUNBOOK':
-          transform.runbookIds = [...new Set([...(transform.runbookIds ?? []), action.runbookId])];
+          transform.runbookIds = [
+            ...new Set([...(transform.runbookIds ?? []), action.runbookId]),
+          ].slice(0, PREPAGING_LIMITS.maxAttachRunbooks);
           transformed = true;
           break;
         case 'ADD_NOTE':

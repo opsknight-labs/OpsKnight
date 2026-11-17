@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { buildExecutionPreview, checkExecutionReadiness } from './execution-preview';
 import type { IncidentEventType, Prisma, RunbookExecutionStep } from '@prisma/client';
 import { z } from 'zod/v3';
+import { PREPAGING_LIMITS } from '@/lib/intelligence/noise-controls/contract';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { safeOutboundFetch } from '@/lib/network-security';
@@ -87,7 +88,10 @@ const jobPayloadSchema = z.discriminatedUnion('kind', [
       incidentId: z.string().cuid(),
       sourceEventId: z.string().min(1).max(200),
       source: z.string().max(40).optional(),
-      attachRunbookIds: z.array(z.string().min(1).max(100)).max(20).optional(),
+      attachRunbookIds: z
+        .array(z.string().min(1).max(100))
+        .max(PREPAGING_LIMITS.maxAttachRunbooks)
+        .optional(),
     })
     .strict(),
 ]);

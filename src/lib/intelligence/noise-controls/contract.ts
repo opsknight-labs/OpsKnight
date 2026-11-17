@@ -18,6 +18,8 @@ export const PREPAGING_LIMITS = {
   maxOrchestrationRules: 50,
   maxConditions: 10,
   maxActions: 6,
+  /** Distinct runbooks one decision may attach; the runbook trigger job rejects a longer list. */
+  maxAttachRunbooks: 20,
   regexLength: 200,
   textLength: 2_000,
   maxHoldSeconds: 60,
