@@ -46,6 +46,8 @@ export const WORK_KINDS = {
   EVALUATE_METRIC_TEMPLATE: 'EVALUATE_METRIC_TEMPLATE',
   /** Operations insights for one scope, subject `SCOPE_TYPE:scopeId`; see ops-insights/handlers.ts. Opt-in. */
   OPS_INSIGHTS: 'OPS_INSIGHTS',
+  /** The daily runbook-ranking weight fit, one coalesced item (subject `global`); see learning/runbook-weights.ts. */
+  FIT_RUNBOOK_WEIGHTS: 'FIT_RUNBOOK_WEIGHTS',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -68,6 +70,7 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   EVALUATE_METRIC_TEMPLATE: 46,
   // Operations insights are daily background analysis: everything about a live incident goes first.
   OPS_INSIGHTS: 60,
+  FIT_RUNBOOK_WEIGHTS: 65,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

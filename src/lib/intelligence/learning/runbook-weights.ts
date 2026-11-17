@@ -1,10 +1,12 @@
 import 'server-only';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { DEFAULT_RUNBOOK_WEIGHTS, runbookWeightsSchema, type RunbookWeights } from '../contract';
+import { stableAnalysisHash } from '../jobs/input-hash';
+import { enqueueWorkItems, WORK_KINDS, type ClaimedWorkItem } from '../jobs/work-queue';
 import { scoreRunbook, type RunbookScoreFeatures } from '../recommendations/wilson';
 import {
   parseOrThrow,
@@ -32,8 +34,9 @@ import {
  * learns how much to trust the service-wide record, the same-problem record, MTTR improvement and an untried
  * binding. Suggest-only: nothing applies until a person publishes the proposal as a policy version.
  *
- * The fit runs in the intelligence lane once a day (scheduleRunbookWeightFit) and its result is stored, so
- * the review page only reads one row.
+ * The fit runs in the intelligence lane as a daily FIT_RUNBOOK_WEIGHTS work item (scheduleRunbookWeightFit
+ * enqueues it, runRunbookWeightFit handles it): skipped when the labelled examples are unchanged, and fenced
+ * on the item's generation. Its result is stored, so the review page only reads one row.
  */
 
 export interface RunbookExample extends RunbookScoreFeatures {
@@ -225,7 +228,10 @@ export function mergeRunbookLabels(
 }
 
 export async function suggestRunbookWeights(client: typeof prisma = prisma) {
-  const examples = await loadRunbookExamples(client);
+  return proposalFor(await loadRunbookExamples(client));
+}
+
+function proposalFor(examples: RunbookExample[]) {
   const proposal = fitRunbookWeights(examples);
   if (!proposal) return null;
   return {
@@ -270,6 +276,55 @@ async function storeRunbookWeightProposal(
   });
 }
 
+/** Stores a lane fit unless a newer generation already stored one. Returns whether it was written. */
+async function storeFencedRunbookWeightProposal(
+  proposal: StoredRunbookWeightsProposal | null,
+  fence: { inputHash: string; generation: number },
+  client: typeof prisma
+): Promise<boolean> {
+  const stats = JSON.stringify({ proposal, ...fence });
+  const written = await client.$executeRaw`
+    INSERT INTO "IntelligencePattern" ("id", "scopeKey", "kind", "key", "stats", "support", "lastSeenAt", "updatedAt")
+    VALUES (${randomUUID()}, ${PROPOSAL_ROW.scopeKey}, ${PROPOSAL_ROW.kind}, ${PROPOSAL_ROW.key},
+      ${stats}::jsonb, ${proposal?.support ?? 0}, now(), now())
+    ON CONFLICT ("scopeKey", "kind", "key") DO UPDATE SET
+      "stats" = EXCLUDED."stats", "support" = EXCLUDED."support", "lastSeenAt" = now(), "updatedAt" = now()
+    WHERE COALESCE(("IntelligencePattern"."stats"->>'generation')::bigint, 0) <= ${fence.generation}`;
+  return written > 0;
+}
+
+export type RunbookWeightFitOutcome = 'unchanged' | 'fitted' | 'stale';
+
+/**
+ * The FIT_RUNBOOK_WEIGHTS handler. The two capped reads always run; the fit and the write are skipped when
+ * the labelled examples hash to what the stored fit used (only its timestamp moves, so the schedule waits
+ * another day). An older generation never overwrites a newer fit.
+ */
+export async function runRunbookWeightFit(
+  item: Pick<ClaimedWorkItem, 'generation' | 'force'>,
+  client: typeof prisma = prisma
+): Promise<RunbookWeightFitOutcome> {
+  const examples = await loadRunbookExamples(client);
+  const inputHash = stableAnalysisHash(['runbook-weights:v1', RUNBOOK_FIT_LIMITS, examples]);
+  const stored = await client.intelligencePattern.findUnique({
+    where: proposalWhere,
+    select: { stats: true },
+  });
+  if (!item.force && (stored?.stats as { inputHash?: unknown } | null)?.inputHash === inputHash) {
+    await client.intelligencePattern.update({
+      where: proposalWhere,
+      data: { lastSeenAt: new Date() },
+    });
+    return 'unchanged';
+  }
+  const written = await storeFencedRunbookWeightProposal(
+    proposalFor(examples),
+    { inputHash, generation: item.generation },
+    client
+  );
+  return written ? 'fitted' : 'stale';
+}
+
 /** Fits now and stores the result (null when there is no supported improvement). */
 export async function refreshRunbookWeightProposal(client: typeof prisma = prisma) {
   const proposal = await suggestRunbookWeights(client);
@@ -304,8 +359,8 @@ export function resetRunbookWeightFitSchedule(): void {
 }
 
 /**
- * Called once per lane cycle: nothing between checks, then one indexed read, and the fit (two capped reads
- * under a 5 s statement timeout) at most once a day. Returns whether it refitted.
+ * Called once per lane cycle: nothing between checks, then one indexed read, and at most once a day one
+ * coalesced FIT_RUNBOOK_WEIGHTS work item (the fit itself runs in its handler). Returns whether it enqueued.
  */
 export async function scheduleRunbookWeightFit(
   now: number,
@@ -318,7 +373,7 @@ export async function scheduleRunbookWeightFit(
     select: { lastSeenAt: true },
   });
   if (row && now - row.lastSeenAt.getTime() < RUNBOOK_FIT_SCHEDULE.refitAfterMs) return false;
-  await refreshRunbookWeightProposal(client);
+  await enqueueWorkItems([{ kind: WORK_KINDS.FIT_RUNBOOK_WEIGHTS, subjectKey: 'global' }], client);
   return true;
 }
 
