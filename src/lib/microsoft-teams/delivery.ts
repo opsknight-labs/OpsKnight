@@ -392,6 +392,21 @@ async function syncTeamsNotificationFailure(
     .catch(() => undefined);
 }
 
+/** A superseded delivery is a normal outcome, not a failure: record it as SKIPPED. */
+async function syncTeamsNotificationSkipped(
+  idempotencyKey: string | null | undefined,
+  reason: string,
+  tx: Prisma.TransactionClient
+) {
+  if (!idempotencyKey) return;
+  await tx.notification
+    .updateMany({
+      where: { deliveryKey: idempotencyKey, status: { not: 'DELIVERED' } },
+      data: { status: 'SKIPPED', errorMsg: reason.slice(0, 1000) },
+    })
+    .catch(() => undefined);
+}
+
 async function syncTeamsNotificationRetry(
   idempotencyKey: string | null | undefined,
   nextAttemptAt: Date,
@@ -835,7 +850,11 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       payloadInstant instanceof Date && !Number.isNaN(payloadInstant.getTime());
     let staleReason: string | null = null;
     if (eventType === 'triggered') {
-      if (incident.status !== 'OPEN') staleReason = `Incident is now ${incident.status}`;
+      // An acknowledged incident still needs its card: the card renders current
+      // state, and the ack event may be fenced (notify-on-ack off), which would
+      // otherwise leave the channel with no card at all.
+      if (incident.status !== 'OPEN' && incident.status !== 'ACKNOWLEDGED')
+        staleReason = `Incident is now ${incident.status}`;
       else if (payloadGeneration !== null && incident.escalationGeneration !== payloadGeneration)
         staleReason = 'Escalation generation was superseded';
     } else if (eventType === 'acknowledged') {
@@ -894,12 +913,20 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       const reason = staleReason;
       await prisma
         .$transaction(async tx => {
+          // Supersession is expected (e.g. a fast ack): complete the operation
+          // instead of surfacing a spurious FAILED delivery in health and history.
           const updated = await tx.externalOperation.updateMany({
             where: { id, status: 'PROCESSING', leaseToken },
-            data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
+            data: {
+              status: 'COMPLETED',
+              lastError: null,
+              resultPayload: { superseded: true, reason } as Prisma.InputJsonObject,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
           });
           if (updated.count > 0) {
-            await syncTeamsNotificationFailure(operation.idempotencyKey, reason, tx);
+            await syncTeamsNotificationSkipped(operation.idempotencyKey, reason, tx);
           }
         })
         .catch(() => undefined);

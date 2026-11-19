@@ -452,3 +452,72 @@ describe('processMicrosoftTeamsOperation admission & concurrency classification'
     );
   });
 });
+
+describe('processMicrosoftTeamsOperation supersession', () => {
+  it('records a superseded delivery as COMPLETED/SKIPPED, not FAILED', async () => {
+    vi.clearAllMocks();
+    currentResultPayload = null;
+    incident.status = 'OPEN'; // reopened after the resolve event was enqueued
+    const baseFindUnique = prismaMock.externalOperation.findUnique.getMockImplementation()!;
+    prismaMock.externalOperation.findUnique.mockImplementationOnce(async args => ({
+      ...(await baseFindUnique(args)),
+      idempotencyKey: 'teams:delivery:inc-1',
+    }));
+    const opUpdates: Array<Record<string, unknown>> = [];
+    const notificationUpdates: Array<Record<string, unknown>> = [];
+    const originalTransaction = prismaMock.$transaction.getMockImplementation()!;
+    prismaMock.$transaction.mockImplementation(async callback =>
+      callback({
+        microsoftTeamsIncidentMessage: {
+          findUnique: vi.fn(async () => ledger),
+          updateMany: vi.fn(async () => ({ count: ledgerUpdateCount })),
+        },
+        externalOperation: {
+          findUnique: vi.fn(async () => ownerOperation),
+          updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            opUpdates.push(data);
+            return { count: 1 };
+          }),
+        },
+        notification: {
+          updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            notificationUpdates.push(data);
+            return { count: 1 };
+          }),
+        },
+      })
+    );
+    try {
+      const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+      await expect(processMicrosoftTeamsOperation('op-late')).resolves.toBeNull();
+    } finally {
+      incident.status = 'RESOLVED';
+      prismaMock.$transaction.mockImplementation(originalTransaction);
+    }
+    expect(opUpdates[0]).toMatchObject({ status: 'COMPLETED' });
+    expect(notificationUpdates[0]).toMatchObject({ status: 'SKIPPED' });
+    expect(sendIncidentCard).not.toHaveBeenCalled();
+  });
+});
+
+describe('processMicrosoftTeamsOperation fast ack', () => {
+  it('still delivers the triggered card when the incident was already acknowledged', async () => {
+    vi.clearAllMocks();
+    incident.status = 'ACKNOWLEDGED';
+    const baseFindUnique = prismaMock.externalOperation.findUnique.getMockImplementation()!;
+    prismaMock.externalOperation.findUnique.mockImplementationOnce(async args => {
+      const op = (await baseFindUnique(args)) as Record<string, unknown>;
+      return {
+        ...op,
+        requestPayload: { destinationId: 'dest-1', eventType: 'triggered' },
+      };
+    });
+    try {
+      const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+      // A superseded triggered event would resolve null; this one proceeds to card delivery.
+      await expect(processMicrosoftTeamsOperation('op-late')).rejects.toThrow(/Teams card/);
+    } finally {
+      incident.status = 'RESOLVED';
+    }
+  });
+});
