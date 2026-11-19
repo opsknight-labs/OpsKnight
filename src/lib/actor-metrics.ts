@@ -1,7 +1,16 @@
 import 'server-only';
 
-import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { actorMetricReadScope, incidentReadWhere } from '@/lib/authorization-filters';
+import type { Prisma } from '@prisma/client';
+import {
+  actorMetricReadScope,
+  incidentReadWhere,
+  scheduleReadWhere,
+} from '@/lib/authorization-filters';
+import {
+  authorize,
+  AUTHORIZATION_ACTIONS,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 import {
   calculateMultiServiceUptime,
   calculateSLAMetrics,
@@ -17,7 +26,18 @@ export function calculateActorSLAMetrics(
   actor: AuthorizationActor,
   filters: SLAMetricsFilter = {}
 ): Promise<SLAMetrics> {
-  return calculateSLAMetrics({ ...filters, ...actorMetricReadScope(actor) });
+  return calculateSLAMetrics({
+    ...filters,
+    ...actorMetricReadScope(actor),
+    scheduleScope: actorScheduleScope(actor),
+  });
+}
+
+/** Schedules whose on-call data the actor may see in analytics; none without schedule access. */
+function actorScheduleScope(actor: AuthorizationActor): Prisma.OnCallScheduleWhereInput {
+  return authorize({ actor, action: AUTHORIZATION_ACTIONS.SCHEDULE_READ }).allowed
+    ? scheduleReadWhere(actor)
+    : { id: { in: [] } };
 }
 
 /** Authenticated uptime boundary; public status pages use the unscoped helper. */

@@ -130,6 +130,11 @@ export type SLAMetricsFilter = IncidentMetricFilter & {
    * Bypass historical rollup path and force live database queries (used for drift detection)
    */
   _forceLive?: boolean;
+  /**
+   * On-call schedules the caller may read. On-call coverage, hours, the on-call widget and
+   * override counts are restricted to these; omit only for internal/system callers.
+   */
+  scheduleScope?: Prisma.OnCallScheduleWhereInput;
   /** Internal: hybrid owns the user-visible measurement, so its live child must not double-log. */
   _skipPerformanceLog?: boolean;
 };
@@ -1115,13 +1120,18 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         incident: { is: recentIncidentWhere },
       },
     }),
-    getWindowOnCallShifts(now, coverageWindowEnd).then(shifts =>
+    getWindowOnCallShifts(now, coverageWindowEnd, filters.scheduleScope).then(shifts =>
       shifts.map(s => ({ start: s.start, end: s.end, userId: s.userId }))
     ),
-    getWindowOnCallShifts(finalStart, finalEnd).then(shifts =>
+    getWindowOnCallShifts(finalStart, finalEnd, filters.scheduleScope).then(shifts =>
       shifts.map(s => ({ start: s.start, end: s.end, userId: s.userId }))
     ),
-    prisma.onCallOverride.count({ where: { end: { gte: now } } }),
+    prisma.onCallOverride.count({
+      where: {
+        end: { gte: now },
+        ...(filters.scheduleScope ? { schedule: filters.scheduleScope } : {}),
+      },
+    }),
     prisma.incident.groupBy({
       by: ['status'],
       where: recentIncidentWhere,
@@ -1183,7 +1193,9 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       _count: { _all: true },
     }),
     // On-Call Widget (Resolved dynamically from active schedule layers)
-    getActiveOnCallShifts(now).then(shifts => shifts.slice(0, 5)),
+    getActiveOnCallShifts(now, { where: filters.scheduleScope }).then(shifts =>
+      shifts.slice(0, 5)
+    ),
     // resolved24h must honor the same filters as the rest of the metrics —
     // otherwise team/urgency/visibility-scoped queries surface a count
     // from an unrelated population, contradicting the dashboard above it.
