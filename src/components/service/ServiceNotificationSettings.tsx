@@ -506,7 +506,26 @@ export default function ServiceNotificationSettings({
       </div>
 
       {/* FORM: Notification Channels and Event Triggers */}
-      <form action={saveNotificationSettings} className="space-y-3.5">
+      <form
+        action={saveNotificationSettings}
+        onSubmit={e => {
+          // Saving without Slack clears its webhook/channel and disables every linked
+          // destination, which must then be re-linked by hand: confirm first.
+          const removesSlack =
+            serviceNotificationChannels.includes('SLACK') &&
+            !channels.includes('SLACK') &&
+            Boolean(slackWebhookUrl || slackChannel || existingSlackDests.some(d => d.enabled));
+          if (
+            removesSlack &&
+            !window.confirm(
+              'Turning off Slack removes the Slack webhook URL and channel and disables all linked Slack destinations. Continue?'
+            )
+          ) {
+            e.preventDefault();
+          }
+        }}
+        className="space-y-3.5"
+      >
         {/* Submit an explicit snapshot so an empty selection cannot be confused with a missing field. */}
         <input
           type="hidden"
