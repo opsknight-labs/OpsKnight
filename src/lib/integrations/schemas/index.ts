@@ -81,48 +81,54 @@ export type CloudWatchAlarmMessage = z.infer<typeof CloudWatchAlarmSchema>;
 // Azure Monitor
 // ============================================
 
-export const AzureAlertSchema = z.object({
-  schemaId: z.string().optional(),
-  data: z
-    .object({
-      essentials: z
-        .object({
-          alertId: z.string().optional(),
-          alertRule: z.string().optional(),
-          severity: z.string().optional(),
-          signalType: z.string().optional(),
-          monitorCondition: z.string().optional(),
-          monitorService: z.string().optional(),
-          firedDateTime: z.string().optional(),
-          description: z.string().optional(),
-        })
-        .optional(),
-      alertContext: z.unknown().optional(),
-      context: z
-        .object({
-          id: z.string().optional(),
-          name: z.string().optional(),
-          description: z.string().optional(),
-          conditionType: z.string().optional(),
-          condition: z
-            .object({
-              windowSize: z.string().optional(),
-              allOf: z
-                .array(
-                  z.object({
-                    metricName: z.string().optional(),
-                    threshold: z.number().optional(),
-                  })
-                )
-                .optional(),
-            })
-            .optional(),
-        })
-        .optional(),
-      properties: z.unknown().optional(),
-    })
-    .optional(),
-});
+export const AzureAlertSchema = z
+  .object({
+    schemaId: z.string().optional(),
+    data: z
+      .object({
+        essentials: z
+          .object({
+            alertId: z.string().optional(),
+            alertRule: z.string().optional(),
+            severity: z.string().optional(),
+            signalType: z.string().optional(),
+            monitorCondition: z.string().optional(),
+            monitorService: z.string().optional(),
+            firedDateTime: z.string().optional(),
+            description: z.string().optional(),
+          })
+          .optional(),
+        alertContext: z.unknown().optional(),
+        context: z
+          .object({
+            id: z.string().optional(),
+            name: z.string().optional(),
+            description: z.string().optional(),
+            conditionType: z.string().optional(),
+            condition: z
+              .object({
+                windowSize: z.string().optional(),
+                allOf: z
+                  .array(
+                    z.object({
+                      metricName: z.string().optional(),
+                      threshold: z.number().optional(),
+                    })
+                  )
+                  .optional(),
+              })
+              .optional(),
+          })
+          .optional(),
+        properties: z.unknown().optional(),
+      })
+      .optional(),
+  })
+  // Without an alert id every malformed delivery would fold into one 'azure-unknown' incident.
+  .refine(value => Boolean(value.data?.essentials?.alertId || value.data?.context?.id), {
+    message: 'Azure alert must include data.essentials.alertId',
+    path: ['data', 'essentials', 'alertId'],
+  });
 
 export type AzureAlertData = z.infer<typeof AzureAlertSchema>;
 
@@ -502,7 +508,12 @@ export const GoogleCloudMonitoringSchema = z
     state: z.string().optional(),
     severity: z.string().optional(),
   })
-  .passthrough();
+  .passthrough()
+  // An empty or undecodable body would otherwise become one bogus 'GCP Monitoring Alert' incident.
+  .refine(value => Boolean(value.incident || value.summary || value.policy_name), {
+    message: 'Expected a Cloud Monitoring incident payload',
+    path: ['incident'],
+  });
 
 export type GoogleCloudMonitoringEvent = z.infer<typeof GoogleCloudMonitoringSchema>;
 

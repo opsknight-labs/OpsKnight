@@ -21,7 +21,8 @@ function parsePubSubPayload(body: string): GoogleCloudMonitoringEvent {
         },
       } as GoogleCloudMonitoringEvent;
     } catch {
-      return parsed as GoogleCloudMonitoringEvent;
+      // An undecodable Pub/Sub message is invalid input, not an alert; the handler returns 400.
+      throw new Error('Invalid Pub/Sub message data');
     }
   }
   return parsed as GoogleCloudMonitoringEvent;
