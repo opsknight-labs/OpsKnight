@@ -557,7 +557,7 @@ export async function toggleIntegrationStatus(
   revalidatePath(`/services/${serviceId}/integrations`);
 }
 
-export async function deleteService(serviceId: string) {
+export async function deleteService(serviceId: string): Promise<{ error?: string } | void> {
   let currentUser: { id: string } | null = null;
   try {
     currentUser = await assertAdmin();
@@ -571,17 +571,18 @@ export async function deleteService(serviceId: string) {
   // Incident history is an audit record and must never be erased as a side effect of
   // deleting a service. Require explicit archival/reassignment before deletion.
   const incidentCount = await prisma.incident.count({ where: { serviceId } });
+  // Returned, not thrown: production sanitises thrown server-action messages.
   if (incidentCount > 0) {
-    throw new Error(
-      `Cannot delete this service while it has ${incidentCount} incident(s). Preserve or reassign the incident history first.`
-    );
+    return {
+      error: `Cannot delete this service while it has ${incidentCount} incident(s). Preserve or reassign the incident history first.`,
+    };
   }
 
   const objectiveCount = await prisma.serviceObjective.count({ where: { serviceId } });
   if (objectiveCount > 0) {
-    throw new Error(
-      `Cannot delete this service while it has ${objectiveCount} service objective revision(s). Reliability history must retain its original service scope.`
-    );
+    return {
+      error: `Cannot delete this service while it has ${objectiveCount} service objective revision(s). Reliability history must retain its original service scope.`,
+    };
   }
 
   // Now delete the service

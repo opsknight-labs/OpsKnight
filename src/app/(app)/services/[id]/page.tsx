@@ -576,7 +576,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const boundUpdateService = updateService.bind(null, service.id);
   const boundDeleteService = async () => {
     'use server';
-    await deleteService(service.id);
+    return deleteService(service.id);
   };
 
   // --- TAB 1: INCIDENTS CONTENT ---
