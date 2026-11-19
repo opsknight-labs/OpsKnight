@@ -264,7 +264,10 @@ async function claimEffect(id: string): Promise<ClaimedIntent | null> {
   };
 }
 
-async function recordEffect(claim: ClaimedIntent, responsePayload: Prisma.InputJsonValue): Promise<void> {
+async function recordEffect(
+  claim: ClaimedIntent,
+  responsePayload: Prisma.InputJsonValue | typeof Prisma.JsonNull
+): Promise<void> {
   const result = await prisma.chatOpsIntent.updateMany({
     where: { id: claim.id, status: 'EFFECT_PROCESSING', leaseToken: claim.leaseToken },
     data: {
@@ -402,7 +405,11 @@ export async function processChatOpsIntent(intentId: string): Promise<void> {
           response = await result.json();
         }
       }
-      await recordEffect(effectClaim, response as Prisma.InputJsonValue);
+      // A null reply (e.g. a URL button) means nothing to send; Prisma needs JsonNull for it.
+      await recordEffect(
+        effectClaim,
+        response === null ? Prisma.JsonNull : (response as Prisma.InputJsonValue)
+      );
     } catch (error) {
       await failEffect(effectClaim, error);
       throw error;
