@@ -283,11 +283,17 @@ async function applyEvent(
 
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
-    const existingIncident = await findOpenEventIncident(tx, serviceId, candidateDedupKeys);
+    const existingIncident = await findOpenEventIncident(
+      tx,
+      serviceId,
+      candidateDedupKeys,
+      event_action === 'resolve'
+    );
 
     // Rolling-upgrade compatibility: move an open incident created with an
     // older, unscoped key to the integration-scoped key on first contact.
-    if (existingIncident && existingIncident.dedupKey !== dedupKeys.primary) {
+    // A resolve can match through an appended alert; only a legacy-keyed incident is re-keyed.
+    if (existingIncident && dedupKeys.legacy && existingIncident.dedupKey === dedupKeys.legacy) {
       await tx.incident.update({
         where: { id: existingIncident.id },
         data: { dedupKey: dedupKeys.primary },
@@ -1038,6 +1044,25 @@ async function applyEvent(
           urgency: classification.urgency,
         },
       };
+    }
+
+    if (event_action === 'resolve' && existingIncident!.openOtherAlertKeys) {
+      // Content dedup appended other keys to this incident and some still fire: it stays open.
+      const openKeys = existingIncident!.openOtherAlertKeys;
+      await tx.incidentEvent.create({
+        data: {
+          incidentId: existingIncident!.id,
+          message: `Alert cleared by event from ${normalizedSource}; ${openKeys} other alert ${openKeys === 1 ? 'key is' : 'keys are'} still firing, so the incident stays open.`,
+        },
+      });
+      logger.info('event.alert_resolved_incident_open', {
+        incidentId: existingIncident!.id,
+        dedupKey: dedup_key,
+        source: normalizedSource,
+        openOtherAlertKeys: openKeys,
+      });
+      delete existingIncident!.openOtherAlertKeys;
+      return { action: 'alert_resolved' as const, incident: existingIncident! };
     }
 
     if (event_action === 'resolve') {
