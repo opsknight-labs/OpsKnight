@@ -146,9 +146,12 @@ it('mints evidence only for actual reads and rejects readable but unretrieved ci
     'get_incident',
     { id: incident.id },
     { id: incident.id, title: incident.title, updatedAt: incident.updatedAt.toISOString() }
-  )) as { evidence: SourceReference[] };
+  )) as { evidence: Array<{ handle: string; kind: string; id: string }> };
   expect(evidence.verified).toBe(true);
-  expect(result.evidence[0]).toMatchObject({
+  // The model sees a short handle; the provenance stays server-side.
+  expect(result.evidence[0]).toEqual({ handle: 'E1', kind: 'incident', id: incident.id });
+  const [source] = evidence.sources() as SourceReference[];
+  expect(source).toMatchObject({
     kind: 'incident',
     id: incident.id,
     dataClass: 'PERSONAL',
@@ -157,7 +160,7 @@ it('mints evidence only for actual reads and rejects readable but unretrieved ci
   const citation = evidence.citations(`[evidence:${result.evidence[0].handle}]`)[0];
   expect(citation).toMatchObject({
     href: `/incidents/${incident.id}`,
-    handle: result.evidence[0].handle,
+    handle: source.handle,
   });
   expect(evidence.citations(`/incidents/${incident.id}extra`)).toEqual([]);
 });

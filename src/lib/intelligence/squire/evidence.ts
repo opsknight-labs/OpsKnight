@@ -14,6 +14,32 @@ const row = (value: unknown): Row =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Row) : {};
 const rows = (value: unknown): Row[] => (Array.isArray(value) ? value.map(row) : []);
 const unavailable = { error: 'Evidence could not be verified. Read the source again.' };
+const MAX_RESULT_BYTES = 32_768;
+const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8');
+
+/**
+ * An oversized result keeps its leading rows: the longest list (the result itself, or a top-level field) is
+ * halved until the whole fits. Returns null when there is no list left to trim.
+ */
+function trimRows(result: unknown): unknown {
+  let current = result;
+  while (bytes(current) > MAX_RESULT_BYTES) {
+    if (Array.isArray(current)) {
+      if (current.length <= 1) return null;
+      current = current.slice(0, Math.floor(current.length / 2));
+      continue;
+    }
+    const object = row(current);
+    const longest = Object.entries(object)
+      .filter(
+        (entry): entry is [string, unknown[]] => Array.isArray(entry[1]) && entry[1].length > 1
+      )
+      .sort((a, b) => bytes(b[1]) - bytes(a[1]))[0];
+    if (!longest) return null;
+    current = { ...object, [longest[0]]: longest[1].slice(0, Math.floor(longest[1].length / 2)) };
+  }
+  return current;
+}
 const prefixes = new Map<SourceReference['kind'], string>([
   ['incident', '/incidents/'],
   ['runbook', '/runbooks/'],
@@ -26,7 +52,10 @@ const prefixes = new Map<SourceReference['kind'], string>([
 
 /** Turn-local provenance. Handles are minted only after an actual read and a current visibility check. */
 export class SquireEvidenceRegistry {
-  private readonly captured = new Map<string, { source: SourceReference; label: string }>();
+  private readonly captured = new Map<
+    string,
+    { source: SourceReference; label: string; ref: string }
+  >();
   private complete = true;
   private readonly coverageNotices = new Set<string>();
   notices(): string[] {
@@ -87,6 +116,8 @@ export class SquireEvidenceRegistry {
       this.captured.set(sourceKey(snapshot), {
         source,
         label: (snapshot.label ?? snapshot.id).slice(0, 200),
+        // The model sees this short handle; the uuid, digest and read time stay on the server.
+        ref: this.captured.get(sourceKey(snapshot))?.ref ?? `E${this.captured.size + 1}`,
       });
       result.push(source);
     }
@@ -121,11 +152,17 @@ export class SquireEvidenceRegistry {
     return (await this.capture(snapshots)) ? briefing : null;
   }
 
-  async observe(name: string, input: unknown, result: unknown): Promise<unknown> {
-    if (Buffer.byteLength(JSON.stringify(result) ?? '', 'utf8') > 32_768) {
+  async observe(name: string, input: unknown, full: unknown): Promise<unknown> {
+    const result = trimRows(full);
+    if (result === null) {
       this.complete = false;
       return unavailable;
     }
+    const truncated = result !== full;
+    if (truncated)
+      this.coverageNotices.add(
+        'A tool result was too large and was trimmed to its first rows; more matches may exist.'
+      );
     const object = row(result);
     if (name === 'semantic_search_incidents') {
       const coverage = row(object.coverage);
@@ -238,6 +275,15 @@ export class SquireEvidenceRegistry {
         });
         if (name === 'get_change_diff') add('change', { id: object.changeId, title: object.title });
         break;
+      // Automation (tools-automation.ts): a decision is about the incident (and the service it ran on);
+      // a rule explanation is read from the service's live automation version.
+      case 'get_automation_decision':
+        add('incident', { ...object, id: row(input).incidentId, snapshot: result });
+        if (typeof object.serviceId === 'string') add('service', { id: object.serviceId });
+        break;
+      case 'explain_automation_rule':
+        add('service', { ...object, id: row(input).serviceId, snapshot: result });
+        break;
       // ---- Incident-response tools (tools-incident.ts) ----
       case 'get_alert_payload':
         add('alert', object);
@@ -278,11 +324,17 @@ export class SquireEvidenceRegistry {
         return unavailable;
     }
     const evidence = await this.capture(snapshots);
-    return evidence ? { data: result, evidence } : unavailable;
+    if (!evidence) return unavailable;
+    const refs = evidence.map(source => ({
+      handle: this.captured.get(sourceKey(source))!.ref,
+      kind: source.kind,
+      id: source.id,
+    }));
+    return { data: result, evidence: refs, ...(truncated ? { truncated: true } : {}) };
   }
 
   /**
-   * Every source read so far this turn with its handle, label and in-app link, for answers that are
+   * Every source read so far this turn with its short handle, label and in-app link, for answers that are
    * assembled from evidence (investigation hypotheses, partial answers) rather than written by the model.
    */
   entries(): Array<{
@@ -292,10 +344,11 @@ export class SquireEvidenceRegistry {
     label: string;
     href: string | null;
   }> {
-    return [...this.captured.values()].map(({ source, label }) => {
+    return [...this.captured.values()].map(({ source, label, ref }) => {
       const prefix = prefixes.get(source.kind);
       return {
-        handle: source.handle,
+        // The short handle the model saw; it is only ever resolved back through this turn's ledger.
+        handle: ref,
         kind: source.kind,
         id: source.id,
         label,
@@ -307,7 +360,7 @@ export class SquireEvidenceRegistry {
   /** A readable but unretrieved URL never becomes a citation. */
   citations(text: string): SquireCitation[] {
     return [...this.captured.values()]
-      .flatMap(({ source, label }) => {
+      .flatMap(({ source, label, ref }) => {
         if (
           source.kind !== 'incident' &&
           source.kind !== 'runbook' &&
@@ -322,6 +375,7 @@ export class SquireEvidenceRegistry {
         const href = `${prefixes.get(kind)}${encodeURIComponent(source.id)}`;
         // Require an exact URL boundary, so a short id cannot cite a different longer id.
         const referenced =
+          text.includes(`[evidence:${ref}]`) ||
           text.includes(`[evidence:${source.handle}]`) ||
           [
             ...text.matchAll(
