@@ -1,6 +1,7 @@
 import MobileAutomationPanel from '@/components/automation/MobileAutomationPanel';
 import { hasCapability } from '@/lib/authorization';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
+import MobileSquireMount from '@/components/squire/MobileSquireMount';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
@@ -223,6 +224,10 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
           />
         </div>
       </Card>
+      {/* The assistant: optional and off by default; never delays or breaks the page. */}
+      <Suspense fallback={null}>
+        <MobileSquireMount />
+      </Suspense>
     </div>
   );
 }
