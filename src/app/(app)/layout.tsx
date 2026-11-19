@@ -11,6 +11,7 @@ import TopbarUserMenu from '@/components/TopbarUserMenu';
 import SidebarSearch from '@/components/SidebarSearch';
 import QuickActions from '@/components/QuickActions';
 import TopbarNotifications from '@/components/TopbarNotifications';
+import AttentionBadge from '@/components/intelligence/overview/AttentionBadge';
 import TopbarBreadcrumbs from '@/components/TopbarBreadcrumbs';
 import GlobalKeyboardHandlerWrapper from '@/components/GlobalKeyboardHandlerWrapper';
 import AppErrorBoundary from './error-boundary';
@@ -143,6 +144,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                           <SidebarSearch />
                         </div>
                         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+                          <Suspense fallback={null}>
+                            <AttentionBadge actor={requestContext.actor} />
+                          </Suspense>
                           <TopbarNotifications />
                           <QuickActions canCreate={canCreate} />
                           <TopbarUserMenu
