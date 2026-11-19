@@ -330,6 +330,41 @@ describe('central notification control plane', () => {
     ]);
   });
 
+  it.each([
+    [404, 5],
+    [503, 1],
+    [429, undefined],
+  ])('settles a webhook HTTP %i with attempts=%s', async (statusCode, expectedAttempts) => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = { kind: 'WEBHOOK', url: 'https://example.com/events', payload: {} };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'webhook-4xx',
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    } as never);
+    vi.mocked(prisma.notificationDeliveryAttempt.create).mockResolvedValue({} as never);
+    mocks.sendWebhook.mockResolvedValue({
+      success: false,
+      statusCode,
+      error: `Webhook returned ${statusCode}: nope`,
+    });
+
+    await deliverCentralNotification('webhook-4xx');
+
+    const failed = vi
+      .mocked(prisma.notification.updateMany)
+      .mock.calls.map(([args]) => args?.data as { status?: string; attempts?: number })
+      .find(data => data?.status === 'FAILED');
+    expect(failed?.attempts).toBe(expectedAttempts);
+  });
+
   it('uses one atomic claim when two workers race for the same delivery', async () => {
     const due = new Date(Date.now() - 60_000);
     vi.mocked(prisma.notification.findUnique).mockResolvedValue({

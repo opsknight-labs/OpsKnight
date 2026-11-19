@@ -2957,7 +2957,16 @@ async function deliverCentralNotificationOwned(
     }
 
     // Permanent failure
-    const permanent = isPermanentProviderError(errorMessage);
+    // A generic webhook 4xx (deleted Discord hook, bad payload) will not heal on
+    // retry; 408 and 429 remain transient.
+    const webhookClientError =
+      payload.kind === 'WEBHOOK' &&
+      typeof result.statusCode === 'number' &&
+      result.statusCode >= 400 &&
+      result.statusCode < 500 &&
+      result.statusCode !== 408 &&
+      result.statusCode !== 429;
+    const permanent = webhookClientError || isPermanentProviderError(errorMessage);
     const exhausted = currentDeliveryAttempt >= candidate.maxAttempts;
     const safeFailover = isEmail && isSafeEmailFailoverCondition(result);
     const canFailover = safeFailover && !isLastProviderInRoute && !exhausted;
