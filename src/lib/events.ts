@@ -293,12 +293,12 @@ export async function processEvent(
           dedupKey: dedup_key,
         };
       }
-      // A late upstream recovery for an incident a responder already resolved
-      // belongs to that incident; buffering it would make the next real trigger
-      // create an already-RESOLVED incident that pages nobody. Recoveries often
-      // arrive long after a person resolves, so no time window: the latest
-      // resolved incident owns it while it has not yet seen a recovery.
-      const lastResolved = await tx.incident.findFirst({
+      // With no open incident, a resolve for a key that already had a resolved
+      // incident belongs to that closed episode: a late recovery after a manual
+      // resolve, or a repeated recovery. Buffering it would let the next real
+      // trigger open as already-RESOLVED and page nobody. A genuine early resolve
+      // for a new episode then leaves that incident open, which still pages.
+      const recentlyResolved = await tx.incident.findFirst({
         where: {
           serviceId,
           dedupKey: { in: candidateDedupKeys },
@@ -306,17 +306,8 @@ export async function processEvent(
           resolvedAt: { not: null },
         },
         orderBy: [{ resolvedAt: 'desc' }, { id: 'desc' }],
-        select: {
-          id: true,
-          alerts: {
-            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-            take: 1,
-            select: { status: true },
-          },
-        },
+        select: { id: true },
       });
-      const recentlyResolved =
-        lastResolved && lastResolved.alerts[0]?.status === 'TRIGGERED' ? lastResolved : null;
       if (recentlyResolved) {
         await persistAlert(recentlyResolved.id);
         logger.info('event.resolve_late_for_resolved_incident', {

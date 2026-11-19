@@ -3387,6 +3387,34 @@ describe('PostgreSQL ingestion durability', () => {
     expect(recurrence.status).toBe('OPEN');
   });
 
+  it('keeps a repeated late recovery with the closed episode so the next trigger still pages', async () => {
+    await processEvent(envelope('repeat-recovery').event, serviceId, 'integration');
+    const first = await prisma.incident.findFirstOrThrow({
+      where: { serviceId, dedupKey: 'integration:repeat-recovery' },
+    });
+    await runReadCommittedTransaction(tx =>
+      applyIncidentLifecycleCommand(tx, { incidentId: first.id, command: 'RESOLVE', source: 'WEB' })
+    );
+    for (let i = 0; i < 2; i++) {
+      const recovery = await processEvent(
+        envelope('repeat-recovery', 'resolve').event,
+        serviceId,
+        'integration'
+      );
+      expect(recovery).toMatchObject({ action: 'ignored', reason: 'Incident already resolved' });
+    }
+    expect(
+      await prisma.alert.count({
+        where: { serviceId, dedupKey: 'integration:repeat-recovery', incidentId: null },
+      })
+    ).toBe(0);
+    await processEvent(envelope('repeat-recovery').event, serviceId, 'integration');
+    const recurrence = await prisma.incident.findFirstOrThrow({
+      where: { serviceId, dedupKey: 'integration:repeat-recovery', id: { not: first.id } },
+    });
+    expect(recurrence.status).toBe('OPEN');
+  });
+
   it('releases a flapping hold once the alert stops oscillating, but not while it still flaps', async () => {
     const flap = async (key: string) => {
       const at = Date.now();
