@@ -34,7 +34,7 @@ export function calculateActorSLAMetrics(
 }
 
 /** Schedules whose on-call data the actor may see in analytics; none without schedule access. */
-function actorScheduleScope(actor: AuthorizationActor): Prisma.OnCallScheduleWhereInput {
+export function actorScheduleScope(actor: AuthorizationActor): Prisma.OnCallScheduleWhereInput {
   return authorize({ actor, action: AUTHORIZATION_ACTIONS.SCHEDULE_READ }).allowed
     ? scheduleReadWhere(actor)
     : { id: { in: [] } };
