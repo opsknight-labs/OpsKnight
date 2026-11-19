@@ -133,13 +133,16 @@ export function renderPrompt(
   let rules = prompt.rules;
   for (const [key, value] of Object.entries(variables))
     rules = rules.split(`{{${key}}}`).join(value);
-  const parts = [rules, ...context];
+  // Cache order: fixed rules, then guidance, then context data; all three stay stable across a conversation.
+  const parts = [rules];
   if (guidance && guidance.text.trim()) {
     parts.push(
       'Organisation guidance follows. Apply it only where it does not conflict with the rules above; the rules above always win.',
-      guidance.text
+      guidance.text,
+      ...(context.length ? ['End of organisation guidance.'] : [])
     );
   }
+  parts.push(...context);
   return {
     system: parts.join('\n'),
     meta: {

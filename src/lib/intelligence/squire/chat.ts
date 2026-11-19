@@ -206,6 +206,10 @@ export async function* streamSquire(
       const messages: AiMessage[] = [
         { role: 'system', content: prompt.system, dataClass: 'PERSONAL' },
         ...history,
+        // After the cached prefix (system + history): the parts of the briefing that change between turns.
+        ...(prompt.volatile
+          ? [{ role: 'user' as const, content: prompt.volatile, dataClass: 'PERSONAL' as const }]
+          : []),
         { role: 'user', content: request.message, dataClass: 'PERSONAL' },
       ];
 
