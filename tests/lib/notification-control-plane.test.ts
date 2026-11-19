@@ -143,10 +143,20 @@ describe('central notification control plane', () => {
 
   it('commits deferred webhook intent without starting a provider attempt', async () => {
     vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'deferred-webhook' } as never);
-    const result = await enqueueCentralNotification({
-      ...input, channel: 'WEBHOOK', recipientType: 'WEBHOOK', recipientAddress: 'https://receiver.example.test/events',
-      payload: { kind: 'WEBHOOK', url: 'https://receiver.example.test/events', payload: { event: 'fixture' } },
-    }, { dispatchImmediately: false });
+    const result = await enqueueCentralNotification(
+      {
+        ...input,
+        channel: 'WEBHOOK',
+        recipientType: 'WEBHOOK',
+        recipientAddress: 'https://receiver.example.test/events',
+        payload: {
+          kind: 'WEBHOOK',
+          url: 'https://receiver.example.test/events',
+          payload: { event: 'fixture' },
+        },
+      },
+      { dispatchImmediately: false }
+    );
     expect(result).toEqual({ id: expect.any(String), created: true });
     expect(result.id).toBe(vi.mocked(prisma.notification.create).mock.calls[0]?.[0]?.data.id);
     expect(prisma.notification.create).toHaveBeenCalledTimes(1);
@@ -411,9 +421,9 @@ describe('central notification control plane', () => {
     expect(mocks.sendWebhook).toHaveBeenCalledWith(
       expect.objectContaining({ secret: 'new-secret' })
     );
-    expect(vi.mocked(prisma.webhookIntegration.findFirst).mock.calls[0]?.[0]?.where).toMatchObject(
-      { type: 'GENERIC' }
-    );
+    expect(vi.mocked(prisma.webhookIntegration.findFirst).mock.calls[0]?.[0]?.where).toMatchObject({
+      type: 'GENERIC',
+    });
 
     mocks.sendWebhook.mockClear();
     vi.mocked(prisma.webhookIntegration.findFirst).mockResolvedValue(null);

@@ -366,7 +366,7 @@ export function formatGoogleChatPayload(
 
   // Status mapping
   const statusIcon =
-    (eventType === 'triggered' || eventType === 'breached')
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔥'
       : eventType === 'acknowledged'
         ? '⚠️'
@@ -474,7 +474,7 @@ export function formatMicrosoftTeamsPayload(
 ): Record<string, any> {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const accentColor =
-    (eventType === 'triggered' || eventType === 'breached')
+    eventType === 'triggered' || eventType === 'breached'
       ? 'Attention' // Red
       : eventType === 'acknowledged' || eventType === 'warning'
         ? 'Warning' // Yellow/Orange
@@ -483,7 +483,7 @@ export function formatMicrosoftTeamsPayload(
           : 'Default';
 
   const statusEmoji =
-    (eventType === 'triggered' || eventType === 'breached')
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔥'
       : eventType === 'acknowledged'
         ? '⚠️'
@@ -608,7 +608,7 @@ export function formatDiscordPayload(
 ): Record<string, any> {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const color =
-    (eventType === 'triggered' || eventType === 'breached')
+    eventType === 'triggered' || eventType === 'breached'
       ? 0xd32f2f // Red
       : eventType === 'acknowledged' || eventType === 'warning'
         ? 0xf9a825 // Yellow
@@ -617,7 +617,7 @@ export function formatDiscordPayload(
           : 0x757575; // Grey
 
   const statusEmoji =
-    (eventType === 'triggered' || eventType === 'breached')
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔴'
       : eventType === 'acknowledged' || eventType === 'warning'
         ? '🟡'
@@ -685,7 +685,7 @@ export function formatTelegramPayload(
 ): Record<string, any> {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const statusEmoji =
-    (eventType === 'triggered' || eventType === 'breached')
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔴'
       : eventType === 'acknowledged'
         ? '🟡'
@@ -699,7 +699,10 @@ export function formatTelegramPayload(
     `Status: ${incident.status}`,
     `Urgency: ${incident.urgency}`,
     `Assignee: ${incident.assignee?.name || 'Unassigned'}`,
-    incident.description ? `Details: ${incident.description}` : null,
+    // Telegram rejects messages over 4096 characters.
+    incident.description
+      ? `Details: ${incident.description.substring(0, 3000)}${incident.description.length > 3000 ? '...' : ''}`
+      : null,
     `View: ${incidentUrl}`,
   ]
     .filter(Boolean)
@@ -735,7 +738,7 @@ export function formatSlackPayload(
 
   // Status color mapping
   const statusEmoji =
-    (eventType === 'triggered' || eventType === 'breached')
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔴'
       : eventType === 'acknowledged'
         ? '🟡'
@@ -782,7 +785,8 @@ export function formatSlackPayload(
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: `*Description:*\n${incident.description}`,
+                // Slack rejects section text over 3000 characters.
+                text: `*Description:*\n${incident.description.substring(0, 2900)}${incident.description.length > 2900 ? '...' : ''}`,
               },
             },
           ]
