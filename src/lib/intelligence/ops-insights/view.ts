@@ -279,31 +279,52 @@ export async function listInsightsInbox(
       cursor = row.id;
       const name = names.get(row.scopeType)?.get(row.scopeId);
       if (name === undefined) continue;
+      // One visible row past the page proves a next page exists; it is dropped, not shown.
+      if (items.length === limit) return { items, nextCursor: items[limit - 1].id };
       items.push({
         ...toView(row),
         scopeName: name,
         scopeHref: `${SCOPE_PATHS[row.scopeType]}/${row.scopeId}`,
       });
-      if (items.length === limit) return { items, nextCursor: cursor };
     }
     if (page.length < OPS_INSIGHT_READ_LIMITS.inboxPage) return { items, nextCursor: null };
   }
   return { items, nextCursor: cursor };
 }
 
+/** Rows the badge looks at: ids and scopes only, no evidence. */
+const BADGE_SCAN = 200;
+
 /** Badge cap: the topbar shows "9+" past it. */
 export const OPS_INSIGHT_BADGE_CAP = 9;
 
 /**
- * The topbar "Needs attention" count: open insights the viewer may see, capped, read once per request.
+ * The topbar "Needs attention" count: open insights the viewer may see, capped, read once per request. It
+ * renders on every page, so it reads ids and scopes only (no evidence), in one page plus one visibility
+ * query per scope type. The overview's decision probes are not counted here: they are several probes.
  *
- * shortcut: reuses the inbox read (one bounded page plus one visibility query per scope type, at most
- * `inboxRounds`) rather than a single COUNT, because visibility is per scope; upgrade with a team column on
- * OpsInsight. The overview's decision probes are not counted here: they are several probes, not one read.
+ * shortcut: only the newest BADGE_SCAN open insights are considered, so a viewer who can read very little of
+ * a very large estate may see a low count; upgrade with a team column on OpsInsight.
  */
 export const countInsightsInboxBadge = cache(
   async (actor: AuthorizationActor): Promise<{ count: number; more: boolean }> => {
-    const inbox = await listInsightsInbox(actor, { limit: OPS_INSIGHT_BADGE_CAP });
-    return { count: inbox.items.length, more: inbox.nextCursor !== null };
+    const areas = await visibleAreas(prisma);
+    if (areas.length === 0) return { count: 0, more: false };
+    const rows = await prisma.opsInsight.findMany({
+      where: { status: 'OPEN', area: { in: areas } },
+      orderBy: [{ severity: 'desc' }, { lastSeenAt: 'desc' }, { id: 'desc' }],
+      take: BADGE_SCAN,
+      select: { scopeType: true, scopeId: true },
+    });
+    const byType = new Map<OpsInsightScopeType, string[]>();
+    for (const row of rows)
+      byType.set(row.scopeType, [...(byType.get(row.scopeType) ?? []), row.scopeId]);
+    let count = 0;
+    for (const [type, ids] of byType) {
+      const readable = await readableOpsInsightScopes(actor, type, [...new Set(ids)], prisma);
+      count += ids.filter(id => readable.has(id)).length;
+      if (count > OPS_INSIGHT_BADGE_CAP) break;
+    }
+    return { count: Math.min(count, OPS_INSIGHT_BADGE_CAP), more: count > OPS_INSIGHT_BADGE_CAP };
   }
 );
