@@ -772,9 +772,7 @@ const BetterUptimeIncidentSchema = z
 
 export const BetterUptimeSchema = z
   .object({
-    incident: z
-      .union([BetterUptimeIncidentSchema, z.string(), z.number()])
-      .optional(),
+    incident: z.union([BetterUptimeIncidentSchema, z.string(), z.number()]).optional(),
     data: z
       .object({
         id: z.union([z.string(), z.number()]).optional(),

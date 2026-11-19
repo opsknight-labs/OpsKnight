@@ -138,7 +138,9 @@ export function parseManageEngineAlarms(rawBody: string): ManageEnginePayload[] 
       parsed.length > 0 &&
       parsed.every(item => item && typeof item === 'object' && !Array.isArray(item))
     ) {
-      return parsed.map(item => unwrapEnvelope(item as Record<string, unknown>) as ManageEnginePayload);
+      return parsed.map(
+        item => unwrapEnvelope(item as Record<string, unknown>) as ManageEnginePayload
+      );
     }
     throw new Error('Invalid JSON array payload');
   }

@@ -220,9 +220,10 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
     const repoName = payload.repository?.full_name || 'unknown';
     // Include the branch so a PR check success cannot resolve main's failure.
     const checkBranch = check.check_suite?.head_branch;
-    const checkDedupKey = `github-check-${repoName}-${check.name || check.id}${checkBranch ? `-${checkBranch}` : ''}`
-      .toLowerCase()
-      .replace(/[^a-z0-9-_]/g, '-');
+    const checkDedupKey =
+      `github-check-${repoName}-${check.name || check.id}${checkBranch ? `-${checkBranch}` : ''}`
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]/g, '-');
 
     if (isPending) {
       return {

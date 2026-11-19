@@ -30,7 +30,9 @@ export type BitbucketEvent = {
 
 // Only an explicit failure pages and only an explicit success recovers; push,
 // PR and in-progress/stopped events are informational.
-function determineAction(...states: Array<string | undefined>): 'trigger' | 'resolve' | 'acknowledge' {
+function determineAction(
+  ...states: Array<string | undefined>
+): 'trigger' | 'resolve' | 'acknowledge' {
   const normalized = states.filter(Boolean).join(' ').toLowerCase();
   if (/\b(failed|error)\b/.test(normalized)) return 'trigger';
   if (/\b(successful|success)\b/.test(normalized)) return 'resolve';

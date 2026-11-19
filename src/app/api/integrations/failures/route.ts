@@ -325,7 +325,9 @@ export async function POST(request: NextRequest) {
       if (!existing) throw new Error('ChatOps intent not found');
       // Retrying a COMPLETED/PENDING intent would repost it to chat.
       if (existing.status !== 'FAILED') {
-        throw new Error(`Only FAILED ChatOps intents can be retried (current state: ${existing.status})`);
+        throw new Error(
+          `Only FAILED ChatOps intents can be retried (current state: ${existing.status})`
+        );
       }
       const intent = await tx.chatOpsIntent.update({
         where: { id: body.id, status: 'FAILED' },

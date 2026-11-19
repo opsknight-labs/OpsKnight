@@ -23,11 +23,7 @@ function resolveAction(
   // Only an acknowledgement or the start of downtime/flapping holds escalation.
   // DOWNTIMEEND/CANCELLED, FLAPPINGSTOP/DISABLED and CUSTOM fall through to the
   // current state so a still-failing check keeps paging.
-  if (
-    notif.includes('ACK') ||
-    notif === 'DOWNTIMESTART' ||
-    notif === 'FLAPPINGSTART'
-  ) {
+  if (notif.includes('ACK') || notif === 'DOWNTIMESTART' || notif === 'FLAPPINGSTART') {
     return 'acknowledge';
   }
 
