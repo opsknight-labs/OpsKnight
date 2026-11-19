@@ -72,6 +72,7 @@ type PostmortemFormProps = {
   incidentId: string;
   initialData?: {
     id: string;
+    revision?: number;
     title: string;
     summary?: string | null;
     timeline?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -224,6 +225,7 @@ export default function PostmortemForm({
       timeline: timelineEvents,
       impact: impactMetrics,
       actionItems: actionItems,
+      expectedRevision: initialData?.revision,
     };
 
     startTransition(async () => {

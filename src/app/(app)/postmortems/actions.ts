@@ -2,6 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
+import { z } from 'zod/v3';
 import { revalidatePath } from 'next/cache';
 import {
   getCurrentAuthorizationActor,
@@ -61,12 +62,94 @@ export type PostmortemData = {
   lessons?: string;
   status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   isPublic?: boolean;
+  /** Revision the editor loaded; required when editing an existing postmortem. */
+  expectedRevision?: number;
 };
+
+const text = (max: number) => z.string().max(max);
+const number = z.number().finite().nonnegative().optional();
+// Only the editable columns; unknown keys (createdById, incidentId, ...) are dropped.
+const postmortemInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  summary: text(10_000).optional(),
+  timeline: z
+    .array(
+      z.object({
+        id: text(100),
+        timestamp: text(64),
+        type: z.enum(['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION']),
+        title: text(500),
+        description: text(5_000),
+        actor: text(200).optional(),
+      })
+    )
+    .max(200)
+    .optional(),
+  impact: z
+    .object({
+      usersAffected: number,
+      downtimeMinutes: number,
+      errorRate: number,
+      servicesAffected: z.array(text(200)).max(100).optional(),
+      slaBreaches: number,
+      revenueImpact: number,
+      apiErrors: number,
+      performanceDegradation: number,
+    })
+    .optional(),
+  contributingFactors: z
+    .array(
+      z.object({
+        id: text(100),
+        category: z.enum(['TECHNICAL', 'PROCESS', 'HUMAN', 'EXTERNAL', 'OTHER']),
+        description: text(5_000),
+        evidence: z.array(text(1_000)).max(20),
+      })
+    )
+    .max(50)
+    .optional(),
+  fiveWhys: z
+    .array(z.object({ id: text(100), question: text(1_000), answer: text(5_000) }))
+    .max(20)
+    .optional(),
+  rootCause: text(20_000).optional(),
+  resolution: text(10_000).optional(),
+  actionItems: z
+    .array(
+      z.object({
+        id: text(200),
+        title: text(500),
+        description: text(5_000),
+        owner: text(100).optional(),
+        dueDate: text(64).optional(),
+        status: z.enum(['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED']),
+        priority: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+        externalIssue: z.record(z.unknown()).optional(),
+        completedAt: z.union([z.string().max(64), z.date(), z.null()]).optional(),
+      })
+    )
+    .max(200)
+    .optional(),
+  lessons: text(10_000).optional(),
+  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+  isPublic: z.boolean().optional(),
+  expectedRevision: z.number().int().positive().optional(),
+});
 
 /**
  * Create or update a postmortem for an incident
  */
-export async function upsertPostmortem(incidentId: string, data: PostmortemData) {
+export async function upsertPostmortem(incidentId: string, input: PostmortemData) {
+  const parsed = postmortemInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(`Invalid postmortem: ${parsed.error.issues[0]?.message ?? 'bad input'}`);
+  }
+  // The schema mirrors PostmortemData; the cast only narrows externalIssue back to its Jira type.
+  const { expectedRevision, ...data } = parsed.data as unknown as PostmortemData;
+  if (JSON.stringify(data).length > 1_000_000) {
+    throw new Error('Invalid postmortem: content is too large');
+  }
+
   try {
     await assertResponderOrAbove();
   } catch (error) {
@@ -120,10 +203,19 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
   }
 
   const postmortem = await prisma.$transaction(async tx => {
+    // Lock the row so a concurrent board/API/Jira change cannot slip between check and write.
+    await tx.$queryRaw`SELECT "id" FROM "Postmortem" WHERE "incidentId" = ${incidentId} FOR UPDATE`;
     const existingPostmortem = await tx.postmortem.findUnique({
       where: { incidentId },
-      select: { publishedAt: true, status: true },
+      select: { publishedAt: true, status: true, revision: true },
     });
+    if (existingPostmortem && existingPostmortem.revision !== expectedRevision) {
+      throw new Error(
+        expectedRevision === undefined
+          ? 'A postmortem already exists for this incident. Open it to edit.'
+          : 'This postmortem was changed by someone else (or an action item was updated) since you opened it. Reload to see the latest version, then reapply your edits.'
+      );
+    }
 
     const publishedAt =
       data.status === 'PUBLISHED'
