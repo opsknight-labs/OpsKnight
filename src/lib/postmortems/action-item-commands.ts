@@ -219,3 +219,26 @@ export async function replacePostmortemActionItems(
   });
   return getPostmortemActionItems(tx, postmortemId);
 }
+
+/**
+ * Persist action items a generated draft extracted from notes as ActionItem rows, so they reach
+ * the board, the API and overdue reminders (rows are the read source once any exist).
+ */
+export async function createDraftActionItemRows(
+  db: Prisma.TransactionClient,
+  postmortem: { id: string; incidentId: string },
+  items: ReadonlyArray<{ title: string }>
+) {
+  if (items.length === 0) return;
+  await db.actionItem.createMany({
+    data: items.map((item, index) => ({
+      id: getStoredActionItemId({ postmortemId: postmortem.id, index }),
+      postmortemId: postmortem.id,
+      incidentId: postmortem.incidentId,
+      title: item.title.slice(0, 300) || 'Untitled action item',
+      status: 'OPEN' as const,
+      priority: 'MEDIUM' as const,
+      source: 'POSTMORTEM' as const,
+    })),
+  });
+}

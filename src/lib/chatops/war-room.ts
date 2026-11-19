@@ -8,6 +8,7 @@
 
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { createDraftActionItemRows } from '@/lib/postmortems/action-item-commands';
 import { findSlackWarRoomAuthority } from '@/lib/war-room/slack-compatibility';
 
 type WarRoomResult = {
@@ -272,7 +273,7 @@ export async function ensurePostmortemDraft(incidentId: string): Promise<string 
       (await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { id: true } }))?.id ||
       (await prisma.user.findFirst({ select: { id: true } }))?.id;
     if (!authorId) return null;
-    await prisma.postmortem.create({
+    const postmortem = await prisma.postmortem.create({
       data: {
         incidentId,
         title: `Postmortem: ${incident.title}`,
@@ -287,6 +288,7 @@ export async function ensurePostmortemDraft(incidentId: string): Promise<string 
         status: 'DRAFT',
       },
     });
+    await createDraftActionItemRows(prisma, postmortem, actionItemsFromNotes);
     return `${appUrl}/postmortems/${incidentId}`;
   } catch (err) {
     logger.warn('[ChatOps] Failed to ensure postmortem draft', { incidentId, error: err });
