@@ -62,18 +62,27 @@ type SlackThreadMessage = {
   subtype?: string;
 };
 
-/** Slack thread messages before the question, oldest first, as bounded conversation history. */
+/**
+ * The asker's own earlier messages in the thread, oldest first, as bounded conversation history. History
+ * becomes `user` turns run with the asker's access and answered in a public channel, so anyone else's words
+ * (people without that access, bots relaying alert text) would be instructions the asker never gave.
+ */
 export function slackThreadHistory(
   messages: readonly SlackThreadMessage[],
-  questionTs: string
+  questionTs: string,
+  askerId: string
 ): SquireRequest['history'] {
   return boundChatHistory(
     messages
-      .filter(message => message.ts && message.ts !== questionTs && !message.subtype)
-      .map(message => ({
-        speaker: message.bot_id ? 'A bot' : `Slack user ${message.user ?? 'unknown'}`,
-        text: message.text ?? '',
-      }))
+      .filter(
+        message =>
+          message.ts &&
+          message.ts !== questionTs &&
+          !message.subtype &&
+          !message.bot_id &&
+          message.user === askerId
+      )
+      .map(message => ({ speaker: `Slack user ${askerId}`, text: message.text ?? '' }))
   );
 }
 
@@ -81,7 +90,8 @@ async function readSlackThread(
   token: string,
   channel: string,
   threadTs: string,
-  questionTs: string
+  questionTs: string,
+  askerId: string
 ): Promise<SquireRequest['history']> {
   try {
     // shortcut: reads the first THREAD_READ_LIMIT replies before the question; a longer thread loses its tail.
@@ -101,7 +111,7 @@ async function readSlackThread(
       messages?: SlackThreadMessage[];
     } | null;
     return body?.ok && Array.isArray(body.messages)
-      ? slackThreadHistory(body.messages, questionTs)
+      ? slackThreadHistory(body.messages, questionTs, askerId)
       : [];
   } catch {
     // History is context only; the question is still answered without it.
@@ -152,7 +162,13 @@ export async function answerSlackSquireMention(
   const [history, placeholder] = botToken
     ? await Promise.all([
         payload.thread_ts
-          ? readSlackThread(botToken, payload.channel_id, payload.thread_ts, payload.ts)
+          ? readSlackThread(
+              botToken,
+              payload.channel_id,
+              payload.thread_ts,
+              payload.ts,
+              payload.user_id
+            )
           : Promise.resolve([]),
         slackApiCall('chat.postMessage', botToken, {
           channel: payload.channel_id,
