@@ -505,13 +505,15 @@ describe('processMicrosoftTeamsOperation fast ack', () => {
     vi.clearAllMocks();
     incident.status = 'ACKNOWLEDGED';
     const baseFindUnique = prismaMock.externalOperation.findUnique.getMockImplementation()!;
-    prismaMock.externalOperation.findUnique.mockImplementationOnce(async args => {
+    prismaMock.externalOperation.findUnique.mockImplementationOnce((async (
+      args: Parameters<typeof baseFindUnique>[0]
+    ) => {
       const op = (await baseFindUnique(args)) as Record<string, unknown>;
       return {
         ...op,
         requestPayload: { destinationId: 'dest-1', eventType: 'triggered' },
       };
-    });
+    }) as unknown as typeof baseFindUnique);
     try {
       const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
       // A superseded triggered event would resolve null; this one proceeds to card delivery.

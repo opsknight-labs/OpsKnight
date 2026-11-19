@@ -6,7 +6,7 @@ import { transformSplunkObservabilityToEvent } from '@/lib/integrations/splunk-o
 import { transformElasticToEvent } from '@/lib/integrations/elastic';
 import { transformHoneycombToEvent } from '@/lib/integrations/honeycomb';
 import { transformSentryToEvent } from '@/lib/integrations/sentry';
-import { transformNewRelicToEvent } from '@/lib/integrations/newrelic';
+import { transformNewRelicToEvent, type NewRelicEvent } from '@/lib/integrations/newrelic';
 import {
   AzureAlertSchema,
   GoogleCloudMonitoringSchema,
@@ -33,7 +33,7 @@ function parseNewRelic(body: unknown) {
   const result = validatePayload(NewRelicEventSchema, body);
   expect(result.success).toBe(true);
   if (!result.success) throw new Error('invalid');
-  return transformNewRelicToEvent(result.data);
+  return transformNewRelicToEvent(result.data as NewRelicEvent);
 }
 
 describe('normalizeEventAction negation', () => {

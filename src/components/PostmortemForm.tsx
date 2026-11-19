@@ -278,7 +278,7 @@ export default function PostmortemForm({
       setFiveWhysSteps(startingWhys);
 
       // Suggest initial contributing factors based on draft notes
-      const inferred = parseStoredFactors(draft.rootCause, draft.summary);
+      const inferred = parseStoredFactors(draft.rootCause);
       setSelectedFactors(inferred);
 
       toast.success('Draft generated successfully');

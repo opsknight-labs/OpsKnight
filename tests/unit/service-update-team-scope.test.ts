@@ -20,8 +20,7 @@ describe('SERVICE_UPDATE is team scoped like the UI', () => {
   });
 
   it('keeps admins global', () => {
-    expect(update('team-b', { id: 'a', role: 'ADMIN', status: 'ACTIVE', teamIds: [] }).scope).toBe(
-      'global'
-    );
+    const decision = update('team-b', { id: 'a', role: 'ADMIN', status: 'ACTIVE', teamIds: [] });
+    expect(decision.allowed && decision.scope).toBe('global');
   });
 });

@@ -414,7 +414,7 @@ describe('sla-breach-monitor', () => {
       expect(webhookCalls).toHaveLength(2);
       expect(new Set(webhookCalls.map(input => input.eventKey)).size).toBe(2);
       for (const input of webhookCalls) {
-        const payload = input.payload as { payload: { event: { type: string } } };
+        const payload = input.payload as unknown as { payload: { event: { type: string } } };
         expect(payload.payload.event.type).toBe('breached');
       }
     });

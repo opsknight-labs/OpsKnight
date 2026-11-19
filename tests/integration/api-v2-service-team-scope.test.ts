@@ -1,6 +1,7 @@
 import { beforeEach, expect, it } from 'vitest';
-import { PATCH } from '@/app/api/v2/services/[id]/route';
-import { PATCH as PATCH_SETTINGS } from '@/app/api/v2/services/[id]/notification-settings/route';
+import { PATCH as patchService } from '@/app/api/v2/services/[id]/route';
+import { PATCH as patchSettings } from '@/app/api/v2/services/[id]/notification-settings/route';
+import type { NextRouteHandler } from '@/lib/api-v2/endpoint';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 import {
   createTestEscalationPolicy,
@@ -9,6 +10,9 @@ import {
   resetDatabase,
   testPrisma,
 } from '../helpers/test-db';
+
+const PATCH = patchService as unknown as NextRouteHandler;
+const PATCH_SETTINGS = patchSettings as unknown as NextRouteHandler;
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) {
