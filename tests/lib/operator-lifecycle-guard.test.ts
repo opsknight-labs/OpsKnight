@@ -12,12 +12,23 @@ vi.mock('@/lib/rbac', () => ({
   getCurrentUser: vi.fn().mockResolvedValue({ id: 'user-1', name: 'Test User' }),
 }));
 
-vi.mock('@/lib/incidents/idempotent-commands', () => ({
-  transitionIncidentToStatusIdempotent: vi.fn().mockResolvedValue({
+const emitAuditEvent = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/lib/audit', () => ({ emitAuditEvent }));
+
+const transitionIncidentToStatusIdempotent = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
     replayed: false,
-    value: { changed: true },
-  }),
-}));
+    value: {
+      incidentId: 'inc-1',
+      command: 'ACKNOWLEDGE',
+      source: 'WEB',
+      previousStatus: 'OPEN',
+      status: 'ACKNOWLEDGED',
+      changed: true,
+    },
+  })
+);
+vi.mock('@/lib/incidents/idempotent-commands', () => ({ transitionIncidentToStatusIdempotent }));
 
 describe('operator-lifecycle resolution guard', () => {
   it('rejects direct RESOLVED status transition via updateIncidentStatus', async () => {
@@ -37,5 +48,20 @@ describe('operator-lifecycle resolution guard', () => {
   it('allows ACKNOWLEDGED status transition via updateIncidentStatus', async () => {
     const result = await updateIncidentStatus('inc-1', 'ACKNOWLEDGED', undefined, 'WEB');
     expect(result).toEqual({ replayed: false });
+  });
+
+  it('records the operator as actor and writes an audit event', async () => {
+    await updateIncidentStatus('inc-1', 'ACKNOWLEDGED', 'OPEN', 'MOBILE');
+    expect(transitionIncidentToStatusIdempotent).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: { id: 'user-1', name: 'Test User' } }),
+      undefined
+    );
+    expect(emitAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'incident.acknowledge',
+        target: { type: 'INCIDENT', id: 'inc-1' },
+        actor: expect.objectContaining({ type: 'USER', id: 'user-1' }),
+      })
+    );
   });
 });

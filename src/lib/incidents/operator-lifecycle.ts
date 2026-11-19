@@ -10,8 +10,10 @@ import {
   getCurrentUser,
 } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
+import { emitAuditEvent } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 import type { IdempotencyContext } from '@/lib/idempotency';
-import type { IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
+import type { IncidentLifecycleResult, IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
 import {
   executeIdempotentIncidentLifecycleCommand,
   transitionIncidentToStatusIdempotent,
@@ -23,6 +25,27 @@ function revalidateIncident(incidentId: string): void {
   revalidatePath(`/incidents/${incidentId}`);
   revalidatePath('/incidents');
   revalidatePath('/');
+}
+
+/** Operator lifecycle changes are compliance-relevant: record who made them. */
+async function auditOperatorChange(
+  result: IncidentLifecycleResult,
+  user: { id: string; name?: string | null; email?: string | null }
+): Promise<void> {
+  await emitAuditEvent({
+    action: `incident.${(result.command ?? 'status').toLowerCase()}`,
+    source: 'UI',
+    target: { type: 'INCIDENT', id: result.incidentId },
+    actor: { type: 'USER', id: user.id, name: user.name ?? null, email: user.email ?? null },
+    oldValue: { status: result.previousStatus },
+    newValue: { status: result.status },
+    metadata: { channel: result.source },
+  }).catch(error => {
+    logger.error('incident.lifecycle.audit_failed', {
+      incidentId: result.incidentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 /**
@@ -56,17 +79,22 @@ export async function updateIncidentStatus(
   if (status === 'ACKNOWLEDGED') await assertCanAcknowledgeIncident(id);
   else await assertResponderOrAbove();
 
+  const user = await getCurrentUser();
   const result = await transitionIncidentToStatusIdempotent(
     {
       incidentId: id,
       status,
       expectedStatus,
       source,
+      actor: { id: user.id, name: user.name ?? undefined },
     },
     idempotency
   );
 
-  if (result.value.changed && !result.replayed) revalidateIncident(id);
+  if (result.value.changed && !result.replayed) {
+    await auditOperatorChange(result.value, user);
+    revalidateIncident(id);
+  }
   return { replayed: result.replayed };
 }
 
@@ -122,6 +150,9 @@ export async function resolveIncidentWithNote(
     idempotency
   );
 
-  if (result.value.changed && !result.replayed) revalidateIncident(id);
+  if (result.value.changed && !result.replayed) {
+    await auditOperatorChange(result.value, user);
+    revalidateIncident(id);
+  }
   return { replayed: result.replayed };
 }
