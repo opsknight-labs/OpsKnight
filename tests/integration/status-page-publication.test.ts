@@ -165,6 +165,45 @@ describe('status page publication lifecycle', () => {
     await expect(reconcileStatusPageSnapshots(1)).resolves.toEqual({ attempted: 1, rebuilt: 1 });
   });
 
+  it('keeps serving the last good projection while an incident write is projected', async () => {
+    const { page } = await livePage();
+    // A source write (an incident on a mapped service) only bumps the revision.
+    await testPrisma.$executeRaw`UPDATE "StatusPageSnapshot" SET "revision" = "revision" + 1 WHERE "statusPageId" = ${page.id}`;
+    const { revoke } = trackStoreCalls();
+
+    await expect(reconcileStatusPageSnapshots(1)).resolves.toEqual({ attempted: 1, rebuilt: 1 });
+    expect(revoke).not.toHaveBeenCalledWith(page.id, 'PRIVACY');
+    expect(await servingState(page.id)).toBe('LIVE');
+  });
+
+  it('fails closed when a dirty page cannot be republished within the bounded window', async () => {
+    const { page } = await livePage();
+    await testPrisma.$executeRaw`UPDATE "StatusPageSnapshot" SET "revision" = "revision" + 1, "generatedAt" = NOW() - INTERVAL '10 minutes' WHERE "statusPageId" = ${page.id}`;
+    const { revoke } = trackStoreCalls();
+
+    await reconcileStatusPageSnapshots(1);
+    expect(revoke).toHaveBeenCalledWith(page.id, 'PRIVACY');
+  });
+
+  it('bounds the listed active incidents so an alert storm cannot block publication', async () => {
+    const page = await createTestStatusPage({ enabled: true });
+    const service = await createTestService('Storm API');
+    await linkServiceToStatusPage(page.id, service.id);
+    await testPrisma.incident.createMany({
+      data: Array.from({ length: 105 }, (_, index) => ({
+        title: `Storm ${index}`,
+        serviceId: service.id,
+        status: 'OPEN' as const,
+        urgency: 'HIGH' as const,
+        visibility: 'PUBLIC' as const,
+      })),
+    });
+
+    expect(await rebuildStatusPageSnapshot(page.id)).toBe(true);
+    const projected = await getStatusPageSnapshot(page.id);
+    expect(projected.snapshot?.incidents.length).toBe(100);
+  });
+
   it('withdraws the projection before writing a privacy tightening, then republishes', async () => {
     const { page } = await livePage();
     const { revoke } = trackStoreCalls();
