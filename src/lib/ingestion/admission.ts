@@ -17,6 +17,8 @@ export function ingestionDeliveryKey(headers: Headers, provider: string): string
     return headers.get('x-github-delivery') ?? headers.get('x-gitlab-event-uuid') ?? undefined;
   if (provider === 'GRAFANA')
     return headers.get('x-request-id') ?? headers.get('x-grafana-delivery') ?? undefined;
+  // SNS keeps the same MessageId across its delivery retries.
+  if (provider === 'CLOUDWATCH') return headers.get('x-amz-sns-message-id') ?? undefined;
   if (provider === 'SENTRY') {
     const timestamp = headers.get('sentry-hook-timestamp');
     const signature = headers.get('sentry-hook-signature');

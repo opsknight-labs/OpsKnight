@@ -43,11 +43,12 @@ export function transformCloudWatchToEvent(message: CloudWatchAlarmMessage): {
       severity: (() => {
         if (isOk) return 'info';
         if (message.NewStateValue === 'INSUFFICIENT_DATA') return 'warning';
-        const desc = (message.AlarmDescription || '').toUpperCase();
-        if (desc.includes('CRITICAL') || desc.includes('HIGH')) return 'critical';
-        if (desc.includes('WARNING') || desc.includes('MEDIUM') || desc.includes('ERROR'))
-          return 'error';
-        if (desc.includes('INFO') || desc.includes('LOW')) return 'info';
+        // Whole words only: 'slow' must not read as LOW, 'highlight' not as HIGH.
+        const desc = new Set((message.AlarmDescription || '').toUpperCase().split(/[^A-Z0-9]+/));
+        const has = (...words: string[]) => words.some(word => desc.has(word));
+        if (has('CRITICAL', 'HIGH')) return 'critical';
+        if (has('WARNING', 'MEDIUM', 'ERROR')) return 'error';
+        if (has('INFO', 'LOW')) return 'info';
         return 'critical'; // Default to critical for alarms
       })(),
       custom_details: {
