@@ -5,6 +5,7 @@ import {
   enqueueJiraCommentOperations,
   enqueueJiraCreateOperation,
   processExternalOperation,
+  jiraCommentableIncidentLinksWhere,
 } from '@/lib/external-operations';
 import { isValidJiraKey, extractJiraKey, isJiraStatusDone } from '@/lib/jira-validation';
 import { acquireJiraExternalIssueLinkFence } from '@/lib/jira-concurrency';
@@ -783,7 +784,7 @@ export async function syncIncidentNoteToJira(
 ): Promise<number> {
   try {
     const links = await prisma.externalIssueLink.findMany({
-      where: { incidentId, provider: 'JIRA' },
+      where: jiraCommentableIncidentLinksWhere(incidentId),
       select: { externalKey: true },
     });
 
@@ -821,7 +822,7 @@ export async function syncIncidentEventToJira(
 ): Promise<number> {
   try {
     const links = await prisma.externalIssueLink.findMany({
-      where: { incidentId, provider: 'JIRA' },
+      where: jiraCommentableIncidentLinksWhere(incidentId),
       select: { externalKey: true },
     });
 

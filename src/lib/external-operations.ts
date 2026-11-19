@@ -98,6 +98,17 @@ function operationFailureStatus(attempts: number): 'FAILED' | 'AMBIGUOUS' {
   return attempts >= MAX_JIRA_OPERATION_ATTEMPTS ? 'FAILED' : 'AMBIGUOUS';
 }
 
+/** Incident Jira links that may receive outbound comments (service sync not turned off). */
+export function jiraCommentableIncidentLinksWhere(
+  incidentId: string
+): Prisma.ExternalIssueLinkWhereInput {
+  return {
+    incidentId,
+    provider: 'JIRA',
+    NOT: { incident: { is: { service: { jiraServiceMapping: { is: { syncEnabled: false } } } } } },
+  };
+}
+
 export async function enqueueJiraCommentOperations(
   inputs: JiraCommentOperationInput[]
 ): Promise<{ attempted: number; pending: number }> {

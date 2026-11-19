@@ -29,7 +29,10 @@ vi.mock('@/lib/provider-admission', () => ({
   recordProviderSuccess: vi.fn(),
 }));
 
-import { enqueueJiraCreateOperation } from '@/lib/external-operations';
+import {
+  enqueueJiraCreateOperation,
+  jiraCommentableIncidentLinksWhere,
+} from '@/lib/external-operations';
 
 describe('Jira create ownership invariant', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -100,6 +103,16 @@ describe('Jira create ownership invariant', () => {
           }),
         })
       );
+    });
+  });
+
+  it('excludes links on services whose Jira sync is turned off from outbound comments', () => {
+    expect(jiraCommentableIncidentLinksWhere('inc-1')).toEqual({
+      incidentId: 'inc-1',
+      provider: 'JIRA',
+      NOT: {
+        incident: { is: { service: { jiraServiceMapping: { is: { syncEnabled: false } } } } },
+      },
     });
   });
 });
