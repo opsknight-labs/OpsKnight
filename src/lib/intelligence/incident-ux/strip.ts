@@ -288,7 +288,8 @@ export function insightsSections(insights: IncidentInsights): InsightsSectionId[
     ],
     ['runbooks', Boolean(response?.runbooks.length)],
     ['impact', Boolean(insights.impact && !isImpactEmpty(insights.impact))],
-    ['summary', insights.mode !== 'OFF' && insights.ai.summaryEnabled],
+    // One summary per incident: when the briefing already carries an AI summary, it is the summary.
+    ['summary', insights.mode !== 'OFF' && insights.ai.summaryEnabled && !proactive?.briefing?.ai],
   ]);
   return INSIGHTS_SECTIONS.filter(section => has.get(section));
 }
