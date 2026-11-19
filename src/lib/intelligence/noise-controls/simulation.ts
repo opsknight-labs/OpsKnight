@@ -222,10 +222,16 @@ export async function simulatePrePagingControls(
           if (serviceIds.includes(row.serviceId) && opensIncident(row)) ids.add(row.incidentId);
         return ids.size;
       },
-      async findStormParent(serviceIds, since) {
+      async findStormParent(serviceIds, since, preferServiceId) {
         let parent: Row | null = null;
+        // Same order as the live lookup: the alert's own service first, then the earliest.
         for (const row of recentRows(since))
-          if (serviceIds.includes(row.serviceId) && opensIncident(row)) parent = row;
+          if (
+            serviceIds.includes(row.serviceId) &&
+            opensIncident(row) &&
+            (!parent || row.serviceId === preferServiceId || parent.serviceId !== preferServiceId)
+          )
+            parent = row;
         return parent ? { id: parent.incidentId } : null;
       },
       async recentAlertStatuses(serviceId, key, since, limit) {

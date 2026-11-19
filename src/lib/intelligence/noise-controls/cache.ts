@@ -326,12 +326,13 @@ export function prismaLookups(tx: Pick<Prisma.TransactionClient, '$queryRaw'>): 
         WHERE "serviceId" = ANY(${[...serviceIds]}::text[]) AND "createdAt" >= ${since}`);
       return Number(row?.count ?? 0);
     },
-    async findStormParent(serviceIds, since) {
+    async findStormParent(serviceIds, since, preferServiceId) {
       const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT "id" FROM "Incident"
         WHERE "serviceId" = ANY(${[...serviceIds]}::text[]) AND "createdAt" >= ${since}
           AND "status" IN ('OPEN', 'ACKNOWLEDGED')
-        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1`);
+        ORDER BY ("serviceId" = ${preferServiceId ?? null}::text) DESC NULLS LAST, "createdAt" ASC, "id" ASC
+        LIMIT 1`);
       return rows[0] ?? null;
     },
     async recentAlertStatuses(serviceId, key, since, limit) {
@@ -409,7 +410,8 @@ const STORM_PARENT_PART = [
   `::text[]) AND "createdAt" >= `,
   `
           AND "status" IN ('OPEN', 'ACKNOWLEDGED')
-        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)`,
+        ORDER BY ("serviceId" = `,
+  `::text) DESC NULLS LAST, "createdAt" ASC, "id" ASC LIMIT 1)`,
 ] as const;
 const NULL_PART = ['NULL'] as const;
 
@@ -454,7 +456,7 @@ export function prefetchStatement(plan: PrePagingLookupPlan): Prisma.Sql {
     );
   if (plan.storm) {
     const serviceIds = [...plan.storm.serviceIds];
-    values.push(serviceIds, plan.storm.since, serviceIds, plan.storm.since);
+    values.push(serviceIds, plan.storm.since, serviceIds, plan.storm.since, plan.serviceId);
   }
   // The tag accepts any string list; called directly it does exactly what a template literal would.
   const text = statementText(!!plan.dedup, !!plan.flapping, !!plan.storm);
@@ -527,14 +529,15 @@ export function prefetchedLookups(
         return base.countRecentIncidents(serviceIds, since);
       return Number((await prefetch()).stormCount ?? 0);
     },
-    async findStormParent(serviceIds, since) {
+    async findStormParent(serviceIds, since, preferServiceId) {
       const planned = plan.storm;
       if (
         !planned ||
         !sameScope(serviceIds, planned.serviceIds) ||
-        since.getTime() !== planned.since.getTime()
+        since.getTime() !== planned.since.getTime() ||
+        (preferServiceId !== undefined && preferServiceId !== plan.serviceId)
       )
-        return base.findStormParent(serviceIds, since);
+        return base.findStormParent(serviceIds, since, preferServiceId);
       const id = (await prefetch()).stormParent;
       return id ? { id } : null;
     },

@@ -32,7 +32,7 @@ function composed(plan: PrePagingLookupPlan): Prisma.Sql {
     ? Prisma.sql`(SELECT "id" FROM "Incident"
         WHERE "serviceId" = ANY(${[...plan.storm.serviceIds]}::text[]) AND "createdAt" >= ${plan.storm.since}
           AND "status" IN ('OPEN', 'ACKNOWLEDGED')
-        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)`
+        ORDER BY ("serviceId" = ${plan.serviceId}::text) DESC NULLS LAST, "createdAt" ASC, "id" ASC LIMIT 1)`
     : none;
   return Prisma.sql`SELECT ${dedup} AS "dedup", ${statuses} AS "statuses",
           ${stormCount} AS "stormCount", ${stormParent} AS "stormParent"`;

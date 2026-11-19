@@ -925,11 +925,40 @@ async function applyEvent(
           childIncidentId: newIncident.id,
           evidence: applied!.evidence,
         });
+        // The parent pages for the whole storm, so it carries the most urgent child's urgency.
+        const parentUrgency = maxUrgency(stormParent.urgency, effectiveUrgency);
+        let parentReleased = false;
+        // Conditional so concurrent children only ever raise it: a lower child never overwrites a higher one.
+        const parentRaised =
+          parentUrgency !== stormParent.urgency &&
+          (
+            await tx.incident.updateMany({
+              where: {
+                id: stormParent.id,
+                urgency: {
+                  in: (Object.keys(URGENCY_RANK) as IncidentUrgency[]).filter(
+                    level => URGENCY_RANK[level] < URGENCY_RANK[parentUrgency]
+                  ),
+                },
+              },
+              data: { urgency: parentUrgency },
+            })
+          ).count > 0;
+        if (parentRaised) {
+          const previousUrgency = stormParent.urgency;
+          parentReleased = (
+            await reconcileIncidentEngagementAfterUrgencyChange(tx, {
+              incidentId: stormParent.id,
+              previousUrgency,
+              urgency: parentUrgency,
+            })
+          ).released;
+        }
         await tx.incidentEvent.create({
           data: {
             incidentId: stormParent.id,
             message: truncateString(
-              `Storm child grouped under this incident: "${sanitizedTitle}" (${newIncident.id}) from ${normalizedSource}. ${applied!.reason}.`,
+              `Storm child grouped under this incident: "${sanitizedTitle}" (${newIncident.id}) from ${normalizedSource}. ${applied!.reason}.${parentRaised ? ` Urgency raised to ${parentUrgency}.` : ''}${parentReleased ? ' Support-hours engagement deferral released.' : ''}`,
               1_000
             ),
           },

@@ -490,16 +490,22 @@ describe('pre-paging evaluation', () => {
         },
       }),
     });
+    const parentLookups: unknown[][] = [];
     const busy = {
       ...quiet,
       countRecentIncidents: async () => 12,
-      findStormParent: async () => ({ id: 'inc-parent' }),
+      findStormParent: async (...args: unknown[]) => {
+        parentLookups.push(args);
+        return { id: 'inc-parent' };
+      },
     };
     expect(await evaluatePrePagingControls(input(), storm, busy)).toMatchObject({
       action: 'GROUP_CHILD',
       control: 'STORM',
       targetIncidentId: 'inc-parent',
     });
+    // The parent lookup prefers an incident on the alert's own service within the storm scope.
+    expect(parentLookups[0]?.[2]).toBe(input().serviceId);
     const rising = { ...quiet, countRecentIncidents: async () => 6 };
     const held = await evaluatePrePagingControls(input(), storm, rising);
     expect(held).toMatchObject({ action: 'HOLD', control: 'STORM' });
