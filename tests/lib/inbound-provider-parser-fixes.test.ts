@@ -38,7 +38,11 @@ describe('uptime providers', () => {
       current_state: 'DOWN',
       importance_level: 'HIGH',
     });
-    const up = transformPingdomToEvent({ check_id: 77, previous_state: 'DOWN', current_state: 'UP' });
+    const up = transformPingdomToEvent({
+      check_id: 77,
+      previous_state: 'DOWN',
+      current_state: 'UP',
+    });
     expect(down.event_action).toBe('trigger');
     expect(down.payload.severity).toBe('critical');
     expect(up.event_action).toBe('resolve');
@@ -76,7 +80,13 @@ describe('uptime providers', () => {
   });
 
   it('Uptime Kuma test notifications and PENDING/MAINTENANCE heartbeats do not page', () => {
-    expect(transformUptimeKumaToEvent({ heartbeat: null, monitor: null, msg: 'Testing' })).toBeNull();
+    expect(
+      transformUptimeKumaToEvent({ heartbeat: null, monitor: null, msg: 'Testing' })
+    ).toBeNull();
+    // A custom sender with only a top-level status still pages.
+    expect(transformUptimeKumaToEvent({ status: 'down', msg: 'API down' })?.event_action).toBe(
+      'trigger'
+    );
     expect(
       transformUptimeKumaToEvent({ heartbeat: { status: 2 }, monitor: { id: 1, name: 'API' } })
     ).toBeNull();
@@ -87,7 +97,11 @@ describe('uptime providers', () => {
   });
 
   it('UptimeRobot SSL expiry is a warning on its own key and paused is ignored', () => {
-    const ssl = transformUptimeRobotToEvent({ alertType: '3', monitorID: 9, monitorFriendlyName: 'Site' });
+    const ssl = transformUptimeRobotToEvent({
+      alertType: '3',
+      monitorID: 9,
+      monitorFriendlyName: 'Site',
+    });
     expect(ssl?.event_action).toBe('trigger');
     expect(ssl?.payload.severity).toBe('warning');
     expect(ssl?.dedup_key).toBe('9-ssl');
@@ -99,9 +113,9 @@ describe('uptime providers', () => {
 describe('infrastructure monitors', () => {
   it('Nagios/Icinga CUSTOM and DOWNTIMEEND follow the state instead of acknowledging', () => {
     const base = { HOSTNAME: 'db', SERVICEDESC: 'pg', SERVICESTATE: 'CRITICAL' };
-    expect(transformNagiosToEvent({ ...base, NOTIFICATIONTYPE: 'CUSTOM' } as any).event_action).toBe(
-      'trigger'
-    );
+    expect(
+      transformNagiosToEvent({ ...base, NOTIFICATIONTYPE: 'CUSTOM' } as any).event_action
+    ).toBe('trigger');
     expect(
       transformNagiosToEvent({ ...base, NOTIFICATIONTYPE: 'DOWNTIMEEND' } as any).event_action
     ).toBe('trigger');
@@ -119,14 +133,25 @@ describe('infrastructure monitors', () => {
   });
 
   it('Zabbix closing update resolves; unack does not acknowledge', () => {
-    const closed = transformZabbixToEvent({ event_id: '1', action: 'Update', status: 'RESOLVED' } as any);
-    const unack = transformZabbixToEvent({ event_id: '1', action: 'Unacknowledged', status: 'PROBLEM' } as any);
+    const closed = transformZabbixToEvent({
+      event_id: '1',
+      action: 'Update',
+      status: 'RESOLVED',
+    } as any);
+    const unack = transformZabbixToEvent({
+      event_id: '1',
+      action: 'Unacknowledged',
+      status: 'PROBLEM',
+    } as any);
     expect(closed.event_action).toBe('resolve');
     expect(unack.event_action).toBe('trigger');
   });
 
   it('Zabbix subject-only problem and recovery share a dedup key', () => {
-    const problem = transformZabbixToEvent({ host_name: 'h', subject: 'Problem: Disk full' } as any);
+    const problem = transformZabbixToEvent({
+      host_name: 'h',
+      subject: 'Problem: Disk full',
+    } as any);
     const recovery = transformZabbixToEvent({
       host_name: 'h',
       subject: 'Resolved in 5m 3s: Disk full',
@@ -157,8 +182,16 @@ describe('infrastructure monitors', () => {
   });
 
   it('ManageEngine per-event ids do not split a trigger from its clear', () => {
-    const trigger = transformManageEngineToEvent({ deviceName: 'h1', eventId: 'e1', stringseverity: 'Critical' } as any);
-    const clear = transformManageEngineToEvent({ deviceName: 'h1', eventId: 'e2', stringseverity: 'Clear' } as any);
+    const trigger = transformManageEngineToEvent({
+      deviceName: 'h1',
+      eventId: 'e1',
+      stringseverity: 'Critical',
+    } as any);
+    const clear = transformManageEngineToEvent({
+      deviceName: 'h1',
+      eventId: 'e2',
+      stringseverity: 'Clear',
+    } as any);
     expect(clear.dedup_key).toBe(trigger.dedup_key);
   });
 });
@@ -185,18 +218,26 @@ describe('CI/CD providers', () => {
   it('Bitbucket reads commit_status.state and ignores non-status events', () => {
     const repo = { full_name: 'org/app' };
     expect(
-      transformBitbucketToEvent({ repository: repo, commit_status: { name: 'build', state: 'SUCCESSFUL' } })
-        .event_action
+      transformBitbucketToEvent({
+        repository: repo,
+        commit_status: { name: 'build', state: 'SUCCESSFUL' },
+      }).event_action
     ).toBe('resolve');
     expect(
-      transformBitbucketToEvent({ repository: repo, commit_status: { name: 'build', state: 'FAILED' } })
-        .event_action
+      transformBitbucketToEvent({
+        repository: repo,
+        commit_status: { name: 'build', state: 'FAILED' },
+      }).event_action
     ).toBe('trigger');
     expect(
-      transformBitbucketToEvent({ repository: repo, commit_status: { name: 'build', state: 'INPROGRESS' } })
-        .event_action
+      transformBitbucketToEvent({
+        repository: repo,
+        commit_status: { name: 'build', state: 'INPROGRESS' },
+      }).event_action
     ).toBe('acknowledge');
-    expect(transformBitbucketToEvent({ repository: repo, push: {} }).event_action).toBe('acknowledge');
+    expect(transformBitbucketToEvent({ repository: repo, push: {} }).event_action).toBe(
+      'acknowledge'
+    );
   });
 
   it('GitLab ordinary issues and manual pipelines do not page or resolve', () => {
@@ -274,9 +315,9 @@ describe('CI/CD providers', () => {
 describe('incident-tool compat', () => {
   it('Splunk On-Call INFO is ignored', () => {
     expect(transformSplunkOnCallToEvent({ message_type: 'INFO', entity_id: 'e' })).toBeNull();
-    expect(transformSplunkOnCallToEvent({ message_type: 'RECOVERY', entity_id: 'e' })?.event_action).toBe(
-      'resolve'
-    );
+    expect(
+      transformSplunkOnCallToEvent({ message_type: 'RECOVERY', entity_id: 'e' })?.event_action
+    ).toBe('resolve');
   });
 
   it('PagerDuty triggers without dedup_key get unique keys, not summary keys', () => {
@@ -289,9 +330,9 @@ describe('incident-tool compat', () => {
   it('generic signature verification accepts Bitbucket X-Hub-Signature', () => {
     const body = '{"a":1}';
     const sig = `sha256=${crypto.createHmac('sha256', 's3cret').update(body).digest('hex')}`;
-    expect(verifyWebhookSignature('generic', body, { 'x-hub-signature': sig }, 's3cret').valid).toBe(
-      true
-    );
+    expect(
+      verifyWebhookSignature('generic', body, { 'x-hub-signature': sig }, 's3cret').valid
+    ).toBe(true);
     expect(
       verifyWebhookSignature('generic', body, { 'x-hub-signature': 'sha256=00' }, 's3cret').valid
     ).toBe(false);

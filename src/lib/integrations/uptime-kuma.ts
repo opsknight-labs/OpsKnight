@@ -45,7 +45,7 @@ export function transformUptimeKumaToEvent(data: UptimeKumaEvent): {
   };
 } | null {
   // Kuma's "Test" button sends heartbeat and monitor as null: nothing to page.
-  if (!data.heartbeat && !data.monitor) return null;
+  if (!data.heartbeat && !data.monitor && !data.status) return null;
   const summary =
     firstString(data.monitor?.name, data.msg, data.heartbeat?.msg) || 'Uptime Kuma Alert';
   const action = mapAction(data.heartbeat?.status, data.status);
