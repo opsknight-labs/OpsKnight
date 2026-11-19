@@ -3366,6 +3366,11 @@ describe('PostgreSQL ingestion durability', () => {
         source: 'WEB',
       })
     );
+    // Upstream recoveries routinely arrive long after a person resolves.
+    await prisma.incident.update({
+      where: { id: first.id },
+      data: { resolvedAt: new Date(Date.now() - 3600000) },
+    });
     const late = await processEvent(
       envelope('late-recovery', 'resolve').event,
       serviceId,

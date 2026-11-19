@@ -69,7 +69,6 @@ const MAX_DESCRIPTION_LENGTH = 10000;
 const OUT_OF_ORDER_RESOLVE_WINDOW_MS = 5 * 60 * 1000;
 // A provider recovery can lag a manual resolve by far more than the buffer
 // window; a late recovery for a closed episode must not pre-resolve the next.
-const CLOSED_EPISODE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 // CI/CD success is a new run's state, never a late recovery of a pending failure.
 const CI_INTEGRATION_TYPES = new Set(['GITHUB', 'GITLAB', 'BITBUCKET', 'VERCEL']);
 
@@ -294,28 +293,36 @@ export async function processEvent(
           dedupKey: dedup_key,
         };
       }
-      // A resolve for an incident someone already closed is late, not early:
-      // link it there so it cannot turn the next genuine trigger into a resolved incident.
-      const receivedAt = processingLease ? envelope.receivedAt : new Date();
-      const recentlyClosed = await tx.incident.findFirst({
+      // A late upstream recovery for an incident a responder already resolved
+      // belongs to that incident; buffering it would make the next real trigger
+      // create an already-RESOLVED incident that pages nobody. Recoveries often
+      // arrive long after a person resolves, so no time window: the latest
+      // resolved incident owns it while it has not yet seen a recovery.
+      const lastResolved = await tx.incident.findFirst({
         where: {
           serviceId,
           dedupKey: { in: candidateDedupKeys },
           status: 'RESOLVED',
-          resolvedAt: {
-            gte: new Date(receivedAt.getTime() - CLOSED_EPISODE_LOOKBACK_MS),
-            lte: receivedAt,
+          resolvedAt: { not: null },
+        },
+        orderBy: [{ resolvedAt: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          alerts: {
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { status: true },
           },
         },
-        orderBy: { resolvedAt: 'desc' },
-        select: { id: true },
       });
-      if (recentlyClosed) {
-        await persistAlert(recentlyClosed.id);
+      const recentlyResolved =
+        lastResolved && lastResolved.alerts[0]?.status === 'TRIGGERED' ? lastResolved : null;
+      if (recentlyResolved) {
+        await persistAlert(recentlyResolved.id);
         logger.info('event.resolve_late_for_resolved_incident', {
           dedupKey: dedup_key,
           serviceId,
-          incidentId: recentlyClosed.id,
+          incidentId: recentlyResolved.id,
         });
         return {
           action: 'ignored',
