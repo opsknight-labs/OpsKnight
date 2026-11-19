@@ -13,22 +13,23 @@ export function safeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
-export function extractIntegrationKey(req: NextRequest): string | null {
+/**
+ * Every routing-key value the request carries, in precedence order. Senders such as Pub/Sub push
+ * (OIDC JWT) or Datadog OAuth put their own token in Authorization, so the query key must still count.
+ */
+export function extractIntegrationKeyCandidates(req: NextRequest): string[] {
+  const candidates: string[] = [];
   const authHeader = req.headers.get('authorization') || '';
   const lower = authHeader.toLowerCase();
 
   if (lower.startsWith('bearer ')) {
-    return authHeader.slice(7).trim();
-  }
-
-  if (lower.startsWith('token token=')) {
-    return authHeader.slice('token token='.length).trim();
+    candidates.push(authHeader.slice(7).trim());
+  } else if (lower.startsWith('token token=')) {
+    candidates.push(authHeader.slice('token token='.length).trim());
   }
 
   const direct = req.headers.get('x-integration-key') || req.headers.get('x-api-key');
-  if (direct) {
-    return direct.trim();
-  }
+  if (direct) candidates.push(direct.trim());
 
   // Fallback for providers that cannot set headers (e.g., some webhook senders).
   const { searchParams } = new URL(req.url);
@@ -36,7 +37,13 @@ export function extractIntegrationKey(req: NextRequest): string | null {
     searchParams.get('integrationKey') ||
     searchParams.get('integration_key') ||
     searchParams.get('key');
-  return queryKey?.trim() || null;
+  if (queryKey) candidates.push(queryKey.trim());
+
+  return candidates.filter(Boolean);
+}
+
+export function extractIntegrationKey(req: NextRequest): string | null {
+  return extractIntegrationKeyCandidates(req)[0] ?? null;
 }
 
 export async function isIntegrationAuthorized(
@@ -45,18 +52,20 @@ export async function isIntegrationAuthorized(
   previousKey?: string | null,
   previousKeyExpiresAt?: Date | null
 ): Promise<boolean> {
-  const provided = extractIntegrationKey(req);
-  if (!provided) return false;
+  const candidates = extractIntegrationKeyCandidates(req);
+  if (candidates.length === 0) return false;
   const [currentValue, previousValue] = await Promise.all([
     decryptStoredSecret(expectedKey),
     previousKey ? decryptStoredSecret(previousKey) : Promise.resolve(null),
   ]);
-  const currentMatches = safeEqual(provided, currentValue);
-  const previousMatches =
+  const previousActive = Boolean(
     previousValue && previousKeyExpiresAt && previousKeyExpiresAt.getTime() > Date.now()
-      ? safeEqual(provided, previousValue)
-      : false;
-  return currentMatches || previousMatches;
+  );
+  return candidates.some(
+    provided =>
+      safeEqual(provided, currentValue) ||
+      (previousActive && safeEqual(provided, previousValue as string))
+  );
 }
 
 /** Signature secrets accepted now: the current one, plus the previous one during a rotation overlap. */
