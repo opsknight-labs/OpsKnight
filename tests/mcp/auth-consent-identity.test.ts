@@ -152,12 +152,18 @@ describe('B8: consent identity', () => {
   it('treats loopback and app-scheme redirects as local, web hosts as not', () => {
     expect(consentRedirectFacts('http://127.0.0.1:5173/cb')).toEqual({
       host: '127.0.0.1:5173',
+      address: 'http://127.0.0.1:5173/cb',
       staysLocal: true,
     });
     expect(consentRedirectFacts('http://localhost/cb').staysLocal).toBe(true);
     expect(consentRedirectFacts('cursor://anysphere.cursor-mcp/oauth').staysLocal).toBe(true);
+    // The query is left out of the shown address: it can carry long, meaningless state.
+    expect(consentRedirectFacts('https://app.example/cb?state=abc#x').address).toBe(
+      'https://app.example/cb'
+    );
     expect(consentRedirectFacts('https://evil.example/cb')).toEqual({
       host: 'evil.example',
+      address: 'https://evil.example/cb',
       staysLocal: false,
     });
   });

@@ -74,9 +74,12 @@ export default function PolicyDeleteButton({
         Danger Zone
       </h3>
       {deletionError && (
-        <div role="alert" className="mb-4 text-sm text-red-900">
+        <div role="alert" className="mb-4 text-sm text-red-900 dark:text-red-300">
           <p>{deletionError}</p>
-          <a className="mt-2 inline-block underline" href={`/policies/${policyId}?tab=dependencies`}>
+          <a
+            className="mt-2 inline-block underline"
+            href={`/policies/${policyId}?tab=dependencies`}
+          >
             Review dependencies and archive options
           </a>
           <ul className="mt-2 list-disc pl-5">

@@ -76,20 +76,31 @@ describe('authorizeIncidentEscalation', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('does not grant escalation authority to the incident assignee', async () => {
+  it('lets the incident assignee escalate their own incident', async () => {
     vi.mocked(prisma.incident.findUnique).mockResolvedValue(
       incidentResource({ assigneeId: 'user-1' }) as never
     );
 
     await expect(
       authorizeIncidentEscalation({ actorId: 'user-1', incidentId: 'inc-1' })
-    ).rejects.toBeInstanceOf(AuthorizationError);
+    ).resolves.toBeUndefined();
   });
 
-  it('does not grant escalation authority to a service team member', async () => {
+  it('lets a service team member escalate a team incident', async () => {
     mocks.resolveUserActor.mockResolvedValue(actor({ teamIds: ['team-1'] }));
     vi.mocked(prisma.incident.findUnique).mockResolvedValue(
       incidentResource({ service: { teamId: 'team-1' } }) as never
+    );
+
+    await expect(
+      authorizeIncidentEscalation({ actorId: 'user-1', incidentId: 'inc-1' })
+    ).resolves.toBeUndefined();
+  });
+
+  it('never lets an auditor escalate, even when assigned', async () => {
+    mocks.resolveUserActor.mockResolvedValue(actor({ role: 'AUDITOR', teamIds: ['team-1'] }));
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue(
+      incidentResource({ assigneeId: 'user-1', service: { teamId: 'team-1' } }) as never
     );
 
     await expect(
@@ -177,7 +188,10 @@ describe('requestIncidentEscalation', () => {
     );
     // The engine is asked to advance the incident's current escalation, never a
     // caller-supplied generation.
-    expect(mocks.executeEscalation).toHaveBeenCalledWith('inc-1', 0, { generation: 0 });
+    expect(mocks.executeEscalation).toHaveBeenCalledWith('inc-1', 0, {
+      generation: 0,
+      immediate: true,
+    });
   });
 
   it('fences retry after an escalation effect at the original generation and step', async () => {
@@ -226,8 +240,14 @@ describe('requestIncidentEscalation', () => {
 
     expect(prisma.incidentEvent.create).toHaveBeenCalledTimes(1);
     expect(mocks.emitAuditEvent).toHaveBeenCalledTimes(1);
-    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(1, 'inc-1', 2, { generation: 4 });
-    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(2, 'inc-1', 2, { generation: 4 });
+    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(1, 'inc-1', 2, {
+      generation: 4,
+      immediate: true,
+    });
+    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(2, 'inc-1', 2, {
+      generation: 4,
+      immediate: true,
+    });
   });
 
   it('rejects a key reused for another incident with a typed conflict, paging nobody', async () => {

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { X, Save } from 'lucide-react';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
+import { notify } from '@/lib/toast';
 
 type SavedFilter = {
   id: string;
@@ -27,6 +29,8 @@ export default function DashboardSavedFilters() {
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [filterName, setFilterName] = useState('');
+  const [pendingDeleteFilter, setPendingDeleteFilter] = useState<SavedFilter | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('dashboard-saved-filters');
@@ -58,7 +62,7 @@ export default function DashboardSavedFilters() {
     if (range) currentFilters.range = range;
 
     if (Object.keys(currentFilters).length === 0) {
-      alert('No active filters to save');
+      notify.warning('No active filters to save');
       return;
     }
 
@@ -106,7 +110,7 @@ export default function DashboardSavedFilters() {
           <Badge
             key={filter.id}
             variant="outline"
-            className="px-3 py-1.5 text-xs font-medium cursor-pointer hover:bg-neutral-50 hover:border-primary transition-all flex items-center gap-1.5"
+            className="px-3 py-1.5 text-xs font-medium cursor-pointer hover:bg-ink-50 hover:border-primary transition-all flex items-center gap-1.5"
             onClick={() => loadFilter(filter)}
           >
             <Save className="h-3 w-3" />
@@ -114,9 +118,8 @@ export default function DashboardSavedFilters() {
             <button
               onClick={e => {
                 e.stopPropagation();
-                if (confirm(`Delete "${filter.name}"?`)) {
-                  deleteFilter(filter.id);
-                }
+                setPendingDeleteFilter(filter);
+                setDeleteDialogOpen(true);
               }}
               className="ml-1 hover:text-foreground"
               title="Delete filter"
@@ -180,6 +183,16 @@ export default function DashboardSavedFilters() {
           </div>
         </div>
       )}
+
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete saved filter"
+        description={pendingDeleteFilter ? `Delete "${pendingDeleteFilter.name}"?` : ''}
+        onConfirm={() => {
+          if (pendingDeleteFilter) deleteFilter(pendingDeleteFilter.id);
+        }}
+      />
     </div>
   );
 }

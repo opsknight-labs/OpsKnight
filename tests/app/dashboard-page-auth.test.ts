@@ -65,6 +65,7 @@ describe('Dashboard Page Auth Boundary', () => {
         avatarUrl: null,
         gender: null,
         timeZone: 'UTC',
+        themePreference: 'SYSTEM',
         tokenVersion: 1,
       },
       actor: {

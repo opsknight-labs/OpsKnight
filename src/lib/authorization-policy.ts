@@ -14,6 +14,7 @@ export const AUTHORIZATION_ACTIONS = {
   INCIDENT_ACKNOWLEDGE: 'incident.acknowledge',
   INCIDENT_ESCALATE: 'incident.escalate',
   INCIDENT_NOTE: 'incident.note',
+  INCIDENT_RESOLVE: 'incident.resolve',
   INCIDENT_MANAGE: 'incident.manage',
   EVENT_CREATE: 'event.create',
   SERVICE_READ: 'service.read',
@@ -91,6 +92,8 @@ export const AUTHORIZATION_ACTIONS = {
   POSTMORTEM_MANAGE: 'postmortem.manage',
   SERVICE_ACCOUNT_READ: 'service_account.read',
   SERVICE_ACCOUNT_MANAGE: 'service_account.manage',
+  MAINTENANCE_WINDOW_READ: 'maintenance_window.read',
+  MAINTENANCE_WINDOW_MANAGE: 'maintenance_window.manage',
 } as const;
 
 export type AuthorizationAction =
@@ -102,12 +105,29 @@ export type AuthorizationActor = {
   status: 'ACTIVE' | 'INVITED' | 'DISABLED';
   teamIds: readonly string[];
   apiKey?: { id: string; scopes: readonly string[] };
+  /**
+   * Effective permissions (base role + custom role + active temporary grants). When absent,
+   * the built-in permissions of `role` are used.
+   */
+  capabilities?: ReadonlySet<Capability>;
+  /** Incidents this actor holds an active incident-scoped emergency (break-glass) grant for. */
+  elevatedIncidentIds?: readonly string[];
 };
+
+/** Whether the actor's effective permission set includes `capability`. */
+export function actorHasCapability(actor: AuthorizationActor, capability: Capability): boolean {
+  return actor.capabilities
+    ? actor.capabilities.has(capability)
+    : hasCapability(actor.role, capability);
+}
 
 export type AuthorizationResource =
   | {
       type: 'incident';
+      id?: string;
       assigneeId?: string | null;
+      /** People currently on call for the incident's escalation policy. */
+      onCallUserIds?: readonly string[];
       watcherIds?: readonly string[];
       visibility?: 'PUBLIC' | 'PRIVATE';
       serviceTeamId?: string | null;
@@ -128,6 +148,7 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE]: IncidentResource;
   [AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE]: IncidentResource;
   [AUTHORIZATION_ACTIONS.INCIDENT_NOTE]: IncidentResource;
+  [AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE]: IncidentResource;
   [AUTHORIZATION_ACTIONS.INCIDENT_MANAGE]: IncidentResource;
   [AUTHORIZATION_ACTIONS.EVENT_CREATE]: ServiceResource;
   [AUTHORIZATION_ACTIONS.SERVICE_READ]: ServiceResource;
@@ -210,6 +231,8 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_ACCOUNT_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_ACCOUNT_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.MAINTENANCE_WINDOW_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.MAINTENANCE_WINDOW_MANAGE]?: AuthorizationResource;
 };
 
 export type AuthorizationRequest<A extends AuthorizationAction = AuthorizationAction> = {
@@ -320,6 +343,7 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
     {
       global: CAPABILITIES.INCIDENT_CREATE_ALL,
+      scoped: CAPABILITIES.INCIDENT_CREATE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
@@ -334,6 +358,7 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE,
     {
       global: CAPABILITIES.OPERATIONS_MANAGE,
+      scoped: CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
@@ -341,6 +366,7 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
     {
       global: CAPABILITIES.OPERATIONS_MANAGE,
+      scoped: CAPABILITIES.INCIDENT_ESCALATE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
@@ -348,6 +374,15 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_NOTE,
     {
       global: CAPABILITIES.OPERATIONS_MANAGE,
+      scoped: CAPABILITIES.INCIDENT_NOTE_SCOPED,
+      apiScope: API_SCOPES.INCIDENTS_WRITE,
+    },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE,
+    {
+      global: CAPABILITIES.OPERATIONS_MANAGE,
+      scoped: CAPABILITIES.INCIDENT_RESOLVE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
@@ -376,7 +411,9 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
   [
     AUTHORIZATION_ACTIONS.SERVICE_UPDATE,
     {
-      global: CAPABILITIES.OPERATIONS_MANAGE,
+      // Matches assertCanModifyService: operators may change only their own teams' services.
+      global: CAPABILITIES.ADMIN_MANAGE,
+      scoped: CAPABILITIES.OPERATIONS_MANAGE,
       apiScope: API_SCOPES.SERVICES_WRITE,
     },
   ],
@@ -714,7 +751,52 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
       apiScope: API_SCOPES.SERVICE_ACCOUNTS_WRITE,
     },
   ],
+  [
+    AUTHORIZATION_ACTIONS.MAINTENANCE_WINDOW_READ,
+    {
+      global: CAPABILITIES.SERVICE_READ_ALL,
+      scoped: CAPABILITIES.SERVICE_READ_SCOPED,
+      apiScope: API_SCOPES.SERVICES_READ,
+    },
+  ],
+  [
+    // Team membership of every touched service is enforced per request (see api-v2/maintenance-windows).
+    AUTHORIZATION_ACTIONS.MAINTENANCE_WINDOW_MANAGE,
+    { global: CAPABILITIES.OPERATIONS_MANAGE, apiScope: API_SCOPES.SERVICES_WRITE },
+  ],
 ]);
+
+const INCIDENT_OPERATOR_ACTIONS: ReadonlySet<AuthorizationAction> = new Set([
+  AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE,
+  AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
+  AUTHORIZATION_ACTIONS.INCIDENT_NOTE,
+  AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE,
+]);
+
+export function isIncidentOperatorAction(action: AuthorizationAction): boolean {
+  return INCIDENT_OPERATOR_ACTIONS.has(action);
+}
+
+/**
+ * Who may work an incident without organization-wide operations access: the assignee, anyone
+ * currently on call for it, and members of the owning team (public incidents only). Watchers
+ * and stakeholders may read an incident but not operate it.
+ */
+export function incidentOperatorRelation(
+  actor: AuthorizationActor,
+  resource: IncidentResource
+): 'ASSIGNEE' | 'ON_CALL' | 'TEAM_MEMBER' | null {
+  if (resource.assigneeId && resource.assigneeId === actor.id) return 'ASSIGNEE';
+  if (resource.onCallUserIds?.includes(actor.id)) return 'ON_CALL';
+  if (resource.visibility === 'PRIVATE') return null;
+  const teams = new Set(actor.teamIds);
+  if (
+    (resource.serviceTeamId && teams.has(resource.serviceTeamId)) ||
+    (resource.assignedTeamId && teams.has(resource.assignedTeamId))
+  )
+    return 'TEAM_MEMBER';
+  return null;
+}
 
 function isResourceInScope(actor: AuthorizationActor, resource: AuthorizationResource): boolean {
   const teams = new Set(actor.teamIds);
@@ -731,7 +813,12 @@ function isResourceInScope(actor: AuthorizationActor, resource: AuthorizationRes
       : Boolean(resource.teamId && teams.has(resource.teamId));
   if (resource.type === 'status_page') return true;
   if (resource.type === 'incident') {
-    if (resource.assigneeId === actor.id || resource.watcherIds?.includes(actor.id)) return true;
+    if (
+      resource.assigneeId === actor.id ||
+      resource.watcherIds?.includes(actor.id) ||
+      resource.onCallUserIds?.includes(actor.id)
+    )
+      return true;
     if (resource.visibility !== 'PUBLIC') return false;
     return Boolean(
       (resource.serviceTeamId && teams.has(resource.serviceTeamId)) ||
@@ -771,8 +858,15 @@ export function authorize<A extends AuthorizationAction>(
       requiredScope: policy.apiScope,
     };
   }
-  if (hasCapability(actor.role, policy.global)) return { allowed: true, scope: 'global' };
-  if (!policy.scoped || !hasCapability(actor.role, policy.scoped)) {
+  if (actorHasCapability(actor, policy.global)) return { allowed: true, scope: 'global' };
+  if (
+    resource?.type === 'incident' &&
+    resource.id &&
+    actor.elevatedIncidentIds?.includes(resource.id) &&
+    hasCapability('RESPONDER', policy.global)
+  )
+    return { allowed: true, scope: 'resource' };
+  if (!policy.scoped || !actorHasCapability(actor, policy.scoped)) {
     return { allowed: false, reason: 'MISSING_CAPABILITY', requiredCapability: policy.global };
   }
   if (!resource) return { allowed: true, scope: 'resource' };
@@ -782,6 +876,11 @@ export function authorize<A extends AuthorizationAction>(
     (resource.type !== 'team' || !resource.ownerIds?.includes(actor.id))
   )
     return { allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE', requiredCapability: policy.scoped };
+  if (resource.type === 'incident' && isIncidentOperatorAction(action)) {
+    return incidentOperatorRelation(actor, resource)
+      ? { allowed: true, scope: 'resource' }
+      : { allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE', requiredCapability: policy.scoped };
+  }
   if (isResourceInScope(actor, resource)) return { allowed: true, scope: 'resource' };
   return { allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE', requiredCapability: policy.scoped };
 }

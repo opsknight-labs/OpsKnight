@@ -505,7 +505,10 @@ function RuleConfigureSheet({
           role="note"
           className="mb-6 flex items-start gap-2.5 rounded-lg bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-500/30 dark:text-amber-100"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+          <AlertCircle
+            className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+            aria-hidden
+          />
           <p>
             Saving configuration or trigger conditions pauses this Automatic rule immediately.{' '}
             <Link

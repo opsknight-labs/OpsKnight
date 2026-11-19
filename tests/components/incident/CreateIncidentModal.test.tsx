@@ -216,6 +216,25 @@ describe('CreateIncidentModal', () => {
     });
   });
 
+  it('keeps a PRIVATE service default when starting from scratch', async () => {
+    mockOpenOptions = { serviceId: 'srv-auth' };
+    render(<CreateIncidentModal />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Internal System Only/i }).getAttribute('aria-pressed')
+      ).toBe('true')
+    );
+
+    fireEvent.click(screen.getByText('Start from scratch'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Internal System Only/i }).getAttribute('aria-pressed')
+      ).toBe('true')
+    );
+  });
+
   it('switches description between Write and Preview modes', async () => {
     render(<CreateIncidentModal />);
 

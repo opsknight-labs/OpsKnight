@@ -12,6 +12,8 @@ interface AttemptRecord {
   count: number;
   lastAttempt: number;
   lockedUntil: number | null;
+  // Lockouts served so far; drives the progressive schedule.
+  lockouts?: number;
 }
 
 const attemptStore = new Map<string, AttemptRecord>();
@@ -57,6 +59,7 @@ function getAttemptKey(email: string, ip: string): string {
  */
 function getLockoutMultiplier(lockoutCount: number): number {
   const idx = Math.min(lockoutCount, LOGIN_SECURITY_CONFIG.LOCKOUT_MULTIPLIERS.length - 1);
+  // eslint-disable-next-line security/detect-object-injection -- idx is clamped to the array bounds above
   return LOGIN_SECURITY_CONFIG.LOCKOUT_MULTIPLIERS[idx];
 }
 
@@ -115,6 +118,16 @@ export function checkLoginAttempt(
     };
   }
 
+  // Lockout served: allow a fresh round of attempts (recordFailedAttempt resets the count).
+  if (record.lockedUntil) {
+    return {
+      allowed: true,
+      remainingAttempts: LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS,
+      lockedUntil: null,
+      lockoutDurationMs: null,
+    };
+  }
+
   // Check remaining attempts
   const remaining = LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS - record.count;
   return {
@@ -152,6 +165,7 @@ export function recordFailedAttempt(
   // If lockout has expired, reset count but keep history for progressive lockouts
   if (record.lockedUntil && now >= record.lockedUntil) {
     record.lockedUntil = null;
+    record.count = 0;
   }
 
   // Increment attempt count
@@ -161,7 +175,8 @@ export function recordFailedAttempt(
   // Check if should lock out
   if (record.count >= LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS) {
     // Calculate lockout count (how many times we've locked this key)
-    const lockoutCount = Math.floor(record.count / LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS);
+    const lockoutCount = (record.lockouts ?? 0) + 1;
+    record.lockouts = lockoutCount;
     const multiplier = getLockoutMultiplier(lockoutCount - 1);
     const lockoutDuration = LOGIN_SECURITY_CONFIG.BASE_LOCKOUT_MS * multiplier;
     record.lockedUntil = now + lockoutDuration;
@@ -249,6 +264,7 @@ export function isValidEmail(email: string): boolean {
 
   // RFC 5322 compliant regex (simplified)
   const emailRegex =
+    // eslint-disable-next-line security/detect-unsafe-regex -- input is capped at 254 chars above, which bounds backtracking
     /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
 
   if (!emailRegex.test(trimmed)) return false;

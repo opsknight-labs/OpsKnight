@@ -13,6 +13,7 @@ import {
   processCentralNotificationQueue,
   reconcileUnknownNotifications,
   resolveNotificationExpiry,
+  requeueCentralNotification,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
 import { reconcileNotificationProviderFeedback } from '@/lib/notification-provider-feedback';
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   encrypt: vi.fn(async (value: string) => `encrypted:${value}`),
   decrypt: vi.fn(async (value: string) => value.replace(/^encrypted:/, '')),
   isBulkPaused: vi.fn().mockResolvedValue(false),
+  allowsInsecureWebhookUrls: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -44,6 +46,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     incident: { findUnique: vi.fn() },
     service: { findUnique: vi.fn() },
+    webhookIntegration: { findFirst: vi.fn(), findUnique: vi.fn() },
     systemConfig: { findUnique: vi.fn() },
     notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
     userNotificationEndpoint: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -64,6 +67,7 @@ vi.mock('@/lib/notification-dispatch-recovery', () => ({
 vi.mock('@/lib/encryption', () => ({
   encrypt: mocks.encrypt,
   decrypt: mocks.decrypt,
+  decryptStoredSecret: mocks.decrypt,
   getEncryptionKey: vi.fn(() => '11'.repeat(32)),
 }));
 vi.mock('@/lib/email', () => ({
@@ -71,6 +75,9 @@ vi.mock('@/lib/email', () => ({
   sendIncidentEmail: mocks.sendIncidentEmail,
 }));
 vi.mock('@/lib/webhooks', () => ({ sendWebhook: mocks.sendWebhook }));
+vi.mock('@/lib/webhook-url-policy', () => ({
+  allowsInsecureWebhookUrls: mocks.allowsInsecureWebhookUrls,
+}));
 vi.mock('@/lib/slack', () => ({
   sendSlackMessageToChannel: mocks.sendSlackMessageToChannel,
   sendSlackNotification: vi.fn(),
@@ -141,10 +148,20 @@ describe('central notification control plane', () => {
 
   it('commits deferred webhook intent without starting a provider attempt', async () => {
     vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'deferred-webhook' } as never);
-    const result = await enqueueCentralNotification({
-      ...input, channel: 'WEBHOOK', recipientType: 'WEBHOOK', recipientAddress: 'https://receiver.example.test/events',
-      payload: { kind: 'WEBHOOK', url: 'https://receiver.example.test/events', payload: { event: 'fixture' } },
-    }, { dispatchImmediately: false });
+    const result = await enqueueCentralNotification(
+      {
+        ...input,
+        channel: 'WEBHOOK',
+        recipientType: 'WEBHOOK',
+        recipientAddress: 'https://receiver.example.test/events',
+        payload: {
+          kind: 'WEBHOOK',
+          url: 'https://receiver.example.test/events',
+          payload: { event: 'fixture' },
+        },
+      },
+      { dispatchImmediately: false }
+    );
     expect(result).toEqual({ id: expect.any(String), created: true });
     expect(result.id).toBe(vi.mocked(prisma.notification.create).mock.calls[0]?.[0]?.data.id);
     expect(prisma.notification.create).toHaveBeenCalledTimes(1);
@@ -328,6 +345,103 @@ describe('central notification control plane', () => {
       'webhook-second',
       'webhook-first',
     ]);
+  });
+
+  it.each([
+    [404, 5],
+    [503, 1],
+    [429, undefined],
+  ])('settles a webhook HTTP %i with attempts=%s', async (statusCode, expectedAttempts) => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = { kind: 'WEBHOOK', url: 'https://example.com/events', payload: {} };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'webhook-4xx',
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    } as never);
+    vi.mocked(prisma.notificationDeliveryAttempt.create).mockResolvedValue({} as never);
+    mocks.sendWebhook.mockResolvedValue({
+      success: false,
+      statusCode,
+      error: `Webhook returned ${statusCode}: nope`,
+    });
+
+    await deliverCentralNotification('webhook-4xx');
+
+    const failed = vi
+      .mocked(prisma.notification.updateMany)
+      .mock.calls.map(([args]) => args?.data as { status?: string; attempts?: number })
+      .find(data => data?.status === 'FAILED');
+    expect(failed?.attempts).toBe(expectedAttempts);
+  });
+
+  it('signs queued integration webhooks with the current secret and revokes on type change', async () => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = {
+      kind: 'WEBHOOK',
+      url: 'https://example.com/events',
+      payload: {},
+      secret: 'old-secret',
+      lifecyclePolicy: {
+        incidentId: 'inc-1',
+        eventType: 'triggered',
+        serviceId: 'svc-1',
+        targetKind: 'WEBHOOK_INTEGRATION',
+        targetId: 'wh-1',
+        targetAddress: 'https://example.com/events',
+        targetType: 'GENERIC',
+      },
+    };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'webhook-rotated',
+      status: 'PENDING',
+      category: 'INCIDENT',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    } as never);
+    vi.mocked(prisma.notificationDeliveryAttempt.create).mockResolvedValue({} as never);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      status: 'OPEN',
+      escalationGeneration: null,
+    } as never);
+    vi.mocked(prisma.webhookIntegration.findFirst).mockResolvedValue({ id: 'wh-1' } as never);
+    vi.mocked(prisma.webhookIntegration.findUnique).mockResolvedValue({
+      secret: 'encrypted:new-secret',
+    } as never);
+    mocks.sendWebhook.mockResolvedValue({ success: true });
+
+    await deliverCentralNotification('webhook-rotated');
+    expect(mocks.sendWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ secret: 'new-secret', requireHttps: true })
+    );
+
+    // An admin allowing http:// relaxes the send-time check for service webhooks.
+    mocks.sendWebhook.mockClear();
+    mocks.allowsInsecureWebhookUrls.mockResolvedValueOnce(true);
+    await deliverCentralNotification('webhook-rotated');
+    expect(mocks.sendWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ requireHttps: false })
+    );
+    expect(vi.mocked(prisma.webhookIntegration.findFirst).mock.calls[0]?.[0]?.where).toMatchObject({
+      type: 'GENERIC',
+    });
+
+    mocks.sendWebhook.mockClear();
+    vi.mocked(prisma.webhookIntegration.findFirst).mockResolvedValue(null);
+    await deliverCentralNotification('webhook-rotated');
+    expect(mocks.sendWebhook).not.toHaveBeenCalled();
   });
 
   it('uses one atomic claim when two workers race for the same delivery', async () => {
@@ -571,7 +685,13 @@ describe('central notification control plane', () => {
           new Error('receipt index unavailable')
         );
       vi.mocked(prisma.notification.findMany).mockResolvedValue([
-        { id: 'notification_expired' },
+        {
+          id: 'notification_expired',
+          createdAt: new Date(),
+          status: 'PENDING',
+          attempts: 0,
+          maxAttempts: 5,
+        },
       ] as never);
       vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
 
@@ -600,6 +720,32 @@ describe('central notification control plane', () => {
       );
     }
   );
+
+  it('keeps a terminally FAILED outcome when its retained payload expires', async () => {
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        id: 'notification_failed_terminal',
+        createdAt: new Date(),
+        status: 'FAILED',
+        attempts: 5,
+        maxAttempts: 5,
+      },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    await processCentralNotificationQueue();
+
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: expect.arrayContaining(['notification_failed_terminal']) },
+        status: 'FAILED',
+      },
+      data: { payloadEncrypted: null },
+    });
+    expect(prisma.notification.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SKIPPED' }) })
+    );
+  });
 
   it('uses class-specific floors when aging queued notifications', async () => {
     await processCentralNotificationQueue();
@@ -639,6 +785,7 @@ describe('central notification control plane', () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue([
       {
         id: 'notification_unknown_push',
+        createdAt: due,
         channel: 'PUSH',
         attempts: 1,
         providerMessageId: null,
@@ -679,11 +826,72 @@ describe('central notification control plane', () => {
       awaitingCallback: 0,
       unsupported: 1,
     });
+    // Revisited once at expiry (no stored expiry: createdAt + 24h) to settle the row.
     expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ reconciliationDeadline: null }),
+        data: expect.objectContaining({
+          reconciliationDeadline: new Date('2026-09-21T00:00:00.000Z'),
+        }),
       })
     );
+  });
+
+  it('settles an expired UNKNOWN row as FAILED and scrubs its payload', async () => {
+    const due = new Date('2026-09-20T01:00:00.000Z');
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        id: 'notification_unknown_email',
+        createdAt: new Date('2026-09-20T00:00:00.000Z'),
+        expiresAt: new Date('2026-09-20T00:30:00.000Z'),
+        channel: 'EMAIL',
+        attempts: 1,
+        providerMessageId: null,
+        deliveryAttempts: [{ provider: 'smtp' }],
+      },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    await expect(reconcileUnknownNotifications(due)).resolves.toEqual({
+      retried: 0,
+      awaitingCallback: 0,
+      unsupported: 1,
+    });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'notification_unknown_email',
+        status: 'UNKNOWN',
+        reconciliationDeadline: { lte: due },
+      },
+      data: expect.objectContaining({
+        status: 'FAILED',
+        reconciliationDeadline: null,
+        payloadEncrypted: null,
+      }),
+    });
+  });
+
+  it('lets an operator requeue an UNKNOWN notification', async () => {
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({ channel: 'EMAIL' } as never);
+    vi.mocked(prisma.notification.findFirst).mockResolvedValue({
+      attempts: 1,
+      maxAttempts: 5,
+      status: 'UNKNOWN',
+    } as never);
+    const txUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      operation: (tx: unknown) => unknown
+    ) => operation({ notification: { updateMany: txUpdateMany } })) as never);
+
+    await expect(requeueCentralNotification('notification_unknown_email')).resolves.toBe(true);
+    expect(prisma.notification.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ['FAILED', 'UNKNOWN'] } }),
+      })
+    );
+    expect(txUpdateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ status: 'UNKNOWN', attempts: 1 }),
+      data: expect.objectContaining({ status: 'PENDING', reconciliationDeadline: null }),
+    });
   });
 
   it.each([false, true])(
@@ -786,7 +994,7 @@ describe('central notification control plane', () => {
         channel: 'EMAIL',
         recipientType: 'USER',
         recipientAddress: 'alice@example.com',
-        templateKey: 'incident-triggered',
+        templateKey: 'incident-acknowledged',
         sourceType: 'INCIDENT',
         sourceId: 'incident-1',
         eventKey: 'event-1',
@@ -797,7 +1005,7 @@ describe('central notification control plane', () => {
           kind: 'INCIDENT_EMAIL',
           userId: 'u1',
           incidentId: 'incident-1',
-          eventType: 'triggered',
+          eventType: 'acknowledged',
         } as never,
       },
       scheduledAt
@@ -812,7 +1020,7 @@ describe('central notification control plane', () => {
         channel: 'EMAIL',
         recipientType: 'USER',
         recipientAddress: 'alice@example.com',
-        templateKey: 'incident-triggered',
+        templateKey: 'incident-acknowledged',
         sourceType: 'INCIDENT',
         sourceId: 'incident-1',
         eventKey: 'event-1',
@@ -822,7 +1030,7 @@ describe('central notification control plane', () => {
           kind: 'INCIDENT_EMAIL',
           userId: 'u1',
           incidentId: 'incident-1',
-          eventType: 'triggered',
+          eventType: 'acknowledged',
           eventAt: twoHoursAgo.toISOString(),
         } as never,
       },
@@ -849,6 +1057,34 @@ describe('central notification control plane', () => {
     );
     // 12:00 + 2h TTL = 14:00
     expect(futureExpiry.toISOString()).toBe('2026-09-15T14:00:00.000Z');
+
+    // Case 4: a triggered page (escalation step/repeat) carries the incident's
+    // creation instant as eventAt, but its freshness starts when it is sent.
+    const pageExpiry = resolveNotificationExpiry(
+      {
+        category: 'INCIDENT',
+        channel: 'SMS',
+        recipientType: 'USER',
+        recipientAddress: '+15555550100',
+        templateKey: 'incident-triggered',
+        sourceType: 'INCIDENT',
+        sourceId: 'incident-1',
+        eventKey: 'event-1:step-2',
+        displayMessage: 'Alert',
+        trafficClass: 'CRITICAL',
+        eventAt: twoHoursAgo,
+        payload: {
+          kind: 'INCIDENT_SMS',
+          userId: 'u1',
+          incidentId: 'incident-1',
+          eventType: 'triggered',
+          eventAt: twoHoursAgo.toISOString(),
+        } as never,
+      },
+      scheduledAt
+    );
+    // 12:00 + 30m TTL = 12:30
+    expect(pageExpiry.toISOString()).toBe('2026-09-15T12:30:00.000Z');
   });
 
   it('skips new intents created with stale eventAt immediately upon delivery with zero provider attempts', async () => {

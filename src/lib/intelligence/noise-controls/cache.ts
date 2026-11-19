@@ -142,7 +142,7 @@ export async function loadPrePagingSnapshot(
       where: { mode: { not: 'OFF' } },
       include: { activeVersion: { select: { policyRevision: true } } },
     }),
-    client.maintenanceWindow.findMany({
+    client.noiseMaintenanceWindow.findMany({
       where: {
         enabled: true,
         endedAt: null,

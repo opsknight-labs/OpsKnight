@@ -70,6 +70,14 @@ const config: Config = {
       colors: {
         // Status colour semantics (AGENTS.md); see src/lib/design/status-palette.ts
         status: STATUS_TAILWIND_COLORS,
+        // Theme-aware neutral scale. Light values equal Tailwind `slate`
+        // exactly; the dark theme inverts it (src/styles/index.css).
+        ink: Object.fromEntries(
+          [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map(shade => [
+            shade,
+            `rgb(var(--ink-${shade}) / <alpha-value>)`,
+          ])
+        ),
         border: 'hsl(var(--ui-border) / <alpha-value>)',
         input: 'hsl(var(--ui-input) / <alpha-value>)',
         ring: 'hsl(var(--ui-ring) / <alpha-value>)',

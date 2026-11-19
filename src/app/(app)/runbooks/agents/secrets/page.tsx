@@ -41,6 +41,7 @@ import {
   revokeRunbookSecretGrantAction,
   rotateRunbookSecretAction,
 } from '../../actions';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -52,6 +53,7 @@ export default async function RunbookSecretsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/runbooks/agents/secrets');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const [permissions, user] = await Promise.all([getUserPermissions(), getCurrentUser()]);
   const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);

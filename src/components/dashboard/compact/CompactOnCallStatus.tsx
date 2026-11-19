@@ -80,7 +80,7 @@ const CompactOnCallStatus = memo(function CompactOnCallStatus({
   if (!isOnCall) {
     return (
       <div
-        className="p-3.5 rounded-sm bg-neutral-50 border border-border text-center"
+        className="p-3.5 rounded-sm bg-ink-50 border border-border text-center"
         role="status"
         aria-label="Not currently on-call"
       >
@@ -99,7 +99,7 @@ const CompactOnCallStatus = memo(function CompactOnCallStatus({
       >
         <div className="flex items-center gap-2">
           <div
-            className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+            className="w-1.5 h-1.5 rounded-full bg-card shadow-[0_0_6px_rgba(255,255,255,0.6)]"
             aria-hidden="true"
           />
           <span className="text-sm font-semibold">On-Call Now</span>
@@ -119,7 +119,7 @@ const CompactOnCallStatus = memo(function CompactOnCallStatus({
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
           <div
-            className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.6)] animate-pulse"
+            className="w-1.5 h-1.5 rounded-full bg-card shadow-[0_0_6px_rgba(255,255,255,0.6)] animate-pulse"
             aria-hidden="true"
           />
           <span className="text-sm font-semibold">On-Call Now</span>

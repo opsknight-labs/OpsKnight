@@ -267,12 +267,12 @@ export default function StatusPageAnnouncementManager({
       }
     }
     if (publishOption === 'AT_START' && parsedStartDate) {
-      if (parsedStartDate.getTime() <= Date.now()) {
+      if (parsedStartDate.getTime() <= new Date().getTime()) {
         return 'Scheduled publication start time must be in the future. Select "Publish Now" if this notice is already active or retrospective.';
       }
     }
     if (notificationTiming === 'AT_START' && parsedStartDate) {
-      if (parsedStartDate.getTime() <= Date.now()) {
+      if (parsedStartDate.getTime() <= new Date().getTime()) {
         return 'Subscriber notification "At Start Time" cannot be scheduled in the past. Select "On Publish" or a future start time.';
       }
     }
@@ -861,7 +861,7 @@ export default function StatusPageAnnouncementManager({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-8 px-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 transition-colors"
+                      className="h-8 px-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 transition-colors dark:hover:text-red-400"
                       onClick={() => {
                         setDeleteError(null);
                         setDeletingAnnouncement(announcement);
@@ -1236,11 +1236,11 @@ export default function StatusPageAnnouncementManager({
                       )}
                     </span>
                     <span className="font-mono text-xs">
-                      {parsedEndDate && parsedEndDate.getTime() < Date.now() ? (
+                      {parsedEndDate && parsedEndDate.getTime() < new Date().getTime() ? (
                         <span className="text-muted-foreground font-medium">
                           ● Concluded historical notice
                         </span>
-                      ) : parsedStartDate && parsedStartDate.getTime() > Date.now() ? (
+                      ) : parsedStartDate && parsedStartDate.getTime() > new Date().getTime() ? (
                         <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
                           ● Scheduled
                         </span>

@@ -12,6 +12,8 @@ import {
   groupSchema,
   parse,
   enterpriseSchema,
+  ScimFailure,
+  USERNAME_EMAIL_MISMATCH,
 } from '@/lib/scim/protocol/validation';
 
 const user = {
@@ -62,6 +64,33 @@ describe('bounded SCIM protocol and ordered PATCH', () => {
         )
       )
     ).toMatchObject({ userName: 'new@example.test', active: false });
+  });
+  it('names the attributes when the work email differs from userName (Entra UPN ≠ mail)', () => {
+    const create = {
+      ...user,
+      userName: 'alice.upn@corp.example.test',
+      emails: [{ value: 'alice@example.test', type: 'work', primary: true }],
+    };
+    let failure: unknown;
+    try {
+      parse(userSchema, create);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(ScimFailure);
+    expect(failure).toMatchObject({ status: 400, scimType: 'invalidValue' });
+    const detail = (failure as ScimFailure).message;
+    expect(detail).toBe(`emails: ${USERNAME_EMAIL_MISMATCH}`);
+    expect(detail).toContain('emails[type eq "work"].value');
+    expect(detail).toContain('userName');
+    expect(detail).toContain('Entra: mail');
+    expect(detail).toContain('Okta: user.email');
+    // The IdP error must not echo either submitted address.
+    expect(detail).not.toContain('alice');
+    // A matching work email (case-insensitive) is still accepted.
+    expect(parse(userSchema, { ...create, userName: 'Alice@Example.test' }).userName).toBe(
+      'alice@example.test'
+    );
   });
   it('updates structured names and enterprise department', () => {
     expect(
@@ -188,5 +217,64 @@ describe('provider fixtures and attribute ownership', () => {
       'externalId eq "valid" or userName pr',
     ])
       expect(() => equalityFilter(filter, ['externalid'])).toThrow();
+  });
+});
+
+describe('IdP default attribute mappings', () => {
+  const user = { userName: 'alice@example.test', active: true };
+  const patch = (...Operations: unknown[]) => ({
+    schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+    Operations,
+  });
+
+  it('accepts an Okta create body with password, locale and groups, keeping only stored fields', () => {
+    const parsed = parse(
+      userSchema,
+      normalizeAttributes({
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+        userName: 'Alice@Example.test',
+        name: { givenName: 'Alice', familyName: 'Ng', middleName: 'Q' },
+        emails: [{ primary: true, value: 'alice@example.test', type: 'work', display: 'x' }],
+        displayName: 'Alice Ng',
+        locale: 'en-US',
+        externalId: '00u1',
+        groups: [],
+        password: 'secret-from-okta',
+        active: true,
+      })
+    ) as Record<string, unknown>;
+    expect(parsed).toMatchObject({ userName: 'alice@example.test', externalId: '00u1' });
+    expect(parsed.password).toBeUndefined();
+    expect(parsed.locale).toBeUndefined();
+    expect(parsed.name).toEqual({ givenName: 'Alice', familyName: 'Ng' });
+  });
+
+  it('accepts Entra default attributes on create and PATCH as no-ops', () => {
+    const parsed = parse(
+      userSchema,
+      normalizeAttributes({
+        userName: 'alice@example.test',
+        active: true,
+        preferredLanguage: 'en-US',
+        phoneNumbers: [{ type: 'work', value: '1' }],
+        addresses: [{ type: 'work', formatted: 'x' }],
+        [enterpriseSchema]: { department: 'SRE', employeeNumber: '7', manager: { value: 'm' } },
+      })
+    );
+    // eslint-disable-next-line security/detect-object-injection -- enterpriseSchema is a constant SCIM schema URN
+    expect(parsed[enterpriseSchema]).toEqual({ department: 'SRE' });
+
+    const result = patchUser(
+      user,
+      patch(
+        { op: 'replace', path: 'preferredLanguage', value: 'en-US' },
+        { op: 'add', path: 'phoneNumbers[type eq "work"].value', value: '1' },
+        { op: 'add', path: 'addresses[type eq "work"].formatted', value: 'x' },
+        { op: 'replace', path: `${enterpriseSchema}:employeeNumber`, value: '7' },
+        { op: 'replace', path: `${enterpriseSchema}:manager`, value: 'm' },
+        { op: 'replace', path: 'displayName', value: 'Alice' }
+      )
+    );
+    expect(result).toEqual({ ...user, displayName: 'Alice' });
   });
 });

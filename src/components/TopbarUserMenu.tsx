@@ -17,6 +17,7 @@ import { Settings, LogOut, User, Keyboard, HelpCircle } from 'lucide-react';
 import { useUserAvatarSafe } from '@/hooks/useUserAvatar';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import AppearanceControl from '@/components/theme/AppearanceControl';
 
 type Props = {
   name: string | null;
@@ -52,7 +53,7 @@ export default function TopbarUserMenu({
           <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 via-muted to-primary/20 group-hover:from-primary/40 group-hover:via-primary/10 group-hover:to-primary/40 transition-all duration-500" />
 
           {/* 2. Slate Gap */}
-          <div className="absolute inset-[2px] rounded-full bg-slate-900" />
+          <div className="absolute inset-[2px] rounded-full bg-zinc-900" />
 
           {/* 3. Avatar Image */}
           <Avatar className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full border border-black/5 dark:border-white/10 shadow-sm">
@@ -155,6 +156,13 @@ export default function TopbarUserMenu({
               </Link>
             </DropdownMenuItem>
           </DropdownMenuGroup>
+
+          <DropdownMenuSeparator className="my-1 bg-border/60" />
+
+          <div className="px-2 pb-1.5 pt-1">
+            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Appearance</p>
+            <AppearanceControl size="sm" />
+          </div>
 
           <DropdownMenuSeparator className="my-1 bg-border/60" />
 

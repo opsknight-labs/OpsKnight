@@ -29,10 +29,12 @@ import {
   AlertTriangle,
   XCircle,
 } from 'lucide-react';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AgentLifecyclePage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/runbooks/agents/[id]/setup');
   await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const id = z
     .string()

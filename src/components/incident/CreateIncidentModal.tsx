@@ -235,7 +235,7 @@ const PRIORITY_OPTIONS = [
     label: INCIDENT_PRIORITY_DEFINITIONS.P5.label,
     description: INCIDENT_PRIORITY_DEFINITIONS.P5.description,
     selectedClass:
-      'bg-slate-500/15 text-slate-700 border-slate-500/40 ring-1 ring-slate-500/30 shadow-2xs dark:text-slate-300',
+      'bg-slate-500/15 text-slate-700 border-slate-500/40 ring-1 ring-slate-500/30 shadow-2xs dark:text-zinc-300',
     dotClass: 'bg-slate-400',
   },
 ];
@@ -428,6 +428,18 @@ function CreateIncidentModalContent({
     name: ['title', 'serviceId', 'urgency', 'priority', 'assigneeId', 'visibility'],
   });
 
+  // Reset paths must re-derive the service default: the sync effect below only
+  // reruns when the default changes, so a hard-coded PUBLIC would stick and
+  // publish a PRIVATE-default service's incident to the status page.
+  // A ref keeps resetForm/applyTemplate stable for the context-loading effect.
+  const contextServicesRef = useRef<Service[]>([]);
+  const serviceDefaultVisibility = useCallback(
+    (serviceId: string) =>
+      contextServicesRef.current.find(s => s.id === serviceId)?.defaultIncidentVisibility ??
+      'PUBLIC',
+    []
+  );
+
   const resetForm = useCallback(() => {
     userOverrodeVisibility.current = false;
     form.reset({
@@ -437,10 +449,10 @@ function CreateIncidentModalContent({
       urgency: 'HIGH',
       priority: '',
       assigneeId: 'unassigned',
-      visibility: 'PUBLIC',
+      visibility: serviceDefaultVisibility(openOptions?.serviceId || ''),
       dedupKey: '',
     });
-  }, [form, openOptions?.serviceId]);
+  }, [form, openOptions?.serviceId, serviceDefaultVisibility]);
 
   const applyTemplate = useCallback(
     (template: Template) => {
@@ -452,11 +464,11 @@ function CreateIncidentModalContent({
         urgency: template.defaultUrgency,
         priority: template.defaultPriority || '',
         assigneeId: 'unassigned',
-        visibility: 'PUBLIC',
+        visibility: serviceDefaultVisibility(template.defaultService?.id || ''),
         dedupKey: '',
       });
     },
-    [form]
+    [form, serviceDefaultVisibility]
   );
 
   useEffect(() => {
@@ -466,6 +478,7 @@ function CreateIncidentModalContent({
       .then(data => {
         if (cancelled) return;
         const ctx = data as ContextData;
+        contextServicesRef.current = ctx.services;
         setContextData(ctx);
         setLoading(false);
 
@@ -1041,7 +1054,7 @@ function CreateIncidentModalContent({
                               className={cn(
                                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
                                 field.value === 'PRIVATE'
-                                  ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-slate-300'
+                                  ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-zinc-300'
                                   : 'border-border/80 bg-muted/50 text-muted-foreground'
                               )}
                             >
@@ -1057,7 +1070,7 @@ function CreateIncidentModalContent({
                                     <Badge
                                       variant="secondary"
                                       size="xs"
-                                      className="text-[9px] font-medium px-1.5 py-0 border-slate-500/30 text-slate-700 dark:text-slate-300 bg-slate-500/10"
+                                      className="text-[9px] font-medium px-1.5 py-0 border-slate-500/30 text-slate-700 dark:text-zinc-300 bg-slate-500/10"
                                     >
                                       Service Default
                                     </Badge>
@@ -1068,7 +1081,7 @@ function CreateIncidentModalContent({
                                     className={cn(
                                       'text-[9px] font-semibold',
                                       field.value === 'PRIVATE'
-                                        ? 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
+                                        ? 'border-slate-500/40 text-slate-700 dark:text-zinc-300 bg-slate-500/10'
                                         : 'opacity-60'
                                     )}
                                   >

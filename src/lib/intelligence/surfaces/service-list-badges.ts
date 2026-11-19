@@ -75,7 +75,7 @@ export async function getServiceListBadges(
         take: ids.length + 1,
         select: { scopeKey: true, mode: true },
       }),
-      client.maintenanceWindow.findMany({
+      client.noiseMaintenanceWindow.findMany({
         where: {
           enabled: true,
           endedAt: null,

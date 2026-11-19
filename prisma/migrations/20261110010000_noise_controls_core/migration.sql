@@ -27,7 +27,7 @@ CREATE UNIQUE INDEX "NoiseControlPolicy_scopeKey_key" ON "NoiseControlPolicy"("s
 CREATE INDEX "NoiseControlPolicy_serviceId_idx" ON "NoiseControlPolicy"("serviceId");
 CREATE INDEX "NoiseControlPolicy_mode_idx" ON "NoiseControlPolicy"("mode");
 
-CREATE TABLE "MaintenanceWindow" (
+CREATE TABLE "NoiseMaintenanceWindow" (
   "id" TEXT NOT NULL,
   "name" VARCHAR(120) NOT NULL,
   "description" VARCHAR(500),
@@ -48,12 +48,12 @@ CREATE TABLE "MaintenanceWindow" (
   "createdById" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
-  CONSTRAINT "MaintenanceWindow_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "MaintenanceWindow_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT "NoiseMaintenanceWindow_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "NoiseMaintenanceWindow_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
-CREATE INDEX "MaintenanceWindow_enabled_endsAt_idx" ON "MaintenanceWindow"("enabled", "endsAt");
-CREATE INDEX "MaintenanceWindow_serviceId_idx" ON "MaintenanceWindow"("serviceId");
-CREATE INDEX "MaintenanceWindow_teamId_idx" ON "MaintenanceWindow"("teamId");
+CREATE INDEX "NoiseMaintenanceWindow_enabled_endsAt_idx" ON "NoiseMaintenanceWindow"("enabled", "endsAt");
+CREATE INDEX "NoiseMaintenanceWindow_serviceId_idx" ON "NoiseMaintenanceWindow"("serviceId");
+CREATE INDEX "NoiseMaintenanceWindow_teamId_idx" ON "NoiseMaintenanceWindow"("teamId");
 
 CREATE TABLE "SuppressionRule" (
   "id" TEXT NOT NULL,

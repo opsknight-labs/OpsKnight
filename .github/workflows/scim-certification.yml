@@ -87,6 +87,7 @@ jobs:
       - run: npx ts-node --project tsconfig.script.json scripts/scim/seed-certification.ts
       # Exercise the compiled SQL/runtime boundary, not only the development server.
       - run: BUILD_DIR=.next-scim-production npx next build
+        env: { NODE_OPTIONS: --max-old-space-size=6144 }
       - name: Stage standalone production assets
         run: |
           mkdir -p .next-scim-production/standalone/public .next-scim-production/standalone/.next-scim-production/static

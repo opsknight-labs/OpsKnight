@@ -10,7 +10,7 @@ const DIGEST_RE = /^sha256:[a-f0-9]{64}$/;
 const REQUIRED_GATES = Object.freeze([
   'architecture', 'protocol', 'oauth', 'rbac', 'workflowParity', 'approvals',
   'durableTasks', 'mixedLoad', 'faultTolerance', 'clients', 'deployment',
-  'migrationUpgrade', 'security', 'documentation',
+  'migrationUpgrade', 'security', 'documentation', 'conformance',
 ]);
 
 function isRecord(value) {

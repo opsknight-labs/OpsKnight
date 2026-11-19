@@ -18,6 +18,11 @@ import {
   type SettingsActionState,
 } from '@/lib/settings-result';
 
+// The lifecycle fence waits for in-flight provider transactions (up to their
+// 40s JIRA_PROVIDER_FENCE_TIMEOUT_MS) before doing its work, so the default 5s
+// interactive-transaction timeout is too short.
+const JIRA_LIFECYCLE_TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 70_000 };
+
 const JiraConfigSchema = z
   .object({
     baseUrl: z.string().trim().min(1, 'Jira site URL is required.'),
@@ -123,6 +128,18 @@ export async function saveJiraConfig(
       };
     }
 
+    // Links and mappings point at issues on the old site; a webhook from the new
+    // site for the same key (e.g. OPS-1) would otherwise update the wrong entity.
+    if (originChanged && (await prisma.externalIssueLink.count({ where: { provider: 'JIRA' } }))) {
+      return {
+        success: false,
+        code: 'VALIDATION_ERROR',
+        error:
+          'This workspace has issues linked from the current Jira site. Remove the Jira workspace first, then connect the new site.',
+        updatedAt: expectedUpdatedAt,
+      };
+    }
+
     const apiTokenEncrypted = hasFreshApiToken
       ? await encrypt(apiToken)
       : existing?.apiTokenEncrypted;
@@ -205,7 +222,7 @@ export async function saveJiraConfig(
         select: { updatedAt: true },
       });
       return saved.updatedAt.toISOString();
-    });
+    }, JIRA_LIFECYCLE_TRANSACTION_OPTIONS);
 
     revalidateJiraWorkspacePaths();
 
@@ -365,7 +382,7 @@ export async function removeJiraWorkspace(formData: FormData): Promise<SettingsA
         },
         tx
       );
-    });
+    }, JIRA_LIFECYCLE_TRANSACTION_OPTIONS);
 
     revalidateJiraWorkspacePaths();
     return { success: true, error: null, updatedAt: null };

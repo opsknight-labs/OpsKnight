@@ -366,7 +366,7 @@ export async function listMaintenanceWindows(
   client: Client = prisma
 ): Promise<MaintenanceWindowView[]> {
   const now = options.now ?? new Date();
-  const rows = await client.maintenanceWindow.findMany({
+  const rows = await client.noiseMaintenanceWindow.findMany({
     where: options.includePast
       ? {}
       : {
@@ -426,7 +426,7 @@ export async function createMaintenanceWindow(input: unknown, actor: Intelligenc
       const team = await tx.team.findUnique({ where: { id: parsed.teamId }, select: { id: true } });
       if (!team) throw invalid('teamId', 'Unknown team');
     }
-    const created = await tx.maintenanceWindow.create({
+    const created = await tx.noiseMaintenanceWindow.create({
       data: {
         name: parsed.name,
         description: parsed.description ?? null,
@@ -473,7 +473,7 @@ export async function endMaintenanceWindow(
   id: string,
   actor: IntelligenceActor
 ): Promise<'ended' | 'missing'> {
-  const result = await prisma.maintenanceWindow.updateMany({
+  const result = await prisma.noiseMaintenanceWindow.updateMany({
     where: { id, endedAt: null },
     data: { endedAt: new Date(), endedById: actor.actorId },
   });
@@ -494,7 +494,10 @@ export async function setMaintenanceWindowEnabled(
   enabled: boolean,
   actor: IntelligenceActor
 ): Promise<'updated' | 'missing'> {
-  const result = await prisma.maintenanceWindow.updateMany({ where: { id }, data: { enabled } });
+  const result = await prisma.noiseMaintenanceWindow.updateMany({
+    where: { id },
+    data: { enabled },
+  });
   if (result.count !== 1) return 'missing';
   await logAudit({
     action: enabled

@@ -18,6 +18,7 @@ export const SLACK_REQUIRED_BOT_SCOPES = [
   'reactions:read', // Receive reaction_added for 📌 pin sync
   'users:read', // Resolve Slack users for attribution
   'users:read.email', // Match Slack users to OpsKnight accounts (auto-invite)
+  'commands', // Register and receive the /incident slash command
 ] as const;
 
 /** Scopes that extend coverage; absence degrades rather than breaks. */

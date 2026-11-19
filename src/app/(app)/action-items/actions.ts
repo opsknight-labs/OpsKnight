@@ -84,6 +84,12 @@ export async function updateActionItemStatus(
               updatedAt: new Date(),
             },
           });
+        } else {
+          // Touch the parent so its revision advances and an open editor cannot overwrite this.
+          await tx.postmortem.update({
+            where: { id: existing.postmortemId },
+            data: { updatedAt: new Date() },
+          });
         }
 
         return item;

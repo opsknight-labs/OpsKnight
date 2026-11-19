@@ -7,6 +7,7 @@ import { encrypt, decrypt } from '@/lib/encryption';
 import { AppError } from '@/lib/errors';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
+import { effectiveAccessSelect } from '@/lib/access/effective';
 import {
   authorize,
   AUTHORIZATION_ACTIONS,
@@ -62,7 +63,13 @@ export async function processReportExportJob(
   }
   const user = await prisma.user.findUnique({
     where: { id: record.userId },
-    select: { id: true, role: true, status: true, teamMemberships: { select: { teamId: true } } },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+      teamMemberships: { select: { teamId: true } },
+      ...effectiveAccessSelect(),
+    },
   });
   const baseActor = user && authorizationActorFromUser(user);
   if (!baseActor) throw new AppError({ code: 'AUTHORIZATION_DENIED' });

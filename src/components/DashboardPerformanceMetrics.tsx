@@ -66,13 +66,13 @@ export default function DashboardPerformanceMetrics({
       if (trend === 'up' || change > 0) {
         return {
           icon: <TrendingUp className="h-3 w-3" />,
-          color: 'text-red-600',
+          color: 'text-red-600 dark:text-red-400',
           text: `+${formatTime(Math.abs(change))} (+${percentChange.toFixed(1)}%)`,
         };
       } else if (trend === 'down' || change < 0) {
         return {
           icon: <TrendingDown className="h-3 w-3" />,
-          color: 'text-emerald-600',
+          color: 'text-emerald-600 dark:text-emerald-400',
           text: `-${formatTime(Math.abs(change))} (-${percentChange.toFixed(1)}%)`,
         };
       }
@@ -88,14 +88,16 @@ export default function DashboardPerformanceMetrics({
   return (
     <div className="grid grid-cols-2 gap-4">
       {/* MTTA */}
-      <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+      <div className="p-4 bg-ink-50 rounded-lg border border-ink-200">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
             MTTA
           </div>
           <span className="text-[0.7rem] text-muted-foreground">Mean Time to Acknowledge</span>
         </div>
-        <div className="text-[1.75rem] font-bold text-red-600 mb-1">{formatTime(mtta)}</div>
+        <div className="text-[1.75rem] font-bold text-red-600 mb-1 dark:text-red-400">
+          {formatTime(mtta)}
+        </div>
         {mttaTrendData && (
           <div
             className={cn(
@@ -110,7 +112,7 @@ export default function DashboardPerformanceMetrics({
       </div>
 
       {/* MTTR */}
-      <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+      <div className="p-4 bg-ink-50 rounded-lg border border-ink-200">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
             MTTR
@@ -132,7 +134,7 @@ export default function DashboardPerformanceMetrics({
       </div>
 
       {/* Ack SLA */}
-      <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+      <div className="p-4 bg-ink-50 rounded-lg border border-ink-200">
         <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 font-semibold">
           Acknowledge SLA
         </div>
@@ -140,10 +142,10 @@ export default function DashboardPerformanceMetrics({
           className={cn(
             'text-2xl font-bold mb-0.5',
             ackSlaRate >= 95
-              ? 'text-emerald-600'
+              ? 'text-emerald-600 dark:text-emerald-400'
               : ackSlaRate >= 80
                 ? 'text-orange-500'
-                : 'text-red-600'
+                : 'text-red-600 dark:text-red-400'
           )}
         >
           {ackSlaRate.toFixed(1)}%
@@ -154,7 +156,7 @@ export default function DashboardPerformanceMetrics({
       </div>
 
       {/* Resolve SLA */}
-      <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+      <div className="p-4 bg-ink-50 rounded-lg border border-ink-200">
         <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 font-semibold">
           Resolve SLA
         </div>
@@ -162,10 +164,10 @@ export default function DashboardPerformanceMetrics({
           className={cn(
             'text-2xl font-bold mb-0.5',
             resolveSlaRate >= 95
-              ? 'text-emerald-600'
+              ? 'text-emerald-600 dark:text-emerald-400'
               : resolveSlaRate >= 80
                 ? 'text-orange-500'
-                : 'text-red-600'
+                : 'text-red-600 dark:text-red-400'
           )}
         >
           {resolveSlaRate.toFixed(1)}%

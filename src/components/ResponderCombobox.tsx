@@ -124,11 +124,11 @@ export default function ResponderCombobox({
                     avatarUrl={user.avatarUrl}
                     gender={user.gender}
                     size="sm"
-                    className="mr-2 shrink-0 border-slate-200"
+                    className="mr-2 shrink-0 border-ink-200"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-xs font-semibold text-slate-800">
+                      <span className="truncate text-xs font-semibold text-ink-800">
                         {user.name}
                       </span>
                       {user.role && (

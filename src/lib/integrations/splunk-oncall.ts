@@ -27,7 +27,9 @@ export function transformSplunkOnCallToEvent(data: SplunkOnCallEvent): {
     severity: 'critical' | 'error' | 'warning' | 'info';
     custom_details: Record<string, unknown>;
   };
-} {
+} | null {
+  // Splunk On-Call INFO messages are timeline notes; they never open incidents.
+  if (data.message_type?.trim().toUpperCase() === 'INFO') return null;
   const summary =
     firstString(data.message, data.state_message, data.entity_display_name, data.alert?.message) ||
     'Splunk On-Call Alert';

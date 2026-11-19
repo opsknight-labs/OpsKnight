@@ -5,7 +5,14 @@ import { requireMcp } from '@/lib/mcp/core/errors';
 import { MCP_PAT_CLIENT_ID } from '@/lib/mcp/auth/effective-access';
 import { MCP_CALL_LOG_DEFAULT_RETENTION_DAYS } from '@/lib/mcp/core/call-log';
 import type { McpViewer } from './queries';
-import { USAGE_GROUPS, USAGE_WINDOW_KEYS, type UsageGroup, type UsageWindow } from './list-params';
+import { resolveUsageRange } from './usage-range';
+import {
+  USAGE_GROUPS,
+  USAGE_PAGE_SIZE,
+  USAGE_WINDOW_KEYS,
+  type UsageGroup,
+  type UsageWindow,
+} from './list-params';
 
 export { USAGE_GROUPS, USAGE_WINDOW_KEYS };
 export type { UsageGroup, UsageWindow };
@@ -23,7 +30,6 @@ export const USAGE_WINDOWS: Record<UsageWindow, number> = {
 };
 
 /** Groups shown per view; the rest are summed into the totals only. */
-export const USAGE_ROW_LIMIT = 50;
 /** Rows in one export. A longer result is cut and says so. */
 export const USAGE_EXPORT_LIMIT = 10_000;
 
@@ -56,11 +62,78 @@ export type McpUsage = {
   since: string;
   rows: McpUsageRow[];
   totals: { calls: number; failed: number; errorRate: number; p95Ms: number | null };
-  /** More groups exist than the view shows. */
-  truncated: boolean;
+  /** The page shown (1-based; clamped to the last page) and how many groups exist in all. */
+  page: number;
+  groupCount: number;
   /** Days the log is kept; a window longer than this is incomplete. */
   retentionDays: number;
+  /** End of the period shown (now, or the end of a custom range). */
+  until: string;
+  /** The custom date range in force, or null when a preset window is shown. */
+  range: { from: string; to: string } | null;
+  /** Why the requested custom range was refused; the preset window is shown instead. */
+  rangeError: string | null;
+  /** Calls and failures per hour (periods up to two days) or per UTC day, oldest first. */
+  bucket: 'hour' | 'day';
+  series: { at: string; calls: number; failed: number }[];
+  /** The most frequent failures, by error code and outcome. */
+  errorCodes: { code: string | null; outcome: string; count: number }[];
 };
+
+/** Kinds of failure listed in the breakdown. */
+export const USAGE_ERROR_CODE_LIMIT = 10;
+
+type UsagePeriodInput = { window: UsageWindow; from?: string | null; to?: string | null };
+
+async function usageRetentionDays() {
+  const policy = await prisma.mcpPolicy.findUnique({
+    where: { id: 'default' },
+    select: { callLogRetentionDays: true },
+  });
+  return policy?.callLogRetentionDays ?? MCP_CALL_LOG_DEFAULT_RETENTION_DAYS;
+}
+
+/** The period a view covers: a valid custom range, else the preset window ending now. */
+export function usagePeriod(input: UsagePeriodInput, retentionDays: number, now: Date) {
+  const preset = {
+    since: new Date(now.getTime() - USAGE_WINDOWS[input.window]),
+    until: now,
+    range: null,
+  };
+  if (!input.from && !input.to) return { ...preset, rangeError: null };
+  const range = resolveUsageRange(input.from ?? '', input.to ?? '', retentionDays, now);
+  return range.ok
+    ? {
+        since: range.since,
+        until: range.until,
+        range: { from: range.from, to: range.to },
+        rangeError: null,
+      }
+    : { ...preset, rangeError: range.error };
+}
+
+const HOUR = 3_600_000;
+
+/** Every bucket in the period, empty ones as zero, so the chart's x axis is true to time. */
+export function fillUsageSeries(
+  rows: readonly { bucket: Date; calls: number; failed: number }[],
+  since: Date,
+  until: Date,
+  bucket: 'hour' | 'day'
+) {
+  const step = bucket === 'hour' ? HOUR : 24 * HOUR;
+  const found = new Map(rows.map(row => [row.bucket.getTime(), row]));
+  const series: McpUsage['series'] = [];
+  for (let at = Math.floor(since.getTime() / step) * step; at < until.getTime(); at += step) {
+    const row = found.get(at);
+    series.push({
+      at: new Date(at).toISOString(),
+      calls: row?.calls ?? 0,
+      failed: row?.failed ?? 0,
+    });
+  }
+  return series;
+}
 
 function requireAdmin(viewer: McpViewer) {
   requireMcp(viewer.isAdmin, 'MCP_ADMIN_REQUIRED', 403);
@@ -120,39 +193,68 @@ export function usageLabel(
 
 export async function getMcpUsage(
   viewer: McpViewer,
-  input: { window: UsageWindow; by: UsageGroup; q?: string },
+  input: UsagePeriodInput & {
+    by: UsageGroup;
+    q?: string;
+    page?: number;
+    /** Only this assistant's calls (the assistant detail page). */
+    clientId?: string;
+  },
   now = new Date()
 ): Promise<McpUsage> {
   requireAdmin(viewer);
-  const since = new Date(now.getTime() - USAGE_WINDOWS[input.window]);
+  const retentionDays = await usageRetentionDays();
+  const { since, until, range, rangeError } = usagePeriod(input, retentionDays, now);
   const column = GROUP_COLUMN[input.by];
-  const where = Prisma.sql`"at" >= ${since} ${textFilter(input.q ?? '')}`;
+  const client = input.clientId ? Prisma.sql`AND "clientId" = ${input.clientId}` : Prisma.empty;
+  const where = Prisma.sql`"at" >= ${since} AND "at" < ${until} ${client} ${textFilter(input.q ?? '')}`;
   const success = Prisma.join(SUCCESS_OUTCOMES);
   const timed = Prisma.join(TIMED_OUTCOMES);
+  const bucket = until.getTime() - since.getTime() <= 2 * 24 * HOUR ? 'hour' : 'day';
+  // A closed set: the unit never comes from the request as text.
+  const unit = Prisma.raw(bucket === 'hour' ? "'hour'" : "'day'");
 
-  const [groups, total, policy] = await Promise.all([
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const [groups, total, buckets, errorCodes] = await Promise.all([
     prisma.$queryRaw<
-      { key: string | null; calls: bigint; failed: bigint; p95: number | null }[]
+      {
+        key: string | null;
+        calls: bigint;
+        failed: bigint;
+        p95: number | null;
+        groupCount: bigint;
+      }[]
     >`SELECT ${column} AS "key",
+        COUNT(*) OVER () AS "groupCount",
         COUNT(*) AS calls,
         COUNT(*) FILTER (WHERE "outcome" NOT IN (${success})) AS failed,
         percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")
           FILTER (WHERE "outcome" IN (${timed})) AS p95
       FROM "McpCallLog" WHERE ${where}
-      GROUP BY 1 ORDER BY calls DESC, "key" ASC NULLS LAST LIMIT ${USAGE_ROW_LIMIT + 1}`,
+      GROUP BY 1 ORDER BY calls DESC, "key" ASC NULLS LAST
+      LIMIT ${USAGE_PAGE_SIZE} OFFSET ${(page - 1) * USAGE_PAGE_SIZE}`,
     prisma.$queryRaw<{ calls: bigint; failed: bigint; p95: number | null }[]>`
       SELECT COUNT(*) AS calls,
         COUNT(*) FILTER (WHERE "outcome" NOT IN (${success})) AS failed,
         percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")
           FILTER (WHERE "outcome" IN (${timed})) AS p95
       FROM "McpCallLog" WHERE ${where}`,
-    prisma.mcpPolicy.findUnique({
-      where: { id: 'default' },
-      select: { callLogRetentionDays: true },
-    }),
+    prisma.$queryRaw<{ bucket: Date; calls: bigint; failed: bigint }[]>`
+      SELECT date_trunc(${unit}, "at") AS bucket, COUNT(*) AS calls,
+        COUNT(*) FILTER (WHERE "outcome" NOT IN (${success})) AS failed
+      FROM "McpCallLog" WHERE ${where}
+      GROUP BY 1 ORDER BY 1`,
+    prisma.$queryRaw<{ code: string | null; outcome: string; count: bigint }[]>`
+      SELECT "errorCode" AS code, "outcome", COUNT(*) AS count
+      FROM "McpCallLog" WHERE ${where} AND "outcome" NOT IN (${success})
+      GROUP BY 1, 2 ORDER BY count DESC, code ASC NULLS LAST, "outcome" ASC
+      LIMIT ${USAGE_ERROR_CODE_LIMIT}`,
   ]);
 
-  const shown = groups.slice(0, USAGE_ROW_LIMIT);
+  // A page past the end (a stale link after the window shrank) shows the first page instead.
+  if (groups.length === 0 && page > 1) return getMcpUsage(viewer, { ...input, page: 1 }, now);
+  const shown = groups;
+  const groupCount = Number(groups.at(0)?.groupCount ?? 0);
   const names = await labels(
     input.by,
     shown.flatMap(group => (group.key ? [group.key] : []))
@@ -165,6 +267,9 @@ export async function getMcpUsage(
     window: input.window,
     by: input.by,
     since: since.toISOString(),
+    until: until.toISOString(),
+    range,
+    rangeError,
     rows: shown.map(group => {
       const callCount = Number(group.calls);
       const failedCount = Number(group.failed);
@@ -184,8 +289,25 @@ export async function getMcpUsage(
       p95Ms:
         totals?.p95 === null || totals?.p95 === undefined ? null : Math.round(Number(totals.p95)),
     },
-    truncated: groups.length > USAGE_ROW_LIMIT,
-    retentionDays: policy?.callLogRetentionDays ?? MCP_CALL_LOG_DEFAULT_RETENTION_DAYS,
+    page,
+    groupCount,
+    retentionDays,
+    bucket,
+    series: fillUsageSeries(
+      buckets.map(row => ({
+        bucket: row.bucket,
+        calls: Number(row.calls),
+        failed: Number(row.failed),
+      })),
+      since,
+      until,
+      bucket
+    ),
+    errorCodes: errorCodes.map(row => ({
+      code: row.code,
+      outcome: row.outcome,
+      count: Number(row.count),
+    })),
   };
 }
 
@@ -217,20 +339,23 @@ export const USAGE_EXPORT_COLUMNS = [
 /** The rows behind a view, newest first, cut at USAGE_EXPORT_LIMIT. */
 export async function getMcpUsageExportRows(
   viewer: McpViewer,
-  input: { window: UsageWindow; q?: string },
+  input: UsagePeriodInput & { q?: string },
   now = new Date()
 ) {
   requireAdmin(viewer);
-  const since = new Date(now.getTime() - USAGE_WINDOWS[input.window]);
+  const { since, until, range, rangeError } = usagePeriod(input, await usageRetentionDays(), now);
+  // An export never silently widens to another period than the one asked for.
+  requireMcp(!rangeError, 'MCP_INVALID_USAGE_RANGE', 400, rangeError ?? undefined);
   const rows = await prisma.$queryRaw<
     (Omit<McpUsageExportRow, 'at'> & { at: Date })[]
   >`SELECT "at", "tool", "operationId", "outcome", "durationMs", "requestId", "errorCode",
       "clientId", "userId", "grantId"
-    FROM "McpCallLog" WHERE "at" >= ${since} ${textFilter(input.q ?? '')}
+    FROM "McpCallLog" WHERE "at" >= ${since} AND "at" < ${until} ${textFilter(input.q ?? '')}
     ORDER BY "at" DESC, "id" DESC LIMIT ${USAGE_EXPORT_LIMIT + 1}`;
   return {
     rows: rows.slice(0, USAGE_EXPORT_LIMIT).map(row => ({ ...row, at: row.at.toISOString() })),
     truncated: rows.length > USAGE_EXPORT_LIMIT,
+    range,
   };
 }
 

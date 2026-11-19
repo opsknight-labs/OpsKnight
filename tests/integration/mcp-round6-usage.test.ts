@@ -170,6 +170,35 @@ describe('fleet usage', () => {
     expect(usage.rows[0]!.calls).toBeGreaterThanOrEqual(usage.rows[1]!.calls);
   });
 
+  it('pages the groups in a stable order and falls back to page one for a stale page', async () => {
+    const { grant } = await connection();
+    // 45 tools; tool_NN has NN+1 calls so the order is fixed (busiest first).
+    await db.mcpCallLog.createMany({
+      data: Array.from({ length: 45 }, (_, n) =>
+        Array.from({ length: n + 1 }, () =>
+          row(grant.id, { tool: `tool_${String(n).padStart(2, '0')}` })
+        )
+      ).flat(),
+    });
+    const admin = viewerOf('admin', true);
+    const first = await getMcpUsage(admin, { window: '24h', by: 'tool', page: 1 });
+    const second = await getMcpUsage(admin, { window: '24h', by: 'tool', page: 2 });
+    const third = await getMcpUsage(admin, { window: '24h', by: 'tool', page: 3 });
+    expect([first.rows.length, second.rows.length, third.rows.length]).toEqual([20, 20, 5]);
+    expect([first.groupCount, second.groupCount, third.groupCount]).toEqual([45, 45, 45]);
+    expect(first.rows[0]!.key).toBe('tool_44');
+    expect(second.rows[0]!.key).toBe('tool_24');
+    expect(third.rows.at(-1)!.key).toBe('tool_00');
+    const keys = [...first.rows, ...second.rows, ...third.rows].map(entry => entry.key);
+    expect(new Set(keys).size).toBe(45);
+    // Totals describe the whole window, not the page.
+    expect(third.totals.calls).toBe((45 * 46) / 2);
+    // A page past the end (a stale link) shows the first page.
+    const stale = await getMcpUsage(admin, { window: '24h', by: 'tool', page: 9 });
+    expect(stale.page).toBe(1);
+    expect(stale.rows[0]!.key).toBe('tool_44');
+  });
+
   it('groups by assistant and by person with names, never emails, and flags older unattributed calls', async () => {
     const a = await connection('Alpha assistant');
     const b = await connection('Beta assistant');
@@ -345,5 +374,99 @@ describe('request log retention', () => {
       await expect(
         db.mcpPolicy.update({ where: { id: 'default' }, data: { callLogRetentionDays: days } })
       ).rejects.toThrow();
+  });
+});
+
+describe('calls over time, error codes and custom ranges', () => {
+  const now = new Date('2026-11-12T15:30:00.000Z');
+  const admin = () => viewerOf('admin', true);
+
+  it('buckets calls and failures per hour, zero-filled, with the top error codes', async () => {
+    const { grant, client } = await connection();
+    const other = await connection('Other client');
+    await db.mcpCallLog.createMany({
+      data: [
+        row(grant.id, { at: new Date('2026-11-12T14:10:00Z'), clientId: client.id }),
+        row(grant.id, {
+          at: new Date('2026-11-12T14:20:00Z'),
+          clientId: client.id,
+          outcome: 'rate_limited',
+          errorCode: 'RATE_LIMITED',
+        }),
+        row(grant.id, {
+          at: new Date('2026-11-12T12:05:00Z'),
+          clientId: client.id,
+          outcome: 'rate_limited',
+          errorCode: 'RATE_LIMITED',
+        }),
+        row(other.grant.id, {
+          at: new Date('2026-11-12T12:06:00Z'),
+          clientId: other.client.id,
+          outcome: 'tool_error',
+        }),
+      ],
+    });
+    const usage = await getMcpUsage(admin(), { window: '24h', by: 'tool' }, now);
+    expect(usage.bucket).toBe('hour');
+    expect(usage.series).toHaveLength(25);
+    const at = (iso: string) => usage.series.find(point => point.at === iso);
+    expect(at('2026-11-12T14:00:00.000Z')).toEqual({
+      at: '2026-11-12T14:00:00.000Z',
+      calls: 2,
+      failed: 1,
+    });
+    expect(at('2026-11-12T13:00:00.000Z')).toMatchObject({ calls: 0, failed: 0 });
+    expect(usage.errorCodes).toEqual([
+      { code: 'RATE_LIMITED', outcome: 'rate_limited', count: 2 },
+      { code: null, outcome: 'tool_error', count: 1 },
+    ]);
+
+    // One assistant only (the assistant detail page).
+    const mine = await getMcpUsage(
+      admin(),
+      { window: '24h', by: 'tool', clientId: client.id },
+      now
+    );
+    expect(mine.totals).toMatchObject({ calls: 3, failed: 2 });
+  });
+
+  it('shows a valid custom range per day and falls back, saying why, on an invalid one', async () => {
+    const { grant } = await connection();
+    await db.mcpCallLog.createMany({
+      data: [
+        row(grant.id, { at: new Date('2026-11-01T10:00:00Z') }),
+        row(grant.id, { at: new Date('2026-11-03T23:59:00Z') }),
+        row(grant.id, { at: new Date('2026-11-04T00:00:00Z') }),
+      ],
+    });
+    const usage = await getMcpUsage(
+      admin(),
+      { window: '24h', from: '2026-11-01', to: '2026-11-03', by: 'tool' },
+      now
+    );
+    expect(usage.range).toEqual({ from: '2026-11-01', to: '2026-11-03' });
+    expect(usage.bucket).toBe('day');
+    expect(usage.series.map(point => point.calls)).toEqual([1, 0, 1]);
+    expect(usage.totals.calls).toBe(2);
+
+    const refused = await getMcpUsage(
+      admin(),
+      { window: '24h', from: '2026-01-01', to: '2026-11-03', by: 'tool' },
+      now
+    );
+    expect(refused.range).toBeNull();
+    expect(refused.rangeError).toMatch(/kept for 30 days/);
+    expect(refused.totals.calls).toBe(0);
+
+    const exported = await getMcpUsageExportRows(
+      admin(),
+      { window: '24h', from: '2026-11-01', to: '2026-11-03' },
+      now
+    );
+    expect(exported.rows).toHaveLength(2);
+    expect(exported.range).toEqual({ from: '2026-11-01', to: '2026-11-03' });
+    await expect(
+      getMcpUsageExportRows(admin(), { window: '24h', from: '2026-11-03', to: '2026-11-01' }, now)
+    ).rejects.toThrow('MCP_INVALID_USAGE_RANGE');
   });
 });

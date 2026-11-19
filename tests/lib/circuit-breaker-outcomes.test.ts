@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CircuitBreaker, CircuitBreakerTimeoutError } from '@/lib/circuit-breaker';
+import {
+  CircuitBreaker,
+  CircuitBreakers,
+  CircuitBreakerTimeoutError,
+  getAllCircuitStats,
+} from '@/lib/circuit-breaker';
 
 describe('circuit breaker provider outcomes', () => {
   afterEach(() => vi.useRealTimers());
@@ -85,5 +90,15 @@ describe('circuit breaker provider outcomes', () => {
       shouldCountFailure: result => result.statusCode >= 500,
     });
     expect(breaker.getState()).toBe('HALF_OPEN');
+  });
+});
+
+describe('webhook circuit breakers', () => {
+  it('isolates webhooks on the same host and keeps tokens out of the breaker name', () => {
+    const a = CircuitBreakers.webhook('https://discord.com/api/webhooks/1/secret-a');
+    const b = CircuitBreakers.webhook('https://discord.com/api/webhooks/2/secret-b');
+    expect(a).not.toBe(b);
+    expect(CircuitBreakers.webhook('https://discord.com/api/webhooks/1/secret-a')).toBe(a);
+    expect(Object.keys(getAllCircuitStats()).join(' ')).not.toContain('secret-a');
   });
 });

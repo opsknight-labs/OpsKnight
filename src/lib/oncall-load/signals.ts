@@ -39,7 +39,7 @@ export async function loadShiftRiskSignals(
       },
     }),
     // shortcut: one-off service windows only; a recurring window's next end is not expanded here.
-    client.maintenanceWindow.groupBy({
+    client.noiseMaintenanceWindow.groupBy({
       by: ['serviceId'],
       where: {
         serviceId: { in: ids },

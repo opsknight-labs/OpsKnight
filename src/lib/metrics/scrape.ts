@@ -212,7 +212,13 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         prisma.runbookExecution.groupBy({ by: ['status'], _count: { id: true } })
       ),
       collectWithTimeout('runbook-attempts', DB_COLLECTOR_TIMEOUT_MS, () =>
-        prisma.runbookStepAttempt.groupBy({ by: ['status'], _count: { id: true } })
+        prisma.runbookStepAttempt.groupBy({
+          by: ['status'],
+          // An UNKNOWN attempt superseded by a safe retry or resolved by an operator no longer
+          // needs attention; counting it would keep the critical alert firing forever.
+          where: { NOT: { status: 'UNKNOWN', executionStep: { status: { not: 'UNKNOWN' } } } },
+          _count: { id: true },
+        })
       ),
       collectWithTimeout('runbook-agents', DB_COLLECTOR_TIMEOUT_MS, () =>
         prisma.runbookAgent.groupBy({ by: ['status'], _count: { id: true } })

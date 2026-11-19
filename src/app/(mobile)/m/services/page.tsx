@@ -5,6 +5,8 @@ import MobileServicesClient from '@/components/mobile/MobileServicesClient';
 import { appRoutes } from '@/lib/app-routes';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { requirePageAccess } from '@/lib/access/server';
+import { findServicesInMaintenance } from '@/lib/service-maintenance/windows';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,15 +15,14 @@ export default async function MobileServicesPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  await requirePageAccess('/m/services');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/services'));
 
   const params = await searchParams;
   const query = params.q?.trim() || '';
   const incidentAccess = incidentReadWhere(context.actor);
-  const serviceWhere = query
-    ? { name: { contains: query, mode: 'insensitive' as const } }
-    : {};
+  const serviceWhere = query ? { name: { contains: query, mode: 'insensitive' as const } } : {};
 
   const services = await prisma.service.findMany({
     where: { AND: [serviceReadWhere(context.actor), serviceWhere] },
@@ -39,5 +40,18 @@ export default async function MobileServicesPage({
     },
   });
 
-  return <MobileServicesClient initialServices={services} query={query} />;
+  const inMaintenance = await findServicesInMaintenance(services.map(s => s.id));
+
+  return (
+    <MobileServicesClient
+      initialServices={services.map(service => ({
+        id: service.id,
+        name: service.name,
+        description: service.description,
+        _count: service._count,
+        maintenanceTitle: inMaintenance.get(service.id)?.title ?? null,
+      }))}
+      query={query}
+    />
+  );
 }

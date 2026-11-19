@@ -261,7 +261,10 @@ export default function AdhocRunbookLauncher({
                 </div>
                 {selected.hasWrite && (
                   <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-900 dark:text-amber-100">
-                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+                    <ShieldAlert
+                      className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                      aria-hidden
+                    />
                     This runbook can change systems. You must authorize the planned writes after
                     preview, and steps marked for approval wait for a responder with approval
                     rights.

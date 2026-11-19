@@ -1,9 +1,7 @@
 import { getLogBuffer } from '@/lib/logger';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,20 +12,9 @@ export default async function SystemLogsPage({
 }: {
   searchParams: Promise<{ level?: string; search?: string; component?: string }>;
 }) {
+  // Admin-only; checked against the database role (not the session token) by the page rule.
+  await requirePageAccess('/system-logs');
   const params = await searchParams;
-  const session = await getServerSession(await getAuthOptions());
-
-  if (!session?.user?.email) {
-    redirect('/login');
-    return null;
-  }
-
-  // Only admins can view logs
-  const user = session.user as { email: string; role?: string };
-  if (user.role !== 'ADMIN') {
-    redirect('/');
-    return null;
-  }
 
   // Get all logs from buffer (newest first)
   const allLogs = (getLogBuffer(500) || []).reverse();
@@ -81,7 +68,7 @@ export default async function SystemLogsPage({
     emoji: string;
   } = {
     variant: 'info',
-    border: 'border-l-slate-400',
+    border: 'border-l-ink-400',
     emoji: '📝',
   };
 
@@ -106,14 +93,16 @@ export default async function SystemLogsPage({
           className="glass-panel p-4 hover:shadow-md transition-shadow border-l-4 border-l-red-500"
         >
           <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Errors</div>
-          <div className="text-2xl font-extrabold tracking-tight text-red-600">{stats.errors}</div>
+          <div className="text-2xl font-extrabold tracking-tight text-red-600 dark:text-red-400">
+            {stats.errors}
+          </div>
         </Link>
         <Link
           href="/system-logs?level=warn"
           className="glass-panel p-4 hover:shadow-md transition-shadow border-l-4 border-l-yellow-500"
         >
           <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Warnings</div>
-          <div className="text-2xl font-extrabold tracking-tight text-yellow-600">
+          <div className="text-2xl font-extrabold tracking-tight text-yellow-600 dark:text-yellow-400">
             {stats.warnings}
           </div>
         </Link>
@@ -122,14 +111,16 @@ export default async function SystemLogsPage({
           className="glass-panel p-4 hover:shadow-md transition-shadow border-l-4 border-l-blue-500"
         >
           <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Info</div>
-          <div className="text-2xl font-extrabold tracking-tight text-blue-600">{stats.info}</div>
+          <div className="text-2xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400">
+            {stats.info}
+          </div>
         </Link>
         <Link
           href="/system-logs?level=debug"
           className="glass-panel p-4 hover:shadow-md transition-shadow border-l-4 border-l-gray-500"
         >
           <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Debug</div>
-          <div className="text-2xl font-extrabold tracking-tight text-gray-600">{stats.debug}</div>
+          <div className="text-2xl font-extrabold tracking-tight text-ink-600">{stats.debug}</div>
         </Link>
       </div>
 
@@ -149,7 +140,7 @@ export default async function SystemLogsPage({
           <select
             name="level"
             defaultValue={params.level || ''}
-            className="px-3 py-2 border border-border rounded-md bg-white text-sm"
+            className="px-3 py-2 border border-border rounded-md bg-card text-sm"
           >
             <option value="">All Levels</option>
             <option value="error">❌ Errors</option>
@@ -250,7 +241,9 @@ export default async function SystemLogsPage({
                       {log.message || '(no message)'}
                     </div>
                     {log.error?.message && (
-                      <div className="mt-1 text-xs text-red-600 truncate">{log.error.message}</div>
+                      <div className="mt-1 text-xs text-red-600 truncate dark:text-red-400">
+                        {log.error.message}
+                      </div>
                     )}
                   </div>
                 </summary>
@@ -272,7 +265,7 @@ export default async function SystemLogsPage({
                       <div className="font-semibold mb-1.5 text-muted-foreground uppercase tracking-wide">
                         Stack Trace
                       </div>
-                      <pre className="bg-red-50 p-2.5 rounded-md overflow-auto text-[10px] text-red-700 font-mono leading-relaxed border border-red-200">
+                      <pre className="bg-red-50 p-2.5 rounded-md overflow-auto text-[10px] text-red-700 font-mono leading-relaxed border border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/30">
                         {log.error.stack}
                       </pre>
                     </div>

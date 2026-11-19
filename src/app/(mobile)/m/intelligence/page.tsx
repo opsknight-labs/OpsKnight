@@ -17,6 +17,7 @@ import {
 } from '@/lib/intelligence/overview';
 import { assertCapability } from '@/lib/rbac';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,7 @@ export default async function MobileIntelligencePage({
 }: {
   searchParams?: Promise<{ window?: string | string[] }>;
 }) {
+  await requirePageAccess('/m/intelligence');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/intelligence'));
   await assertCapability(CAPABILITIES.INTELLIGENCE_READ);

@@ -1,4 +1,10 @@
 {
+  "GET /action-items [postmortems:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /audit-exports/{id}/download [audit:export]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
@@ -165,7 +171,7 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
-    "USER": "deny:MISSING_CAPABILITY"
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/alerts [incidents:read]": {
     "ADMIN": "allow:global",
@@ -207,7 +213,7 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
-    "USER": "deny:MISSING_CAPABILITY"
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/intelligence [incidents:read]": {
     "ADMIN": "allow:global",
@@ -225,7 +231,7 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
-    "USER": "deny:MISSING_CAPABILITY"
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/notification-attempts [incidents:read]": {
     "ADMIN": "allow:global",
@@ -249,7 +255,7 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
-    "USER": "deny:MISSING_CAPABILITY"
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/response-activity [incidents:read]": {
     "ADMIN": "allow:global",
@@ -478,6 +484,72 @@
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
+  },
+  "GET /maintenance-schedules/{id} [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "PATCH /maintenance-schedules/{id} [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /maintenance-schedules/{id} [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /maintenance-schedules [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "POST /maintenance-schedules [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /maintenance-windows/{id}/end [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /maintenance-windows/{id} [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "PATCH /maintenance-windows/{id} [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /maintenance-windows/{id} [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /maintenance-windows [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "POST /maintenance-windows [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
   },
   "GET /notification-providers/{provider}/diagnostics [notification-providers:read]": {
     "ADMIN": "allow:global",
@@ -1435,7 +1507,7 @@
   },
   "PATCH /services/{id}/notification-settings [services:write]": {
     "ADMIN": "allow:global",
-    "RESPONDER": "allow:global",
+    "RESPONDER": "allow:resource",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
@@ -1471,7 +1543,7 @@
   },
   "PATCH /services/{id} [services:write]": {
     "ADMIN": "allow:global",
-    "RESPONDER": "allow:global",
+    "RESPONDER": "allow:resource",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },

@@ -5,7 +5,7 @@ import { assignTeamServices } from '@/lib/teams/service-commands';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
-import { assertAdminOrResponder, assertAdmin, assertAdminOrTeamOwner } from '@/lib/rbac';
+import { assertAdminOrResponder, assertAdmin, assertTeamManager } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
@@ -16,6 +16,7 @@ import {
   requireMembershipCoordinates,
   requireTeamAccess,
   teamMemberInput,
+  findTeamDeletionBlocker,
 } from '@/lib/teams/administration';
 
 type TeamFormState = {
@@ -83,7 +84,7 @@ export async function createTeam(
 export async function updateTeam(teamId: string, formData: FormData) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrTeamOwner(teamId);
+    currentUser = await assertTeamManager(teamId);
   } catch (error) {
     return {
       error:
@@ -147,6 +148,8 @@ export async function deleteTeam(teamId: string) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
+  const blocker = await findTeamDeletionBlocker(teamId);
+  if (blocker) return { error: blocker };
   await prisma.$transaction([
     prisma.teamMember.deleteMany({
       where: { teamId },
@@ -189,7 +192,7 @@ export async function deleteTeam(teamId: string) {
 
 export async function addTeamMember(teamId: string, formData: FormData) {
   try {
-    const actor = await assertAdminOrTeamOwner(teamId);
+    const actor = await assertTeamManager(teamId);
     await setTeamMembership(
       teamId,
       String(formData.get('userId') ?? ''),
@@ -204,7 +207,7 @@ export async function addTeamMember(teamId: string, formData: FormData) {
 export async function updateTeamMemberRole(memberId: string, formData: FormData) {
   try {
     const member = await requireMembershipCoordinates(memberId);
-    const actor = await assertAdminOrTeamOwner(member.teamId);
+    const actor = await assertTeamManager(member.teamId);
     await patchTeamMembership(
       memberId,
       { role: teamMemberInput.shape.role.parse(formData.get('role') || 'MEMBER') },
@@ -221,7 +224,7 @@ export async function updateTeamMemberNotifications(
 ) {
   try {
     const member = await requireMembershipCoordinates(memberId);
-    const actor = await assertAdminOrTeamOwner(member.teamId);
+    const actor = await assertTeamManager(member.teamId);
     await patchTeamMembership(memberId, { receiveTeamNotifications: receiveNotifications }, actor);
     revalidateTeamAdministration(member.teamId);
   } catch (error) {
@@ -231,7 +234,7 @@ export async function updateTeamMemberNotifications(
 export async function removeTeamMember(memberId: string) {
   try {
     const member = await requireMembershipCoordinates(memberId);
-    const actor = await assertAdminOrTeamOwner(member.teamId);
+    const actor = await assertTeamManager(member.teamId);
     await removeTeamMembership(memberId, actor);
     revalidateTeamAdministration(member.teamId);
   } catch (error) {
@@ -243,7 +246,7 @@ export async function designateTeamLead(
   userId: string | null
 ): Promise<{ error?: string; success?: boolean }> {
   try {
-    const actor = await assertAdminOrTeamOwner(teamId);
+    const actor = await assertTeamManager(teamId);
     await setTeamLead(teamId, { userId }, actor);
     revalidateTeamAdministration(teamId);
     return { success: true };
@@ -264,7 +267,7 @@ export async function assignServicesToTeam(
   serviceIds: string[]
 ): Promise<{ error?: string; success?: boolean }> {
   try {
-    const actor = await assertAdminOrTeamOwner(teamId);
+    const actor = await assertTeamManager(teamId);
     await assignTeamServices(teamId, { serviceIds }, actor);
     revalidateTeamAdministration(teamId);
     return { success: true };

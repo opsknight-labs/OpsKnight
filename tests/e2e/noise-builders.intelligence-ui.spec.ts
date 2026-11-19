@@ -21,7 +21,7 @@ let alertAt = new Date();
 let sessionCookies: Awaited<ReturnType<BrowserContext['cookies']>> = [];
 
 async function cleanup() {
-  await prisma.maintenanceWindow.deleteMany({ where: { name: { startsWith: 'e2e-noise-' } } });
+  await prisma.noiseMaintenanceWindow.deleteMany({ where: { name: { startsWith: 'e2e-noise-' } } });
   if (adminId)
     await prisma.intelligenceEvaluationRun.deleteMany({ where: { createdById: adminId } });
   const services = { name: { startsWith: 'e2e-noise-' } };
@@ -156,7 +156,7 @@ test.describe.serial('noise-control builders', () => {
     await expect(form.getByText('Maintenance window saved.')).toBeVisible();
     const agenda = page.getByRole('list', { name: 'Maintenance agenda' });
     await expect(agenda.getByText(name).first()).toBeVisible();
-    const saved = await prisma.maintenanceWindow.findFirstOrThrow({ where: { name } });
+    const saved = await prisma.noiseMaintenanceWindow.findFirstOrThrow({ where: { name } });
     expect(saved.recurrence).toBe(
       `FREQ=WEEKLY;BYDAY=${['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][new Date(alertAt.getTime() - HOUR / 2).getUTCDay()]}`
     );

@@ -91,14 +91,17 @@ export function resetMcpAdmissionForTests() {
 /** Untrusted callers cannot spend another known peer's small OAuth quota. */
 export async function admitMcpOAuthRequest(
   request: Request,
-  endpoint: 'token' | 'revoke' | 'register' | 'device_authorization'
+  endpoint: 'token' | 'revoke' | 'register' | 'device_authorization',
+  // The token endpoint charges the peer first and the shared ceiling only after validation, and
+  // never for a credential this installation issued, so junk floods cannot lock out real clients.
+  options: { chargePeer?: boolean; chargeGlobal?: boolean } = {}
 ) {
   // Registration and device sign-in create rows from anonymous requests: a much smaller budget.
   const small = endpoint === 'register' || endpoint === 'device_authorization';
   const ip = getClientIp(request);
   // Next's direct Request does not expose the socket peer. Never trust a spoofable
   // header to invent one; such deployments share only the larger safety ceiling.
-  if (ip !== '0.0.0.0') {
+  if (options.chargePeer !== false && ip !== '0.0.0.0') {
     const peer = digestMcpSecret(`oauth-peer:${ip}`);
     requireMcp(
       (await checkRateLimit(`mcp:oauth:${endpoint}:peer:${peer}`, small ? 10 : 60, 60000)).allowed,
@@ -106,6 +109,7 @@ export async function admitMcpOAuthRequest(
       429
     );
   }
+  if (options.chargeGlobal === false) return;
   requireMcp(
     (await checkRateLimit(`mcp:oauth:${endpoint}:global`, small ? 60 : 2048, 60000)).allowed,
     'MCP_RATE_LIMITED',

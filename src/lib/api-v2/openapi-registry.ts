@@ -556,6 +556,94 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/maintenance-windows',
+    'listMaintenanceWindows',
+    'services:read',
+    'list',
+    'MaintenanceWindow'
+  ),
+  op(
+    'post',
+    '/maintenance-windows',
+    'createMaintenanceWindow',
+    'services:write',
+    'item',
+    'MaintenanceWindow'
+  ),
+  op(
+    'get',
+    '/maintenance-windows/{id}',
+    'getMaintenanceWindow',
+    'services:read',
+    'item',
+    'MaintenanceWindow'
+  ),
+  op(
+    'patch',
+    '/maintenance-windows/{id}',
+    'updateMaintenanceWindow',
+    'services:write',
+    'item',
+    'MaintenanceWindow'
+  ),
+  op(
+    'delete',
+    '/maintenance-windows/{id}',
+    'deleteMaintenanceWindow',
+    'services:write',
+    'none',
+    ''
+  ),
+  op(
+    'post',
+    '/maintenance-windows/{id}/end',
+    'endMaintenanceWindow',
+    'services:write',
+    'item',
+    'MaintenanceWindow'
+  ),
+  op(
+    'get',
+    '/maintenance-schedules',
+    'listMaintenanceSchedules',
+    'services:read',
+    'list',
+    'MaintenanceSchedule'
+  ),
+  op(
+    'post',
+    '/maintenance-schedules',
+    'createMaintenanceSchedule',
+    'services:write',
+    'item',
+    'MaintenanceSchedule'
+  ),
+  op(
+    'get',
+    '/maintenance-schedules/{id}',
+    'getMaintenanceSchedule',
+    'services:read',
+    'item',
+    'MaintenanceSchedule'
+  ),
+  op(
+    'patch',
+    '/maintenance-schedules/{id}',
+    'updateMaintenanceSchedule',
+    'services:write',
+    'item',
+    'MaintenanceSchedule'
+  ),
+  op(
+    'delete',
+    '/maintenance-schedules/{id}',
+    'deleteMaintenanceSchedule',
+    'services:write',
+    'none',
+    ''
+  ),
+  op(
+    'get',
     '/service-objectives/catalog',
     'getServiceObjectiveCatalog',
     'service-objectives:read',
@@ -1856,6 +1944,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('delete', '/postmortems/{id}', 'deletePostmortem', 'postmortems:write', 'none', ''),
   op('get', '/postmortems', 'listPostmortems', 'postmortems:read', 'list', 'Postmortem'),
   op('post', '/postmortems', 'createPostmortem', 'postmortems:write', 'item', 'Postmortem'),
+  op('get', '/action-items', 'listActionItems', 'postmortems:read', 'list', 'ActionItemSummary'),
   op('get', '/reports/metrics', 'getMetricsReport', 'reports:read', 'item', 'MetricsReport'),
   op('get', '/reports/catalog', 'getReportCatalog', 'reports:read', 'item', 'ReportCatalog'),
   op('post', '/reports/query', 'queryReportMetrics', 'reports:read', 'item', 'ReportQueryResult'),

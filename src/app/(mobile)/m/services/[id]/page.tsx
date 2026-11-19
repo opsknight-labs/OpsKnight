@@ -17,6 +17,15 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { requirePageAccess } from '@/lib/access/server';
+import { assertCanModifyService } from '@/lib/rbac';
+import {
+  listServiceMaintenanceOverview,
+  maintenanceWindowPhase,
+} from '@/lib/service-maintenance/windows';
+import MobileServiceMaintenance, {
+  type MobileMaintenanceWindow,
+} from '@/components/mobile/MobileServiceMaintenance';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +35,7 @@ type PageProps = {
 };
 
 export default async function MobileServiceDetailPage({ params, searchParams }: PageProps) {
+  await requirePageAccess('/m/services/[id]');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/services'));
 
@@ -67,6 +77,29 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
   if (!service) notFound();
   if ((await searchParams)?.tab === 'automation') redirect(`/m/services/${service.id}/automation`);
   const isOperational = service._count.incidents === 0;
+
+  // Same check as the desktop service page: managers are whoever may modify the service.
+  let canManageService = false;
+  try {
+    await assertCanModifyService(service.id);
+    canManageService = true;
+  } catch {
+    // Viewable, but this user cannot change the service.
+  }
+  const now = new Date();
+  const maintenanceWindows: MobileMaintenanceWindow[] = [];
+  for (const w of await listServiceMaintenanceOverview(service.id, now)) {
+    const phase = maintenanceWindowPhase(w, now);
+    if (phase === 'ENDED') continue;
+    maintenanceWindows.push({
+      id: w.id,
+      title: w.title,
+      phase,
+      startsAt: w.startsAt.toISOString(),
+      endsAt: w.endsAt.toISOString(),
+      heldCount: w._count.heldIncidents,
+    });
+  }
 
   return (
     <div className="responsive-page space-y-4 pb-12">
@@ -117,6 +150,11 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
           <Detail label="Escalation policy" value={service.policy?.name || 'None'} />
         </div>
       </section>
+      <MobileServiceMaintenance
+        serviceId={service.id}
+        canManage={canManageService}
+        windows={maintenanceWindows}
+      />
       {hasCapability(context.actor.role, 'automation.read') && (
         <MobileAutomationPanel
           serviceId={service.id}

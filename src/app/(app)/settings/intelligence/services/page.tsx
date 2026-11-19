@@ -9,6 +9,7 @@ import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { listServicePolicyOverview } from '@/lib/intelligence/settings/service';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -36,6 +37,7 @@ export default async function IntelligenceServicesPage({
 }: {
   searchParams?: Promise<{ q?: string }>;
 }) {
+  await requirePageAccess('/settings/intelligence/services');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
   const q = ((await searchParams)?.q ?? '').slice(0, 100);

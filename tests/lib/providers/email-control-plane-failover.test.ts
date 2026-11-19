@@ -198,6 +198,53 @@ describe('Control Plane Email Provider Failover', () => {
     });
   });
 
+  describe('Definitive SMTP rejection is not an ambiguous outcome', () => {
+    it('does not park a mapped SMTP 550 "User unknown" in UNKNOWN', async () => {
+      const payload = {
+        kind: 'EMAIL' as const,
+        to: 'nobody@example.com',
+        subject: 'Database high load',
+        html: '<p>High load</p>',
+        emailRoute: ['smtp'],
+      };
+      vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'notif-smtp-550',
+        status: 'PENDING',
+        category: 'INCIDENT',
+        trafficClass: 'CRITICAL',
+        attempts: 0,
+        maxAttempts: 3,
+        scheduledAt: new Date(Date.now() - 1000),
+        nextAttemptAt: new Date(Date.now() - 1000),
+        expiresAt: new Date(Date.now() + 60000),
+        createdAt: new Date(),
+        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+        sourceType: 'incident',
+        sourceId: 'inc-1',
+        recipientId: 'user-1',
+        templateKey: 'incident-alert',
+        claimToken: null,
+        fanoutId: null,
+      } as never);
+      vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
+        { provider: 'smtp', enabled: true, host: 'smtp.example.com', fromEmail: 'ops@example.com' },
+      ] as never);
+      mocks.sendEmail.mockResolvedValueOnce({
+        success: false,
+        error: "Can't send mail - all recipients were rejected: 550 5.1.1 User unknown",
+        statusCode: 422,
+        errorCode: 'EENVELOPE',
+      });
+
+      await deliverCentralNotification('notif-smtp-550');
+
+      expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+      expect(prismaMocks.notificationUpdateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'UNKNOWN' }) })
+      );
+    });
+  });
+
   describe('Ambiguous timeout never causes second provider send', () => {
     it('halts and marks notification UNKNOWN when primary provider encounters ambiguous ETIMEDOUT', async () => {
       const payload = {

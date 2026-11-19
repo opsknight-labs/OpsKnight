@@ -30,6 +30,7 @@ import {
   listSuppressionRules,
   suggestSuppressionRules,
 } from '@/lib/intelligence/noise-controls';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -50,6 +51,7 @@ export default async function NoiseControlsPage({
 }: {
   searchParams: Promise<{ service?: string }>;
 }) {
+  await requirePageAccess('/settings/intelligence/noise-controls');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
   const actor = await getCurrentAuthorizationActor();
@@ -183,7 +185,7 @@ export default async function NoiseControlsPage({
 
       <SettingsSection
         id="maintenance-windows"
-        title="Maintenance windows"
+        title="Noise maintenance rules"
         description="Alerts in a window are stored and visible but never page (or page at a lower urgency). Windows can repeat (weekly, weekdays, weekends, monthly or a custom RRULE) and can be ended early. Test a window against the last 7 days before saving it."
       >
         <MaintenanceWindowsPanel

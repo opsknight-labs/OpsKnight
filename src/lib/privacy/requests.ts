@@ -185,6 +185,34 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
       });
     }
 
+    // Automated requests are only complete once the engine actually fulfilled them;
+    // marking them COMPLETED otherwise would close a DSAR with the subject's data untouched.
+    if (parsed.toStatus === 'COMPLETED' && current.subjectType === 'USER') {
+      let fulfilled = true;
+      if (isAutomatedErasureRequest(current)) {
+        const execution = await tx.privacyErasureExecution.findUnique({
+          where: { requestId: current.id },
+          select: { status: true },
+        });
+        fulfilled = execution?.status === 'COMPLETED';
+      } else if (isAutomatedPrivacyRequestType(current.requestType)) {
+        fulfilled =
+          (await tx.privacyExportArtifact.count({
+            where: { requestId: current.id, status: { in: ['READY', 'DOWNLOADED'] } },
+          })) > 0;
+      }
+      if (!fulfilled) {
+        throw new AppError({
+          code: 'PRIVACY_REQUEST_INVALID_TRANSITION',
+          userMessage:
+            current.requestType === 'ERASURE'
+              ? 'Run the erasure to completion before marking this request completed.'
+              : 'Generate the subject export before marking this request completed.',
+          details: { from: current.status, to: parsed.toStatus, reason: 'NOT_FULFILLED' },
+        });
+      }
+    }
+
     const now = new Date();
     const data: Record<string, unknown> = { status: parsed.toStatus };
     if (parsed.notes !== undefined) data.notes = parsed.notes;

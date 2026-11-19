@@ -75,16 +75,17 @@ it('commits membership, session revocation, notification, audit and concurrent s
     }),
   });
 });
-it('requires current ownership rather than team membership or credential scope alone', async () => {
+it('requires team management (owner or team admin), not membership or credential scope alone', async () => {
   const { team, target } = await fixture();
-  for (const role of ['USER', 'RESPONDER', 'AUDITOR'] as const) {
+  // Plain members and read-only auditors (even as owners) cannot manage the team.
+  for (const [role, teamRole] of [
+    ['USER', 'MEMBER'],
+    ['RESPONDER', 'MEMBER'],
+    ['AUDITOR', 'OWNER'],
+  ] as const) {
     const member = await createV2Credential(['teams:read', 'teams:write'], role);
     await db.teamMember.create({
-      data: {
-        teamId: team.id,
-        userId: member.user.id,
-        role: role === 'AUDITOR' ? 'OWNER' : 'ADMIN',
-      },
+      data: { teamId: team.id, userId: member.user.id, role: teamRole },
     });
     const current = await db.team.findUniqueOrThrow({ where: { id: team.id } });
     expect(
@@ -92,6 +93,16 @@ it('requires current ownership rather than team membership or credential scope a
     ).toBe(403);
   }
   expect(await db.teamMember.count({ where: { userId: target.id } })).toBe(0);
+  // A team admin may add members.
+  const teamAdmin = await createV2Credential(['teams:read', 'teams:write'], 'USER');
+  await db.teamMember.create({
+    data: { teamId: team.id, userId: teamAdmin.user.id, role: 'ADMIN' },
+  });
+  const current = await db.team.findUniqueOrThrow({ where: { id: team.id } });
+  expect(
+    (await put(teamAdmin.token, team.id, target.id, current.revision, 'team-admin')).status
+  ).toBe(200);
+  expect(await db.teamMember.count({ where: { userId: target.id } })).toBe(1);
 });
 it('requires scopes even for an organization administrator and rejects unrelated-team IDOR', async () => {
   const { owner, team, target } = await fixture();

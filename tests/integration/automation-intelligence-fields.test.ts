@@ -74,7 +74,7 @@ async function setup(switchOn: boolean) {
     expectedActiveVersionId: version.id,
   });
   const now = Date.now();
-  await db.maintenanceWindow.create({
+  await db.noiseMaintenanceWindow.create({
     data: {
       name: 'Patching',
       scope: 'SERVICE',

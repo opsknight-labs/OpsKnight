@@ -5,11 +5,7 @@ export type SettingsNavItem = {
   href: string;
   icon: string;
   keywords?: string[];
-  requiresAdmin?: boolean;
-  requiresAdminOrAuditor?: boolean;
-  /** Admins, auditors and responders: everyone who may view a read-only settings area. */
-  requiresResponderOrAuditor?: boolean;
-  requiresResponder?: boolean;
+  /** Visibility comes from the page access registry (`@/lib/access/pages`) using `href`. */
   badge?: string;
 };
 
@@ -65,6 +61,32 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         icon: 'shield',
         keywords: ['password', 'sessions', 'mfa', 'security', 'auth'],
       },
+      {
+        id: 'my-access',
+        label: 'My Access',
+        description: 'Your role, teams and permissions, temporary access, and access requests',
+        href: '/settings/access',
+        icon: 'key',
+        keywords: ['access', 'permissions', 'role', 'request access', 'why can’t i', 'denied'],
+      },
+      {
+        id: 'access-requests',
+        label: 'Access Requests',
+        description: 'Review requests from people who need access to your teams or a new role',
+        href: '/settings/access/requests',
+        icon: 'users',
+        keywords: ['approve', 'access request', 'grant', 'join team'],
+      },
+      {
+        id: 'access-admin',
+        label: 'Access Management',
+        description:
+          'Roles, custom roles, access checker, access reviews, emergency access and policy',
+        href: '/settings/access/admin',
+        icon: 'shield',
+        badge: 'Admin',
+        keywords: ['rbac', 'custom role', 'access review', 'break glass', 'who has access'],
+      },
     ],
   },
   {
@@ -79,7 +101,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'Configure alert classification, priority and urgency semantics, and immutable incident response SLA targets',
         href: '/settings/incident-sla',
         icon: 'activity',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: [
           'sla',
@@ -108,8 +129,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'Similar incidents, correlation, possible causes, insights and the AI assistant. Off by default and never on the paging path',
         href: '/settings/intelligence',
         icon: 'activity',
-        // Matches the pages: anyone with intelligence.read may view them; only admins change anything.
-        requiresResponderOrAuditor: true,
         keywords: [
           'aiops',
           'intelligence',
@@ -131,7 +150,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Define custom incident metadata, dropdown attributes, and validation rules',
         href: '/settings/custom-fields',
         icon: 'list',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['metadata', 'incident', 'fields', 'custom'],
       },
@@ -141,7 +159,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Customize public status page appearance, custom domains, and announcements',
         href: '/settings/status-pages',
         icon: 'globe',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['public', 'status', 'branding', 'domain'],
       },
@@ -151,7 +168,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Generate, rotate, and manage programmatic API keys and integration tokens',
         href: '/settings/api-keys',
         icon: 'key',
-        requiresAdmin: false,
         keywords: ['token', 'automation', 'api', 'keys', 'rest'],
       },
       {
@@ -160,7 +176,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Inspect workspace change logs, security events, and compliance audit trail',
         href: '/audit',
         icon: 'activity',
-        requiresAdminOrAuditor: true,
         badge: 'Admin / Auditor',
         keywords: ['audit', 'history', 'events', 'compliance', 'security'],
       },
@@ -171,7 +186,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'Review control readiness, privacy inventory, CRA posture, and evidence sources',
         href: '/settings/security-compliance',
         icon: 'shield-check',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['compliance', 'privacy', 'cra', 'gdpr', 'soc 2', 'iso', 'evidence', 'sbom'],
       },
@@ -181,7 +195,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Track and fulfil data subject access, portability, and other DSAR requests',
         href: '/settings/privacy-requests',
         icon: 'shield',
-        requiresAdminOrAuditor: true,
         badge: 'Admin / Auditor',
         keywords: ['privacy', 'dsar', 'gdpr', 'access request', 'export', 'erasure', 'subject'],
       },
@@ -198,7 +211,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Connect Slack OAuth workspace for automatic incident alert broadcast',
         href: '/settings/integrations/slack',
         icon: 'slack',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['alerts', 'channels', 'slack', 'bot', 'broadcast'],
       },
@@ -208,7 +220,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Connect Azure AD app to broadcast incident Adaptive Cards to Teams channels',
         href: '/settings/integrations/microsoft-teams',
         icon: 'microsoft-teams',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['alerts', 'channels', 'teams', 'microsoft', 'entra', 'adaptive card'],
       },
@@ -219,7 +230,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'Auto-create dedicated Slack channels and conference bridges for critical incidents',
         href: '/settings/integrations/chatops',
         icon: 'message-circle',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['war room', 'channel', 'chatops', 'slack', 'video', 'bridge'],
       },
@@ -248,7 +258,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Create and sync incident remediation work and action items in Jira',
         href: '/settings/integrations/jira',
         icon: 'jira',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['jira', 'tickets', 'issues', 'atlassian', 'sync', 'action items'],
       },
@@ -266,7 +275,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'Inspect database health, background jobs and queues, scheduler state, notification delivery, and SLA monitors',
         href: '/settings/system/health',
         icon: 'activity',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: [
           'health',
@@ -286,7 +294,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'Application base URL, data retention periods, and general platform parameters',
         href: '/settings/system',
         icon: 'settings',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['app url', 'providers', 'retention', 'data'],
       },
@@ -297,7 +304,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'Inspect real-time application logs, runtime errors, and component diagnostics',
         href: '/system-logs',
         icon: 'terminal',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: [
           'logs',
@@ -316,7 +322,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Configure Twilio SMS, AWS SNS, WhatsApp Business, and Web Push VAPID keys',
         href: '/settings/notifications',
         icon: 'bell',
-        requiresAdmin: true,
         badge: 'Admin',
         keywords: ['twilio', 'push', 'sms', 'whatsapp', 'vapid', 'sns'],
       },
@@ -326,7 +331,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Workspace delivery health, failures, and retries',
         href: '/settings/notifications/operations',
         icon: 'activity',
-        requiresAdminOrAuditor: true,
         badge: 'Admin/Auditor',
         keywords: ['delivery', 'operations', 'failures', 'retries', 'dead letter'],
       },

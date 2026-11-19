@@ -344,6 +344,10 @@ describe('Runbook Presentation Summaries', () => {
 
     const health = await getRunbookHealthSummary();
     expect(health.health).toBe('HEALTHY');
+    // Superseded UNKNOWN attempts (safe retry succeeded) must not keep health DEGRADED forever.
+    expect(mockPrisma.runbookStepAttempt.count).toHaveBeenCalledWith({
+      where: { status: 'UNKNOWN', executionStep: { status: 'UNKNOWN' } },
+    });
   });
 
   it('getRunbookHealthSummary evaluates UNKNOWN when zero agents are enrolled', async () => {

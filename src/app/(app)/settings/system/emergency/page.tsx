@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import SettingsPageHeader from '@/components/settings/SettingsPageHeader';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export default async function EmergencyAdministrationPage() {
+  await requirePageAccess('/settings/system/emergency');
   const actor = await getControlActor();
   const origin = await authenticationOrigin();
   return (

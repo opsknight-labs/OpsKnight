@@ -19,6 +19,7 @@ import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import { MCP_CATALOG, isMcpExecutable, mcpContractHash } from '@/lib/mcp/catalog';
 import { mcpHttpError } from '@/lib/mcp/auth/http';
 import { logger } from '@/lib/logger';
+import { AppError } from '@/lib/errors';
 import prisma from '@/lib/prisma';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 
@@ -297,7 +298,10 @@ describe('A4: structured errors', () => {
     expect(error.domainCode).toBe('VALIDATION_FAILED');
     expect(error.fields).toEqual([{ field: 'body.title', code: 'too_small' }]);
     const text = toolErrorText(error);
-    expect(text).toBe('MCP_DOMAIN_REJECTED (VALIDATION_FAILED): Not retryable.');
+    // A static hint per registered code says what to do; the problem's own text never appears.
+    expect(text).toMatch(/^MCP_DOMAIN_REJECTED \(VALIDATION_FAILED\): A value is out of range/);
+    expect(text).toMatch(/ Not retryable\.$/);
+    expect(text).not.toMatch(/Secret|leaked|secret value/);
     const content = toolErrorContent(error, 'req-9');
     expect(content).toEqual({
       error: {
@@ -305,6 +309,7 @@ describe('A4: structured errors', () => {
         domainCode: 'VALIDATION_FAILED',
         fields: [{ field: 'body.title', code: 'too_small' }],
         retryable: false,
+        hint: expect.stringContaining('describe_operation'),
         requestId: 'req-9',
       },
     });
@@ -639,6 +644,40 @@ describe('E1: unexpected tool errors are logged without arguments', () => {
       prismaCode: 'P2024',
     });
     expect(JSON.stringify(log.mock.calls)).not.toContain('secret-arg');
+  });
+
+  it('tells the caller what is wrong when a step throws a validation or domain error, without logging it as ours', async () => {
+    const log = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const invalid = Object.assign(new Error('Secret detail value'), {
+      name: 'ZodError',
+      issues: [{ path: ['runbookId'], code: 'invalid_string', message: 'Secret detail value' }],
+    });
+    vi.spyOn(prisma.user, 'findUnique').mockRejectedValueOnce(invalid);
+    const bad = await callTool('whoami', {});
+    expect(bad.isError).toBe(true);
+    expect(bad.content[0].text).toContain('/runbookId are not valid (invalid_string)');
+    expect(bad.content[0].text).not.toContain('Secret detail');
+    expect(errorMeta(bad)).toMatchObject({ code: 'MCP_INVALID_ARGUMENTS' });
+    // A registered 4xx domain rule is the caller's too: its code is passed on, nothing is retried.
+    vi.spyOn(prisma.user, 'findUnique').mockRejectedValueOnce(
+      new AppError({ code: 'IDEMPOTENCY_KEY_CONFLICT' })
+    );
+    const conflict = await callTool('whoami', {});
+    expect(conflict.content[0].text).toContain('MCP_DOMAIN_REJECTED (IDEMPOTENCY_KEY_CONFLICT)');
+    expect(conflict.content[0].text).not.toMatch(/Retryable\./);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('answers a database serialization conflict as a retryable contention, not an internal error', async () => {
+    vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    vi.spyOn(prisma.user, 'findUnique').mockRejectedValueOnce(
+      Object.assign(new Error('could not serialize access'), { code: 'P2034' })
+    );
+    const result = await callTool('whoami', {});
+    expect(result.isError).toBe(true);
+    expect(errorMeta(result)).toMatchObject({ code: 'MCP_CONTENTION', retryable: true });
+    expect(result.content[0].text).toContain('try again with the same idempotencyKey');
+    expect(result.content[0].text).not.toContain('could not serialize');
   });
 
   it('does not log an expected refusal', async () => {

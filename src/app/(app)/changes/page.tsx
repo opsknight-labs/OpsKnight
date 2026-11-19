@@ -17,6 +17,7 @@ import {
 } from '@/lib/intelligence/lists/contract';
 import { loadSection } from '@/lib/intelligence/overview';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -32,6 +33,7 @@ export default async function ChangesPage({
 }: {
   searchParams?: Promise<Record<string, ListParam>>;
 }) {
+  await requirePageAccess('/changes');
   await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const actor = await getCurrentAuthorizationActor();
   const filters = parseChangeListFilters((await searchParams) ?? {});

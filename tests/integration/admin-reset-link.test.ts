@@ -18,12 +18,14 @@ const mockPrisma = vi.hoisted(() => ({
   $transaction: vi.fn(),
 }));
 const mockAssertAdmin = vi.hoisted(() => vi.fn());
+const mockAssertPermanentAdmin = vi.hoisted(() => vi.fn());
 const mockCheckRateLimit = vi.hoisted(() => vi.fn());
 const mockIssuePasswordResetToken = vi.hoisted(() => vi.fn());
 const mockIssueUserInviteToken = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/rbac', () => ({
   assertAdmin: mockAssertAdmin,
+  assertPermanentAdminForAdminTargets: mockAssertPermanentAdmin,
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -56,6 +58,7 @@ describe('API: Admin Generate Reset Link', () => {
       role: 'ADMIN',
       status: 'ACTIVE',
     });
+    mockAssertPermanentAdmin.mockResolvedValue(undefined);
     mockCheckRateLimit.mockResolvedValue(undefined);
     mockIssuePasswordResetToken.mockResolvedValue({
       token: 'admin-reset-token-12345678901234567890123456789012',
@@ -163,6 +166,33 @@ describe('API: Admin Generate Reset Link', () => {
     const data = await res.json();
     expect(res.status).toBe(403);
     expect(data.code).toBe('AUTHORIZATION_DENIED');
+  });
+
+  it('refuses a reset link for an admin account unless the caller is an assigned admin', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'other-admin',
+      email: 'root@example.com',
+      status: 'ACTIVE',
+    });
+    mockAssertPermanentAdmin.mockRejectedValue(
+      new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'Only an assigned administrator can change administrator accounts.',
+      })
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/admin/generate-reset-link', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'other-admin' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    expect(mockAssertPermanentAdmin).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'admin-id' }),
+      ['other-admin']
+    );
+    expect(mockIssuePasswordResetToken).not.toHaveBeenCalled();
   });
 
   it('maps password-reset rate limiting by typed code instead of matching error text', async () => {

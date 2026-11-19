@@ -10,10 +10,11 @@ import { disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { validatePasswordStrength } from '@/lib/passwords';
 import { getPushConfig } from '@/lib/notification-providers';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import { isValidTimeZone } from '@/lib/timezone';
-import { CAPABILITIES, hasCapability, isApiScope } from '@/lib/authorization';
+import { CAPABILITIES, isApiScope, capabilitiesOf } from '@/lib/authorization';
 import { getCurrentUser } from '@/lib/rbac';
 import {
   createServiceAccount,
@@ -286,6 +287,34 @@ export async function sendTestNotification(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await getCurrentUser();
+
+    // Phone channels bill the workspace's provider account: only test a channel the
+    // user has switched on, and cap test sends per user (minute burst + hourly).
+    const phoneChannelEnabled = {
+      SMS: user.smsNotificationsEnabled,
+      VOICE: user.voiceNotificationsEnabled,
+      WHATSAPP: user.whatsappNotificationsEnabled,
+    } as const;
+    if (
+      channel in phoneChannelEnabled &&
+      !phoneChannelEnabled[channel as keyof typeof phoneChannelEnabled]
+    ) {
+      return {
+        success: false,
+        error: `Enable ${channel === 'WHATSAPP' ? 'WhatsApp' : channel.toLowerCase()} notifications before sending a test.`,
+      };
+    }
+    const [burst, hourly] = await Promise.all([
+      checkRateLimit(`test-notification:${user.id}`, 5, 60_000),
+      checkRateLimit(`test-notification-hour:${user.id}`, 20, 60 * 60_000),
+    ]);
+    if (!burst.allowed || !hourly.allowed) {
+      return {
+        success: false,
+        error: 'Too many test notifications. Please wait before sending another.',
+      };
+    }
+
     const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
     const crypto = await import('crypto');
 
@@ -616,7 +645,10 @@ export async function revokeApiKey(formData: FormData) {
     where: { id: keyId },
     select: { id: true, userId: true, tokenHash: true },
   });
-  if (!key || (user.role !== 'ADMIN' && key.userId !== user.id)) {
+  if (
+    !key ||
+    (!capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE) && key.userId !== user.id)
+  ) {
     throw new Error('API key not found or you do not have permission to revoke it.');
   }
 
@@ -658,7 +690,7 @@ export async function createServiceAccountAction(
 ): Promise<ActionState> {
   try {
     const user = await getCurrentUser();
-    if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+    if (!capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE)) {
       return { error: 'Only administrators can create service accounts.' };
     }
 
@@ -693,7 +725,7 @@ export async function issueServiceAccountTokenAction(
 ): Promise<ActionState> {
   try {
     const user = await getCurrentUser();
-    if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+    if (!capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE)) {
       return { error: 'Only administrators can issue service account tokens.' };
     }
 
@@ -738,7 +770,7 @@ export async function revokeServiceAccountTokenAction(formData: FormData) {
   if (!serviceAccountId || !tokenId) return;
 
   const user = await getCurrentUser();
-  if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+  if (!capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE)) {
     throw new Error('Only administrators can revoke service account tokens.');
   }
 
@@ -751,7 +783,7 @@ export async function deleteServiceAccountAction(formData: FormData) {
   if (!serviceAccountId) return;
 
   const user = await getCurrentUser();
-  if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+  if (!capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE)) {
     throw new Error('Only administrators can delete service accounts.');
   }
 

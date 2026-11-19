@@ -113,6 +113,8 @@ export type LiveDashboardContextValue = {
   currentUserId: string;
   currentUserName: string;
   canAcknowledge: boolean;
+  /** Whether the viewer may acknowledge this specific incident (scoped users: their own). */
+  canAcknowledgeIncident: (incident: LiveIncident) => boolean;
   canAssignSelf: boolean;
   busyMap: Record<string, 'ack' | 'assign'>;
   acknowledgeIncident: (incident: LiveIncident) => Promise<void>;
@@ -255,6 +257,7 @@ export function LiveDashboardProvider({
   currentUserId,
   currentUserName = '',
   canAcknowledge = false,
+  acknowledgeScope = null,
   canAssignSelf = false,
   persistQuery = true,
   children,
@@ -263,6 +266,11 @@ export function LiveDashboardProvider({
   currentUserId: string;
   currentUserName?: string;
   canAcknowledge?: boolean;
+  /**
+   * Null when the viewer may acknowledge any visible incident. Otherwise only incidents assigned
+   * to them or on their teams (the server re-checks every action, including on-call relations).
+   */
+  acknowledgeScope?: { teamIds: readonly string[] } | null;
   canAssignSelf?: boolean;
   /** Shared displays (wallboards) are driven by their URL, never by a personal saved view. */
   persistQuery?: boolean;
@@ -387,9 +395,11 @@ export function LiveDashboardProvider({
 
   const notifyNewCritical = useCallback((incidents: LiveIncident[]) => {
     if (!alertsRef.current || incidents.length === 0) return;
-    if (document.visibilityState === 'visible') return;
+    // The user opted in, so the tone always plays (wallboards stay visible and focused); the
+    // system notification is only for when nobody is looking at this window.
     playAlertTone();
-    if ('Notification' in window && Notification.permission === 'granted') {
+    const watching = document.visibilityState === 'visible' && document.hasFocus();
+    if (!watching && 'Notification' in window && Notification.permission === 'granted') {
       const [first] = incidents;
       const notification = new Notification(
         incidents.length === 1
@@ -706,7 +716,10 @@ export function LiveDashboardProvider({
 
   useEffect(() => {
     const safety = setInterval(() => {
-      if (document.visibilityState === 'visible') void reconcileRef.current('safety');
+      // A hidden tab has no realtime stream; keep polling only when critical alerts are on.
+      if (document.visibilityState === 'visible' || alertsRef.current) {
+        void reconcileRef.current('safety');
+      }
     }, SAFETY_RECONCILE_MS);
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
@@ -1037,11 +1050,27 @@ export function LiveDashboardProvider({
 
   useEffect(() => () => olderAbortRef.current?.abort(), []);
 
+  const acknowledgeTeams = acknowledgeScope?.teamIds;
+  const canAcknowledgeIncident = useCallback(
+    (incident: LiveIncident) => {
+      if (!canAcknowledge) return false;
+      if (!acknowledgeTeams) return true;
+      if (incident.assignee?.id === currentUserId) return true;
+      const teams = new Set(acknowledgeTeams);
+      return Boolean(
+        (incident.service.teamId && teams.has(incident.service.teamId)) ||
+        (incident.team?.id && teams.has(incident.team.id))
+      );
+    },
+    [canAcknowledge, acknowledgeTeams, currentUserId]
+  );
+
   const value = useMemo<LiveDashboardContextValue>(
     () => ({
       currentUserId,
       currentUserName,
       canAcknowledge,
+      canAcknowledgeIncident,
       canAssignSelf,
       busyMap,
       acknowledgeIncident,
@@ -1083,6 +1112,7 @@ export function LiveDashboardProvider({
       currentUserId,
       currentUserName,
       canAcknowledge,
+      canAcknowledgeIncident,
       canAssignSelf,
       busyMap,
       acknowledgeIncident,

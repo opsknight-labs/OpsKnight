@@ -11,6 +11,7 @@ import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { KIND_CAPABILITIES } from '@/lib/intelligence/connectors/contract';
 import { listObservabilityConnections } from '@/lib/intelligence/connectors/service';
 import { listMetricTemplates } from '@/lib/intelligence/metric-anomaly/service';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -27,6 +28,7 @@ async function safely<T>(label: string, load: () => Promise<T>): Promise<T | nul
 }
 
 export default async function MetricTemplatesPage() {
+  await requirePageAccess('/settings/intelligence/response/metrics');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
 

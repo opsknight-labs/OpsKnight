@@ -87,7 +87,7 @@ const DashboardWidgetToggle = memo(function DashboardWidgetToggle({
     return (
       <div
         className="glass-panel"
-        style={{ background: 'white', padding: '1rem', opacity: 0.6 }}
+        style={{ background: 'hsl(var(--ui-card))', padding: '1rem', opacity: 0.6 }}
         role="region"
         aria-label={`${title} widget (hidden)`}
       >

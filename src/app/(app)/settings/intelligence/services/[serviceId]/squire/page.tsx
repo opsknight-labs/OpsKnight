@@ -11,6 +11,7 @@ import {
   getSquireMemorySettings,
   getSquireServicePolicy,
 } from '@/lib/intelligence/memory/settings';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -20,6 +21,7 @@ export default async function ServiceSquirePage({
 }: {
   params: Promise<{ serviceId: string }>;
 }) {
+  await requirePageAccess('/settings/intelligence/services/[serviceId]/squire');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
   const { serviceId } = await params;

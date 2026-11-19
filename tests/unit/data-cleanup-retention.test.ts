@@ -179,6 +179,14 @@ describe('Data Cleanup Retention Logic', () => {
     expect(alertDiffDays).toBe(7);
   });
 
+  it('never deletes audit logs younger than the 365-day floor, even with 1-day log retention', async () => {
+    await performDataCleanup(true, { logRetentionDays: 1 });
+    const days = (where: { createdAt: { lt: Date } }) =>
+      Math.round((Date.now() - where.createdAt.lt.getTime()) / (24 * 60 * 60 * 1000));
+    expect(days(mockPrisma.auditLog.count.mock.calls[0][0].where)).toBe(365);
+    expect(days(mockPrisma.inAppNotification.count.mock.calls[0][0].where)).toBe(1);
+  });
+
   it('uses incidentCutoff in incident event check so incidents are not blocked by logRetentionDays', async () => {
     await performDataCleanup(true, {
       incidentRetentionDays: 60,
@@ -208,7 +216,7 @@ describe('Data Cleanup Retention Logic', () => {
   });
 
   it('cascades deletion across all incident relations before deleting incidents', async () => {
-    const mockTx: Record<string, any> = {
+    const mockTx = {
       $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
       externalIssueLink: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
       actionItem: { deleteMany: vi.fn().mockResolvedValue({ count: 2 }) },

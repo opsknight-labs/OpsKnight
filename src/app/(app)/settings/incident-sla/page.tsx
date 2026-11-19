@@ -3,10 +3,12 @@ import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 import { getSlaSchedulerMode } from '@/lib/incident-sla/scheduler-control';
 import IncidentSlaClientView from '@/components/settings/incident-sla/IncidentSlaClientView';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 export default async function IncidentSlaSettingsPage() {
+  await requirePageAccess('/settings/incident-sla');
   const permissions = await getUserPermissions();
   if (!permissions.authenticated || !permissions.capabilities.includes('admin.manage'))
     redirect('/settings');

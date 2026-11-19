@@ -39,7 +39,7 @@ export default function GaugeChart({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#e5e7eb"
+          stroke="hsl(var(--ui-border))"
           strokeWidth="8"
           strokeDasharray={circumference}
           strokeDashoffset={circumference / 2}

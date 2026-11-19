@@ -23,12 +23,16 @@ vi.mock('@/lib/jira-concurrency', () => ({
   acquireJiraExternalIssueLinkFence: vi.fn(),
 }));
 vi.mock('@/lib/provider-admission', () => ({
+  ProviderCooldownError: class ProviderCooldownError extends Error {},
   assertProviderAdmitted: vi.fn(),
   recordProviderFailure: vi.fn(),
   recordProviderSuccess: vi.fn(),
 }));
 
-import { enqueueJiraCreateOperation } from '@/lib/external-operations';
+import {
+  enqueueJiraCreateOperation,
+  jiraCommentableIncidentLinksWhere,
+} from '@/lib/external-operations';
 
 describe('Jira create ownership invariant', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -49,5 +53,76 @@ describe('Jira create ownership invariant', () => {
     ).rejects.toThrow('exactly one OpsKnight entity');
 
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  describe('re-creating after unlink or failure', () => {
+    const input = { incidentId: 'inc-1', projectKey: 'OPS', issueType: 'Bug', summary: 'Outage' };
+    function txWith(existing: Record<string, unknown> | null, linked: boolean) {
+      const tx = {
+        externalOperation: {
+          findUnique: vi.fn().mockResolvedValue(existing),
+          update: vi.fn(),
+          create: vi.fn().mockResolvedValue({ id: 'op-new' }),
+        },
+        externalIssueLink: { findUnique: vi.fn().mockResolvedValue(linked ? { id: 'l' } : null) },
+        backgroundJob: { create: vi.fn() },
+      };
+      mocks.transaction.mockImplementation((fn: (client: typeof tx) => unknown) => fn(tx));
+      return tx;
+    }
+
+    it('starts a new operation when the previously created issue was unlinked', async () => {
+      const tx = txWith({ id: 'op-old', status: 'COMPLETED', externalId: '10001' }, false);
+      await expect(enqueueJiraCreateOperation(input)).resolves.toBe('op-new');
+      expect(tx.externalOperation.update).toHaveBeenCalledWith({
+        where: { id: 'op-old' },
+        data: { idempotencyKey: 'jira:create:incident:inc-1:retired:op-old' },
+      });
+      const job = tx.backgroundJob.create.mock.calls[0][0].data;
+      expect(job.scheduledAt.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('keeps returning the operation while its issue is still linked', async () => {
+      const tx = txWith({ id: 'op-old', status: 'COMPLETED', externalId: '10001' }, true);
+      await expect(enqueueJiraCreateOperation(input)).resolves.toBe('op-old');
+      expect(tx.externalOperation.update).not.toHaveBeenCalled();
+      expect(tx.externalOperation.create).not.toHaveBeenCalled();
+    });
+
+    it('applies the corrected request to a failed operation instead of replaying the old one', async () => {
+      const tx = txWith({ id: 'op-old', status: 'FAILED', externalId: null }, false);
+      await expect(enqueueJiraCreateOperation({ ...input, issueType: 'Task' })).resolves.toBe(
+        'op-old'
+      );
+      expect(tx.externalOperation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'op-old' },
+          data: expect.objectContaining({
+            requestPayload: expect.objectContaining({ issueType: 'Task' }),
+            attempts: 0,
+          }),
+        })
+      );
+      // The old job completed when the operation failed; a new durable fallback is needed.
+      expect(tx.backgroundJob.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ payload: { operationId: 'op-old' } }),
+      });
+    });
+
+    it('does not add a second job for an operation whose job is still pending', async () => {
+      const tx = txWith({ id: 'op-old', status: 'AMBIGUOUS', externalId: null }, false);
+      await expect(enqueueJiraCreateOperation(input)).resolves.toBe('op-old');
+      expect(tx.backgroundJob.create).not.toHaveBeenCalled();
+    });
+  });
+
+  it('excludes links on services whose Jira sync is turned off from outbound comments', () => {
+    expect(jiraCommentableIncidentLinksWhere('inc-1')).toEqual({
+      incidentId: 'inc-1',
+      provider: 'JIRA',
+      NOT: {
+        incident: { is: { service: { jiraServiceMapping: { is: { syncEnabled: false } } } } },
+      },
+    });
   });
 });

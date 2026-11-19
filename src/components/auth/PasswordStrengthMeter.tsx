@@ -21,10 +21,7 @@ export default function PasswordStrengthMeter({
   showRequirements = true,
   context,
 }: PasswordStrengthMeterProps) {
-  const strength = useMemo(
-    () => calculatePasswordStrength(password, context),
-    [password, context]
-  );
+  const strength = useMemo(() => calculatePasswordStrength(password, context), [password, context]);
   const requirements = useMemo(
     () => getPasswordRequirements(password, context),
     [password, context]
@@ -36,11 +33,11 @@ export default function PasswordStrengthMeter({
     <div className="space-y-2" aria-live="polite">
       <div className="space-y-1">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-medium text-slate-600 dark:text-slate-300">Password strength</span>
+          <span className="font-medium text-slate-600 dark:text-zinc-300">Password strength</span>
           <span className={`font-semibold ${strength.textColor}`}>{strength.label}</span>
         </div>
         <div
-          className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+          className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800"
           role="progressbar"
           aria-label="Password strength"
           aria-valuenow={strength.percentage}

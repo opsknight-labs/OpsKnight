@@ -1,10 +1,12 @@
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import prisma from '@/lib/prisma';
+import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { logAudit } from '@/lib/audit';
+import { findServicesInMaintenance } from '@/lib/service-maintenance/windows';
 import {
   getCurrentAuthorizationActor,
   getUserPermissions,
@@ -23,12 +25,13 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import { getServiceListBadges } from '@/lib/intelligence/surfaces/service-list-badges';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 async function createService(formData: FormData) {
   'use server';
-  let currentUser: { id: string };
+  let currentUser: Awaited<ReturnType<typeof assertAdminOrResponder>>;
   try {
     currentUser = await assertAdminOrResponder();
   } catch (error) {
@@ -41,6 +44,21 @@ async function createService(formData: FormData) {
   const teamId = formData.get('teamId') as string;
   const escalationPolicyId = formData.get('escalationPolicyId') as string;
   const name = typeof rawName === 'string' ? rawName : '';
+
+  // Same rule as moving a service: non-admins may only use a team they belong to.
+  // This also turns an unknown teamId into a message instead of an FK 500.
+  if (teamId) {
+    const team = await prisma.team.findFirst({
+      where: {
+        id: teamId,
+        ...(capabilitiesOf(currentUser).includes(CAPABILITIES.ADMIN_MANAGE)
+          ? {}
+          : { members: { some: { userId: currentUser.id } } }),
+      },
+      select: { id: true },
+    });
+    if (!team) redirect('/services?error=invalid-team');
+  }
 
   try {
     const normalizedName = await assertServiceNameAvailable(name);
@@ -93,6 +111,7 @@ type ServicesPageProps = {
 };
 
 export default async function ServicesPage({ searchParams }: ServicesPageProps) {
+  await requirePageAccess('/services');
   const params = await searchParams;
   const searchQuery = typeof params?.search === 'string' ? params.search.trim() : '';
   const statusFilter = typeof params?.status === 'string' ? params.status : 'all';
@@ -351,10 +370,18 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const metricDataState = slaMetrics ? ('available' as const) : ('unavailable' as const);
 
   const intelligenceBadges = await intelligenceBadgesPromise;
+  const inMaintenance = await findServicesInMaintenance(services.map(s => s.id));
   const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
-    const dynamicStatus = (slaData?.dynamicStatus || service.status || 'OPERATIONAL') as
-      'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
+    // Without SLA data, a status filter already proved each row's live status from
+    // incidents; Service.status is a rarely written column and only a last resort.
+    const filteredStatus = ['OPERATIONAL', 'DEGRADED', 'CRITICAL'].includes(statusFilter)
+      ? statusFilter
+      : null;
+    const dynamicStatus = (slaData?.dynamicStatus ||
+      filteredStatus ||
+      service.status ||
+      'OPERATIONAL') as 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
     const openIncidentCount = slaData?.activeCount ?? 0;
     const hasCritical = (slaData?.criticalCount ?? 0) > 0;
     const incidentCount = slaData?.count ?? 0;
@@ -367,6 +394,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       incidentCount,
       metricDataState,
       intelligenceBadges: intelligenceBadges[service.id],
+      maintenanceTitle: inMaintenance.get(service.id)?.title ?? null,
     };
   });
 
@@ -448,6 +476,16 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
               A service with this name already exists. Please choose a unique name.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {errorCode === 'invalid-team' && (
+          <Alert variant="destructive">
+            <XCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              You can only create services in a team you belong to.
             </AlertDescription>
           </Alert>
         )}

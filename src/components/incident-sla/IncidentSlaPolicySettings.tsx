@@ -62,7 +62,7 @@ const PRIORITY_STYLES: Record<Priority, { badge: string; dot: string; title: str
     title: 'Low Impact',
   },
   P5: {
-    badge: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+    badge: 'bg-slate-500/10 text-slate-600 dark:text-zinc-400 border-slate-500/20',
     dot: 'bg-slate-500',
     title: 'Informational',
   },

@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { REVOCABLE_SUBSCRIPTION_STATES } from '@/lib/status-pages/subscription-policy';
 
 /** Shared UI/REST command: removal revokes delivery, never erases consent/history. */
 export async function removeStatusPageSubscribers(
@@ -24,14 +25,21 @@ export async function removeStatusPageSubscribers(
     if (!existing.length)
       throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Subscription not found.' });
     const validIds = existing.map(row => row.id);
-    const changed = await tx.statusPageSubscription.updateMany({
+    const revoked = await tx.statusPageSubscription.updateMany({
+      where: { id: { in: validIds }, statusPageId, state: { in: REVOCABLE_SUBSCRIPTION_STATES } },
+      data: { unsubscribedAt: new Date(), state: 'UNSUBSCRIBED' },
+    });
+    // Complained/bounced/suppressed rows record the removal but keep their suppression state.
+    const suppressed = await tx.statusPageSubscription.updateMany({
       where: {
         id: { in: validIds },
         statusPageId,
-        OR: [{ unsubscribedAt: null }, { state: { not: 'UNSUBSCRIBED' } }],
+        unsubscribedAt: null,
+        state: { notIn: REVOCABLE_SUBSCRIPTION_STATES },
       },
-      data: { unsubscribedAt: new Date(), state: 'UNSUBSCRIBED' },
+      data: { unsubscribedAt: new Date() },
     });
+    const changed = { count: revoked.count + suppressed.count };
     await tx.notification.updateMany({
       where: {
         recipientType: 'SUBSCRIBER',

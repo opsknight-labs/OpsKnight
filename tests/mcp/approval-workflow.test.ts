@@ -104,6 +104,9 @@ describe('review outcomes', () => {
     );
     expect(expectedReviewCode(new Error('database exploded'))).toBeNull();
     expect(reviewMessage('MCP_REAUTHENTICATION_REQUIRED')).toContain("Confirm it's you");
+    // A disabled requester or a revoked connection is an expected refusal, not an error page.
+    expect(reviewMessage('MCP_INACTIVE_PRINCIPAL')).toContain('no longer active');
+    expect(reviewMessage('MCP_INVALID_GRANT')).toContain('was revoked');
     expect(reviewMessage('SOMETHING_NEW')).toContain('could not be recorded');
     // Inherited object keys are not expected refusals: they must still surface as real errors.
     expect(expectedReviewCode(new Error('constructor'))).toBeNull();
@@ -112,6 +115,10 @@ describe('review outcomes', () => {
   });
 
   it('completes the loader reasons a reviewer can be blocked for', () => {
+    // A malformed id fails the id format check before any lookup; it is a missing request.
+    expect(reviewBlockedReason(Object.assign(new Error('invalid id'), { name: 'ZodError' }))).toBe(
+      'unavailable'
+    );
     expect(reviewBlockedReason(new McpBoundaryError('MCP_APPROVAL_UNAVAILABLE', 404))).toBe(
       'unavailable'
     );

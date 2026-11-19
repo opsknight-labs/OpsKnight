@@ -5,7 +5,7 @@ vi.mock('@/lib/encryption', () => ({
   decrypt: vi.fn(async (value: string) => `plain:${value}`),
 }));
 
-import { resolveSecretInputValues } from '@/lib/runbooks/secrets';
+import { agentCanResolveSecretInputs, resolveSecretInputValues } from '@/lib/runbooks/secrets';
 
 describe('Runbook secret execution scope', () => {
   it('queries only grants for the claiming Agent or resolved target pool', async () => {
@@ -40,5 +40,18 @@ describe('Runbook secret execution scope', () => {
         runbookSecret: { findMany: vi.fn().mockResolvedValue([]) },
       } as never)
     ).rejects.toThrow('not granted to this Agent or execution pool');
+  });
+
+  it('lets a claiming agent check grant coverage before it claims, so it can skip the attempt', async () => {
+    const count = vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+    const tx = { runbookSecret: { count } } as never;
+    const values = { a: 'secret://one', b: 'secret://two', region: 'eu' };
+    const scope = { agentId: 'agent-2', targetAgentPoolId: 'pool-1' };
+
+    await expect(agentCanResolveSecretInputs(values, scope, tx)).resolves.toBe(false);
+    await expect(agentCanResolveSecretInputs(values, scope, tx)).resolves.toBe(true);
+    await expect(agentCanResolveSecretInputs({ region: 'eu' }, scope, tx)).resolves.toBe(true);
+    expect(count).toHaveBeenCalledTimes(2);
+    expect(count.mock.calls[0][0].where.grants.some.OR).toContainEqual({ agentId: 'agent-2' });
   });
 });

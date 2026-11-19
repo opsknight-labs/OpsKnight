@@ -57,7 +57,7 @@ export default function PolicyDirectoryCard({
   const remainingServicesCount = policy.services.length - visibleServices.length;
 
   return (
-    <Card className="hover:shadow-md hover:border-primary/40 transition-all group flex flex-col justify-between border-slate-200/80 bg-white">
+    <Card className="hover:shadow-md hover:border-primary/40 transition-all group flex flex-col justify-between border-ink-200/80 bg-card">
       <CardContent className="p-5 space-y-4">
         {/* Header: Title, Description & Action Menu */}
         <div className="flex items-start justify-between gap-3">
@@ -97,7 +97,7 @@ export default function PolicyDirectoryCard({
                   href={`/policies/${policy.id}`}
                   className="flex items-center gap-2 cursor-pointer"
                 >
-                  <Layers className="h-3.5 w-3.5 text-slate-500" />
+                  <Layers className="h-3.5 w-3.5 text-ink-500" />
                   View & Configure Policy
                 </Link>
               </DropdownMenuItem>
@@ -106,8 +106,8 @@ export default function PolicyDirectoryCard({
         </div>
 
         {/* Step Flow Breakdown */}
-        <div className="bg-slate-50/70 border border-slate-100 rounded-lg p-3 space-y-2">
-          <div className="flex items-center justify-between text-[11px] font-medium text-slate-600">
+        <div className="bg-ink-50/70 border border-ink-100 rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-medium text-ink-600">
             <span className="flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5 text-primary" />
               <span>
@@ -125,7 +125,7 @@ export default function PolicyDirectoryCard({
             <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
               {policy.steps.slice(0, 4).map((step, idx) => (
                 <div key={step.id || idx} className="flex items-center gap-1">
-                  <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px] font-medium text-slate-700 shadow-2xs">
+                  <div className="flex items-center gap-1 bg-card px-2 py-0.5 rounded border border-ink-200 text-[10px] font-medium text-ink-700 shadow-2xs">
                     {step.targetType === 'USER' && <User className="h-2.5 w-2.5 text-blue-500" />}
                     {step.targetType === 'TEAM' && (
                       <Users className="h-2.5 w-2.5 text-emerald-500" />
@@ -140,7 +140,7 @@ export default function PolicyDirectoryCard({
                         `Step ${idx + 1}`}
                     </span>
                     {step.delayMinutes > 0 && (
-                      <span className="text-slate-400 font-mono text-[9px]">
+                      <span className="text-ink-400 font-mono text-[9px]">
                         +{step.delayMinutes}m
                       </span>
                     )}
@@ -157,7 +157,7 @@ export default function PolicyDirectoryCard({
               )}
             </div>
           ) : (
-            <p className="text-[11px] text-amber-700/80 bg-amber-50/50 px-2 py-1 rounded border border-amber-100/60">
+            <p className="text-[11px] text-amber-700/80 bg-amber-50/50 px-2 py-1 rounded border border-amber-100/60 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/30">
               Needs setup: add at least one notification step
             </p>
           )}
@@ -181,7 +181,7 @@ export default function PolicyDirectoryCard({
                 >
                   <Badge
                     variant="secondary"
-                    className="text-[10px] px-2 py-0.5 hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer border border-slate-200/60"
+                    className="text-[10px] px-2 py-0.5 hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer border border-ink-200/60"
                   >
                     {service.name}
                   </Badge>
@@ -198,14 +198,14 @@ export default function PolicyDirectoryCard({
             </div>
           ) : (
             <div className="text-[11px] text-muted-foreground/80 flex items-center gap-1">
-              <ShieldAlert className="h-3 w-3 text-slate-400" />
+              <ShieldAlert className="h-3 w-3 text-ink-400" />
               <span>Unassigned (no services routing here)</span>
             </div>
           )}
         </div>
 
         {/* Card Footer: Detail Link */}
-        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+        <div className="pt-2 border-t border-ink-100 flex items-center justify-between text-xs">
           <span className="text-muted-foreground text-[11px]">
             {policy.serviceCount > 0 ? 'Active routing' : 'Standby'}
           </span>

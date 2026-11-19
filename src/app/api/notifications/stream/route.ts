@@ -9,7 +9,7 @@ import { getNotificationUserChangeVersion } from '@/lib/notification-change-cloc
 import { isAppError } from '@/lib/errors';
 import { getRequestSessionJti } from '@/lib/realtime-stream-authorization';
 import { isSessionActive } from '@/lib/session-registry';
-import { inAppNotificationHref } from '@/lib/notification-links';
+import { inAppNotificationHref, inAppNotificationKind } from '@/lib/notification-links';
 
 /**
  * Server-Sent Events endpoint for real-time notification updates
@@ -166,15 +166,7 @@ export async function GET(req: NextRequest) {
                 const timeAgo = formatDateTime(notification.createdAt, userTimeZone, {
                   format: 'relative',
                 });
-                const typeKey = notification.type.toLowerCase();
-                let type: 'incident' | 'service' | 'schedule' | 'system' = 'incident';
-                if (typeKey === 'schedule') {
-                  type = 'schedule';
-                } else if (typeKey === 'service' || typeKey === 'team') {
-                  type = 'service';
-                } else if (typeKey === 'system') {
-                  type = 'system';
-                }
+                const type = inAppNotificationKind(notification.type);
                 const incidentId =
                   notification.entityType === 'INCIDENT' ? notification.entityId : null;
 
@@ -257,15 +249,7 @@ export async function GET(req: NextRequest) {
                 const timeAgo = formatDateTime(notification.createdAt, userTimeZone, {
                   format: 'relative',
                 });
-                const typeKey = notification.type.toLowerCase();
-                let type: 'incident' | 'service' | 'schedule' | 'system' = 'incident';
-                if (typeKey === 'schedule') {
-                  type = 'schedule';
-                } else if (typeKey === 'service' || typeKey === 'team') {
-                  type = 'service';
-                } else if (typeKey === 'system') {
-                  type = 'system';
-                }
+                const type = inAppNotificationKind(notification.type);
                 const incidentId =
                   notification.entityType === 'INCIDENT' ? notification.entityId : null;
 
@@ -346,7 +330,7 @@ export async function GET(req: NextRequest) {
                   return;
                 }
 
-                const active = await isSessionActive(user.id, sessionJti);
+                const active = await isSessionActive(user.id, sessionJti, { throwOnError: true });
                 if (!active) {
                   send(JSON.stringify({ type: 'authorization_revoked' }));
                   cleanup();
@@ -357,8 +341,8 @@ export async function GET(req: NextRequest) {
                   userId: user.id,
                   error: authError instanceof Error ? authError.message : String(authError),
                 });
-                // Fail closed: terminate stream on authorization recheck failure
-                send(JSON.stringify({ type: 'authorization_revoked' }));
+                // Fail closed: terminate the stream, but a failed recheck (e.g. a database blip)
+                // is not a revocation, so the client reconnects instead of being signed out.
                 cleanup();
                 return;
               }

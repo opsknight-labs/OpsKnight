@@ -83,6 +83,12 @@ export function wireSchema<T extends Json>(schema: T): T {
  * member named `data` stays explicit even when null or empty, and `evidence` (provenance and the
  * untrusted-data warning) is passed through unchanged.
  */
+/**
+ * Members whose emptiness is the answer. "Nobody is on call" is `onCallUsers: []`; left out, it
+ * reads as "not reported", which an assistant cannot tell from a lookup that failed to say.
+ */
+const KEEP_WHEN_EMPTY = new Set(['onCallUsers']);
+
 export function compactResult(value: Json): Json {
   if (Array.isArray(value)) return value.map(compactResult);
   if (!isObject(value)) return value;
@@ -94,7 +100,7 @@ export function compactResult(value: Json): Json {
     }
     const compact = compactResult(child);
     if (compact === undefined) continue;
-    if (key !== 'data') {
+    if (key !== 'data' && !KEEP_WHEN_EMPTY.has(key)) {
       if (compact === null) continue;
       if (Array.isArray(compact) && compact.length === 0) continue;
       if (isObject(compact) && Object.keys(compact).length === 0) continue;

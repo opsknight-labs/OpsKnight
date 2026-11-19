@@ -22,6 +22,7 @@ import { resolveAccessContext } from '@/lib/access-context';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 import './analytics-v2.css';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,7 @@ export default async function AnalyticsV2Page({
 }: {
   searchParams?: Promise<SearchParams>;
 }) {
+  await requirePageAccess('/analytics');
   const session = await getServerSession(await getAuthOptions());
   const actor = await getCurrentAuthorizationActor();
   const email = session?.user?.email ?? null;

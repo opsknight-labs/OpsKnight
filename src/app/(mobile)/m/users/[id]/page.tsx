@@ -10,6 +10,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { assertCanViewUser } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ type PageProps = {
 };
 
 export default async function MobileUserDetailPage({ params }: PageProps) {
+  await requirePageAccess('/m/users/[id]');
   const { id } = await params;
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', `/m/users/${id}`));
@@ -112,7 +114,7 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
         </h3>
         <div className="flex flex-col gap-2">
           {user.teamMemberships.length === 0 ? (
-            <p className="text-xs text-slate-500 dark:text-slate-400">No team memberships</p>
+            <p className="text-xs text-slate-500 dark:text-zinc-400">No team memberships</p>
           ) : (
             user.teamMemberships.map(membership => (
               <Link
@@ -139,12 +141,12 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
 
       {/* Active Incidents Section */}
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
           Active Incidents ({user._count.assignedIncidents})
         </h3>
         <div className="flex flex-col gap-2">
           {user.assignedIncidents.length === 0 ? (
-            <p className="text-xs text-slate-500 dark:text-slate-400">No active incidents</p>
+            <p className="text-xs text-slate-500 dark:text-zinc-400">No active incidents</p>
           ) : (
             user.assignedIncidents.map(incident => (
               <Link key={incident.id} href={`/m/incidents/${incident.id}`} className="no-underline">

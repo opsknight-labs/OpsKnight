@@ -4,6 +4,12 @@ export type SubscriptionRequestAction = 'ACCEPT' | 'REACTIVATE' | 'REFRESH_VERIF
 
 const VERIFICATION_RESEND_DELAY_MS = 60_000;
 
+/**
+ * Only consent states move to UNSUBSCRIBED on revocation. COMPLAINED, BOUNCED and SUPPRESSED are
+ * deliverability state and must survive an unsubscribe, or a later sign-up would REACTIVATE them.
+ */
+export const REVOCABLE_SUBSCRIPTION_STATES: StatusPageSubscriptionState[] = ['PENDING', 'ACTIVE'];
+
 export function subscriptionRequestAction(
   state: StatusPageSubscriptionState,
   subscribedAt: Date,

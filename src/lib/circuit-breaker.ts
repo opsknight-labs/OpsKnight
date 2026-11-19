@@ -15,6 +15,7 @@
  *   const result = await emailBreaker.execute(() => sendEmail(...));
  */
 
+import { createHash } from 'crypto';
 import { logger } from './logger';
 
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
@@ -352,13 +353,17 @@ export const CircuitBreakers = {
     }),
 
   webhook: (url: string) => {
-    let host = 'generic';
+    let target = 'generic';
     try {
-      host = new URL(url).hostname;
+      // Per webhook, not per host, so one broken Discord/Slack hook does not open
+      // the breaker for every other hook on that host. The path (token) is hashed.
+      const parsed = new URL(url);
+      const pathHash = createHash('sha256').update(parsed.pathname).digest('hex').slice(0, 16);
+      target = `${parsed.hostname}#${pathHash}`;
     } catch {
-      host = 'invalid-url';
+      target = 'invalid-url';
     }
-    const key = `webhook:${host}`;
+    const key = `webhook:${target}`;
     if (breakers.size > 200 && !breakers.has(key)) {
       const firstKey = breakers.keys().next().value;
       if (firstKey && firstKey.startsWith('webhook:')) {
@@ -404,7 +409,10 @@ export const CircuitBreakers = {
     return getCircuitBreaker(key, {
       failureThreshold: 5,
       resetTimeout: 30000,
-      timeout: 10000,
+      // Must exceed the Teams client's own 30s create-POST timeout: a breaker
+      // timeout is reported as "circuit open" and re-queues a create that may
+      // already have posted the card, stranding it as AMBIGUOUS.
+      timeout: 35000,
     });
   },
 };

@@ -62,7 +62,7 @@ function EscalationStatusBadge({
         'gap-1.5 font-semibold rounded-md border transition-colors inline-flex items-center text-xs px-2.5 py-0.5 shadow-2xs leading-normal',
         isEscalating
           ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700',
+          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700',
         className
       )}
       title={titleParts.join(' - ')}
@@ -72,7 +72,7 @@ function EscalationStatusBadge({
           'h-1.5 w-1.5 rounded-full ring-2 ring-offset-0 shrink-0',
           isEscalating
             ? 'bg-amber-500 ring-amber-200/70 animate-pulse'
-            : 'bg-slate-400 ring-slate-200/70'
+            : 'bg-slate-400 ring-ink-200/70'
         )}
       />
       <span>{labelParts.join(' · ')}</span>

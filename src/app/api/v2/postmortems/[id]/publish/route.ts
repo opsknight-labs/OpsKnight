@@ -4,6 +4,7 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { etagHeaders, requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
 import { AppError } from '@/lib/errors';
+import { assertPostmortemAccess, postmortemEditWhere } from '@/lib/postmortems/authorization';
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
 
@@ -42,6 +43,7 @@ export const POST = defineV2Route({
       },
     });
     if (!current) throw new AppError({ code: 'POSTMORTEM_NOT_FOUND' });
+    await assertPostmortemAccess(tx!, current.id, postmortemEditWhere(actor));
     if (current.revision !== expectedRevision) throw new AppError({ code: 'PRECONDITION_FAILED' });
     if (current.incident.status !== 'RESOLVED') {
       throw new AppError({

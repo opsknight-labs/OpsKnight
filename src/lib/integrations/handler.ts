@@ -127,7 +127,9 @@ export function createIntegrationHandler<T>(
           integration.previousKeyExpiresAt
         ))
       ) {
-        throw IntegrationErrors.invalidPayload('Invalid integration key');
+        // A missing or wrong key is an authentication failure (401), not a
+        // payload problem; match withIntegrationMiddleware below.
+        throw IntegrationErrors.unauthorized('Invalid integration key');
       }
 
       integrationType = integration.type;
@@ -169,6 +171,7 @@ export function createIntegrationHandler<T>(
 
       const headers: Record<string, string | null> = {
         'x-hub-signature-256': req.headers.get('x-hub-signature-256'),
+        'x-hub-signature': req.headers.get('x-hub-signature'),
         'x-gitlab-token': req.headers.get('x-gitlab-token'),
         'sentry-hook-signature': req.headers.get('sentry-hook-signature'),
         'x-slack-request-timestamp': req.headers.get('x-slack-request-timestamp'),

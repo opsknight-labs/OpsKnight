@@ -35,6 +35,19 @@ export type DatadogSingleEvent = {
 
 export type DatadogEvent = DatadogSingleEvent | DatadogSingleEvent[];
 
+const DATADOG_TRANSITIONS = new Set([
+  'triggered',
+  're-triggered',
+  'recovered',
+  'ok',
+  'warn',
+  'warning',
+  'alert',
+  'renotified',
+  'renotify',
+  'no data',
+]);
+
 export function transformDatadogToEvent(data: DatadogEvent): Array<{
   event_action: 'trigger' | 'resolve';
   dedup_key: string;
@@ -69,13 +82,21 @@ export function transformDatadogToEvent(data: DatadogEvent): Array<{
     const alertType = eventData.alert_type || eventData.alert?.severity || 'warning';
     const status = eventData.alert?.status || eventData.monitor?.status || 'triggered';
 
-    const isResolved = status === 'resolved' || status === 'ok' || alertType === 'success';
+    // $ALERT_TRANSITION sends 'Recovered'; titles carry '[Recovered]' or '[Recovered on {host:x}]'.
+    const bracket = /^\[([^\]]*)\]\s*/.exec(title);
+    const [transitionWord = '', ...scopeParts] = (bracket?.[1] ?? '').split(' on ');
+    const transition = transitionWord.toLowerCase();
+    const isResolved =
+      ['resolved', 'ok', 'recovered'].includes(String(status).toLowerCase()) ||
+      alertType === 'success' ||
+      transition === 'recovered';
     // Build stable dedup key - avoid Date.now() which defeats deduplication
     // Priority: aggregation_key > alert.id > monitor.id > title-based hash
-    const cleanTitle = (title || 'unknown').replace(
-      /^\[(Triggered|Recovered|OK|Warn|Warning|Alert|Renotified|No Data)\]\s*/i,
-      ''
-    );
+    // Strip the transition word but keep a multi-alert scope ('on {host:x}') so groups stay apart.
+    const cleanTitle =
+      bracket && DATADOG_TRANSITIONS.has(transition)
+        ? `${scopeParts.length ? `on ${scopeParts.join(' on ')} ` : ''}${title.slice(bracket[0].length)}`
+        : title;
     const titleKey = cleanTitle.replace(/\s+/g, '-').toLowerCase();
     const titleHash = createHash('sha256').update(titleKey).digest('hex').slice(0, 32);
 

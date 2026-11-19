@@ -27,6 +27,7 @@ import {
 } from '@/lib/intelligence/settings/routes';
 import ConnectionsSection from '../_sections/ConnectionsSection';
 import KnowledgeMemorySection from '../_sections/KnowledgeMemorySection';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -47,6 +48,7 @@ export default async function IntelligenceAssistantPage({
 }: {
   searchParams?: Promise<RouteSearchParams>;
 }) {
+  await requirePageAccess('/settings/intelligence/ai');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   // Usage, spend and budgets moved to Evaluation & spend; links carrying the spend period follow.
   const params = await searchParams;

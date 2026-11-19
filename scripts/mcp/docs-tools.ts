@@ -56,6 +56,7 @@ async function list<T>(method: 'tools/list' | 'prompts/list', writes: boolean, s
         writes,
         sensitive,
         [],
+        false,
         // Opt-in tools are documented too; their descriptions say what turns them on.
         { squire: true }
       ),

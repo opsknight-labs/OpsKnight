@@ -50,7 +50,10 @@ const DashboardCollapsibleWidget = memo(function DashboardCollapsibleWidget({
   const shouldShowContent = isMounted ? isExpanded : defaultExpanded;
 
   return (
-    <div className="glass-panel" style={{ background: 'white', padding: '0', overflow: 'hidden' }}>
+    <div
+      className="glass-panel"
+      style={{ background: 'hsl(var(--ui-card))', padding: '0', overflow: 'hidden' }}
+    >
       <button
         onClick={toggleExpanded}
         onKeyDown={handleKeyDown}

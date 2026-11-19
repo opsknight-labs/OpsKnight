@@ -119,9 +119,10 @@ export async function acceptPostgresBatch(
             providerPayloadDigest,
             restoreBatchAlerts: child.restoreBatchAlerts,
           },
-          // Conservatively charge shared bytes to each unfinished reference. This
-          // bounds unfinished referenced context even after sibling completion.
-          providerBytes,
+          // The shared payload is stored once, so each child carries its share.
+          // Charging the whole payload per child made a large Alertmanager group
+          // reserve hundreds of MiB and starve all ingestion with 503s.
+          providerBytes: Math.ceil(providerBytes / children.length),
           automationSnapshot,
           counts,
           // Older releases stored full per-child context. Only calculate this

@@ -18,10 +18,12 @@ import {
 import { HealthDetailCards } from '@/components/runbooks/health/HealthDetailCards';
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 export default async function RunbookHealthPage() {
+  await requirePageAccess('/runbooks/health');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const user = await getCurrentUser();
   const userTimeZone = getUserTimeZone(user);
@@ -245,7 +247,7 @@ export default async function RunbookHealthPage() {
               className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
               title={`Health evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone})`}
             >
-              <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
+              <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
               {userTimeZone}
             </span>
             <RunbookLiveRefresh enabled={true} intervalMs={20000} />

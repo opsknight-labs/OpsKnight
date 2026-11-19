@@ -451,7 +451,7 @@ describe('ManageEngine Integration — Comprehensive Real-World Suite', () => {
       const invalidSigRes = await POST(invalidSigReq);
       expect(invalidSigRes.status).toBe(401);
 
-      // 3. Invalid integration key -> 400 INVALID_PAYLOAD
+      // 3. Invalid integration key -> 401 INTEGRATION_AUTHENTICATION_FAILED
       const invalidKeyReq = new NextRequest(
         'http://localhost:3000/api/integrations/manageengine?integrationId=int_me_hmac&integrationKey=wrong_key',
         {
@@ -464,7 +464,8 @@ describe('ManageEngine Integration — Comprehensive Real-World Suite', () => {
         }
       );
       const invalidKeyRes = await POST(invalidKeyReq);
-      expect(invalidKeyRes.status).toBe(400);
+      expect(invalidKeyRes.status).toBe(401);
+      expect((await invalidKeyRes.json()).code).toBe('INTEGRATION_AUTHENTICATION_FAILED');
     });
 
     it('maps all ManageEngine severity levels cleanly into OpsKnight Incident Urgency (LOW -> MEDIUM -> HIGH)', async () => {

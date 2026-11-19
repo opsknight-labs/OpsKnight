@@ -18,11 +18,11 @@ import {
   readAnnouncementNotificationGeneration,
 } from '@/lib/status-pages/announcement-notification-generation';
 import {
-  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1,
-  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
-  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING,
-  type AnnouncementFanoutDeliveryMode,
-} from '@/lib/status-pages/announcement-fanout-contract';
+  cancelPendingAnnouncementJobs,
+  createAnnouncementFanoutJob,
+  lockAnnouncementMutation,
+  suppressUndeliveredAnnouncementIntents,
+} from '@/lib/status-pages/announcement-commands';
 
 class InvalidDateError extends Error {
   constructor(public readonly fieldName: string) {
@@ -81,82 +81,6 @@ function effectiveNotificationTiming(
 ): AnnouncementNotificationTiming {
   if (notifySubscribers === false) return 'NONE';
   return notificationTiming ?? 'ON_PUBLISH';
-}
-
-async function lockAnnouncementMutation(
-  tx: Prisma.TransactionClient,
-  statusPageId: string,
-  announcementId: string
-) {
-  const lockKey = `${statusPageId}:${announcementId}`;
-  await tx.$executeRaw`
-    SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
-  `;
-}
-
-async function cancelPendingAnnouncementJobs(
-  tx: Prisma.TransactionClient,
-  announcementId: string,
-  statusPageId: string
-) {
-  await tx.$executeRaw`
-    DELETE FROM "BackgroundJob"
-    WHERE (
-        ("type" = ${STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1}::"JobType" AND "status" = 'PENDING'::"JobStatus")
-        OR
-        ("type" = ${STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2}::"JobType" AND "status" = ${STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING}::"JobStatus")
-      )
-      AND ("payload"->>'announcementId') = ${announcementId}
-      AND ("payload"->>'statusPageId') = ${statusPageId}
-  `;
-}
-
-async function suppressUndeliveredAnnouncementIntents(
-  tx: Prisma.TransactionClient,
-  announcementId: string,
-  reason: string
-) {
-  await tx.notification.updateMany({
-    where: {
-      sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
-      sourceId: announcementId,
-      status: { in: ['PENDING', 'FAILED'] },
-    },
-    data: {
-      status: 'SKIPPED',
-      payloadEncrypted: null,
-      lastAttemptAt: null,
-      claimToken: null,
-      claimedBy: null,
-      errorMsg: reason,
-    },
-  });
-}
-
-async function createAnnouncementFanoutJob(
-  tx: Prisma.TransactionClient,
-  input: {
-    announcementId: string;
-    statusPageId: string;
-    scheduledAt: Date;
-    generation: number;
-    deliveryMode: AnnouncementFanoutDeliveryMode;
-  }
-) {
-  return tx.backgroundJob.create({
-    data: {
-      type: STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
-      status: STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING,
-      scheduledAt: input.scheduledAt,
-      maxAttempts: 5,
-      payload: {
-        announcementId: input.announcementId,
-        statusPageId: input.statusPageId,
-        notificationGeneration: input.generation,
-        deliveryMode: input.deliveryMode,
-      },
-    },
-  });
 }
 
 export async function POST(req: NextRequest) {
@@ -371,7 +295,8 @@ export async function PATCH(req: NextRequest) {
       const nextIsActive = isActive !== undefined ? Boolean(isActive) : existing.isActive;
       const timing =
         notificationTiming ??
-        ((existing.notificationTiming as AnnouncementNotificationTiming | null) ?? 'NONE');
+        (existing.notificationTiming as AnnouncementNotificationTiming | null) ??
+        'NONE';
       const nextPlan = deriveAnnouncementNotificationPlan({
         isActive: nextIsActive,
         notificationTiming: timing,
@@ -399,8 +324,7 @@ export async function PATCH(req: NextRequest) {
       const generationMutation = schedulingMutation || eligibilityChanged || contentMutation;
 
       const reactivating = existing.isActive === false && nextIsActive === true;
-      const enablingNotifications =
-        existing.notificationTiming === 'NONE' && timing !== 'NONE';
+      const enablingNotifications = existing.notificationTiming === 'NONE' && timing !== 'NONE';
       if (
         schedulingMutation &&
         nextPlan.shouldNotify &&

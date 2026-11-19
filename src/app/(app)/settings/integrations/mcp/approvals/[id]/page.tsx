@@ -31,9 +31,11 @@ import {
   reviewBlockedReason,
   SelfApprovalConfirm,
 } from '../review-gate';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export default async function RunbookApproval({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/settings/integrations/mcp/approvals/[id]');
   const heading = 'Review requested runbook execution';
   let loaded:
     | { own: NonNullable<Awaited<ReturnType<typeof loadMcpRunbookRequest>>> }
@@ -88,11 +90,13 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
   const highestMeta = highest ? runbookStepRiskMeta(highest) : null;
   const status = runbookApprovalStatus(preview);
   return (
-    <div className="max-w-3xl space-y-6 rounded-lg border p-6">
+    <div className="min-w-0 max-w-3xl space-y-6 rounded-lg border p-4 sm:p-6">
       <BackToApprovals />
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">{heading}</h1>
-        {runbook && <p className="text-base">Run “{runbook.name}”</p>}
+        <h1 className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">
+          {heading}
+        </h1>
+        {runbook && <p className="text-base [overflow-wrap:anywhere]">Run “{runbook.name}”</p>}
         <RequestedBy
           person={requester.person}
           assistant={requester.assistant}
@@ -155,10 +159,31 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
         </dd>
       </dl>
       <DecisionReason reason={preview.decisionReason} />
-      <h2 className="text-lg font-semibold">Frozen actions</h2>
+      {summary.inputs.length > 0 && (
+        <section className="space-y-2 rounded border p-4" aria-labelledby="runbook-inputs">
+          <h2 id="runbook-inputs" className="font-display text-lg font-semibold">
+            Inputs the assistant supplied
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            These values are used in the actions below. Credentials are never shown, and a value
+            that was shortened or partly hidden says so.
+          </p>
+          <dl className="space-y-2 break-words">
+            {summary.inputs.map(input => (
+              <div key={input.key}>
+                <dt className="font-medium [overflow-wrap:anywhere]">
+                  {input.key} <span className="text-xs text-muted-foreground">({input.type})</span>
+                </dt>
+                <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{input.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+      <h2 className="font-display text-lg font-semibold">Frozen actions</h2>
       {summary.steps.map(step => (
         <section key={step.key} className="space-y-2 rounded border p-4">
-          <h3 className="font-semibold">{step.name}</h3>
+          <h3 className="font-display font-semibold [overflow-wrap:anywhere]">{step.name}</h3>
           <p className="flex flex-wrap items-center gap-2 text-sm">
             <span>{step.type}</span>
             <span className={cn(RISK_PILL_CLASS, runbookStepRiskMeta(step.risk).className)}>
@@ -168,15 +193,17 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
           <dl className="space-y-2 break-words">
             {step.configuration.map(([label, value]) => (
               <div key={label}>
-                <dt className="font-medium">{label}</dt>
-                <dd className="whitespace-pre-wrap">{value}</dd>
+                <dt className="font-medium [overflow-wrap:anywhere]">{label}</dt>
+                <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
               </div>
             ))}
           </dl>
         </section>
       ))}
       <details className="rounded border p-3">
-        <summary className="cursor-pointer text-sm font-medium">Verification details</summary>
+        <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
+          Verification details
+        </summary>
         <dl className="grid gap-x-4 gap-y-3 break-all pt-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
           <dt className={DT_CLASS}>Runbook id</dt>
           <dd className={DD_CLASS}>{summary.runbookId}</dd>

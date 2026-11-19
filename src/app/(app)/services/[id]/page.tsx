@@ -25,6 +25,9 @@ import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters
 import { deleteService, updateService, deleteIntegration } from '../actions';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import { logger } from '@/lib/logger';
+import { resolveIntegrationKeysForDisplay } from '@/lib/integrations/display-key';
+import { getAppUrl } from '@/lib/app-url';
+import { getWebhookUrl } from '@/lib/integrations/ingest-url';
 
 // UI Components
 import {
@@ -44,6 +47,18 @@ import { resolveServiceIntelligenceAccess } from '@/lib/intelligence/surfaces/se
 import ServiceIntelligenceTab, {
   ServiceIntelligenceTabSkeleton,
 } from './intelligence/ServiceIntelligenceTab';
+import ServiceMaintenancePanel, {
+  type MaintenanceScheduleView,
+  type MaintenanceWindowView,
+} from '@/components/service/ServiceMaintenancePanel';
+import {
+  listServiceMaintenanceOverview,
+  maintenanceWindowPhase,
+} from '@/lib/service-maintenance/windows';
+import {
+  describeMaintenanceSchedule,
+  listMaintenanceSchedules,
+} from '@/lib/service-maintenance/schedules';
 import ServiceSettingsFlashToast from '@/components/service/ServiceSettingsFlashToast';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 
@@ -70,6 +85,7 @@ import {
   Webhook,
   Bell,
   ChevronDown,
+  Wrench,
 } from 'lucide-react';
 
 // Custom Components
@@ -80,6 +96,7 @@ import AddIntegrationGrid from '@/components/service/AddIntegrationGrid';
 import CopyButton from '@/components/service/CopyButton';
 import IntegrationStatusToggle from '@/components/service/IntegrationStatusToggle';
 import IntegrationSecretControl from '@/components/service/IntegrationSecretControl';
+import { UNSIGNABLE_INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 import DeleteIntegrationButton from '@/components/service/DeleteIntegrationButton';
 import ServiceGeneralSettings from '@/components/service/ServiceGeneralSettings';
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
@@ -102,6 +119,7 @@ import {
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { INTEGRATION_TYPES, IntegrationType } from '@/components/service/integration-types';
+import { denyResourceAccess, requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -123,79 +141,8 @@ type ServiceDetailPageProps = {
   }>;
 };
 
-function getWebhookUrl(
-  integrationType: IntegrationType,
-  integrationId: string,
-  integrationKey: string
-): string {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-  const keyParam = `&integrationKey=${encodeURIComponent(integrationKey)}`;
-
-  switch (integrationType) {
-    case 'CLOUDWATCH':
-      return `${baseUrl}/api/integrations/cloudwatch?integrationId=${integrationId}${keyParam}`;
-    case 'AZURE':
-      return `${baseUrl}/api/integrations/azure?integrationId=${integrationId}${keyParam}`;
-    case 'DATADOG':
-      return `${baseUrl}/api/integrations/datadog?integrationId=${integrationId}${keyParam}`;
-    case 'GRAFANA':
-      return `${baseUrl}/api/integrations/grafana?integrationId=${integrationId}${keyParam}`;
-    case 'PROMETHEUS':
-      return `${baseUrl}/api/integrations/prometheus?integrationId=${integrationId}${keyParam}`;
-    case 'NEWRELIC':
-      return `${baseUrl}/api/integrations/newrelic?integrationId=${integrationId}${keyParam}`;
-    case 'SENTRY':
-      return `${baseUrl}/api/integrations/sentry?integrationId=${integrationId}${keyParam}`;
-    case 'GITHUB':
-      return `${baseUrl}/api/integrations/github?integrationId=${integrationId}${keyParam}`;
-    case 'GOOGLE_CLOUD_MONITORING':
-      return `${baseUrl}/api/integrations/google-cloud-monitoring?integrationId=${integrationId}${keyParam}`;
-    case 'SPLUNK_ONCALL':
-      return `${baseUrl}/api/integrations/splunk-oncall?integrationId=${integrationId}${keyParam}`;
-    case 'SPLUNK_OBSERVABILITY':
-      return `${baseUrl}/api/integrations/splunk-observability?integrationId=${integrationId}${keyParam}`;
-    case 'DYNATRACE':
-      return `${baseUrl}/api/integrations/dynatrace?integrationId=${integrationId}${keyParam}`;
-    case 'APPDYNAMICS':
-      return `${baseUrl}/api/integrations/appdynamics?integrationId=${integrationId}${keyParam}`;
-    case 'ELASTIC':
-      return `${baseUrl}/api/integrations/elastic?integrationId=${integrationId}${keyParam}`;
-    case 'HONEYCOMB':
-      return `${baseUrl}/api/integrations/honeycomb?integrationId=${integrationId}${keyParam}`;
-    case 'BITBUCKET':
-      return `${baseUrl}/api/integrations/bitbucket?integrationId=${integrationId}${keyParam}`;
-    case 'UPTIMEROBOT':
-      return `${baseUrl}/api/integrations/uptimerobot?integrationId=${integrationId}${keyParam}`;
-    case 'PINGDOM':
-      return `${baseUrl}/api/integrations/pingdom?integrationId=${integrationId}${keyParam}`;
-    case 'BETTER_UPTIME':
-      return `${baseUrl}/api/integrations/better-uptime?integrationId=${integrationId}${keyParam}`;
-    case 'UPTIME_KUMA':
-      return `${baseUrl}/api/integrations/uptime-kuma?integrationId=${integrationId}${keyParam}`;
-    case 'NAGIOS':
-      return `${baseUrl}/api/integrations/nagios?integrationId=${integrationId}${keyParam}`;
-    case 'ICINGA':
-      return `${baseUrl}/api/integrations/icinga?integrationId=${integrationId}${keyParam}`;
-    case 'ZABBIX':
-      return `${baseUrl}/api/integrations/zabbix?integrationId=${integrationId}${keyParam}`;
-    case 'MANAGEENGINE':
-      return `${baseUrl}/api/integrations/manageengine?integrationId=${integrationId}${keyParam}`;
-    case 'PAGERDUTY':
-      return `${baseUrl}/api/integrations/pagerduty/v2/enqueue?integrationId=${integrationId}${keyParam}`;
-    case 'GITLAB':
-      return `${baseUrl}/api/integrations/gitlab?integrationId=${integrationId}${keyParam}`;
-    case 'VERCEL':
-      return `${baseUrl}/api/integrations/vercel?integrationId=${integrationId}${keyParam}`;
-    case 'WEBHOOK':
-      return `${baseUrl}/api/integrations/webhook?integrationId=${integrationId}${keyParam}`;
-    case 'EVENTS_API_V2':
-    default:
-      return `${baseUrl}/api/events`;
-  }
-}
-
 export default async function ServiceDetailPage({ params, searchParams }: ServiceDetailPageProps) {
+  await requirePageAccess('/services/[id]');
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const requestedPage = parsePageParam(resolvedSearchParams?.page);
@@ -212,6 +159,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   try {
     currentUser = await assertCanViewService(id);
   } catch {
+    if (await prisma.service.count({ where: { id } }))
+      await denyResourceAccess({ resource: 'service', id });
     notFound();
   }
   const [actor, user] = await Promise.all([getCurrentAuthorizationActor(), getCurrentUser()]);
@@ -228,6 +177,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     // The service is viewable but this user cannot change its configuration.
   }
   const canManageResponsePolicy = canManageService;
+  // Settings -> System -> App URL first, then NEXT_PUBLIC_APP_URL / NEXTAUTH_URL. Resolved once.
+  const appBaseUrl = await getAppUrl();
 
   const { calculateActorSLAMetrics, calculateActorMultiServiceUptime } =
     await import('@/lib/actor-metrics');
@@ -626,7 +577,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const boundUpdateService = updateService.bind(null, service.id);
   const boundDeleteService = async () => {
     'use server';
-    await deleteService(service.id);
+    return deleteService(service.id);
   };
 
   // --- TAB 1: INCIDENTS CONTENT ---
@@ -771,6 +722,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     </div>
   );
 
+  // Keys are stored encrypted; senders need the plaintext. Only managers ever see them.
+  const integrationDisplayKeys = canManageService
+    ? await resolveIntegrationKeysForDisplay(service.integrations ?? [])
+    : new Map<string, string | null>();
+
   // --- TAB 3: INTEGRATIONS & WEBHOOKS CONTENT ---
   const integrationsContent = (
     <div className="space-y-4">
@@ -797,9 +753,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               category: 'Other' as const,
               iconBg: '#475569',
             };
-            const webhookUrl = canManageService
-              ? getWebhookUrl(integrationType, integration.id, integration.key)
-              : null;
+            const displayKey = integrationDisplayKeys.get(integration.id) ?? null;
+            const webhookUrl =
+              canManageService && displayKey
+                ? getWebhookUrl(appBaseUrl, integrationType, integration.id, displayKey)
+                : null;
 
             return (
               <Card
@@ -853,7 +811,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                         <DeleteIntegrationButton
                           action={async () => {
                             'use server';
-                            await deleteIntegration(integration.id, id);
+                            return deleteIntegration(integration.id, id);
                           }}
                           integrationName={integration.name}
                           variant="icon"
@@ -869,6 +827,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                       <p className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs text-muted-foreground">
                         Integration connection details are visible to service managers only.
                       </p>
+                    ) : !displayKey ? (
+                      <InlineNotice tone="warning">
+                        This integration&apos;s key could not be decrypted, so its connection
+                        details can&apos;t be shown. Rotate the key to issue a new one, and check
+                        that the encryption keyring is configured on every replica.
+                      </InlineNotice>
                     ) : integrationType === 'EVENTS_API_V2' && webhookUrl ? (
                       <div className="space-y-2">
                         <div className="space-y-1">
@@ -890,11 +854,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                             <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                               <Key className="h-2.5 w-2.5" /> Routing Key
                             </Label>
-                            <CopyButton text={integration.key} />
+                            <CopyButton text={displayKey} />
                           </div>
                           <Input
                             readOnly
-                            value={integration.key}
+                            value={displayKey}
                             className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
                           />
                           <p className="text-[10.5px] text-muted-foreground leading-tight">
@@ -913,13 +877,13 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                             </div>
                             <div className="flex items-center gap-2">
                               <CopyButton
-                                text={`curl -X POST ${webhookUrl} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Token token=${integration.key}" \\\n  -d '{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
+                                text={`curl -X POST ${webhookUrl} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Token token=${displayKey}" \\\n  -d '{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
                                 className="h-5 px-1.5 text-[10px]"
                               />
                               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
                             </div>
                           </summary>
-                          <div className="border-t border-border/70 bg-slate-950 p-2 text-slate-200">
+                          <div className="border-t border-border/70 bg-zinc-950 p-2 text-zinc-200">
                             <pre className="overflow-x-auto text-[10px] font-mono leading-relaxed select-all">
                               <span className="text-purple-400">curl</span> -X POST {webhookUrl} \
                               <br />
@@ -930,7 +894,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                               \<br />
                               &nbsp; -H{' '}
                               <span className="text-green-400">
-                                &quot;Authorization: Token token={integration.key.substring(0, 10)}
+                                &quot;Authorization: Token token={displayKey.substring(0, 10)}
                                 ...&quot;
                               </span>{' '}
                               \<br />
@@ -958,14 +922,18 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           />
                         </div>
 
-                        <div className="pt-1.5 border-t border-dashed border-border/80">
-                          <IntegrationSecretControl
-                            integrationId={integration.id}
-                            serviceId={id}
-                            hasSecret={Boolean(integration.signatureSecret)}
-                            className="w-full"
-                          />
-                        </div>
+                        {(!UNSIGNABLE_INTEGRATION_TYPES.has(integration.type) ||
+                          integration.signatureSecret) && (
+                          <div className="pt-1.5 border-t border-dashed border-border/80">
+                            <IntegrationSecretControl
+                              integrationId={integration.id}
+                              serviceId={id}
+                              hasSecret={Boolean(integration.signatureSecret)}
+                              signingSupported={!UNSIGNABLE_INTEGRATION_TYPES.has(integration.type)}
+                              className="w-full"
+                            />
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -1056,6 +1024,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const notificationsContent = (
     <div className="space-y-3.5">
       {isSaved && <ServiceSettingsFlashToast serviceId={id} />}
+      {errorCode === 'invalid-slack-webhook' && (
+        <InlineNotice tone="error" title="Invalid Slack webhook URL">
+          Use an incoming-webhook URL from Slack (https://hooks.slack.com/...). Nothing was saved.
+        </InlineNotice>
+      )}
 
       {canManageService ? (
         <ServiceNotificationSettings
@@ -1227,6 +1200,73 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     </div>
   );
 
+  const [maintenanceRows, maintenanceServices, maintenanceScheduleRows] = await Promise.all([
+    listServiceMaintenanceOverview(id, now),
+    canManageService
+      ? prisma.service.findMany({
+          // Only services this user could add to a window (mirrors assertCanModifyService).
+          where: hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)
+            ? {}
+            : { team: { members: { some: { userId: user.id } } } },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+          // shortcut: plain filtered checkbox list, so cap it; switch to server search past this.
+          take: 2000,
+        })
+      : Promise.resolve([]),
+    listMaintenanceSchedules({ serviceIds: [id], take: 20 }),
+  ]);
+  // A window can span other teams' services; name only those this viewer can read.
+  const readableTeams = 'teamId' in serviceReadWhere(actor) ? new Set(actor.teamIds) : null;
+  const readable = <T extends { service: { teamId: string | null } }>(rows: T[]) =>
+    rows.filter(
+      r => !readableTeams || (r.service.teamId !== null && readableTeams.has(r.service.teamId))
+    );
+  const maintenanceSchedules: MaintenanceScheduleView[] = maintenanceScheduleRows.map(s => {
+    const { summary, nextOccurrence } = describeMaintenanceSchedule(s, now);
+    return {
+      id: s.id,
+      title: s.title,
+      summary,
+      paused: s.pausedAt !== null,
+      nextLabel: nextOccurrence
+        ? formatDateTime(nextOccurrence.startsAt, userTimeZone, { format: 'datetime' })
+        : null,
+      serviceNames: readable(s.services).map(x => x.service.name),
+      hiddenServiceCount: s.services.length - readable(s.services).length,
+      description: s.description,
+      serviceIds: readable(s.services).map(x => x.serviceId),
+      frequency: s.frequency,
+      interval: s.interval,
+      byWeekday: s.byWeekday,
+      dayOfMonth: s.dayOfMonth,
+      timeZone: s.timeZone,
+      startTime: s.startTime,
+      durationMinutes: s.durationMinutes,
+      startsOn: s.startsOn,
+      endsOn: s.endsOn,
+      endBehavior: s.endBehavior,
+      publishToStatusPage: s.publishToStatusPage,
+    };
+  });
+  const maintenanceWindows: MaintenanceWindowView[] = maintenanceRows.map(w => ({
+    id: w.id,
+    title: w.title,
+    description: w.description,
+    phase: maintenanceWindowPhase(w, now),
+    startsAt: w.startsAt.toISOString(),
+    endsAt: w.endsAt.toISOString(),
+    startsLabel: formatDateTime(w.startsAt, userTimeZone, { format: 'datetime' }),
+    endsLabel: formatDateTime(w.endsAt, userTimeZone, { format: 'datetime' }),
+    endBehavior: w.endBehavior,
+    publishToStatusPage: w.publishToStatusPage,
+    serviceNames: readable(w.services).map(s => s.service.name),
+    hiddenServiceCount: w.services.length - readable(w.services).length,
+    heldCount: w._count.heldIncidents,
+    recurring: w.scheduleId !== null,
+  }));
+  const activeMaintenance = maintenanceWindows.find(w => w.phase === 'ACTIVE');
+
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Centralized Hero Header */}
@@ -1265,13 +1305,20 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               {dynamicStatus === 'UNKNOWN' ? 'Unavailable' : dynamicStatus}
             </Badge>
 
+            {activeMaintenance && (
+              <Badge variant="info" size="xs" className="uppercase font-bold text-[10px] gap-1">
+                <Wrench className="h-3 w-3" aria-hidden="true" />
+                In maintenance until {activeMaintenance.endsLabel}
+              </Badge>
+            )}
+
             {service.team && (
               <Badge
                 variant="outline"
                 size="xs"
                 className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Users className="h-3 w-3 mr-1 text-slate-400" />
+                <Users className="h-3 w-3 mr-1 text-ink-400" />
                 {service.team.name}
               </Badge>
             )}
@@ -1292,7 +1339,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                 size="xs"
                 className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Globe className="h-3 w-3 mr-1 text-slate-400" />
+                <Globe className="h-3 w-3 mr-1 text-ink-400" />
                 {service.region}
               </Badge>
             )}
@@ -1303,7 +1350,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
               {service.description || 'No description provided for this service.'}
             </p>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-ink-400">
               30-day reliability metrics • Active incident count excludes snoozed alerts
             </p>
           </div>
@@ -1369,6 +1416,17 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               : undefined
         }
         notificationsCount={activeNotificationDestinationsCount}
+        maintenanceActive={Boolean(activeMaintenance)}
+        maintenanceContent={
+          <ServiceMaintenancePanel
+            serviceId={service.id}
+            canManage={canManageService}
+            windows={maintenanceWindows}
+            schedules={maintenanceSchedules}
+            services={maintenanceServices}
+            userTimeZone={userTimeZone}
+          />
+        }
         incidentsContent={incidentsContent}
         automationContent={
           hasCapability(actor.role, CAPABILITIES.AUTOMATION_READ) ? (

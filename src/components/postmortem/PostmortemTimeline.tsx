@@ -23,7 +23,7 @@ export default function PostmortemTimeline({
 
   if (!events || events.length === 0) {
     return (
-      <Card className="bg-gradient-to-br from-white to-slate-50">
+      <Card className="bg-gradient-to-br from-card to-ink-50">
         <CardContent className="py-8 text-center">
           <p className="text-muted-foreground">No timeline events recorded</p>
         </CardContent>
@@ -47,7 +47,7 @@ export default function PostmortemTimeline({
   };
 
   return (
-    <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+    <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
       <CardHeader>
         <CardTitle className="text-xl">Incident Timeline</CardTitle>
         <p className="text-sm text-muted-foreground">
@@ -84,11 +84,7 @@ export default function PostmortemTimeline({
 
                 {/* Event card */}
                 <div
-                  className={cn(
-                    'ml-4 p-4 bg-white rounded-md shadow-sm',
-                    'border-2',
-                    config.border
-                  )}
+                  className={cn('ml-4 p-4 bg-card rounded-md shadow-sm', 'border-2', config.border)}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">

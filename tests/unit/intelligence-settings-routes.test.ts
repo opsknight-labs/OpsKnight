@@ -17,6 +17,9 @@ const redirect = vi.hoisted(() =>
   })
 );
 vi.mock('next/navigation', () => ({ redirect }));
+// The page access rule is covered by tests/unit/access-control.test.ts; here only the redirect matters.
+const requirePageAccess = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('@/lib/access/server', () => ({ requirePageAccess }));
 
 const APP_DIR = join(process.cwd(), 'src/app/(app)');
 const SETTINGS_DIR = join(APP_DIR, 'settings/intelligence');

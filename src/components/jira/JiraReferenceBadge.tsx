@@ -3,14 +3,15 @@ import { sanitizeJiraHttpUrl, type JiraIssueReference } from '@/lib/jira-referen
 import { cn } from '@/lib/utils';
 
 function statusColor(status: string | undefined): string {
-  if (!status) return 'bg-slate-100 text-slate-600';
+  if (!status) return 'bg-ink-100 text-ink-600';
   const lower = status.toLowerCase();
   if (lower === 'done' || lower === 'closed' || lower === 'resolved')
-    return 'bg-emerald-100 text-emerald-700';
-  if (lower === 'in progress' || lower === 'in review') return 'bg-blue-100 text-blue-700';
+    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300';
+  if (lower === 'in progress' || lower === 'in review')
+    return 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300';
   if (lower === 'to do' || lower === 'open' || lower === 'backlog')
-    return 'bg-amber-100 text-amber-700';
-  return 'bg-slate-100 text-slate-600';
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300';
+  return 'bg-ink-100 text-ink-600';
 }
 
 export default function JiraReferenceBadge({
@@ -29,8 +30,8 @@ export default function JiraReferenceBadge({
   const safeUrl = sanitizeJiraHttpUrl(issue.url);
   const title = `${contextLabel ? `${contextLabel}: ` : ''}${issue.key}${issue.status ? ` — ${issue.status}` : ''}${issue.assignee ? ` (${issue.assignee})` : ''}`;
   const classes = cn(
-    'inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors',
-    safeUrl && 'hover:bg-blue-100',
+    'inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300',
+    safeUrl && 'hover:bg-blue-100 dark:hover:bg-blue-500/15',
     !safeUrl && 'cursor-default',
     className
   );

@@ -109,8 +109,8 @@ const SLA_TIERS: SlaTierDef[] = [
     uptime: '99.0%',
     ackTarget: '4h Ack SLA',
     colorClass:
-      'border-slate-500/40 bg-slate-500/5 text-slate-700 dark:text-slate-300 ring-1 ring-slate-500/30',
-    badgeClass: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+      'border-slate-500/40 bg-slate-500/5 text-slate-700 dark:text-zinc-300 ring-1 ring-slate-500/30',
+    badgeClass: 'bg-slate-500/10 text-slate-600 dark:text-zinc-400 border-slate-500/20',
     icon: Layers,
   },
   {
@@ -154,10 +154,9 @@ export default function ServiceGeneralSettings({
   const activeTierDef = SLA_TIERS.find(t => t.id === selectedTier);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (!canManageService) {
-      e.preventDefault();
-      return;
-    }
+    // The form has no action attribute, so without this the browser does a native GET submit.
+    e.preventDefault();
+    if (!canManageService) return;
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
       await action(formData);

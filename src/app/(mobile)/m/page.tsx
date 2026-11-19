@@ -23,10 +23,12 @@ import { formatDurationShort } from '@/lib/mobile-time';
 import { logger } from '@/lib/logger';
 import { getResponderDashboardSnapshot } from '@/lib/dashboard/responder-dashboard-snapshot';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobileDashboard() {
+  await requirePageAccess('/m');
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m'));
 

@@ -212,7 +212,13 @@ export async function POST(req: NextRequest) {
           );
         }
       } else if (body.AlarmName) {
-        // Direct CloudWatch format - validate
+        // Once a topic is bound, only verified SNS messages may change incidents; an unsigned
+        // direct alarm would bypass that check with just the routing key.
+        if (integration.snsTopicArn) {
+          logger.warn('api.integration.cloudwatch_unsigned_direct_rejected', { integrationId });
+          return jsonError('Only signed SNS messages from the configured topic are accepted', 403);
+        }
+        // Direct CloudWatch format (legacy integrations without a bound topic) - validate
         const validation = validatePayload(CloudWatchAlarmSchema, body);
         if (!validation.success) {
           logger.warn('api.integration.cloudwatch_validation_failed', {

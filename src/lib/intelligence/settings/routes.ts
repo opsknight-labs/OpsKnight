@@ -49,7 +49,7 @@ export const INTELLIGENCE_SETTINGS_GROUPS = [
     sections: [
       { id: 'policy', label: 'Policy' },
       { id: 'suppression-rules', label: 'Suppression rules' },
-      { id: 'maintenance-windows', label: 'Maintenance windows' },
+      { id: 'maintenance-windows', label: 'Noise maintenance rules' },
       { id: 'policy-history', label: 'Orchestration versions' },
       { id: 'heartbeats', label: 'Heartbeats' },
       { id: 'simulation', label: 'Simulation' },

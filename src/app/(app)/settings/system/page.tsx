@@ -6,6 +6,7 @@ import { getUserPermissions } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
 import AppUrlSettings from '@/components/settings/AppUrlSettings';
+import OutboundWebhookSettings from '@/components/settings/OutboundWebhookSettings';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import RetentionPolicySettings from '@/components/settings/RetentionPolicySettings';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
@@ -31,6 +32,7 @@ import Link from 'next/link';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
 import { getScimConfig } from '@/lib/scim';
 import ScimIntegrationSummary from '@/components/settings/ScimIntegrationSummary';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -75,7 +77,7 @@ async function loadSystemSettings() {
   ] = await Promise.all([
     prisma.systemSettings.findUnique({
       where: { id: 'default' },
-      select: { appUrl: true, updatedAt: true },
+      select: { appUrl: true, updatedAt: true, allowInsecureWebhookUrls: true },
     }),
     prisma.oidcConfig.findUnique({
       where: { id: 'default' },
@@ -126,6 +128,7 @@ async function loadSystemSettings() {
 }
 
 export default async function SystemSettingsPage() {
+  await requirePageAccess('/settings/system');
   // Data loading is isolated from rendering: a try/catch cannot catch render errors, and the
   // failure path must never echo internal error details to the browser.
   let loaded: Awaited<ReturnType<typeof loadSystemSettings>> | null = null;
@@ -214,6 +217,18 @@ export default async function SystemSettingsPage() {
         updatedAt={systemSettings?.updatedAt?.toISOString() ?? null}
       />
     </SettingsSection>
+  );
+
+  const appUrlAndWebhooksTab = (
+    <div className="space-y-6">
+      {appUrlTab}
+      <SettingsSection
+        title="Outgoing webhooks"
+        description="Which URLs service webhooks may post to."
+      >
+        <OutboundWebhookSettings allowHttp={systemSettings?.allowInsecureWebhookUrls ?? false} />
+      </SettingsSection>
+    </div>
   );
 
   const ssoTab = (
@@ -593,7 +608,7 @@ export default async function SystemSettingsPage() {
       <SystemSettingsTabs
         overviewTab={overviewTab}
         automationTab={automationTab}
-        appUrlTab={appUrlTab}
+        appUrlTab={appUrlAndWebhooksTab}
         ssoTab={ssoTab}
         scimTab={scimTab}
         retentionTab={retentionTab}

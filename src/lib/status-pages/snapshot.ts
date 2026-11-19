@@ -48,6 +48,11 @@ import {
   type HistoryIncident,
 } from './history-query';
 
+/** How long a dirty page may serve its last good projection before it fails closed. */
+const STALE_DIRTY_FAIL_CLOSED_SECONDS = 300;
+/** Listed active incidents per snapshot; matches the largest configurable display budget. */
+const MAX_ACTIVE_SNAPSHOT_INCIDENTS = 100;
+
 export type StatusPageSnapshot = PublicStatusPageSnapshot;
 
 function mapMaintenanceRows(
@@ -209,8 +214,10 @@ export async function buildStatusPageSnapshot(
   };
 
   // Active incidents must never be evicted by the historical display limit.
-  // We fetch ALL active PUBLIC incidents plus recent/overlapping resolved incidents
-  // up to the display budget, then dedupe and sort active-first.
+  // We fetch the newest active PUBLIC incidents (bounded, so an alert storm cannot push the
+  // snapshot past its byte limit and stop every publish) plus recent/overlapping resolved
+  // incidents up to the display budget, then dedupe and sort active-first. Component status
+  // comes from loadCurrentIncidentsByService, which still sees every active incident.
   type SnapshotIncident = Prisma.IncidentGetPayload<{ select: typeof INCIDENT_SELECT }>;
   let incidents: SnapshotIncident[] = [];
   if (ids.length && visibility.showIncidents) {
@@ -221,6 +228,7 @@ export async function buildStatusPageSnapshot(
         status: { in: ['OPEN', 'ACKNOWLEDGED'] },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: MAX_ACTIVE_SNAPSHOT_INCIDENTS,
       select: INCIDENT_SELECT,
     });
     const historicalIncidents = await db.incident.findMany({
@@ -962,9 +970,10 @@ export async function reconcileStatusPageSnapshots(limit = 10) {
   setOperationalGauge('opsknight_status_page_fail_closed', Number(health?.failClosed ?? 0));
 
   const pages = await prisma.$queryRaw<
-    Array<{ statusPageId: string; dirty: boolean; servingState: string }>
+    Array<{ statusPageId: string; dirty: boolean; servingState: string; stale: boolean }>
   >`
-    SELECT "statusPageId", "servingState", ("publishedRevision" <> "revision") AS "dirty"
+    SELECT "statusPageId", "servingState", ("publishedRevision" <> "revision") AS "dirty",
+      ("generatedAt" IS NULL OR "generatedAt" < NOW() - ${STALE_DIRTY_FAIL_CLOSED_SECONDS} * INTERVAL '1 second') AS "stale"
     FROM "StatusPageSnapshot"
     WHERE "publishedRevision" <> "revision"
        OR "lastError" IS NOT NULL
@@ -974,12 +983,18 @@ export async function reconcileStatusPageSnapshots(limit = 10) {
   let rebuilt = 0;
   for (const page of pages) {
     try {
-      // A dirty revision of unknown provenance may represent disclosure tightening and must
-      // fail closed. A row already carrying a non-LIVE state holds a decision the control plane
-      // made deliberately, and overwriting it here would flap the page dark between an
-      // administrator's commit and its synchronous republish.
-      if (page.dirty && page.servingState === 'LIVE') {
-        await getStatusPageServingStore().revoke(page.statusPageId, 'PRIVACY');
+      // A dirty revision of unknown provenance (most often an incident write on a mapped
+      // service) keeps serving the last good projection while it is rebuilt; revoking on every
+      // incident write took live pages dark exactly when visitors need them. If the page still
+      // cannot be republished after a bounded window, the change may be a disclosure tightening,
+      // so it then fails closed. A row carrying another state (FAIL_CLOSED, DISABLED) holds a
+      // decision the control plane made deliberately and is never overwritten here.
+      if (page.dirty && (page.servingState === 'LIVE' || page.servingState === 'STALE_OK')) {
+        if (page.stale) {
+          await getStatusPageServingStore().revoke(page.statusPageId, 'PRIVACY');
+        } else if (page.servingState === 'LIVE') {
+          await getStatusPageServingStore().revoke(page.statusPageId, 'SUPERSEDED');
+        }
       }
       const outcome = await publishStatusPageSnapshot(page.statusPageId);
       if (outcome.kind === 'failed') {

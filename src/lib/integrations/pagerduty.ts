@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { normalizeEventAction, normalizeSeverity, firstString } from './normalization';
 import type { PagerDutyEvent } from './schemas';
 
@@ -28,9 +29,9 @@ export function transformPagerDutyToEvent(data: PagerDutyEvent): {
   const severity = normalizeSeverity(data.payload?.severity, 'error');
   const source = firstString(data.payload?.source, data.client) || 'PagerDuty';
 
-  const dedupKey =
-    firstString(data.dedup_key, data.dedupKey) ||
-    `pd-${summary.replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
+  // Like PagerDuty, a trigger without dedup_key is a new alert with its own
+  // key (returned to the caller); summaries are not identities.
+  const dedupKey = firstString(data.dedup_key, data.dedupKey) || `pd-${randomUUID()}`;
 
   return {
     event_action: normalizeEventAction(eventAction, 'trigger'),

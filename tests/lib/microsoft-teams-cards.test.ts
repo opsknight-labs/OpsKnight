@@ -25,6 +25,23 @@ function baseIncident() {
 }
 
 describe('buildMicrosoftTeamsIncidentCard', () => {
+  it('renders alert title and description as plain TextRuns, never markdown TextBlocks', () => {
+    const phish = '[Reset password](https://evil.example)';
+    const card = buildMicrosoftTeamsIncidentCard({
+      incident: incident({ title: phish, description: phish }),
+      eventType: 'triggered',
+    });
+    const markdownBlocks: string[] = [];
+    const plainRuns: string[] = [];
+    JSON.stringify(card.body, (_key, value) => {
+      if (value?.type === 'TextBlock') markdownBlocks.push(String(value.text));
+      if (value?.type === 'TextRun') plainRuns.push(String(value.text));
+      return value;
+    });
+    expect(markdownBlocks.some(text => text.includes(phish))).toBe(false);
+    expect(plainRuns.filter(text => text === phish)).toHaveLength(2);
+  });
+
   it('renders AdaptiveCard v1.5 with emphasis header, facts, and single View action', () => {
     const card = buildMicrosoftTeamsIncidentCard({ incident: incident(), eventType: 'triggered' });
     expect(card.$schema).toContain('adaptive-card.json');

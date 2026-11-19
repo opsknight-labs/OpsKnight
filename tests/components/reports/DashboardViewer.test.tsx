@@ -226,6 +226,22 @@ describe('DashboardViewer Component', () => {
     expect(screen.getByText('Executive Operations')).toBeDefined();
   });
 
+  it('keeps unsaved edits when a data refresh delivers new widget props during edit mode', async () => {
+    const { rerender } = render(<DashboardViewer {...defaultProps} />);
+
+    const settingsButton = screen.getByRole('button', { name: 'Dashboard settings' });
+    fireEvent.pointerDown(settingsButton, { button: 0 });
+    fireEvent.click(await screen.findByText(/Edit Dashboard/i));
+    fireEvent.click(screen.getByTestId('remove-widget-btn'));
+    expect(screen.getByText('1 widgets in grid')).toBeDefined();
+
+    // router.refresh() re-renders the server component with fresh prop references.
+    rerender(<DashboardViewer {...defaultProps} widgets={mockWidgets.map(w => ({ ...w }))} />);
+
+    expect(screen.getByText('1 widgets in grid')).toBeDefined();
+    expect(screen.getByText('Unsaved changes')).toBeDefined();
+  });
+
   it('renders editing footer with dashboard-edit-footer class and opens widget library via Add Widget button', async () => {
     const { container } = render(<DashboardViewer {...defaultProps} />);
 

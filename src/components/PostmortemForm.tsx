@@ -42,7 +42,6 @@ import PostmortemActionItems from './postmortem/PostmortemActionItems';
 import FiveWhysBuilder, { type FiveWhysStep } from './postmortem/FiveWhysBuilder';
 import ContributingFactorsSelector, {
   type FactorType,
-  ALL_FACTORS,
 } from './postmortem/ContributingFactorsSelector';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import { useTimezone } from '@/contexts/TimezoneContext';
@@ -68,6 +67,11 @@ import {
   PostmortemQualityChecklist,
   PostmortemRecurrenceStrip,
 } from './postmortem/PostmortemIntelligence';
+import {
+  formatFiveWhys,
+  parseStoredFactors,
+  parseStoredFiveWhys,
+} from './postmortem/root-cause-format';
 
 const postmortemSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100, 'Title must be less than 100 characters'),
@@ -85,6 +89,7 @@ type PostmortemFormProps = {
   incidentId: string;
   initialData?: {
     id: string;
+    revision?: number;
     title: string;
     summary?: string | null;
     timeline?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -123,90 +128,6 @@ function extractNarrative(rawRootCause?: string | null): string {
       ?.split(/\[Contributing Factors:.*\]/i)[0]
       ?.trim() || ''
   );
-}
-
-// Helper to parse 5-whys steps from existing root cause text
-function parseStoredFiveWhys(rawRootCause?: string | null): FiveWhysStep[] {
-  if (!rawRootCause) return [];
-  const lines = rawRootCause.split('\n').filter(l => l.trim().length > 0);
-  const whyLines = lines.filter(l => /^(why\s*#?\d*|why:|\d+\.\s*why)/i.test(l.trim()));
-
-  if (whyLines.length > 0) {
-    return whyLines.map((line, idx) => {
-      const parts = line.split(/:\s*|\s*-\s*|\s*➔\s*/);
-      return {
-        id: `why-${idx + 1}-${Date.now()}`,
-        question: parts[0]?.trim() || `Why #${idx + 1}`,
-        answer: parts.slice(1).join(': ').trim() || '',
-      };
-    });
-  }
-
-  return [];
-}
-
-// Helper to parse factor tags from existing root cause text
-function parseStoredFactors(
-  rawRootCause?: string | null,
-  rawSummary?: string | null
-): FactorType[] {
-  const factors: FactorType[] = [];
-  const combined = `${rawRootCause || ''} ${rawSummary || ''}`.toLowerCase();
-
-  // Match explicit [Contributing Factors: ...] header
-  const match = rawRootCause?.match(/\[Contributing Factors:\s*([^\]]+)\]/i);
-  if (match && match[1]) {
-    const factorNames = match[1].split(',').map(s => s.trim().toUpperCase());
-    ALL_FACTORS.forEach(f => {
-      if (factorNames.includes(f) || factorNames.includes(f.replace('_', ' '))) {
-        factors.push(f);
-      }
-    });
-  }
-
-  // Keyword inferences
-  if (
-    combined.includes('database') ||
-    combined.includes('server') ||
-    combined.includes('cpu') ||
-    combined.includes('memory') ||
-    combined.includes('network')
-  ) {
-    if (!factors.includes('INFRASTRUCTURE')) factors.push('INFRASTRUCTURE');
-  }
-  if (
-    combined.includes('bug') ||
-    combined.includes('null') ||
-    combined.includes('syntax') ||
-    combined.includes('deploy') ||
-    combined.includes('regression')
-  ) {
-    if (!factors.includes('CODE_DEFECT')) factors.push('CODE_DEFECT');
-  }
-  if (
-    combined.includes('monitoring') ||
-    combined.includes('alert') ||
-    combined.includes('metric') ||
-    combined.includes('blindspot')
-  ) {
-    if (!factors.includes('MONITORING_GAP')) factors.push('MONITORING_GAP');
-  }
-  if (
-    combined.includes('runbook') ||
-    combined.includes('procedure') ||
-    combined.includes('handoff')
-  ) {
-    if (!factors.includes('PROCESS')) factors.push('PROCESS');
-  }
-  if (
-    combined.includes('vendor') ||
-    combined.includes('third-party') ||
-    combined.includes('upstream')
-  ) {
-    if (!factors.includes('VENDOR_DEPENDENCY')) factors.push('VENDOR_DEPENDENCY');
-  }
-
-  return factors;
 }
 
 export default function PostmortemForm({
@@ -285,7 +206,7 @@ export default function PostmortemForm({
     parseStoredFiveWhys(initialData?.rootCause)
   );
   const [selectedFactors, setSelectedFactors] = useState<FactorType[]>(() =>
-    parseStoredFactors(initialData?.rootCause, initialData?.summary)
+    parseStoredFactors(initialData?.rootCause)
   );
 
   const handleToggleFactor = (factor: FactorType) => {
@@ -317,9 +238,7 @@ export default function PostmortemForm({
 
     const validWhys = fiveWhysSteps.filter(s => s.question.trim() || s.answer.trim());
     if (validWhys.length > 0) {
-      const whysFormatted = validWhys
-        .map((s, idx) => `Why #${idx + 1}: ${s.question.trim()} - ${s.answer.trim()}`)
-        .join('\n');
+      const whysFormatted = formatFiveWhys(validWhys);
       rootCauseParts.push(`### 5-Whys Analysis\n${whysFormatted}`);
     }
 
@@ -329,6 +248,7 @@ export default function PostmortemForm({
       timeline: timelineEvents,
       impact: impactMetrics,
       actionItems: actionItems,
+      expectedRevision: initialData?.revision,
     };
 
     startTransition(async () => {
@@ -381,7 +301,7 @@ export default function PostmortemForm({
       setFiveWhysSteps(startingWhys);
 
       // Suggest initial contributing factors based on draft notes
-      const inferred = parseStoredFactors(draft.rootCause, draft.summary);
+      const inferred = parseStoredFactors(draft.rootCause);
       setSelectedFactors(inferred);
 
       toast.success('Draft generated successfully');
@@ -493,7 +413,7 @@ export default function PostmortemForm({
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {/* Incident Selection */}
         {!incidentId && resolvedIncidents.length > 0 && (
-          <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+          <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
             <CardHeader>
               <CardTitle className="text-xl">Select Incident</CardTitle>
             </CardHeader>
@@ -535,7 +455,7 @@ export default function PostmortemForm({
         )}
 
         {incidentId && effectiveIncidentJiraIssues.length > 0 && (
-          <Card className="border-blue-200/80 bg-blue-50/40 shadow-sm">
+          <Card className="border-blue-200/80 bg-blue-50/40 shadow-sm dark:border-blue-500/30 dark:bg-blue-500/10">
             <CardContent className="p-4 flex flex-col gap-1.5">
               <div className="text-xs font-semibold text-foreground">
                 Inherited incident context
@@ -552,7 +472,7 @@ export default function PostmortemForm({
         <PostmortemRecurrenceStrip recurrence={assistView?.recurrence} />
 
         {/* Basic Information */}
-        <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="flex flex-row justify-between items-center space-y-0 pb-4">
             <CardTitle className="text-xl">Basic Information</CardTitle>
             <Button
@@ -561,12 +481,12 @@ export default function PostmortemForm({
               size="sm"
               onClick={handleAutoDraft}
               disabled={isDrafting || (!incidentId && !selectedIncidentId)}
-              className="bg-white hover:bg-purple-50 hover:text-purple-700 transition-colors border-purple-200"
+              className="bg-card hover:bg-purple-50 hover:text-purple-700 transition-colors border-purple-200 dark:hover:bg-purple-500/10 dark:hover:text-purple-300 dark:border-purple-500/30"
             >
               {isDrafting ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <Wand2 className="w-4 h-4 mr-2 text-purple-600" />
+                <Wand2 className="w-4 h-4 mr-2 text-purple-600 dark:text-purple-400" />
               )}
               Auto-Draft
             </Button>
@@ -669,7 +589,7 @@ export default function PostmortemForm({
                       </SelectContent>
                     </Select>
                     <FormMessage />
-                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded flex items-start gap-2 text-sm text-yellow-800">
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded flex items-start gap-2 text-sm text-yellow-800 dark:bg-yellow-500/10 dark:border-yellow-500/30 dark:text-yellow-300">
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>Private postmortems are not shown on the public status page.</span>
                     </div>
@@ -681,7 +601,7 @@ export default function PostmortemForm({
         </Card>
 
         {/* Timeline */}
-        <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl">Incident Timeline</CardTitle>
           </CardHeader>
@@ -694,7 +614,7 @@ export default function PostmortemForm({
         <PostmortemImpactInput metrics={impactMetrics} onChange={setImpactMetrics} />
 
         {/* Root Cause Analysis & 5-Whys Studio */}
-        <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="pb-3">
             <CardTitle className="text-xl flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -718,7 +638,7 @@ export default function PostmortemForm({
             </div>
 
             {/* 5-Whys Interactive Builder */}
-            <div className="pt-4 border-t border-slate-200/80">
+            <div className="pt-4 border-t border-ink-200/80">
               <FiveWhysBuilder
                 initialSteps={fiveWhysSteps}
                 onChange={setFiveWhysSteps}
@@ -731,7 +651,7 @@ export default function PostmortemForm({
               control={form.control}
               name="rootCause"
               render={({ field }) => (
-                <FormItem className="pt-4 border-t border-slate-200/80">
+                <FormItem className="pt-4 border-t border-ink-200/80">
                   <FormLabel>Technical Root Cause Narrative</FormLabel>
                   <FormControl>
                     <Textarea
@@ -753,7 +673,7 @@ export default function PostmortemForm({
               control={form.control}
               name="resolution"
               render={({ field }) => (
-                <FormItem className="pt-4 border-t border-slate-200/80">
+                <FormItem className="pt-4 border-t border-ink-200/80">
                   <FormLabel>Mitigation & Resolution Steps</FormLabel>
                   <FormControl>
                     <Textarea
@@ -781,7 +701,7 @@ export default function PostmortemForm({
         <PostmortemActionSuggestions suggestions={suggestions} onAdd={addSuggestion} />
 
         {/* Lessons Learned */}
-        <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl">Lessons Learned</CardTitle>
           </CardHeader>
@@ -820,7 +740,7 @@ export default function PostmortemForm({
         <PostmortemQualityChecklist issues={qualityIssues} />
 
         {/* Form Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+        <div className="flex justify-end gap-3 pt-4 border-t border-ink-200">
           <Button
             type="button"
             variant="outline"

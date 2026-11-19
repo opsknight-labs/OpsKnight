@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import { getUserPermissions } from '@/lib/rbac';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ type PageProps = {
 };
 
 export default async function MobilePostmortemDetailPage({ params }: PageProps) {
+  await requirePageAccess('/m/postmortems/[id]');
   const { id } = await params;
   const [context, permissions] = await Promise.all([
     getRequestActorContext(),

@@ -13,6 +13,7 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { executeIdempotentIncidentLifecycleCommand } from '@/lib/incidents/idempotent-commands';
 import { AppError } from '@/lib/errors';
+import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
 export const POST = withV2Observability(async function POST(
@@ -40,14 +41,13 @@ export const POST = withV2Observability(async function POST(
       });
     }
 
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE, {
-      type: 'incident',
-      assigneeId: incident.assigneeId,
-      watcherIds: incident.watchers.map(w => w.userId),
-      visibility: incident.visibility,
-      serviceTeamId: incident.service.teamId,
-      assignedTeamId: incident.teamId,
-    });
+    enforceV2Authorization(
+      actor,
+
+      AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE,
+
+      (await resolveIncidentResourceForActor(actor, id)) ?? { type: 'incident' }
+    );
 
     const body = await req.json().catch(() => ({}));
     const validated = IncidentAcknowledgeV2Schema.parse(body);

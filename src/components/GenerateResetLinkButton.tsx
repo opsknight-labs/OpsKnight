@@ -79,7 +79,7 @@ export default function GenerateResetLinkButton({
           onClick={copyToClipboard}
           variant="outline"
           size="sm"
-          className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 gap-2"
+          className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 gap-2 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300"
           title="Click to copy link"
         >
           {copied ? (
@@ -99,7 +99,7 @@ export default function GenerateResetLinkButton({
           }}
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200/80 cursor-pointer"
+          className="h-7 w-7 p-0 rounded-full bg-ink-100 hover:bg-ink-200 text-ink-600 hover:text-ink-900 border border-ink-200/80 cursor-pointer"
           title="Close"
         >
           <X className="h-3.5 w-3.5 stroke-[2.25]" />
@@ -128,7 +128,7 @@ export default function GenerateResetLinkButton({
           disabled={isLoading}
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200/80 cursor-pointer"
+          className="h-7 w-7 p-0 rounded-full bg-ink-100 hover:bg-ink-200 text-ink-600 hover:text-ink-900 border border-ink-200/80 cursor-pointer"
           title="Cancel"
         >
           <X className="h-3.5 w-3.5 stroke-[2.25]" />
@@ -148,7 +148,7 @@ export default function GenerateResetLinkButton({
         onClick={() => setConfirming(true)}
         variant="ghost"
         size="sm"
-        className={`h-7 text-xs gap-1.5 ${isInvite ? 'text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100' : 'text-emerald-600 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'} ${className}`}
+        className={`h-7 text-xs gap-1.5 ${isInvite ? 'text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/30 dark:hover:bg-blue-500/15' : 'text-emerald-600 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:hover:bg-emerald-500/15'} ${className}`}
         title={buttonLabel}
         aria-label={`${buttonLabel} for ${userName}`}
       >

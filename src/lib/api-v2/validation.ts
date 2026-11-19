@@ -1,6 +1,14 @@
 import { z } from 'zod/v3';
+import { STATUS_ANNOUNCEMENT_TYPES } from '@/lib/validation';
 import { APP_ROLES, isApiScope } from '@/lib/authorization';
 import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
+import { isValidTimeZone } from '@/lib/timezone';
+
+const IanaTimeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(isValidTimeZone, { message: 'Invalid IANA time zone' });
 
 export const PaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -158,13 +166,13 @@ export const TeamUpdateV2Schema = z.object({
 
 export const ScheduleCreateV2Schema = z.object({
   name: z.string().trim().min(2).max(100),
-  timeZone: z.string().trim().min(1).default('UTC'),
+  timeZone: IanaTimeZoneSchema.default('UTC'),
   description: z.string().trim().max(1000).optional().nullable(),
 });
 
 export const ScheduleUpdateV2Schema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
-  timeZone: z.string().trim().min(1).optional(),
+  timeZone: IanaTimeZoneSchema.optional(),
   description: z.string().trim().max(1000).optional().nullable(),
 });
 
@@ -297,11 +305,11 @@ export const StatusPageUpdateV2Schema = z.object({
 export const StatusPageAnnouncementV2Schema = z.object({
   title: z.string().trim().min(2).max(200),
   message: z.string().trim().min(1).max(5000),
-  type: z.string().trim().default('INFO'),
+  type: z.enum(STATUS_ANNOUNCEMENT_TYPES).default('INFO'),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional().nullable(),
   isActive: z.boolean().default(true),
-  services: z.array(z.string().trim().min(1)).optional(),
+  services: z.array(z.string().trim().min(1)).max(200).optional(),
 });
 
 export const RunbookExecuteV2Schema = z.object({
@@ -351,6 +359,24 @@ export const PostmortemListQuerySchema = z.object({
     .transform(val => (val === undefined ? undefined : val === 'true')),
   search: z.string().trim().max(100).optional(),
 });
+
+export const ActionItemListQuerySchema = z
+  .object({
+    // Parsed by the route's pagination; named here only so the strict schema admits them.
+    limit: z.string().optional(),
+    cursor: z.string().optional(),
+    status: z.enum(['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED']).optional(),
+    priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
+    /** A user id, or the literal `me` for the caller. */
+    ownerId: z.string().trim().min(1).max(100).optional(),
+    incidentId: z.string().trim().min(1).max(100).optional(),
+    postmortemId: z.string().trim().min(1).max(100).optional(),
+    overdue: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform(val => (val === undefined ? undefined : val === 'true')),
+  })
+  .strict();
 
 export const PostmortemImpactV2Schema = z
   .object({

@@ -66,11 +66,7 @@ export type MicrosoftTeamsCardOptions = {
 };
 
 export type TeamsIncidentPresentationState =
-  | 'OPEN'
-  | 'ACKNOWLEDGED'
-  | 'SNOOZED'
-  | 'RESOLVED'
-  | 'SUPPRESSED';
+  'OPEN' | 'ACKNOWLEDGED' | 'SNOOZED' | 'RESOLVED' | 'SUPPRESSED';
 
 export function deriveTeamsIncidentPresentation(
   input: MicrosoftTeamsIncidentCardInput
@@ -447,13 +443,18 @@ export function buildMicrosoftTeamsIncidentCard(
                     color: 'Attention',
                     wrap: true,
                   },
+                  // Alert-supplied text goes in a TextRun, which Teams renders as plain
+                  // text; a TextBlock would turn "[x](https://evil)" into a live link.
                   {
-                    type: 'TextBlock',
-                    text: incident.title,
-                    weight: 'Bolder',
-                    size: 'Large',
-                    wrap: true,
-                    maxLines: 2,
+                    type: 'RichTextBlock',
+                    inlines: [
+                      {
+                        type: 'TextRun',
+                        text: safeIncidentDescription(incident.title, 200) ?? '',
+                        weight: 'Bolder',
+                        size: 'Large',
+                      },
+                    ],
                   },
                   {
                     type: 'TextBlock',
@@ -496,11 +497,9 @@ export function buildMicrosoftTeamsIncidentCard(
           ...(description
             ? [
                 {
-                  type: 'TextBlock',
-                  text: description,
-                  wrap: true,
+                  type: 'RichTextBlock',
+                  inlines: [{ type: 'TextRun', text: description, isSubtle: true }],
                   spacing: 'Medium',
-                  isSubtle: true,
                 } as const,
               ]
             : []),

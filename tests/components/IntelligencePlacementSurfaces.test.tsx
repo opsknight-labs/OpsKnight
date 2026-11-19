@@ -566,6 +566,7 @@ describe('ServiceDetailTabs', () => {
     runbooksContent: <p>runbooks</p>,
     integrationsContent: <p>integrations</p>,
     notificationsContent: <p>notifications</p>,
+    maintenanceContent: <p>maintenance</p>,
     settingsContent: <p>settings</p>,
   };
 

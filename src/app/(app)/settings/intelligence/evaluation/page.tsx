@@ -8,6 +8,7 @@ import {
 import AiUsageSpendSections from '../_sections/AiUsageSpendSections';
 import GroupingQualitySection from '../_sections/GroupingQualitySection';
 import InsightsSections from '../_sections/InsightsSections';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -26,6 +27,7 @@ export default async function IntelligenceEvaluationPage({
 }: {
   searchParams?: Promise<RouteSearchParams>;
 }) {
+  await requirePageAccess('/settings/intelligence/evaluation');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
   const params = await searchParams;

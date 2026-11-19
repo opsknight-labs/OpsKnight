@@ -6,6 +6,9 @@ import { withMcpDatabase } from '@/lib/database-workload';
 import { logger } from '@/lib/logger';
 import { setOperationalGauge } from '@/lib/metrics/operational/registry';
 import { McpBoundaryError, requireMcp } from '../core/errors';
+import { MY_PAGES_URI, pollPages, resetPagePushForTests } from './page-push';
+
+export { MY_PAGES_URI };
 
 export const MAX_RESOURCE_SUBSCRIPTIONS = 5;
 export const MAX_STREAMS_PER_PROCESS = 32;
@@ -29,11 +32,20 @@ const URI =
   /^opsknight:\/\/(incidents|services|schedules|runbooks|reports|postmortems)\/([A-Za-z0-9_-]{1,128})$/;
 
 export function parseSubscriptionUri(uri: string) {
+  // The person's own pages: authorized (and re-checked) like listing incidents.
+  if (uri === MY_PAGES_URI)
+    return {
+      domain: 'oncall' as const,
+      id: 'me',
+      readOperation: 'listIncidents',
+      args: { query: { limit: 1 } } as Record<string, unknown>,
+    };
   const match = URI.exec(uri);
   requireMcp(match, 'MCP_INVALID_RESOURCE_ID');
   const domain = match[1] as Domain;
+  const id = match[2];
   // eslint-disable-next-line security/detect-object-injection -- domain matched the closed URI pattern
-  return { domain, id: match[2], readOperation: TABLES[domain].read };
+  return { domain, id, readOperation: TABLES[domain].read, args: { path: { id } } };
 }
 
 /** The change bus every listen stream on this replica subscribes to. Events are hints, not data. */
@@ -41,20 +53,30 @@ export const mcpEventBus = new InMemoryServerEventBus(error =>
   logger.warn('mcp.subscription.listener_failed', { error: error.message })
 );
 
+/**
+ * Streams one person may hold across all their connections. The per-connection cap alone let one
+ * person with many connections (a personal token allows twenty) fill every slot on the process.
+ */
+export const MAX_STREAMS_PER_USER = 4;
+
 let processStreams = 0;
 const grantStreams = new Map<string, number>();
+const userStreams = new Map<string, number>();
 
 /** Long-lived streams have their own capacity, separate from database-work admission. */
-export function acquireStreamSlot(grantId: string) {
+export function acquireStreamSlot(grantId: string, ownerId?: string) {
   const forGrant = grantStreams.get(grantId) ?? 0;
+  const forUser = ownerId ? (userStreams.get(ownerId) ?? 0) : 0;
   // Process capacity frees as other streams end (at most STREAM_LIFETIME_MS); a retry can fit.
   if (processStreams >= MAX_STREAMS_PER_PROCESS)
     throw new McpBoundaryError('MCP_SUBSCRIPTIONS_BUSY', 503, true, undefined, {
       retryAfterSeconds: 30,
     });
   requireMcp(forGrant < MAX_STREAMS_PER_GRANT, 'MCP_SUBSCRIPTIONS_LIMIT', 429);
+  requireMcp(forUser < MAX_STREAMS_PER_USER, 'MCP_SUBSCRIPTIONS_LIMIT', 429);
   processStreams++;
   grantStreams.set(grantId, forGrant + 1);
+  if (ownerId) userStreams.set(ownerId, forUser + 1);
   setOperationalGauge('opsknight_mcp_subscriptions_active', processStreams);
   let released = false;
   return () => {
@@ -64,6 +86,11 @@ export function acquireStreamSlot(grantId: string) {
     const remaining = (grantStreams.get(grantId) ?? 1) - 1;
     if (remaining > 0) grantStreams.set(grantId, remaining);
     else grantStreams.delete(grantId);
+    if (ownerId) {
+      const left = (userStreams.get(ownerId) ?? 1) - 1;
+      if (left > 0) userStreams.set(ownerId, left);
+      else userStreams.delete(ownerId);
+    }
     setOperationalGauge('opsknight_mcp_subscriptions_active', processStreams);
   };
 }
@@ -122,6 +149,7 @@ export async function pollChanges() {
       const byDomain = new Map<Domain, string[]>();
       for (const uri of tracked.keys()) {
         const { domain, id } = parseSubscriptionUri(uri);
+        if (domain === 'oncall') continue;
         byDomain.set(domain, [...(byDomain.get(domain) ?? []), id]);
       }
       for (const [domain, ids] of byDomain) {
@@ -147,6 +175,7 @@ export async function pollChanges() {
       if (policySeen !== undefined && at !== policySeen)
         mcpEventBus.publish({ kind: 'tools_list_changed' });
       policySeen = at;
+      await pollPages();
     });
   } catch (error) {
     // A failed poll only delays hints; clients always re-read with fresh authorization.
@@ -166,4 +195,5 @@ export function resetSubscriptionStateForTests(revalidateMs = 30_000) {
   lastSeen.clear();
   processStreams = 0;
   grantStreams.clear();
+  resetPagePushForTests();
 }

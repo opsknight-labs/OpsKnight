@@ -13,6 +13,9 @@ export class ScimFailure extends Error {
 export const enterpriseSchema = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
 export const patchSchema = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
 export const identifier = z.string().trim().min(1).max(320);
+/** Returned to the IdP when userName and the work email differ (e.g. Entra UPN ≠ mail). */
+export const USERNAME_EMAIL_MISMATCH =
+  'The work email (emails[type eq "work"].value) must equal userName. Map the same directory email attribute to both (Entra: mail; Okta: user.email).';
 export const memberSchema = z
   .object({
     value: identifier,
@@ -57,7 +60,6 @@ export const userSchema = z
         givenName: z.string().trim().max(160).optional(),
         familyName: z.string().trim().max(160).optional(),
       })
-      .strict()
       .optional(),
     emails: z
       .array(
@@ -67,7 +69,6 @@ export const userSchema = z
             type: z.literal('work').optional(),
             primary: z.boolean().optional(),
           })
-          .strict()
       )
       .max(1)
       .optional(),
@@ -75,7 +76,6 @@ export const userSchema = z
     title: z.string().trim().max(320).nullable().optional(),
     [enterpriseSchema]: z
       .object({ department: z.string().trim().max(320).nullable().optional() })
-      .strict()
       .optional(),
     photos: z
       .array(
@@ -88,15 +88,26 @@ export const userSchema = z
             type: z.string().optional(),
             primary: z.boolean().optional(),
           })
-          .strict()
       )
       .max(1)
       .optional(),
+    // Authority stays with OpsKnight: privilege attributes are refused, never ignored.
+    roles: z.never().optional(),
+    entitlements: z.never().optional(),
+    rolesource: z.never().optional(),
   })
-  .strict()
+  // Unknown attributes are ignored, not rejected (RFC 7644 §3.3): Okta and Entra send
+  // password, locale, groups, phoneNumbers, addresses, manager... on every create/PUT.
+  // Only the fields declared above are ever persisted.
   .superRefine((user, ctx) => {
+    // OpsKnight stores one email that is both the login name and the work email, so the two
+    // attributes must agree. Name the attributes (never the values) so IdP logs are actionable.
     if (user.emails?.[0] && user.emails[0].value.toLowerCase() !== user.userName)
-      ctx.addIssue({ code: 'custom', message: 'The work email must match userName.' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['emails'],
+        message: USERNAME_EMAIL_MISMATCH,
+      });
   });
 
 /** Structural attribute names are case-insensitive; reject ambiguous duplicates. */

@@ -254,7 +254,10 @@ describe('sla-breach-monitor', () => {
 
       await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
       expect(enqueueCentralNotification).not.toHaveBeenCalled();
-      expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
+      // Nothing to deliver, but the transition is still recorded so it is not re-detected forever.
+      expect(prisma.incidentEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ incidentId: 'inc-1', type: 'SLA_WARNING' }),
+      });
     });
 
     it('does not create an SLA Slack intent when the service Slack checkbox is unchecked', async () => {
@@ -299,7 +302,7 @@ describe('sla-breach-monitor', () => {
 
       await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
       expect(enqueueCentralNotification).not.toHaveBeenCalled();
-      expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
+      expect(prisma.incidentEvent.create).toHaveBeenCalledTimes(1);
     });
 
     it('does not commit the SLA dedupe marker when intent materialization fails', async () => {
@@ -345,8 +348,75 @@ describe('sla-breach-monitor', () => {
         new Error('database unavailable')
       );
 
-      await expect(checkSLABreaches()).rejects.toThrow('database unavailable');
+      // The check completes (one incident must not fail the scheduler cycle) but the marker is
+      // not written, so the warning is retried next cycle.
+      await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
       expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('sends SLA breach webhooks per incident with a breached event type', async () => {
+      const { default: prisma } = await import('@/lib/prisma');
+      const now = new Date('2026-01-05T12:00:00Z');
+      vi.setSystemTime(now);
+      const incident = (id: string) => ({
+        id,
+        title: `Incident ${id}`,
+        serviceId: 'svc-1',
+        urgency: 'HIGH',
+        status: 'OPEN',
+        createdAt: new Date(now.getTime() - 20 * 60 * 1000),
+        resolvedAt: null,
+        slaAckTargetMs: 15 * 60 * 1000,
+        slaResolveTargetMs: 120 * 60 * 1000,
+        slaTargetSource: 'SERVICE_DEFAULT',
+        slaTargetCapturedAt: new Date(now.getTime() - 20 * 60 * 1000),
+        slaPausedMs: 0,
+        slaPauseStartedAt: null,
+        slaAckElapsedMs: null,
+        slaResolveElapsedMs: null,
+        acknowledgedAt: null,
+        dedupKey: null,
+        escalationProcessingAt: null,
+        snoozedUntil: null,
+        snoozeReason: null,
+        service: {
+          id: 'svc-1',
+          name: 'Test Service',
+          targetAckMinutes: 15,
+          targetResolveMinutes: 120,
+          slackChannel: null,
+          slackWebhookUrl: null,
+          serviceNotificationChannels: ['WEBHOOK'],
+          serviceNotifyOnSlaBreach: true,
+          webhookIntegrations: [
+            {
+              id: 'wh-1',
+              type: 'GENERIC',
+              url: 'https://hooks.example.com/x',
+              secret: null,
+              channel: null,
+              enabled: true,
+            },
+          ],
+        },
+      });
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([
+        incident('inc-1'),
+        incident('inc-2'),
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
+
+      await checkSLABreaches();
+
+      const webhookCalls = vi
+        .mocked(enqueueCentralNotification)
+        .mock.calls.map(([input]) => input)
+        .filter(input => input.channel === 'WEBHOOK');
+      expect(webhookCalls).toHaveLength(2);
+      expect(new Set(webhookCalls.map(input => input.eventKey)).size).toBe(2);
+      for (const input of webhookCalls) {
+        const payload = input.payload as unknown as { payload: { event: { type: string } } };
+        expect(payload.payload.event.type).toBe('breached');
+      }
     });
 
     it('deduplicates SLA ACK and RESOLVE breach events when already logged', async () => {

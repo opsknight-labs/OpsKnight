@@ -19,6 +19,7 @@ import { checksum } from '@/lib/automation/cache';
 import { createRunbook, publishDraftVersion } from '@/lib/runbooks/versioning';
 import { createServiceBinding } from '@/lib/runbooks/bindings';
 import { callMcpOperation } from '@/lib/mcp/core/execution';
+import { processObjectiveEvaluation } from '@/lib/slo/evaluation-jobs';
 import {
   commitApprovedMcpOperation,
   mcpApprovalCommitKey,
@@ -167,6 +168,59 @@ async function candidateFixture(f: Fixture) {
   return { serviceId: service.id, activeId: active.id, candidateId: candidate.id };
 }
 
+const HOUR = 60 * 60 * 1000;
+// A two-hour window on a fresh service, already running or starting in an hour.
+async function maintenanceFixture(phase: 'ACTIVE' | 'UPCOMING') {
+  const service = await createTestService('Maintenance approval');
+  const startsAt = new Date(Date.now() + (phase === 'ACTIVE' ? -HOUR : HOUR));
+  const endsAt = new Date(startsAt.getTime() + 2 * HOUR);
+  const window = await db.maintenanceWindow.create({
+    data: {
+      title: 'Database upgrade',
+      startsAt,
+      endsAt,
+      services: { create: { serviceId: service.id, startsAt, endsAt } },
+    },
+  });
+  return { serviceId: service.id, windowId: window.id };
+}
+const maintenanceWindow = (s: Record<string, string>) =>
+  db.maintenanceWindow.findUnique({ where: { id: s.windowId } });
+const windowRevision = async (s: Record<string, string>) =>
+  `"${(await maintenanceWindow(s))!.revision}"`;
+const editWindow = async (s: Record<string, string>) => {
+  await db.maintenanceWindow.update({
+    where: { id: s.windowId },
+    data: { description: 'Edited out of band' },
+  });
+};
+
+// A weekly schedule on a fresh service; occurrences are not needed for approval checks.
+async function scheduleFixture() {
+  const service = await createTestService('Schedule approval');
+  const schedule = await db.maintenanceSchedule.create({
+    data: {
+      title: 'Weekly patching',
+      frequency: 'WEEKLY',
+      byWeekday: [0],
+      timeZone: 'UTC',
+      startTime: '02:00',
+      durationMinutes: 60,
+      startsOn: '2030-01-06',
+      services: { create: { serviceId: service.id } },
+    },
+  });
+  return { serviceId: service.id, scheduleId: schedule.id };
+}
+const maintenanceSchedule = (s: Record<string, string>) =>
+  db.maintenanceSchedule.findUnique({ where: { id: s.scheduleId } });
+const editSchedule = async (s: Record<string, string>) => {
+  await db.maintenanceSchedule.update({
+    where: { id: s.scheduleId },
+    data: { description: 'Edited out of band' },
+  });
+};
+
 const evaluationJobs = async (s: Record<string, string>) =>
   (
     await db.backgroundJob.findMany({
@@ -264,6 +318,109 @@ const scenarios: Scenario[] = [
       args: { path: { id: s.lineageId }, body: { expectedVersionId: s.versionId } },
     }),
     effect: async (_f, s) => evaluationJobs(s),
+  },
+  {
+    name: 'create maintenance window',
+    operationId: 'createMaintenanceWindow',
+    setup: async () => ({ serviceId: (await createTestService('Maintenance create')).id }),
+    input: async (_f, s) => ({
+      args: {
+        body: {
+          title: 'Reviewed upgrade',
+          serviceIds: [s.serviceId],
+          startsAt: new Date(Date.now() + HOUR).toISOString(),
+          endsAt: new Date(Date.now() + 2 * HOUR).toISOString(),
+        },
+      },
+    }),
+    effect: async (_f, s) =>
+      (
+        await db.maintenanceWindow.findMany({
+          where: { services: { some: { serviceId: s.serviceId } } },
+        })
+      ).map(row => row.title),
+  },
+  {
+    name: 'update maintenance window',
+    operationId: 'updateMaintenanceWindow',
+    setup: async () => maintenanceFixture('UPCOMING'),
+    input: async (_f, s) => ({
+      args: {
+        path: { id: s.windowId },
+        body: { title: 'Reviewed upgrade' },
+        ifMatch: await windowRevision(s),
+      },
+    }),
+    effect: async (_f, s) => (await maintenanceWindow(s))!.title,
+    invalidate: async (_f, s) => editWindow(s),
+  },
+  {
+    name: 'delete maintenance window',
+    operationId: 'deleteMaintenanceWindow',
+    setup: async () => maintenanceFixture('UPCOMING'),
+    input: async (_f, s) => ({ args: { path: { id: s.windowId } } }),
+    effect: async (_f, s) => db.maintenanceWindow.count({ where: { id: s.windowId } }),
+    invalidate: async (_f, s) => editWindow(s),
+  },
+  {
+    // Ending early resumes paging for the held services; naturally idempotent, no If-Match.
+    name: 'end maintenance window',
+    operationId: 'endMaintenanceWindow',
+    setup: async () => maintenanceFixture('ACTIVE'),
+    input: async (_f, s) => ({ args: { path: { id: s.windowId }, body: {} } }),
+    effect: async (_f, s) => {
+      const row = (await maintenanceWindow(s))!;
+      return [row.endsAt.toISOString(), row.endProcessedAt !== null];
+    },
+  },
+  {
+    name: 'create maintenance schedule',
+    operationId: 'createMaintenanceSchedule',
+    setup: async () => ({ serviceId: (await createTestService('Schedule create')).id }),
+    input: async (_f, s) => ({
+      args: {
+        body: {
+          title: 'Reviewed patching',
+          serviceIds: [s.serviceId],
+          frequency: 'DAILY',
+          timeZone: 'UTC',
+          startTime: '03:00',
+          durationMinutes: 60,
+          startsOn: '2030-01-01',
+        },
+      },
+    }),
+    effect: async (_f, s) =>
+      (
+        await db.maintenanceSchedule.findMany({
+          where: { services: { some: { serviceId: s.serviceId } } },
+        })
+      ).map(row => row.title),
+  },
+  {
+    name: 'update maintenance schedule',
+    operationId: 'updateMaintenanceSchedule',
+    setup: async () => scheduleFixture(),
+    input: async (_f, s) => ({
+      args: {
+        path: { id: s.scheduleId },
+        body: { title: 'Reviewed patching', paused: true },
+        ifMatch: `"${(await maintenanceSchedule(s))!.revision}"`,
+      },
+    }),
+    effect: async (_f, s) => {
+      const row = (await maintenanceSchedule(s))!;
+      return [row.title, row.pausedAt !== null];
+    },
+    invalidate: async (_f, s) => editSchedule(s),
+  },
+  {
+    name: 'delete maintenance schedule',
+    operationId: 'deleteMaintenanceSchedule',
+    setup: async () => scheduleFixture(),
+    input: async (_f, s) => ({ args: { path: { id: s.scheduleId } } }),
+    effect: async (_f, s) => db.maintenanceSchedule.count({ where: { id: s.scheduleId } }),
+    invalidate: async (_f, s) => editSchedule(s),
   },
   {
     name: 'notification settings',
@@ -466,6 +623,48 @@ describe('service batch-wide', () => {
     await supersedeObjective(s);
     await commitApprovedMcpOperation(f.ctx(), { approvalId: prepared.approvalId });
     expect(await evaluationJobs(s)).toEqual([['PENDING', s.versionId]]);
+    // The worker must re-resolve the MCP grant (`mcp:<grantId>`), not look for an ApiKey row.
+    const [job] = await db.backgroundJob.findMany({
+      where: { payload: { path: ['lineageId'], equals: s.lineageId } },
+    });
+    await db.backgroundJob.update({ where: { id: job.id }, data: { status: 'PROCESSING' } });
+    await processObjectiveEvaluation(job.id);
+    const done = await db.backgroundJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect((done.payload as { receipt?: { outcome: string } }).receipt?.outcome).toBe(
+      'EVALUATED'
+    );
+  });
+
+  it('reads maintenance windows through generic dispatch', async () => {
+    const f = await fixture();
+    const s = await maintenanceFixture('ACTIVE');
+    type Window = { id: string; phase: string; serviceIds: string[] };
+    const list = (await callMcpOperation(f.ctx(), 'listMaintenanceWindows', {
+      query: { serviceId: s.serviceId, phase: 'ACTIVE' },
+    })) as { data: { data: Window[] } };
+    expect(list.data.data.map(row => [row.id, row.phase, row.serviceIds])).toEqual([
+      [s.windowId, 'ACTIVE', [s.serviceId]],
+    ]);
+    const one = (await callMcpOperation(f.ctx(), 'getMaintenanceWindow', {
+      path: { id: s.windowId },
+    })) as { data: { data: Window } };
+    expect(one.data.data.id).toBe(s.windowId);
+  });
+
+  it('reads maintenance schedules through generic dispatch', async () => {
+    const f = await fixture();
+    const s = await scheduleFixture();
+    type Schedule = { id: string; summary: string; serviceIds: string[] };
+    const list = (await callMcpOperation(f.ctx(), 'listMaintenanceSchedules', {
+      query: { serviceId: s.serviceId },
+    })) as { data: { data: Schedule[] } };
+    expect(list.data.data.map(row => [row.id, row.summary, row.serviceIds])).toEqual([
+      [s.scheduleId, 'Every Sunday 02:00–03:00 UTC', [s.serviceId]],
+    ]);
+    const one = (await callMcpOperation(f.ctx(), 'getMaintenanceSchedule', {
+      path: { id: s.scheduleId },
+    })) as { data: { data: Schedule } };
+    expect(one.data.data.id).toBe(s.scheduleId);
   });
 
   it('refuses a frozen service create once its escalation policy is gone', async () => {

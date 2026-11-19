@@ -107,6 +107,8 @@ type LifecycleDeliveryPolicy = {
     | 'LEGACY_SERVICE_WEBHOOK';
   targetId?: string;
   targetAddress?: string;
+  /** Webhook integration type the payload was formatted for. */
+  targetType?: string;
 };
 
 export type CentralNotificationPayload =
@@ -526,6 +528,14 @@ export function resolveNotificationExpiry(
           : NOTIFICATION_FRESHNESS_TTL_MS.BULK;
 
   let originTime = scheduledAt.getTime();
+  // A triggered page's eventAt is the incident's creation instant (its identity),
+  // but each escalation step/repeat is a fresh page: freshness starts when it is sent.
+  const isTriggeredPage =
+    input.category === 'INCIDENT' &&
+    !!input.payload &&
+    typeof input.payload === 'object' &&
+    (input.payload as { eventType?: unknown }).eventType === 'triggered';
+  if (isTriggeredPage) return new Date(originTime + ttlMs);
   if (input.eventAt) {
     const parsed = new Date(input.eventAt).getTime();
     if (!Number.isNaN(parsed)) originTime = parsed;
@@ -892,7 +902,12 @@ export async function enqueueCentralNotification(
 function payloadProviderKey(payload: CentralNotificationPayload): string {
   if (payload.kind === 'WEBHOOK' || payload.kind === 'STATUS_PAGE_WEBHOOK') {
     try {
-      return new URL(payload.url).origin;
+      // Scope deferral to the individual webhook, not the whole host: one
+      // service's Discord 429 must not defer every Discord webhook. The path is
+      // hashed because it usually carries the webhook token.
+      const url = new URL(payload.url);
+      const pathHash = crypto.createHash('sha256').update(url.pathname).digest('hex').slice(0, 16);
+      return `${url.origin}#${pathHash}`;
     } catch {
       return 'invalid-webhook';
     }
@@ -1405,12 +1420,32 @@ async function dispatchPayload(
     }
     case 'WEBHOOK': {
       const { sendWebhook } = await import('./webhooks');
+      let secret = payload.secret;
+      const policy = payload.lifecyclePolicy;
+      if (policy?.targetKind === 'WEBHOOK_INTEGRATION' && policy.targetId) {
+        // Sign with the integration's current secret so a rotation applies to
+        // queued and retrying deliveries instead of the one frozen at enqueue.
+        const integration = await prisma.webhookIntegration.findUnique({
+          where: { id: policy.targetId },
+          select: { secret: true },
+        });
+        if (integration) {
+          const { decryptStoredSecret } = await import('./encryption');
+          secret = integration.secret ? await decryptStoredSecret(integration.secret) : undefined;
+        }
+      }
+      // Service webhooks follow the admin HTTPS setting at send time too, so turning it
+      // off stops existing http:// targets, not just new ones.
+      const requireHttps =
+        policy?.targetKind === 'WEBHOOK_INTEGRATION' &&
+        !(await (await import('./webhook-url-policy')).allowsInsecureWebhookUrls());
       return executeProvider(CircuitBreakers.webhook(payload.url), () =>
         sendWebhook({
+          requireHttps,
           url: payload.url,
           payload: payload.payload,
           headers: payload.headers,
-          secret: payload.secret,
+          secret,
           method: payload.method,
           timeout: payload.timeout,
           deliveryId: notificationId,
@@ -1469,7 +1504,7 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
     },
     orderBy: { expiresAt: 'asc' },
     take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
-    select: { id: true },
+    select: { id: true, status: true, attempts: true, maxAttempts: true },
   });
 
   // Pass 2: pre-upgrade rows where expiresAt IS NULL but the row is older than
@@ -1488,11 +1523,27 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
     },
     orderBy: { createdAt: 'asc' },
     take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
-    select: { id: true },
+    select: { id: true, status: true, attempts: true, maxAttempts: true },
   });
 
-  const allExpiredIds = [...expired.map(item => item.id), ...nullExpired.map(item => item.id)];
-  if (allExpiredIds.length === 0) return 0;
+  const rows = [...expired, ...nullExpired];
+  if (rows.length === 0) return 0;
+  // Terminally failed rows keep their FAILED outcome (and error); only the payload,
+  // kept for operator requeue, is scrubbed now that it can no longer be sent.
+  const terminalIds = rows
+    .filter(row => row.status === 'FAILED' && row.attempts >= row.maxAttempts)
+    .map(row => row.id);
+  const terminalSet = new Set(terminalIds);
+  const allExpiredIds = rows.filter(row => !terminalSet.has(row.id)).map(row => row.id);
+  let scrubbed = 0;
+  if (terminalIds.length > 0) {
+    const terminal = await prisma.notification.updateMany({
+      where: { id: { in: terminalIds }, status: 'FAILED' },
+      data: { payloadEncrypted: null },
+    });
+    scrubbed = terminal.count;
+  }
+  if (allExpiredIds.length === 0) return scrubbed;
   const result = await prisma.notification.updateMany({
     where: {
       id: { in: allExpiredIds },
@@ -1505,7 +1556,7 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
       errorMsg: 'Notification expired before delivery.',
     },
   });
-  return result.count;
+  return scrubbed + result.count;
 }
 
 function isAmbiguousDeliveryError(errorText: string): boolean {
@@ -1576,6 +1627,10 @@ function isSafeEmailFailoverCondition(result: DeliveryResult): boolean {
     return true;
   }
   return false;
+}
+
+function isClientRejectionStatus(statusCode: number | undefined): boolean {
+  return typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500;
 }
 
 function isPermanentProviderError(message: string): boolean {
@@ -1681,6 +1736,8 @@ async function serviceTargetDeliveryRevoked(
         serviceId: policy.serviceId,
         enabled: true,
         ...(policy.targetAddress ? { url: policy.targetAddress } : {}),
+        // The payload body is pre-formatted for one type (Discord, Google Chat...).
+        ...(policy.targetType ? { type: policy.targetType } : {}),
         service: { serviceNotificationChannels: { has: 'WEBHOOK' } },
       },
       select: { id: true },
@@ -2846,7 +2903,9 @@ async function deliverCentralNotificationOwned(
       result.errorCode === 'UNKNOWN' ||
       result.errorCode === 'ETIMEDOUT' ||
       result.errorCode === 'ECONNRESET' ||
-      isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`);
+      // A 4xx is a definitive refusal; its text (e.g. SMTP "550 User unknown") is not ambiguity.
+      (!isClientRejectionStatus(result.statusCode) &&
+        isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`));
 
     if (isAmbiguous) {
       const reconciliationDeadline = new Date(Date.now() + UNKNOWN_RECONCILIATION_DELAY_MS);
@@ -2976,7 +3035,16 @@ async function deliverCentralNotificationOwned(
     }
 
     // Permanent failure
-    const permanent = isPermanentProviderError(errorMessage);
+    // A generic webhook 4xx (deleted Discord hook, bad payload) will not heal on
+    // retry; 408 and 429 remain transient.
+    const webhookClientError =
+      payload.kind === 'WEBHOOK' &&
+      typeof result.statusCode === 'number' &&
+      result.statusCode >= 400 &&
+      result.statusCode < 500 &&
+      result.statusCode !== 408 &&
+      result.statusCode !== 429;
+    const permanent = webhookClientError || isPermanentProviderError(errorMessage);
     const exhausted = currentDeliveryAttempt >= candidate.maxAttempts;
     const safeFailover = isEmail && isSafeEmailFailoverCondition(result);
     const canFailover = safeFailover && !isLastProviderInRoute && !exhausted;
@@ -3007,7 +3075,8 @@ async function deliverCentralNotificationOwned(
           errorMsg: errorMessage,
           attempts: candidate.maxAttempts,
           lastAttemptAt: null,
-          ...terminalPayload(candidate.category),
+          // Payload is kept so an operator can requeue after fixing the provider;
+          // cleanupExpiredNotifications scrubs it once the row expires.
         },
       });
       await recordFanoutTerminal(candidate.fanoutId, 'failed');
@@ -3041,7 +3110,6 @@ async function deliverCentralNotificationOwned(
           : new Date(Date.now() + notificationRetryDelayMs(currentDeliveryAttempt)),
         attempts: currentDeliveryAttempt,
         lastAttemptAt: null,
-        ...(exhausted ? terminalPayload(candidate.category) : {}),
       },
     });
     if (failedUpdate.count > 0 && exhausted) {
@@ -3064,7 +3132,6 @@ async function deliverCentralNotificationOwned(
         : new Date(Date.now() + notificationRetryDelayMs(finalAttempts)),
       attempts: finalAttempts,
       lastAttemptAt: null,
-      ...(isExhausted ? terminalPayload(candidate.category) : {}),
     },
   });
   return { success: false, claimed: true, error: lastFailureResult.error };
@@ -3087,6 +3154,7 @@ export async function reconcileUnknownNotifications(
     select: {
       id: true,
       createdAt: true,
+      expiresAt: true,
       channel: true,
       attempts: true,
       providerMessageId: true,
@@ -3101,6 +3169,24 @@ export async function reconcileUnknownNotifications(
   let awaitingCallback = 0;
   let unsupported = 0;
   for (const row of rows) {
+    const expiry =
+      row.expiresAt ?? new Date(row.createdAt.getTime() + NOTIFICATION_FRESHNESS_TTL_MS.BULK);
+    if (expiry <= now) {
+      // Past its freshness window nothing can resend it: settle as FAILED so it is
+      // counted and visible, and scrub the payload (may hold webhook secrets).
+      const updated = await prisma.notification.updateMany({
+        where: { id: row.id, status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
+        data: {
+          status: 'FAILED',
+          failedAt: now,
+          reconciliationDeadline: null,
+          errorMsg: 'Delivery was never confirmed before the notification expired.',
+          payloadEncrypted: null,
+        },
+      });
+      unsupported += updated.count;
+      continue;
+    }
     const capability = deliveryReconciliationCapability(
       row.channel,
       row.deliveryAttempts?.[0]?.provider
@@ -3113,7 +3199,8 @@ export async function reconcileUnknownNotifications(
       const updated = await prisma.notification.updateMany({
         where: { id: row.id, status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
         data: {
-          reconciliationDeadline: null,
+          // Revisit once more at expiry to settle the row; an operator may requeue before then.
+          reconciliationDeadline: expiry,
           errorMsg: 'Provider receipt did not arrive; operator reconciliation is required.',
         },
       });
@@ -3396,10 +3483,11 @@ export async function requeueCentralNotification(
     where: {
       id: notificationId,
       payloadEncrypted: { not: null },
-      status: 'FAILED',
+      // UNKNOWN is requeueable by an operator who accepts the duplicate risk.
+      status: { in: ['FAILED', 'UNKNOWN'] },
       OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
     },
-    select: { attempts: true, maxAttempts: true },
+    select: { attempts: true, maxAttempts: true, status: true },
   });
   if (!notification || notification.attempts >= 20) return false;
   const maxAttempts = Math.min(20, Math.max(notification.maxAttempts, notification.attempts + 1));
@@ -3411,13 +3499,14 @@ export async function requeueCentralNotification(
         where: {
           id: notificationId,
           payloadEncrypted: { not: null },
-          status: 'FAILED',
+          status: notification.status,
           attempts: notification.attempts,
           maxAttempts: notification.maxAttempts,
         },
         data: {
           status: 'PENDING',
           maxAttempts,
+          reconciliationDeadline: null,
           failedAt: null,
           errorMsg: null,
           lastAttemptAt: null,

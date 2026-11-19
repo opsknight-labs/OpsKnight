@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -64,6 +65,7 @@ export default async function PolicyDetailPage({
     suggestDelay?: string;
   }>;
 }) {
+  await requirePageAccess('/policies/[id]');
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
 
@@ -81,11 +83,19 @@ export default async function PolicyDetailPage({
       include: {
         steps: {
           include: {
-            targetUser: true,
-            targetTeam: {
-              include: { teamLead: true },
+            // StepsList is a client component: select only rendered fields so user
+            // rows (passwordHash, phone numbers, token state) never reach the payload.
+            targetUser: {
+              select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
             },
-            targetSchedule: true,
+            targetTeam: {
+              select: {
+                id: true,
+                name: true,
+                teamLead: { select: { id: true, name: true, email: true } },
+              },
+            },
+            targetSchedule: { select: { id: true, name: true } },
             conditions: true,
           },
           orderBy: { stepOrder: 'asc' },
@@ -212,7 +222,7 @@ export default async function PolicyDetailPage({
 
   // Tab 2: Linked Services Content
   const servicesContent = (
-    <Card className="border-border bg-card shadow-2xs">
+    <Card className="border-ink-200/80 bg-card shadow-2xs">
       <CardHeader className="pb-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -237,7 +247,7 @@ export default async function PolicyDetailPage({
       </CardHeader>
       <CardContent>
         {services.length === 0 ? (
-          <div className="p-8 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 space-y-2">
+          <div className="p-8 text-center rounded-xl border border-dashed border-ink-200 bg-ink-50/50 space-y-2">
             <Server className="h-8 w-8 text-slate-300 mx-auto" />
             <h4 className="text-sm font-semibold text-foreground">No services attached</h4>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
@@ -258,19 +268,18 @@ export default async function PolicyDetailPage({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {services.map(service => (
               <Link key={service.id} href={`/services/${service.id}`} className="block group">
-                <div className="p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all flex items-start justify-between shadow-2xs">
+                <div className="p-4 rounded-xl border border-ink-200/80 bg-card hover:border-primary/50 hover:bg-primary/5 transition-all flex items-start justify-between shadow-2xs">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5 truncate">
-                      <Server className="h-3.5 w-3.5 text-slate-400 group-hover:text-primary shrink-0 transition-colors" />
+                      <Server className="h-3.5 w-3.5 text-ink-400 group-hover:text-primary shrink-0 transition-colors" />
                       <span className="truncate">{service.name}</span>
                     </div>
                     {service.team ? (
                       <p className="text-[11px] text-muted-foreground truncate">
-                        Team:{' '}
-                        <span className="font-medium text-slate-700">{service.team.name}</span>
+                        Team: <span className="font-medium text-ink-700">{service.team.name}</span>
                       </p>
                     ) : (
-                      <p className="text-[11px] text-slate-400 italic">No team assigned</p>
+                      <p className="text-[11px] text-ink-400 italic">No team assigned</p>
                     )}
                   </div>
                   <ExternalLink className="h-3.5 w-3.5 text-slate-300 group-hover:text-primary shrink-0 ml-2 transition-colors" />
@@ -285,7 +294,7 @@ export default async function PolicyDetailPage({
 
   // Tab 3: Policy Activity History Content
   const activityContent = (
-    <Card className="border-border bg-card shadow-2xs">
+    <Card className="border-ink-200/80 bg-card shadow-2xs">
       <CardHeader className="pb-4">
         <CardTitle className="text-base font-bold flex items-center gap-2">
           <Activity className="h-4 w-4 text-primary" />
@@ -346,7 +355,7 @@ export default async function PolicyDetailPage({
               </div>
             </form>
           ) : (
-            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl text-xs text-muted-foreground italic border border-border/60">
+            <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-xl text-xs text-muted-foreground italic border border-border/60">
               You do not have permission to edit this policy. Admin role required.
             </div>
           )}
@@ -426,7 +435,7 @@ export default async function PolicyDetailPage({
         ]}
         alert={
           errorCode === 'duplicate-policy' ? (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium flex items-center gap-2">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium flex items-center gap-2 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
               <AlertTriangle className="h-4 w-4" />
               An escalation policy with this name already exists.
             </div>
@@ -451,7 +460,7 @@ export default async function PolicyDetailPage({
             page={Number((await searchParams)?.depPage ?? 1)}
             policyId={id}
             archived={!!policy.archivedAt}
-            canManage={permissions.role === 'ADMIN'}
+            canManage={permissions.isAdmin}
           />
         }
       />

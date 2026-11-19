@@ -36,6 +36,7 @@ export async function assignIncidentDomainCommand(
 ): Promise<AssignIncidentResult> {
   const runner = async (tx: Prisma.TransactionClient): Promise<AssignIncidentResult> => {
     const { incidentId } = input;
+    const by = input.actor.name?.trim() ? ` by ${input.actor.name.trim()}` : '';
     const assigneeId = input.assigneeId?.trim() || null;
     const teamId = input.teamId?.trim() || null;
 
@@ -68,7 +69,7 @@ export async function assignIncidentDomainCommand(
         data: {
           incidentId,
           type: 'ASSIGNMENT',
-          message: 'Incident unassigned',
+          message: `Incident unassigned${by}`,
         },
       });
 
@@ -107,7 +108,7 @@ export async function assignIncidentDomainCommand(
         data: {
           incidentId,
           type: 'ASSIGNMENT',
-          message: `Incident assigned to team: ${teamRecord.name}`,
+          message: `Incident assigned to team: ${teamRecord.name}${by}`,
         },
       });
 
@@ -156,7 +157,7 @@ export async function assignIncidentDomainCommand(
       data: {
         incidentId,
         type: 'ASSIGNMENT',
-        message: `Incident manually reassigned to ${assigneeRecord.name}`,
+        message: `Incident manually reassigned to ${assigneeRecord.name}${by}`,
       },
     });
 

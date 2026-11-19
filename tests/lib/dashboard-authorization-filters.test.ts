@@ -51,4 +51,13 @@ describe('dashboard authorization filters', () => {
       ],
     });
   });
+
+  it('applies the caller authorization scope to widget activity even without filters', () => {
+    const where = buildWidgetActivityIncidentWhere({
+      authorizationScope: { actorId: 'user-1', teamIds: ['team-1'] },
+    });
+    expect(where).toBeDefined();
+    expect(JSON.stringify(where)).toContain('"assigneeId":"user-1"');
+    expect(JSON.stringify(where)).toContain('"visibility":"PUBLIC"');
+  });
 });

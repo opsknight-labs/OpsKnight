@@ -7,6 +7,7 @@ import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import { assertCanViewSchedule } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ type PageProps = {
 };
 
 export default async function MobileScheduleDetailPage({ params }: PageProps) {
+  await requirePageAccess('/m/schedules/[id]');
   const { id } = await params;
   try {
     await assertCanViewSchedule(id);

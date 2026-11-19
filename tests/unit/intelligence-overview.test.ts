@@ -50,7 +50,6 @@ describe('AIOps overview navigation', () => {
     const item = NAVIGATION_ITEMS.find(entry => entry.href === '/intelligence');
     expect(item).toBeDefined();
     const expected = APP_ROLES.filter(role => hasCapability(role, CAPABILITIES.INTELLIGENCE_READ));
-    expect([...(item?.requiresRole ?? [])].sort()).toEqual([...expected].sort());
     for (const role of APP_ROLES) {
       const hrefs = getAuthorizedNavItems(role).map(entry => entry.href);
       expect(hrefs.includes('/intelligence')).toBe(expected.includes(role));

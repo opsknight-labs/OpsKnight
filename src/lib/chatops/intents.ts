@@ -6,6 +6,8 @@ import { toSlackResponseUrl } from '@/lib/slack-signature';
 import type { ChatProvider } from '@/lib/chatops/provider';
 
 const LEASE_MS = 5 * 60 * 1000;
+// Slack response_url links expire 30 minutes after the interaction.
+const SLACK_RESPONSE_URL_TTL_MS = 30 * 60 * 1000;
 
 export type ChatOpsIntentInput = {
   provider?: ChatProvider;
@@ -270,6 +272,7 @@ type ClaimedIntent = {
   responsePayload: Prisma.JsonValue | null;
   provider: ChatProvider;
   responseMode: 'INLINE' | 'DEFERRED';
+  createdAt?: Date;
 };
 
 async function claimEffect(id: string): Promise<ClaimedIntent | null> {
@@ -296,9 +299,7 @@ async function claimEffect(id: string): Promise<ClaimedIntent | null> {
   const intent = await (
     prisma as unknown as {
       chatOpsIntent: {
-        findUnique: (
-          a: unknown
-        ) => Promise<{
+        findUnique: (a: unknown) => Promise<{
           id: string;
           encryptedPayload: string;
           responsePayload: Prisma.JsonValue | null;
@@ -330,7 +331,7 @@ async function claimEffect(id: string): Promise<ClaimedIntent | null> {
 
 async function recordEffect(
   claim: ClaimedIntent,
-  responsePayload: Prisma.InputJsonValue
+  responsePayload: Prisma.InputJsonValue | typeof Prisma.JsonNull
 ): Promise<void> {
   const result = await prisma.chatOpsIntent.updateMany({
     where: { id: claim.id, status: 'EFFECT_PROCESSING', leaseToken: claim.leaseToken },
@@ -374,6 +375,7 @@ async function claimResponse(id: string): Promise<ClaimedIntent | null> {
           responsePayload: Prisma.JsonValue | null;
           provider?: ChatProvider;
           responseMode?: string;
+          createdAt?: Date;
         } | null>;
       };
     }
@@ -385,6 +387,7 @@ async function claimResponse(id: string): Promise<ClaimedIntent | null> {
       responsePayload: true,
       provider: true,
       responseMode: true,
+      createdAt: true,
     },
   });
   return intent
@@ -395,6 +398,7 @@ async function claimResponse(id: string): Promise<ClaimedIntent | null> {
         responsePayload: intent.responsePayload,
         provider: (intent.provider as ChatProvider) ?? 'SLACK',
         responseMode: (intent.responseMode as string as 'INLINE' | 'DEFERRED') ?? 'DEFERRED',
+        createdAt: intent.createdAt,
       }
     : null;
 }
@@ -469,6 +473,8 @@ async function deliverResponse(
     return;
   }
   if (claim.provider === 'MICROSOFT_TEAMS') return;
+  // An expired response_url can never accept the reply; retrying only ends the job FAILED.
+  if (claim.createdAt && Date.now() - claim.createdAt.getTime() > SLACK_RESPONSE_URL_TTL_MS) return;
   await sendSlackResponse(payload, response);
 }
 
@@ -507,7 +513,11 @@ export async function processChatOpsIntent(intentId: string): Promise<void> {
           response = await result.json();
         }
       }
-      await recordEffect(effectClaim, response as Prisma.InputJsonValue);
+      // A null reply (e.g. a URL button) means nothing to send; Prisma needs JsonNull for it.
+      await recordEffect(
+        effectClaim,
+        response === null ? Prisma.JsonNull : (response as Prisma.InputJsonValue)
+      );
     } catch (error) {
       await failEffect(effectClaim, error);
       throw error;

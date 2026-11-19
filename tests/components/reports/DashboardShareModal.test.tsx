@@ -76,7 +76,7 @@ describe('DashboardShareModal Component', () => {
         '/api/dashboards/dash-test-1',
         expect.objectContaining({
           method: 'PUT',
-          body: JSON.stringify({ visibility: 'TEAM' }),
+          body: JSON.stringify({ visibility: 'TEAM', teamId: 'team-sre' }),
         })
       );
       expect(defaultProps.onVisibilityChange).toHaveBeenCalledWith('TEAM');

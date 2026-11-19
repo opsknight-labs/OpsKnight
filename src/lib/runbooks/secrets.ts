@@ -249,9 +249,44 @@ export async function revokeRunbookSecretGrant(
   });
 }
 
+type SecretScope = { agentId: string; targetAgentPoolId?: string | null };
+
+function grantedSecretsWhere(names: string[], scope: SecretScope): Prisma.RunbookSecretWhereInput {
+  return {
+    name: { in: names },
+    grants: {
+      some: {
+        OR: [
+          { agentId: scope.agentId },
+          ...(scope.targetAgentPoolId
+            ? [
+                {
+                  agentPoolId: scope.targetAgentPoolId,
+                  agentPool: { members: { some: { agentId: scope.agentId } } },
+                },
+              ]
+            : []),
+        ],
+      },
+    },
+  };
+}
+
+/** Whether this agent holds a grant for every secret the values reference (no decryption). */
+export async function agentCanResolveSecretInputs(
+  values: Record<string, unknown>,
+  scope: SecretScope,
+  tx: Prisma.TransactionClient
+): Promise<boolean> {
+  const names = [...collectSecretReferences(values)];
+  if (names.length === 0) return true;
+  const granted = await tx.runbookSecret.count({ where: grantedSecretsWhere(names, scope) });
+  return granted === names.length;
+}
+
 export async function resolveSecretInputValues(
   values: Record<string, unknown>,
-  scope: { agentId: string; targetAgentPoolId?: string | null },
+  scope: SecretScope,
   tx: Prisma.TransactionClient
 ) {
   const names = [...collectSecretReferences(values)];
@@ -261,26 +296,7 @@ export async function resolveSecretInputValues(
   await tx.$queryRaw(Prisma.sql`SELECT id FROM "RunbookSecret"
     WHERE name IN (${Prisma.join(names)}) ORDER BY id FOR SHARE`);
 
-  const records = await tx.runbookSecret.findMany({
-    where: {
-      name: { in: names },
-      grants: {
-        some: {
-          OR: [
-            { agentId: scope.agentId },
-            ...(scope.targetAgentPoolId
-              ? [
-                  {
-                    agentPoolId: scope.targetAgentPoolId,
-                    agentPool: { members: { some: { agentId: scope.agentId } } },
-                  },
-                ]
-              : []),
-          ],
-        },
-      },
-    },
-  });
+  const records = await tx.runbookSecret.findMany({ where: grantedSecretsWhere(names, scope) });
   const byName = new Map(records.map(record => [record.name, record.valueEncrypted]));
   const resolvedEntries = await Promise.all(
     Object.entries(values).map(async ([key, value]) => {

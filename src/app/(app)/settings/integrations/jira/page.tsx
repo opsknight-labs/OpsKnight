@@ -7,11 +7,13 @@ import { JiraLogo } from '@/components/common/BrandLogos';
 import { Shield, Globe, Mail, Lock, CheckCircle2, XCircle } from 'lucide-react';
 import JiraIntegrationPage from '@/components/settings/JiraIntegrationPage';
 import { getAppUrl } from '@/lib/app-url';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function GlobalJiraIntegrationPage() {
+  await requirePageAccess('/settings/integrations/jira');
   const permissions = await getUserPermissions();
   if (!permissions) redirect('/login');
   if (!permissions.isAdmin) redirect('/settings');
@@ -114,10 +116,12 @@ export default async function GlobalJiraIntegrationPage() {
           },
           {
             label: 'Webhook Sync',
-            value: config?.webhookSecretEncrypted ? 'Encrypted Secret' : 'Standard Webhook',
+            value: config?.webhookSecretEncrypted ? 'Encrypted Secret' : 'Secret Required',
             icon: <Lock className="h-4 w-4" />,
             valueClassName: config?.webhookSecretEncrypted ? 'text-emerald-300' : 'text-amber-300',
-            subtext: 'Inbound issue updates',
+            subtext: config?.webhookSecretEncrypted
+              ? 'Inbound issue updates'
+              : 'Inbound updates are rejected until a secret is set',
           },
           {
             label: 'Issue Sync',

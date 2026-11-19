@@ -1,6 +1,9 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { logAudit } from '@/lib/audit';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { decryptProviderConfig, maskSensitiveFields } from '@/lib/encrypted-provider-config';
 
@@ -87,4 +90,45 @@ export async function refreshSingleHealthCheckAction(checkId: string): Promise<{
   const report = await collectAdminHealth({ force: true });
   const check = report.checks.find(c => c.id === checkId) || null;
   return { check, report };
+}
+
+/** Client input for the outgoing-webhook setting, parsed strictly before authorization. */
+const outboundWebhookSettingsInput = z
+  .object({ allowInsecureWebhookUrls: z.boolean() })
+  .strict();
+
+/**
+ * Allow or forbid plain http:// URLs for outgoing service webhooks (HTTPS-only by default).
+ */
+export async function saveOutboundWebhookSettings(
+  input: z.input<typeof outboundWebhookSettingsInput>
+): Promise<{ allowInsecureWebhookUrls: boolean }> {
+  const { allowInsecureWebhookUrls } = outboundWebhookSettingsInput.parse(input);
+  await assertAdmin();
+  const actor = await getCurrentUser();
+  return prisma.$transaction(async tx => {
+    const existing = await tx.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: { allowInsecureWebhookUrls: true },
+    });
+    await tx.systemSettings.upsert({
+      where: { id: 'default' },
+      update: { allowInsecureWebhookUrls },
+      create: { id: 'default', allowInsecureWebhookUrls },
+    });
+    await logAudit(
+      {
+        action: 'settings.webhook_http.updated',
+        entityType: 'USER',
+        entityId: actor.id,
+        actorId: actor.id,
+        oldValue: { allowInsecureWebhookUrls: existing?.allowInsecureWebhookUrls ?? false },
+        newValue: { allowInsecureWebhookUrls },
+        details: { setting: 'outbound_webhook_http' },
+      },
+      tx
+    );
+    revalidatePath('/settings/system');
+    return { allowInsecureWebhookUrls };
+  });
 }

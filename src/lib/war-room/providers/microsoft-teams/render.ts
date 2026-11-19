@@ -124,7 +124,11 @@ export function renderMicrosoftTeamsWarRoomProjection(
     type: 'AdaptiveCard',
     version: '1.5',
     body: [
-      { type: 'TextBlock', size: 'Large', weight: 'Bolder', text: model.incident.title },
+      // TextRun renders plain text, so an alert title cannot inject markdown links.
+      {
+        type: 'RichTextBlock',
+        inlines: [{ type: 'TextRun', size: 'Large', weight: 'Bolder', text: model.incident.title }],
+      },
       {
         type: 'FactSet',
         facts: [

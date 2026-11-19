@@ -35,7 +35,7 @@ export type LiveDirectoryOption = { id: string; name: string };
 
 const SEARCH_DEBOUNCE_MS = 250;
 const controlClass =
-  'h-8 rounded-lg border-border bg-card px-2.5 text-xs shadow-2xs hover:border-slate-300';
+  'h-8 rounded-lg border-border bg-card px-2.5 text-xs shadow-2xs hover:border-ink-300';
 
 /** Facet options with live counts first, then the rest of the viewer's directory at zero. */
 function mergeOptions(directory: LiveDirectoryOption[], facets: LiveFacetOption[]) {
@@ -236,11 +236,7 @@ function LiveViewPicker() {
       <legend className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         View
       </legend>
-      <div
-        role="radiogroup"
-        aria-label="Live incident view"
-        className="grid grid-cols-2 gap-1.5"
-      >
+      <div role="radiogroup" aria-label="Live incident view" className="grid grid-cols-2 gap-1.5">
         {LIVE_INCIDENT_VIEWS.map(view => {
           const active = query.view === view;
           const count = counts.get(view);
@@ -264,7 +260,9 @@ function LiveViewPicker() {
                 <span
                   className={cn(
                     'rounded px-1 font-mono text-[10px] tabular-nums',
-                    active ? 'bg-primary/20 font-bold text-primary' : 'bg-muted/60 text-muted-foreground'
+                    active
+                      ? 'bg-primary/20 font-bold text-primary'
+                      : 'bg-muted/60 text-muted-foreground'
                   )}
                 >
                   {count}
@@ -387,7 +385,9 @@ export function LiveToolbar({
           <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
             <div className="flex items-center gap-1.5">
               <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-              <span className="text-xs font-semibold tracking-tight text-foreground">Filter Incidents</span>
+              <span className="text-xs font-semibold tracking-tight text-foreground">
+                Filter Incidents
+              </span>
               {moreCount > 0 && (
                 <span className="rounded-full bg-primary/15 px-1.5 py-0.2 font-mono text-[10px] font-bold text-primary">
                   {moreCount} active

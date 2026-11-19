@@ -81,6 +81,7 @@ import {
 } from '../../runbook-actions';
 import { redactRunbookConfiguration } from '@/lib/runbooks/display-name';
 import { cn } from '@/lib/utils';
+import { requirePageAccess } from '@/lib/access/server';
 export const dynamic = 'force-dynamic';
 
 function timestamp(date: Date, timeZone: string) {
@@ -96,6 +97,7 @@ export default async function AutomationRulePage({
 }: {
   params: Promise<{ id: string; ruleId: string }>;
 }) {
+  await requirePageAccess('/services/[id]/automations/[ruleId]');
   const input = z.object({ id: z.string().cuid(), ruleId: z.string().cuid() }).parse(await params);
   const [user] = await Promise.all([
     getCurrentUser(),
@@ -227,7 +229,7 @@ export default async function AutomationRulePage({
         }
         title={ruleName}
         subtitle={
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-400">
             <span>
               Runs{' '}
               <Link
@@ -240,10 +242,7 @@ export default async function AutomationRulePage({
             <span>·</span>
             <span>created by {rule.createdBy?.name ?? 'OpsKnight Admin'}</span>
             <span>·</span>
-            <RuleTimestamp
-              {...timestamp(rule.createdAt, userTimeZone)}
-              className="text-slate-400"
-            />
+            <RuleTimestamp {...timestamp(rule.createdAt, userTimeZone)} className="text-ink-400" />
           </div>
         }
         stats={[
@@ -396,7 +395,7 @@ export default async function AutomationRulePage({
                 className={cn(
                   'rounded border text-[10px] font-mono font-semibold px-1.5 py-0.5',
                   certifiedAgents > 0
-                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
                     : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
                 )}
               >

@@ -3,6 +3,7 @@ import { z } from 'zod/v3';
 import { isIP } from 'node:net';
 import type { McpClient, McpPolicy, PrismaClient } from '@prisma/client';
 import { McpBoundaryError } from '../core/errors';
+import { stripInvisibleText } from '../core/projection';
 import { CIMD_MAX_BYTES, fetchPinnedMetadata, type CimdResponse } from './cimd-transport';
 import { rejectDuplicateJsonKeys } from '../protocol/input';
 import { logger } from '@/lib/logger';
@@ -189,8 +190,7 @@ export async function resolveCimdClient(
       documentRedirectUris: document.redirect_uris.map(urlForLog),
     });
   const name =
-    (document.client_name ?? '')
-      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    stripInvisibleText((document.client_name ?? '').replace(/[\u0000-\u001f\u007f]/g, ' '))
       .trim()
       .slice(0, 100) || url.hostname;
   const data = {

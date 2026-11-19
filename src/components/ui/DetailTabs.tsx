@@ -39,6 +39,8 @@ export type DetailTabItem = {
   count?: number | string;
   badge?: ReactNode;
   content?: ReactNode;
+  /** Keep the content mounted (hidden) while another tab is active, preserving unsaved state. */
+  keepMounted?: boolean;
   disabled?: boolean;
 };
 
@@ -208,7 +210,7 @@ export default function DetailTabs({
                     'group relative flex flex-initial items-center justify-center gap-1.5 rounded-lg py-1.5 sm:py-2 px-2.5 sm:px-3 text-xs font-medium transition-all duration-150 cursor-pointer select-none whitespace-nowrap shrink-0',
                     'border border-border/40 bg-background/50 text-muted-foreground/90 shadow-2xs',
                     'hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]',
-                    'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:border-primary/50 data-[state=active]:shadow-xs data-[state=active]:ring-2 data-[state=active]:ring-primary/20'
+                    'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:border-primary/50 data-[state=active]:shadow-xs data-[state=active]:ring-2 data-[state=active]:ring-primary/20 dark:data-[state=active]:bg-muted dark:data-[state=active]:border-white/15 dark:data-[state=active]:ring-white/5'
                   )}
                 >
                   {tab.icon && (
@@ -254,8 +256,10 @@ export default function DetailTabs({
                 <TabsContent
                   key={tab.id}
                   value={tab.id}
+                  forceMount={tab.keepMounted ? true : undefined}
                   className={cn(
                     'focus-visible:outline-hidden data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:slide-in-from-bottom-1 data-[state=active]:duration-200',
+                    tab.keepMounted && 'data-[state=inactive]:hidden',
                     contentClassName
                   )}
                 >

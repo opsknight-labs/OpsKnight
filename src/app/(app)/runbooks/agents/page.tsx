@@ -27,6 +27,7 @@ import {
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
 } from '@/components/runbooks/RunbookPagination';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -52,6 +53,7 @@ export default async function RunbookAgentsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/runbooks/agents');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const rawParams = await searchParams;
   const legacyTarget = legacyFleetRedirect(rawParams);
@@ -180,7 +182,7 @@ export default async function RunbookAgentsPage({
             className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
             title={`Fleet evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone})`}
           >
-            <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
+            <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
             {userTimeZone}
           </span>
           {canManage && (

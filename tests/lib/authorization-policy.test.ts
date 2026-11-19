@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CAPABILITIES } from '@/lib/authorization';
 import {
   AUTHORIZATION_ACTIONS,
   authorize,
@@ -82,15 +83,23 @@ describe('authorization policy matrix', () => {
   it.each([
     ['acknowledge', AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE],
     ['add a note to', AUTHORIZATION_ACTIONS.INCIDENT_NOTE],
-  ])('keeps User and Auditor read-only when attempting to %s an incident', (_name, action) => {
-    expect(authorize({ actor: actor(), action, resource: incident() })).toMatchObject({
-      allowed: false,
-      reason: 'MISSING_CAPABILITY',
-    });
-    expect(
-      authorize({ actor: actor({ role: 'AUDITOR' }), action, resource: incident() })
-    ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
-  });
+  ])(
+    'limits Users to their own incidents and keeps Auditors read-only when attempting to %s an incident',
+    (_name, action) => {
+      expect(
+        authorize({ actor: actor(), action, resource: incident({ serviceTeamId: 'team-other' }) })
+      ).toMatchObject({
+        allowed: false,
+        reason: 'RESOURCE_OUT_OF_SCOPE',
+      });
+      expect(
+        authorize({ actor: actor(), action, resource: { ...incident(), assigneeId: actor().id } })
+      ).toMatchObject({ allowed: true, scope: 'resource' });
+      expect(
+        authorize({ actor: actor({ role: 'AUDITOR' }), action, resource: incident() })
+      ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
+    }
+  );
 
   it('requires API scope and user permission together', () => {
     const apiActor = actor({
@@ -211,5 +220,39 @@ describe('authorization policy matrix', () => {
         action: AUTHORIZATION_ACTIONS.EVENT_CREATE,
       })
     ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
+  });
+});
+
+describe('scoped incident creation', () => {
+  const scoped = actor({ capabilities: new Set([CAPABILITIES.INCIDENT_CREATE_SCOPED]) });
+
+  it('allows incident.create.scoped on a service owned by one of the actor teams', () => {
+    expect(
+      authorize({
+        actor: scoped,
+        action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+        resource: { type: 'service', teamId: 'team-1' },
+      }).allowed
+    ).toBe(true);
+  });
+
+  it('denies incident.create.scoped on another team service', () => {
+    expect(
+      authorize({
+        actor: scoped,
+        action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+        resource: { type: 'service', teamId: 'team-2' },
+      })
+    ).toMatchObject({ allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE' });
+  });
+
+  it('still denies a plain USER without the scoped capability', () => {
+    expect(
+      authorize({
+        actor: actor(),
+        action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+        resource: { type: 'service', teamId: 'team-1' },
+      }).allowed
+    ).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import { createDateTimeFormatterCache } from './date-time-format';
 import {
   getTimeZoneOffsetMs,
   getZonedDateTimeFormatter,
+  isValidTimeZone,
   resolveLocalDateTimeInTimeZone,
   type LocalDateTimeParts,
 } from './timezone';
@@ -535,9 +536,9 @@ export function buildScheduleBlocks(
   windowEnd: Date,
   timeZone: string = 'UTC'
 ) {
-  const blocks = layers.flatMap(layer =>
-    generateLayerBlocks(layer, windowStart, windowEnd, timeZone)
-  );
+  // An invalid stored zone would throw RangeError and break every caller (cron, paging, UI).
+  const zone = isValidTimeZone(timeZone) ? timeZone : 'UTC';
+  const blocks = layers.flatMap(layer => generateLayerBlocks(layer, windowStart, windowEnd, zone));
   return applyOverrides(blocks, overrides, windowStart, windowEnd);
 }
 
@@ -569,12 +570,17 @@ export function getFinalScheduleBlocks(
 
   const events: TimelineEvent[] = [];
   for (const block of sorted) {
-    // Overrides always take top priority over all scheduled layers
+    // A replacement override takes over its own layer's slot only: it beats
+    // same-priority layers but must not outrank a higher-priority layer. An
+    // override not tied to a known layer still wins outright.
+    const knownLayerPriority = layerPriority.get(block.layerId);
+    const baseLayerPriority = knownLayerPriority ?? 0;
     const priority =
-      block.source === 'override'
-        ? Number.MAX_SAFE_INTEGER
-        : (layerPriority.get(block.layerId) ?? 0);
-    const baseLayerPriority = layerPriority.get(block.layerId) ?? 0;
+      block.source !== 'override'
+        ? baseLayerPriority
+        : knownLayerPriority === undefined
+          ? Number.MAX_SAFE_INTEGER
+          : knownLayerPriority + 0.5;
     events.push({
       time: block.start,
       type: 'start',

@@ -14,6 +14,7 @@ vi.mock('@/lib/event-outbox', () => ({
 }));
 
 import {
+  DEFAULT_SNOOZE_MINUTES,
   applyIncidentLifecycleCommand,
   executeIncidentLifecycleBatch,
   executeIncidentLifecycleCommand,
@@ -518,6 +519,78 @@ describe('incident lifecycle command engine', () => {
     );
   });
 
+  it('defaults an open-ended snooze to a finite end so auto-unsnooze is scheduled', async () => {
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'OPEN' }));
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-snooze-open',
+      command: 'SNOOZE',
+      source: 'WEB',
+      now: NOW,
+    });
+
+    const expected = new Date(NOW.getTime() + DEFAULT_SNOOZE_MINUTES * 60_000);
+    expect(tx.incident.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ snoozedUntil: expected }) })
+    );
+    expect(mocks.enqueueLifecycleSideEffects).toHaveBeenCalledWith(
+      asTransactionClient(tx),
+      expect.objectContaining({ command: 'SNOOZE', snoozedUntil: expected })
+    );
+  });
+
+  it('keeps the existing end time when re-snoozing without one', async () => {
+    const until = new Date('2026-08-27T15:00:00.000Z');
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'SNOOZED', snoozedUntil: until }));
+
+    const result = await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-resnooze',
+      command: 'SNOOZE',
+      source: 'BULK',
+      snoozedUntil: null,
+      now: NOW,
+    });
+
+    expect(result.changed).toBe(false);
+    expect(tx.incident.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['CHATOPS', 'VOICE', 'MOBILE', 'EVENT'] as const)(
+    'does not gate %s resolves on required custom fields it cannot fill',
+    async source => {
+      tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'OPEN' }));
+      tx.customField.findMany.mockResolvedValue([{ name: 'Impact' }]);
+
+      const result = await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+        incidentId: 'inc-gate',
+        command: 'RESOLVE',
+        source,
+        now: NOW,
+      });
+
+      expect(result.changed).toBe(true);
+      expect(tx.customField.findMany).not.toHaveBeenCalled();
+    }
+  );
+
+  it('only counts required fields that existed when the incident was opened', async () => {
+    const createdAt = new Date('2026-08-27T11:40:00.000Z');
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'OPEN', createdAt }));
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-retro',
+      command: 'RESOLVE',
+      source: 'WEB',
+      now: NOW,
+    });
+
+    expect(tx.customField.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ createdAt: { lte: createdAt } }),
+      })
+    );
+  });
+
   it('rolls back the logical batch when one transition is invalid', async () => {
     const committed: string[] = [];
 
@@ -598,5 +671,40 @@ describe('incident lifecycle command engine', () => {
         }),
       })
     );
+  });
+
+  it('gives a snooze without an end time the default end so it auto-unsnoozes', async () => {
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'OPEN' }));
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-snooze-open',
+      command: 'SNOOZE',
+      source: 'MOBILE',
+      now: NOW,
+    });
+
+    const defaultEnd = new Date(NOW.getTime() + 60 * 60_000);
+    expect(tx.incident.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ snoozedUntil: defaultEnd }) })
+    );
+    expect(mocks.enqueueLifecycleSideEffects).toHaveBeenCalledWith(
+      asTransactionClient(tx),
+      expect.objectContaining({ command: 'SNOOZE', snoozedUntil: defaultEnd })
+    );
+  });
+
+  it('keeps an existing snooze end when re-snoozed without one', async () => {
+    const end = new Date('2026-08-27T13:00:00.000Z');
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'SNOOZED', snoozedUntil: end }));
+
+    const result = await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-snooze-again',
+      command: 'SNOOZE',
+      source: 'BULK',
+      now: NOW,
+    });
+
+    expect(result.changed).toBe(false);
+    expect(tx.incident.update).not.toHaveBeenCalled();
   });
 });

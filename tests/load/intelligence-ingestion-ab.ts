@@ -351,7 +351,7 @@ async function reset() {
     'TRUNCATE TABLE "Incident", "BackgroundJob", "IntelligenceWorkItem", "IntelligenceCursor" CASCADE'
   );
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Alert", "NoiseControlPolicy", "MaintenanceWindow", "SuppressionRule", "PrePagingDecision" CASCADE'
+    'TRUNCATE TABLE "Alert", "NoiseControlPolicy", "NoiseMaintenanceWindow", "SuppressionRule", "PrePagingDecision" CASCADE'
   );
 }
 
@@ -436,7 +436,7 @@ async function enableNoiseControls(
       },
     });
   }
-  await prisma.maintenanceWindow.create({
+  await prisma.noiseMaintenanceWindow.create({
     data: {
       name: 'Never matches',
       scope: 'LABEL',

@@ -59,6 +59,7 @@ async function listTools(
         writesEnabled,
         false,
         [],
+        false,
         options
       ),
     { legacy: 'stateless', responseMode: 'json', maxSubscriptions: 0 }

@@ -46,47 +46,47 @@ function getWidgetTheme(color?: string): {
     case 'emerald':
     case 'green':
       return {
-        iconBg: 'bg-emerald-100',
-        iconText: 'text-emerald-600',
-        border: 'border-emerald-200/50',
+        iconBg: 'bg-emerald-100 dark:bg-emerald-500/15',
+        iconText: 'text-emerald-600 dark:text-emerald-400',
+        border: 'border-emerald-200/50 dark:border-emerald-500/30',
       };
     case 'blue':
       return {
-        iconBg: 'bg-blue-100',
-        iconText: 'text-blue-600',
-        border: 'border-blue-200/50',
+        iconBg: 'bg-blue-100 dark:bg-blue-500/15',
+        iconText: 'text-blue-600 dark:text-blue-400',
+        border: 'border-blue-200/50 dark:border-blue-500/30',
       };
     case 'amber':
     case 'orange':
       return {
-        iconBg: 'bg-amber-100',
-        iconText: 'text-amber-600',
-        border: 'border-amber-200/50',
+        iconBg: 'bg-amber-100 dark:bg-amber-500/15',
+        iconText: 'text-amber-600 dark:text-amber-400',
+        border: 'border-amber-200/50 dark:border-amber-500/30',
       };
     case 'violet':
     case 'purple':
       return {
-        iconBg: 'bg-violet-100',
-        iconText: 'text-violet-600',
-        border: 'border-violet-200/50',
+        iconBg: 'bg-violet-100 dark:bg-violet-500/15',
+        iconText: 'text-violet-600 dark:text-violet-400',
+        border: 'border-violet-200/50 dark:border-violet-500/30',
       };
     case 'red':
       return {
-        iconBg: 'bg-rose-100',
-        iconText: 'text-rose-600',
-        border: 'border-rose-200/50',
+        iconBg: 'bg-rose-100 dark:bg-rose-500/15',
+        iconText: 'text-rose-600 dark:text-rose-400',
+        border: 'border-rose-200/50 dark:border-rose-500/30',
       };
     case 'slate':
       return {
-        iconBg: 'bg-slate-100',
-        iconText: 'text-slate-600',
-        border: 'border-slate-200/50',
+        iconBg: 'bg-ink-100',
+        iconText: 'text-ink-600',
+        border: 'border-ink-200/50',
       };
     case 'cyan':
       return {
-        iconBg: 'bg-cyan-100',
-        iconText: 'text-cyan-600',
-        border: 'border-cyan-200/50',
+        iconBg: 'bg-cyan-100 dark:bg-cyan-500/15',
+        iconText: 'text-cyan-600 dark:text-cyan-400',
+        border: 'border-cyan-200/50 dark:border-cyan-500/30',
       };
     default:
       return null;
@@ -142,7 +142,7 @@ export default function SidebarWidget({
               )}
               {/* Last Updated Indicator */}
               {mounted && lastUpdated && (
-                <p className="text-[10px] text-slate-400 font-medium">
+                <p className="text-[10px] text-ink-400 font-medium">
                   Updated {getTimeAgo(lastUpdated)}
                 </p>
               )}
@@ -157,7 +157,7 @@ export default function SidebarWidget({
                   onClick={onRefresh}
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600"
+                  className="h-7 w-7 hover:bg-ink-100 rounded-lg text-ink-400 hover:text-ink-600"
                   title="Refresh data"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -172,7 +172,7 @@ export default function SidebarWidget({
                 );
 
                 const buttonClasses = cn(
-                  'h-7 gap-1.5 px-2.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
+                  'h-7 gap-1.5 px-2.5 rounded-lg text-ink-500 hover:text-ink-700 hover:bg-ink-100 transition-colors'
                 );
 
                 if (action.href) {
@@ -206,8 +206,8 @@ export default function SidebarWidget({
         {/* Loading State */}
         {isLoading ? (
           <div className="py-6 text-center text-muted-foreground">
-            <Loader2 className="h-5 w-5 mx-auto mb-2 animate-spin text-slate-400" />
-            <p className="text-xs text-slate-400">Loading...</p>
+            <Loader2 className="h-5 w-5 mx-auto mb-2 animate-spin text-ink-400" />
+            <p className="text-xs text-ink-400">Loading...</p>
           </div>
         ) : (
           children

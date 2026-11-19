@@ -16,7 +16,12 @@ import { getAiSettings } from '@/lib/intelligence/ai/settings';
 import { draftIncidentSummaryNoteAction } from '@/app/(app)/incidents/[id]/intelligence-actions';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
+import {
+  assertCanViewIncident,
+  getIncidentOperatorPermissions,
+  getUserPermissions,
+} from '@/lib/rbac';
+import { denyResourceAccess } from '@/lib/access/server';
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
 import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
@@ -34,7 +39,7 @@ import IncidentQuickLinksCard from '@/components/incident/detail/IncidentQuickLi
 import IncidentResponseTimeline from '@/components/incident/detail/IncidentResponseTimeline';
 import IncidentContextCard from '@/components/incident/detail/IncidentContextCard';
 import { getIncidentResponseTimeline } from '@/lib/incidents/response-timeline';
-import { getUserTimeZone } from '@/lib/timezone';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import MobileOperationalContextCard from '@/components/incident/MobileOperationalContextCard';
 import {
@@ -55,10 +60,28 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
 import { redactNotificationError } from '@/lib/notification-operations';
-import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, Pause, Volume2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  Pause,
+  Volume2,
+  Wrench,
+} from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { getIncidentCollaborationView } from '@/lib/incident-collaboration/get-incident-collaboration';
+
+// Only the user fields client components render; full rows carry passwordHash,
+// phone numbers and token state that must never reach the RSC payload.
+const CLIENT_USER_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  avatarUrl: true,
+  gender: true,
+} as const;
 
 export type IncidentDetailScreenProps = {
   id: string;
@@ -80,7 +103,13 @@ export default async function IncidentDetailScreen({
   presentation = 'desktop',
   initialTab,
 }: IncidentDetailScreenProps) {
-  const user = await assertCanViewIncident(id);
+  const user = await assertCanViewIncident(id).catch(async (error: unknown) => {
+    const code = (error as { code?: string } | null)?.code;
+    if (code === 'INCIDENT_NOT_FOUND') notFound();
+    if (code === 'INCIDENT_ACCESS_DENIED' || code === 'AUTHORIZATION_DENIED')
+      return denyResourceAccess({ resource: 'incident', id });
+    throw error;
+  });
   const appUrl = await getAppUrl();
   const storedIncident = await prisma.incident.findUnique({
     where: { id },
@@ -104,11 +133,11 @@ export default async function IncidentDetailScreen({
           },
         },
       },
-      assignee: true,
-      team: true,
+      assignee: { select: CLIENT_USER_SELECT },
+      team: { select: { id: true, name: true } },
       events: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 200 },
       notes: {
-        include: { user: true },
+        include: { user: { select: CLIENT_USER_SELECT } },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 100,
       },
@@ -128,9 +157,13 @@ export default async function IncidentDetailScreen({
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 50,
       },
-      watchers: { include: { user: true }, orderBy: { createdAt: 'asc' } },
+      watchers: {
+        include: { user: { select: CLIENT_USER_SELECT } },
+        orderBy: { createdAt: 'asc' },
+      },
       tags: { include: { tag: true }, orderBy: { createdAt: 'asc' } },
       customFieldValues: { include: { customField: true } },
+      maintenanceWindow: { select: { id: true, title: true, endsAt: true } },
     },
   });
 
@@ -168,6 +201,8 @@ export default async function IncidentDetailScreen({
       : storedIncident.service.policy;
   const incident = {
     ...visibleIncidentSource(storedIncident, sensitive),
+    // The incident is serialized to client components: never ship webhook secrets.
+    service: { ...storedIncident.service, slackWebhookUrl: null, webhookUrl: null },
     incidentPolicy,
     noEscalation: decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION',
   };
@@ -176,8 +211,10 @@ export default async function IncidentDetailScreen({
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL) ||
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED);
   const canManageIncident = permissions.isResponderOrAbove;
-  const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
-  const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
+  const operator = await getIncidentOperatorPermissions(id);
+  const canAcknowledgeIncident = operator.canAcknowledge;
+  const canAddIncidentNote = operator.canAddNote;
+  const canResolveIncident = operator.canResolve;
   const canReadAutomation =
     permissions.capabilities.includes(CAPABILITIES.AUTOMATION_READ) &&
     !!storedIncident.automationDecision;
@@ -198,7 +235,9 @@ export default async function IncidentDetailScreen({
             orderBy: { name: 'asc' },
           })
         : Promise.resolve([]),
-      canManageIncident ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
+      canManageIncident
+        ? prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
+        : Promise.resolve([]),
       prisma.customField.findMany({ orderBy: { order: 'asc' } }),
       prisma.incidentEvent.count({ where: { incidentId: id } }),
       prisma.incidentNote.count({ where: { incidentId: id } }),
@@ -240,7 +279,7 @@ export default async function IncidentDetailScreen({
 
   const handleAddNote = addIncidentDetailNote.bind(null, id);
   const handleAcknowledge = acknowledgeIncidentDetail.bind(null, id);
-  const handleReopen = reopenIncidentDetail.bind(null, id);
+  const handleReopen = reopenIncidentDetail.bind(null, id, incident.status);
   const handleSuppress = suppressIncidentDetail.bind(null, id);
   const handleAddWatcher = addIncidentDetailWatcher.bind(null, id);
   const handleRemoveWatcher = removeIncidentDetailWatcher.bind(null, id);
@@ -284,6 +323,7 @@ export default async function IncidentDetailScreen({
       message: event.message,
       type: event.type,
       createdAt: event.createdAt,
+      channel: event.channel,
     })),
     notes: incident.notes.map(note => ({
       id: note.id,
@@ -542,12 +582,42 @@ export default async function IncidentDetailScreen({
         </section>
       )}
 
+      {storedIncident.maintenanceWindow && incident.status === 'SUPPRESSED' && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-status-info-border bg-status-info-soft px-4 py-2.5 text-sm text-status-info-deep"
+        >
+          <Wrench className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            Held by maintenance window{' '}
+            <Link
+              href={
+                presentation === 'mobile'
+                  ? `/m/services/${incident.serviceId}`
+                  : `/services/${incident.serviceId}?tab=maintenance`
+              }
+              className={`font-semibold underline-offset-2 hover:underline ${
+                presentation === 'mobile' ? '-my-3 inline-block py-3 underline' : ''
+              }`}
+            >
+              {storedIncident.maintenanceWindow.title}
+            </Link>
+            . Nobody is paged until it ends (
+            {formatDateTime(storedIncident.maintenanceWindow.endsAt, userTimeZone, {
+              format: 'datetime',
+            })}
+            ).
+          </span>
+        </div>
+      )}
+
       {/* Command Bar: Responders need immediate access to Acknowledge / Resolve */}
       <IncidentCommandBar
         incidentId={incident.id}
         currentStatus={incident.status}
         canManage={canManageIncident}
         canAcknowledge={canManageIncident || canAcknowledgeIncident}
+        canResolve={canManageIncident || canResolveIncident}
         snoozedUntil={incident.snoozedUntil}
         onAcknowledge={handleAcknowledge}
         onUnacknowledge={handleReopen}

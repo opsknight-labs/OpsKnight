@@ -38,6 +38,7 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 const MIN_DELAY_MS = 15_000;
 const MAX_DELAY_MS = 2 * 60_000;
 const SINGLETON_ID = 'singleton';
+const OBJECTIVE_SNAPSHOT_RETRY_MS = 15 * 60_000;
 
 // Local state for timer management (not persisted)
 let timer: NodeJS.Timeout | null = null;
@@ -211,6 +212,7 @@ export type SchedulerStateData = {
   lastObjectiveSnapshotSuccessAt?: Date | null;
   lastObjectiveSnapshotDurationMs?: number | null;
   lastObjectiveSnapshotFailed?: number;
+  lastMaintenanceSweepAt?: Date | null;
 };
 
 /**
@@ -453,6 +455,33 @@ async function runOnce() {
       } catch (_) {}
     }, HEARTBEAT_INTERVAL_MS);
 
+    // Service maintenance windows: release incidents held by windows that ended.
+    // Runs first so a failure in a later step can't keep alerts held, and so the
+    // escalation jobs it enqueues are processed in this same tick. Activation needs no
+    // scheduler (it is time-derived); the sweep is idempotent and resumable.
+    try {
+      const { processEndedMaintenanceWindows } = await import('./service-maintenance/windows');
+      const sweptAt = new Date();
+      const maintenanceWindows = await processEndedMaintenanceWindows(sweptAt);
+      await updateSchedulerState({ lastMaintenanceSweepAt: sweptAt }, leaseEpoch);
+      if (maintenanceWindows.windows > 0) {
+        logger.info('[Cron] Maintenance windows processed', maintenanceWindows);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Maintenance window sweep failed', { error });
+    }
+
+    // Flapping holds: release incidents whose alert stopped oscillating so they page.
+    try {
+      const { releaseStableFlappingHolds } = await import('./flapping');
+      const releasedFlapping = await releaseStableFlappingHolds();
+      if (releasedFlapping > 0) {
+        logger.info('[Cron] Flapping holds released', { released: releasedFlapping });
+      }
+    } catch (error) {
+      logger.warn('[Cron] Flapping hold sweep failed', { error });
+    }
+
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
     const ownership = getSchedulerOwnership(schedulerProfile);
     const jobResult = ownership.backgroundJobs
@@ -595,6 +624,17 @@ async function runOnce() {
 
     await assertLease(leaseEpoch);
 
+    // Recurring maintenance: materialise upcoming occurrences as ordinary windows.
+    try {
+      const { materializeMaintenanceSchedules } = await import('./service-maintenance/schedules');
+      const materialized = await materializeMaintenanceSchedules(new Date());
+      if (materialized.created > 0 || materialized.failed > 0) {
+        logger.info('[Cron] Maintenance schedules materialized', materialized);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Maintenance schedule materialization failed', { error });
+    }
+
     // Group 3: Maintenance tasks (low priority, run last)
     const { processAuthenticationAlerts } = await import('./auth-control/security-events');
     await processAuthenticationAlerts();
@@ -612,6 +652,21 @@ async function runOnce() {
     const notificationCapacityCleanup = await cleanupExpiredNotificationCapacityData();
     const { expireDuePrivacyExportArtifacts } = await import('./privacy/export/artifact');
     const privacyExportArtifactsExpired = await expireDuePrivacyExportArtifacts();
+    // Access control maintenance: revert ended temporary access, expire stale requests, and
+    // start scheduled access reviews. Enforcement never depends on this (checked per request).
+    let accessMaintenance: Record<string, unknown> | null = null;
+    try {
+      const { processEndedAccessGrants } = await import('./access/grants');
+      const { expireStaleAccessRequests } = await import('./access/requests');
+      const { maybeStartScheduledAccessReview } = await import('./access/admin');
+      accessMaintenance = {
+        grants: await processEndedAccessGrants(),
+        requests: await expireStaleAccessRequests(),
+        review: await maybeStartScheduledAccessReview(),
+      };
+    } catch (error) {
+      logger.warn('[Cron] Access-control maintenance failed', { error });
+    }
     let jobsCleaned = false;
     if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
       const { default: automationStore } = await import('./prisma');
@@ -626,6 +681,7 @@ async function runOnce() {
       rateLimitCleanup,
       notificationCapacityCleanup,
       privacyExportArtifactsExpired,
+      accessMaintenance,
       mcpCleanup,
       jobsCleaned,
     });
@@ -789,10 +845,12 @@ async function runOnce() {
             },
             leaseEpoch
           );
+          // Failed snapshots are retried on their own below, not by re-running the whole
+          // daily block (cleanup, drift detection, reconciliation) every tick.
           if (serviceObjectiveSnapshots.failed > 0) {
-            throw new Error(
-              `${serviceObjectiveSnapshots.failed} service objective snapshot(s) failed; retrying the daily run`
-            );
+            logger.warn('[Cron] Service objective snapshots failed; retrying them later', {
+              failed: serviceObjectiveSnapshots.failed,
+            });
           }
         }
 
@@ -820,6 +878,31 @@ async function runOnce() {
           stack: error instanceof Error ? error.stack : undefined,
         });
         // Don't update lastRollupDate so it retries next cycle.
+      }
+    } else if (
+      !isNewDay &&
+      state.lastObjectiveSnapshotFailed > 0 &&
+      state.lastObjectiveSnapshotAt &&
+      state.lastObjectiveSnapshotAt.toISOString().split('T')[0] === todayKey &&
+      now.getTime() - state.lastObjectiveSnapshotAt.getTime() >= OBJECTIVE_SNAPSHOT_RETRY_MS
+    ) {
+      try {
+        const { processServiceObjectiveSnapshots } =
+          await import('@/jobs/service-objective-scheduler');
+        const retry = await processServiceObjectiveSnapshots(now);
+        await updateSchedulerState(
+          {
+            lastObjectiveSnapshotAt: now,
+            lastObjectiveSnapshotSuccessAt: retry.failed === 0 ? now : undefined,
+            lastObjectiveSnapshotDurationMs: retry.durationMs,
+            lastObjectiveSnapshotFailed: retry.failed,
+          },
+          leaseEpoch
+        );
+      } catch (error) {
+        logger.error('[Cron] Service objective snapshot retry failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 

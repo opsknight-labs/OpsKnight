@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { ChevronLeft, AlertCircle, Webhook } from 'lucide-react';
 import { assertCanModifyService } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function NewWebhookPage({
   params,
@@ -23,6 +24,7 @@ export default async function NewWebhookPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ error?: string }>;
 }) {
+  await requirePageAccess('/services/[id]/webhooks/new');
   const { id } = await params;
   await assertCanModifyService(id);
   const resolvedSearchParams = await searchParams;
@@ -107,6 +109,16 @@ export default async function NewWebhookPage({
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
               A webhook integration with this name already exists. Please choose a unique name.
+            </AlertDescription>
+          </Alert>
+        )}
+        {errorCode === 'invalid-url' && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              The webhook URL must use HTTPS (unless an admin allows http in System Settings) and must not point to a private or
+              internal network address.
             </AlertDescription>
           </Alert>
         )}

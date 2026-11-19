@@ -9,6 +9,8 @@ export type ReviewResult =
 export const REVIEW_MESSAGES: Readonly<Record<string, string>> = {
   MCP_RATE_LIMITED: 'Too many review decisions in the last minute. Wait a moment and try again.',
   MCP_APPROVAL_UNAVAILABLE: 'This request no longer exists or is not available to you.',
+  REVIEW_BULK_HIGH_RISK:
+    'High-risk changes cannot be approved together. Open each one, read it and approve it there.',
   MCP_APPROVAL_EXPIRED:
     'This request is no longer open: it expired or someone else already decided it. Reload the page to see its status.',
   PREVIEW_REVIEW_EXPIRED:
@@ -51,6 +53,10 @@ export const REVIEW_MESSAGES: Readonly<Record<string, string>> = {
     "The requester's assistant connection was signed out, so this request cannot be approved.",
   MCP_INVALID_TOKEN:
     "The requester's assistant connection is no longer valid, so this request cannot be approved.",
+  MCP_INACTIVE_PRINCIPAL:
+    "The requester's account is no longer active, so this request cannot be approved.",
+  MCP_INVALID_GRANT:
+    "The requester's assistant connection was revoked, so this request cannot be approved.",
 };
 
 /** Own keys only: an inherited name such as "constructor" is not an expected refusal. */

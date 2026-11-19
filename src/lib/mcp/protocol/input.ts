@@ -43,7 +43,7 @@ export function rejectDuplicateJsonKeys(text: string) {
 
 export async function readMcpBody(request: Request) {
   requireMcp(
-    request.headers.get('content-type')?.split(';')[0] === 'application/json',
+    request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() === 'application/json',
     'MCP_CONTENT_TYPE',
     415
   );

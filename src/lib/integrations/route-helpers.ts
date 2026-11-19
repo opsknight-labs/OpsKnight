@@ -13,7 +13,8 @@ type SignatureProvider =
 
 export function createIntegrationRoute<T>(
   integrationType: keyof typeof IntegrationSchemas,
-  transform: (payload: T) => EventPayload,
+  // null marks a provider notification that must not change incident state.
+  transform: (payload: T) => EventPayload | null,
   options?: {
     signatureProvider?: SignatureProvider;
     skipRateLimit?: boolean;
@@ -31,6 +32,7 @@ export function createIntegrationRoute<T>(
     },
     async ({ payload, integration }) => {
       const event = transform(payload);
+      if (!event) return { action: 'ignored' };
       const result = await processIntegrationEvent({
         event,
         serviceId: integration.serviceId,
