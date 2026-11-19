@@ -166,8 +166,9 @@ describe('Squire investigation mode (scripted model)', () => {
         if (c.plans === 'sweep')
           return {
             content: JSON.stringify({
-              thought: `Check changes over ${index + 1} hours`,
-              calls: [{ tool: 'get_recent_changes', input: JSON.stringify({ hours: index + 1 }) }],
+              // Counting down from 72 h so no step repeats the first round's 6-hour read.
+              thought: `Check changes over ${72 - index} hours`,
+              calls: [{ tool: 'get_recent_changes', input: JSON.stringify({ hours: 72 - index }) }],
               done: false,
             }),
           };
