@@ -151,11 +151,11 @@ export async function assertAdmin() {
 export async function assertPermanentAdminForAdminTargets(
   actor: { baseRole: string },
   targetUserIds: readonly string[],
-  grantsAdmin = false
+  newRole?: unknown
 ) {
   if (actor.baseRole === 'ADMIN') return;
   const touchesAdmin =
-    grantsAdmin ||
+    newRole === 'ADMIN' ||
     (await prisma.user.count({ where: { id: { in: [...targetUserIds] }, role: 'ADMIN' } })) > 0;
   if (touchesAdmin) {
     throw new AuthorizationError(

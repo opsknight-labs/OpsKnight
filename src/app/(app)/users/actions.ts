@@ -236,7 +236,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
     return { error: 'Select a valid user role.' };
   }
   try {
-    await assertPermanentAdminForAdminTargets(currentUser, [userId], role === 'ADMIN');
+    await assertPermanentAdminForAdminTargets(currentUser, [userId], role);
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unauthorized.' };
   }
@@ -474,7 +474,7 @@ export async function bulkUpdateUsers(
     await assertPermanentAdminForAdminTargets(
       admin,
       userIds,
-      action === 'setRole' && formData.get('role') === 'ADMIN'
+      action === 'setRole' ? formData.get('role') : null
     );
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unauthorized.' };
@@ -770,7 +770,7 @@ export async function updateUserProfile(
       await assertPermanentAdminForAdminTargets(
         currentUser,
         [userId],
-        targetRole === 'ADMIN' && targetRole !== existingUser.role
+        targetRole !== existingUser.role ? targetRole : null
       );
     } catch (err) {
       return { error: err instanceof Error ? err.message : 'Unauthorized.' };
