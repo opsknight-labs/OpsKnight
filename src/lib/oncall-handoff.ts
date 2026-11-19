@@ -2,7 +2,6 @@ import prisma from '@/lib/prisma';
 import { logger } from './logger';
 import { getActiveOnCallShifts } from './oncall-shifts';
 import { createInAppNotifications } from './in-app-notifications';
-import { activeIncidentStatuses } from './incident-status';
 import { getBaseUrl } from './env-validation';
 import { generateShiftReminderEmailHTML, generateShiftHandoffEmailHTML } from './email';
 import { enqueueCentralNotification } from './notification-control-plane';
@@ -186,11 +185,12 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
 
         const serviceIds = policies.flatMap(p => p.services.map(s => s.id));
         if (serviceIds.length > 0) {
-          // Find active (triggered or acknowledged) incidents on these services
+          // Only unacknowledged incidents move: an ACKNOWLEDGED incident has a
+          // responder actively working it and must not be taken from them.
           const activeIncidents = await prisma.incident.findMany({
             where: {
               serviceId: { in: serviceIds },
-              status: { in: activeIncidentStatuses() },
+              status: 'OPEN',
             },
             select: { id: true, title: true, status: true, assigneeId: true },
           });
@@ -200,12 +200,15 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
             incident => incident.assigneeId && outgoingUserIds.has(incident.assigneeId)
           );
 
+          const reassigned: typeof incidentsToReassign = [];
           for (const incident of incidentsToReassign) {
-            // Reassign to incoming responder
-            await prisma.incident.update({
-              where: { id: incident.id },
+            // Compare-and-set: skip if acknowledged or manually reassigned since the read.
+            const { count } = await prisma.incident.updateMany({
+              where: { id: incident.id, status: 'OPEN', assigneeId: incident.assigneeId },
               data: { assigneeId: incomingShift.userId },
             });
+            if (count === 0) continue;
+            reassigned.push(incident);
 
             if (typeof prisma.incidentEvent?.create === 'function') {
               await prisma.incidentEvent.create({
@@ -220,12 +223,12 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
           }
 
           // Send handoff summary digest to incoming responder only if incidents were reassigned
-          if (incidentsToReassign.length > 0) {
+          if (reassigned.length > 0) {
             await createInAppNotifications({
               userIds: [incomingShift.userId],
               type: 'INCIDENT',
               title: 'Shift Handoff: Active Incidents',
-              message: `You took over on-call for "${incomingShift.schedule.name}" with ${incidentsToReassign.length} active incident(s).`,
+              message: `You took over on-call for "${incomingShift.schedule.name}" with ${reassigned.length} active incident(s).`,
               entityType: 'SCHEDULE',
               entityId: scheduleId,
             });
@@ -235,12 +238,12 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
               try {
                 const baseUrl = getBaseUrl();
                 const scheduleUrl = `${baseUrl}/schedules/${scheduleId}`;
-                const subject = `🔄 [Shift Handoff] You are now On-Call for "${incomingShift.schedule.name}" (${incidentsToReassign.length} active incidents)`;
+                const subject = `🔄 [Shift Handoff] You are now On-Call for "${incomingShift.schedule.name}" (${reassigned.length} active incidents)`;
                 const html = await generateShiftHandoffEmailHTML({
                   userName: incomingShift.user.name || 'Team Member',
                   scheduleName: incomingShift.schedule.name,
                   scheduleUrl,
-                  activeIncidents: incidentsToReassign.map(inc => ({
+                  activeIncidents: reassigned.map(inc => ({
                     id: inc.id,
                     title: inc.title,
                     status: inc.status,
@@ -248,7 +251,7 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
                   })),
                   timeZone: incomingShift.user.timeZone || 'UTC',
                 });
-                const text = `Shift Handoff: You are now on-call for "${incomingShift.schedule.name}" with ${incidentsToReassign.length} active incident(s).\n\nSchedule: ${scheduleUrl}`;
+                const text = `Shift Handoff: You are now on-call for "${incomingShift.schedule.name}" with ${reassigned.length} active incident(s).\n\nSchedule: ${scheduleUrl}`;
 
                 await enqueueCentralNotification(
                   {
