@@ -11,6 +11,7 @@ import {
 } from './contract';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import {
+  CACHE_READ_BUDGET_WEIGHT,
   exceededScopedBudget,
   recordUsageBreakdown,
   type ReservationScope,
@@ -18,6 +19,7 @@ import {
 } from './scoped-budget';
 
 export type { ReservationScope, UsageAttribution } from './scoped-budget';
+export { CACHE_READ_BUDGET_WEIGHT } from './scoped-budget';
 
 type RejectionScope = 'global' | 'user' | 'background' | 'team' | 'capability';
 const countRejection = (scope: RejectionScope) =>
@@ -217,9 +219,6 @@ export async function reserveAiTokens(
     return row;
   });
 }
-
-/** Weight of one cache-read token against the token budgets. */
-export const CACHE_READ_BUDGET_WEIGHT = 0.1;
 
 export async function recordAiUsage(
   usage: AiUsage,
