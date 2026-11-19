@@ -212,6 +212,10 @@ export const GitHubEventSchema = z.object({
     .object({
       id: z.number(),
       name: z.string(),
+      check_suite: z
+        .object({ head_branch: z.string().nullable().optional() })
+        .passthrough()
+        .optional(),
       status: z.enum(['queued', 'in_progress', 'completed']),
       conclusion: z
         .enum([
@@ -252,13 +256,17 @@ export const GitHubEventSchema = z.object({
       html_url: z.string().optional(),
     })
     .optional(),
+  // `deployment` events carry no state; deployment_status events put it on
+  // deployment_status (error, failure, inactive, in_progress, queued, pending, success).
   deployment: z
     .object({
       id: z.number(),
       environment: z.string(),
-      state: z.enum(['pending', 'success', 'failure', 'error']),
+      state: z.string().optional(),
     })
+    .passthrough()
     .optional(),
+  deployment_status: z.object({ state: z.string() }).passthrough().optional(),
   // GitLab format
   object_kind: z.string().optional(),
   project: z
@@ -732,6 +740,9 @@ export const PingdomSchema = z
     check_id: z.union([z.string(), z.number()]).optional(),
     check_name: z.string().optional(),
     state: z.string().optional(),
+    current_state: z.string().optional(),
+    previous_state: z.string().optional(),
+    importance_level: z.string().optional(),
     message: z.string().optional(),
     description: z.string().optional(),
     last_error: z.string().optional(),
@@ -745,19 +756,31 @@ export type PingdomEvent = z.infer<typeof PingdomSchema>;
 // Better Uptime
 // ============================================
 
+const BetterUptimeIncidentSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).optional(),
+    name: z.string().optional(),
+    status: z.string().optional(),
+    severity: z.string().optional(),
+    cause: z.string().optional(),
+    started_at: z.string().nullish(),
+    resolved_at: z.string().nullish(),
+    acknowledged_at: z.string().nullish(),
+    url: z.string().optional(),
+  })
+  .passthrough();
+
 export const BetterUptimeSchema = z
   .object({
     incident: z
+      .union([BetterUptimeIncidentSchema, z.string(), z.number()])
+      .optional(),
+    data: z
       .object({
         id: z.union([z.string(), z.number()]).optional(),
-        name: z.string().optional(),
-        status: z.string().optional(),
-        severity: z.string().optional(),
-        cause: z.string().optional(),
-        started_at: z.string().optional(),
-        resolved_at: z.string().optional(),
-        url: z.string().optional(),
+        attributes: BetterUptimeIncidentSchema.optional(),
       })
+      .passthrough()
       .optional(),
     name: z.string().optional(),
     status: z.string().optional(),
@@ -1056,6 +1079,8 @@ export const GitLabPayloadSchema = z
         iid: z.number().optional(),
         source_branch: z.string().optional(),
         target_branch: z.string().optional(),
+        ref: z.string().optional(),
+        issue_type: z.string().optional(),
       })
       .passthrough()
       .optional(),
@@ -1118,7 +1143,7 @@ export const VercelPayloadSchema = z
           })
           .passthrough()
           .optional(),
-        target: z.string().optional(),
+        target: z.string().nullish(),
         plan: z.string().optional(),
         user: z.object({ id: z.string().optional(), username: z.string().optional() }).optional(),
         team: z.object({ id: z.string().optional(), slug: z.string().optional() }).optional(),

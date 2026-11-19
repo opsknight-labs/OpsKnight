@@ -33,8 +33,8 @@ describe('GitLab Webhooks Integration', () => {
     const event = transformGitLabToEvent(payload as any);
     expect(event.event_action).toBe('trigger');
     expect(event.payload.severity).toBe('error');
-    // Ensure pipeline ID is in the dedup key to avoid collissions with other pipelines on the same branch
-    expect(event.dedup_key).toBe('gitlab-fintech-payment-service-pipeline-991');
+    // Keyed by project + ref so a later pipeline on the same branch can resolve it
+    expect(event.dedup_key).toBe('gitlab-fintech-payment-service-main');
     expect(event.payload.custom_details.sha).toBe('abc1234');
   });
 
@@ -57,7 +57,8 @@ describe('GitLab Webhooks Integration', () => {
 
     const event = transformGitLabToEvent(payload as any);
     expect(event.event_action).toBe('resolve');
-    expect(event.dedup_key).toBe('gitlab-fintech-payment-service-pipeline-992');
+    // A new pipeline id (992) still resolves the failure from pipeline 991
+    expect(event.dedup_key).toBe('gitlab-fintech-payment-service-main');
   });
 
   it('should parse a merge request open event as acknowledge', () => {

@@ -28,15 +28,17 @@ export type BitbucketEvent = {
   [key: string]: unknown;
 };
 
-function determineAction(result?: string, state?: string): 'trigger' | 'resolve' {
-  const normalized = `${result || ''} ${state || ''}`.toLowerCase();
-  if (normalized.includes('success')) return 'resolve';
-  if (normalized.includes('completed') && normalized.includes('successful')) return 'resolve';
-  return 'trigger';
+// Only an explicit failure pages and only an explicit success recovers; push,
+// PR and in-progress/stopped events are informational.
+function determineAction(...states: Array<string | undefined>): 'trigger' | 'resolve' | 'acknowledge' {
+  const normalized = states.filter(Boolean).join(' ').toLowerCase();
+  if (/\b(failed|error)\b/.test(normalized)) return 'trigger';
+  if (/\b(successful|success)\b/.test(normalized)) return 'resolve';
+  return 'acknowledge';
 }
 
 export function transformBitbucketToEvent(data: BitbucketEvent): {
-  event_action: 'trigger' | 'resolve';
+  event_action: 'trigger' | 'resolve' | 'acknowledge';
   dedup_key: string;
   payload: {
     summary: string;
@@ -47,14 +49,12 @@ export function transformBitbucketToEvent(data: BitbucketEvent): {
 } {
   const pipelineState = data.pipeline?.state?.name;
   const pipelineResult = data.pipeline?.state?.result?.name;
+  const commitState = data.commit_status?.state;
   const summary =
     firstString(data.repository?.full_name, data.repository?.name) || 'Bitbucket Pipeline';
 
-  const action = determineAction(pipelineResult, pipelineState);
-  const severity = normalizeSeverity(
-    pipelineResult && pipelineResult.toLowerCase().includes('success') ? 'info' : 'error',
-    'error'
-  );
+  const action = determineAction(commitState, pipelineResult, pipelineState);
+  const severity = normalizeSeverity(action === 'trigger' ? 'error' : 'info', 'error');
 
   // Use stable repository + pipeline/commit status name for dedup key across runs
   const repoName = (data.repository?.full_name || data.repository?.name || 'unknown')
@@ -70,12 +70,13 @@ export function transformBitbucketToEvent(data: BitbucketEvent): {
     event_action: action,
     dedup_key: String(dedupKey),
     payload: {
-      summary: `Bitbucket ${pipelineResult || pipelineState || 'pipeline'}: ${summary}`,
+      summary: `Bitbucket ${commitState || pipelineResult || pipelineState || 'pipeline'}: ${summary}`,
       source: 'Bitbucket',
       severity,
       custom_details: {
         event: data.event,
         pipeline: data.pipeline,
+        commitStatus: data.commit_status,
         repository: data.repository,
         raw: data,
       },

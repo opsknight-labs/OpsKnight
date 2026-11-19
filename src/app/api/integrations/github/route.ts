@@ -74,14 +74,6 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.github_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }
-        const claim = await claimInboundDelivery(
-          integration.id,
-          'GITHUB',
-          req.headers.get('x-github-delivery')
-        );
-        if (claim?.disposition === 'COMPLETED') return jsonOk({ status: 'duplicate' }, 200);
-        if (claim?.disposition === 'BUSY') return jsonError('Webhook delivery is in progress', 503);
-        if (claim?.disposition === 'CLAIMED') deliveryClaim = claim;
       }
 
       let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -99,6 +91,18 @@ export async function POST(req: NextRequest) {
           integrationId,
         });
         return jsonError('Invalid GitHub webhook payload', 400, { errors: validation.errors });
+      }
+
+      // Claim only after validation so a rejected payload leaves no PROCESSING fence.
+      if (VERIFY_SIGNATURES && integration.signatureSecret) {
+        const claim = await claimInboundDelivery(
+          integration.id,
+          'GITHUB',
+          req.headers.get('x-github-delivery')
+        );
+        if (claim?.disposition === 'COMPLETED') return jsonOk({ status: 'duplicate' }, 200);
+        if (claim?.disposition === 'BUSY') return jsonError('Webhook delivery is in progress', 503);
+        if (claim?.disposition === 'CLAIMED') deliveryClaim = claim;
       }
 
       // Transform to standard event format

@@ -15,7 +15,8 @@ export function transformVercelToEvent(data: VercelPayload): {
   const projectName =
     firstString(data.payload?.project?.name, data.payload?.deployment?.name, data.payload?.name) ||
     'vercel-project';
-  const target = data.payload?.target || 'production';
+  // Vercel sends target "production", or null for preview deployments.
+  const target = data.payload?.target || 'preview';
   const isProduction = target === 'production';
   const deploymentId = data.payload?.deployment?.id;
 

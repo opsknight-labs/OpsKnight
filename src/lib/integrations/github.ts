@@ -31,6 +31,7 @@ export type GitHubEvent = {
   check_run?: {
     id: number;
     name: string;
+    check_suite?: { head_branch?: string | null };
     status: 'queued' | 'in_progress' | 'completed';
     conclusion?:
       | 'success'
@@ -65,7 +66,10 @@ export type GitHubEvent = {
   deployment?: {
     id: number;
     environment: string;
-    state: 'pending' | 'success' | 'failure' | 'error';
+    state?: string;
+  };
+  deployment_status?: {
+    state: string;
   };
   // GitLab format
   object_kind?: string;
@@ -214,7 +218,9 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
     const isPending = check.status === 'queued' || check.status === 'in_progress';
 
     const repoName = payload.repository?.full_name || 'unknown';
-    const checkDedupKey = `github-check-${repoName}-${check.name || check.id}`
+    // Include the branch so a PR check success cannot resolve main's failure.
+    const checkBranch = check.check_suite?.head_branch;
+    const checkDedupKey = `github-check-${repoName}-${check.name || check.id}${checkBranch ? `-${checkBranch}` : ''}`
       .toLowerCase()
       .replace(/[^a-z0-9-_]/g, '-');
 
@@ -419,15 +425,20 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
     };
   }
 
-  // Handle GitHub deployment
+  // Handle GitHub deployment / deployment_status. The state lives on
+  // deployment_status; a bare `deployment` (creation) event has none.
   if (payload.deployment) {
-    const deployment = payload.deployment;
+    const deployment = {
+      ...payload.deployment,
+      state: payload.deployment_status?.state ?? payload.deployment.state,
+    };
     const isFailure = deployment.state === 'failure' || deployment.state === 'error';
     const isResolved = deployment.state === 'success';
-    const isPending = deployment.state === 'pending';
+    const isPending = !isFailure && !isResolved;
 
     const repoName = payload.repository?.full_name || 'unknown';
-    const deploymentDedupKey = `github-deployment-${repoName}-${deployment.id}`;
+    // Keyed by environment so the next successful deploy resolves a failed one.
+    const deploymentDedupKey = `github-deployment-${repoName}-${deployment.environment}`;
 
     if (isPending) {
       return {

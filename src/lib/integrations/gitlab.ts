@@ -21,37 +21,25 @@ export function transformGitLabToEvent(data: GitLabPayload): {
     const rawStatus =
       firstString(data.build_status, data.status, data.object_attributes?.status) || 'unknown';
     const status = rawStatus.toLowerCase();
-    const ref = firstString(data.ref, 'main');
+    // Pipeline hooks carry the ref in object_attributes; job hooks at the top level.
+    const ref = firstString(data.ref, data.object_attributes?.ref, 'main');
     const pipelineId = data.object_attributes?.id || data.build_id;
 
-    let event_action: 'trigger' | 'resolve' | 'acknowledge' = 'trigger';
-    let severity: 'critical' | 'error' | 'warning' | 'info' = 'error';
-
-    if (status === 'success' || status === 'passed' || status === 'manual') {
+    // Only a failure pages and only a success recovers. Every other status
+    // (running, manual, canceled, skipped, scheduled, ...) is informational.
+    let event_action: 'trigger' | 'resolve' | 'acknowledge' = 'acknowledge';
+    let severity: 'critical' | 'error' | 'warning' | 'info' = 'info';
+    if (status === 'success' || status === 'passed') {
       event_action = 'resolve';
-      severity = 'info';
-    } else if (
-      status === 'running' ||
-      status === 'pending' ||
-      status === 'created' ||
-      status === 'preparing' ||
-      status === 'waiting_for_resource'
-    ) {
-      event_action = 'acknowledge';
-      severity = 'info';
     } else if (status === 'failed') {
       event_action = 'trigger';
       severity = 'error';
-    } else if (status === 'canceled' || status === 'skipped') {
-      event_action = 'acknowledge';
-      severity = 'warning';
     }
 
     const summary = `GitLab CI: Pipeline for ${projectPath} on ${ref} ${rawStatus}`;
-    // Include pipeline ID in dedup key so different pipelines don't collide, with ref fallback
-    const dedup_key = pipelineId
-      ? `gitlab-${cleanProject}-pipeline-${pipelineId}`
-      : `gitlab-${cleanProject}-${ref}`;
+    // Key by ref (and job name) so a later pipeline's success resolves the failure.
+    const jobName = kind === 'pipeline' ? undefined : firstString(data.build_name);
+    const dedup_key = `gitlab-${cleanProject}-${ref}${jobName ? `-job-${jobName}` : ''}`;
 
     return {
       event_action,
@@ -179,11 +167,12 @@ export function transformGitLabToEvent(data: GitLabPayload): {
       'GitLab Alert';
     const issueId = data.object_attributes?.id || 'alert';
 
-    let event_action: 'trigger' | 'resolve' | 'acknowledge' = 'trigger';
+    // Ordinary project issues are not alerts; only incidents and alerts page.
+    const isAlert =
+      kind !== 'issue' || data.object_attributes?.issue_type?.toLowerCase() === 'incident';
+    let event_action: 'trigger' | 'resolve' | 'acknowledge' = isAlert ? 'trigger' : 'acknowledge';
     if (action === 'close' || action === 'closed' || action === 'resolved') {
       event_action = 'resolve';
-    } else if (action === 'reopen' || action === 'open' || action === 'opened') {
-      event_action = 'trigger';
     }
 
     const severity = normalizeSeverity(data.object_attributes?.severity, 'error');
