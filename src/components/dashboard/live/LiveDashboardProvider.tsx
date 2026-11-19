@@ -395,9 +395,11 @@ export function LiveDashboardProvider({
 
   const notifyNewCritical = useCallback((incidents: LiveIncident[]) => {
     if (!alertsRef.current || incidents.length === 0) return;
-    if (document.visibilityState === 'visible') return;
+    // The user opted in, so the tone always plays (wallboards stay visible and focused); the
+    // system notification is only for when nobody is looking at this window.
     playAlertTone();
-    if ('Notification' in window && Notification.permission === 'granted') {
+    const watching = document.visibilityState === 'visible' && document.hasFocus();
+    if (!watching && 'Notification' in window && Notification.permission === 'granted') {
       const [first] = incidents;
       const notification = new Notification(
         incidents.length === 1
@@ -714,7 +716,10 @@ export function LiveDashboardProvider({
 
   useEffect(() => {
     const safety = setInterval(() => {
-      if (document.visibilityState === 'visible') void reconcileRef.current('safety');
+      // A hidden tab has no realtime stream; keep polling only when critical alerts are on.
+      if (document.visibilityState === 'visible' || alertsRef.current) {
+        void reconcileRef.current('safety');
+      }
     }, SAFETY_RECONCILE_MS);
     const onVisible = () => {
       if (document.visibilityState === 'visible') {

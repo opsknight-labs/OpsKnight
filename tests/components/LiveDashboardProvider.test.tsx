@@ -192,6 +192,67 @@ describe('LiveDashboardProvider', () => {
     expect(screen.getByTestId('highlighted').textContent).toBe('b');
   });
 
+  const stubAudio = () => {
+    const created = vi.fn();
+    class FakeAudioContext {
+      currentTime = 0;
+      destination = {};
+      constructor() {
+        created();
+      }
+      createOscillator() {
+        const node = {
+          frequency: { value: 0 },
+          connect: (next: unknown) => next,
+          start: vi.fn(),
+          stop: vi.fn(),
+          onended: null,
+        };
+        return node;
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+          connect: (next: unknown) => next,
+        };
+      }
+      close() {}
+    }
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    return created;
+  };
+
+  it('plays the critical alert tone on a visible, focused wallboard', async () => {
+    window.localStorage.setItem('opsknight:dashboard:critical-alerts:v1', 'on');
+    const tone = stubAudio();
+    const view = mount();
+    fetchMock.mockImplementation(() => respond(snapshot(['b', 'a'])));
+    realtime.value = { ...realtime.value, changeCount: 1, changeGeneration: '42' };
+    view.rerender(
+      <LiveDashboardProvider initialSnapshot={snapshot(['a'])} currentUserId="me">
+        <Probe />
+      </LiveDashboardProvider>
+    );
+    await flush();
+    expect(screen.getByTestId('ids').textContent).toBe('b,a');
+    expect(tone).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps polling a hidden tab when critical alerts are enabled', async () => {
+    window.localStorage.setItem('opsknight:dashboard:critical-alerts:v1', 'on');
+    const tone = stubAudio();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      mount();
+      fetchMock.mockImplementation(() => respond(snapshot(['b', 'a'])));
+      await flush(30_500);
+      expect(fetchMock).toHaveBeenCalled();
+      expect(tone).toHaveBeenCalledTimes(1);
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
   const rerenderProvider = (view: ReturnType<typeof mount>) =>
     view.rerender(
       <LiveDashboardProvider initialSnapshot={snapshot(['a'])} currentUserId="me">
