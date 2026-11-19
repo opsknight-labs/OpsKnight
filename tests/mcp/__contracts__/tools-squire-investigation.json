@@ -1,0 +1,26 @@
+[
+  {
+    "name": "squire_get_investigation",
+    "title": "Get a Squire investigation",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "0eaee13c9f84c040f38b4a6e1e10517ecc672db3dedca29bb7bfb86faec752a8",
+    "descriptionSha256": "5c68a4e0bba722c480ccaad22b36cfc66c5effc50cffe6fe22d5cc4394659039"
+  },
+  {
+    "name": "squire_start_investigation",
+    "title": "Start a Squire investigation",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "85ec21cbc08fbd45287b7fe47d710516e9b0bd7566e4c5c35c02a78d855ed51c",
+    "descriptionSha256": "b2d24c1eeed82d818ff561ea0264f54a19516f6646564cd87d9ea7f3e880c858"
+  }
+]
