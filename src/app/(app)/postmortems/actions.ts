@@ -67,7 +67,8 @@ export type PostmortemData = {
 };
 
 const text = (max: number) => z.string().max(max);
-const number = z.number().finite().nonnegative().optional();
+// nullish: legacy rows may hold nulls that the editor round-trips.
+const number = z.number().finite().nonnegative().nullish();
 // Only the editable columns; unknown keys (createdById, incidentId, ...) are dropped.
 const postmortemInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -80,7 +81,7 @@ const postmortemInputSchema = z.object({
         type: z.enum(['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION']),
         title: text(500),
         description: text(5_000),
-        actor: text(200).optional(),
+        actor: text(200).nullish(),
       })
     )
     .max(200)
@@ -90,7 +91,7 @@ const postmortemInputSchema = z.object({
       usersAffected: number,
       downtimeMinutes: number,
       errorRate: number,
-      servicesAffected: z.array(text(200)).max(100).optional(),
+      servicesAffected: z.array(text(200)).max(100).nullish(),
       slaBreaches: number,
       revenueImpact: number,
       apiErrors: number,
@@ -124,7 +125,7 @@ const postmortemInputSchema = z.object({
         dueDate: text(64).optional(),
         status: z.enum(['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED']),
         priority: z.enum(['HIGH', 'MEDIUM', 'LOW']),
-        externalIssue: z.record(z.unknown()).optional(),
+        externalIssue: z.record(z.unknown()).nullish(),
         completedAt: z.union([z.string().max(64), z.date(), z.null()]).optional(),
       })
     )
