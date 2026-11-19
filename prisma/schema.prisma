@@ -2630,6 +2630,8 @@ model StatusPage {
   enableUptimeExports         Boolean                    @default(false)
   statusApiRequireToken       Boolean                    @default(false)
   statusApiRateLimitEnabled   Boolean                    @default(false)
+  /// Minutes between status updates while an incident is open (incident page "next update due"). Null = 30.
+  updateCadenceMinutes        Int?
   statusApiRateLimitMax       Int                        @default(120)
   statusApiRateLimitWindowSec Int                        @default(60)
   uptimeExcellentThreshold    Float                      @default(99.9)

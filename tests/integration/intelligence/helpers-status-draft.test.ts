@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
-import { loadStatusDrafts } from '@/lib/intelligence/helpers/status-draft-loader';
+import {
+  loadIncidentStatusUpdate,
+  loadStatusDrafts,
+} from '@/lib/intelligence/helpers/status-draft-loader';
 import {
   createTestIncident,
   createTestService,
@@ -99,6 +102,11 @@ describe('status-update drafts for a status page', () => {
     ]);
     // An incident on the database reaches the website through the hidden API.
     expect(drafts[0].affected.map(component => component.name)).toEqual(['Database', 'Website']);
+
+    // The incident page's "Post status update" asks for one incident, even past the newest three.
+    const oldest = await db.incident.findFirstOrThrow({ where: { title: 'db incident 4' } });
+    const named = await loadStatusDrafts(admin, page.id, oldest.id);
+    expect(named.map(draft => draft.incidentId)).toEqual([oldest.id]);
   });
 
   it('stays silent while the switch is off, for an inactive reader and for an unknown page', async () => {
@@ -117,5 +125,70 @@ describe('status-update drafts for a status page', () => {
     expect(await loadStatusDrafts(admin, 'no-such-page')).toEqual([]);
     expect(await loadStatusDrafts({ ...admin, status: 'DISABLED' }, page.id)).toEqual([]);
     expect(await loadStatusDrafts(admin, page.id)).toHaveLength(1);
+  });
+});
+
+describe('status updates from the incident page', () => {
+  it('names the page the incident touches, then the next update due from the last linked one', async () => {
+    await switches(true);
+    const { page, database } = await fixture();
+    const incident = await createTestIncident('db down', database.id, { status: 'OPEN' });
+
+    expect(await loadIncidentStatusUpdate(incident)).toEqual({
+      statusPageId: page.id,
+      statusPageName: 'Public',
+      cadenceMinutes: 30,
+      lastUpdateAt: null,
+      nextDueAt: null,
+    });
+
+    await db.statusPage.update({ where: { id: page.id }, data: { updateCadenceMinutes: 15 } });
+    const postedAt = new Date('2026-11-17T10:00:00Z');
+    for (const createdAt of [new Date('2026-11-17T09:00:00Z'), postedAt])
+      await db.statusPageAnnouncement.create({
+        data: {
+          statusPageId: page.id,
+          incidentId: incident.id,
+          title: 'Investigating',
+          message: 'Looking into it',
+          startDate: createdAt,
+          createdAt,
+        },
+      });
+
+    expect(await loadIncidentStatusUpdate(incident)).toMatchObject({
+      statusPageId: page.id,
+      cadenceMinutes: 15,
+      lastUpdateAt: postedAt,
+      nextDueAt: new Date('2026-11-17T10:15:00Z'),
+    });
+  });
+
+  it('renders nothing off the page, for private or closed incidents and while the switch is off', async () => {
+    const settings = await switches(true);
+    const { database, unrelated, api } = await fixture();
+    const open = await createTestIncident('db down', database.id, { status: 'OPEN' });
+
+    // Hidden components and upstream-only services have no page of their own to post on.
+    for (const serviceId of [unrelated.id, api.id])
+      expect(
+        await loadIncidentStatusUpdate(await createTestIncident('x', serviceId, { status: 'OPEN' }))
+      ).toBeNull();
+    expect(
+      await loadIncidentStatusUpdate(
+        await createTestIncident('p', database.id, { status: 'OPEN', visibility: 'PRIVATE' })
+      )
+    ).toBeNull();
+    expect(
+      await loadIncidentStatusUpdate(
+        await createTestIncident('r', database.id, { status: 'RESOLVED' })
+      )
+    ).toBeNull();
+
+    await db.intelligenceSettings.update({
+      where: { id: settings.id },
+      data: { opsHelpersEnabled: false },
+    });
+    expect(await loadIncidentStatusUpdate(open)).toBeNull();
   });
 });

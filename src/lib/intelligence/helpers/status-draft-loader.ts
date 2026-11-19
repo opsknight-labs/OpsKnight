@@ -26,7 +26,9 @@ const MAX_SOURCE_SERVICES = 500;
  */
 export async function loadStatusDrafts(
   actor: AuthorizationActor,
-  statusPageId: string
+  statusPageId: string,
+  /** Just this incident (the incident page's "Post status update"), even when it is not among the newest. */
+  incidentId?: string
 ): Promise<StatusDraft[]> {
   if (actor.status !== 'ACTIVE') return [];
   const settings = await getIntelligenceSettings();
@@ -62,6 +64,7 @@ export async function loadStatusDrafts(
     where: {
       AND: [
         {
+          ...(incidentId ? { id: incidentId } : {}),
           serviceId: { in: [...sources].slice(0, MAX_SOURCE_SERVICES) },
           status: { in: ['OPEN', 'ACKNOWLEDGED'] },
           visibility: 'PUBLIC',
@@ -76,4 +79,60 @@ export async function loadStatusDrafts(
   return incidents
     .map(incident => draftStatusUpdate(incident, components, edges))
     .filter((draft): draft is StatusDraft => draft !== null);
+}
+
+/** Minutes between status updates while an incident is open, when the page sets none. */
+export const STATUS_UPDATE_CADENCE_DEFAULT = 30;
+
+export type IncidentStatusUpdate = {
+  statusPageId: string;
+  statusPageName: string;
+  cadenceMinutes: number;
+  /** The last announcement linked to this incident; null before the first one. */
+  lastUpdateAt: Date | null;
+  nextDueAt: Date | null;
+};
+
+/**
+ * The status page an incident should be posted on, and when the next update is due. The page the incident
+ * last posted on wins; otherwise the first page that shows the incident's own service. Null for private or
+ * closed incidents (the ones `loadStatusDrafts` never drafts), while the switch is off, and when no page
+ * shows the service. At most two indexed reads on the incident page; the caller checks the publish permission.
+ */
+export async function loadIncidentStatusUpdate(incident: {
+  id: string;
+  serviceId: string;
+  status: string;
+  visibility: string;
+}): Promise<IncidentStatusUpdate | null> {
+  if (incident.visibility !== 'PUBLIC' || !['OPEN', 'ACKNOWLEDGED'].includes(incident.status))
+    return null;
+  const settings = await getIntelligenceSettings();
+  if (!settings.enabled || !settings.opsHelpersEnabled) return null;
+
+  const pageSelect = { select: { id: true, name: true, updateCadenceMinutes: true } } as const;
+  const last = await prisma.statusPageAnnouncement.findFirst({
+    where: { incidentId: incident.id },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { createdAt: true, statusPage: pageSelect },
+  });
+  const page =
+    last?.statusPage ??
+    (
+      await prisma.statusPageService.findFirst({
+        where: { serviceId: incident.serviceId, showOnPage: true },
+        orderBy: [{ statusPageId: 'asc' }],
+        select: { statusPage: pageSelect },
+      })
+    )?.statusPage;
+  if (!page) return null;
+
+  const cadenceMinutes = page.updateCadenceMinutes ?? STATUS_UPDATE_CADENCE_DEFAULT;
+  return {
+    statusPageId: page.id,
+    statusPageName: page.name,
+    cadenceMinutes,
+    lastUpdateAt: last?.createdAt ?? null,
+    nextDueAt: last ? new Date(last.createdAt.getTime() + cadenceMinutes * 60_000) : null,
+  };
 }

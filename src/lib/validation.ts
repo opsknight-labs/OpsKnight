@@ -334,6 +334,8 @@ export const StatusAnnouncementCreateSchema = z
       })
       .optional(),
     notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional(),
+    /** The incident this update is about (set when the form was filled from an incident's draft). */
+    incidentId: z.string().min(1).max(64).optional().nullable(),
   })
   .superRefine((data, ctx) => {
     const startMs = new Date(data.startDate).getTime();
