@@ -2,8 +2,7 @@ import { ALL_FACTORS, type FactorType } from './ContributingFactorsSelector';
 import type { FiveWhysStep } from './FiveWhysBuilder';
 
 // The editor stores five whys inside rootCause as `Why #n: <question> - <answer>`.
-// The question is lazy, so the first ` -` is taken as the separator and answers may contain dashes.
-const SERIALIZED_WHY = /^why\s*#\d+:\s?(.*?)(?:\s-(?:\s(.*))?)?$/i;
+const SERIALIZED_WHY = /^why\s*#\d+:\s?/i;
 
 export function formatFiveWhys(steps: FiveWhysStep[]): string {
   return steps
@@ -19,9 +18,16 @@ export function parseStoredFiveWhys(rawRootCause?: string | null): FiveWhysStep[
 
   return whyLines.map((line, idx) => {
     const id = `why-${idx + 1}-${Date.now()}`;
-    const serialized = line.trim().match(SERIALIZED_WHY);
-    if (serialized)
-      return { id, question: (serialized[1] ?? '').trim(), answer: (serialized[2] ?? '').trim() };
+    const trimmed = line.trim();
+    const prefix = trimmed.match(SERIALIZED_WHY);
+    if (prefix) {
+      const body = trimmed.slice(prefix[0].length);
+      // The first ` - ` is the serializer's separator, so answers may contain dashes.
+      const sep = body.indexOf(' - ');
+      if (sep !== -1)
+        return { id, question: body.slice(0, sep).trim(), answer: body.slice(sep + 3).trim() };
+      return { id, question: body.replace(/\s-$/, '').trim(), answer: '' };
+    }
     const parts = line.split(/:\s*|\s*-\s*|\s*➔\s*/);
     return {
       id,
