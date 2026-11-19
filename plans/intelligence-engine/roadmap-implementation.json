@@ -407,7 +407,10 @@
   "mascot_integration": {
     "source": "User-supplied Downloads/OpsKnightSquire.tsx and opsknight-squire.svg (2026-11-06 11:47)",
     "states": 9,
-    "variants": ["full", "avatar"],
+    "variants": [
+      "full",
+      "avatar"
+    ],
     "verified": [
       "54 focused component tests passed",
       "Browser: desktop, 390px mobile, dark mode, basic-mode history",
@@ -489,7 +492,10 @@
   "local_runtime_recovery": {
     "verified_at": "2026-11-06",
     "restart": "User explicitly approved Docker Desktop restart; hung Docker app processes restarted without deleting containers or volumes.",
-    "restored_containers": ["opsknight-intel-dev", "opsknight-intel-roadmap-test"],
+    "restored_containers": [
+      "opsknight-intel-dev",
+      "opsknight-intel-roadmap-test"
+    ],
     "other_containers": "Other containers, including mcp939-testdb, were not individually operated and remain stopped after the engine restart.",
     "demo_url": "http://localhost:3100",
     "login": "HTTP 200; root redirects to the local login path with callbackUrl.",
@@ -513,5 +519,53 @@
       "Local million-row benchmark: 1M incidents, alerts and normalized fingerprints, durable PostgreSQL; 5k-alert incremental p50 12.53ms / p99 15.21ms, all index-plan gates passed. Foundation-only nightly workflow added; not full ingestion A/B certification."
     ],
     "scope": "Expanded roadmap still in progress. Incremental indexing, bounded observer, shared alert shape/backfill and foundation benchmark now implemented and verified locally."
+  },
+  "gap-audit-2026-11-17 waves M3/M4/M5": {
+    "status": "not_started",
+    "base": "64413ea56",
+    "integration_branch": "wip/intel-gap3-int",
+    "done": [],
+    "remaining": {
+      "M3": [
+        "noise fail-open under storms",
+        "pre-page grouping in HOLD window (SHADOW first)",
+        "HIGH storm grouping",
+        "SHADOW defaults for new services",
+        "reachable AUTO certification evidence",
+        "event model fields + Alert.integrationId",
+        "change-to-service mapping and deploy mappers; change risk as cause prior",
+        "learning labels from implicit truth, time split, acceptance drift",
+        "Service.slaTier prior",
+        "proactive anomaly evaluation",
+        "scale: Alert partitioning plan, LISTEN/NOTIFY snapshots, lane reservation"
+      ],
+      "M4": [
+        "auto-investigation on page",
+        "hypotheses with verification checks",
+        "suspect change ranking",
+        "metric discovery tools and search_logs schema fix",
+        "Kubernetes and CI/CD connectors",
+        "Slack/Teams thread history, progressive updates, war-room kickoff, channel capture",
+        "MCP long-running investigation task",
+        "hybrid knowledge retrieval and fact TTL",
+        "persisted dialogue state, streamed conclusion",
+        "governance data class, per-tool PII redaction, readUntrusted scope"
+      ],
+      "M5": [
+        "1 incident status update + cadence chip",
+        "2 unified Needs attention home",
+        "3 schedule cover candidates",
+        "4 notification payload findings",
+        "5 settings checklist + Recommended preset",
+        "6 action item dedupe/owner/nudge",
+        "7 suggested responders",
+        "8 personal noise and load cards",
+        "9 SLO burn forecast, change follow-on incidents",
+        "10 mobile parity",
+        "11 on-demand AI helpers",
+        "12 dead code removal"
+      ]
+    },
+    "note": "Run of 2026-11-17/19: all eight slice agents (m5-comms, m5-home, m5-people, m5-mobile-ai, m3-learning, m3-changes, m4-data, m4-chatops) failed with no commits; nothing was merged. M5 learning (wip/intel-m5-learning) is integrated by a separate run and is not tracked here."
   }
 }
