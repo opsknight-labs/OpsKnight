@@ -1,12 +1,14 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { useBundlePreference } from '@/components/settings/useBundlePreference';
 import type { NoiseOverview } from '@/lib/notification-noise/loader';
 import { share, type NoiseReport } from '@/lib/notification-noise/report';
+import { isNightHour } from '@/lib/oncall-load/metrics';
 
 const hourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
 
@@ -61,6 +63,9 @@ export default function NoiseSection({
 }) {
   const { report } = overview;
   const bundle = useBundlePreference(overview.bundleLowUrgencyPages);
+  const nightPages = report.byHour
+    .filter(entry => isNightHour(entry.hour))
+    .reduce((sum, entry) => sum + entry.pages, 0);
 
   return (
     <SettingsSection
@@ -83,7 +88,7 @@ export default function NoiseSection({
       {report.pages > 0 && (
         <SettingsRow
           label={`Last ${report.days} days`}
-          description={`${report.pages} pages, ${share(report.acted, report.pages)}% acted on, ${report.autoResolved} resolved by themselves within minutes`}
+          description={`${report.pages} pages, ${share(report.acted, report.pages)}% acted on, ${report.autoResolved} resolved by themselves within minutes, ${nightPages} at night`}
         >
           <div className="space-y-5">
             <PagesByHour report={report} />
@@ -100,6 +105,9 @@ export default function NoiseSection({
                   <th scope="col" className="pb-2 text-right font-medium">
                     Acted on
                   </th>
+                  <th scope="col" className="pb-2 text-right font-medium">
+                    <span className="sr-only">Tune</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -109,6 +117,15 @@ export default function NoiseSection({
                     <td className="py-2 text-right tabular-nums">{service.pages}</td>
                     <td className="py-2 text-right tabular-nums text-muted-foreground">
                       {share(service.acted, service.pages)}%
+                    </td>
+                    <td className="py-1 pl-3 text-right">
+                      <Link
+                        href={`/services/${encodeURIComponent(service.serviceId)}/notifications`}
+                        aria-label={`Tune ${service.serviceName}`}
+                        className="inline-flex min-h-11 items-center rounded-md px-2 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                      >
+                        Tune
+                      </Link>
                     </td>
                   </tr>
                 ))}
