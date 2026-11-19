@@ -38,16 +38,31 @@ export async function createWebhookIntegration(serviceId: string, formData: Form
     throw error;
   }
 
-  await prisma.webhookIntegration.create({
-    data: {
-      serviceId,
-      name: normalizedName,
-      type,
-      url,
-      secret: secret ? await encrypt(secret) : null,
-      channel: channel || null,
-      enabled: true,
-    },
+  const encryptedSecret = secret ? await encrypt(secret) : null;
+  await prisma.$transaction(async tx => {
+    await tx.webhookIntegration.create({
+      data: {
+        serviceId,
+        name: normalizedName,
+        type,
+        url,
+        secret: encryptedSecret,
+        channel: channel || null,
+        enabled: true,
+      },
+    });
+    // Delivery is gated on the WEBHOOK channel; without it a new, "Enabled"
+    // webhook never fires. Slack linking enables its channel the same way.
+    const service = await tx.service.findUnique({
+      where: { id: serviceId },
+      select: { serviceNotificationChannels: true },
+    });
+    if (service && !service.serviceNotificationChannels.includes('WEBHOOK')) {
+      await tx.service.update({
+        where: { id: serviceId },
+        data: { serviceNotificationChannels: [...service.serviceNotificationChannels, 'WEBHOOK'] },
+      });
+    }
   });
 
   await logAudit({
