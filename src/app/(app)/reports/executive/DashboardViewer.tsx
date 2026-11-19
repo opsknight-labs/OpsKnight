@@ -143,12 +143,21 @@ export default function DashboardViewer({
   // NOC / Kiosk presentation mode
   const [isKioskMode, setIsKioskMode] = useState(false);
 
+  // True while in edit mode; auto-refresh and prop syncs must not wipe in-progress edits.
+  const preserveEditsRef = useRef(false);
+  const syncedDashboardRef = useRef<string | undefined>(undefined);
+
   // Sync state when dashboard/template changes
   useEffect(() => {
-    setSavedBaseline(widgets);
-    setLocalWidgets(widgets);
-    setDashboardTitle(dashboardName);
-    setDashboardDesc(dashboardDescription);
+    const dashboardKey = `${dashboardId ?? ''}:${currentTemplateId ?? ''}`;
+    const sameDashboard = syncedDashboardRef.current === dashboardKey;
+    syncedDashboardRef.current = dashboardKey;
+    if (!sameDashboard || !preserveEditsRef.current) {
+      setSavedBaseline(widgets);
+      setLocalWidgets(widgets);
+      setDashboardTitle(dashboardName);
+      setDashboardDesc(dashboardDescription);
+    }
     const vis = savedDashboards.find(d => d.id === dashboardId)?.visibility;
     if (vis === 'PRIVATE' || vis === 'TEAM' || vis === 'PUBLIC') {
       setCurrentVisibility(vis);
@@ -172,6 +181,8 @@ export default function DashboardViewer({
 
       setRefreshCountdown(prev => {
         if (prev <= 1) {
+          // Hold the refresh until edits are saved or discarded.
+          if (preserveEditsRef.current) return prev;
           router.refresh();
           return autoRefreshInterval;
         }
@@ -323,6 +334,10 @@ export default function DashboardViewer({
     JSON.stringify(localWidgets) !== JSON.stringify(savedBaseline) ||
     dashboardTitle !== dashboardName ||
     dashboardDesc !== dashboardDescription;
+
+  useEffect(() => {
+    preserveEditsRef.current = isEditing;
+  }, [isEditing]);
 
   // Handle adding a new widget from the library
   const handleAddWidget = (widgetDef: WidgetDefinition) => {
