@@ -913,8 +913,19 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       const reason = staleReason;
       await prisma
         .$transaction(async tx => {
-          // Supersession is expected (e.g. a fast ack): complete the operation
-          // instead of surfacing a spurious FAILED delivery in health and history.
+          // A superseded service card is expected (e.g. a fast ack): complete it as
+          // skipped instead of a spurious FAILED. An automation card was asked for
+          // explicitly, so it still fails visibly with the reason.
+          if (payload?.origin === 'AUTOMATION') {
+            const updated = await tx.externalOperation.updateMany({
+              where: { id, status: 'PROCESSING', leaseToken },
+              data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
+            });
+            if (updated.count > 0) {
+              await syncTeamsNotificationFailure(operation.idempotencyKey, reason, tx);
+            }
+            return;
+          }
           const updated = await tx.externalOperation.updateMany({
             where: { id, status: 'PROCESSING', leaseToken },
             data: {
