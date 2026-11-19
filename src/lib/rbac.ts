@@ -144,6 +144,27 @@ export async function assertAdmin() {
   return assertCapability(CAPABILITIES.ADMIN_MANAGE, 'Unauthorized. Admin access required.');
 }
 
+/**
+ * Acting on an ADMIN account (or granting ADMIN) is account-takeover grade, so it needs an
+ * assigned administrator: a time-boxed grant must not be able to outlive itself.
+ */
+export async function assertPermanentAdminForAdminTargets(
+  actor: { baseRole: string },
+  targetUserIds: readonly string[],
+  grantsAdmin = false
+) {
+  if (actor.baseRole === 'ADMIN') return;
+  const touchesAdmin =
+    grantsAdmin ||
+    (await prisma.user.count({ where: { id: { in: [...targetUserIds] }, role: 'ADMIN' } })) > 0;
+  if (touchesAdmin) {
+    throw new AuthorizationError(
+      'Only an assigned administrator can grant the Admin role or change administrator accounts. Temporary admin access cannot do this.',
+      CAPABILITIES.ADMIN_MANAGE
+    );
+  }
+}
+
 export async function assertAdminOrResponder() {
   return assertCapability(
     CAPABILITIES.OPERATIONS_MANAGE,

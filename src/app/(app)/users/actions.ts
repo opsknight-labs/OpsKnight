@@ -13,7 +13,13 @@ import { setTeamMembership, teamMemberInput } from '@/lib/teams/administration';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
-import { assertAdmin, assertTeamManager, assertNotSelf, getCurrentUser } from '@/lib/rbac';
+import {
+  assertAdmin,
+  assertTeamManager,
+  assertNotSelf,
+  assertPermanentAdminForAdminTargets,
+  getCurrentUser,
+} from '@/lib/rbac';
 import { isAppRole } from '@/lib/authorization';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
@@ -216,7 +222,7 @@ export async function addUser(
 }
 
 export async function updateUserRole(userId: string, formData: FormData) {
-  let currentUser: { id: string } | null = null;
+  let currentUser: { id: string; baseRole: string } | null = null;
   try {
     currentUser = await assertAdmin();
     assertNotSelf(currentUser.id, userId, 'change the role of');
@@ -228,6 +234,11 @@ export async function updateUserRole(userId: string, formData: FormData) {
   const role = formData.get('role') as string;
   if (!isAppRole(role)) {
     return { error: 'Select a valid user role.' };
+  }
+  try {
+    await assertPermanentAdminForAdminTargets(currentUser, [userId], role === 'ADMIN');
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unauthorized.' };
   }
   if (role !== 'ADMIN') {
     try {
@@ -282,10 +293,11 @@ export async function removeUserFromTeam(memberId: string) {
 }
 
 export async function deactivateUser(userId: string, _formData?: FormData) {
-  let currentUser: { id: string } | null = null;
+  let currentUser: { id: string; baseRole: string } | null = null;
   try {
     currentUser = await assertAdmin();
     assertNotSelf(currentUser.id, userId, 'deactivate');
+    await assertPermanentAdminForAdminTargets(currentUser, [userId]);
     await assertNotLastAdmin(userId);
   } catch (error) {
     return {
@@ -389,10 +401,11 @@ export async function deleteUser(
   userId: string,
   _formData?: FormData
 ): Promise<{ error?: string } | undefined> {
-  let currentUser: { id: string } | null = null;
+  let currentUser: { id: string; baseRole: string } | null = null;
   try {
     currentUser = await assertAdmin();
     assertNotSelf(currentUser.id, userId, 'delete');
+    await assertPermanentAdminForAdminTargets(currentUser, [userId]);
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -440,7 +453,7 @@ export async function bulkUpdateUsers(
   _prevState: BulkUserActionState,
   formData: FormData
 ): Promise<BulkUserActionState> {
-  let admin: { id: string } | null = null;
+  let admin: { id: string; baseRole: string } | null = null;
   try {
     admin = await assertAdmin();
   } catch {
@@ -457,28 +470,46 @@ export async function bulkUpdateUsers(
     return { error: 'Select at least one user.' };
   }
 
-  if (action === 'activate') {
-    await bulkUpdateUserSecurityState(
+  try {
+    await assertPermanentAdminForAdminTargets(
+      admin,
       userIds,
-      {
-        status: 'ACTIVE',
-        tokenVersion: { increment: 1 },
-      },
-      {
-        deactivatedAt: null,
-      }
+      action === 'setRole' && formData.get('role') === 'ADMIN'
     );
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unauthorized.' };
+  }
+
+  if (action === 'activate') {
+    // Match single reactivation: only DISABLED users change, and one who never set a
+    // password returns to INVITED so their invitation link keeps working.
+    const disabled = await prisma.user.findMany({
+      where: { id: { in: userIds }, status: 'DISABLED' },
+      select: { id: true, passwordHash: true },
+    });
+    const reactivated = disabled.map(user => user.id);
+    for (const status of ['ACTIVE', 'INVITED'] as const) {
+      const ids = disabled
+        .filter(user => Boolean(user.passwordHash) === (status === 'ACTIVE'))
+        .map(user => user.id);
+      if (ids.length === 0) continue;
+      await bulkUpdateUserSecurityState(
+        ids,
+        { status, tokenVersion: { increment: 1 } },
+        { deactivatedAt: null }
+      );
+    }
 
     await logAudit({
       action: 'user.reactivated.bulk',
       entityType: 'USER',
       entityId: 'bulk',
       actorId: admin?.id || null,
-      details: { userIds, count: userIds.length },
+      details: { userIds: reactivated, count: reactivated.length },
     });
 
     revalidatePath('/users');
-    return { success: true, message: `Activated ${userIds.length} user(s)` };
+    return { success: true, message: `Activated ${reactivated.length} user(s)` };
   } else if (action === 'deactivate') {
     if (admin && userIds.includes(admin.id)) {
       return { error: 'You cannot deactivate your own account.' };
@@ -594,10 +625,10 @@ export async function bulkUpdateUsers(
       return { error: 'Select a valid user role.' };
     }
 
+    if (admin && userIds.includes(admin.id)) {
+      return { error: 'You cannot change your own role.' };
+    }
     if (role !== 'ADMIN') {
-      if (admin && userIds.includes(admin.id)) {
-        return { error: 'You cannot demote your own admin account.' };
-      }
       try {
         await assertBatchLeavesActiveAdmin(userIds);
         for (const userId of userIds) {
@@ -732,6 +763,17 @@ export async function updateUserProfile(
         }
       }
       targetRole = role as Role;
+    }
+  }
+  if (!isSelf) {
+    try {
+      await assertPermanentAdminForAdminTargets(
+        currentUser,
+        [userId],
+        targetRole === 'ADMIN' && targetRole !== existingUser.role
+      );
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Unauthorized.' };
     }
   }
 
