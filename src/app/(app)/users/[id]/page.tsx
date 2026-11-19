@@ -19,6 +19,7 @@ import UserAvatar from '@/components/UserAvatar';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import UserDetailTabs from '@/components/users/UserDetailTabs';
 import UserProfileHeaderActions from '@/components/users/UserProfileHeaderActions';
+import { Suspense } from 'react';
 import PersonLoadCard from '@/components/users/PersonLoadCard';
 import { deleteUser, updateUserProfile } from '../actions';
 import McpUserPanel from '@/components/settings/mcp/McpUserPanel';
@@ -330,7 +331,9 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
         }
       />
 
-      <PersonLoadCard actor={actor} userId={id} />
+      <Suspense fallback={null}>
+        <PersonLoadCard actor={actor} userId={id} />
+      </Suspense>
 
       {/* 4-Tab Full-Width Profile Workspace */}
       <UserDetailTabs user={transformedUser} canManage={canManage} defaultTab={defaultTab} />

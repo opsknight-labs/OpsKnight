@@ -2746,6 +2746,7 @@ model StatusPageService {
 
   @@unique([statusPageId, serviceId])
   @@index([statusPageId, order])
+  @@index([serviceId])
 }
 
 model StatusPageAnnouncement {
