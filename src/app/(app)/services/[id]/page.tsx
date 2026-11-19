@@ -6,7 +6,6 @@ import {
   type RunbookResource,
 } from '@/lib/runbooks/presentation/binding-contract';
 import prisma from '@/lib/prisma';
-import { decryptStoredSecret } from '@/lib/encryption';
 import type { WebhookIntegration, Prisma } from '@prisma/client';
 
 type ClassificationPolicyWithRules = Prisma.IncidentClassificationPolicyGetPayload<{
@@ -405,16 +404,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     });
   }
 
-  // Routing keys are stored encrypted; show managers the usable plaintext and nobody else anything.
-  const service = {
-    ...serviceRaw,
-    integrations: await Promise.all(
-      serviceRaw.integrations.map(async integration => ({
-        ...integration,
-        key: canManageService ? await decryptStoredSecret(integration.key) : '',
-      }))
-    ),
-  };
+  const service = serviceRaw;
   const canDeleteService = currentUser.role === 'ADMIN';
 
   const [
