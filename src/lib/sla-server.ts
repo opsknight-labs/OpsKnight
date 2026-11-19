@@ -1818,15 +1818,39 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   // Large windows only hydrate the newest rows, so bucket the volume and
   // latency series in the database; otherwise the chart shows the newest
   // ~100 incidents crammed into the last few buckets.
-  let dbTrendBuckets: Map<
-    string,
-    { count: number; resolveCount: number; ackSum: number; ackCount: number; resolveSum: number }
-  > | null = null;
+  type DbTrendBucket = {
+    count: number;
+    resolveCount: number;
+    ackSum: number;
+    ackCount: number;
+    resolveSum: number;
+    ackSlaMet: number;
+    ackSlaEvaluated: number;
+    resolveSlaMet: number;
+    resolveSlaEvaluated: number;
+    escalationCount: number;
+  };
+  let dbTrendBuckets: Map<string, DbTrendBucket> | null = null;
   if (useDbAggregation) {
     const trendTz = Prisma.raw(`'${userTimeZone.replace(/'/g, "''")}'`);
     const trendFormat = Prisma.raw(useHourlyTrend ? `'YYYY-MM-DD-HH24'` : `'YYYY-MM-DD'`);
     const bucketAckElapsed = slaCapturedAckElapsedSql('Incident');
     const bucketResolveElapsed = slaCapturedResolveElapsedSql('Incident');
+    const bucketCurrentElapsed = slaCurrentMaterializedElapsedSql(Prisma.sql`NOW()`, 'Incident');
+    const bucketAckTarget = slaTargetSql({
+      kind: 'ackMinutes',
+      serviceTargetMap,
+      fallbackMinutes: DEFAULT_ACK_TARGET_MINUTES,
+    });
+    const bucketResolveTarget = slaTargetSql({
+      kind: 'resolveMinutes',
+      serviceTargetMap,
+      fallbackMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
+    });
+    const bucketEscalated = incidentEventSqlPredicate('ESCALATED', 'e');
+    // Escalation and SLA compliance are bucketed here too: dividing sampled (newest ~100)
+    // counts by full bucket totals made older buckets look escalation-free and unevaluated.
+    // The SLA predicates match calculateDbAggregateMetrics so buckets agree with the headline.
     const rows = await prisma
       .$queryRaw<
         Array<{
@@ -1836,22 +1860,69 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           ack_count: bigint;
           ack_sum: number | null;
           resolve_sum: number | null;
+          ack_sla_met: bigint;
+          ack_sla_breached: bigint;
+          resolve_sla_met: bigint;
+          resolve_sla_breached: bigint;
+          escalated: bigint;
         }>
       >(
         Prisma.sql`
+      WITH trend_rows AS MATERIALIZED (
+        SELECT
+          "Incident"."createdAt", "Incident"."acknowledgedAt", "Incident"."resolvedAt",
+          "Incident"."updatedAt", "Incident"."status", "Incident"."resolutionKind",
+          "Incident"."slaAckElapsedMs",
+          ${bucketAckElapsed} AS ack_elapsed_ms,
+          ${bucketResolveElapsed} AS resolve_elapsed_ms,
+          ${bucketCurrentElapsed} AS current_elapsed_ms,
+          ${bucketAckTarget} AS ack_target_ms,
+          ${bucketResolveTarget} AS resolve_target_ms,
+          EXISTS (
+            SELECT 1 FROM "IncidentEvent" e
+            WHERE e."incidentId" = "Incident"."id" AND ${bucketEscalated}
+          ) AS escalated
+        FROM "Incident"
+        WHERE "createdAt" >= ${finalStart}
+          AND "createdAt" <= ${finalEnd}
+          ${fullIncidentFilterSql}
+      )
       SELECT
         to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${trendTz}, ${trendFormat}) AS bucket,
         COUNT(*) AS total,
         COUNT(*) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND "resolvedAt" IS NOT NULL) AS resolved,
         COUNT(*) FILTER (WHERE "slaAckElapsedMs" IS NOT NULL OR ("acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt")) AS ack_count,
-        SUM(${bucketAckElapsed})
+        SUM(ack_elapsed_ms)
           FILTER (WHERE "slaAckElapsedMs" IS NOT NULL OR ("acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt")) AS ack_sum,
-        SUM(${bucketResolveElapsed})
-          FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND "resolvedAt" IS NOT NULL) AS resolve_sum
-      FROM "Incident"
-      WHERE "createdAt" >= ${finalStart}
-        AND "createdAt" <= ${finalEnd}
-        ${fullIncidentFilterSql}
+        SUM(resolve_elapsed_ms)
+          FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND "resolvedAt" IS NOT NULL) AS resolve_sum,
+        COUNT(*) FILTER (
+          WHERE ("slaAckElapsedMs" IS NOT NULL OR "acknowledgedAt" IS NOT NULL)
+            AND ack_elapsed_ms <= ack_target_ms
+        ) AS ack_sla_met,
+        COUNT(*) FILTER (
+          WHERE (("slaAckElapsedMs" IS NOT NULL OR "acknowledgedAt" IS NOT NULL)
+            AND ack_elapsed_ms > ack_target_ms)
+          OR ("slaAckElapsedMs" IS NULL AND "acknowledgedAt" IS NULL AND "status" = 'RESOLVED'::"IncidentStatus"
+            AND NOT ("resolutionKind" = 'SOURCE_RECOVERY'::"IncidentResolutionKind"
+              AND resolve_elapsed_ms <= ack_target_ms))
+          OR ("slaAckElapsedMs" IS NULL AND "acknowledgedAt" IS NULL AND "status" != 'RESOLVED'::"IncidentStatus"
+            AND current_elapsed_ms > ack_target_ms)
+        ) AS ack_sla_breached,
+        COUNT(*) FILTER (
+          WHERE "status" = 'RESOLVED'::"IncidentStatus"
+          AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL
+          AND resolve_elapsed_ms <= resolve_target_ms
+        ) AS resolve_sla_met,
+        COUNT(*) FILTER (
+          WHERE ("status" = 'RESOLVED'::"IncidentStatus"
+            AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL
+            AND resolve_elapsed_ms > resolve_target_ms)
+          OR ("status" != 'RESOLVED'::"IncidentStatus"
+            AND current_elapsed_ms > resolve_target_ms)
+        ) AS resolve_sla_breached,
+        COUNT(*) FILTER (WHERE escalated) AS escalated
+      FROM trend_rows
       GROUP BY 1
     `
       )
@@ -1871,6 +1942,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
             ackCount: Number(row.ack_count),
             ackSum: Number(row.ack_sum ?? 0),
             resolveSum: Number(row.resolve_sum ?? 0),
+            ackSlaMet: Number(row.ack_sla_met),
+            ackSlaEvaluated: Number(row.ack_sla_met) + Number(row.ack_sla_breached),
+            resolveSlaMet: Number(row.resolve_sla_met),
+            resolveSlaEvaluated: Number(row.resolve_sla_met) + Number(row.resolve_sla_breached),
+            escalationCount: Number(row.escalated),
           },
         ])
       );
@@ -1942,10 +2018,15 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       entry.ackCount = bucket?.ackCount ?? 0;
       entry.ackSum = bucket?.ackSum ?? 0;
       entry.resolveSum = bucket?.resolveSum ?? 0;
+      entry.ackSlaMet = bucket?.ackSlaMet ?? 0;
+      entry.ackSlaEvaluated = bucket?.ackSlaEvaluated ?? 0;
+      entry.resolveSlaMet = bucket?.resolveSlaMet ?? 0;
+      entry.resolveSlaEvaluated = bucket?.resolveSlaEvaluated ?? 0;
+      entry.escalationCount = bucket?.escalationCount ?? 0;
     }
   }
 
-  for (const event of escalationEvents) {
+  for (const event of dbTrendBuckets ? [] : escalationEvents) {
     if (!event.createdAt) continue;
     const key = getTrendKey(event.createdAt);
     const trendEntry = trendIndex.get(key);
