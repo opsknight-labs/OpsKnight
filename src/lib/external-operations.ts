@@ -157,6 +157,18 @@ export async function enqueueJiraCreateOperation(input: JiraCreateOperationInput
   const idempotencyKey = jiraCreateKey(input);
   return prisma.$transaction(async tx => {
     const now = new Date();
+    // The caller processes the create inline; the job is only the durable
+    // fallback, so do not let the worker race the user's request for it.
+    const createFallbackJob = (operationId: string) =>
+      tx.backgroundJob.create({
+        data: {
+          type: 'EXTERNAL_OPERATION',
+          status: 'PENDING',
+          scheduledAt: new Date(now.getTime() + CREATE_FALLBACK_DELAY_MS),
+          maxAttempts: MAX_JIRA_OPERATION_ATTEMPTS,
+          payload: { operationId },
+        },
+      });
     const existing = await tx.externalOperation.findUnique({
       where: { provider_idempotencyKey: { provider: 'JIRA', idempotencyKey } },
       select: { id: true, status: true, externalId: true, leaseExpiresAt: true },
@@ -198,6 +210,8 @@ export async function enqueueJiraCreateOperation(input: JiraCreateOperationInput
             lastError: null,
           },
         });
+        // A FAILED operation's job has already completed; re-arm the fallback.
+        if (existing.status === 'FAILED') await createFallbackJob(existing.id);
         return existing.id;
       }
     }
@@ -211,17 +225,7 @@ export async function enqueueJiraCreateOperation(input: JiraCreateOperationInput
         requestPayload: input as Prisma.InputJsonObject,
       },
     });
-    await tx.backgroundJob.create({
-      data: {
-        type: 'EXTERNAL_OPERATION',
-        status: 'PENDING',
-        // The caller processes the create inline; the job is only the durable
-        // fallback, so do not let the worker race the user's request for it.
-        scheduledAt: new Date(now.getTime() + CREATE_FALLBACK_DELAY_MS),
-        maxAttempts: MAX_JIRA_OPERATION_ATTEMPTS,
-        payload: { operationId: operation.id },
-      },
-    });
+    await createFallbackJob(operation.id);
     return operation.id;
   });
 }

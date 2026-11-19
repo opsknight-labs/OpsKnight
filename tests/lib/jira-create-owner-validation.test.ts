@@ -103,6 +103,16 @@ describe('Jira create ownership invariant', () => {
           }),
         })
       );
+      // The old job completed when the operation failed; a new durable fallback is needed.
+      expect(tx.backgroundJob.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ payload: { operationId: 'op-old' } }),
+      });
+    });
+
+    it('does not add a second job for an operation whose job is still pending', async () => {
+      const tx = txWith({ id: 'op-old', status: 'AMBIGUOUS', externalId: null }, false);
+      await expect(enqueueJiraCreateOperation(input)).resolves.toBe('op-old');
+      expect(tx.backgroundJob.create).not.toHaveBeenCalled();
     });
   });
 
