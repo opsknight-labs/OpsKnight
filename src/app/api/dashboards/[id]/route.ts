@@ -148,9 +148,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { name, description, layout, config, visibility, teamId, widgets } = parseResult.data;
 
     const effectiveVisibility = visibility ?? existing.visibility;
-    const effectiveTeamId = teamId ?? existing.teamId;
-
     const teamIds = new Set(user.teamMemberships.map(membership => membership.teamId));
+    // Sharing a private/public dashboard to TEAM without naming a team uses the owner's only team.
+    const effectiveTeamId =
+      teamId ?? existing.teamId ?? (teamIds.size === 1 ? [...teamIds][0] : undefined);
+    if (effectiveVisibility === 'TEAM' && !effectiveTeamId && teamIds.size > 1) {
+      return NextResponse.json(
+        {
+          error:
+            'You belong to several teams. Filter the dashboard to the team to share with, then choose Team.',
+        },
+        { status: 400 }
+      );
+    }
     if (effectiveVisibility === 'TEAM') {
       if (typeof effectiveTeamId !== 'string' || !teamIds.has(effectiveTeamId)) {
         return NextResponse.json({ error: 'Team dashboard access denied' }, { status: 403 });

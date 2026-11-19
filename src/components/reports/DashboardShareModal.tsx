@@ -97,7 +97,12 @@ export default function DashboardShareModal({
       const response = await fetch(`/api/dashboards/${dashboardId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visibility: newVisibility }),
+        // TEAM needs a team: the filtered team if any, otherwise the server uses the owner's team.
+        body: JSON.stringify(
+          newVisibility === 'TEAM' && currentFilters.teamId
+            ? { visibility: newVisibility, teamId: currentFilters.teamId }
+            : { visibility: newVisibility }
+        ),
       });
 
       if (!response.ok) {
