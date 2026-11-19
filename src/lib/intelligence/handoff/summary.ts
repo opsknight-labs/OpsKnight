@@ -303,13 +303,15 @@ export function handoffBrief(summary: HandoffSummary): string {
 }
 
 /**
- * Optional AI narrative: three sentences on what matters first. Uses the SUMMARIZE capability with the
- * PERSONAL data class (names of responders appear), charged to the recipient's own AI budget. Any failure
- * or missing provider yields null.
+ * Optional AI narrative: three sentences on what matters first, drafted once per handoff and shared by its
+ * recipients (the facts are the schedule's, not any one person's). Uses the SUMMARIZE capability with the
+ * PERSONAL data class (names of responders appear), charged to the first recipient's AI budget. Any
+ * failure or missing provider yields null.
  */
 export async function draftHandoffNarrative(
   summary: HandoffSummary,
-  recipientUserId: string
+  scheduleId: string,
+  chargedUserId: string
 ): Promise<string | null> {
   try {
     const port = await resolveLanguageModel('SUMMARIZE', 'PERSONAL');
@@ -319,7 +321,7 @@ export async function draftHandoffNarrative(
       port,
       {
         context: {
-          actorId: recipientUserId,
+          actorId: chargedUserId,
           capability: 'SUMMARIZE',
           callSite: 'background',
           dataClass: 'PERSONAL',
@@ -335,8 +337,8 @@ export async function draftHandoffNarrative(
         ],
         maxOutputTokens: outputTokensFor('handoff.narrative'),
       },
-      // A handoff is written for one person; another recipient never gets their text.
-      { prompt: HANDOFF_NARRATIVE_PROMPT, scope: `user:${recipientUserId}` }
+      // Shared only within one schedule's handoff; another schedule never gets this text.
+      { prompt: HANDOFF_NARRATIVE_PROMPT, scope: `schedule:${scheduleId}` }
     );
     const text = result.text?.trim();
     return text ? text.slice(0, 800) : null;
