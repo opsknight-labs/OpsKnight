@@ -335,7 +335,12 @@ export async function evaluateIncidentTriggers(
           stormParentId =
             (
               await prisma.incidentRelationship.findFirst({
-                where: { sourceIncidentId: incidentId, type: 'PARENT_CHILD', decision: 'ACCEPTED' },
+                where: {
+                  sourceIncidentId: incidentId,
+                  type: 'PARENT_CHILD',
+                  decision: 'ACCEPTED',
+                  evidence: { path: ['kind'], equals: 'prepaging_storm' },
+                },
                 select: { targetIncidentId: true },
               })
             )?.targetIncidentId ?? null;

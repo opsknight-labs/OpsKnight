@@ -113,6 +113,27 @@ describeIfRealDB('automatic runbook triggers: storm children and per-rule rate c
     });
   });
 
+  it('still runs for a child linked by anything other than a pre-paging storm', async () => {
+    const { service } = await createAutomaticReadOnlyRule();
+    const parent = await createTestIncident('Linked parent', service.id);
+    const child = await createTestIncident('Linked child', service.id);
+    await testPrisma.incidentRelationship.create({
+      data: {
+        sourceIncidentId: child.id,
+        targetIncidentId: parent.id,
+        type: 'PARENT_CHILD',
+        origin: 'RULE',
+        decision: 'ACCEPTED',
+        evidence: { kind: 'correlation' },
+        engineVersion: 'test',
+      },
+    });
+
+    expect(await evaluateIncidentTriggers(child.id, 'linked-child-event')).toMatchObject({
+      started: 1,
+    });
+  });
+
   it('caps one automatic rule at 5 runs per 10 minutes and records the skip', async () => {
     const { service } = await createAutomaticReadOnlyRule();
     const incidents = [];
