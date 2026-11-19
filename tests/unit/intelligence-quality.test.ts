@@ -85,4 +85,20 @@ describe('offline scoring proposals', () => {
     expect(result!.weights.content).toBeGreaterThanOrEqual(0.4);
     expect(result!.heldOutLoss).toBeLessThan(result!.baselineLoss);
   });
+  it('holds out the newest examples by time, not by row position', () => {
+    const data = Array.from({ length: 200 }, (_, i) => ({
+      content: i % 2 ? 0.9 : 0.3,
+      labels: i % 2 ? 1 : 0,
+      sameService: 1,
+      recency: 1,
+      resolved: 1,
+      helpful: i % 2 === 1,
+      at: 1_000 * i,
+    }));
+    // Input order must not matter once timestamps are present.
+    expect(fitScoringWeights([...data].reverse())).toEqual(fitScoringWeights(data));
+    // Newest 20% all one-sided: no honest held-out check exists, so no proposal.
+    const skewed = data.map((row, i) => (i >= 160 ? { ...row, helpful: true } : row));
+    expect(fitScoringWeights(skewed)).toBeNull();
+  });
 });

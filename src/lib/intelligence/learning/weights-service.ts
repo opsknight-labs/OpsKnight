@@ -15,10 +15,10 @@ import {
 
 export async function suggestScoringWeights() {
   const rows = await prisma.$queryRaw<
-    Array<{ pair: string; evidence: Prisma.JsonValue; helpful: boolean }>
+    Array<{ pair: string; evidence: Prisma.JsonValue; helpful: boolean; at: Date }>
   >`
     SELECT DISTINCT ON (f."incidentId", f."subjectRef")
-      f."incidentId" || ':' || f."subjectRef" AS pair, f."evidence", fb."verdict" IN ('HELPFUL', 'CORRECT') AS helpful
+      f."incidentId" || ':' || f."subjectRef" AS pair, f."evidence", fb."verdict" IN ('HELPFUL', 'CORRECT') AS helpful, fb."createdAt" AS at
     FROM "IntelligenceFeedback" fb JOIN "IntelligenceFinding" f ON f."id" = fb."subjectId"
     WHERE fb."subjectType" = 'FINDING' AND f."kind" = 'SIMILAR_INCIDENT'
       AND fb."verdict" IN ('HELPFUL', 'NOT_HELPFUL', 'CORRECT', 'INCORRECT')
@@ -44,6 +44,7 @@ export async function suggestScoringWeights() {
         ...parsed.data.components,
         content: combinedContent(parsed.data.components),
         helpful: row.helpful,
+        at: row.at.getTime(),
       });
   }
   const proposal = fitScoringWeights(examples);

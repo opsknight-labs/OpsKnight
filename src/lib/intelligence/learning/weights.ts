@@ -3,6 +3,8 @@ import { SIMILARITY_WEIGHTS, type ScoringWeights } from '../similarity/scoring';
 
 export interface ScoringExample extends ScoringWeights {
   helpful: boolean;
+  /** Label time (ms). Rows without one keep their input position in the time order. */
+  at?: number;
 }
 const FEATURES = ['content', 'labels', 'sameService', 'recency', 'resolved'] as const;
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, x))));
@@ -24,8 +26,14 @@ export function fitScoringWeights(examples: readonly ScoringExample[]) {
     rows.filter(row => !row.helpful).length < 10
   )
     return null;
-  const train = rows.filter((_, i) => i % 5 !== 0);
-  const held = rows.filter((_, i) => i % 5 === 0);
+  // Time-based split: train on the oldest 80%, hold out the newest 20% so the check mimics deployment.
+  const ordered = rows
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => (a.row.at ?? 0) - (b.row.at ?? 0) || a.i - b.i)
+    .map(({ row }) => row);
+  const cut = Math.floor(ordered.length * 0.8);
+  const train = ordered.slice(0, cut);
+  const held = ordered.slice(cut);
   if (new Set(held.map(row => row.helpful)).size < 2) return null;
   const weights: ScoringWeights = { ...SIMILARITY_WEIGHTS };
   for (let iteration = 0; iteration < 300; iteration++) {
