@@ -404,7 +404,10 @@ export const CircuitBreakers = {
     return getCircuitBreaker(key, {
       failureThreshold: 5,
       resetTimeout: 30000,
-      timeout: 10000,
+      // Must exceed the Teams client's own 30s create-POST timeout: a breaker
+      // timeout is reported as "circuit open" and re-queues a create that may
+      // already have posted the card, stranding it as AMBIGUOUS.
+      timeout: 35000,
     });
   },
 };
