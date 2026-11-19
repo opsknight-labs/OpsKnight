@@ -404,7 +404,7 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
   usesChatOpsPolicy: true,
   capabilities: {
     createRoom: true,
-    privateRooms: false,
+    privateRooms: true,
     manageMembers: true,
     updateRoom: true,
     archiveRoom: true,
