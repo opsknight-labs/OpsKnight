@@ -89,10 +89,15 @@ const escalationJobs = (incidentId: string) =>
     },
   });
 
-/** Ages every alert of the incident so its latest state change is `ms` old. */
+/** Ages every alert of the incident, and its keys' history, so its latest state change is `ms` old. */
 async function ageAlerts(incidentId: string, ms: number) {
+  const keys = await db.alert.findMany({
+    where: { incidentId, dedupKey: { not: null } },
+    distinct: ['dedupKey'],
+    select: { dedupKey: true },
+  });
   await db.alert.updateMany({
-    where: { incidentId },
+    where: { OR: [{ incidentId }, { dedupKey: { in: keys.map(key => key.dedupKey!) } }] },
     data: { createdAt: new Date(Date.now() - ms) },
   });
 }
@@ -148,6 +153,44 @@ describe('un-suppress sweep', () => {
     // Idempotent: a second pass finds nothing to do.
     await runUnsuppressSweep(budget);
     expect(await escalationJobs(id)).toBe(1);
+  });
+
+  it('pages a hard-down alert that keeps re-sending after the flap stopped', async () => {
+    const service = await createTestService('Flapping hard-down');
+    const id = await flappingIncident(service.id, 'disk-hd');
+    await ageAlerts(id, 61_000);
+    // Re-sent every 60s while down: new TRIGGERED rows, but no state change since the flap.
+    await send(service.id, 'disk-hd');
+    expect((await incident(id)).status).toBe('SUPPRESSED');
+
+    await runUnsuppressSweep(budget);
+    expect((await incident(id)).status).toBe('OPEN');
+    expect(await escalationJobs(id)).toBe(1);
+  });
+
+  it('one failing incident does not stop the rest of the page', async () => {
+    const first = await flappingIncident((await createTestService('Isolate A')).id, 'disk-a');
+    const second = await flappingIncident((await createTestService('Isolate B')).id, 'disk-b');
+    await ageAlerts(first, 61_000);
+    await ageAlerts(second, 61_000);
+    // A trigger that rejects UNSUPPRESS for the first incident only.
+    await db.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION noise_sweep_fail() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.id = '${first}' AND NEW.status = 'OPEN' THEN RAISE EXCEPTION 'boom'; END IF;
+        RETURN NEW;
+      END $$ LANGUAGE plpgsql`);
+    await db.$executeRawUnsafe(
+      `CREATE TRIGGER noise_sweep_fail BEFORE UPDATE ON "Incident" FOR EACH ROW EXECUTE FUNCTION noise_sweep_fail()`
+    );
+    try {
+      await runUnsuppressSweep(budget);
+    } finally {
+      await db.$executeRawUnsafe(`DROP TRIGGER noise_sweep_fail ON "Incident"`);
+      await db.$executeRawUnsafe(`DROP FUNCTION noise_sweep_fail()`);
+    }
+    expect((await incident(first)).status).toBe('SUPPRESSED');
+    expect((await incident(second)).status).toBe('OPEN');
   });
 
   it('leaves a flap-suppressed incident whose alert is clear', async () => {
@@ -283,5 +326,86 @@ describe('storm parent', () => {
     // Idempotent: the re-paged child is not paged again.
     await runStormCascadeSweep(budget);
     expect(await escalationJobs(firing.id)).toBe(1);
+  });
+
+  it('resolves clear children past a required custom field and still pages the rest', async () => {
+    const service = await createTestService('Storm required field');
+    await policy(service.id, { storm: { enabled: true, threshold: 2, windowSeconds: 60 } });
+    await db.customField.create({
+      data: {
+        name: 'Root cause',
+        key: 'root_cause',
+        type: 'TEXT',
+        required: true,
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    });
+    const parent = incidentOf(await send(service.id, 'edge-1'));
+    await send(service.id, 'edge-2');
+    const clear = incidentOf(await send(service.id, 'edge-3'));
+    const firing = incidentOf(await send(service.id, 'edge-4'));
+    await db.alert.create({
+      data: {
+        serviceId: service.id,
+        incidentId: clear.id,
+        dedupKey: `${integrationId}:edge-3`,
+        status: 'RESOLVED',
+        payload: {},
+      },
+    });
+    await db.incident.update({
+      where: { id: parent.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+
+    await runStormCascadeSweep(budget);
+    expect((await incident(clear.id)).status).toBe('RESOLVED');
+    expect(await escalationJobs(firing.id)).toBe(1);
+  });
+
+  it('does not re-page a child whose grouping was reversed and already paged', async () => {
+    const service = await createTestService('Storm reversed');
+    await policy(service.id, { storm: { enabled: true, threshold: 2, windowSeconds: 60 } });
+    const parent = incidentOf(await send(service.id, 'edge-1'));
+    await send(service.id, 'edge-2');
+    const child = incidentOf(await send(service.id, 'edge-3'));
+    await db.prePagingDecision.updateMany({
+      where: { incidentId: child.id, action: 'GROUP_CHILD' },
+      data: { reversedAt: new Date() },
+    });
+    await db.incident.update({
+      where: { id: parent.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+
+    await runStormCascadeSweep(budget);
+    expect(await escalationJobs(child.id)).toBe(0);
+  });
+
+  it('probes for a cascade only while a resolved parent has an open child to settle', async () => {
+    const service = await createTestService('Storm probe');
+    await policy(service.id, { storm: { enabled: true, threshold: 2, windowSeconds: 60 } });
+    const parent = incidentOf(await send(service.id, 'edge-1'));
+    await send(service.id, 'edge-2');
+    const child = incidentOf(await send(service.id, 'edge-3'));
+    resetNoiseSweepSchedule();
+    expect(await scheduleNoiseSweeps(Date.now())).toBe(0); // parent still open
+
+    await db.incident.update({
+      where: { id: child.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+    await db.incident.update({
+      where: { id: parent.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+    resetNoiseSweepSchedule();
+    expect(await scheduleNoiseSweeps(Date.now())).toBe(0); // child already closed
+    await runStormCascadeSweep(budget);
+    const link = await db.incidentRelationship.findFirstOrThrow({
+      where: { sourceIncidentId: child.id },
+      select: { evidence: true },
+    });
+    expect(link.evidence).toMatchObject({ cascadedAt: expect.any(String) });
   });
 });
