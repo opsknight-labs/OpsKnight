@@ -6,6 +6,8 @@ import { toSlackResponseUrl } from '@/lib/slack-signature';
 import type { ChatProvider } from '@/lib/chatops/provider';
 
 const LEASE_MS = 5 * 60 * 1000;
+// Slack response_url links expire 30 minutes after the interaction.
+const SLACK_RESPONSE_URL_TTL_MS = 30 * 60 * 1000;
 
 export type ChatOpsIntentInput = {
   provider?: ChatProvider;
@@ -221,6 +223,7 @@ type ClaimedIntent = {
   responsePayload: Prisma.JsonValue | null;
   provider: ChatProvider;
   responseMode: 'INLINE' | 'DEFERRED';
+  createdAt?: Date;
 };
 
 async function claimEffect(id: string): Promise<ClaimedIntent | null> {
@@ -294,10 +297,10 @@ async function claimResponse(id: string): Promise<ClaimedIntent | null> {
   });
   if (claimed.count !== 1) return null;
   const intent = await (prisma as unknown as {
-    chatOpsIntent: { findUnique: (a: unknown) => Promise<{ id: string; encryptedPayload: string; responsePayload: Prisma.JsonValue | null; provider?: ChatProvider; responseMode?: string } | null> };
+    chatOpsIntent: { findUnique: (a: unknown) => Promise<{ id: string; encryptedPayload: string; responsePayload: Prisma.JsonValue | null; provider?: ChatProvider; responseMode?: string; createdAt?: Date } | null> };
   }).chatOpsIntent.findUnique({
     where: { id },
-    select: { id: true, encryptedPayload: true, responsePayload: true, provider: true, responseMode: true },
+    select: { id: true, encryptedPayload: true, responsePayload: true, provider: true, responseMode: true, createdAt: true },
   });
   return intent ? {
     id: intent.id,
@@ -306,6 +309,7 @@ async function claimResponse(id: string): Promise<ClaimedIntent | null> {
     responsePayload: intent.responsePayload,
     provider: (intent.provider as ChatProvider) ?? 'SLACK',
     responseMode: ((intent.responseMode as string) as 'INLINE' | 'DEFERRED') ?? 'DEFERRED',
+    createdAt: intent.createdAt,
   } : null;
 }
 
@@ -364,6 +368,8 @@ async function deliverResponse(claim: ClaimedIntent, payload: Record<string, unk
   // but no transport delivery is required here.
   if (claim.responseMode === 'INLINE') return;
   if (claim.provider === 'MICROSOFT_TEAMS') return;
+  // An expired response_url can never accept the reply; retrying only ends the job FAILED.
+  if (claim.createdAt && Date.now() - claim.createdAt.getTime() > SLACK_RESPONSE_URL_TTL_MS) return;
   await sendSlackResponse(payload, response);
 }
 
