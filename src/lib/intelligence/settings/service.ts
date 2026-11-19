@@ -20,6 +20,11 @@ import {
 } from '../contract';
 import { getAutoGate, getAutoGates } from '../evaluation/quality';
 import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
+import {
+  clearPageContextKinds,
+  PAGE_CONTEXT_KINDS,
+  visiblePageKinds,
+} from '../helpers/page-context';
 
 /**
  * Publishing a policy re-indexes this many of the scope's open incidents in the background, newest first.
@@ -201,6 +206,13 @@ export async function updateIntelligenceSettings(
       update: { ...values, revision: { increment: 1 }, updatedBy: actor.actorId },
       select: SETTINGS_SELECT,
     });
+    if (
+      previous.enabled &&
+      previous.pageContextEnabled &&
+      !(next.enabled && next.pageContextEnabled)
+    ) {
+      await clearPageContextKinds(tx, PAGE_CONTEXT_KINDS, null);
+    }
     await logAudit(
       {
         action: 'intelligence.settings.updated',
@@ -400,6 +412,21 @@ async function appendVersion(
   return version;
 }
 
+/** Leads a new head version hides must leave the stored page contexts of its scope now, not on the next run. */
+async function clearHiddenPageContext(
+  tx: Prisma.TransactionClient,
+  scope: PolicyScope,
+  mode: IntelligenceModeValue,
+  definition: PolicyDefinition
+) {
+  const visible = visiblePageKinds(mode, definition);
+  await clearPageContextKinds(
+    tx,
+    PAGE_CONTEXT_KINDS.filter(kind => !visible.includes(kind)),
+    scope.serviceId ? { serviceId: scope.serviceId } : 'global'
+  );
+}
+
 /** Caller must authorize INTELLIGENCE_MANAGE. Publishing always creates a new immutable version. */
 export async function publishPolicyVersion(
   scope: PolicyScope,
@@ -421,6 +448,7 @@ export async function publishPolicyVersion(
       reason: parsed.reason,
       actorId: actor.actorId,
     });
+    await clearHiddenPageContext(tx, scope, parsed.mode, parsed.definition);
     await scheduleReanalysisForScope(tx, scope);
     await logAudit(
       {
@@ -486,6 +514,7 @@ export async function rollbackPolicy(
       createdFromVersion: parsed.targetVersion,
       actorId: actor.actorId,
     });
+    await clearHiddenPageContext(tx, scope, target.mode, definition);
     await scheduleReanalysisForScope(tx, scope);
     await logAudit(
       {
@@ -516,6 +545,8 @@ export async function clearServiceOverride(
     const previous = await readHeadVersion(tx, scopeKey);
     if (!previous) return 'none';
     await tx.intelligencePolicy.update({ where: { scopeKey }, data: { overrideActive: false } });
+    const fallback = (await readHeadVersion(tx, GLOBAL_POLICY_SCOPE_KEY)) ?? OFF_DEFAULT;
+    await clearHiddenPageContext(tx, { serviceId }, fallback.mode, fallback.definition);
     await logAudit(
       {
         action: 'intelligence.policy.override_cleared',

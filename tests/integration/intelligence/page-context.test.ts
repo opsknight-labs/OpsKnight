@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
+import {
+  DEFAULT_POLICY_DEFINITION,
+  INTELLIGENCE_SETTINGS_DEFAULTS,
+  intelligenceSettingsInputSchema,
+} from '@/lib/intelligence/contract';
+import {
+  publishPolicyVersion,
+  updateIntelligenceSettings,
+} from '@/lib/intelligence/settings/service';
 import { replaceFindings } from '@/lib/intelligence/similarity/findings';
 import {
   createTestIncident,
   createTestService,
+  createTestUser,
   resetDatabase,
   testPrisma as db,
 } from '../../helpers/test-db';
@@ -21,6 +30,35 @@ const switches = (pageContextEnabled: boolean) =>
     create: { id: 'default', ...INTELLIGENCE_SETTINGS_DEFAULTS, enabled: true, pageContextEnabled },
     update: { pageContextEnabled },
   });
+
+async function policy(
+  mode: 'SHADOW' | 'SUGGEST' | 'OFF',
+  scope: { serviceId?: string } = {},
+  features: { similarity?: boolean; response?: boolean } = {}
+) {
+  const admin = await createTestUser({ role: 'ADMIN' });
+  const head = await db.intelligencePolicy.findUnique({
+    where: { scopeKey: scope.serviceId ? `service:${scope.serviceId}` : 'global' },
+    select: { headVersion: true },
+  });
+  const definition = {
+    ...DEFAULT_POLICY_DEFINITION,
+    similarity: {
+      ...DEFAULT_POLICY_DEFINITION.similarity,
+      enabled: features.similarity ?? DEFAULT_POLICY_DEFINITION.similarity.enabled,
+    },
+    response: {
+      ...DEFAULT_POLICY_DEFINITION.response,
+      enabled: features.response ?? DEFAULT_POLICY_DEFINITION.response.enabled,
+    },
+  };
+  await publishPolicyVersion(
+    scope,
+    { mode, definition, expectedHeadVersion: head?.headVersion ?? 0 },
+    { actorId: admin.id, source: 'UI' }
+  );
+  return admin;
+}
 
 const row = (subjectRef: string, confidence: number) => ({
   confidence,
@@ -48,6 +86,7 @@ const stored = async (id: string) =>
 describe('page context precomputed from findings', () => {
   it('keeps the rank-1 lead of each page kind on the incident row, without moving updatedAt', async () => {
     await switches(true);
+    await policy('SUGGEST');
     const service = await createTestService('Api');
     const incident = await createTestIncident('api down', service.id);
     const before = (await stored(incident.id)).updatedAt;
@@ -86,5 +125,56 @@ describe('page context precomputed from findings', () => {
     await write(incident.id, 'CHANGE_CORRELATION', 1, [row('chg_1', 0.7)]);
 
     expect((await stored(incident.id)).pageContext).toBeNull();
+  });
+
+  it('writes nothing for a service whose policy is SHADOW, and only the kinds its policy enables', async () => {
+    await switches(true);
+    await policy('SUGGEST');
+    const shadow = await createTestService('Shadow');
+    await policy('SHADOW', { serviceId: shadow.id });
+    const hidden = await createTestIncident('shadow down', shadow.id);
+    await write(hidden.id, 'SIMILAR_INCIDENT', 1, [row('inc_a', 0.9)]);
+    await write(hidden.id, 'CHANGE_CORRELATION', 1, [row('chg_1', 0.7)]);
+    expect((await stored(hidden.id)).pageContext).toBeNull();
+
+    const partial = await createTestService('Partial');
+    await policy('SUGGEST', { serviceId: partial.id }, { similarity: false });
+    const incident = await createTestIncident('partial down', partial.id);
+    await write(incident.id, 'SIMILAR_INCIDENT', 1, [row('inc_a', 0.9)]);
+    await write(incident.id, 'CHANGE_CORRELATION', 1, [row('chg_1', 0.7)]);
+    expect((await stored(incident.id)).pageContext).toEqual({ changeId: 'chg_1' });
+  });
+
+  it('clears stored leads when the switch, the engine or the policy turns them off', async () => {
+    await switches(true);
+    const admin = await policy('SUGGEST');
+    const service = await createTestService('Api');
+    const other = await createTestService('Other');
+    const a = await createTestIncident('a', service.id, {
+      pageContext: { similarIncidentId: 'inc_a', changeId: 'chg_1' },
+    });
+    const b = await createTestIncident('b', other.id, { pageContext: { changeId: 'chg_2' } });
+
+    // A service policy without similarity drops only that lead, only on that service.
+    await policy('SUGGEST', { serviceId: service.id }, { similarity: false });
+    expect((await stored(a.id)).pageContext).toEqual({ changeId: 'chg_1' });
+    expect((await stored(b.id)).pageContext).toEqual({ changeId: 'chg_2' });
+
+    // The global policy going SHADOW clears services that follow it, not overridden ones.
+    await policy('SHADOW');
+    expect((await stored(b.id)).pageContext).toBeNull();
+    expect((await stored(a.id)).pageContext).toEqual({ changeId: 'chg_1' });
+
+    // Turning the page-context switch off clears everything.
+    const settings = await db.intelligenceSettings.findUniqueOrThrow({ where: { id: 'default' } });
+    const keys = Object.keys(intelligenceSettingsInputSchema.shape);
+    const input = Object.fromEntries(
+      keys.filter(k => k in settings).map(k => [k, settings[k as keyof typeof settings]])
+    );
+    await updateIntelligenceSettings(
+      { ...input, expectedRevision: settings.revision, pageContextEnabled: false },
+      { actorId: admin.id, source: 'UI' }
+    );
+    expect((await stored(a.id)).pageContext).toBeNull();
   });
 });
