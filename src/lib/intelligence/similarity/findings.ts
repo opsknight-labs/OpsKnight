@@ -3,6 +3,7 @@ import type { IntelligenceFindingKind, Prisma } from '@prisma/client';
 import { INTELLIGENCE_ENGINE_VERSION } from '../contract';
 import type { SimilarIncident } from '../similarity/retrieval';
 import type { SimilarityTier } from '../similarity/capabilities';
+import { PAGE_CONTEXT_KINDS, refreshPageContext } from '../helpers/page-context';
 
 export interface FindingRow {
   confidence: number;
@@ -77,6 +78,7 @@ export async function replaceFindings(
     create: { incidentId: input.incidentId, kind: input.kind, ...success },
     update: success,
   });
+  if (PAGE_CONTEXT_KINDS.includes(input.kind)) await refreshPageContext(tx, input.incidentId);
   return 'written';
 }
 

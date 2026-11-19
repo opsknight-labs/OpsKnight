@@ -50,6 +50,7 @@ type SettingsValues = {
   handoffSummaryEnabled: boolean;
   opsHelpersEnabled: boolean;
   automationIntelligenceFieldsEnabled: boolean;
+  pageContextEnabled: boolean;
   revision: number;
 };
 
@@ -184,6 +185,27 @@ export function IntelligenceSettingsForm({
             Adds In maintenance, Recent risky change, SLO burning, Flapping and Storm active as rule
             conditions. Values come from a snapshot refreshed every 30 seconds; until it loads they
             read as unknown and no rule matches on them.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${enabledId}-page-context`}
+          name="pageContextEnabled"
+          type="checkbox"
+          defaultChecked={settings.pageContextEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <div>
+          <label htmlFor={`${enabledId}-page-context`} className="text-sm font-medium">
+            Add leads to page emails
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Links the top similar past incident, the likely change and the best runbook in page
+            emails, from findings already computed for the incident. Links only, no titles; each one
+            still checks the reader when opened. A first page often goes out before analysis
+            finishes, so leads usually show from the first escalation on.
           </p>
         </div>
       </div>
