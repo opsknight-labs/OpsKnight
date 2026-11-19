@@ -12,6 +12,10 @@ import {
   mutateIncidentStatus,
   type BrowserIncidentStatus,
 } from '@/lib/incidents/status-client';
+import { snoozeIncidentWithDuration } from '@/app/(app)/incidents/snooze-actions';
+
+// A swipe snooze is always finite so the auto-unsnooze worker resumes escalation.
+const SWIPE_SNOOZE_MINUTES = 60;
 
 type IncidentListItem = {
   id: string;
@@ -79,6 +83,13 @@ export default function MobileIncidentList({
 
   const handleStatusUpdate = async (id: string, status: 'ACKNOWLEDGED' | 'SNOOZED') => {
     if (updatingIds.has(id)) return;
+    // A swipe is easy to trigger while scrolling; pausing escalation needs an explicit yes.
+    if (
+      status === 'SNOOZED' &&
+      !window.confirm('Snooze this incident for 1 hour? Escalation pauses until then.')
+    ) {
+      return;
+    }
     setUpdatingIds(current => new Set(current).add(id));
     setErrorMessage('');
 
@@ -94,6 +105,11 @@ export default function MobileIncidentList({
     });
 
     try {
+      if (status === 'SNOOZED') {
+        await snoozeIncidentWithDuration(id, SWIPE_SNOOZE_MINUTES);
+        router.refresh();
+        return;
+      }
       const result = await mutateIncidentStatus({ incidentId: id, status, expectedStatus });
       if (result.state === 'QUEUED') {
         setLocalIncidents(previous);
