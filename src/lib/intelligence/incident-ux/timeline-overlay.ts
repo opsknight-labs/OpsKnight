@@ -7,7 +7,8 @@ import type { InsightsSectionId } from './strip-contract';
  * events, notes and notifications. Free of server imports (types only) so the client timeline can use it.
  */
 
-export type IntelligenceTimelineKind = Exclude<TimeAxisKind, 'INCIDENT'> | 'BRIEFING';
+// CHAT rows are incident events the core timeline already shows; a fact has one place.
+export type IntelligenceTimelineKind = Exclude<TimeAxisKind, 'INCIDENT' | 'CHAT'> | 'BRIEFING';
 
 export const INTELLIGENCE_TIMELINE_KIND_LABEL: Record<IntelligenceTimelineKind, string> = {
   ALERT: 'Alert',
@@ -63,13 +64,13 @@ export function toIntelligenceTimelineEvents(
   if (axis) {
     const seen = new Map<string, number>();
     for (const entry of axis.entries) {
-      if (entry.kind === 'INCIDENT') continue;
+      if (entry.kind === 'INCIDENT' || entry.kind === 'CHAT') continue;
       const base = `${entry.kind.toLowerCase()}-${entry.at.getTime()}`;
       const count = seen.get(base) ?? 0;
       seen.set(base, count + 1);
       events.push({
         id: `intel-${base}${count ? `-${count}` : ''}`,
-        kind: entry.kind,
+        kind: entry.kind as IntelligenceTimelineKind,
         at: entry.at,
         title: entry.title,
         detail: entry.detail,

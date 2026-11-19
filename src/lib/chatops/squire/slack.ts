@@ -125,7 +125,7 @@ export async function findSlackIncidentForChannel(workspaceId: string, channelId
         },
       ],
     },
-    select: { id: true, serviceId: true, title: true },
+    select: { id: true, serviceId: true, title: true, visibility: true },
     orderBy: { createdAt: 'desc' },
   });
 }
