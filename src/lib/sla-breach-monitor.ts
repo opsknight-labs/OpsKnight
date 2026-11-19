@@ -357,38 +357,47 @@ async function notifyBreachWarning(
     // Do not create a synthetic Slack recipient. A service target is preferred,
     // with a configured global webhook as the deliberate fallback.
     if (hasSlackEnabled && (slackChannel || slackWebhookUrl)) {
-      await enqueueCentralNotification({
-        category: 'SLA',
-        channel: 'SLACK',
-        recipientType: slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
-        recipientId: warning.serviceId,
-        recipientAddress: slackChannel || slackWebhookUrl!,
-        incidentId: warning.incidentId,
-        templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
-        sourceType: 'INCIDENT_SLA',
-        sourceId: warning.incidentId,
-        eventKey,
-        displayMessage: plainText,
-        priority: isBreached ? 0 : 1,
-        payload: slackChannel
-          ? {
-              kind: 'SLACK_CHANNEL',
-              channel: slackChannel,
-              incident: incidentPresentation,
-              eventType: 'triggered',
-              includeInteractiveButtons: true,
-              serviceId: warning.serviceId,
-              additionalMessage: message,
-            }
-          : {
-              kind: 'SLACK_WEBHOOK',
-              incident: incidentPresentation,
-              eventType: 'triggered',
-              webhookUrl: slackWebhookUrl,
-              additionalMessage: message,
-            },
-      });
-      durableIntentCount++;
+      // One incident's enqueue failure must not abort the whole check (and the scheduler cycle).
+      try {
+        await enqueueCentralNotification({
+          category: 'SLA',
+          channel: 'SLACK',
+          recipientType: slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
+          recipientId: warning.serviceId,
+          recipientAddress: slackChannel || slackWebhookUrl!,
+          incidentId: warning.incidentId,
+          templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
+          sourceType: 'INCIDENT_SLA',
+          sourceId: warning.incidentId,
+          eventKey,
+          displayMessage: plainText,
+          priority: isBreached ? 0 : 1,
+          payload: slackChannel
+            ? {
+                kind: 'SLACK_CHANNEL',
+                channel: slackChannel,
+                incident: incidentPresentation,
+                eventType: 'triggered',
+                includeInteractiveButtons: true,
+                serviceId: warning.serviceId,
+                additionalMessage: message,
+              }
+            : {
+                kind: 'SLACK_WEBHOOK',
+                incident: incidentPresentation,
+                eventType: 'triggered',
+                webhookUrl: slackWebhookUrl,
+                additionalMessage: message,
+              },
+        });
+        durableIntentCount++;
+      } catch (error) {
+        materialized = false;
+        logger.error('[SLA Breach Monitor] Error enqueueing Slack notification', {
+          incidentId: warning.incidentId,
+          error,
+        });
+      }
     }
   }
 

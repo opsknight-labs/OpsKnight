@@ -348,7 +348,9 @@ describe('sla-breach-monitor', () => {
         new Error('database unavailable')
       );
 
-      await expect(checkSLABreaches()).rejects.toThrow('database unavailable');
+      // The check completes (one incident must not fail the scheduler cycle) but the marker is
+      // not written, so the warning is retried next cycle.
+      await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
       expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
 
