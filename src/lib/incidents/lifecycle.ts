@@ -900,6 +900,49 @@ export async function executeIncidentLifecycleTargetBatch(
   });
 }
 
+/**
+ * Pages an OPEN incident that is not escalating with a fresh escalation run, the way UNSUPPRESS does:
+ * a storm child whose parent resolved while it still fires. Fenced on the escalation generation the
+ * caller read, so it is a no-op when the incident moved on in between. Returns whether it paged.
+ */
+export async function repageOpenIncident(
+  tx: Prisma.TransactionClient,
+  input: { incidentId: string; generation: number; eventMessage: string; now?: Date }
+): Promise<boolean> {
+  const now = input.now ?? new Date();
+  const incident = await tx.incident.findUnique({
+    where: { id: input.incidentId },
+    select: { serviceId: true },
+  });
+  if (!incident) return false;
+  const routing = await resolveIncidentResponderRouting(input.incidentId, incident.serviceId, tx);
+  if (routing.type === 'NO_ESCALATION') return false;
+  const updated = await tx.incident.updateMany({
+    where: { id: input.incidentId, status: 'OPEN', escalationGeneration: input.generation },
+    data: {
+      escalationStatus: 'ESCALATING',
+      currentEscalationStep: 0,
+      nextEscalationAt: now,
+      escalationProcessingAt: null,
+      escalationGeneration: { increment: 1 },
+    },
+  });
+  if (updated.count === 0) return false;
+  await tx.incidentEvent.create({
+    data: {
+      incidentId: input.incidentId,
+      type: 'STATUS_CHANGE',
+      message: input.eventMessage.trim().slice(0, MAX_EVENT_MESSAGE_LENGTH),
+    },
+  });
+  const { resumeEscalationExecution } = await import('@/lib/escalation/repository');
+  await resumeEscalationExecution(tx, {
+    incidentId: input.incidentId,
+    reason: 'Superseded by a re-page',
+  });
+  return true;
+}
+
 /** Lifecycle-owned repair used when an engagement gate is released. */
 export async function setIncidentNextEscalationAt(
   tx: Prisma.TransactionClient,

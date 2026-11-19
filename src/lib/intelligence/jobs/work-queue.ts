@@ -50,6 +50,8 @@ export const WORK_KINDS = {
   BACKFILL_ESCALATION_ATTEMPTS: 'BACKFILL_ESCALATION_ATTEMPTS',
   /** The daily weight fit (runbook ranking, similarity, cause), one coalesced item (subject `global`); see learning/runbook-weights.ts. */
   FIT_RUNBOOK_WEIGHTS: 'FIT_RUNBOOK_WEIGHTS',
+  /** Noise-control follow-ups (subject `unsuppress` or `storm-cascade`); see noise-controls/sweep.ts. */
+  NOISE_SWEEP: 'NOISE_SWEEP',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -74,6 +76,8 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   OPS_INSIGHTS: 60,
   BACKFILL_ESCALATION_ATTEMPTS: 70,
   FIT_RUNBOOK_WEIGHTS: 65,
+  // Pages incidents a noise decision held back once the reason ended: ahead of analysis backlogs.
+  NOISE_SWEEP: 8,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;
