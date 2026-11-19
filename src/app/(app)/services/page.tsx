@@ -1,6 +1,7 @@
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import prisma from '@/lib/prisma';
+import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -29,7 +30,7 @@ export const revalidate = 0;
 
 async function createService(formData: FormData) {
   'use server';
-  let currentUser: { id: string; role: string };
+  let currentUser: Awaited<ReturnType<typeof assertAdminOrResponder>>;
   try {
     currentUser = await assertAdminOrResponder();
   } catch (error) {
@@ -49,7 +50,9 @@ async function createService(formData: FormData) {
     const team = await prisma.team.findFirst({
       where: {
         id: teamId,
-        ...(currentUser.role === 'ADMIN' ? {} : { members: { some: { userId: currentUser.id } } }),
+        ...(capabilitiesOf(currentUser).includes(CAPABILITIES.ADMIN_MANAGE)
+          ? {}
+          : { members: { some: { userId: currentUser.id } } }),
       },
       select: { id: true },
     });
