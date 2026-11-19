@@ -98,16 +98,17 @@ async function postEvent(req: NextRequest) {
     const priorKey = integration.previousKey
       ? await decryptStoredSecret(integration.previousKey)
       : null;
+    // Verify on both lookup paths: the legacy `key` match also matches a
+    // stored ciphertext, which must never work as the credential itself.
     if (
-      paramId &&
-      (!providedKey ||
-        !(
-          safeCompare(currentKey, providedKey) ||
-          (priorKey &&
-            integration.previousKeyExpiresAt &&
-            integration.previousKeyExpiresAt.getTime() > Date.now() &&
-            safeCompare(priorKey, providedKey))
-        ))
+      !providedKey ||
+      !(
+        safeCompare(currentKey, providedKey) ||
+        (priorKey &&
+          integration.previousKeyExpiresAt &&
+          integration.previousKeyExpiresAt.getTime() > Date.now() &&
+          safeCompare(priorKey, providedKey))
+      )
     ) {
       return new Response(JSON.stringify({ status: 'error', message: 'Invalid integration key' }), {
         status: 401,
