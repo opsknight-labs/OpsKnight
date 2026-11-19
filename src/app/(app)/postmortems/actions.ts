@@ -79,12 +79,13 @@ const postmortemInputSchema = z.object({
         id: text(100),
         timestamp: text(64),
         type: z.enum(['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION']),
-        title: text(500),
-        description: text(5_000),
+        title: text(1_000),
+        // Auto-drafts copy every incident event and note verbatim, so keep these caps loose.
+        description: text(50_000),
         actor: text(200).nullish(),
       })
     )
-    .max(200)
+    .max(5_000)
     .optional(),
   impact: z
     .object({
@@ -147,7 +148,7 @@ export async function upsertPostmortem(incidentId: string, input: PostmortemData
   }
   // The schema mirrors PostmortemData; the cast only narrows externalIssue back to its Jira type.
   const { expectedRevision, ...data } = parsed.data as unknown as PostmortemData;
-  if (JSON.stringify(data).length > 1_000_000) {
+  if (JSON.stringify(data).length > 2_000_000) {
     throw new Error('Invalid postmortem: content is too large');
   }
 
