@@ -4,7 +4,12 @@ import { RESPONSE_LIMITS, type ResponseWeights } from '../contract';
 import { loadActiveEdges } from '../dependencies/service';
 import { upstreamDistances, type DependencyEdge } from '../dependencies/graph';
 import type { FindingRow } from '../similarity/findings';
-import { scoreCause, type CauseRelation, type ChangeKindValue } from './scoring';
+import {
+  MAX_NEGATIVE_LEAD_SECONDS,
+  scoreCause,
+  type CauseRelation,
+  type ChangeKindValue,
+} from './scoring';
 import { loadChangeBaselines } from './baseline';
 import { computeMetricAnomalyFindings } from '../metric-anomaly/evidence';
 
@@ -16,6 +21,16 @@ export interface CauseFindings {
 }
 
 const MINUTE_MS = 60_000;
+
+/** A change's start, from the `startedAt` label a source mapper records, when it parses and precedes the finish. */
+function changeStart(change: Pick<ChangeEvent, 'labels' | 'occurredAt'>): Date {
+  const labels =
+    change.labels && typeof change.labels === 'object' && !Array.isArray(change.labels)
+      ? (change.labels as Record<string, unknown>)
+      : {};
+  const started = typeof labels.startedAt === 'string' ? new Date(labels.startedAt) : null;
+  return started && started.getTime() < change.occurredAt.getTime() ? started : change.occurredAt;
+}
 export const MAX_CHANGE_SOURCES = 32;
 export const MAX_CHANGE_CANDIDATES_PER_SOURCE = 50;
 
@@ -57,8 +72,20 @@ export async function computeCauseFindings(
   knownEdges?: readonly DependencyEdge[],
   weights?: ResponseWeights
 ): Promise<CauseFindings> {
-  const onset = incident.createdAt.getTime();
+  // Onset is the first alert when it predates the incident row (grouping and pre-paging delays).
+  const firstAlert = await tx.alert.findFirst({
+    where: { incidentId: incident.id },
+    orderBy: { createdAt: 'asc' },
+    select: { createdAt: true },
+  });
+  const onsetAt =
+    firstAlert && firstAlert.createdAt < incident.createdAt
+      ? firstAlert.createdAt
+      : incident.createdAt;
+  const onset = onsetAt.getTime();
   const windowStart = new Date(onset - RESPONSE_LIMITS.causeLookbackMinutes * MINUTE_MS);
+  // A change that finished (or started) shortly after onset may still be the cause.
+  const changesUntil = new Date(onset + MAX_NEGATIVE_LEAD_SECONDS * 1000);
   const edges = knownEdges ?? (await loadActiveEdges(tx));
   const upstream = upstreamDistances(edges, incident.serviceId, RESPONSE_LIMITS.maxUpstreamDepth);
   const serviceIds = [incident.serviceId, ...upstream.keys()];
@@ -66,21 +93,21 @@ export async function computeCauseFindings(
   // Separate scoped/global budgets preserve local evidence during a noisy global rollout.
   const [scopedChanges, globalChanges, upstreamIncidents, baselines, fingerprint, metricAnomalies] =
     await Promise.all([
-      recentChangeCandidates(tx, serviceIds, windowStart, incident.createdAt, false),
-      recentChangeCandidates(tx, serviceIds, windowStart, incident.createdAt, true),
+      recentChangeCandidates(tx, serviceIds, windowStart, changesUntil, false),
+      recentChangeCandidates(tx, serviceIds, windowStart, changesUntil, true),
       upstream.size === 0
         ? Promise.resolve([])
         : tx.incident.findMany({
             where: {
               id: { not: incident.id },
               serviceId: { in: [...upstream.keys()] },
-              createdAt: { gte: windowStart, lte: incident.createdAt },
+              createdAt: { gte: windowStart, lte: onsetAt },
             },
             orderBy: { createdAt: 'desc' },
             take: RESPONSE_LIMITS.maxCauseCandidates,
             select: { id: true, serviceId: true, createdAt: true },
           }),
-      loadChangeBaselines(tx, serviceIds, incident.createdAt),
+      loadChangeBaselines(tx, serviceIds, onsetAt),
       tx.incidentFingerprint.findUnique({
         where: { incidentId: incident.id },
         select: { labels: true, tokens: true },
@@ -103,13 +130,14 @@ export async function computeCauseFindings(
         relation = 'UPSTREAM';
         depth = upstream.get(change.serviceId) ?? 1;
       }
-      const leadSeconds = Math.round((onset - change.occurredAt.getTime()) / 1000);
+      const leadSeconds = Math.round((onset - changeStart(change).getTime()) / 1000);
       const baseline = baselines(change.source, change.serviceId);
       const changeLabels =
         change.labels && typeof change.labels === 'object' && !Array.isArray(change.labels)
           ? change.labels
           : {};
       const comparisons = Object.entries(changeLabels).flatMap(([key, value]) => {
+        if (key === 'startedAt') return [];
         const found = Object.entries(labels).find(([label]) => label === key);
         return found ? [Number(found[1] === value)] : [];
       });
