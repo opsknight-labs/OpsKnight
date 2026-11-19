@@ -365,7 +365,7 @@ describe('rendering', () => {
 
 describe('investigation trigger', () => {
   it('decides clear cases without a model', () => {
-    expect(diagnosticCue('Why is checkout returning 500s?')).toBe('yes');
+    expect(diagnosticCue('Why is checkout returning 500s?')).toBe('maybe');
     expect(diagnosticCue('investigate this incident')).toBe('yes');
     expect(diagnosticCue('What is the root cause?')).toBe('yes');
     expect(diagnosticCue('is the latency spike related to the deploy?')).toBe('maybe');
@@ -373,6 +373,20 @@ describe('investigation trigger', () => {
     expect(diagnosticCue('acknowledge this incident')).toBe('no');
     expect(diagnosticCue('/resolve fixed')).toBe('no');
     expect(diagnosticCue('list open incidents')).toBe('no');
+  });
+
+  it('sends a bare "why <aux>" question to the classifier instead of investigating outright', () => {
+    expect(diagnosticCue('why did this happen?')).toBe('maybe');
+    expect(diagnosticCue('Why are users seeing errors?')).toBe('maybe');
+    expect(diagnosticCue('figure out why checkout broke')).toBe('yes');
+  });
+
+  it('never investigates "why" questions about ownership or routing', () => {
+    expect(diagnosticCue('why was I paged?')).toBe('no');
+    expect(diagnosticCue('Why is this assigned to me?')).toBe('no');
+    expect(diagnosticCue('why did Alice get notified about the outage?')).toBe('no');
+    expect(diagnosticCue('why is Bob on-call for checkout?')).toBe('no');
+    expect(diagnosticCue('why is it escalated to the platform team')).toBe('no');
   });
 
   it('asks the classifier only for ambiguous questions on an incident, and treats failure as no', async () => {
@@ -392,7 +406,10 @@ describe('investigation trigger', () => {
         }) as unknown as LanguageModelPort
     );
     const base = { classifier, context, dataClass: 'PERSONAL' as const };
-    expect(await wantsInvestigation('why is it down?', { ...base, onIncident: false })).toBe(true);
+    expect(
+      await wantsInvestigation('investigate why it is down', { ...base, onIncident: false })
+    ).toBe(true);
+    expect(await wantsInvestigation('why is it down?', { ...base, onIncident: false })).toBe(false);
     expect(classifier).not.toHaveBeenCalled();
     expect(await wantsInvestigation('is the spike related?', { ...base, onIncident: false })).toBe(
       false
