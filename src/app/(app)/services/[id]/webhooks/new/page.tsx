@@ -112,6 +112,16 @@ export default async function NewWebhookPage({
             </AlertDescription>
           </Alert>
         )}
+        {errorCode === 'invalid-url' && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              The webhook URL must be a valid HTTPS URL that does not point to a private or
+              internal network address.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card className="rounded-2xl border border-border/80 dark:border-border/60 shadow-xs">
           <CardHeader className="border-b pb-4 bg-muted/20">
