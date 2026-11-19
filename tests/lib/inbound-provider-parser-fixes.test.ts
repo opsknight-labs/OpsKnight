@@ -212,6 +212,12 @@ describe('action word matching', () => {
     expect(transformWebhookToEvent({ status: 'ok' }).event_action).toBe('resolve');
     expect(transformWebhookToEvent({ status: 'acknowledged' }).event_action).toBe('acknowledge');
   });
+
+  it('ignores inherited object keys when mapping a sender severity', () => {
+    const event = transformWebhookToEvent({ summary: 'x', severity: 'constructor' });
+    expect(typeof event.payload.severity).toBe('string');
+    expect(['critical', 'error', 'warning', 'info']).toContain(event.payload.severity);
+  });
 });
 
 describe('CI/CD providers', () => {

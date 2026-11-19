@@ -111,8 +111,11 @@ export function transformWebhookToEvent(
   // Map severity
   const severityStr = String(severityRaw).toLowerCase();
   const mappedSeverity =
-    // eslint-disable-next-line security/detect-object-injection -- read-only lookup in the admin-configured severity map
-    finalConfig.severityMapping?.[severityStr] ||
+    // Own keys only: a sender severity like "constructor" must not hit Object.prototype.
+    (finalConfig.severityMapping && Object.hasOwn(finalConfig.severityMapping, severityStr)
+      ? // eslint-disable-next-line security/detect-object-injection -- own-key lookup in the admin-configured severity map
+        finalConfig.severityMapping[severityStr]
+      : undefined) ||
     (severityStr.includes('critical') || severityStr.includes('high')
       ? 'critical'
       : severityStr.includes('error')
