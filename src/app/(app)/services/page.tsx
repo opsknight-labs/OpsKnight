@@ -29,7 +29,7 @@ export const revalidate = 0;
 
 async function createService(formData: FormData) {
   'use server';
-  let currentUser: { id: string };
+  let currentUser: { id: string; role: string };
   try {
     currentUser = await assertAdminOrResponder();
   } catch (error) {
@@ -42,6 +42,19 @@ async function createService(formData: FormData) {
   const teamId = formData.get('teamId') as string;
   const escalationPolicyId = formData.get('escalationPolicyId') as string;
   const name = typeof rawName === 'string' ? rawName : '';
+
+  // Same rule as moving a service: non-admins may only use a team they belong to.
+  // This also turns an unknown teamId into a message instead of an FK 500.
+  if (teamId) {
+    const team = await prisma.team.findFirst({
+      where: {
+        id: teamId,
+        ...(currentUser.role === 'ADMIN' ? {} : { members: { some: { userId: currentUser.id } } }),
+      },
+      select: { id: true },
+    });
+    if (!team) redirect('/services?error=invalid-team');
+  }
 
   try {
     const normalizedName = await assertServiceNameAvailable(name);
@@ -444,6 +457,16 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
               A service with this name already exists. Please choose a unique name.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {errorCode === 'invalid-team' && (
+          <Alert variant="destructive">
+            <XCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              You can only create services in a team you belong to.
             </AlertDescription>
           </Alert>
         )}
