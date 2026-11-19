@@ -38,6 +38,7 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 const MIN_DELAY_MS = 15_000;
 const MAX_DELAY_MS = 2 * 60_000;
 const SINGLETON_ID = 'singleton';
+const OBJECTIVE_SNAPSHOT_RETRY_MS = 15 * 60_000;
 
 // Local state for timer management (not persisted)
 let timer: NodeJS.Timeout | null = null;
@@ -818,10 +819,12 @@ async function runOnce() {
             },
             leaseEpoch
           );
+          // Failed snapshots are retried on their own below, not by re-running the whole
+          // daily block (cleanup, drift detection, reconciliation) every tick.
           if (serviceObjectiveSnapshots.failed > 0) {
-            throw new Error(
-              `${serviceObjectiveSnapshots.failed} service objective snapshot(s) failed; retrying the daily run`
-            );
+            logger.warn('[Cron] Service objective snapshots failed; retrying them later', {
+              failed: serviceObjectiveSnapshots.failed,
+            });
           }
         }
 
@@ -849,6 +852,31 @@ async function runOnce() {
           stack: error instanceof Error ? error.stack : undefined,
         });
         // Don't update lastRollupDate so it retries next cycle.
+      }
+    } else if (
+      !isNewDay &&
+      state.lastObjectiveSnapshotFailed > 0 &&
+      state.lastObjectiveSnapshotAt &&
+      state.lastObjectiveSnapshotAt.toISOString().split('T')[0] === todayKey &&
+      now.getTime() - state.lastObjectiveSnapshotAt.getTime() >= OBJECTIVE_SNAPSHOT_RETRY_MS
+    ) {
+      try {
+        const { processServiceObjectiveSnapshots } =
+          await import('@/jobs/service-objective-scheduler');
+        const retry = await processServiceObjectiveSnapshots(now);
+        await updateSchedulerState(
+          {
+            lastObjectiveSnapshotAt: now,
+            lastObjectiveSnapshotSuccessAt: retry.failed === 0 ? now : undefined,
+            lastObjectiveSnapshotDurationMs: retry.durationMs,
+            lastObjectiveSnapshotFailed: retry.failed,
+          },
+          leaseEpoch
+        );
+      } catch (error) {
+        logger.error('[Cron] Service objective snapshot retry failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
