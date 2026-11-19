@@ -303,7 +303,7 @@ export function generateIncidentWebhookPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning'
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached'
 ): Record<string, any> {
   const baseUrl = getBaseUrl();
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
@@ -359,14 +359,14 @@ export function formatGoogleChatPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string
 ): Record<string, any> {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
 
   // Status mapping
   const statusIcon =
-    eventType === 'triggered'
+    (eventType === 'triggered' || eventType === 'breached')
       ? '🔥'
       : eventType === 'acknowledged'
         ? '⚠️'
@@ -469,12 +469,12 @@ export function formatMicrosoftTeamsPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string
 ): Record<string, any> {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const accentColor =
-    eventType === 'triggered'
+    (eventType === 'triggered' || eventType === 'breached')
       ? 'Attention' // Red
       : eventType === 'acknowledged' || eventType === 'warning'
         ? 'Warning' // Yellow/Orange
@@ -483,7 +483,7 @@ export function formatMicrosoftTeamsPayload(
           : 'Default';
 
   const statusEmoji =
-    eventType === 'triggered'
+    (eventType === 'triggered' || eventType === 'breached')
       ? '🔥'
       : eventType === 'acknowledged'
         ? '⚠️'
@@ -603,12 +603,12 @@ export function formatDiscordPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string
 ): Record<string, any> {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const color =
-    eventType === 'triggered'
+    (eventType === 'triggered' || eventType === 'breached')
       ? 0xd32f2f // Red
       : eventType === 'acknowledged' || eventType === 'warning'
         ? 0xf9a825 // Yellow
@@ -617,7 +617,7 @@ export function formatDiscordPayload(
           : 0x757575; // Grey
 
   const statusEmoji =
-    eventType === 'triggered'
+    (eventType === 'triggered' || eventType === 'breached')
       ? '🔴'
       : eventType === 'acknowledged' || eventType === 'warning'
         ? '🟡'
@@ -679,13 +679,13 @@ export function formatTelegramPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string,
   channel?: string
 ): Record<string, any> {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const statusEmoji =
-    eventType === 'triggered'
+    (eventType === 'triggered' || eventType === 'breached')
       ? '🔴'
       : eventType === 'acknowledged'
         ? '🟡'
@@ -728,14 +728,14 @@ export function formatSlackPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string
 ): Record<string, any> {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
 
   // Status color mapping
   const statusEmoji =
-    eventType === 'triggered'
+    (eventType === 'triggered' || eventType === 'breached')
       ? '🔴'
       : eventType === 'acknowledged'
         ? '🟡'
@@ -823,7 +823,7 @@ export function formatWebhookPayloadByType(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string,
   channel?: string
 ): Record<string, any> {
@@ -851,7 +851,7 @@ export function formatWebhookPayloadByType(
 export async function sendIncidentWebhook(
   webhookUrl: string,
   incidentId: string,
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   secret?: string,
   webhookType?: string,
   channel?: string

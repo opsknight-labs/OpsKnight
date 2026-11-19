@@ -410,7 +410,9 @@ async function notifyBreachWarning(
             templateKey: `sla-webhook-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
             sourceType: 'WEBHOOK_INTEGRATION',
             sourceId: webhook.id,
-            eventKey,
+            // sourceId is the webhook, so the incident must be in the key or a
+            // later incident's breach collides with an earlier one's delivery.
+            eventKey: `${eventKey}:${warning.incidentId}`,
             displayMessage: plainText,
             priority: isBreached ? 0 : 1,
             payload: {
@@ -426,7 +428,7 @@ async function notifyBreachWarning(
                   service: { id: warning.serviceId, name: warning.serviceName },
                   createdAt: warning.createdAt,
                 },
-                isBreached ? 'triggered' : 'warning',
+                isBreached ? 'breached' : 'warning',
                 getBaseUrl(),
                 webhook.channel || undefined
               ),
