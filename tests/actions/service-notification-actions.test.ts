@@ -95,4 +95,16 @@ describe('updateServiceNotificationSettings', () => {
       },
     });
   });
+  it('rejects a Slack webhook URL that delivery would refuse', async () => {
+    const formData = new FormData();
+    formData.set('serviceNotificationChannelsJson', JSON.stringify(['SLACK']));
+    formData.set('slackWebhookUrl', 'https://hooks.slak.com/services/T/B/X');
+
+    await updateServiceNotificationSettings('svc-1', formData);
+
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      '/services/svc-1?tab=notifications&error=invalid-slack-webhook'
+    );
+    expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+  });
 });

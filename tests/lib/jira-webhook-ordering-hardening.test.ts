@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   externalIssueFindMany: vi.fn(),
   externalIssueUpdateMany: vi.fn(),
   actionItemFindMany: vi.fn(),
+  actionItemUpdateMany: vi.fn(),
   incidentEventCreate: vi.fn(),
   incidentUpdate: vi.fn(),
   getDefaultActorId: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock('@/lib/prisma', () => ({
       findMany: mocks.externalIssueFindMany,
       updateMany: mocks.externalIssueUpdateMany,
     },
-    actionItem: { findMany: mocks.actionItemFindMany },
+    actionItem: { findMany: mocks.actionItemFindMany, updateMany: mocks.actionItemUpdateMany },
     incidentEvent: { create: mocks.incidentEventCreate },
     incident: { update: mocks.incidentUpdate },
   },
@@ -36,10 +37,7 @@ vi.mock('@/lib/audit', () => ({
 }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 
-import {
-  extractJiraWebhookEventTime,
-  processJiraWebhookEvent,
-} from '@/lib/jira-sync';
+import { extractJiraWebhookEventTime, processJiraWebhookEvent } from '@/lib/jira-sync';
 
 function link(overrides: Record<string, unknown> = {}) {
   return {
@@ -112,6 +110,56 @@ describe('Jira webhook ordering hardening', () => {
     expect(mocks.incidentEventCreate).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['In Review', 0],
+    ['To Do', 1],
+  ])(
+    'only moves a linked action item on a real Jira status transition (%s)',
+    async (status, expectedUpdates) => {
+      const actionLink = link({
+        incidentId: null,
+        actionItemId: 'ai-1',
+        externalStatus: 'In Review',
+      });
+      mocks.externalIssueFindMany
+        .mockResolvedValueOnce([actionLink])
+        .mockResolvedValueOnce([syncEnabledLink()]);
+
+      await processJiraWebhookEvent({
+        webhookEvent: 'jira:issue_updated',
+        timestamp: '2026-09-11T10:06:00.000Z',
+        issue: {
+          id: 'jira-100',
+          key: 'OPS-100',
+          fields: { updated: '2026-09-11T10:06:00.000Z', status: { name: status } },
+        },
+      });
+
+      expect(mocks.actionItemUpdateMany).toHaveBeenCalledTimes(expectedUpdates);
+    }
+  );
+
+  it('records a Jira status update without faking an incident status change', async () => {
+    mocks.externalIssueFindMany
+      .mockResolvedValueOnce([link({ externalStatus: 'To Do' })])
+      .mockResolvedValueOnce([syncEnabledLink()]);
+
+    await processJiraWebhookEvent({
+      webhookEvent: 'jira:issue_updated',
+      timestamp: '2026-09-11T10:06:00.000Z',
+      issue: {
+        id: 'jira-100',
+        key: 'OPS-100',
+        fields: { updated: '2026-09-11T10:06:00.000Z', status: { name: 'In Progress' } },
+      },
+    });
+
+    expect(mocks.incidentEventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'LEGACY_OTHER' }) })
+    );
+    expect(mocks.incidentUpdate).not.toHaveBeenCalled();
+  });
+
   it('marks a Jira deletion as historical failed state and preserves the key', async () => {
     mocks.externalIssueFindMany
       .mockResolvedValueOnce([link()])
@@ -140,7 +188,7 @@ describe('Jira webhook ordering hardening', () => {
     expect(mocks.incidentEventCreate).toHaveBeenCalledWith({
       data: {
         incidentId: 'inc-1',
-        type: 'STATUS_CHANGE',
+        type: 'LEGACY_OTHER',
         message: 'Jira issue OPS-100 was deleted in Jira',
       },
     });

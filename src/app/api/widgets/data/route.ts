@@ -8,6 +8,7 @@ import prisma from '@/lib/prisma';
 import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
 import { dashboardMetricsScope } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { actorScheduleScope } from '@/lib/actor-metrics';
 
 /**
  * Unified Widget Data API
@@ -67,6 +68,7 @@ export async function GET(req: NextRequest) {
       endDate: dateFilter.window.end,
       includeAllTime: range === 'all',
       ...metricsScope,
+      scheduleScope: actorScheduleScope(actor),
     });
 
     return jsonOk(widgetData, 200, {

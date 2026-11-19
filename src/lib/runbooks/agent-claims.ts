@@ -15,7 +15,7 @@ import {
 import { sha256 } from './agent-auth';
 import { sanitizeCompressedArtifact } from './artifact-safety';
 import { redactRunbookOutput, redactRunbookEvidence } from './redaction';
-import { resolveSecretInputValues } from './secrets';
+import { agentCanResolveSecretInputs, resolveSecretInputValues } from './secrets';
 import {
   isSecretReference,
   referencedStepInputKeys,
@@ -40,6 +40,21 @@ import {
 
 const PROXY_DIAGNOSTIC_COOLDOWN_MS = 60_000;
 const lastProxyDiagnosticWarn = new Map<string, number>();
+
+/** The pool whose secret grants apply to an attempt: its target pool, else the selection's source pool. */
+function secretGrantPoolId(attempt: {
+  targetAgentPoolId: string | null;
+  executionStep: { execution: { targetSelection: Prisma.JsonValue } };
+}): string | null {
+  if (attempt.targetAgentPoolId) return attempt.targetAgentPoolId;
+  const selection = attempt.executionStep.execution.targetSelection;
+  return selection &&
+    typeof selection === 'object' &&
+    !Array.isArray(selection) &&
+    typeof selection.sourcePoolId === 'string'
+    ? selection.sourcePoolId
+    : null;
+}
 
 function logProxyDiagnosticWarning(agentId: string) {
   const now = Date.now();
@@ -420,6 +435,18 @@ export async function claimAgentAttempt(
                 blockedSecretTransport = true;
                 continue;
               }
+              // A pool member without a grant must skip the attempt, not claim it and fail every
+              // poll: that would starve the rest of its queue until the claim deadline.
+              if (
+                hasSecrets &&
+                !(await agentCanResolveSecretInputs(
+                  Object.fromEntries(Object.entries(inputs).filter(([key]) => keys.has(key))),
+                  { agentId, targetAgentPoolId: secretGrantPoolId(candidate) },
+                  tx
+                ))
+              ) {
+                continue;
+              }
               eligible.push(candidate);
               if (eligible.length >= 10) break;
             }
@@ -511,17 +538,7 @@ export async function claimAgentAttempt(
             rawInputValues,
             {
               agentId,
-              targetAgentPoolId:
-                attempt.targetAgentPoolId ??
-                (() => {
-                  const selection = attempt.executionStep.execution.targetSelection;
-                  return selection &&
-                    typeof selection === 'object' &&
-                    !Array.isArray(selection) &&
-                    typeof selection.sourcePoolId === 'string'
-                    ? selection.sourcePoolId
-                    : null;
-                })(),
+              targetAgentPoolId: secretGrantPoolId(attempt),
             },
             tx
           );

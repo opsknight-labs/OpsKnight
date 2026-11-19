@@ -12,7 +12,7 @@ const getGraphTokenMock = vi.fn();
 
 const prismaMock = {
   chatIdentityLink: { findUnique: linkFindUnique, upsert: linkUpsert },
-  chatIdentityChallenge: { create: challengeCreate },
+  chatIdentityChallenge: { create: challengeCreate, findUnique: challengeFindUnique },
   user: { findFirst: userFindFirst, findMany: userFindMany },
   scimIdentity: { findMany: directoryFindMany },
   $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
@@ -135,13 +135,11 @@ describe('Microsoft Teams explicit identity linking', () => {
     userFindFirst.mockResolvedValue(historical[0]);
     userFindMany.mockResolvedValue(historical);
     getGraphTokenMock.mockResolvedValue('must-not-be-used');
-    const graph = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response(JSON.stringify({ id: 'unknown-object', mail: 'case@example.test' }), {
-          status: 200,
-        })
-      );
+    const graph = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 'unknown-object', mail: 'case@example.test' }), {
+        status: 200,
+      })
+    );
     try {
       const { resolveMicrosoftTeamsUser } = await import('@/lib/microsoft-teams/identity');
       expect(
@@ -214,5 +212,29 @@ describe('Microsoft Teams explicit identity linking', () => {
     expect(challengeUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ consumedAt: null }) })
     );
+  });
+  it('describes a pending link so the confirm page can show whose Teams account it is', async () => {
+    const { describeMicrosoftTeamsIdentityChallenge } =
+      await import('@/lib/microsoft-teams/identity');
+    challengeFindUnique.mockResolvedValueOnce({
+      provider: 'MICROSOFT_TEAMS',
+      providerTenantId: 'tenant-1',
+      displayName: 'Mallory',
+      consumedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await expect(describeMicrosoftTeamsIdentityChallenge('t'.repeat(43))).resolves.toEqual({
+      displayName: 'Mallory',
+      tenantId: 'tenant-1',
+    });
+
+    challengeFindUnique.mockResolvedValueOnce({
+      provider: 'MICROSOFT_TEAMS',
+      providerTenantId: 'tenant-1',
+      displayName: 'Mallory',
+      consumedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await expect(describeMicrosoftTeamsIdentityChallenge('t'.repeat(43))).resolves.toBeNull();
   });
 });

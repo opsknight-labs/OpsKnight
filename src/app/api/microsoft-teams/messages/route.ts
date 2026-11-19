@@ -13,6 +13,7 @@ import { normalizeTrustedMicrosoftTeamsServiceUrl } from '@/lib/microsoft-teams/
 import {
   revokeMicrosoftTeamsOperations,
   revokeMicrosoftTeamsWarRoomProvisioning,
+  TEAMS_REVOCATION_TX_OPTIONS,
 } from '@/lib/microsoft-teams/lifecycle';
 
 /**
@@ -261,7 +262,7 @@ export async function POST(request: NextRequest) {
               reason: 'Microsoft Teams app was removed from this Team',
             });
             return revoked;
-          });
+          }, TEAMS_REVOCATION_TX_OPTIONS);
           logger.info('[MicrosoftTeams] Teams operations settled after bot removal', {
             tenantId,
             teamId,

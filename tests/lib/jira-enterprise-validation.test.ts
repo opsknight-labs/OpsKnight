@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   assertAdmin: vi.fn(),
   encrypt: vi.fn(),
   findJiraConfig: vi.fn(),
+  countLinks: vi.fn(),
   transaction: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     jiraConfig: { findUnique: mocks.findJiraConfig },
+    externalIssueLink: { count: mocks.countLinks },
     $transaction: mocks.transaction,
   },
 }));
@@ -44,6 +46,7 @@ describe('Jira enterprise security boundaries', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.assertAdmin.mockResolvedValue({ id: 'admin-1' });
+    mocks.countLinks.mockResolvedValue(0);
     mocks.findJiraConfig.mockResolvedValue({
       id: 'default',
       baseUrl: 'https://acme.atlassian.net',
@@ -89,6 +92,19 @@ describe('Jira enterprise security boundaries', () => {
     expect(result.success).toBe(true);
     expect(mocks.encrypt).toHaveBeenCalledWith('fresh-token');
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an origin change while issues from the old site are still linked', async () => {
+    mocks.countLinks.mockResolvedValue(3);
+
+    const result = await saveJiraConfig(
+      { success: true, error: null, updatedAt: REVISION },
+      configForm('https://new-acme.atlassian.net', 'fresh-token')
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Remove the Jira workspace first');
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it('rejects confusing or local outbound Jira URLs', () => {

@@ -23,6 +23,8 @@ interface IntegrationSecretControlProps {
   serviceId: string;
   hasSecret?: boolean;
   initialSecret?: string | null;
+  /** False for providers that cannot sign requests with this secret. */
+  signingSupported?: boolean;
   className?: string;
 }
 
@@ -31,6 +33,7 @@ export default function IntegrationSecretControl({
   serviceId,
   hasSecret,
   initialSecret,
+  signingSupported = true,
   className,
 }: IntegrationSecretControlProps) {
   const isInitiallyConfigured = Boolean(hasSecret ?? initialSecret);
@@ -66,6 +69,8 @@ export default function IntegrationSecretControl({
       setLoading(false);
     }
   };
+
+  if (!configured && !signingSupported) return null;
 
   if (!configured) {
     return (
@@ -180,10 +185,17 @@ export default function IntegrationSecretControl({
           </AlertDialog>
         </div>
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        Inbound webhooks must be HMAC-signed with this secret.{' '}
-        <span className="text-amber-600/90 dark:text-amber-400/90">Keep it private.</span>
-      </p>
+      {signingSupported ? (
+        <p className="text-[10px] text-muted-foreground">
+          Inbound webhooks must be HMAC-signed with this secret.{' '}
+          <span className="text-amber-600/90 dark:text-amber-400/90">Keep it private.</span>
+        </p>
+      ) : (
+        <p role="alert" className="text-[10px] text-amber-600 dark:text-amber-400">
+          This provider cannot sign webhooks with this secret. Remove it: it does not protect the
+          endpoint and can cause deliveries to be rejected.
+        </p>
+      )}
     </div>
   );
 }

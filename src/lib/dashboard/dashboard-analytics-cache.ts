@@ -2,7 +2,11 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import type { IncidentStatus } from '@prisma/client';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import {
+  authorize,
+  AUTHORIZATION_ACTIONS,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { getRealtimeChangeGeneration } from '@/lib/realtime-change-control-plane';
 import {
@@ -83,6 +87,13 @@ function normalizedKey(actor: AuthorizationActor, filters: DashboardAnalyticsFil
   const scope = metricScope
     ? { type: 'scoped', actorId: metricScope.actorId, teams: [...metricScope.teamIds].sort() }
     : { type: 'global' };
+  // On-call data is scoped by schedule access, which a custom role may grant differently.
+  const scheduleAccess = authorize({ actor, action: AUTHORIZATION_ACTIONS.SCHEDULE_READ });
+  const schedules = !scheduleAccess.allowed
+    ? 'none'
+    : scheduleAccess.scope === 'global'
+      ? 'all'
+      : actor.id;
   const normalizedFilters = {
     rangeDays: filters.rangeDays,
     startDate: filters.startDate?.toISOString(),
@@ -93,7 +104,7 @@ function normalizedKey(actor: AuthorizationActor, filters: DashboardAnalyticsFil
     urgency: filters.urgency,
     status: filters.status,
   };
-  return JSON.stringify({ scope, filters: normalizedFilters });
+  return JSON.stringify({ scope, schedules, filters: normalizedFilters });
 }
 
 function fingerprint(key: string): string {

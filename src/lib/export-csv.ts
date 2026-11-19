@@ -14,7 +14,9 @@ export function exportToCsv<T>(filename: string, columns: CsvColumn<T>[], data: 
 
   const escapeCsvValue = (val: unknown): string => {
     if (val === null || val === undefined) return '""';
-    const str = String(val);
+    const raw = String(val);
+    // Same formula-injection guard as sanitizeCsvCell in csv.ts (not imported: that module pulls in csv-stringify).
+    const str = typeof val === 'string' && /^[=+\-@\t\r|%]/.test(raw.trim()) ? `'${raw}` : raw;
     // Double-quote wrap and escape existing double quotes
     return `"${str.replace(/"/g, '""')}"`;
   };

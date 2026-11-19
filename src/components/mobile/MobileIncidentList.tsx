@@ -12,6 +12,10 @@ import {
   mutateIncidentStatus,
   type BrowserIncidentStatus,
 } from '@/lib/incidents/status-client';
+import { snoozeIncidentWithDuration } from '@/app/(app)/incidents/snooze-actions';
+
+// A swipe snooze is always finite so the auto-unsnooze worker resumes escalation.
+const SWIPE_SNOOZE_MINUTES = 60;
 
 type IncidentListItem = {
   id: string;
@@ -72,6 +76,7 @@ export default function MobileIncidentList({
 
   useEffect(() => {
     if (typeof window === 'undefined' || !navigator.onLine) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- online-only resync from props; navigator.onLine is browser state that cannot be read during render
     setLocalIncidents(incidents);
     setCachedAt(null);
     void writeCache(cacheKey, incidents);
@@ -79,21 +84,39 @@ export default function MobileIncidentList({
 
   const handleStatusUpdate = async (id: string, status: 'ACKNOWLEDGED' | 'SNOOZED') => {
     if (updatingIds.has(id)) return;
+    // A swipe is easy to trigger while scrolling; pausing escalation needs an explicit yes.
+    if (
+      status === 'SNOOZED' &&
+      // eslint-disable-next-line no-alert -- blocking confirm keeps the swipe handler synchronous; an async dialog would need a pending-swipe state machine
+      !window.confirm('Snooze this incident for 1 hour? Escalation pauses until then.')
+    ) {
+      return;
+    }
     setUpdatingIds(current => new Set(current).add(id));
     setErrorMessage('');
 
     const previous = localIncidents;
     const expectedStatus = localIncidents.find(incident => incident.id === id)?.status;
     setLocalIncidents(current => {
-      const updated = current.map(incident => (incident.id === id ? { ...incident, status } : incident));
+      const updated = current.map(incident =>
+        incident.id === id ? { ...incident, status } : incident
+      );
       if (filter === 'open') return updated.filter(incident => incident.id !== id);
-      if (filter === 'all_open' && status !== 'ACKNOWLEDGED') return updated.filter(incident => incident.id !== id);
-      if (filter === 'acknowledged' && status !== 'ACKNOWLEDGED') return updated.filter(incident => incident.id !== id);
-      if (filter === 'muted' && status !== 'SNOOZED') return updated.filter(incident => incident.id !== id);
+      if (filter === 'all_open' && status !== 'ACKNOWLEDGED')
+        return updated.filter(incident => incident.id !== id);
+      if (filter === 'acknowledged' && status !== 'ACKNOWLEDGED')
+        return updated.filter(incident => incident.id !== id);
+      if (filter === 'muted' && status !== 'SNOOZED')
+        return updated.filter(incident => incident.id !== id);
       return updated;
     });
 
     try {
+      if (status === 'SNOOZED') {
+        await snoozeIncidentWithDuration(id, SWIPE_SNOOZE_MINUTES);
+        router.refresh();
+        return;
+      }
       const result = await mutateIncidentStatus({ incidentId: id, status, expectedStatus });
       if (result.state === 'QUEUED') {
         setLocalIncidents(previous);
@@ -147,7 +170,9 @@ export default function MobileIncidentList({
               : undefined
           }
           onSnooze={
-            incident.status === 'OPEN' ? () => handleStatusUpdate(incident.id, 'SNOOZED') : undefined
+            incident.status === 'OPEN'
+              ? () => handleStatusUpdate(incident.id, 'SNOOZED')
+              : undefined
           }
           isUpdating={updatingIds.has(incident.id)}
         />

@@ -174,4 +174,32 @@ describe('executeEscalation delay handling', () => {
     expect(prisma.incident.update).not.toHaveBeenCalled();
     expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
   });
+
+  it('claims the pending step immediately for a manual escalation instead of waiting', async () => {
+    vi.mocked(prisma.incident.findUnique)
+      .mockResolvedValueOnce(
+        delayedPolicyIncident({
+          id: 'inc-3',
+          currentEscalationStep: 0,
+          nextEscalationAt: new Date('2026-01-01T00:05:00.000Z'),
+          escalationStatus: 'ESCALATING',
+        }) as never
+      )
+      .mockResolvedValueOnce({
+        status: 'OPEN',
+        escalationStatus: 'ESCALATING',
+        escalationGeneration: 3,
+      } as never);
+    vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 0 } as never);
+
+    const result = await executeEscalation('inc-3', 0, { generation: 3, immediate: true });
+
+    expect(result.outcome).not.toBe('STEP_SCHEDULED');
+    expect(prisma.incident.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'inc-3', escalationGeneration: 3 }),
+        data: expect.objectContaining({ currentEscalationStep: 0 }),
+      })
+    );
+  });
 });

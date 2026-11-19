@@ -36,10 +36,10 @@ export const POST = withV2Observability(async function POST(
       });
     }
 
-    if (notification.status !== 'FAILED') {
+    if (notification.status !== 'FAILED' && notification.status !== 'UNKNOWN') {
       throw new AppError({
         code: 'NOTIFICATION_NOT_RETRYABLE',
-        userMessage: `Notification '${id}' is in status '${notification.status}' and cannot be retried. Only FAILED notifications can be retried.`,
+        userMessage: `Notification '${id}' is in status '${notification.status}' and cannot be retried. Only FAILED or UNKNOWN notifications can be retried.`,
       });
     }
 
@@ -56,7 +56,7 @@ export const POST = withV2Observability(async function POST(
           tx,
         }),
       // MCP approval recheck inside the requeue's own transaction; a no-op for REST callers.
-      // The requeue only moves FAILED to PENDING; the delivery worker sends after it commits.
+      // The requeue only moves FAILED or UNKNOWN to PENDING; the delivery worker sends after it commits.
       async tx => {
         await internalV2MutationGuard()?.(tx);
       }
@@ -68,10 +68,10 @@ export const POST = withV2Observability(async function POST(
         where: { id },
         select: { status: true },
       });
-      if (current && current.status !== 'FAILED') {
+      if (current && current.status !== 'FAILED' && current.status !== 'UNKNOWN') {
         throw new AppError({
           code: 'NOTIFICATION_NOT_RETRYABLE',
-          userMessage: `Notification '${id}' is in status '${current.status}' and cannot be retried. Only FAILED notifications can be retried.`,
+          userMessage: `Notification '${id}' is in status '${current.status}' and cannot be retried. Only FAILED or UNKNOWN notifications can be retried.`,
         });
       }
       throw new AppError({

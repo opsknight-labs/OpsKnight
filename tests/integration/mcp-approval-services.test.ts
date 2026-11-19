@@ -19,6 +19,7 @@ import { checksum } from '@/lib/automation/cache';
 import { createRunbook, publishDraftVersion } from '@/lib/runbooks/versioning';
 import { createServiceBinding } from '@/lib/runbooks/bindings';
 import { callMcpOperation } from '@/lib/mcp/core/execution';
+import { processObjectiveEvaluation } from '@/lib/slo/evaluation-jobs';
 import {
   commitApprovedMcpOperation,
   mcpApprovalCommitKey,
@@ -622,6 +623,16 @@ describe('service batch-wide', () => {
     await supersedeObjective(s);
     await commitApprovedMcpOperation(f.ctx(), { approvalId: prepared.approvalId });
     expect(await evaluationJobs(s)).toEqual([['PENDING', s.versionId]]);
+    // The worker must re-resolve the MCP grant (`mcp:<grantId>`), not look for an ApiKey row.
+    const [job] = await db.backgroundJob.findMany({
+      where: { payload: { path: ['lineageId'], equals: s.lineageId } },
+    });
+    await db.backgroundJob.update({ where: { id: job.id }, data: { status: 'PROCESSING' } });
+    await processObjectiveEvaluation(job.id);
+    const done = await db.backgroundJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect((done.payload as { receipt?: { outcome: string } }).receipt?.outcome).toBe(
+      'EVALUATED'
+    );
   });
 
   it('reads maintenance windows through generic dispatch', async () => {

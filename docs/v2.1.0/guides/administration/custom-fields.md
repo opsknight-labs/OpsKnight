@@ -55,7 +55,7 @@ Keys are unique across the workspace. Treat a key as an integration contract: th
 - `URL`: must begin with `http://` or `https://`.
 - `EMAIL`: must match the current email form, contain no whitespace, and include an `@` plus dotted domain. It is stored lowercase.
 
-Empty input becomes no value. An empty required field is rejected with `<field name> is required.` Required custom fields also block human/operator incident resolution until completed. Automated upstream resolution is not subject to that human completion gate.
+Empty input becomes no value. An empty required field is rejected with `<field name> is required.` Required custom fields also block human/operator incident resolution (web, bulk, REST API, runbooks) until completed. Fields added after an incident was opened do not block it. Automated upstream resolution and surfaces that cannot fill fields (Slack/Teams, voice, mobile) are not subject to that gate.
 
 The create-definition endpoint accepts a default as text. Test that the default is valid for its type before relying on it; incident value validation is authoritative.
 

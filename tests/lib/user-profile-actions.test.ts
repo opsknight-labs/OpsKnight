@@ -109,4 +109,44 @@ describe('updateUserProfile Action', () => {
     expect(result).toEqual({ error: 'Only administrators can change user roles.' });
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
+
+  it('stops a temporary (JIT) admin from changing an assigned admin account', async () => {
+    vi.mocked(getServerSession).mockResolvedValue({
+      user: { email: 'alice@example.com' },
+    });
+    prismaMock.user.findUnique.mockImplementation(
+      async (args: { where: { id?: string; email?: string } }) => {
+        if (args.where.email === 'alice@example.com') {
+          return {
+            id: 'user-1',
+            name: 'Alice',
+            email: 'alice@example.com',
+            role: 'USER',
+            accessGrants: [
+              {
+                id: 'grant-1',
+                role: 'ADMIN',
+                incidentId: null,
+                revokedAt: null,
+                expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+              },
+            ],
+          };
+        }
+        if (args.where.id === 'admin-1') {
+          return { email: 'root@example.com', role: 'ADMIN', phoneNumber: null };
+        }
+        return null;
+      }
+    );
+    prismaMock.user.count.mockResolvedValue(1);
+
+    const formData = new FormData();
+    formData.append('name', 'Root');
+    formData.append('email', 'attacker@example.com');
+
+    const result = await updateUserProfile('admin-1', formData);
+    expect(result?.error).toMatch(/assigned administrator/);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
 });

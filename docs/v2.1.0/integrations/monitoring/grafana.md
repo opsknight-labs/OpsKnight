@@ -36,7 +36,7 @@ service.
 2. Select **Add integration → Grafana**, then save the integration.
 3. Copy the webhook URL and integration key shown by OpsKnight.
 4. In Grafana, open **Alerting → Contact points → Add contact point**, choose **Webhook**, and paste the complete OpsKnight URL.
-5. Leave the default Grafana/Alertmanager JSON intact. If you configure an OpsKnight signature secret, configure the matching Grafana HMAC signature so `X-Grafana-Signature` can be verified.
+5. Leave the default Grafana/Alertmanager JSON intact. If you configure an OpsKnight signature secret, configure the matching Grafana HMAC signature (default header `X-Grafana-Alerting-Signature`; `X-Grafana-Signature` is also accepted; leave the timestamp header unset) so the body signature can be verified.
 6. Test the contact point, attach it through a notification policy, then make a test rule fire and return to Normal. Ensure resolved messages are enabled.
 
 Provider console labels can change independently of OpsKnight. Use the webhook

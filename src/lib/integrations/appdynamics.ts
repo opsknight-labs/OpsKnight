@@ -42,7 +42,10 @@ export function transformAppDynamicsToEvent(data: AppDynamicsEvent): {
     `appdynamics-${baseName.replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
-    event_action: normalizeEventAction(status, 'trigger'),
+    // POLICY_CANCELED_* ends a violation just like POLICY_CLOSE_*.
+    event_action: /^POLICY_CANCEL+ED/i.test(status ?? '')
+      ? 'resolve'
+      : normalizeEventAction(status, 'trigger'),
     dedup_key: String(dedupKey),
     payload: {
       summary,

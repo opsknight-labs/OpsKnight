@@ -28,6 +28,8 @@ export type WebhookOptions = {
   circuitBreaker?: boolean;
   /** Stable across retries so receivers can safely deduplicate delivery. */
   deliveryId?: string;
+  /** Refuse plain http:// targets (service webhooks unless an admin allows http). */
+  requireHttps?: boolean;
 };
 
 export type WebhookResult = {
@@ -107,6 +109,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
       maxAttempts = 3,
       circuitBreaker = true,
       deliveryId,
+      requireHttps = false,
     } = options;
 
     if (!url) {
@@ -116,9 +119,14 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
     // SSRF Protection: Validate URL
     const { assertSafeOutboundUrl, safeOutboundFetch } = await import('./network-security');
     try {
-      await assertSafeOutboundUrl(url);
+      await assertSafeOutboundUrl(url, { requireHttps });
     } catch {
-      return { success: false, error: 'Invalid or restricted Webhook URL' };
+      return {
+        success: false,
+        error: requireHttps
+          ? 'Invalid or restricted Webhook URL (HTTPS required; an admin can allow http:// in System Settings)'
+          : 'Invalid or restricted Webhook URL',
+      };
     }
 
     // Stringify payload
@@ -152,7 +160,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
           attempts++;
           // Resolve again immediately before every attempt. This limits DNS
           // rebinding exposure and prevents a retry from using a newly-private answer.
-          await assertSafeOutboundUrl(url);
+          await assertSafeOutboundUrl(url, { requireHttps });
           const attemptController = new AbortController();
           const attemptTimeoutId = setTimeout(() => attemptController.abort(), timeout);
           try {
@@ -250,14 +258,16 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
         statusCode: response.status,
         responseBody: responseText,
       };
-    } catch (fetchError: any) {
-      if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
+    } catch (fetchError: unknown) {
+      const { name, message } = fetchError as { name?: string; message?: string };
+      if (name === 'AbortError' || message?.includes('timeout')) {
         return { success: false, error: 'Webhook request timed out after retries' };
       }
 
       throw fetchError;
     }
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as Error & { statusCode?: number; retryAfterMs?: number };
     logger.error('Webhook send error', {
       component: 'webhooks',
       error: error instanceof Error ? error.message : String(error),
@@ -303,8 +313,8 @@ export function generateIncidentWebhookPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning'
-): Record<string, any> {
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached'
+) {
   const baseUrl = getBaseUrl();
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
 
@@ -359,14 +369,14 @@ export function formatGoogleChatPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string
-): Record<string, any> {
+) {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
 
   // Status mapping
   const statusIcon =
-    eventType === 'triggered'
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔥'
       : eventType === 'acknowledged'
         ? '⚠️'
@@ -469,12 +479,12 @@ export function formatMicrosoftTeamsPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string
-): Record<string, any> {
+) {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const accentColor =
-    eventType === 'triggered'
+    eventType === 'triggered' || eventType === 'breached'
       ? 'Attention' // Red
       : eventType === 'acknowledged' || eventType === 'warning'
         ? 'Warning' // Yellow/Orange
@@ -483,7 +493,7 @@ export function formatMicrosoftTeamsPayload(
           : 'Default';
 
   const statusEmoji =
-    eventType === 'triggered'
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔥'
       : eventType === 'acknowledged'
         ? '⚠️'
@@ -603,12 +613,12 @@ export function formatDiscordPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string
-): Record<string, any> {
+) {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const color =
-    eventType === 'triggered'
+    eventType === 'triggered' || eventType === 'breached'
       ? 0xd32f2f // Red
       : eventType === 'acknowledged' || eventType === 'warning'
         ? 0xf9a825 // Yellow
@@ -617,7 +627,7 @@ export function formatDiscordPayload(
           : 0x757575; // Grey
 
   const statusEmoji =
-    eventType === 'triggered'
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔴'
       : eventType === 'acknowledged' || eventType === 'warning'
         ? '🟡'
@@ -679,13 +689,13 @@ export function formatTelegramPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string,
   channel?: string
-): Record<string, any> {
+) {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
   const statusEmoji =
-    eventType === 'triggered'
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔴'
       : eventType === 'acknowledged'
         ? '🟡'
@@ -699,7 +709,10 @@ export function formatTelegramPayload(
     `Status: ${incident.status}`,
     `Urgency: ${incident.urgency}`,
     `Assignee: ${incident.assignee?.name || 'Unassigned'}`,
-    incident.description ? `Details: ${incident.description}` : null,
+    // Telegram rejects messages over 4096 characters.
+    incident.description
+      ? `Details: ${incident.description.substring(0, 3000)}${incident.description.length > 3000 ? '...' : ''}`
+      : null,
     `View: ${incidentUrl}`,
   ]
     .filter(Boolean)
@@ -728,14 +741,14 @@ export function formatSlackPayload(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string
-): Record<string, any> {
+) {
   const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
 
   // Status color mapping
   const statusEmoji =
-    eventType === 'triggered'
+    eventType === 'triggered' || eventType === 'breached'
       ? '🔴'
       : eventType === 'acknowledged'
         ? '🟡'
@@ -782,7 +795,8 @@ export function formatSlackPayload(
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: `*Description:*\n${incident.description}`,
+                // Slack rejects section text over 3000 characters.
+                text: `*Description:*\n${incident.description.substring(0, 2900)}${incident.description.length > 2900 ? '...' : ''}`,
               },
             },
           ]
@@ -823,10 +837,10 @@ export function formatWebhookPayloadByType(
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
   },
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   baseUrl: string,
   channel?: string
-): Record<string, any> {
+) {
   switch (webhookType.toUpperCase()) {
     case 'GOOGLE_CHAT':
       return formatGoogleChatPayload(incident, eventType, baseUrl);
@@ -851,7 +865,7 @@ export function formatWebhookPayloadByType(
 export async function sendIncidentWebhook(
   webhookUrl: string,
   incidentId: string,
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'warning' | 'breached',
   secret?: string,
   webhookType?: string,
   channel?: string
@@ -893,7 +907,8 @@ export async function sendIncidentWebhook(
     }
 
     return result;
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as Error;
     logger.error('Send incident webhook error', {
       component: 'webhooks',
       error,

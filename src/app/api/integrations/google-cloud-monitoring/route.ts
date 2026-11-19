@@ -5,7 +5,15 @@ import {
 } from '@/lib/integrations/google-cloud-monitoring';
 
 function parsePubSubPayload(body: string): GoogleCloudMonitoringEvent {
-  const parsed = JSON.parse(body) as Record<string, any>;
+  const parsed = JSON.parse(body) as {
+    message?: {
+      data?: string;
+      messageId?: string;
+      publishTime?: string;
+      attributes?: Record<string, string>;
+    };
+    subscription?: string;
+  };
   const message = parsed?.message;
   if (message?.data) {
     try {
@@ -21,7 +29,8 @@ function parsePubSubPayload(body: string): GoogleCloudMonitoringEvent {
         },
       } as GoogleCloudMonitoringEvent;
     } catch {
-      return parsed as GoogleCloudMonitoringEvent;
+      // An undecodable Pub/Sub message is invalid input, not an alert; the handler returns 400.
+      throw new Error('Invalid Pub/Sub message data');
     }
   }
   return parsed as GoogleCloudMonitoringEvent;

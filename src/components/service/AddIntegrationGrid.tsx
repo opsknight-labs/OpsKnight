@@ -61,7 +61,11 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
   const handleSubmit = async (formData: FormData) => {
     setLoading(true);
     try {
-      await createIntegration(formData);
+      const result = await createIntegration(formData);
+      if (result.error) {
+        showToast(result.error, 'error');
+        return;
+      }
       showToast('Integration created successfully', 'success');
       router.refresh();
       handleClose();

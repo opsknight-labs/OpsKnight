@@ -9,6 +9,7 @@ import { encrypt, decrypt } from '@/lib/encryption';
 import {
   revokeMicrosoftTeamsOperations,
   revokeMicrosoftTeamsWarRoomProvisioning,
+  TEAMS_REVOCATION_TX_OPTIONS,
 } from '@/lib/microsoft-teams/lifecycle';
 
 /**
@@ -195,7 +196,7 @@ export async function saveMicrosoftTeamsConfig(
         reason: 'Microsoft Teams war rooms were disabled by an administrator',
       });
     }
-  });
+  }, TEAMS_REVOCATION_TX_OPTIONS);
 
   await logAudit({
     action: 'microsoftTeams.config.updated',

@@ -290,7 +290,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             verified: false,
             timezone: subscriberTimezone,
             ...(preferencesProvided
-              ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
+              ? { preferences: normalizedPreferences ?? Prisma.DbNull }
               : {}),
           },
         });
@@ -308,7 +308,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             verificationTokenExpiresAt: verificationExpiresAt,
             timezone: subscriberTimezone,
             ...(preferencesProvided
-              ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
+              ? { preferences: normalizedPreferences ?? Prisma.DbNull }
               : {}),
           },
         });
@@ -327,7 +327,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           state: 'PENDING',
           timezone: subscriberTimezone,
           ...(preferencesProvided
-            ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
+            ? { preferences: normalizedPreferences ?? Prisma.DbNull }
             : {}),
         },
         select: { id: true },

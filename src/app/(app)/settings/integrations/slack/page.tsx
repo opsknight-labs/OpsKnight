@@ -44,6 +44,7 @@ export default async function GlobalSlackIntegrationPage(props: {
     where: {
       services: { none: {} }, // Global integration
     },
+    orderBy: { updatedAt: 'desc' }, // same row the disconnect route removes
     select: {
       id: true,
       workspaceId: true,
@@ -60,7 +61,6 @@ export default async function GlobalSlackIntegrationPage(props: {
         },
       },
     },
-    orderBy: { updatedAt: 'desc' },
   });
 
   // Check if OAuth is configured (database only - no env vars for UI-driven setup)

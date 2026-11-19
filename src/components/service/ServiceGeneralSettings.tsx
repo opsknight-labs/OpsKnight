@@ -154,10 +154,9 @@ export default function ServiceGeneralSettings({
   const activeTierDef = SLA_TIERS.find(t => t.id === selectedTier);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (!canManageService) {
-      e.preventDefault();
-      return;
-    }
+    // The form has no action attribute, so without this the browser does a native GET submit.
+    e.preventDefault();
+    if (!canManageService) return;
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
       await action(formData);

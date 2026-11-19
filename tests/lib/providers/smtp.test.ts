@@ -146,4 +146,29 @@ describe('SMTP Provider Transport Contract', () => {
     expect(result.statusCode).toBe(429);
     expect(result.retryAfterMs).toBe(60_000);
   });
+  it('maps SMTP reply codes onto HTTP semantics (5xx rejection, 4xx transient)', async () => {
+    mockSendMail.mockRejectedValueOnce({
+      message: "Can't send mail - all recipients were rejected: 550 5.1.1 User unknown",
+      responseCode: 550,
+      code: 'EENVELOPE',
+    });
+    const rejected = await sendEmail(
+      { to: 'nobody@internal.corp', subject: 'x', html: '<p>x</p>' },
+      validConfig
+    );
+    expect(rejected.statusCode).toBe(422);
+    expect(rejected.retryAfterMs).toBeUndefined();
+
+    mockSendMail.mockRejectedValueOnce({
+      message: '451 4.3.0 Temporary local problem',
+      responseCode: 451,
+      code: 'EMESSAGE',
+    });
+    const transient = await sendEmail(
+      { to: 'admin@internal.corp', subject: 'x', html: '<p>x</p>' },
+      validConfig
+    );
+    expect(transient.statusCode).toBe(429);
+    expect(transient.retryAfterMs).toBe(60_000);
+  });
 });

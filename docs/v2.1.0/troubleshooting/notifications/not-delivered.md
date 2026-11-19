@@ -41,6 +41,7 @@ Use this decision table for one notification ID:
 | deferred | quiet hours, policy delay, or provider capacity admission | verify scheduled next-attempt time |
 | retrying | transient provider/network response | inspect status code and backoff; do not create another intent |
 | permanent failure | invalid endpoint, credentials, template, or provider rejection | repair endpoint/configuration, then use supported retry |
+| unknown | ambiguous provider outcome (timeout, reset, HTTP 5xx) | check the provider; requeue only if a duplicate is acceptable. Unconfirmed rows settle as failed when they expire |
 | provider accepted, user did not receive | downstream provider/device/destination issue | use provider message ID and feedback receipt |
 
 Channel-specific checks:

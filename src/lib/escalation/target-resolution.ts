@@ -21,7 +21,7 @@ import {
   type LayerRestrictions,
   type OverrideInput,
 } from '../oncall';
-import { startOfDayInTimeZone, startOfNextDayInTimeZone } from '../timezone';
+import { isValidTimeZone, startOfDayInTimeZone, startOfNextDayInTimeZone } from '../timezone';
 
 export type EscalationTargetResolution =
   | { outcome: 'RESOLVED'; userIds: string[]; targetName: string }
@@ -221,8 +221,10 @@ function layerRotationLengthHours(layer: ScheduleLayerRow): number {
  * identically to what the on-call UI shows.
  */
 function effectiveOnCallUserIds(schedule: ScheduleForCoverage, atTime: Date): string[] {
-  const windowStart = startOfDayInTimeZone(atTime, schedule.timeZone);
-  const windowEnd = startOfNextDayInTimeZone(atTime, schedule.timeZone);
+  // A legacy row with an invalid zone must still page (in UTC) rather than throw.
+  const timeZone = isValidTimeZone(schedule.timeZone) ? schedule.timeZone : 'UTC';
+  const windowStart = startOfDayInTimeZone(atTime, timeZone);
+  const windowEnd = startOfNextDayInTimeZone(atTime, timeZone);
 
   const layerPriority = new Map<string, number>(
     schedule.layers.map(layer => [layer.id, layerPriorityOf(layer)])
@@ -266,7 +268,7 @@ function effectiveOnCallUserIds(schedule: ScheduleForCoverage, atTime: Date): st
     },
   }));
 
-  const blocks = buildScheduleBlocks(layers, overrides, windowStart, windowEnd, schedule.timeZone);
+  const blocks = buildScheduleBlocks(layers, overrides, windowStart, windowEnd, timeZone);
 
   const activeAt = getFinalScheduleBlocks(blocks, layerPriority).filter(
     block => block.start.getTime() <= atTime.getTime() && block.end.getTime() > atTime.getTime()

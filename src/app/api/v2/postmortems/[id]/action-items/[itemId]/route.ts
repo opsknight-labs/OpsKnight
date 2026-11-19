@@ -12,6 +12,7 @@ import {
   replacePostmortemActionItems,
 } from '@/lib/postmortems/action-item-commands';
 import type { ActionItem } from '@/lib/action-items';
+import { assertPostmortemAccess, postmortemEditWhere } from '@/lib/postmortems/authorization';
 
 const paramsSchema = z
   .object({
@@ -154,6 +155,8 @@ export const DELETE = defineV2Route({
         userMessage: 'Corrective action not found.',
       });
     }
+    // Removing an item is an editor operation in the UI (the board only changes status).
+    await assertPostmortemAccess(tx!, parent.id, postmortemEditWhere(actor));
     const items = collection.items.filter(item => item.id !== params.itemId).map(toInput);
     const updated = await replacePostmortemActionItems(
       tx!,

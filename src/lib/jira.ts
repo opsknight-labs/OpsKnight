@@ -156,12 +156,31 @@ async function jiraRequest<T>(
       status: response.status,
       retryAfterMs: parseJiraRetryAfterMs(response.headers.get('retry-after')),
       cause: body
-        ? new Error(`Jira request failed (${response.status}) with a provider response body.`)
+        ? new Error(
+            `Jira request failed (${response.status}) with a provider response body.${jiraErrorFieldSuffix(body)}`
+          )
         : new Error(`Jira request failed (${response.status}).`),
     });
   }
 
   return (await response.json()) as T;
+}
+
+/**
+ * Names (never values) of the fields Jira rejected, e.g. " Fields: issuetype,components."
+ * so callers can tell a bad issue type from a bad component without exposing content.
+ */
+function jiraErrorFieldSuffix(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { errors?: unknown };
+    if (!parsed.errors || typeof parsed.errors !== 'object') return '';
+    const fields = Object.keys(parsed.errors)
+      .filter(field => /^[A-Za-z0-9_.-]{1,64}$/.test(field))
+      .slice(0, 10);
+    return fields.length ? ` Fields: ${fields.join(',')}.` : '';
+  } catch {
+    return '';
+  }
 }
 
 export async function getDecryptedJiraConfig(): Promise<JiraConfigForRequest | null> {

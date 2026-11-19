@@ -76,6 +76,8 @@ function stepTargetId(step: PolicyStepRow): string | null {
 
 export interface ExecuteEscalationOptions {
   generation?: number;
+  /** A manual escalation fires the step now instead of waiting out its delay. */
+  immediate?: boolean;
 }
 
 /**
@@ -202,7 +204,7 @@ export async function executeEscalation(
     supportHoursState: supportHours.state,
   });
 
-  if (applicable && stepDelayMinutes > 0) {
+  if (applicable && stepDelayMinutes > 0 && !options.immediate) {
     if (!incident.nextEscalationAt) {
       const dueAt = escalationDueAt(now, stepDelayMinutes);
       const scheduled = await scheduleDelayedEscalationStep({

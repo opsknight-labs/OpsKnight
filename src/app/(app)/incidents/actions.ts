@@ -12,6 +12,7 @@ import {
 } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
+import { emitAuditEvent } from '@/lib/audit';
 import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
@@ -216,12 +217,19 @@ export async function addNote(incidentId: string, content: string) {
 export async function reassignIncident(incidentId: string, assigneeId: string, teamId?: string) {
   const actor = await assertResponderOrAbove();
 
-  await assignIncidentDomainCommand({
+  const result = await assignIncidentDomainCommand({
     incidentId,
     assigneeId,
     teamId,
     actor: { id: actor.id, name: actor.name },
   });
+  await emitAuditEvent({
+    action: 'incident.reassigned',
+    source: 'UI',
+    target: { type: 'INCIDENT', id: incidentId },
+    actor: { type: 'USER', id: actor.id, name: actor.name ?? null },
+    newValue: { assigneeId: result.assigneeId, teamId: result.teamId },
+  }).catch(() => undefined);
 
   revalidatePath(`/incidents/${incidentId}`);
   revalidatePath('/incidents');

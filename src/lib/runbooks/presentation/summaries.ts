@@ -67,7 +67,11 @@ export const getRunbookHealthSummary = cache(async () => {
   const now = await getRunbookDatabaseNow();
   const [fleet, unknown, expiredLeases, oldestPending, circuits, workers] = await Promise.all([
     getRunbookFleetSummary(),
-    prisma.runbookStepAttempt.count({ where: { status: 'UNKNOWN' } }),
+    // Only outcomes still awaiting verification: a safe retry that succeeded (or an operator
+    // resolution) moves the step on, and its superseded UNKNOWN attempt is history.
+    prisma.runbookStepAttempt.count({
+      where: { status: 'UNKNOWN', executionStep: { status: 'UNKNOWN' } },
+    }),
     prisma.runbookStepAttempt.count({
       where: { status: { in: ['CLAIMED', 'RUNNING'] }, leaseExpiresAt: { lt: now } },
     }),

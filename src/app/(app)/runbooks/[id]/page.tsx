@@ -758,6 +758,8 @@ export default async function RunbookDetailPage({
             label: 'Workflow',
             icon: <Workflow className="h-4 w-4" />,
             content: builder,
+            // Unsaved builder edits must survive switching to another tab and back.
+            keepMounted: true,
           },
           {
             id: 'versions',

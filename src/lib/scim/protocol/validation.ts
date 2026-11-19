@@ -60,7 +60,6 @@ export const userSchema = z
         givenName: z.string().trim().max(160).optional(),
         familyName: z.string().trim().max(160).optional(),
       })
-      .strict()
       .optional(),
     emails: z
       .array(
@@ -70,7 +69,6 @@ export const userSchema = z
             type: z.literal('work').optional(),
             primary: z.boolean().optional(),
           })
-          .strict()
       )
       .max(1)
       .optional(),
@@ -78,7 +76,6 @@ export const userSchema = z
     title: z.string().trim().max(320).nullable().optional(),
     [enterpriseSchema]: z
       .object({ department: z.string().trim().max(320).nullable().optional() })
-      .strict()
       .optional(),
     photos: z
       .array(
@@ -91,12 +88,17 @@ export const userSchema = z
             type: z.string().optional(),
             primary: z.boolean().optional(),
           })
-          .strict()
       )
       .max(1)
       .optional(),
+    // Authority stays with OpsKnight: privilege attributes are refused, never ignored.
+    roles: z.never().optional(),
+    entitlements: z.never().optional(),
+    rolesource: z.never().optional(),
   })
-  .strict()
+  // Unknown attributes are ignored, not rejected (RFC 7644 §3.3): Okta and Entra send
+  // password, locale, groups, phoneNumbers, addresses, manager... on every create/PUT.
+  // Only the fields declared above are ever persisted.
   .superRefine((user, ctx) => {
     // OpsKnight stores one email that is both the login name and the work email, so the two
     // attributes must agree. Name the attributes (never the values) so IdP logs are actionable.

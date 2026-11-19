@@ -47,12 +47,15 @@ function resolveZabbixAction(data: ZabbixPayload): 'trigger' | 'resolve' | 'ackn
   const value = firstString(data.event_value, data.eventValue, data.trigger_value);
   const action = firstString(data.action)?.toUpperCase();
 
-  if (action?.includes('ACK') || action?.includes('UPDATE')) {
-    return 'acknowledge';
-  }
-
+  // A closed problem wins over the update that closed it.
   if (status === 'RESOLVED' || status === 'OK' || status === 'RECOVERED' || value === '0') {
     return 'resolve';
+  }
+
+  // Only an acknowledgement holds escalation; other updates (unack, comment,
+  // severity change) fall through to the problem state below.
+  if (action?.includes('ACK') && !action.includes('UNACK')) {
+    return 'acknowledge';
   }
 
   if (status === 'PROBLEM' || value === '1') {
@@ -107,9 +110,12 @@ export function transformZabbixToEvent(data: ZabbixPayload): {
     data.triggerId
   );
 
+  // Default subjects are "Problem: X" and "Resolved in 5m: X"; drop the state
+  // prefix so a recovery keyed by subject matches its problem.
+  const stableName = summary.replace(/^(problem|resolved[^:]*|recovery|ok):\s*/i, '');
   const dedupKey = eventOrTriggerId
     ? `zabbix-${host}-${eventOrTriggerId}`
-    : `zabbix-${host}-${summary.replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
+    : `zabbix-${host}-${stableName.replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
     event_action: eventAction,

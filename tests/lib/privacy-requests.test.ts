@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => {
       update: privacyRequestUpdate,
       findMany: privacyRequestFindMany,
     },
+    privacyErasureExecution: { findUnique: vi.fn() },
+    privacyExportArtifact: { count: vi.fn() },
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(mockPrisma)),
   };
 
@@ -332,11 +334,29 @@ describe('privacy request lifecycle', () => {
       expect(auditPayload).not.toContain('Cannot verify identity');
     });
 
+    it('refuses COMPLETED for automated USER requests that were never fulfilled', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(
+        baseRequest({ status: 'PROCESSING', requestType: 'ERASURE' })
+      );
+      mocks.mockPrisma.privacyErasureExecution.findUnique.mockResolvedValue({ status: 'FAILED' });
+      await expect(
+        transitionPrivacyRequest({ requestId: 'creq00000001', toStatus: 'COMPLETED' }, ACTOR)
+      ).rejects.toMatchObject({ code: 'PRIVACY_REQUEST_INVALID_TRANSITION' });
+
+      mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ status: 'PROCESSING' }));
+      mocks.mockPrisma.privacyExportArtifact.count.mockResolvedValue(0);
+      await expect(
+        transitionPrivacyRequest({ requestId: 'creq00000001', toStatus: 'COMPLETED' }, ACTOR)
+      ).rejects.toMatchObject({ code: 'PRIVACY_REQUEST_INVALID_TRANSITION' });
+      expect(mocks.privacyRequestUpdateMany).not.toHaveBeenCalled();
+    });
+
     it('emits privacy.request.completed and stamps completedAt when finishing processing', async () => {
       const current = baseRequest({ status: 'PROCESSING' });
       mocks.privacyRequestFindUnique.mockResolvedValue(current);
       mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 1 });
       mocks.privacyRequestFindUniqueOrThrow.mockResolvedValue(baseRequest({ status: 'COMPLETED' }));
+      mocks.mockPrisma.privacyExportArtifact.count.mockResolvedValue(1);
 
       await transitionPrivacyRequest({ requestId: 'creq00000001', toStatus: 'COMPLETED' }, ACTOR);
 

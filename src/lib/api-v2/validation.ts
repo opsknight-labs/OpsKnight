@@ -2,6 +2,13 @@ import { z } from 'zod/v3';
 import { STATUS_ANNOUNCEMENT_TYPES } from '@/lib/validation';
 import { APP_ROLES, isApiScope } from '@/lib/authorization';
 import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
+import { isValidTimeZone } from '@/lib/timezone';
+
+const IanaTimeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(isValidTimeZone, { message: 'Invalid IANA time zone' });
 
 export const PaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -159,13 +166,13 @@ export const TeamUpdateV2Schema = z.object({
 
 export const ScheduleCreateV2Schema = z.object({
   name: z.string().trim().min(2).max(100),
-  timeZone: z.string().trim().min(1).default('UTC'),
+  timeZone: IanaTimeZoneSchema.default('UTC'),
   description: z.string().trim().max(1000).optional().nullable(),
 });
 
 export const ScheduleUpdateV2Schema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
-  timeZone: z.string().trim().min(1).optional(),
+  timeZone: IanaTimeZoneSchema.optional(),
   description: z.string().trim().max(1000).optional().nullable(),
 });
 

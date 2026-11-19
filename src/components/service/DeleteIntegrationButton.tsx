@@ -14,9 +14,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/shadcn/alert-dialog';
 import { Trash2 } from 'lucide-react';
+import { notify } from '@/lib/toast';
 
 type DeleteIntegrationButtonProps = {
-  action: (formData: FormData) => void;
+  action: (formData: FormData) => Promise<{ error?: string } | void>;
   integrationName: string;
   variant?: 'default' | 'icon';
 };
@@ -27,11 +28,23 @@ export default function DeleteIntegrationButton({
   variant = 'default',
 }: DeleteIntegrationButtonProps) {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
 
-  const handleConfirm = () => {
-    const formData = new FormData();
-    action(formData);
-    setOpen(false);
+  const handleConfirm = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      const result = await action(new FormData());
+      if (result?.error) {
+        notify.error(result.error);
+        return;
+      }
+      setOpen(false);
+    } catch (error) {
+      notify.error(error);
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -78,8 +91,9 @@ export default function DeleteIntegrationButton({
           <AlertDialogAction
             onClick={e => {
               e.preventDefault();
-              handleConfirm();
+              void handleConfirm();
             }}
+            disabled={pending}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             Yes, Delete Integration

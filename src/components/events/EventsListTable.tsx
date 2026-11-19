@@ -33,6 +33,7 @@ export type EventItem = {
   id: string;
   createdAt: Date | string;
   message: string;
+  type?: string | null;
   incident: {
     id: string;
     title: string;
@@ -238,7 +239,7 @@ export default function EventsListTable({
                         </button>
                       </TableCell>
                       <TableCell className="p-4">
-                        <EventLifecycleBadge message={event.message} />
+                        <EventLifecycleBadge message={event.message} type={event.type} />
                       </TableCell>
                       <TableCell className="p-4">
                         <div className="flex items-center gap-2 flex-wrap">

@@ -32,8 +32,15 @@ export async function acknowledgeIncidentDetail(incidentIdValue: string) {
   await updateIncidentStatus(incidentId(incidentIdValue), 'ACKNOWLEDGED');
 }
 
-export async function reopenIncidentDetail(incidentIdValue: string) {
-  await updateIncidentStatus(incidentId(incidentIdValue), 'OPEN');
+// Unacknowledge/unsnooze/unsuppress only. RESOLVED is excluded so a stale click can never reopen.
+const reopenFromSchema = z.enum(['ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED']);
+
+export async function reopenIncidentDetail(incidentIdValue: string, fromStatus: string) {
+  await updateIncidentStatus(
+    incidentId(incidentIdValue),
+    'OPEN',
+    reopenFromSchema.parse(fromStatus)
+  );
 }
 
 export async function suppressIncidentDetail(incidentIdValue: string) {

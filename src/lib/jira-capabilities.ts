@@ -6,20 +6,12 @@
  */
 
 import prisma from '@/lib/prisma';
+import { isAppError } from '@/lib/errors';
 
-export type JiraWorkspaceState =
-  | 'NOT_CONFIGURED'
-  | 'CONFIGURED'
-  | 'DISABLED'
-  | 'ENABLED';
+export type JiraWorkspaceState = 'NOT_CONFIGURED' | 'CONFIGURED' | 'DISABLED' | 'ENABLED';
 
 export type JiraCapabilityReason =
-  | 'NOT_CONFIGURED'
-  | 'CONFIGURED'
-  | 'DISABLED'
-  | 'NOT_MAPPED'
-  | 'SYNC_DISABLED'
-  | 'OK';
+  'NOT_CONFIGURED' | 'CONFIGURED' | 'DISABLED' | 'NOT_MAPPED' | 'SYNC_DISABLED' | 'OK';
 
 export type JiraCapability = {
   workspaceState: JiraWorkspaceState;
@@ -216,11 +208,56 @@ export type JiraErrorCode =
   | 'JIRA_NOT_MAPPED'
   | 'JIRA_UNKNOWN';
 
+type ClassifiedJiraError = { code: JiraErrorCode; retryable: boolean; userMessage: string };
+
+/**
+ * Jira HTTP failures arrive as AppErrors whose message is generic ("Jira rejected
+ * the requested operation."), so classify them by the structured provider status.
+ */
+function classifyJiraProviderError(error: unknown): ClassifiedJiraError | null {
+  if (!isAppError(error) || error.details?.provider !== 'jira') return null;
+  const status = error.details.providerStatus;
+  const operation = String(error.details.operation ?? '');
+  const causeText = (error.cause instanceof Error ? error.cause.message : '').toLowerCase();
+  const fields = causeText.match(/fields: ([^.]*)\./)?.[1]?.split(',') ?? [];
+
+  if (status === 401) return classifyJiraError(new Error('401 unauthorized'));
+  if (status === 403) return classifyJiraError(new Error('403 forbidden'));
+  if (status === 429) return classifyJiraError(new Error('429 rate limit'));
+  if (typeof status === 'number' && status >= 500) {
+    return classifyJiraError(new Error('503 unavailable'));
+  }
+  if (status === undefined && error.details.dependencyUnavailable) {
+    return classifyJiraError(new Error('timeout'));
+  }
+  if (status === 404) {
+    return classifyJiraError(
+      new Error(operation.includes('/project') ? 'project not found' : 'issue not found')
+    );
+  }
+  if (fields.includes('issuetype')) return classifyJiraError(new Error('issuetype'));
+  if (fields.includes('components')) return classifyJiraError(new Error('component'));
+  if (fields.includes('project')) return classifyJiraError(new Error('project not found'));
+  if (typeof status === 'number') {
+    return {
+      code: 'JIRA_VALIDATION_FAILED',
+      retryable: false,
+      userMessage: fields.length
+        ? `Jira rejected the request. Check these fields in the Jira mapping: ${fields.join(', ')}.`
+        : 'Jira rejected the request. Check the Jira project mapping for this service.',
+    };
+  }
+  return null;
+}
+
 export function classifyJiraError(error: unknown): {
   code: JiraErrorCode;
   retryable: boolean;
   userMessage: string;
 } {
+  const structured = classifyJiraProviderError(error);
+  if (structured) return structured;
+
   const rawMsg = error instanceof Error ? error.message : String(error);
   const lower = rawMsg.toLowerCase();
 

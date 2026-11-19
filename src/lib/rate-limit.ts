@@ -58,6 +58,27 @@ export async function checkRateLimit(
 }
 
 /**
+ * Give back one hit reserved with checkRateLimit in the window that ended at `resetAt`, so
+ * callers can reserve atomically up front and refund only the attempts that turned out fine.
+ * Best effort: a failed refund leaves the hit counted (fail closed).
+ */
+export async function releaseRateLimit(
+  key: string,
+  windowMs: number,
+  resetAt: number
+): Promise<void> {
+  const windowStart = Math.round(resetAt / windowMs) - 1;
+  try {
+    await prisma.rateLimit.updateMany({
+      where: { key: `${key}:${windowStart}`, count: { gt: 0 } },
+      data: { count: { decrement: 1 } },
+    });
+  } catch (error) {
+    logger.warn('Rate limit refund failed; the reserved hit stays counted', { error });
+  }
+}
+
+/**
  * Atomically increment a shared fixed-window counter in PostgreSQL and return
  * the post-increment count. Unlike checkRateLimit this throws on database
  * failure, so callers can choose their own fail-open/fail-closed policy

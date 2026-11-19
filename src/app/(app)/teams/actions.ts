@@ -16,6 +16,7 @@ import {
   requireMembershipCoordinates,
   requireTeamAccess,
   teamMemberInput,
+  findTeamDeletionBlocker,
 } from '@/lib/teams/administration';
 
 type TeamFormState = {
@@ -147,6 +148,8 @@ export async function deleteTeam(teamId: string) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
+  const blocker = await findTeamDeletionBlocker(teamId);
+  if (blocker) return { error: blocker };
   await prisma.$transaction([
     prisma.teamMember.deleteMany({
       where: { teamId },

@@ -23,13 +23,21 @@ export function transformHoneycombToEvent(data: HoneycombEvent): {
   };
 } {
   const safeData = data && typeof data === 'object' ? data : {};
-  const summary = firstString(safeData.alert_name, safeData.trigger_reason) || 'Honeycomb Alert';
+  // Honeycomb's default trigger body uses id/name; alert_id/alert_name come from custom templates.
+  const id = firstString(
+    safeData.alert_id,
+    typeof safeData.id === 'string' ? safeData.id : undefined
+  );
+  const name = firstString(
+    safeData.alert_name,
+    typeof safeData.name === 'string' ? safeData.name : undefined
+  );
+  const summary = firstString(name, safeData.trigger_reason) || 'Honeycomb Alert';
   const status = firstString(safeData.status, safeData.event_type);
   const severity = normalizeSeverity(safeData.alert_severity, 'warning');
   // Use alert_id or create stable key from alert_name (avoids Date.now() which defeats dedup)
   const dedupKey =
-    firstString(safeData.alert_id) ||
-    `honeycomb-${(safeData.alert_name || 'alert').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
+    id || `honeycomb-${(name || 'alert').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
     event_action: normalizeEventAction(status, 'trigger'),

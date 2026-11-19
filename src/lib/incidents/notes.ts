@@ -68,13 +68,13 @@ export async function addIncidentNoteDomainCommand(
       },
     });
 
+    const { enqueueJiraCommentOperationsInTransaction, jiraCommentableIncidentLinksWhere } =
+      await import('@/lib/external-operations');
     const links = await tx.externalIssueLink.findMany({
-      where: { incidentId, provider: 'JIRA' },
+      where: jiraCommentableIncidentLinksWhere(incidentId),
       select: { externalKey: true },
     });
     if (links.length > 0) {
-      const { enqueueJiraCommentOperationsInTransaction } =
-        await import('@/lib/external-operations');
       await enqueueJiraCommentOperationsInTransaction(
         tx,
         links.map(link => ({

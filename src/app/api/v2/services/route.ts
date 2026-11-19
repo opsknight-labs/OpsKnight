@@ -18,6 +18,7 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
+import { assertServicePolicyAssignableForApi } from '@/lib/automation/service-policy';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
@@ -143,8 +144,9 @@ export const POST = withV2Observability(async function POST(req: NextRequest) {
       apiKey.id,
       'service:create',
       validated,
-      tx =>
-        tx.service.create({
+      async tx => {
+        await assertServicePolicyAssignableForApi(tx, null, validated.escalationPolicyId);
+        return tx.service.create({
           data: {
             name: validated.name,
             description: validated.description ?? null,
@@ -164,7 +166,8 @@ export const POST = withV2Observability(async function POST(req: NextRequest) {
             team: { select: { id: true, name: true } },
             policy: { select: { id: true, name: true } },
           },
-        }),
+        });
+      },
       created => ({
         action: 'service.created',
         entityType: 'SERVICE',

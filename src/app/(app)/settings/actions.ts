@@ -10,6 +10,7 @@ import { disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { validatePasswordStrength } from '@/lib/passwords';
 import { getPushConfig } from '@/lib/notification-providers';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import { isValidTimeZone } from '@/lib/timezone';
@@ -286,6 +287,34 @@ export async function sendTestNotification(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await getCurrentUser();
+
+    // Phone channels bill the workspace's provider account: only test a channel the
+    // user has switched on, and cap test sends per user (minute burst + hourly).
+    const phoneChannelEnabled = {
+      SMS: user.smsNotificationsEnabled,
+      VOICE: user.voiceNotificationsEnabled,
+      WHATSAPP: user.whatsappNotificationsEnabled,
+    } as const;
+    if (
+      channel in phoneChannelEnabled &&
+      !phoneChannelEnabled[channel as keyof typeof phoneChannelEnabled]
+    ) {
+      return {
+        success: false,
+        error: `Enable ${channel === 'WHATSAPP' ? 'WhatsApp' : channel.toLowerCase()} notifications before sending a test.`,
+      };
+    }
+    const [burst, hourly] = await Promise.all([
+      checkRateLimit(`test-notification:${user.id}`, 5, 60_000),
+      checkRateLimit(`test-notification-hour:${user.id}`, 20, 60 * 60_000),
+    ]);
+    if (!burst.allowed || !hourly.allowed) {
+      return {
+        success: false,
+        error: 'Too many test notifications. Please wait before sending another.',
+      };
+    }
+
     const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
     const crypto = await import('crypto');
 
