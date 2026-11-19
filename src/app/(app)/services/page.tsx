@@ -362,8 +362,15 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const inMaintenance = await findServicesInMaintenance(services.map(s => s.id));
   const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
-    const dynamicStatus = (slaData?.dynamicStatus || service.status || 'OPERATIONAL') as
-      'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
+    // Without SLA data, a status filter already proved each row's live status from
+    // incidents; Service.status is a rarely written column and only a last resort.
+    const filteredStatus = ['OPERATIONAL', 'DEGRADED', 'CRITICAL'].includes(statusFilter)
+      ? statusFilter
+      : null;
+    const dynamicStatus = (slaData?.dynamicStatus ||
+      filteredStatus ||
+      service.status ||
+      'OPERATIONAL') as 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
     const openIncidentCount = slaData?.activeCount ?? 0;
     const hasCritical = (slaData?.criticalCount ?? 0) > 0;
     const incidentCount = slaData?.count ?? 0;
