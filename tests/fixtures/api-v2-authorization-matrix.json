@@ -1489,7 +1489,7 @@
   },
   "PATCH /services/{id}/notification-settings [services:write]": {
     "ADMIN": "allow:global",
-    "RESPONDER": "allow:global",
+    "RESPONDER": "allow:resource",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
@@ -1525,7 +1525,7 @@
   },
   "PATCH /services/{id} [services:write]": {
     "ADMIN": "allow:global",
-    "RESPONDER": "allow:global",
+    "RESPONDER": "allow:resource",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },

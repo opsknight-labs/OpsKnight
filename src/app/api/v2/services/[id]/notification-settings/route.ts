@@ -1,6 +1,7 @@
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
+import { enforceV2Authorization } from '@/lib/api-v2/rbac';
 import { logV2Audit } from '@/lib/api-v2/audit';
 import { etagHeaders, preconditionFailed, requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
@@ -76,9 +77,24 @@ export const PATCH = defineV2Route({
   preconditionRequired: true,
   idempotent: true,
   idempotencyRequired: true,
-  replayAuthGuard: async ({ params, tx }) => {
-    const exists = await tx!.service.findUnique({ where: { id: params.id }, select: { id: true } });
-    if (!exists) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
+  resourceExtractor: async ({ params }) => {
+    const service = await prisma.service.findUnique({
+      where: { id: params.id },
+      select: { teamId: true },
+    });
+    if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
+    return { type: 'service', teamId: service.teamId };
+  },
+  replayAuthGuard: async ({ params, actor, tx }) => {
+    const service = await tx!.service.findUnique({
+      where: { id: params.id },
+      select: { teamId: true },
+    });
+    if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
+    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SERVICE_UPDATE, {
+      type: 'service',
+      teamId: service.teamId,
+    });
   },
   handler: async ({ req, params, body, actor, apiKey, tx }) => {
     const expected = requireRevisionIfMatch(req);

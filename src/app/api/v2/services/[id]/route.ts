@@ -119,6 +119,11 @@ export const PATCH = withV2Observability(async function PATCH(
           userMessage: `Team with id '${validated.teamId}' not found.`,
         });
       }
+      // Non-admins may only move a service into a team they belong to.
+      enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SERVICE_UPDATE, {
+        type: 'service',
+        teamId: validated.teamId,
+      });
     }
 
     if (validated.escalationPolicyId) {
