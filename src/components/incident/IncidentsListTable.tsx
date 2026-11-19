@@ -396,9 +396,12 @@ export default function IncidentsListTable({
         return;
       }
 
+      // The status the operator saw guards against acting on a stale row
+      // (e.g. Unacknowledge on an incident someone else already resolved).
+      const expectedStatus = displayedIncidents.find(i => i.id === incidentId)?.status;
       startTransition(async () => {
         try {
-          await updateIncidentStatus(incidentId, status);
+          await updateIncidentStatus(incidentId, status, expectedStatus);
           showToast(`Incident ${status.toLowerCase()} successfully`, 'success');
           router.refresh();
         } catch (error) {

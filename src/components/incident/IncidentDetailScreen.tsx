@@ -239,7 +239,7 @@ export default async function IncidentDetailScreen({
 
   const handleAddNote = addIncidentDetailNote.bind(null, id);
   const handleAcknowledge = acknowledgeIncidentDetail.bind(null, id);
-  const handleReopen = reopenIncidentDetail.bind(null, id);
+  const handleReopen = reopenIncidentDetail.bind(null, id, incident.status);
   const handleSuppress = suppressIncidentDetail.bind(null, id);
   const handleAddWatcher = addIncidentDetailWatcher.bind(null, id);
   const handleRemoveWatcher = removeIncidentDetailWatcher.bind(null, id);
