@@ -2,11 +2,7 @@ import prisma from '@/lib/prisma';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import {
-  assertCanViewUser,
-  getCurrentAuthorizationActor,
-  getUserPermissions,
-} from '@/lib/rbac';
+import { assertCanViewUser, getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -23,6 +19,7 @@ import UserAvatar from '@/components/UserAvatar';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import UserDetailTabs from '@/components/users/UserDetailTabs';
 import UserProfileHeaderActions from '@/components/users/UserProfileHeaderActions';
+import PersonLoadCard from '@/components/users/PersonLoadCard';
 import { deleteUser, updateUserProfile } from '../actions';
 
 export const revalidate = 0;
@@ -311,6 +308,8 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
           />
         }
       />
+
+      <PersonLoadCard actor={actor} userId={id} />
 
       {/* 4-Tab Full-Width Profile Workspace */}
       <UserDetailTabs user={transformedUser} canManage={canManage} defaultTab={defaultTab} />
