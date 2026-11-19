@@ -24,7 +24,7 @@ import { resolveApiKeyActor } from '@/lib/authorization-actors';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { authorizationDecisionError } from '@/lib/api-authorization-error';
 import { AppError } from '@/lib/errors';
-import { isIntegrationAuthorized } from '@/lib/integrations/auth';
+import { isIntegrationAuthorized, safeEqual } from '@/lib/integrations/auth';
 import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -49,8 +49,7 @@ async function postEvent(req: NextRequest) {
       const key = authHeader.slice('Token token='.length).trim();
       const fingerprint = integrationKeyFingerprint(key);
       // Keys are stored encrypted and found by fingerprint; plaintext-key
-      // lookups only cover legacy rows, and every match is re-verified below
-      // so a leaked ciphertext is never accepted as a credential.
+      // lookups only cover legacy rows, and every match is re-verified below.
       const integration = await measureAdmissionStage('authentication', async () => {
         const candidate = await prisma.integration.findFirst({
           where: {
@@ -62,7 +61,12 @@ async function postEvent(req: NextRequest) {
             ],
           },
         });
-        return candidate &&
+        if (!candidate) return null;
+        // Backward compatibility: integrations that existed before the upgrade keep
+        // accepting the exact stored value the old UI displayed (the encrypted key).
+        const legacyStoredKeyMatch =
+          candidate.legacyStoredKeyAccepted && safeEqual(key, candidate.key);
+        return legacyStoredKeyMatch ||
           (await isIntegrationAuthorized(
             req,
             candidate.key,

@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import type { NextRequest } from 'next/server';
 import { decryptStoredSecret } from '@/lib/encryption';
 
-function safeEqual(a: string, b: string): boolean {
+export function safeEqual(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const aBuf = Buffer.from(a, 'utf8');
   const bBuf = Buffer.from(b, 'utf8');

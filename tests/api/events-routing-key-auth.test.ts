@@ -48,7 +48,7 @@ describe('/api/events routing-key authentication', () => {
     expect(where.OR).toContainEqual({ keyFingerprint: integrationKeyFingerprint(plaintext) });
   });
 
-  it('rejects the stored ciphertext presented as a key', async () => {
+  it('rejects the stored ciphertext presented as a key for keys created after the upgrade', async () => {
     db.integration.findFirst.mockResolvedValue({
       id: 'i1',
       type: 'EVENTS_API_V2',
@@ -56,8 +56,25 @@ describe('/api/events routing-key authentication', () => {
       key: stored,
       previousKey: null,
       previousKeyExpiresAt: null,
+      legacyStoredKeyAccepted: false,
     });
     expect(code(await post(stored))).toContain('INTEGRATION_KEY_INVALID');
+  });
+
+  it('still accepts the encrypted value the old UI displayed for pre-upgrade integrations', async () => {
+    db.integration.findFirst.mockResolvedValue({
+      id: 'i1',
+      type: 'EVENTS_API_V2',
+      enabled: false, // stop right after authentication
+      key: stored,
+      previousKey: null,
+      previousKeyExpiresAt: null,
+      legacyStoredKeyAccepted: true,
+    });
+    expect(code(await post(stored))).toContain('INTEGRATION_DISABLED');
+    expect(db.integration.findFirst.mock.calls[0][0].where.OR).toContainEqual({ key: stored });
+    // Only an exact match of the stored column counts.
+    expect(code(await post(`${stored}0`))).toContain('INTEGRATION_KEY_INVALID');
   });
 
   it('accepts the previous key during the rotation overlap window', async () => {
