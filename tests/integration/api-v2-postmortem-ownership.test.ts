@@ -1,6 +1,7 @@
 import { beforeEach, expect, it } from 'vitest';
 import { POST as CREATE } from '@/app/api/v2/postmortems/route';
 import { DELETE, PATCH } from '@/app/api/v2/postmortems/[id]/route';
+import { PUT as REPLACE_ITEMS } from '@/app/api/v2/postmortems/[id]/action-items/route';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 import {
   createTestIncident,
@@ -44,6 +45,20 @@ it('applies the UI edit and delete ownership rules to API callers', async () => 
   expect((await patch('ownership-patch-denied')).status).toBe(403);
   expect(
     (await invokeV2(DELETE, responder.token, 'DELETE', `/postmortems/${id}`, { id })).status
+  ).toBe(403);
+
+  expect(
+    (
+      await invokeV2(
+        REPLACE_ITEMS,
+        responder.token,
+        'PUT',
+        `/postmortems/${id}/action-items`,
+        { id },
+        { items: [] },
+        { 'If-Match': etag, 'Idempotency-Key': 'ownership-items-denied' }
+      )
+    ).status
   ).toBe(403);
 
   // The incident assignee may edit, but only the author or an admin may delete.
