@@ -822,10 +822,15 @@ export default function NotificationOperations({
 
                         {canRetry && (
                           <TableCell className="text-right py-2.5">
-                            {row.status === 'FAILED' && (
+                            {(row.status === 'FAILED' || row.status === 'UNKNOWN') && (
                               <Button
                                 variant="outline"
                                 size="sm"
+                                title={
+                                  row.status === 'UNKNOWN'
+                                    ? 'Delivery outcome is unconfirmed; requeueing may send a duplicate.'
+                                    : undefined
+                                }
                                 disabled={retryingId === row.id}
                                 onClick={() => void retry(row.id)}
                                 className="h-7 text-xs font-semibold gap-1 border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400"

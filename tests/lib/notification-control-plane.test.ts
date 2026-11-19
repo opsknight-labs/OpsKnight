@@ -13,6 +13,7 @@ import {
   processCentralNotificationQueue,
   reconcileUnknownNotifications,
   resolveNotificationExpiry,
+  requeueCentralNotification,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
 import { reconcileNotificationProviderFeedback } from '@/lib/notification-provider-feedback';
@@ -672,7 +673,13 @@ describe('central notification control plane', () => {
           new Error('receipt index unavailable')
         );
       vi.mocked(prisma.notification.findMany).mockResolvedValue([
-        { id: 'notification_expired' },
+        {
+          id: 'notification_expired',
+          createdAt: new Date(),
+          status: 'PENDING',
+          attempts: 0,
+          maxAttempts: 5,
+        },
       ] as never);
       vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
 
@@ -701,6 +708,32 @@ describe('central notification control plane', () => {
       );
     }
   );
+
+  it('keeps a terminally FAILED outcome when its retained payload expires', async () => {
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        id: 'notification_failed_terminal',
+        createdAt: new Date(),
+        status: 'FAILED',
+        attempts: 5,
+        maxAttempts: 5,
+      },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    await processCentralNotificationQueue();
+
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: expect.arrayContaining(['notification_failed_terminal']) },
+        status: 'FAILED',
+      },
+      data: { payloadEncrypted: null },
+    });
+    expect(prisma.notification.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SKIPPED' }) })
+    );
+  });
 
   it('uses class-specific floors when aging queued notifications', async () => {
     await processCentralNotificationQueue();
@@ -740,6 +773,7 @@ describe('central notification control plane', () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue([
       {
         id: 'notification_unknown_push',
+        createdAt: due,
         channel: 'PUSH',
         attempts: 1,
         providerMessageId: null,
@@ -780,11 +814,72 @@ describe('central notification control plane', () => {
       awaitingCallback: 0,
       unsupported: 1,
     });
+    // Revisited once at expiry (no stored expiry: createdAt + 24h) to settle the row.
     expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ reconciliationDeadline: null }),
+        data: expect.objectContaining({
+          reconciliationDeadline: new Date('2026-09-21T00:00:00.000Z'),
+        }),
       })
     );
+  });
+
+  it('settles an expired UNKNOWN row as FAILED and scrubs its payload', async () => {
+    const due = new Date('2026-09-20T01:00:00.000Z');
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        id: 'notification_unknown_email',
+        createdAt: new Date('2026-09-20T00:00:00.000Z'),
+        expiresAt: new Date('2026-09-20T00:30:00.000Z'),
+        channel: 'EMAIL',
+        attempts: 1,
+        providerMessageId: null,
+        deliveryAttempts: [{ provider: 'smtp' }],
+      },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    await expect(reconcileUnknownNotifications(due)).resolves.toEqual({
+      retried: 0,
+      awaitingCallback: 0,
+      unsupported: 1,
+    });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'notification_unknown_email',
+        status: 'UNKNOWN',
+        reconciliationDeadline: { lte: due },
+      },
+      data: expect.objectContaining({
+        status: 'FAILED',
+        reconciliationDeadline: null,
+        payloadEncrypted: null,
+      }),
+    });
+  });
+
+  it('lets an operator requeue an UNKNOWN notification', async () => {
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({ channel: 'EMAIL' } as never);
+    vi.mocked(prisma.notification.findFirst).mockResolvedValue({
+      attempts: 1,
+      maxAttempts: 5,
+      status: 'UNKNOWN',
+    } as never);
+    const txUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      operation: (tx: unknown) => unknown
+    ) => operation({ notification: { updateMany: txUpdateMany } })) as never);
+
+    await expect(requeueCentralNotification('notification_unknown_email')).resolves.toBe(true);
+    expect(prisma.notification.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ['FAILED', 'UNKNOWN'] } }),
+      })
+    );
+    expect(txUpdateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ status: 'UNKNOWN', attempts: 1 }),
+      data: expect.objectContaining({ status: 'PENDING', reconciliationDeadline: null }),
+    });
   });
 
   it.each([false, true])(

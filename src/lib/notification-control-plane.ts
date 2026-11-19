@@ -1479,7 +1479,7 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
     },
     orderBy: { expiresAt: 'asc' },
     take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
-    select: { id: true },
+    select: { id: true, status: true, attempts: true, maxAttempts: true },
   });
 
   // Pass 2: pre-upgrade rows where expiresAt IS NULL but the row is older than
@@ -1498,11 +1498,27 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
     },
     orderBy: { createdAt: 'asc' },
     take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
-    select: { id: true },
+    select: { id: true, status: true, attempts: true, maxAttempts: true },
   });
 
-  const allExpiredIds = [...expired.map(item => item.id), ...nullExpired.map(item => item.id)];
-  if (allExpiredIds.length === 0) return 0;
+  const rows = [...expired, ...nullExpired];
+  if (rows.length === 0) return 0;
+  // Terminally failed rows keep their FAILED outcome (and error); only the payload,
+  // kept for operator requeue, is scrubbed now that it can no longer be sent.
+  const terminalIds = rows
+    .filter(row => row.status === 'FAILED' && row.attempts >= row.maxAttempts)
+    .map(row => row.id);
+  const terminalSet = new Set(terminalIds);
+  const allExpiredIds = rows.filter(row => !terminalSet.has(row.id)).map(row => row.id);
+  let scrubbed = 0;
+  if (terminalIds.length > 0) {
+    const terminal = await prisma.notification.updateMany({
+      where: { id: { in: terminalIds }, status: 'FAILED' },
+      data: { payloadEncrypted: null },
+    });
+    scrubbed = terminal.count;
+  }
+  if (allExpiredIds.length === 0) return scrubbed;
   const result = await prisma.notification.updateMany({
     where: {
       id: { in: allExpiredIds },
@@ -1515,7 +1531,7 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
       errorMsg: 'Notification expired before delivery.',
     },
   });
-  return result.count;
+  return scrubbed + result.count;
 }
 
 function isAmbiguousDeliveryError(errorText: string): boolean {
@@ -3034,7 +3050,8 @@ async function deliverCentralNotificationOwned(
           errorMsg: errorMessage,
           attempts: candidate.maxAttempts,
           lastAttemptAt: null,
-          ...terminalPayload(candidate.category),
+          // Payload is kept so an operator can requeue after fixing the provider;
+          // cleanupExpiredNotifications scrubs it once the row expires.
         },
       });
       await recordFanoutTerminal(candidate.fanoutId, 'failed');
@@ -3068,7 +3085,6 @@ async function deliverCentralNotificationOwned(
           : new Date(Date.now() + notificationRetryDelayMs(currentDeliveryAttempt)),
         attempts: currentDeliveryAttempt,
         lastAttemptAt: null,
-        ...(exhausted ? terminalPayload(candidate.category) : {}),
       },
     });
     if (failedUpdate.count > 0 && exhausted) {
@@ -3091,7 +3107,6 @@ async function deliverCentralNotificationOwned(
         : new Date(Date.now() + notificationRetryDelayMs(finalAttempts)),
       attempts: finalAttempts,
       lastAttemptAt: null,
-      ...(isExhausted ? terminalPayload(candidate.category) : {}),
     },
   });
   return { success: false, claimed: true, error: lastFailureResult.error };
@@ -3114,6 +3129,7 @@ export async function reconcileUnknownNotifications(
     select: {
       id: true,
       createdAt: true,
+      expiresAt: true,
       channel: true,
       attempts: true,
       providerMessageId: true,
@@ -3128,6 +3144,24 @@ export async function reconcileUnknownNotifications(
   let awaitingCallback = 0;
   let unsupported = 0;
   for (const row of rows) {
+    const expiry =
+      row.expiresAt ?? new Date(row.createdAt.getTime() + NOTIFICATION_FRESHNESS_TTL_MS.BULK);
+    if (expiry <= now) {
+      // Past its freshness window nothing can resend it: settle as FAILED so it is
+      // counted and visible, and scrub the payload (may hold webhook secrets).
+      const updated = await prisma.notification.updateMany({
+        where: { id: row.id, status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
+        data: {
+          status: 'FAILED',
+          failedAt: now,
+          reconciliationDeadline: null,
+          errorMsg: 'Delivery was never confirmed before the notification expired.',
+          payloadEncrypted: null,
+        },
+      });
+      unsupported += updated.count;
+      continue;
+    }
     const capability = deliveryReconciliationCapability(
       row.channel,
       row.deliveryAttempts?.[0]?.provider
@@ -3140,7 +3174,8 @@ export async function reconcileUnknownNotifications(
       const updated = await prisma.notification.updateMany({
         where: { id: row.id, status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
         data: {
-          reconciliationDeadline: null,
+          // Revisit once more at expiry to settle the row; an operator may requeue before then.
+          reconciliationDeadline: expiry,
           errorMsg: 'Provider receipt did not arrive; operator reconciliation is required.',
         },
       });
@@ -3423,10 +3458,11 @@ export async function requeueCentralNotification(
     where: {
       id: notificationId,
       payloadEncrypted: { not: null },
-      status: 'FAILED',
+      // UNKNOWN is requeueable by an operator who accepts the duplicate risk.
+      status: { in: ['FAILED', 'UNKNOWN'] },
       OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
     },
-    select: { attempts: true, maxAttempts: true },
+    select: { attempts: true, maxAttempts: true, status: true },
   });
   if (!notification || notification.attempts >= 20) return false;
   const maxAttempts = Math.min(20, Math.max(notification.maxAttempts, notification.attempts + 1));
@@ -3438,13 +3474,14 @@ export async function requeueCentralNotification(
         where: {
           id: notificationId,
           payloadEncrypted: { not: null },
-          status: 'FAILED',
+          status: notification.status,
           attempts: notification.attempts,
           maxAttempts: notification.maxAttempts,
         },
         data: {
           status: 'PENDING',
           maxAttempts,
+          reconciliationDeadline: null,
           failedAt: null,
           errorMsg: null,
           lastAttemptAt: null,
