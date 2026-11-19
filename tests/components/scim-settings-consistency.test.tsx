@@ -305,3 +305,16 @@ it('pages drift diagnostics and retains a repair team outside the first team pag
   await screen.findByText('Team page 2 · 26 records');
   expect(screen.getByLabelText('Operational team')).toHaveValue('later-team');
 });
+
+it('tells admins to map the email attribute, not userPrincipalName, to userName', async () => {
+  render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+  const setup = screen.getByRole('heading', { name: 'Provider setup' }).parentElement!;
+  const text = setup.textContent ?? '';
+  expect(text).toContain('mail → userName');
+  expect(text).toContain('user.email → userName');
+  expect(text).toContain('userName must equal the work email');
+  // The Entra default (UPN → userName) is only mentioned as something to replace.
+  expect(text).not.toMatch(/Map [^.]*userPrincipalName → userName/);
+  expect(text).toMatch(/Replace the default userPrincipalName → userName mapping/);
+});

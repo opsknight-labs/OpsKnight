@@ -37,6 +37,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { ProviderRecord, ProviderConfigSchema, SaveStatus } from '@/types/notification-types';
+import type { UpdateNotificationProviderResult } from '@/app/(app)/settings/system/provider-actions';
 import { notify as toast } from '@/lib/toast';
 import { getProviderBrandLogo } from '@/components/settings/ProviderBrandLogos';
 import ProviderCapacitySettings from '@/components/settings/ProviderCapacitySettings';
@@ -162,24 +163,27 @@ export default function ProviderCard({
     e.preventDefault();
     if (!isDirty) return;
 
+    if (enabled) {
+      const missingField = providerConfig.fields.find(field => {
+        if (!field.required) return false;
+        const value = config[field.name];
+        return !value || String(value).trim() === '';
+      });
+      if (missingField) {
+        setError(`${missingField.label} is required`);
+        setSaveStatus('error');
+        return;
+      }
+    }
+
     setIsSaving(true);
     setSaveStatus('idle');
     setError(null);
 
     try {
-      if (enabled) {
-        const requiredFields = providerConfig.fields.filter(f => f.required);
-        for (const field of requiredFields) {
-          const value = config[field.name];
-          if (!value || String(value).trim() === '') {
-            throw new Error(`${field.label} is required`);
-          }
-        }
-      }
-
       const { updateNotificationProvider } =
         await import('@/app/(app)/settings/system/provider-actions');
-      let result: { success: true; updatedAt: string };
+      let result: UpdateNotificationProviderResult;
 
       if (providerConfig.key === 'whatsapp') {
         if (!twilioProvider) {
@@ -235,6 +239,14 @@ export default function ProviderCard({
         );
       }
 
+      // Server actions return failures: a thrown server-action error reaches
+      // the browser only as a redacted "Minified React error #441".
+      if (!result.success) {
+        setError(result.error);
+        setSaveStatus('error');
+        return;
+      }
+
       setSavedEnabled(enabled);
       setSavedConfig(config);
       setSavedRevision(result.updatedAt);
@@ -245,8 +257,10 @@ export default function ProviderCard({
       });
       setSaveStatus('idle');
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save configuration');
+    } catch {
+      // Network failure or an unexpected action crash. Its message is not safe
+      // or useful to show (production redacts it), so keep the generic text.
+      setError('Failed to save configuration. Please try again.');
       setSaveStatus('error');
     } finally {
       setIsSaving(false);
@@ -296,6 +310,10 @@ export default function ProviderCard({
         keepPrevious: true,
         expectedUpdatedAt: savedRevision,
       });
+      if (!result.success) {
+        setGenerateError(result.error);
+        return;
+      }
 
       const nextConfig = {
         ...config,
@@ -314,10 +332,8 @@ export default function ProviderCard({
           : 'VAPID keys generated and saved.'
       );
       router.refresh();
-    } catch (err) {
-      setGenerateError(
-        err instanceof Error ? err.message : 'Failed to generate VAPID keys. Please try again.'
-      );
+    } catch {
+      setGenerateError('Failed to generate VAPID keys. Please try again.');
     } finally {
       setIsGenerating(false);
     }

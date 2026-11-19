@@ -12,6 +12,8 @@ import {
   groupSchema,
   parse,
   enterpriseSchema,
+  ScimFailure,
+  USERNAME_EMAIL_MISMATCH,
 } from '@/lib/scim/protocol/validation';
 
 const user = {
@@ -62,6 +64,33 @@ describe('bounded SCIM protocol and ordered PATCH', () => {
         )
       )
     ).toMatchObject({ userName: 'new@example.test', active: false });
+  });
+  it('names the attributes when the work email differs from userName (Entra UPN ≠ mail)', () => {
+    const create = {
+      ...user,
+      userName: 'alice.upn@corp.example.test',
+      emails: [{ value: 'alice@example.test', type: 'work', primary: true }],
+    };
+    let failure: unknown;
+    try {
+      parse(userSchema, create);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(ScimFailure);
+    expect(failure).toMatchObject({ status: 400, scimType: 'invalidValue' });
+    const detail = (failure as ScimFailure).message;
+    expect(detail).toBe(`emails: ${USERNAME_EMAIL_MISMATCH}`);
+    expect(detail).toContain('emails[type eq "work"].value');
+    expect(detail).toContain('userName');
+    expect(detail).toContain('Entra: mail');
+    expect(detail).toContain('Okta: user.email');
+    // The IdP error must not echo either submitted address.
+    expect(detail).not.toContain('alice');
+    // A matching work email (case-insensitive) is still accepted.
+    expect(parse(userSchema, { ...create, userName: 'Alice@Example.test' }).userName).toBe(
+      'alice@example.test'
+    );
   });
   it('updates structured names and enterprise department', () => {
     expect(

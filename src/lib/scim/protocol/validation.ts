@@ -13,6 +13,9 @@ export class ScimFailure extends Error {
 export const enterpriseSchema = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
 export const patchSchema = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
 export const identifier = z.string().trim().min(1).max(320);
+/** Returned to the IdP when userName and the work email differ (e.g. Entra UPN ≠ mail). */
+export const USERNAME_EMAIL_MISMATCH =
+  'The work email (emails[type eq "work"].value) must equal userName. Map the same directory email attribute to both (Entra: mail; Okta: user.email).';
 export const memberSchema = z
   .object({
     value: identifier,
@@ -95,8 +98,14 @@ export const userSchema = z
   })
   .strict()
   .superRefine((user, ctx) => {
+    // OpsKnight stores one email that is both the login name and the work email, so the two
+    // attributes must agree. Name the attributes (never the values) so IdP logs are actionable.
     if (user.emails?.[0] && user.emails[0].value.toLowerCase() !== user.userName)
-      ctx.addIssue({ code: 'custom', message: 'The work email must match userName.' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['emails'],
+        message: USERNAME_EMAIL_MISMATCH,
+      });
   });
 
 /** Structural attribute names are case-insensitive; reject ambiguous duplicates. */

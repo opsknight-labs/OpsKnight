@@ -19,7 +19,7 @@ keywords:
   ]
 verification:
   level: source
-  verified_at: 2026-10-23
+  verified_at: 2026-11-19
   evidence:
     - src/lib/scim.ts
     - src/app/api/scim/v2/Users/route.ts
@@ -36,6 +36,9 @@ verification:
     - src/app/(app)/settings/system/scim-actions.ts
     - src/lib/scim/lifecycle/users.ts
     - src/lib/scim/lifecycle/membership.ts
+    - src/lib/scim/lifecycle/groups.ts
+    - src/lib/scim/protocol/validation.ts
+    - src/lib/oidc/role-mapping.ts
     - src/lib/microsoft-teams/identity.ts
 ---
 
@@ -54,6 +57,20 @@ SCIM manages directory identities independently from SSO. OIDC controls sign-in 
 its explicit role mapping; SCIM profile changes never change system roles or role
 ownership. Dedicated emergency accounts and credentials are separate database
 principals and cannot be targeted through SCIM Users.
+
+SCIM provisions both **Users** (`/Users`) and **Groups** (`/Groups`). A SCIM group is a
+directory group stored on its connection. It does not create an OpsKnight team and
+grants nothing on its own. After an administrator approves a binding to an existing
+team, the group's members join that team as **Member**; leaving the group removes only
+the memberships that binding created. One group can be bound to several teams, and a
+team can have several bound groups.
+
+SCIM cannot assign roles. The User and Group schemas have no role or entitlement
+attributes, and requests that send them are rejected. Groups never grant a system role
+or a team Owner or Admin role. New SCIM users start with the **User** role under
+administrator authority. A role rule moves the role under SSO control at the account's
+first SSO sign-in; otherwise an administrator sets it. See
+[map groups to roles and teams](./map-roles-and-teams/).
 
 ## Prerequisites
 
@@ -131,19 +148,29 @@ Configure an immutable directory object identifier as `externalId` on creation.
 RFC 7643 makes this attribute optional, but the OpsKnight connector contract
 requires it to prevent unsafe identity adoption and ambiguous retries.
 
-Map the login email to `userName`. The single supported work email must equal
-`userName`. Map `displayName`, `name.formatted`, `name.givenName`,
+Map the user's email address to `userName`. OpsKnight stores one email that is
+both the login name and the work email, so the work email
+(`emails[type eq "work"].value`), when sent, must equal `userName`. A mismatch is
+rejected with HTTP 400 `invalidValue`; the error detail states that the work
+email must equal `userName`. This is intentional: the same email drives
+`userName eq` lookups and the existing-account check that requires explicit
+administrator binding. Map `displayName`, `name.formatted`, `name.givenName`,
 `name.familyName`, `active`, `title`, and the enterprise-user extension
 `department` as needed. Profile images accept HTTP(S) URLs. Unmapped attributes,
 privilege changes and unsupported PATCH paths fail with SCIM errors.
 
 For Entra, use Enterprise applications → Provisioning → Automatic. Enter the Tenant
-URL and one-time Secret Token. Map `objectId` to `externalId` and the intended login
-email to `userName`. Enable group provisioning only after reviewing the directory
+URL and one-time Secret Token. Map `objectId` to `externalId`. Change the default
+`userPrincipalName` → `userName` mapping to `mail` → `userName`, and keep `mail` →
+`emails[type eq "work"].value`. Keep `userPrincipalName` only if every user's UPN
+equals their `mail` address; otherwise users whose UPN differs fail to provision.
+Enable group provisioning only after reviewing the directory
 to operational-team boundary.
 
 For Okta, configure SCIM Integration with HTTP Header bearer authentication and
-`userName` lookup. Map an immutable directory identifier to `externalId`; enable
+`userName` lookup. Set the application username format to Email so `userName`
+is `user.email`, the same value Okta sends as the work email. Map an immutable
+directory identifier to `externalId`; enable
 create, update and deactivate. Push Groups creates directory groups. Team bindings
 require separate approval.
 
@@ -208,7 +235,9 @@ Users support create, read, PUT, ordered atomic PATCH, disable/reactivate and sa
 DELETE. Equality filters support `externalId` and `userName`. Groups support
 create, read, rename, PUT, ordered atomic PATCH and grant-revocation-on-DELETE. Equality
 filters support `displayName`, `externalId` and `id`. Group queries honor
-`excludedAttributes=members` without loading member collections.
+`excludedAttributes=members` without loading member collections. Group members must be
+users already provisioned through the same connection. `PUT`, `PATCH` and `DELETE` on
+the `/Users` or `/Groups` collection return `405`; use the resource URL.
 
 `startIndex` is a positive integer; `count` is a nonnegative integer capped at 100. `count=0` returns only the result count. Ordering is deterministic. Requests
 are capped at 1 MiB, 100 PATCH operations and 10,000 members per group mutation.

@@ -25,6 +25,50 @@ export function getProviderSensitiveFields(provider: string): string[] {
   return Object.entries(SENSITIVE_FIELDS).find(([name]) => name === provider)?.[1] ?? [];
 }
 
+function presenceFlagFor(field: string): string {
+  return `has${field.charAt(0).toUpperCase()}${field.slice(1)}`;
+}
+
+function isMaskedVapidHistory(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      entry =>
+        Boolean(entry) &&
+        typeof entry === 'object' &&
+        'hasPrivateKey' in entry &&
+        !('privateKey' in entry)
+    )
+  );
+}
+
+/**
+ * Inverse of the read-only markers added by `maskSensitiveFields`.
+ *
+ * The settings form edits the masked view and sends it back on save, so the
+ * payload carries `has<SecretField>: true` flags (and, for Web Push, masked key
+ * history). The strict provider schemas rightly reject unknown keys, which made
+ * every provider impossible to re-save after its first save.
+ *
+ * Only exact `has<SensitiveField>` booleans for this provider are removed, so
+ * any other unexpected key still reaches the strict schema and is rejected.
+ * Masked Web Push history is dropped because key history is server-managed
+ * rotation material; `mergeSensitiveProviderFields` restores the stored value.
+ */
+export function stripMaskedPresenceFlags(provider: string, config: unknown): unknown {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return config;
+  const flags = new Set(getProviderSensitiveFields(provider).map(presenceFlagFor));
+  const stripped = Object.fromEntries(
+    Object.entries(config as Record<string, unknown>).filter(
+      ([key, value]) => !(flags.has(key) && typeof value === 'boolean')
+    )
+  );
+  if (provider === 'web-push' && isMaskedVapidHistory(stripped.vapidKeyHistory)) {
+    delete stripped.vapidKeyHistory;
+  }
+  return stripped;
+}
+
 /**
  * Marker prefix for encrypted values
  */
@@ -278,7 +322,7 @@ export function maskSensitiveFields(
       }
       return [
         [field, SECRET_MASK],
-        [`has${field.charAt(0).toUpperCase()}${field.slice(1)}`, true],
+        [presenceFlagFor(field), true],
       ];
     })
   );

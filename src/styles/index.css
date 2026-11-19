@@ -156,6 +156,17 @@
 @layer base {
    .ok-inverse-surface {
       color-scheme: dark;
+      /* Pair every local foreground with a dark surface. Partial overrides
+         mix light page backgrounds with light text in sidebar/header controls. */
+      --ui-background: 240 10% 3.9%;
+      --ui-card: 240 5.9% 7.5%;
+      --ui-popover: 240 5.9% 7.5%;
+      --ui-popover-foreground: 210 40% 98%;
+      --ui-secondary: 240 3.7% 15.9%;
+      --ui-secondary-foreground: 210 40% 98%;
+      --ui-accent: 240 3.7% 15.9%;
+      --ui-accent-foreground: 210 40% 98%;
+      --ui-input: 240 3.7% 20%;
       --ui-foreground: 210 40% 98%;
       --ui-card-foreground: 210 40% 98%;
       /* Same primary pair as the light theme, so filled buttons keep their

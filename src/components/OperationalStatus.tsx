@@ -102,7 +102,7 @@ export default function OperationalStatus({
       text: 'text-ink-400',
       dot: 'bg-slate-500',
       dotBg: 'bg-slate-500',
-      icon: <MinusCircle className="h-4 w-4 text-ink-400" />,
+      icon: <MinusCircle className="h-4 w-4 text-ink-600" />,
       title: 'No operational scope',
       desc: 'Operational health is unavailable until resources are in your scope.',
     },
@@ -122,7 +122,7 @@ export default function OperationalStatus({
       text: 'text-amber-400',
       dot: 'bg-amber-500',
       dotBg: 'bg-amber-500',
-      icon: <AlertCircle className="h-4 w-4 text-amber-500 dark:text-amber-400" />,
+      icon: <AlertCircle className="h-4 w-4 text-amber-700 dark:text-amber-400" />,
       title: 'Yellow Alert',
       desc: 'Non-critical issues reported. Monitoring medium and low urgency alerts.',
     },
@@ -132,7 +132,7 @@ export default function OperationalStatus({
       text: 'text-emerald-400',
       dot: 'bg-emerald-500',
       dotBg: 'bg-emerald-500',
-      icon: <ShieldCheck className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />,
+      icon: <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />,
       title: 'Green Corridor',
       desc: 'All systems fully operational. No active anomalies.',
     },
@@ -228,7 +228,7 @@ export default function OperationalStatus({
         sideOffset={8}
         align="start"
         className={cn(
-          'w-72 p-4 border border-border dark:border-zinc-800 shadow-xl bg-popover dark:bg-[#121216] text-popover-foreground dark:text-zinc-100 z-[1050] rounded-xl'
+          'w-72 max-w-[calc(100vw-2rem)] p-4 border border-border shadow-xl bg-popover text-popover-foreground z-[1050] rounded-xl'
         )}
       >
         <div className="flex items-center gap-2.5 mb-3">
@@ -238,32 +238,28 @@ export default function OperationalStatus({
             {currentTheme.icon}
           </div>
           <div>
-            <div className="text-xs font-bold text-foreground dark:text-zinc-100">
-              {currentTheme.title}
-            </div>
+            <div className="text-xs font-bold text-foreground">{currentTheme.title}</div>
             <div className="text-[11px] text-muted-foreground leading-tight">
               {currentTheme.desc}
             </div>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className="rounded-lg border border-border/80 dark:border-zinc-800 bg-muted/40 dark:bg-zinc-900/60 p-2 text-center">
+          <div className="rounded-lg border border-border/80 bg-muted/60 p-2 text-center">
             <div className="text-[10px] uppercase font-semibold text-muted-foreground">High</div>
-            <div className="text-sm font-bold tabular-nums text-rose-600 dark:text-rose-400">
+            <div className="text-sm font-bold tabular-nums text-rose-700 dark:text-rose-400">
               {critical}
             </div>
           </div>
-          <div className="rounded-lg border border-border/80 dark:border-zinc-800 bg-muted/40 dark:bg-zinc-900/60 p-2 text-center">
+          <div className="rounded-lg border border-border/80 bg-muted/60 p-2 text-center">
             <div className="text-[10px] uppercase font-semibold text-muted-foreground">Medium</div>
-            <div className="text-sm font-bold tabular-nums text-amber-600 dark:text-amber-400">
+            <div className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-400">
               {medium}
             </div>
           </div>
-          <div className="rounded-lg border border-border/80 dark:border-zinc-800 bg-muted/40 dark:bg-zinc-900/60 p-2 text-center">
+          <div className="rounded-lg border border-border/80 bg-muted/60 p-2 text-center">
             <div className="text-[10px] uppercase font-semibold text-muted-foreground">Low</div>
-            <div className="text-sm font-bold tabular-nums text-foreground dark:text-zinc-200">
-              {low}
-            </div>
+            <div className="text-sm font-bold tabular-nums text-foreground">{low}</div>
           </div>
         </div>
         <div className="mt-2.5 text-[10px] text-muted-foreground">
@@ -271,15 +267,13 @@ export default function OperationalStatus({
         </div>
         <Link
           href="/incidents"
-          className="mt-3 group/btn flex items-center justify-between w-full p-2 rounded-lg bg-muted/30 dark:bg-zinc-900/40 hover:bg-muted/70 dark:hover:bg-zinc-800/60 transition-all border border-border/60 dark:border-zinc-800/80"
+          className="mt-3 group/btn flex items-center justify-between w-full p-2 rounded-lg bg-muted/50 hover:bg-muted transition-all border border-border/60"
         >
           <div className="flex items-center gap-2 min-w-0">
             <Info className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="text-xs font-medium text-foreground dark:text-zinc-200 truncate">
-              {detail}
-            </span>
+            <span className="text-xs font-medium text-foreground truncate">{detail}</span>
           </div>
-          <div className="flex items-center justify-center h-5 w-5 rounded bg-background dark:bg-zinc-800 shadow-2xs border border-border/60 dark:border-zinc-700 shrink-0">
+          <div className="flex items-center justify-center h-5 w-5 rounded bg-background shadow-2xs border border-border/60 shrink-0">
             <ArrowRight className="h-3 w-3 text-muted-foreground group-hover/btn:text-foreground group-hover/btn:translate-x-0.5 transition-all" />
           </div>
         </Link>
