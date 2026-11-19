@@ -9,6 +9,37 @@ import {
 } from './validation';
 
 export type UserDocument = ReturnType<typeof userSchema.parse>;
+// Standard core/enterprise User attributes OpsKnight does not store. Okta and Entra map
+// them by default, so PATCHes touching them are accepted as no-ops instead of failing the
+// whole operation. Authority attributes (roles, entitlements, groups, password) stay rejected.
+const IGNORED_USER_ATTRIBUTES = new Set([
+  'nickname',
+  'profileurl',
+  'usertype',
+  'preferredlanguage',
+  'locale',
+  'timezone',
+  'phonenumbers',
+  'ims',
+  'addresses',
+  'x509certificates',
+  'name.middlename',
+  'name.honorificprefix',
+  'name.honorificsuffix',
+  'employeenumber',
+  'costcenter',
+  'organization',
+  'division',
+  'manager',
+]);
+function ignoredUserAttribute(path: string): boolean {
+  let key = path.toLowerCase();
+  const enterprisePrefix = `${enterpriseSchema.toLowerCase()}:`;
+  if (key.startsWith(enterprisePrefix)) key = key.slice(enterprisePrefix.length);
+  const root = key.split(/[[.]/, 1)[0];
+  // root covers sub-paths such as manager.value or phoneNumbers[type eq "work"].value
+  return IGNORED_USER_ATTRIBUTES.has(key) || IGNORED_USER_ATTRIBUTES.has(root);
+}
 export function patchUser(existing: UserDocument, body: unknown) {
   const document: Record<string, unknown> = structuredClone(existing);
   const apply = (path: string, value: unknown, remove: boolean) => {
@@ -86,6 +117,7 @@ export function patchUser(existing: UserDocument, body: unknown) {
       document[enterpriseSchema] = { department: remove ? null : value };
       return;
     }
+    if (ignoredUserAttribute(path)) return;
     throw new ScimFailure(400, `Unsupported User path: ${path}.`, 'invalidPath');
   };
   for (const operation of operations(body)) {

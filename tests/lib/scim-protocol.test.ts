@@ -219,3 +219,61 @@ describe('provider fixtures and attribute ownership', () => {
       expect(() => equalityFilter(filter, ['externalid'])).toThrow();
   });
 });
+
+describe('IdP default attribute mappings', () => {
+  const user = { userName: 'alice@example.test', active: true };
+  const patch = (...Operations: unknown[]) => ({
+    schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+    Operations,
+  });
+
+  it('accepts an Okta create body with password, locale and groups, keeping only stored fields', () => {
+    const parsed = parse(
+      userSchema,
+      normalizeAttributes({
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+        userName: 'Alice@Example.test',
+        name: { givenName: 'Alice', familyName: 'Ng', middleName: 'Q' },
+        emails: [{ primary: true, value: 'alice@example.test', type: 'work', display: 'x' }],
+        displayName: 'Alice Ng',
+        locale: 'en-US',
+        externalId: '00u1',
+        groups: [],
+        password: 'secret-from-okta',
+        active: true,
+      })
+    ) as Record<string, unknown>;
+    expect(parsed).toMatchObject({ userName: 'alice@example.test', externalId: '00u1' });
+    expect(parsed.password).toBeUndefined();
+    expect(parsed.locale).toBeUndefined();
+    expect(parsed.name).toEqual({ givenName: 'Alice', familyName: 'Ng' });
+  });
+
+  it('accepts Entra default attributes on create and PATCH as no-ops', () => {
+    const parsed = parse(
+      userSchema,
+      normalizeAttributes({
+        userName: 'alice@example.test',
+        active: true,
+        preferredLanguage: 'en-US',
+        phoneNumbers: [{ type: 'work', value: '1' }],
+        addresses: [{ type: 'work', formatted: 'x' }],
+        [enterpriseSchema]: { department: 'SRE', employeeNumber: '7', manager: { value: 'm' } },
+      })
+    );
+    expect(parsed[enterpriseSchema]).toEqual({ department: 'SRE' });
+
+    const result = patchUser(
+      user,
+      patch(
+        { op: 'replace', path: 'preferredLanguage', value: 'en-US' },
+        { op: 'add', path: 'phoneNumbers[type eq "work"].value', value: '1' },
+        { op: 'add', path: 'addresses[type eq "work"].formatted', value: 'x' },
+        { op: 'replace', path: `${enterpriseSchema}:employeeNumber`, value: '7' },
+        { op: 'replace', path: `${enterpriseSchema}:manager`, value: 'm' },
+        { op: 'replace', path: 'displayName', value: 'Alice' }
+      )
+    );
+    expect(result).toEqual({ ...user, displayName: 'Alice' });
+  });
+});
