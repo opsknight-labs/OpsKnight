@@ -470,6 +470,17 @@ async function runOnce() {
       logger.warn('[Cron] Maintenance window sweep failed', { error });
     }
 
+    // Flapping holds: release incidents whose alert stopped oscillating so they page.
+    try {
+      const { releaseStableFlappingHolds } = await import('./flapping');
+      const releasedFlapping = await releaseStableFlappingHolds();
+      if (releasedFlapping > 0) {
+        logger.info('[Cron] Flapping holds released', { released: releasedFlapping });
+      }
+    } catch (error) {
+      logger.warn('[Cron] Flapping hold sweep failed', { error });
+    }
+
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
     const ownership = getSchedulerOwnership(schedulerProfile);
     const jobResult = ownership.backgroundJobs

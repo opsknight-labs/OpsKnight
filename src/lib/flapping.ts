@@ -1,6 +1,9 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { logger } from './logger';
+import { runReadCommittedTransaction } from './db-utils';
+import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
+import { lockEventDedupKeys } from './incidents/event-identity';
 
 export interface FlappingConfig {
   /** Sliding window in seconds to count state transitions (default: 180s = 3 min) */
@@ -91,4 +94,70 @@ export async function checkAlertFlapping(
     // On error, assume not flapping to avoid suppressing genuine incidents
     return { isFlapping: false, transitionCount: 0 };
   }
+}
+
+const FLAPPING_HOLD_REASON = 'flapping-suppression';
+
+/**
+ * Releases incidents held SUPPRESSED by flapping detection once the alert has
+ * stopped oscillating. Without this a flap followed by a hard-down stays held
+ * forever: later triggers dedup into the SUPPRESSED incident and page nobody.
+ * A resolve still resolves the held incident directly through ingestion.
+ */
+export async function releaseStableFlappingHolds(
+  config: FlappingConfig = DEFAULT_CONFIG,
+  limit = 100
+): Promise<number> {
+  const heldSince = new Date(Date.now() - config.windowSeconds * 1000);
+  const held = await prisma.incident.findMany({
+    where: {
+      status: 'SUPPRESSED',
+      maintenanceWindowId: null,
+      dedupKey: { not: null },
+      slaPauses: {
+        some: { endedAt: null, reason: FLAPPING_HOLD_REASON, startedAt: { lte: heldSince } },
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+    take: limit,
+    select: { id: true, serviceId: true, dedupKey: true },
+  });
+
+  let released = 0;
+  for (const incident of held) {
+    const dedupKey = incident.dedupKey!;
+    try {
+      const changed = await runReadCommittedTransaction(async tx => {
+        // Serialize with ingestion for this identity, then re-check under the lock.
+        await lockEventDedupKeys(tx, incident.serviceId, [dedupKey]);
+        const hold = await tx.incidentSlaPause.findFirst({
+          where: { incidentId: incident.id, endedAt: null, reason: FLAPPING_HOLD_REASON },
+          select: { id: true },
+        });
+        const current = await tx.incident.findUnique({
+          where: { id: incident.id },
+          select: { status: true, maintenanceWindowId: true },
+        });
+        if (!hold || current?.status !== 'SUPPRESSED' || current.maintenanceWindowId) return false;
+        if ((await checkAlertFlapping(dedupKey, incident.serviceId, config, tx)).isFlapping) {
+          return false;
+        }
+        const result = await applyIncidentLifecycleCommand(tx, {
+          incidentId: incident.id,
+          command: 'UNSUPPRESS',
+          source: 'SYSTEM',
+          expectedStatus: 'SUPPRESSED',
+          eventMessage: 'Alert stopped flapping while still firing; incident released for paging.',
+        });
+        return result.changed;
+      });
+      if (changed) released += 1;
+    } catch (error) {
+      logger.error('[Flapping] Failed to release flapping hold', {
+        incidentId: incident.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return released;
 }
