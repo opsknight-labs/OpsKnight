@@ -513,7 +513,15 @@ async function notifyBreachWarning(
     }
   }
 
-  return materialized && durableIntentCount > 0;
+  if (durableIntentCount === 0) {
+    logger.debug('[SLA Breach Monitor] No deliverable SLA channel configured', {
+      incidentId: warning.incidentId,
+      serviceId: warning.serviceId,
+    });
+  }
+  // With no deliverable channel there is nothing to retry: record the transition anyway so the
+  // timeline shows it and the next tick neither re-detects it nor keeps a stale scheduling hint.
+  return materialized;
 }
 
 /**
