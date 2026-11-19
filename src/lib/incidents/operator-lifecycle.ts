@@ -32,8 +32,10 @@ async function auditOperatorChange(
   result: IncidentLifecycleResult,
   user: { id: string; name?: string | null; email?: string | null }
 ): Promise<void> {
+  // Past tense, matching the REST routes' incident.acknowledged / incident.resolved.
+  const command = (result.command ?? 'status_change').toLowerCase();
   await emitAuditEvent({
-    action: `incident.${(result.command ?? 'status').toLowerCase()}`,
+    action: `incident.${command}${command.endsWith('e') ? 'd' : 'ed'}`,
     source: 'UI',
     target: { type: 'INCIDENT', id: result.incidentId },
     actor: { type: 'USER', id: user.id, name: user.name ?? null, email: user.email ?? null },

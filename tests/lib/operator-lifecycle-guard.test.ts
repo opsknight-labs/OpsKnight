@@ -58,7 +58,7 @@ describe('operator-lifecycle resolution guard', () => {
     );
     expect(emitAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: 'incident.acknowledge',
+        action: 'incident.acknowledged',
         target: { type: 'INCIDENT', id: 'inc-1' },
         actor: expect.objectContaining({ type: 'USER', id: 'user-1' }),
       })
