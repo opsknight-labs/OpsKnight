@@ -293,6 +293,15 @@ describe('IncidentsListTable realtime projection', () => {
     expect(matchesRealtimeFilter(raw('OPEN'), { status: 'ACKNOWLEDGED' })).toBe(false);
   });
 
+  it('keeps maintenance-held incidents out of the default view only', () => {
+    const held = { ...existing, status: 'SUPPRESSED', maintenanceWindowId: 'mw1' };
+    expect(matchesRealtimeFilter(held, { filter: 'all' })).toBe(false);
+    expect(matchesRealtimeFilter(held, { filter: 'suppressed' })).toBe(true);
+    expect(matchesRealtimeFilter({ ...held, maintenanceWindowId: null }, { filter: 'all' })).toBe(
+      true
+    );
+  });
+
   it('admits incidents created after page load when no explicit upper bound is set', () => {
     const later = { ...existing, createdAt: new Date(Date.now() + 60_000) } as Record<
       string,

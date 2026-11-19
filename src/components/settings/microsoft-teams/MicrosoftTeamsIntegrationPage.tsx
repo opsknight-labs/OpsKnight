@@ -259,7 +259,7 @@ export default function MicrosoftTeamsIntegrationPage({
         warRoomCleanupPending > 0 ? (
           <Badge
             variant="outline"
-            className="border-amber-300 text-amber-700 bg-amber-50 text-[10px]"
+            className="border-amber-300 text-amber-700 bg-amber-50 text-[10px] dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
           >
             {warRoomCleanupPending} pending
           </Badge>
@@ -274,10 +274,10 @@ export default function MicrosoftTeamsIntegrationPage({
           variant="outline"
           className={`text-[10px] ${
             integrationReadiness === 'HEALTHY'
-              ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+              ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
               : integrationReadiness === 'UNKNOWN'
-                ? 'border-blue-300 text-blue-700 bg-blue-50'
-                : 'border-amber-300 text-amber-700 bg-amber-50'
+                ? 'border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-500/30 dark:text-blue-300 dark:bg-blue-500/10'
+                : 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
           }`}
         >
           {integrationReadiness}
@@ -534,13 +534,13 @@ export default function MicrosoftTeamsIntegrationPage({
         <DetailTabContent value="war-rooms" className="space-y-4">
           {warRoomDiagnosticsError ? (
             <div
-              className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+              className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
               role="alert"
             >
               <div className="font-semibold flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" /> War-room diagnostics unavailable
               </div>
-              <div className="mt-1 text-xs text-amber-800">
+              <div className="mt-1 text-xs text-amber-800 dark:text-amber-300">
                 Operational evidence could not be loaded — health is reported as UNKNOWN.{' '}
                 {warRoomDiagnosticsError}
               </div>
@@ -567,10 +567,10 @@ export default function MicrosoftTeamsIntegrationPage({
                   variant="outline"
                   className={`text-[10px] font-semibold ${
                     integrationReadiness === 'HEALTHY'
-                      ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+                      ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
                       : integrationReadiness === 'UNKNOWN'
-                        ? 'border-blue-300 text-blue-700 bg-blue-50'
-                        : 'border-amber-300 text-amber-700 bg-amber-50'
+                        ? 'border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-500/30 dark:text-blue-300 dark:bg-blue-500/10'
+                        : 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
                   }`}
                 >
                   {integrationReadiness}
@@ -580,10 +580,10 @@ export default function MicrosoftTeamsIntegrationPage({
                   variant="outline"
                   className={`text-[10px] font-semibold ${
                     operationalFleetHealth === 'HEALTHY'
-                      ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+                      ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
                       : operationalFleetHealth === 'DRIFTED'
-                        ? 'border-violet-300 text-violet-700 bg-violet-50'
-                        : 'border-amber-300 text-amber-700 bg-amber-50'
+                        ? 'border-violet-300 text-violet-700 bg-violet-50 dark:border-violet-500/30 dark:text-violet-300 dark:bg-violet-500/10'
+                        : 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
                   }`}
                 >
                   {operationalFleetHealth}
@@ -712,8 +712,8 @@ export default function MicrosoftTeamsIntegrationPage({
                         variant="outline"
                         className={
                           healthyInst
-                            ? 'border-emerald-300 text-emerald-700 bg-emerald-50 text-[10px]'
-                            : 'border-amber-300 text-amber-700 bg-amber-50 text-[10px]'
+                            ? 'border-emerald-300 text-emerald-700 bg-emerald-50 text-[10px] dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
+                            : 'border-amber-300 text-amber-700 bg-amber-50 text-[10px] dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
                         }
                       >
                         {healthyInst ? 'Healthy' : row.unknown ? 'Unknown' : 'Consent required'}

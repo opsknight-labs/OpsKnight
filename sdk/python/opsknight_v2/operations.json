@@ -591,6 +591,94 @@
     "requiredHeaders": ["Idempotency-Key"],
     "bodyRequired": true
   },
+  "listMaintenanceWindows": {
+    "method": "GET",
+    "path": "/maintenance-windows",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createMaintenanceWindow": {
+    "method": "POST",
+    "path": "/maintenance-windows",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": true
+  },
+  "getMaintenanceWindow": {
+    "method": "GET",
+    "path": "/maintenance-windows/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateMaintenanceWindow": {
+    "method": "PATCH",
+    "path": "/maintenance-windows/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key", "If-Match"],
+    "bodyRequired": true
+  },
+  "deleteMaintenanceWindow": {
+    "method": "DELETE",
+    "path": "/maintenance-windows/{id}",
+    "kind": "none",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "endMaintenanceWindow": {
+    "method": "POST",
+    "path": "/maintenance-windows/{id}/end",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listMaintenanceSchedules": {
+    "method": "GET",
+    "path": "/maintenance-schedules",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createMaintenanceSchedule": {
+    "method": "POST",
+    "path": "/maintenance-schedules",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": true
+  },
+  "getMaintenanceSchedule": {
+    "method": "GET",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateMaintenanceSchedule": {
+    "method": "PATCH",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key", "If-Match"],
+    "bodyRequired": true
+  },
+  "deleteMaintenanceSchedule": {
+    "method": "DELETE",
+    "path": "/maintenance-schedules/{id}",
+    "kind": "none",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getServiceObjectiveCatalog": {
     "method": "GET",
     "path": "/service-objectives/catalog",
@@ -2022,6 +2110,14 @@
     "idempotency": "supported",
     "requiredHeaders": [],
     "bodyRequired": true
+  },
+  "listActionItems": {
+    "method": "GET",
+    "path": "/action-items",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "getMetricsReport": {
     "method": "GET",

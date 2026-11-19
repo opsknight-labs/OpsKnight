@@ -8,8 +8,10 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { SlidersHorizontal, Asterisk, Columns, Database } from 'lucide-react';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function CustomFieldsPage() {
+  await requirePageAccess('/settings/custom-fields');
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
     redirect('/login');

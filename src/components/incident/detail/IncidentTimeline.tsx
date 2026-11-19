@@ -171,6 +171,8 @@ export type Event = {
   message: string;
   type?: string | null;
   createdAt: Date;
+  /** "mcp:<clientId>" when an AI assistant made the change. */
+  channel?: string | null;
 };
 
 export type Note = {
@@ -215,6 +217,7 @@ type TimelineRow = {
   createdAt: Date;
   type: string;
   sortPriority: number;
+  channel?: string | null;
   intelligence?: IntelligenceTimelineEvent;
 };
 
@@ -963,6 +966,16 @@ export default function IncidentTimeline({
                         {event.type}
                       </Badge>
                     )}
+                    {event.channel?.startsWith('mcp:') && (
+                      <Badge
+                        variant="outline"
+                        size="xs"
+                        className="h-5 text-[10px]"
+                        title="Made through an AI assistant on this person's behalf"
+                      >
+                        AI assistant
+                      </Badge>
+                    )}
                   </div>
                   <span className="text-[11px] text-muted-foreground font-mono tabular-nums">
                     {formatDateTime(event.createdAt, userTimeZone, { format: 'datetime' })}
@@ -972,10 +985,10 @@ export default function IncidentTimeline({
                 <p
                   className={`text-sm leading-relaxed whitespace-pre-wrap ${
                     isLifecycleEvent
-                      ? 'text-slate-900 dark:text-slate-100 font-medium'
+                      ? 'text-slate-900 dark:text-zinc-100 font-medium'
                       : isNote
-                        ? 'text-slate-800 dark:text-slate-200'
-                        : 'text-slate-600 dark:text-slate-400'
+                        ? 'text-slate-800 dark:text-zinc-200'
+                        : 'text-slate-600 dark:text-zinc-400'
                   }`}
                 >
                   {formatEscalationMessage(event.message)}
@@ -987,7 +1000,7 @@ export default function IncidentTimeline({
       </div>
 
       {hasMoreActivity && (
-        <div className="mt-4 flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 dark:bg-slate-800/40 text-xs text-muted-foreground gap-2">
+        <div className="mt-4 flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 dark:bg-zinc-800/40 text-xs text-muted-foreground gap-2">
           <span>
             Showing {currentItemsCount} of {totalItemsCount} activity items
           </span>

@@ -1,6 +1,7 @@
 import 'server-only';
 import { z } from 'zod/v3';
 import { requireMcp } from '../core/errors';
+import { stripInvisibleText } from '../core/projection';
 import { isAllowedRedirect } from './redirect-uri';
 
 export const MAX_DYNAMIC_CLIENTS = 5000;
@@ -43,6 +44,10 @@ const registrationMetadataSchema = z
       .min(1)
       .max(100)
       .regex(/^[^\u0000-\u001f\u007f]+$/)
+      // Right-to-left overrides and zero-width characters let a name read as another assistant on
+      // the consent screen; they are removed, and a name that was only those is refused.
+      .transform(stripInvisibleText)
+      .refine(name => name.trim().length > 0)
       .default('MCP assistant'),
     // Optional only for a device-only client (RFC 8628), which never receives a redirect.
     redirect_uris: z

@@ -6,8 +6,10 @@ import { History, BellRing, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function NotificationHistoryPage() {
+  await requirePageAccess('/settings/notifications/history');
   const permissions = await getUserPermissions();
 
   if (!permissions) {

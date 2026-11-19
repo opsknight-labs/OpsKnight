@@ -326,7 +326,7 @@ export default function MicrosoftTeamsSetupWizard({
                     Application (Client) ID <span className="text-destructive">*</span>
                   </Label>
                   {clientIdInput && !GUID_REGEX.test(clientIdInput.trim()) && (
-                    <span className="text-[10px] text-amber-600 flex items-center gap-1">
+                    <span className="text-[10px] text-amber-600 flex items-center gap-1 dark:text-amber-400">
                       <AlertCircle className="h-2.5 w-2.5" /> GUID format expected
                     </span>
                   )}
@@ -349,7 +349,7 @@ export default function MicrosoftTeamsSetupWizard({
                     Directory (Tenant) ID <span className="text-destructive">*</span>
                   </Label>
                   {tenantIdInput && !GUID_REGEX.test(tenantIdInput.trim()) && (
-                    <span className="text-[10px] text-amber-600 flex items-center gap-1">
+                    <span className="text-[10px] text-amber-600 flex items-center gap-1 dark:text-amber-400">
                       <AlertCircle className="h-2.5 w-2.5" /> GUID format expected
                     </span>
                   )}
@@ -799,8 +799,8 @@ export default function MicrosoftTeamsSetupWizard({
                         variant="outline"
                         className={`text-[10px] shrink-0 ${
                           isHealthy
-                            ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
-                            : 'border-amber-300 text-amber-700 bg-amber-50'
+                            ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
+                            : 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
                         }`}
                       >
                         {isHealthy

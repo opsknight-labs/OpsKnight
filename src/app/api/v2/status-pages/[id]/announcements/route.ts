@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import {
   apiV2Created,
   apiV2Error,
@@ -91,6 +91,21 @@ export const POST = withV2Observability(async function POST(
     });
 
     const validated = StatusPageAnnouncementV2Schema.parse(body);
+    // Previously accepted and silently dropped; now scoped like the settings route.
+    const affectedServiceIds = validated.services?.length
+      ? Array.from(new Set(validated.services))
+      : null;
+    if (
+      affectedServiceIds &&
+      (await prisma.statusPageService.count({
+        where: { statusPageId: id, serviceId: { in: affectedServiceIds }, showOnPage: true },
+      })) !== affectedServiceIds.length
+    ) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'Affected services must be shown on this status page.',
+      });
+    }
 
     const execution = await runV2IdempotentAuditedMutation(
       req,
@@ -107,6 +122,7 @@ export const POST = withV2Observability(async function POST(
             startDate: validated.startDate ? new Date(validated.startDate) : new Date(),
             endDate: validated.endDate ? new Date(validated.endDate) : null,
             isActive: validated.isActive,
+            affectedServiceIds: affectedServiceIds ?? Prisma.JsonNull,
           },
           select: {
             id: true,
@@ -116,6 +132,7 @@ export const POST = withV2Observability(async function POST(
             isActive: true,
             startDate: true,
             endDate: true,
+            affectedServiceIds: true,
             createdAt: true,
           },
         }),

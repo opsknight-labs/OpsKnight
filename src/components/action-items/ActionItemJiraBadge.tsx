@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Link2, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
@@ -36,9 +36,11 @@ export default function ActionItemJiraBadge({
   const [showActions, setShowActions] = useState(false);
   const [currentExternalIssue, setCurrentExternalIssue] = useState(externalIssue);
 
-  useEffect(() => {
+  const [syncedExternalIssue, setSyncedExternalIssue] = useState(externalIssue);
+  if (syncedExternalIssue !== externalIssue) {
+    setSyncedExternalIssue(externalIssue);
     setCurrentExternalIssue(externalIssue);
-  }, [externalIssue]);
+  }
 
   const showSync = jiraCapability.canSync;
   const showUnlink = jiraCapability.canUnlink;
@@ -60,7 +62,7 @@ export default function ActionItemJiraBadge({
           <div className="inline-flex items-center gap-0.5">
             {showSync && (
               <button
-                className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-slate-100 transition-colors"
+                className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-ink-100 transition-colors"
                 onClick={() => {
                   setError(null);
                   startTransition(async () => {
@@ -83,7 +85,7 @@ export default function ActionItemJiraBadge({
             )}
             {showUnlink && (
               <button
-                className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-red-50 transition-colors"
+                className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-red-50 transition-colors dark:hover:bg-red-500/10"
                 onClick={() => {
                   setError(null);
                   startTransition(async () => {
@@ -166,7 +168,7 @@ export default function ActionItemJiraBadge({
     <div className="inline-flex items-center gap-1" onClick={event => event.stopPropagation()}>
       {showCreate && (
         <button
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-ink-300 px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors dark:hover:border-blue-500/30 dark:hover:text-blue-400 dark:hover:bg-blue-500/10"
           onClick={() => {
             setError(null);
             startTransition(async () => {
@@ -187,7 +189,7 @@ export default function ActionItemJiraBadge({
       )}
       {showLink && (
         <button
-          className="rounded p-0.5 text-muted-foreground hover:text-blue-600 transition-colors"
+          className="rounded p-0.5 text-muted-foreground hover:text-blue-600 transition-colors dark:hover:text-blue-400"
           onClick={() => setShowLinkForm(true)}
           disabled={isPending}
           title="Link existing Jira issue"

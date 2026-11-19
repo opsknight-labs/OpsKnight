@@ -22,6 +22,7 @@ import { notificationIntentId } from '../notification-identity';
 import { NOTIFICATION_CHANNELS, type NotificationDeliveryChannel } from '../notification-delivery';
 import { filterChannelsForQuietHours } from '../quiet-hours';
 import { getUserNotificationChannels } from '../user-notifications';
+import { PAGE_NOTIFICATION_TITLE } from '../notification-titles';
 
 /** Channels the durable control plane can carry. SLACK/WEBHOOK are service-level. */
 const PERSONAL_CHANNELS: readonly NotificationDeliveryChannel[] = [
@@ -278,7 +279,7 @@ export async function materializeEscalationNotificationIntents(
       {
         userIds: plan.inAppUserIds,
         type: 'INCIDENT',
-        title: 'Action Required',
+        title: PAGE_NOTIFICATION_TITLE,
         message: plan.displayMessage,
         entityType: 'INCIDENT',
         entityId: plan.incidentId,

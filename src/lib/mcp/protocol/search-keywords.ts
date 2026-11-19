@@ -18,9 +18,23 @@ export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
     ['change', 'changed', 'recent changes', 'what changed', 'edited', 'config'],
   ],
   ['getService', ['owner', 'owns', 'owning team', 'who owns', 'team']],
+  ['getServiceSupportHours', ['support hours', 'business hours', 'after hours']],
   [
-    'getServiceSupportHours',
-    ['support hours', 'business hours', 'after hours', 'maintenance window'],
+    'listMaintenanceWindows',
+    ['maintenance', 'downtime', 'planned', 'silence', 'mute', 'suppress', 'change window'],
+  ],
+  [
+    'createMaintenanceWindow',
+    ['schedule maintenance', 'downtime', 'silence', 'mute', 'suppress', 'change window'],
+  ],
+  ['endMaintenanceWindow', ['end maintenance', 'unmute', 'unsilence', 'resume paging']],
+  [
+    'listMaintenanceSchedules',
+    ['recurring maintenance', 'maintenance schedule', 'weekly downtime', 'repeating', 'recurring'],
+  ],
+  [
+    'createMaintenanceSchedule',
+    ['recurring maintenance', 'every week', 'every night', 'repeat downtime', 'recurring'],
   ],
   [
     'listStatusPageAnnouncements',

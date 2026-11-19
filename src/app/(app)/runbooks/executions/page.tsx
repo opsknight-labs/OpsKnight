@@ -28,6 +28,7 @@ import {
 import { RunbookExecutionStatus, type Prisma } from '@prisma/client';
 import { runbookExecutionFilterSchema } from '@/lib/runbooks/schemas';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -36,6 +37,7 @@ export default async function RunbookExecutionsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/runbooks/executions');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const [user, permissions] = await Promise.all([getCurrentUser(), getUserPermissions()]);
   const userTimeZone = getUserTimeZone(user);
@@ -207,7 +209,7 @@ export default async function RunbookExecutionsPage({
               className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
               title={`All execution timestamps reflect your profile timezone: ${userTimeZone}`}
             >
-              <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
+              <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
               {userTimeZone}
             </span>
           </div>

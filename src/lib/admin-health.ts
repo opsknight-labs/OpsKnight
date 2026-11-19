@@ -325,8 +325,11 @@ export async function generate24HourHistory(
   const failedNotifications: FailedNotification[] =
     notificationResult.status === 'fulfilled' ? notificationResult.value : [];
   const unavailableSources = historyResults.filter(result => result.status === 'rejected').length;
-  const { scorePercent: liveScorePercent, criticalIssues, warningIssues } =
-    calculateOperationalScore(checks);
+  const {
+    scorePercent: liveScorePercent,
+    criticalIssues,
+    warningIssues,
+  } = calculateOperationalScore(checks);
   const topCriticalIssue = criticalIssues[0]?.summary;
   const topWarningIssue = warningIssues[0]?.summary;
 
@@ -402,12 +405,19 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
       summary: `PostgreSQL responded in ${latency} ms.`,
       details: [
         `Connection latency: ${latency} ms`,
-        latency > 1000 ? 'Latency exceeds the 1-second health threshold.' : 'Connection check passed.',
+        latency > 1000
+          ? 'Latency exceeds the 1-second health threshold.'
+          : 'Connection check passed.',
       ],
       telemetry: {
         latencyMs: latency,
         latencyThresholdMs: 1000,
-        rawPayload: { latencyMs: latency, thresholdMs: 1000, driver: 'Prisma Client PostgreSQL', pingQuery: 'SELECT 1' },
+        rawPayload: {
+          latencyMs: latency,
+          thresholdMs: 1000,
+          driver: 'Prisma Client PostgreSQL',
+          pingQuery: 'SELECT 1',
+        },
       },
       action: { label: 'Monitoring guide', href: ADMIN_HEALTH_GUIDES.monitoring },
     });
@@ -500,7 +510,9 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         category: 'database',
         status: 'unknown',
         summary: 'Database capacity statistics could not be read.',
-        details: ['The application remains usable; inspect PostgreSQL and platform telemetry directly.'],
+        details: [
+          'The application remains usable; inspect PostgreSQL and platform telemetry directly.',
+        ],
       });
     }
 
@@ -514,7 +526,10 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
       const applied = new Set(rows.filter(row => row.finished_at).map(row => row.migration_name));
       const migrationRoot = path.join(process.cwd(), 'prisma', 'migrations');
       const packaged = fs.existsSync(migrationRoot)
-        ? fs.readdirSync(migrationRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name)
+        ? fs
+            .readdirSync(migrationRoot, { withFileTypes: true })
+            .filter(entry => entry.isDirectory())
+            .map(entry => entry.name)
         : [];
       const pending = packaged.filter(name => !applied.has(name));
       const lastApplied = rows.find(row => row.finished_at)?.finished_at || null;
@@ -532,8 +547,19 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         details: [
           `Applied records: ${applied.size}`,
           `Last applied: ${lastApplied ? ageLabel(lastApplied) : 'none recorded'}`,
-          ...(failed.length ? [`Failed: ${failed.slice(0, 3).map(row => row.migration_name).join(', ')}`] : []),
-          ...(pending.length ? [`Pending: ${pending.slice(0, 3).join(', ')}${pending.length > 3 ? ` (+${pending.length - 3} more)` : ''}`] : []),
+          ...(failed.length
+            ? [
+                `Failed: ${failed
+                  .slice(0, 3)
+                  .map(row => row.migration_name)
+                  .join(', ')}`,
+              ]
+            : []),
+          ...(pending.length
+            ? [
+                `Pending: ${pending.slice(0, 3).join(', ')}${pending.length > 3 ? ` (+${pending.length - 3} more)` : ''}`,
+              ]
+            : []),
         ],
         commandSnippet:
           pending.length > 0 || failed.length > 0
@@ -566,7 +592,9 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         category: 'database',
         status: 'unknown',
         summary: 'Migration history could not be inspected.',
-        details: ['Confirm that the Prisma migration table exists and the application role can read it.'],
+        details: [
+          'Confirm that the Prisma migration table exists and the application role can read it.',
+        ],
       });
     }
 
@@ -591,7 +619,9 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           `Last run: ${ageLabel(state?.lastRunAt || null)}`,
           `Next run: ${state?.nextRunAt?.toISOString() || 'not scheduled'}`,
           `Lock holder: ${state?.lockedBy || 'none'}`,
-          ...(state?.lastError ? ['A last-error marker is present; review restricted server logs for details.'] : []),
+          ...(state?.lastError
+            ? ['A last-error marker is present; review restricted server logs for details.']
+            : []),
         ],
         telemetry: {
           rawPayload: {
@@ -634,10 +664,26 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         status: stale > 0 || failed > 0 ? 'unhealthy' : overdue > 0 ? 'degraded' : 'healthy',
         summary: `${pending} pending, ${processing} processing, ${failed} failed in 24 hours.`,
         details: [`Overdue pending: ${overdue}`, `Processing longer than 10 minutes: ${stale}`],
-        telemetry: { queueDistribution: { pending, processing, failed, overdue, stale }, rawPayload: { pendingJobs: pending, processingJobs: processing, failedJobs: failed, overduePending: overdue, staleProcessing: stale } },
+        telemetry: {
+          queueDistribution: { pending, processing, failed, overdue, stale },
+          rawPayload: {
+            pendingJobs: pending,
+            processingJobs: processing,
+            failedJobs: failed,
+            overduePending: overdue,
+            staleProcessing: stale,
+          },
+        },
       });
     } catch {
-      checks.push({ id: 'jobs', label: 'Background jobs', category: 'workers', status: 'unknown', summary: 'Background-job state could not be read.', details: ['Check database migration and scheduler health.'] });
+      checks.push({
+        id: 'jobs',
+        label: 'Background jobs',
+        category: 'workers',
+        status: 'unknown',
+        summary: 'Background-job state could not be read.',
+        details: ['Check database migration and scheduler health.'],
+      });
     }
 
     try {
@@ -669,87 +715,371 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
       const metrics = metricRows.find(row => row.dataSource === null);
       const sourceSummary = (dataSource: 'live' | 'rollup' | 'hybrid') => {
         const row = metricRows.find(candidate => candidate.dataSource === dataSource);
-        return { sampleCount1h: row?.sampleCount1h ?? 0, sampleCount24h: row?.sampleCount24h ?? 0, p95Ms1h: row?.p95Ms1h ?? null, p95Ms24h: row?.p95Ms24h ?? null };
+        return {
+          sampleCount1h: row?.sampleCount1h ?? 0,
+          sampleCount24h: row?.sampleCount24h ?? 0,
+          p95Ms1h: row?.p95Ms1h ?? null,
+          p95Ms24h: row?.p95Ms24h ?? null,
+        };
       };
-      const byDataSource = { live: sourceSummary('live'), rollup: sourceSummary('rollup'), hybrid: sourceSummary('hybrid') };
+      const byDataSource = {
+        live: sourceSummary('live'),
+        rollup: sourceSummary('rollup'),
+        hybrid: sourceSummary('hybrid'),
+      };
       const sampleCount24h = metrics?.sampleCount24h ?? 0;
       const sampleCount1h = metrics?.sampleCount1h ?? 0;
       const recentP95 = metrics?.p95Ms1h ?? null;
       const dailyP95 = metrics?.p95Ms24h ?? null;
       const priorP95 = metrics?.p95MsPrior23h ?? null;
-      const trend = recentP95 === null || priorP95 === null || priorP95 === 0 ? 'insufficient-data' : recentP95 > priorP95 * 1.2 ? 'regressing' : recentP95 < priorP95 * 0.8 ? 'improving' : 'stable';
+      const trend =
+        recentP95 === null || priorP95 === null || priorP95 === 0
+          ? 'insufficient-data'
+          : recentP95 > priorP95 * 1.2
+            ? 'regressing'
+            : recentP95 < priorP95 * 0.8
+              ? 'improving'
+              : 'stable';
       const displayedP95 = recentP95 ?? dailyP95;
       const displayedP50 = metrics?.p50Ms1h ?? metrics?.p50Ms24h ?? null;
       const displayedAverage = metrics?.avgMs1h ?? metrics?.avgMs24h ?? null;
       const displayWindow = sampleCount1h > 0 ? '1h' : '24h';
-      const slowRate24h = sampleCount24h > 0 ? Math.round(((metrics?.slowCount24h ?? 0) / sampleCount24h) * 1000) / 10 : 0;
+      const slowRate24h =
+        sampleCount24h > 0
+          ? Math.round(((metrics?.slowCount24h ?? 0) / sampleCount24h) * 1000) / 10
+          : 0;
 
       checks.push({
-        id: 'sla-performance', label: 'SLA query performance', category: 'workers',
-        status: sampleCount24h === 0 ? 'unknown' : (metrics?.slowCount1h ?? 0) > 0 || (displayedP95 !== null && displayedP95 > 10_000) ? 'degraded' : 'healthy',
-        summary: sampleCount24h === 0 ? 'No recent SLA query timing data.' : sampleCount1h > 0 ? `${sampleCount1h} queries in the last hour; p95 ${healthDurationLabel(displayedP95)} (${trend} vs prior 23h).` : `No executions in the last hour; historical 24h p95 was ${healthDurationLabel(dailyP95)}.`,
-        details: sampleCount24h === 0 ? ['SLA performance metrics require real calculation requests; no synthetic probe is generated.'] : [
-          `24 hours: ${sampleCount24h} queries, p50 ${healthDurationLabel(metrics?.p50Ms24h)}, p95 ${healthDurationLabel(dailyP95)}, max ${healthDurationLabel(metrics?.maxMs24h)}`,
-          `Slow queries over 10s: ${metrics?.slowCount24h ?? 0} (${slowRate24h}%) in 24h`,
-          ...(sampleCount1h > 0 ? [`Last hour: p50 ${healthDurationLabel(metrics?.p50Ms1h)}, average ${healthDurationLabel(metrics?.avgMs1h)}, max ${healthDurationLabel(metrics?.maxMs1h)}`, `Last-hour slow queries: ${metrics?.slowCount1h ?? 0}; execution rate: ${(sampleCount1h / 60).toFixed(1)} per minute`, `Average incidents scanned: ${Math.round(metrics?.avgIncidents1h ?? 0)} in 1h / ${Math.round(metrics?.avgIncidents24h ?? 0)} in 24h`] : ['Last hour: no timing samples; current SLA-query performance is not established.', `Average incidents scanned per historical run: ${Math.round(metrics?.avgIncidents24h ?? 0)}`]),
-          ...Object.entries(byDataSource).map(([dataSource, source]) => source.sampleCount24h === 0 ? `${dataSource}: no measured requests in 24h` : `${dataSource}: ${source.sampleCount1h} requests / p95 ${healthDurationLabel(source.p95Ms1h)} in 1h; ${source.sampleCount24h} requests / p95 ${healthDurationLabel(source.p95Ms24h)} in 24h`),
-        ],
-        telemetry: { slaMetrics: { p95Ms: displayedP95, p50Ms: displayedP50, avgMs: displayedAverage === null ? null : Math.round(displayedAverage), sampleCount: displayWindow === '1h' ? sampleCount1h : sampleCount24h, windowLabel: displayWindow, p95Ms24h: dailyP95, sampleCount24h, maxMs: metrics?.maxMs1h ?? metrics?.maxMs24h ?? null, slowCount: displayWindow === '1h' ? (metrics?.slowCount1h ?? 0) : (metrics?.slowCount24h ?? 0), trend, slowRate24h, byDataSource }, rawPayload: { window1h: { sampleCount: sampleCount1h, p50Ms: metrics?.p50Ms1h ?? null, p95Ms: recentP95, p95MsPrior23h: priorP95, averageMs: metrics?.avgMs1h ?? null, maxMs: metrics?.maxMs1h ?? null, slowQueriesCount: metrics?.slowCount1h ?? 0, averageIncidentsScanned: metrics?.avgIncidents1h ?? null, executionsPerMinute: sampleCount1h / 60 }, window24h: { sampleCount: sampleCount24h, p50Ms: metrics?.p50Ms24h ?? null, p95Ms: dailyP95, averageMs: metrics?.avgMs24h ?? null, maxMs: metrics?.maxMs24h ?? null, slowQueriesCount: metrics?.slowCount24h ?? 0, averageIncidentsScanned: metrics?.avgIncidents24h ?? null }, trend, byDataSource } },
+        id: 'sla-performance',
+        label: 'SLA query performance',
+        category: 'workers',
+        status:
+          sampleCount24h === 0
+            ? 'unknown'
+            : (metrics?.slowCount1h ?? 0) > 0 || (displayedP95 !== null && displayedP95 > 10_000)
+              ? 'degraded'
+              : 'healthy',
+        summary:
+          sampleCount24h === 0
+            ? 'No recent SLA query timing data.'
+            : sampleCount1h > 0
+              ? `${sampleCount1h} queries in the last hour; p95 ${healthDurationLabel(displayedP95)} (${trend} vs prior 23h).`
+              : `No executions in the last hour; historical 24h p95 was ${healthDurationLabel(dailyP95)}.`,
+        details:
+          sampleCount24h === 0
+            ? [
+                'SLA performance metrics require real calculation requests; no synthetic probe is generated.',
+              ]
+            : [
+                `24 hours: ${sampleCount24h} queries, p50 ${healthDurationLabel(metrics?.p50Ms24h)}, p95 ${healthDurationLabel(dailyP95)}, max ${healthDurationLabel(metrics?.maxMs24h)}`,
+                `Slow queries over 10s: ${metrics?.slowCount24h ?? 0} (${slowRate24h}%) in 24h`,
+                ...(sampleCount1h > 0
+                  ? [
+                      `Last hour: p50 ${healthDurationLabel(metrics?.p50Ms1h)}, average ${healthDurationLabel(metrics?.avgMs1h)}, max ${healthDurationLabel(metrics?.maxMs1h)}`,
+                      `Last-hour slow queries: ${metrics?.slowCount1h ?? 0}; execution rate: ${(sampleCount1h / 60).toFixed(1)} per minute`,
+                      `Average incidents scanned: ${Math.round(metrics?.avgIncidents1h ?? 0)} in 1h / ${Math.round(metrics?.avgIncidents24h ?? 0)} in 24h`,
+                    ]
+                  : [
+                      'Last hour: no timing samples; current SLA-query performance is not established.',
+                      `Average incidents scanned per historical run: ${Math.round(metrics?.avgIncidents24h ?? 0)}`,
+                    ]),
+                ...Object.entries(byDataSource).map(([dataSource, source]) =>
+                  source.sampleCount24h === 0
+                    ? `${dataSource}: no measured requests in 24h`
+                    : `${dataSource}: ${source.sampleCount1h} requests / p95 ${healthDurationLabel(source.p95Ms1h)} in 1h; ${source.sampleCount24h} requests / p95 ${healthDurationLabel(source.p95Ms24h)} in 24h`
+                ),
+              ],
+        telemetry: {
+          slaMetrics: {
+            p95Ms: displayedP95,
+            p50Ms: displayedP50,
+            avgMs: displayedAverage === null ? null : Math.round(displayedAverage),
+            sampleCount: displayWindow === '1h' ? sampleCount1h : sampleCount24h,
+            windowLabel: displayWindow,
+            p95Ms24h: dailyP95,
+            sampleCount24h,
+            maxMs: metrics?.maxMs1h ?? metrics?.maxMs24h ?? null,
+            slowCount:
+              displayWindow === '1h' ? (metrics?.slowCount1h ?? 0) : (metrics?.slowCount24h ?? 0),
+            trend,
+            slowRate24h,
+            byDataSource,
+          },
+          rawPayload: {
+            window1h: {
+              sampleCount: sampleCount1h,
+              p50Ms: metrics?.p50Ms1h ?? null,
+              p95Ms: recentP95,
+              p95MsPrior23h: priorP95,
+              averageMs: metrics?.avgMs1h ?? null,
+              maxMs: metrics?.maxMs1h ?? null,
+              slowQueriesCount: metrics?.slowCount1h ?? 0,
+              averageIncidentsScanned: metrics?.avgIncidents1h ?? null,
+              executionsPerMinute: sampleCount1h / 60,
+            },
+            window24h: {
+              sampleCount: sampleCount24h,
+              p50Ms: metrics?.p50Ms24h ?? null,
+              p95Ms: dailyP95,
+              averageMs: metrics?.avgMs24h ?? null,
+              maxMs: metrics?.maxMs24h ?? null,
+              slowQueriesCount: metrics?.slowCount24h ?? 0,
+              averageIncidentsScanned: metrics?.avgIncidents24h ?? null,
+            },
+            trend,
+            byDataSource,
+          },
+        },
         action: { label: 'SLA guide', href: ADMIN_HEALTH_GUIDES.sla },
       });
     } catch {
-      checks.push({ id: 'sla-performance', label: 'SLA query performance', category: 'workers', status: 'unknown', summary: 'SLA performance data could not be queried.', details: ['Review database migration status and query logs.'] });
+      checks.push({
+        id: 'sla-performance',
+        label: 'SLA query performance',
+        category: 'workers',
+        status: 'unknown',
+        summary: 'SLA performance data could not be queried.',
+        details: ['Review database migration status and query logs.'],
+      });
     }
 
     try {
-      const overdue = await prisma.incident.count({ where: { status: { in: ['OPEN', 'ACKNOWLEDGED'] }, nextEscalationAt: { lt: now } } });
-      const recentEvents = await prisma.incidentEvent.count({ where: { createdAt: { gte: new Date(now.getTime() - 24 * HOUR) } } });
-      checks.push({ id: 'escalations', label: 'Escalation backlog', category: 'workers', status: overdue > 0 ? 'degraded' : 'healthy', summary: overdue > 0 ? `${overdue} escalation step(s) are overdue.` : 'No escalation steps are overdue.', details: [`Overdue next-escalation timers: ${overdue}`, `Incident events in 24 hours: ${recentEvents}`], telemetry: { rawPayload: { overdueEscalations: overdue, recentEvents24h: recentEvents } }, action: { label: 'Incident queue', href: '/incidents' } });
+      const overdue = await prisma.incident.count({
+        where: { status: { in: ['OPEN', 'ACKNOWLEDGED'] }, nextEscalationAt: { lt: now } },
+      });
+      const recentEvents = await prisma.incidentEvent.count({
+        where: { createdAt: { gte: new Date(now.getTime() - 24 * HOUR) } },
+      });
+      checks.push({
+        id: 'escalations',
+        label: 'Escalation backlog',
+        category: 'workers',
+        status: overdue > 0 ? 'degraded' : 'healthy',
+        summary:
+          overdue > 0
+            ? `${overdue} escalation step(s) are overdue.`
+            : 'No escalation steps are overdue.',
+        details: [
+          `Overdue next-escalation timers: ${overdue}`,
+          `Incident events in 24 hours: ${recentEvents}`,
+        ],
+        telemetry: { rawPayload: { overdueEscalations: overdue, recentEvents24h: recentEvents } },
+        action: { label: 'Incident queue', href: '/incidents' },
+      });
     } catch {
-      checks.push({ id: 'escalations', label: 'Escalation backlog', category: 'workers', status: 'unknown', summary: 'Escalation state could not be read.', details: ['Review incident table health and database migrations.'] });
+      checks.push({
+        id: 'escalations',
+        label: 'Escalation backlog',
+        category: 'workers',
+        status: 'unknown',
+        summary: 'Escalation state could not be read.',
+        details: ['Review incident table health and database migrations.'],
+      });
     }
 
     try {
-      const services = await prisma.service.findMany({ select: { name: true, escalationPolicyId: true, policy: { select: { steps: { select: { id: true }, take: 1 } } } }, orderBy: { name: 'asc' } });
+      const services = await prisma.service.findMany({
+        select: {
+          name: true,
+          escalationPolicyId: true,
+          policy: { select: { steps: { select: { id: true }, take: 1 } } },
+        },
+        orderBy: { name: 'asc' },
+      });
       const withoutPolicy = services.filter(service => !service.escalationPolicyId);
-      const withoutSteps = services.filter(service => service.escalationPolicyId && service.policy?.steps.length === 0);
+      const withoutSteps = services.filter(
+        service => service.escalationPolicyId && service.policy?.steps.length === 0
+      );
       const gaps = withoutPolicy.length + withoutSteps.length;
-      checks.push({ id: 'paging-configuration', label: 'Paging configuration coverage', category: 'alerting', status: services.length === 0 ? 'unknown' : gaps > 0 ? 'degraded' : 'healthy', summary: services.length === 0 ? 'No services exist yet.' : gaps === 0 ? `All ${services.length} services have an escalation policy with at least one step.` : `${gaps} of ${services.length} services cannot start policy-based paging.`, details: [`Without an escalation policy: ${withoutPolicy.map(service => service.name).join(', ') || 'none'}`, `Policy has no steps: ${withoutSteps.map(service => service.name).join(', ') || 'none'}`], telemetry: { rawPayload: { totalServices: services.length, withoutPolicyCount: withoutPolicy.length, withoutStepsCount: withoutSteps.length, uncoveredTotal: gaps } }, action: { label: 'Services', href: '/services' } });
+      checks.push({
+        id: 'paging-configuration',
+        label: 'Paging configuration coverage',
+        category: 'alerting',
+        status: services.length === 0 ? 'unknown' : gaps > 0 ? 'degraded' : 'healthy',
+        summary:
+          services.length === 0
+            ? 'No services exist yet.'
+            : gaps === 0
+              ? `All ${services.length} services have an escalation policy with at least one step.`
+              : `${gaps} of ${services.length} services cannot start policy-based paging.`,
+        details: [
+          `Without an escalation policy: ${withoutPolicy.map(service => service.name).join(', ') || 'none'}`,
+          `Policy has no steps: ${withoutSteps.map(service => service.name).join(', ') || 'none'}`,
+        ],
+        telemetry: {
+          rawPayload: {
+            totalServices: services.length,
+            withoutPolicyCount: withoutPolicy.length,
+            withoutStepsCount: withoutSteps.length,
+            uncoveredTotal: gaps,
+          },
+        },
+        action: { label: 'Services', href: '/services' },
+      });
     } catch {
-      checks.push({ id: 'paging-configuration', label: 'Paging configuration coverage', category: 'alerting', status: 'unknown', summary: 'Service paging coverage could not be calculated.', details: ['Review service escalation policies directly.'] });
+      checks.push({
+        id: 'paging-configuration',
+        label: 'Paging configuration coverage',
+        category: 'alerting',
+        status: 'unknown',
+        summary: 'Service paging coverage could not be calculated.',
+        details: ['Review service escalation policies directly.'],
+      });
     }
 
     try {
       const since = new Date(now.getTime() - 24 * HOUR);
       const [providers, failed, pending] = await Promise.all([
-        prisma.notificationProvider.findMany({ select: { provider: true, enabled: true, config: true, updatedAt: true }, orderBy: { provider: 'asc' } }),
+        prisma.notificationProvider.findMany({
+          select: { provider: true, enabled: true, config: true, updatedAt: true },
+          orderBy: { provider: 'asc' },
+        }),
         prisma.notification.count({ where: { status: 'FAILED', createdAt: { gte: since } } }),
-        prisma.notification.count({ where: { status: 'PENDING', createdAt: { lt: new Date(now.getTime() - 5 * MINUTE) } } }),
+        prisma.notification.count({
+          where: { status: 'PENDING', createdAt: { lt: new Date(now.getTime() - 5 * MINUTE) } },
+        }),
       ]);
       const enabled = providers.filter(provider => provider.enabled);
       const incomplete = enabled.filter(provider => {
         const config = provider.config as Record<string, unknown> | null;
         return !config || Object.keys(config).length === 0;
       });
-      checks.push({ id: 'notifications', label: 'Notification providers', category: 'alerting', status: incomplete.length > 0 || pending > 0 ? 'unhealthy' : failed > 0 ? 'degraded' : 'healthy', summary: `${enabled.length} enabled provider(s); ${failed} failed delivery record(s) in 24 hours.`, details: [`Pending longer than 5 minutes: ${pending}`, `Enabled without configuration: ${incomplete.map(item => item.provider).join(', ') || 'none'}`], telemetry: { rawPayload: { enabledProvidersCount: enabled.length, failedDeliveries24h: failed, pendingStaleDeliveries: pending, incompleteProviders: incomplete.map(item => item.provider) } }, action: { label: 'Notification history', href: '/settings/notifications/history' } });
+      checks.push({
+        id: 'notifications',
+        label: 'Notification providers',
+        category: 'alerting',
+        status:
+          incomplete.length > 0 || pending > 0 ? 'unhealthy' : failed > 0 ? 'degraded' : 'healthy',
+        summary: `${enabled.length} enabled provider(s); ${failed} failed delivery record(s) in 24 hours.`,
+        details: [
+          `Pending longer than 5 minutes: ${pending}`,
+          `Enabled without configuration: ${incomplete.map(item => item.provider).join(', ') || 'none'}`,
+        ],
+        telemetry: {
+          rawPayload: {
+            enabledProvidersCount: enabled.length,
+            failedDeliveries24h: failed,
+            pendingStaleDeliveries: pending,
+            incompleteProviders: incomplete.map(item => item.provider),
+          },
+        },
+        action: { label: 'Notification history', href: '/settings/notifications/history' },
+      });
     } catch {
-      checks.push({ id: 'notifications', label: 'Notification providers', category: 'alerting', status: 'unknown', summary: 'Notification health could not be measured.', details: ['Open Notification History and provider settings.'] });
+      checks.push({
+        id: 'notifications',
+        label: 'Notification providers',
+        category: 'alerting',
+        status: 'unknown',
+        summary: 'Notification health could not be measured.',
+        details: ['Open Notification History and provider settings.'],
+      });
     }
 
     try {
-      const enabledIntegrations = await prisma.integration.findMany({ where: { enabled: true }, select: { id: true, name: true, type: true } });
+      const enabledIntegrations = await prisma.integration.findMany({
+        where: { enabled: true },
+        select: { id: true, name: true, type: true },
+      });
       const metrics = getMetricsSummary();
       const failingIntegrations = enabledIntegrations.filter(integration => {
         const current = getMetricsByIntegration(integration.id);
         return current.totalErrors > 0 && current.lastError;
       });
-      checks.push({ id: 'integrations', label: 'Inbound integrations', category: 'alerting', status: metrics.healthStatus, summary: `${enabledIntegrations.length} enabled integration(s); ${metrics.errorRate}% in-process error rate.`, details: [`Integrations with recorded errors: ${failingIntegrations.map(item => item.name).join(', ') || 'none'}`, 'Metrics are process-local and reset on restart; durable logs remain authoritative.'], telemetry: { rawPayload: { enabledIntegrationsCount: enabledIntegrations.length, errorRatePercent: metrics.errorRate, failingIntegrations: failingIntegrations.map(item => ({ id: item.id, name: item.name })) } }, action: { label: 'Inbound services', href: '/services' } });
+      checks.push({
+        id: 'integrations',
+        label: 'Inbound integrations',
+        category: 'alerting',
+        status: metrics.healthStatus,
+        summary: `${enabledIntegrations.length} enabled integration(s); ${metrics.errorRate}% in-process error rate.`,
+        details: [
+          `Integrations with recorded errors: ${failingIntegrations.map(item => item.name).join(', ') || 'none'}`,
+          'Metrics are process-local and reset on restart; durable logs remain authoritative.',
+        ],
+        telemetry: {
+          rawPayload: {
+            enabledIntegrationsCount: enabledIntegrations.length,
+            errorRatePercent: metrics.errorRate,
+            failingIntegrations: failingIntegrations.map(item => ({
+              id: item.id,
+              name: item.name,
+            })),
+          },
+        },
+        action: { label: 'Inbound services', href: '/services' },
+      });
     } catch {
-      checks.push({ id: 'integrations', label: 'Inbound integrations', category: 'alerting', status: 'unknown', summary: 'Integration health could not be measured.', details: ['Review integration test results and system logs.'] });
+      checks.push({
+        id: 'integrations',
+        label: 'Inbound integrations',
+        category: 'alerting',
+        status: 'unknown',
+        summary: 'Integration health could not be measured.',
+        details: ['Review integration test results and system logs.'],
+      });
     }
 
     try {
-      const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' }, select: { appUrl: true } });
+      // A window that ended but still holds incidents means paging is being withheld.
+      const overdueBefore = new Date(Date.now() - 5 * 60_000);
+      const [backlog, oldest, active, scheduler] = await Promise.all([
+        prisma.maintenanceWindow.count({
+          where: { endProcessedAt: null, endsAt: { lt: overdueBefore } },
+        }),
+        prisma.maintenanceWindow.findFirst({
+          where: { endProcessedAt: null, endsAt: { lt: overdueBefore } },
+          orderBy: { endsAt: 'asc' },
+          select: { title: true, endsAt: true },
+        }),
+        prisma.maintenanceWindowService.count({
+          where: { startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
+        }),
+        prisma.cronSchedulerState.findUnique({
+          where: { id: 'singleton' },
+          select: { lastMaintenanceSweepAt: true },
+        }),
+      ]);
+      checks.push({
+        id: 'maintenance-windows',
+        label: 'Maintenance windows',
+        category: 'alerting',
+        status: backlog > 0 ? 'degraded' : 'healthy',
+        summary:
+          backlog > 0
+            ? `${backlog} ended maintenance window(s) still hold incidents; paging for them is delayed.`
+            : `${active} service(s) currently in maintenance; held incidents are released on time.`,
+        details: [
+          `Last end-of-window sweep: ${scheduler?.lastMaintenanceSweepAt?.toISOString() ?? 'never'}`,
+          ...(oldest
+            ? [`Oldest overdue window: "${oldest.title}" ended ${oldest.endsAt.toISOString()}`]
+            : []),
+          'The scheduler releases held incidents every tick; check scheduler health if this stays degraded.',
+        ],
+        telemetry: {
+          rawPayload: {
+            overdueWindows: backlog,
+            servicesInMaintenance: active,
+            lastSweepAt: scheduler?.lastMaintenanceSweepAt ?? null,
+          },
+        },
+        action: { label: 'Services', href: '/services' },
+      });
+    } catch {
+      checks.push({
+        id: 'maintenance-windows',
+        label: 'Maintenance windows',
+        category: 'alerting',
+        status: 'unknown',
+        summary: 'Maintenance window state could not be read.',
+        details: ['Check database migration and scheduler health.'],
+      });
+    }
+
+    try {
+      const settings = await prisma.systemSettings.findUnique({
+        where: { id: 'default' },
+        select: { appUrl: true },
+      });
       const authOrigin = resolveAuthPublicOrigin({ dbAppUrl: settings?.appUrl });
       const productionHttps = isProductionAuthOriginSafe(authOrigin);
       const hasConfiguredOrigin = authOrigin.source !== 'DEVELOPMENT_FALLBACK';
@@ -758,7 +1088,12 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         id: 'public-url',
         label: 'Public authentication origin',
         category: 'security',
-        status: !hasConfiguredOrigin || !productionHttps ? 'unhealthy' : consistent ? 'healthy' : 'degraded',
+        status:
+          !hasConfiguredOrigin || !productionHttps
+            ? 'unhealthy'
+            : consistent
+              ? 'healthy'
+              : 'degraded',
         summary: !hasConfiguredOrigin
           ? 'No public authentication origin is configured.'
           : !productionHttps
@@ -773,7 +1108,9 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           `NEXT_PUBLIC_APP_URL: ${normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL) || 'unset'}`,
           `NEXTAUTH_URL: ${normalizeOrigin(process.env.NEXTAUTH_URL) || 'unset'}`,
           ...(authOrigin.conflicts.length > 0
-            ? authOrigin.conflicts.map(conflict => `${conflict.source} conflicts: ${conflict.origin}`)
+            ? authOrigin.conflicts.map(
+                conflict => `${conflict.source} conflicts: ${conflict.origin}`
+              )
             : []),
         ],
         telemetry: {
@@ -789,7 +1126,14 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         action: { label: 'System settings', href: '/settings/system' },
       });
     } catch {
-      checks.push({ id: 'public-url', label: 'Public authentication origin', category: 'security', status: 'unknown', summary: 'Public authentication origin could not be evaluated.', details: ['Review system settings and deployment environment.'] });
+      checks.push({
+        id: 'public-url',
+        label: 'Public authentication origin',
+        category: 'security',
+        status: 'unknown',
+        summary: 'Public authentication origin could not be evaluated.',
+        details: ['Review system settings and deployment environment.'],
+      });
     }
   }
 
@@ -802,7 +1146,11 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
     category: 'security',
     scope: 'configuration',
     observedAt: now.toISOString(),
-    status: encryptionValid ? 'healthy' : process.env.NODE_ENV === 'development' ? 'degraded' : 'unhealthy',
+    status: encryptionValid
+      ? 'healthy'
+      : process.env.NODE_ENV === 'development'
+        ? 'degraded'
+        : 'unhealthy',
     summary: encryptionValid
       ? 'A valid 32-byte hexadecimal encryption key (or keyring) is configured.'
       : 'A valid ENCRYPTION_KEYS / ENCRYPTION_KEY is not configured.',
@@ -833,57 +1181,207 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
   const latest = await latestRelease();
   const comparison = latest ? compareVersions(APP_VERSION, latest) : 0;
   checks.push({
-    id: 'version', label: 'Version and upgrades', category: 'platform', scope: 'external', observedAt: now.toISOString(),
+    id: 'version',
+    label: 'Version and upgrades',
+    category: 'platform',
+    scope: 'external',
+    observedAt: now.toISOString(),
     status: !latest ? 'unknown' : comparison < 0 ? 'degraded' : 'healthy',
-    summary: !latest ? `Running ${APP_VERSION}; the latest release could not be checked.` : comparison < 0 ? `Running ${APP_VERSION}; ${latest} is available.` : `Running ${APP_VERSION}; no newer stable release was found.`,
-    details: ['Release discovery uses the public GitHub Releases API and can be unavailable in restricted networks.'],
-    telemetry: { rawPayload: { runningVersion: APP_VERSION, latestUpstreamRelease: latest, isLatest: comparison >= 0 } },
+    summary: !latest
+      ? `Running ${APP_VERSION}; the latest release could not be checked.`
+      : comparison < 0
+        ? `Running ${APP_VERSION}; ${latest} is available.`
+        : `Running ${APP_VERSION}; no newer stable release was found.`,
+    details: [
+      'Release discovery uses the public GitHub Releases API and can be unavailable in restricted networks.',
+    ],
+    telemetry: {
+      rawPayload: {
+        runningVersion: APP_VERSION,
+        latestUpstreamRelease: latest,
+        isLatest: comparison >= 0,
+      },
+    },
     action: { label: 'Upgrade runbook', href: ADMIN_HEALTH_GUIDES.upgrades },
   });
 
   if (databaseAvailable) {
     try {
-      const [rollup, staleExternalOperations, failedExternalOperations, staleInbound] = await Promise.all([
-        prisma.incidentMetricRollup.findFirst({ where: { granularity: 'daily', serviceId: null, teamId: null }, orderBy: { date: 'desc' }, select: { date: true, updatedAt: true } }),
-        prisma.externalOperation.count({ where: { status: { in: ['PENDING', 'PROCESSING', 'AMBIGUOUS'] }, updatedAt: { lt: new Date(now.getTime() - 15 * MINUTE) } } }),
-        prisma.externalOperation.count({ where: { status: 'FAILED', updatedAt: { gte: new Date(now.getTime() - 24 * HOUR) } } }),
-        prisma.inboundDelivery.count({ where: { status: 'PROCESSING', updatedAt: { lt: new Date(now.getTime() - 10 * MINUTE) } } }),
-      ]);
+      const [rollup, staleExternalOperations, failedExternalOperations, staleInbound] =
+        await Promise.all([
+          prisma.incidentMetricRollup.findFirst({
+            where: { granularity: 'daily', serviceId: null, teamId: null },
+            orderBy: { date: 'desc' },
+            select: { date: true, updatedAt: true },
+          }),
+          prisma.externalOperation.count({
+            where: {
+              status: { in: ['PENDING', 'PROCESSING', 'AMBIGUOUS'] },
+              updatedAt: { lt: new Date(now.getTime() - 15 * MINUTE) },
+            },
+          }),
+          prisma.externalOperation.count({
+            where: { status: 'FAILED', updatedAt: { gte: new Date(now.getTime() - 24 * HOUR) } },
+          }),
+          prisma.inboundDelivery.count({
+            where: {
+              status: 'PROCESSING',
+              updatedAt: { lt: new Date(now.getTime() - 10 * MINUTE) },
+            },
+          }),
+        ]);
       const expectedLatestDay = new Date(now);
       expectedLatestDay.setUTCHours(0, 0, 0, 0);
       expectedLatestDay.setUTCDate(expectedLatestDay.getUTCDate() - 1);
-      const rollupLagDays = rollup ? Math.max(0, Math.floor((expectedLatestDay.getTime() - rollup.date.getTime()) / (24 * HOUR))) : null;
-      checks.push({ id: 'rollups', label: 'Analytics rollup freshness', category: 'workers', scope: 'cluster', observedAt: now.toISOString(), status: rollupLagDays === null ? 'unknown' : rollupLagDays > 1 ? 'unhealthy' : rollupLagDays > 0 ? 'degraded' : 'healthy', summary: rollup ? `Latest complete daily rollup is ${rollupLagDays} day(s) behind.` : 'No complete daily analytics rollup was found.', details: [`Latest rollup day: ${rollup?.date.toISOString() || 'none'}`, `Last materialized: ${rollup?.updatedAt.toISOString() || 'never'}`], impact: 'Stale rollups can make historical reports and executive dashboards incomplete.', telemetry: { rawPayload: { rollupLagDays, latestDate: rollup?.date.toISOString() || null } } });
-      checks.push({ id: 'integration-control-plane', label: 'Integration delivery control plane', category: 'alerting', scope: 'cluster', observedAt: now.toISOString(), status: staleExternalOperations > 0 || staleInbound > 0 ? 'unhealthy' : failedExternalOperations > 0 ? 'degraded' : 'healthy', summary: `${staleExternalOperations} stale external operation(s), ${staleInbound} stale inbound delivery lease(s).`, details: [`Terminal external failures in 24 hours: ${failedExternalOperations}`, 'Durable database state is cluster-wide and survives replica restarts.'], impact: 'Stale work delays inbound alerts, ChatOps responses, or external issue synchronization.', telemetry: { rawPayload: { staleExternalOperations, failedExternalOperations24h: failedExternalOperations, staleInboundDeliveries: staleInbound } } });
+      const rollupLagDays = rollup
+        ? Math.max(
+            0,
+            Math.floor((expectedLatestDay.getTime() - rollup.date.getTime()) / (24 * HOUR))
+          )
+        : null;
+      checks.push({
+        id: 'rollups',
+        label: 'Analytics rollup freshness',
+        category: 'workers',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status:
+          rollupLagDays === null
+            ? 'unknown'
+            : rollupLagDays > 1
+              ? 'unhealthy'
+              : rollupLagDays > 0
+                ? 'degraded'
+                : 'healthy',
+        summary: rollup
+          ? `Latest complete daily rollup is ${rollupLagDays} day(s) behind.`
+          : 'No complete daily analytics rollup was found.',
+        details: [
+          `Latest rollup day: ${rollup?.date.toISOString() || 'none'}`,
+          `Last materialized: ${rollup?.updatedAt.toISOString() || 'never'}`,
+        ],
+        impact: 'Stale rollups can make historical reports and executive dashboards incomplete.',
+        telemetry: {
+          rawPayload: { rollupLagDays, latestDate: rollup?.date.toISOString() || null },
+        },
+      });
+      checks.push({
+        id: 'integration-control-plane',
+        label: 'Integration delivery control plane',
+        category: 'alerting',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status:
+          staleExternalOperations > 0 || staleInbound > 0
+            ? 'unhealthy'
+            : failedExternalOperations > 0
+              ? 'degraded'
+              : 'healthy',
+        summary: `${staleExternalOperations} stale external operation(s), ${staleInbound} stale inbound delivery lease(s).`,
+        details: [
+          `Terminal external failures in 24 hours: ${failedExternalOperations}`,
+          'Durable database state is cluster-wide and survives replica restarts.',
+        ],
+        impact:
+          'Stale work delays inbound alerts, ChatOps responses, or external issue synchronization.',
+        telemetry: {
+          rawPayload: {
+            staleExternalOperations,
+            failedExternalOperations24h: failedExternalOperations,
+            staleInboundDeliveries: staleInbound,
+          },
+        },
+      });
     } catch {
-      checks.push({ id: 'control-plane-storage', label: 'Durable control-plane telemetry', category: 'workers', scope: 'cluster', observedAt: now.toISOString(), status: 'unknown', summary: 'Durable rollup and integration state could not be inspected.', details: ['Verify migrations and database permissions for control-plane tables.'] });
+      checks.push({
+        id: 'control-plane-storage',
+        label: 'Durable control-plane telemetry',
+        category: 'workers',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status: 'unknown',
+        summary: 'Durable rollup and integration state could not be inspected.',
+        details: ['Verify migrations and database permissions for control-plane tables.'],
+      });
     }
   }
 
   const worker = getJobWorkerStatus();
-  const workerSuccessAgeMs = worker.lastSuccessAt ? now.getTime() - worker.lastSuccessAt.getTime() : null;
+  const workerSuccessAgeMs = worker.lastSuccessAt
+    ? now.getTime() - worker.lastSuccessAt.getTime()
+    : null;
   checks.push({
-    id: 'worker-replica', label: 'Local durable-job worker', category: 'workers', scope: 'replica', required: false, observedAt: now.toISOString(),
-    status: !worker.running ? 'informational' : worker.lastError || workerSuccessAgeMs === null || workerSuccessAgeMs > 5 * MINUTE ? 'degraded' : 'healthy',
-    summary: !worker.running ? 'This web replica does not run the durable-job worker.' : workerSuccessAgeMs === null ? 'The local worker has not completed a successful cycle.' : `The local worker last succeeded ${ageLabel(worker.lastSuccessAt)}.`,
-    details: [`Running on this replica: ${worker.running ? 'yes' : 'no'}`, `In flight: ${worker.inFlight ? 'yes' : 'no'}`, 'A non-running local worker is informational when dedicated worker replicas are deployed.'],
-    impact: 'Use cluster queue age together with this replica signal to determine actual delivery health.',
-    telemetry: { rawPayload: { running: worker.running, inFlight: worker.inFlight, lastRunAt: worker.lastRunAt?.toISOString() || null, lastSuccessAt: worker.lastSuccessAt?.toISOString() || null, hasLastError: Boolean(worker.lastError) } },
+    id: 'worker-replica',
+    label: 'Local durable-job worker',
+    category: 'workers',
+    scope: 'replica',
+    required: false,
+    observedAt: now.toISOString(),
+    status: !worker.running
+      ? 'informational'
+      : worker.lastError || workerSuccessAgeMs === null || workerSuccessAgeMs > 5 * MINUTE
+        ? 'degraded'
+        : 'healthy',
+    summary: !worker.running
+      ? 'This web replica does not run the durable-job worker.'
+      : workerSuccessAgeMs === null
+        ? 'The local worker has not completed a successful cycle.'
+        : `The local worker last succeeded ${ageLabel(worker.lastSuccessAt)}.`,
+    details: [
+      `Running on this replica: ${worker.running ? 'yes' : 'no'}`,
+      `In flight: ${worker.inFlight ? 'yes' : 'no'}`,
+      'A non-running local worker is informational when dedicated worker replicas are deployed.',
+    ],
+    impact:
+      'Use cluster queue age together with this replica signal to determine actual delivery health.',
+    telemetry: {
+      rawPayload: {
+        running: worker.running,
+        inFlight: worker.inFlight,
+        lastRunAt: worker.lastRunAt?.toISOString() || null,
+        lastSuccessAt: worker.lastSuccessAt?.toISOString() || null,
+        hasLastError: Boolean(worker.lastError),
+      },
+    },
   });
 
   const realtime = getRealtimeControlPlaneStatus();
   checks.push({
-    id: 'realtime', label: 'Realtime event control plane', category: 'workers', scope: 'replica', observedAt: now.toISOString(),
-    status: realtime.consecutiveFailures > 2 ? 'unhealthy' : realtime.consecutiveFailures > 0 ? 'degraded' : 'healthy',
-    summary: realtime.consecutiveFailures > 0 ? `${realtime.consecutiveFailures} consecutive change-feed polling failure(s) on this replica.` : 'The local realtime change feed has no recorded polling failures.',
-    details: [`Connected subscribers on this replica: ${realtime.subscribers}`, `Observed generation: ${realtime.observedGeneration || 'not yet observed'}`, `Last temporal reconciliation: ${realtime.lastReconciliationAt || 'not started'}`],
-    impact: 'Repeated failures delay dashboard and widget refreshes; durable data remains authoritative.',
+    id: 'realtime',
+    label: 'Realtime event control plane',
+    category: 'workers',
+    scope: 'replica',
+    observedAt: now.toISOString(),
+    status:
+      realtime.consecutiveFailures > 2
+        ? 'unhealthy'
+        : realtime.consecutiveFailures > 0
+          ? 'degraded'
+          : 'healthy',
+    summary:
+      realtime.consecutiveFailures > 0
+        ? `${realtime.consecutiveFailures} consecutive change-feed polling failure(s) on this replica.`
+        : 'The local realtime change feed has no recorded polling failures.',
+    details: [
+      `Connected subscribers on this replica: ${realtime.subscribers}`,
+      `Observed generation: ${realtime.observedGeneration || 'not yet observed'}`,
+      `Last temporal reconciliation: ${realtime.lastReconciliationAt || 'not started'}`,
+    ],
+    impact:
+      'Repeated failures delay dashboard and widget refreshes; durable data remains authoritative.',
     telemetry: { rawPayload: realtime },
   });
 
   for (const check of checks) {
     check.observedAt ??= now.toISOString();
-    check.scope ??= check.id === 'version' ? 'external' : check.id === 'integrations' ? 'replica' : check.id === 'public-url' || check.id === 'encryption' ? 'configuration' : 'cluster';
+    check.scope ??=
+      check.id === 'version'
+        ? 'external'
+        : check.id === 'integrations'
+          ? 'replica'
+          : check.id === 'public-url' || check.id === 'encryption'
+            ? 'configuration'
+            : 'cluster';
   }
 
   const score = calculateOperationalScore(checks);
@@ -903,7 +1401,9 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
   };
 }
 
-export async function collectAdminHealth(options?: { force?: boolean }): Promise<AdminHealthReport> {
+export async function collectAdminHealth(options?: {
+  force?: boolean;
+}): Promise<AdminHealthReport> {
   const now = Date.now();
   if (!options?.force && cachedHealthReport && cachedHealthReport.expiresAt > now) {
     return cachedHealthReport.report;

@@ -31,6 +31,7 @@ import {
   noiseFilterWhere,
   normalizeNoiseFilter,
 } from '@/lib/intelligence/incident-ux/list-badges';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -55,6 +56,7 @@ export default async function IncidentsPage({
     noise?: string;
   }>;
 }) {
+  await requirePageAccess('/incidents');
   const params = await searchParams;
   const currentFilter = normalizeIncidentFilter(params.filter);
   const currentSearch = params.search || '';
@@ -116,6 +118,11 @@ export default async function IncidentsPage({
 
   if (currentTeamId !== 'all') {
     where.teamId = currentTeamId === 'mine' ? { in: userTeamIds } : currentTeamId;
+  }
+  // Alerts held by a maintenance window stay out of the default view (as incident.io
+  // does); the Suppressed filter still lists them.
+  if (currentFilter === 'all' && !currentStatus) {
+    where.NOT = { status: 'SUPPRESSED', maintenanceWindowId: { not: null } };
   }
   const effectiveWhere = {
     AND: [

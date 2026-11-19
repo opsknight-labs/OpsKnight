@@ -626,14 +626,19 @@ export default function ScimSettingsSection({
             <h4 className="font-semibold">Provider setup</h4>
             <p>
               Entra: Enterprise applications → Provisioning → Automatic. Set Tenant URL and the
-              one-time Secret Token. Map objectId → externalId and userPrincipalName → userName.
-              Verify the work email equals userName.
+              one-time Secret Token. Map objectId → externalId, and mail → userName and the work
+              email. Replace the default userPrincipalName → userName mapping unless every UPN
+              equals the user’s mail address.
             </p>
             <p>
               Okta: Configure SCIM Integration, use HTTP Header bearer authentication, userName as
-              the lookup field, and map a stable directory identifier to externalId. Enable create,
-              update and deactivate. Push Groups creates directory groups; bind teams after
-              reviewing impact.
+              the lookup field, and map a stable directory identifier to externalId. Map user.email
+              → userName (application username format: Email). Enable create, update and deactivate.
+              Push Groups creates directory groups; bind teams after reviewing impact.
+            </p>
+            <p>
+              OpsKnight uses one email as both login name and work email, so userName must equal the
+              work email. Otherwise provisioning fails with a 400 invalidValue error.
             </p>
             <p>
               Map displayName, name.givenName, name.familyName, active, title and the enterprise

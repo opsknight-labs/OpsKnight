@@ -223,6 +223,7 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/postmortems/[id]/action-items/route')).GET,
   ],
   ['listPostmortems', async () => (await import('@/app/api/v2/postmortems/route')).GET],
+  ['listActionItems', async () => (await import('@/app/api/v2/action-items/route')).GET],
   ['getReportCatalog', async () => (await import('@/app/api/v2/reports/catalog/route')).GET],
   ['listSavedReports', async () => (await import('@/app/api/v2/reports/saved/route')).GET],
   ['getSavedReport', async () => (await import('@/app/api/v2/reports/saved/[id]/route')).GET],
@@ -270,6 +271,22 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
   ],
   ['getSchedule', async () => (await import('@/app/api/v2/schedules/[id]/route')).GET],
   ['listSchedules', async () => (await import('@/app/api/v2/schedules/route')).GET],
+  [
+    'listMaintenanceWindows',
+    async () => (await import('@/app/api/v2/maintenance-windows/route')).GET,
+  ],
+  [
+    'getMaintenanceWindow',
+    async () => (await import('@/app/api/v2/maintenance-windows/[id]/route')).GET,
+  ],
+  [
+    'listMaintenanceSchedules',
+    async () => (await import('@/app/api/v2/maintenance-schedules/route')).GET,
+  ],
+  [
+    'getMaintenanceSchedule',
+    async () => (await import('@/app/api/v2/maintenance-schedules/[id]/route')).GET,
+  ],
   ['getService', async () => (await import('@/app/api/v2/services/[id]/route')).GET],
   [
     'getServiceSupportHours',
@@ -717,6 +734,34 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/schedules/[id]/layers/order/route')).PUT,
   ],
   [
+    'createMaintenanceWindow',
+    async () => (await import('@/app/api/v2/maintenance-windows/route')).POST,
+  ],
+  [
+    'updateMaintenanceWindow',
+    async () => (await import('@/app/api/v2/maintenance-windows/[id]/route')).PATCH,
+  ],
+  [
+    'deleteMaintenanceWindow',
+    async () => (await import('@/app/api/v2/maintenance-windows/[id]/route')).DELETE,
+  ],
+  [
+    'endMaintenanceWindow',
+    async () => (await import('@/app/api/v2/maintenance-windows/[id]/end/route')).POST,
+  ],
+  [
+    'createMaintenanceSchedule',
+    async () => (await import('@/app/api/v2/maintenance-schedules/route')).POST,
+  ],
+  [
+    'updateMaintenanceSchedule',
+    async () => (await import('@/app/api/v2/maintenance-schedules/[id]/route')).PATCH,
+  ],
+  [
+    'deleteMaintenanceSchedule',
+    async () => (await import('@/app/api/v2/maintenance-schedules/[id]/route')).DELETE,
+  ],
+  [
     'updateServiceObjective',
     async () => (await import('@/app/api/v2/service-objectives/[id]/route')).PATCH,
   ],
@@ -913,5 +958,13 @@ export const MCP_PREVIEW_HANDLERS = new Map<string, () => Promise<Handler>>([
   ['getPostmortem', async () => (await import('@/app/api/v2/postmortems/[id]/route')).GET],
   ['getSchedule', async () => (await import('@/app/api/v2/schedules/[id]/route')).GET],
   ['getService', async () => (await import('@/app/api/v2/services/[id]/route')).GET],
+  [
+    'getMaintenanceWindow',
+    async () => (await import('@/app/api/v2/maintenance-windows/[id]/route')).GET,
+  ],
+  [
+    'getMaintenanceSchedule',
+    async () => (await import('@/app/api/v2/maintenance-schedules/[id]/route')).GET,
+  ],
   ['getTeam', async () => (await import('@/app/api/v2/teams/[id]/route')).GET],
 ]);

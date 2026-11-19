@@ -7,6 +7,9 @@ import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { authorizationActorFromUser, type UserActorSource } from '@/lib/authorization-actors';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { effectiveAccessSelect } from '@/lib/access/effective';
+import { getAccessControlSettings } from '@/lib/access/settings';
+import type { ThemePreferenceValue } from '@/lib/theme-preference';
 
 export type AuthenticatedRequestActorContext = {
   session: Session;
@@ -19,6 +22,7 @@ export type AuthenticatedRequestActorContext = {
     avatarUrl: string | null;
     gender: string | null;
     timeZone: string | null;
+    themePreference: ThemePreferenceValue;
     tokenVersion: number;
   };
   actor: AuthorizationActor;
@@ -37,6 +41,7 @@ export const getRequestActorContext = cache(
     const sessionUserEmail = session?.user?.email;
     if (!session || (!sessionUserId && !sessionUserEmail)) return null;
 
+    await getAccessControlSettings();
     const user = await prisma.user.findUnique({
       where: sessionUserId ? { id: sessionUserId } : { email: sessionUserEmail! },
       select: {
@@ -48,8 +53,10 @@ export const getRequestActorContext = cache(
         avatarUrl: true,
         gender: true,
         timeZone: true,
+        themePreference: true,
         tokenVersion: true,
         teamMemberships: { select: { teamId: true } },
+        ...effectiveAccessSelect(),
       },
     });
     if (!user) return null;
@@ -93,11 +100,12 @@ export const getRequestActorContext = cache(
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: actor.role,
         status: user.status,
         avatarUrl: user.avatarUrl,
         gender: user.gender,
         timeZone: user.timeZone,
+        themePreference: user.themePreference,
         tokenVersion: user.tokenVersion,
       },
       actor,

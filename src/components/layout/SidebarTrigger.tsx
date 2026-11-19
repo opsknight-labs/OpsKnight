@@ -43,7 +43,7 @@ export default function SidebarTrigger({ className }: SidebarTriggerProps) {
             size="icon"
             onClick={handleClick}
             className={cn(
-              'h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all active:scale-95',
+              'h-8 w-8 rounded-lg text-ink-400 hover:text-white hover:bg-white/10 transition-all active:scale-95',
               className
             )}
             aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}

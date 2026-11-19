@@ -21,8 +21,7 @@ interface PostmortemImpactInputProps {
 }
 
 export default function PostmortemImpactInput({ metrics, onChange }: PostmortemImpactInputProps) {
-  const updateMetric = (key: keyof ImpactMetrics, value: any) => {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
+  const updateMetric = <K extends keyof ImpactMetrics>(key: K, value: ImpactMetrics[K]) => {
     onChange({ ...metrics, [key]: value });
   };
 
@@ -35,7 +34,7 @@ export default function PostmortemImpactInput({ metrics, onChange }: PostmortemI
   };
 
   return (
-    <Card className="bg-gradient-to-br from-white to-slate-50">
+    <Card className="bg-gradient-to-br from-card to-ink-50">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">Impact Assessment</CardTitle>
       </CardHeader>

@@ -5,11 +5,13 @@ import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { readAlertReference } from '@/lib/intelligence/squire/references';
 import { getListedAlert } from '@/lib/intelligence/lists/alerts';
 import { ALERT_DECISION_LABELS } from '@/lib/intelligence/lists/contract';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AlertReferencePage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/alerts/[id]');
   const { id } = await params;
   let alert;
   let listed = null;

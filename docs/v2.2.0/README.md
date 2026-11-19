@@ -21,7 +21,8 @@ Pages for features unchanged since 2.1.0 remain in the [2.1.0 documentation](../
 
 ## AI assistants (MCP)
 
-- [Overview](./guides/mcp/README.md) and [self-hosted setup](./guides/mcp/self-hosted-setup.md)
+- [Overview](./guides/mcp/README.md), [self-hosted setup](./guides/mcp/self-hosted-setup.md) and the
+  [stdio bridge](./guides/mcp/stdio-bridge.md) for local-only clients
 - [What to ask](./guides/mcp/what-to-ask.md), [build an agent](./guides/mcp/build-an-agent.md) and
   [security and data](./guides/mcp/security-and-data.md)
 - [Troubleshooting](./guides/mcp/troubleshooting.md), [permissions and coverage](./reference/mcp/permissions.md)
@@ -40,3 +41,15 @@ Pages for features unchanged since 2.1.0 remain in the [2.1.0 documentation](../
 ## Identity
 
 - [Single sign-on guides](./guides/identity/README.md) and [sign-in troubleshooting](./troubleshooting/login/README.md)
+
+## Integrations
+
+- [Slack permissions and scopes](./integrations/communication/slack/permissions-and-scopes.md):
+  `commands` is now required for `/incident`; workspaces connected on 2.1 must reconnect
+- [Integration tasks](./guides/integrations/README.md), including where copied integration URLs get
+  their hostname (**Settings → System → App URL** first)
+
+## Deployment
+
+- [Helm pre-upgrade runtime gate](./operate/deploy/helm/upgrade-gate.md): values-only upgrades no
+  longer require stopping every Deployment

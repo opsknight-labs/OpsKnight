@@ -24,6 +24,7 @@ import {
 } from '@/lib/intelligence/settings/service';
 import { detectCapabilities } from '@/lib/intelligence/similarity/capabilities';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -58,6 +59,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 export default async function IntelligenceSettingsPage() {
+  await requirePageAccess('/settings/intelligence');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
 

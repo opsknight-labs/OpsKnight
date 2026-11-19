@@ -21,8 +21,10 @@ import {
   Radio,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function StatusPagesControlCenter() {
+  await requirePageAccess('/settings/status-pages');
   const session = await getServerSession(await getAuthOptions());
   if (!session) redirect('/login');
   try {

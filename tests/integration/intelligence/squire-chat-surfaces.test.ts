@@ -510,6 +510,7 @@ describe('ask_squire over the MCP protocol', () => {
           false,
           false,
           [],
+          false,
           { squire: true }
         ),
       { legacy: 'reject', responseMode: 'json', maxSubscriptions: 0 }

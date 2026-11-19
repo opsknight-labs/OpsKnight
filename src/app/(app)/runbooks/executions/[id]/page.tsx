@@ -50,10 +50,12 @@ import { cancelExecutionAction } from '../actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { KeyValueGrid, SectionCard } from '@/components/runbooks/ui/primitives';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
 export default async function ExecutionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/runbooks/executions/[id]');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
   const [user, permissions] = await Promise.all([getCurrentUser(), getUserPermissions()]);
@@ -268,10 +270,10 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
             </Badge>
             <Badge
               variant="outline"
-              className="border-white/10 bg-white/5 text-slate-400 font-mono text-[11px] gap-1 shadow-2xs"
+              className="border-white/10 bg-white/5 text-ink-400 font-mono text-[11px] gap-1 shadow-2xs"
               title={`Execution ID: ${execution.id}`}
             >
-              <Terminal className="h-3 w-3 text-slate-400" aria-hidden="true" />
+              <Terminal className="h-3 w-3 text-ink-400" aria-hidden="true" />
               <span className="hidden sm:inline">ID: </span>
               {execution.id}
             </Badge>
@@ -297,11 +299,11 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 {runbookName}
               </Link>
             </span>
-            <span className="text-slate-500"> · </span>
+            <span className="text-ink-500"> · </span>
             <span>Queued {fmt(execution.createdAt, 'at an unrecorded time')}</span>
             {execution.startedAt && (
               <>
-                <span className="text-slate-500"> · </span>
+                <span className="text-ink-500"> · </span>
                 <span>Started {fmt(execution.startedAt, '')}</span>
               </>
             )}
@@ -408,14 +410,14 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               ) : isFailure ? (
                 <XCircle className="h-3.5 w-3.5 text-rose-400" />
               ) : (
-                <Clock className="h-3.5 w-3.5 text-slate-400" />
+                <Clock className="h-3.5 w-3.5 text-ink-400" />
               ),
           },
           {
             label: 'Progress',
             value: totalSteps > 0 ? `${completedSteps} of ${totalSteps} Steps` : '0 Steps',
             subtext: `${totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0}% completed`,
-            icon: <Workflow className="h-3.5 w-3.5 text-slate-400" />,
+            icon: <Workflow className="h-3.5 w-3.5 text-ink-400" />,
           },
           {
             label: 'Duration',

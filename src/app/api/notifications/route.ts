@@ -7,21 +7,13 @@ import { NotificationPatchSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { AppError } from '@/lib/errors';
-import { inAppNotificationHref } from '@/lib/notification-links';
+import { inAppNotificationHref, inAppNotificationKind } from '@/lib/notification-links';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
 const LEGACY_NOT_FOUND_MESSAGE =
   'The requested item could not be found. It may have been deleted or you may not have access to it.';
 const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
-
-const NOTIFICATION_TYPES = new Map<string, 'incident' | 'service' | 'schedule' | 'system'>([
-  ['incident', 'incident'],
-  ['schedule', 'schedule'],
-  ['service', 'service'],
-  ['team', 'service'],
-  ['system', 'system'],
-]);
 
 export async function GET(req: NextRequest) {
   try {
@@ -71,8 +63,7 @@ export async function GET(req: NextRequest) {
 
     const formattedNotifications = notifications.map(notification => {
       const timeAgo = formatDateTime(notification.createdAt, userTimeZone, { format: 'relative' });
-      const typeKey = notification.type.toLowerCase();
-      const type = NOTIFICATION_TYPES.get(typeKey) ?? 'incident';
+      const type = inAppNotificationKind(notification.type);
       const incidentId = notification.entityType === 'INCIDENT' ? notification.entityId : null;
 
       return {

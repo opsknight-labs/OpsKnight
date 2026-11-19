@@ -4,10 +4,12 @@ import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import MobileMoreContent from '@/components/mobile/MobileMoreContent';
 import NoiseSettings from '@/components/settings/NoiseSettings';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobileMorePage() {
+  await requirePageAccess('/m/more');
   const session = await getServerSession(await getAuthOptions());
 
   const user = session?.user?.email

@@ -13,10 +13,14 @@ import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { getAiSettings } from '@/lib/intelligence/ai/settings';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function CreatePostmortemPage() {
+  await requirePageAccess('/postmortems/create');
   // AI drafting is offered only while an administrator has enabled AI.
-  const aiDraftAvailable = await getAiSettings().then(settings => settings.enabled).catch(() => false);
+  const aiDraftAvailable = await getAiSettings()
+    .then(settings => settings.enabled)
+    .catch(() => false);
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
     redirect('/login');
@@ -106,7 +110,7 @@ export default async function CreatePostmortemPage() {
       </div>
 
       {resolvedIncidents.length === 0 ? (
-        <Card className="bg-gradient-to-br from-white to-slate-50 border-slate-200 shadow-md">
+        <Card className="bg-gradient-to-br from-card to-ink-50 border-ink-200 shadow-md">
           <CardContent className="py-8 text-center">
             <h3 className="text-lg font-semibold mb-2">No Resolved Incidents Available</h3>
             <p className="text-muted-foreground mb-4">
@@ -120,7 +124,7 @@ export default async function CreatePostmortemPage() {
         </Card>
       ) : (
         <PostmortemForm
-            aiDraftAvailable={aiDraftAvailable}
+          aiDraftAvailable={aiDraftAvailable}
           incidentId=""
           users={users}
           resolvedIncidents={resolvedIncidents}

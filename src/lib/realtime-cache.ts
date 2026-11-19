@@ -435,6 +435,7 @@ export async function getCachedRecentIncidents(
         slaResolveElapsedMs: true,
         assigneeId: true,
         teamId: true,
+        maintenanceWindowId: true,
         service: {
           select: {
             id: true,

@@ -68,7 +68,7 @@ export default function DetailHeroBanner({
       )}
 
       {/* Main Glassmorphic Hero Banner (Matching OpsKnight Command Center & Services style) */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-3.5 sm:p-4.5 md:p-5 text-slate-100 shadow-xl ring-1 ring-white/5">
+      <div className="ok-inverse-surface relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] dark:border-zinc-700/60 dark:from-[#18181d] dark:to-[#111114] p-3.5 sm:p-4.5 md:p-5 text-slate-100 shadow-xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
 
         <div
@@ -85,7 +85,7 @@ export default function DetailHeroBanner({
               {(tag || badges) && (
                 <div className="flex flex-wrap items-center gap-1.5">
                   {tag && (
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">
                       {tag}
                     </p>
                   )}
@@ -132,7 +132,7 @@ export default function DetailHeroBanner({
                     {stats.map((stat, idx) => {
                       const statContent = (
                         <>
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-400">
                             {stat.label}
                           </p>
                           <div
@@ -153,7 +153,7 @@ export default function DetailHeroBanner({
                             </span>
                           </div>
                           {stat.subtext && (
-                            <p className="text-[9px] text-slate-400 mt-0.5 truncate">
+                            <p className="text-[9px] text-ink-400 mt-0.5 truncate">
                               {stat.subtext}
                             </p>
                           )}
@@ -215,12 +215,12 @@ export default function DetailHeroBanner({
             {stats.map((stat, idx) => {
               const statContent = (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate w-full">
+                  <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-ink-400 truncate w-full">
                     {stat.label}
                   </p>
                   <div
                     className={cn(
-                      'mt-0.5 flex h-6 items-center justify-center gap-1.5 text-xs sm:text-sm md:text-base font-extrabold text-white min-w-0 max-w-full px-1',
+                      'mt-0.5 flex min-h-6 items-center justify-center gap-1.5 text-xs sm:h-6 sm:text-sm md:text-base font-extrabold text-white min-w-0 max-w-full px-1',
                       stat.valueClassName
                     )}
                   >
@@ -228,7 +228,7 @@ export default function DetailHeroBanner({
                       <span className="shrink-0 flex items-center justify-center">{stat.icon}</span>
                     )}
                     <span
-                      className="truncate max-w-full leading-tight"
+                      className="max-w-full break-words leading-tight sm:truncate"
                       title={
                         stat.tooltip ?? (typeof stat.value === 'string' ? stat.value : undefined)
                       }
@@ -237,7 +237,7 @@ export default function DetailHeroBanner({
                     </span>
                   </div>
                   {stat.subtext && (
-                    <p className="text-[9px] text-slate-400 mt-0.5 truncate w-full">
+                    <p className="text-[9px] text-ink-400 mt-0.5 w-full break-words sm:truncate">
                       {stat.subtext}
                     </p>
                   )}
@@ -302,7 +302,7 @@ export function DetailHeroBannerSkeleton({
       )}
 
       {/* Main Glassmorphic Hero Banner Container */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 sm:p-5 md:p-6 shadow-xl ring-1 ring-white/5">
+      <div className="ok-inverse-surface relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] dark:border-zinc-700/60 dark:from-[#18181d] dark:to-[#111114] p-4 sm:p-5 md:p-6 shadow-xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.02] blur-3xl" />
 
         <div className="relative flex flex-col justify-between gap-4 lg:flex-row lg:items-center">

@@ -221,7 +221,7 @@ describe('previewMaintenanceWindow', () => {
     expect(preview.shiftedWeeks).toBe(1);
     expect(preview.outcome).toMatchObject({ incidentsEvaluated: 5, pagesAvoided: 1 });
     expect(preview.outcome.byControl).toEqual({ MAINTENANCE: 1 });
-    expect(await db.maintenanceWindow.count()).toBe(0);
+    expect(await db.noiseMaintenanceWindow.count()).toBe(0);
   });
 
   it('expands recurrence and resolves team scope', async () => {

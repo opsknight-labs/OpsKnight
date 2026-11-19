@@ -1888,6 +1888,7 @@
   },
   "snoozeIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -1900,6 +1901,7 @@
   },
   "unacknowledgeIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -2218,7 +2220,7 @@
     "annotations": {
       "openWorldHint": true
     },
-    "routeSha256": "0136347684635ea5c34b8901bbdf70dad0dfeca3c2e20a1cbc7c3bd3579acee3",
+    "routeSha256": "5988b8392d578e8b8b856e8f1d137e835e76debd08f8d7775ce0030248bbf65e",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "a7b470f689fc3d8f3368d136997bfb73e5a27ad3991129895a9e5e1767e1415f",
@@ -2262,7 +2264,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "incident_list_notes",
-    "routeSha256": "d108aa673779ef1c370c96980d7ce3c2d55176f27568416c2a5c95b5e9740156",
+    "routeSha256": "558a55d473a241f42dc7d75c85ef1763686932730a6b998643b7760cfe28e6a9",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-round5.test.ts",
     "contractSha256": "609f25b7976a3b847bf09ac0c2e5a07817d7408e498caaa03715aca4033844ea",
@@ -2280,7 +2282,7 @@
     "annotations": {
       "destructiveHint": false
     },
-    "routeSha256": "d108aa673779ef1c370c96980d7ce3c2d55176f27568416c2a5c95b5e9740156",
+    "routeSha256": "558a55d473a241f42dc7d75c85ef1763686932730a6b998643b7760cfe28e6a9",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "e74454a3d3f54c7e54ae44333857c57a728550d0fb068dd3adb4c1c36edd2acf",
@@ -2296,11 +2298,11 @@
     "annotations": {
       "openWorldHint": true
     },
-    "routeSha256": "9038dc371295907e26fd194d23e02ec8f93481f76fc58f63fa0ad5cf44833694",
+    "routeSha256": "4b5db305d9c2bcd00bb0cc39b372e6efb29b38d8f61d05d204654ffde5f2b183",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "9e8db219b89d221ec8a5a8d7cafea8f55916607c9cae2eaaaf4383cd75220b03",
-    "actions": ["incident.manage"]
+    "contractSha256": "5d77838b1a1de3eca19562f78a11d7dbcedaebe2bbee066056ad98525bb7ab2d",
+    "actions": ["incident.resolve"]
   },
   "getIncident": {
     "status": "CURATED",
@@ -2317,6 +2319,7 @@
   },
   "updateIncident": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
@@ -2621,7 +2624,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "incident_available_actions",
-    "routeSha256": "6b7694d7faf4cc2d1eb0f03346105385845a8e47224c5e44c4f33165834f4d05",
+    "routeSha256": "5f1f3a184403ab1b1d575386f6fba8078b96b1d16ea1e8133da1d89401c342fd",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-round5.test.ts",
     "contractSha256": "72a32b2d07116c4b4290fe2745db419a4e2ae8d139b4f6837b94703adbb1be30",
@@ -2728,6 +2731,18 @@
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "e6be5016f9bb607eb22a0cbf4e07b339b6e533f8af13e5798155fb53ed053b5e",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
+  },
+  "listActionItems": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "06fc1cc67dd76fb168410d3dcc8276d7df4414c19d2f3bc087bbffdbd2c7c686",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-best-in-class-protocol.test.ts",
+    "contractSha256": "48a5064fc2efb5fba2a59694e9bd3f83df83da08e76786364bc3e9157ca203da",
     "actions": ["postmortem.read"],
     "additionalScopes": ["incidents:read"]
   },
@@ -3234,6 +3249,7 @@
   },
   "createScheduleOverride": {
     "status": "APPROVAL_REQUIRED",
+    "responderDirect": true,
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
@@ -3568,7 +3584,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": null,
-    "routeSha256": "2f654c60313ec2754dd3a39d5f4ca7cc40351e23d41ff24580696ee5e37ba9c8",
+    "routeSha256": "97becb91ae69c48ef4bcffc2870ea12b4543da17e16810057a9251d410348ee9",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "f6fc2b544f582b117efc599c4d0b6133d6557dae096f5429567dc159576b220a",
@@ -3579,7 +3595,7 @@
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
-    "routeSha256": "2f654c60313ec2754dd3a39d5f4ca7cc40351e23d41ff24580696ee5e37ba9c8",
+    "routeSha256": "97becb91ae69c48ef4bcffc2870ea12b4543da17e16810057a9251d410348ee9",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-operation-approval.test.ts",
     "contractSha256": "fbf3eac1782fd7bbdfc2a31dd340347b6a63c0ab7001f8f2017e6dfebe652a9a",
@@ -3778,5 +3794,130 @@
     "evidence": "tests/integration/mcp-item-previews.test.ts",
     "contractSha256": "0f0c9c74ae5e5fc006759b226d0185b299b8e2acd9f1932b3546090b4a44bcfa",
     "actions": ["status_page.read"]
+  },
+  "listMaintenanceWindows": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed service-level operational read through the existing REST route; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "d8f48c732d10a81712cf356c46fd9f3c26feb0dfd8cd22f3053a5e1cec7aa7a5",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "1cae2cbf8c74eaffc3757e94ccecdc4941334fde95182af9b9b0511e75099277",
+    "actions": ["maintenance_window.read"]
+  },
+  "getMaintenanceWindow": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed service-level operational read through the existing REST route; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "8b26d7a8a718c4b678f6dde52b7dcdc5667a1edef5585b410090e903159af6d8",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "18f7679bc5b6865e3b45d9ea8c51f81c27d252fd96658236ea27aea72e7a665d",
+    "actions": ["maintenance_window.read"]
+  },
+  "createMaintenanceWindow": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
+    "tool": null,
+    "routeSha256": "d8f48c732d10a81712cf356c46fd9f3c26feb0dfd8cd22f3053a5e1cec7aa7a5",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "90f45c21e3f12ee069ea7621580190b4fbc3f32bc30c14addddbf195f58d5c66",
+    "actions": ["maintenance_window.manage"]
+  },
+  "updateMaintenanceWindow": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
+    "tool": null,
+    "routeSha256": "8b26d7a8a718c4b678f6dde52b7dcdc5667a1edef5585b410090e903159af6d8",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "1cecf89382274f4da0e3ca4efc3b509c29efb28d4f01547fb234fc11f3655111",
+    "actions": ["maintenance_window.manage"]
+  },
+  "deleteMaintenanceWindow": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R3",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
+    "tool": null,
+    "routeSha256": "8b26d7a8a718c4b678f6dde52b7dcdc5667a1edef5585b410090e903159af6d8",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "9bbebc3266ca6024ba93f48ad043a2f6d49d6d765f6bef4dcfb26e8b04a9caa4",
+    "actions": ["maintenance_window.manage"],
+    "impactPreview": "getMaintenanceWindow",
+    "additionalScopes": ["services:read"]
+  },
+  "endMaintenanceWindow": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; ending early releases held incidents and resumes paging, so never generic.",
+    "tool": null,
+    "routeSha256": "3e6e57accec5f379f5cb61eff5c06c37f323af85b3699654e89f0959c01e2e71",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "46b697cfa00e703edde587837d38e00208f061c04ba43aceb85cc709938ca60e",
+    "actions": ["maintenance_window.manage"]
+  },
+  "listMaintenanceSchedules": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed service-level operational read through the existing REST route; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "c4589f6f93e79cb12cbda6628ec3fd02cd6dc5339f8b12dc96b81c7b8773588f",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "956d9765bba3d370598e45d2f50fe197ccff8099ebd2e774c080b944ceab9868",
+    "actions": ["maintenance_window.read"]
+  },
+  "getMaintenanceSchedule": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed service-level operational read through the existing REST route; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "d7696d196836f081878646225ab07d7b25e5492251f1ba839b1865401225c054",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "5380ec287f4a8fc0c437425516f11ef6c059ba1279a604ae3353157dc3b0147f",
+    "actions": ["maintenance_window.read"]
+  },
+  "createMaintenanceSchedule": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; a schedule creates recurring windows that hold incidents, so never generic.",
+    "tool": null,
+    "routeSha256": "c4589f6f93e79cb12cbda6628ec3fd02cd6dc5339f8b12dc96b81c7b8773588f",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "63ceb062ddc3d7b23f99055eab5062f1e5fb25d818745f73106087b4654aa12a",
+    "actions": ["maintenance_window.manage"]
+  },
+  "updateMaintenanceSchedule": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; edits replace upcoming occurrences, so never generic.",
+    "tool": null,
+    "routeSha256": "d7696d196836f081878646225ab07d7b25e5492251f1ba839b1865401225c054",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "a2f93323a425af593f7a3e206e5b029135c071f27b80bf52249fdc645ede01d2",
+    "actions": ["maintenance_window.manage"]
+  },
+  "deleteMaintenanceSchedule": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R3",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
+    "tool": null,
+    "routeSha256": "d7696d196836f081878646225ab07d7b25e5492251f1ba839b1865401225c054",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-approval-services.test.ts",
+    "contractSha256": "f125fd39c29ade4f27a9fe3346a91871a898117db00cb4ac6364a6bafb625ba5",
+    "actions": ["maintenance_window.manage"],
+    "impactPreview": "getMaintenanceSchedule",
+    "additionalScopes": ["services:read"]
   }
 }

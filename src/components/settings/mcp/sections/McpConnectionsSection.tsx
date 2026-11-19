@@ -110,6 +110,7 @@ export default function McpConnectionsSection({
   describeScope,
   revokeAction,
   revokeAllAction,
+  revokeMineAction,
   personalTokens,
   activityAction,
 }: {
@@ -131,6 +132,8 @@ export default function McpConnectionsSection({
   describeScope: (scope: string) => string;
   revokeAction: (form: FormData) => Promise<void>;
   revokeAllAction: (form: FormData) => Promise<void>;
+  /** Disconnects only the signed-in user's own connections. */
+  revokeMineAction?: (form: FormData) => Promise<void>;
   /** The personal access token panel, when the policy allows personal tokens. */
   personalTokens?: ReactNode;
   /** Loads one connection's activity drawer; omitted, no drawer is offered. */
@@ -304,7 +307,7 @@ export default function McpConnectionsSection({
                         </div>
                       </ResponsiveCell>
                     )}
-                    <ResponsiveCell label="Assistant" primary={!isAdmin}>
+                    <ResponsiveCell label="Assistant" primary>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/40 shadow-2xs">
                           {row.kind === 'pat' ? (
@@ -317,10 +320,19 @@ export default function McpConnectionsSection({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-foreground">{name}</p>
+                          <p
+                            className="break-words font-medium text-foreground md:truncate"
+                            title={name}
+                          >
+                            {name}
+                          </p>
                           <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                             <StatusPill tone={row.kind === 'pat' ? 'warning' : 'neutral'}>
-                              {row.kind === 'pat' ? 'Personal token' : 'OAuth'}
+                              {row.kind === 'pat'
+                                ? 'Personal token'
+                                : row.idpGranted
+                                  ? 'Granted by your identity provider'
+                                  : 'OAuth'}
                             </StatusPill>
                             {row.kind === 'oauth' && CLIENT_TYPE_LABEL[row.client.type]}
                             {row.kind === 'oauth' && row.client.revoked && ' · assistant revoked'}
@@ -394,7 +406,7 @@ export default function McpConnectionsSection({
                       )}
                     </ResponsiveCell>
                     <ResponsiveCell label="Actions" primary align="end">
-                      <span className="flex flex-wrap items-center justify-end gap-1.5">
+                      <span className="flex flex-wrap items-center justify-start gap-1.5 md:justify-end">
                         {activityAction && (
                           <McpActivityDrawer
                             grantId={row.id}
@@ -416,7 +428,7 @@ export default function McpConnectionsSection({
                             title={`Revoke connection for ${name}?`}
                             confirmLabel="Revoke connection"
                             successMessage="Connection revoked"
-                            className="w-full md:w-auto"
+
                             description={
                               isAdmin ? (
                                 <p>
@@ -471,6 +483,23 @@ export default function McpConnectionsSection({
               {MCP_CREDENTIAL_SECURITY_COPY}
             </p>
           </div>
+          {!isAdmin && revokeMineAction && rows.some(row => row.status === 'active') && (
+            <McpConfirmAction
+              action={revokeMineAction}
+              fields={{}}
+              acknowledgement="I understand this disconnects all of my assistants and personal tokens"
+              label="Disconnect all my assistants"
+              title="Disconnect all your assistants?"
+              confirmLabel="Disconnect all"
+              successMessage="Your assistants were disconnected"
+              description={
+                <p>
+                  Every assistant and personal token connected as you stops working immediately.
+                  Nobody else is affected. You can connect again at any time.
+                </p>
+              }
+            />
+          )}
           {isAdmin && revocable > 0 && (
             <McpConfirmAction
               action={revokeAllAction}

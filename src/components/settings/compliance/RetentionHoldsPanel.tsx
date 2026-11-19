@@ -25,6 +25,8 @@ interface HoldItem {
   releasedBy: { id: string; name: string; email: string } | null;
 }
 
+type HoldsPage = { holds?: HoldItem[]; nextCursor?: string | null };
+
 export default function RetentionHoldsPanel() {
   const [holds, setHolds] = useState<HoldItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,58 +56,87 @@ export default function RetentionHoldsPanel() {
   const requestGenRef = React.useRef(0);
   const abortControllerRef = React.useRef<AbortController | null>(null);
 
-  const fetchHolds = useCallback(
-    async (reset = true, cursorToUse?: string | null) => {
+  const requestHolds = useCallback(
+    (reset: boolean, cursorToUse?: string | null) => {
       if (reset && abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      const currentGen = ++requestGenRef.current;
+      const generation = ++requestGenRef.current;
 
-      if (reset) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-      try {
-        const params = new URLSearchParams();
-        if (statusFilter !== 'ALL') params.set('status', statusFilter);
-        if (scopeFilter !== 'ALL') params.set('scopeType', scopeFilter);
-        if (!reset && cursorToUse) params.set('cursor', cursorToUse);
+      const params = new URLSearchParams();
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (scopeFilter !== 'ALL') params.set('scopeType', scopeFilter);
+      if (!reset && cursorToUse) params.set('cursor', cursorToUse);
 
-        const res = await fetch(`/api/compliance/retention-holds?${params.toString()}`, {
-          signal: controller.signal,
-        });
+      const response = fetch(`/api/compliance/retention-holds?${params.toString()}`, {
+        signal: controller.signal,
+      }).then(async res => {
         if (!res.ok) throw new Error('Failed to load retention holds');
-        const data = await res.json();
-
-        // Discard stale response if filter changed while request was in flight
-        if (currentGen !== requestGenRef.current) return;
-
-        if (reset) {
-          setHolds(data.holds || []);
-        } else {
-          setHolds(prev => [...prev, ...(data.holds || [])]);
-        }
-        setNextCursor(data.nextCursor || null);
-      } catch (err: unknown) {
-        if ((err as { name?: string })?.name === 'AbortError') return;
-        if (currentGen !== requestGenRef.current) return;
-        notify.error(err instanceof Error ? err.message : 'Error loading retention holds');
-      } finally {
-        if (currentGen === requestGenRef.current) {
-          setLoading(false);
-          setLoadingMore(false);
-        }
-      }
+        return (await res.json()) as HoldsPage;
+      });
+      return { generation, response };
     },
     [statusFilter, scopeFilter]
   );
 
+  const applyHoldsPage = useCallback((generation: number, reset: boolean, data: HoldsPage) => {
+    // Discard stale response if filter changed while request was in flight
+    if (generation !== requestGenRef.current) return;
+
+    if (reset) {
+      setHolds(data.holds || []);
+    } else {
+      setHolds(prev => [...prev, ...(data.holds || [])]);
+    }
+    setNextCursor(data.nextCursor || null);
+  }, []);
+
+  const applyHoldsError = useCallback((generation: number, err: unknown) => {
+    if ((err as { name?: string })?.name === 'AbortError') return;
+    if (generation !== requestGenRef.current) return;
+    notify.error(err instanceof Error ? err.message : 'Error loading retention holds');
+  }, []);
+
+  const finishHoldsRequest = useCallback((generation: number) => {
+    if (generation === requestGenRef.current) {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, []);
+
+  const fetchHolds = async (reset = true, cursorToUse?: string | null) => {
+    const { generation, response } = requestHolds(reset, cursorToUse);
+    if (reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+    try {
+      applyHoldsPage(generation, reset, await response);
+    } catch (err: unknown) {
+      applyHoldsError(generation, err);
+    } finally {
+      finishHoldsRequest(generation);
+    }
+  };
+
+  const [holdsFilterKey, setHoldsFilterKey] = useState({ statusFilter, scopeFilter });
+  if (holdsFilterKey.statusFilter !== statusFilter || holdsFilterKey.scopeFilter !== scopeFilter) {
+    setHoldsFilterKey({ statusFilter, scopeFilter });
+    setLoading(true);
+  }
+
   useEffect(() => {
-    fetchHolds(true);
-  }, [fetchHolds]);
+    const { generation, response } = requestHolds(true);
+    void response
+      .then(
+        data => applyHoldsPage(generation, true, data),
+        (err: unknown) => applyHoldsError(generation, err)
+      )
+      .finally(() => finishHoldsRequest(generation));
+  }, [requestHolds, applyHoldsPage, applyHoldsError, finishHoldsRequest]);
 
   const handleCreateHold = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,7 +348,7 @@ export default function RetentionHoldsPanel() {
                           setSelectedHold(hold);
                           setReleaseOpen(true);
                         }}
-                        className="h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 text-xs"
+                        className="h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 text-xs dark:hover:text-rose-400"
                       >
                         <Unlock className="h-3 w-3 mr-1" />
                         Release

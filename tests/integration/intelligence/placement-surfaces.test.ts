@@ -356,7 +356,7 @@ describe('service Intelligence tab loaders', () => {
     await noisePolicy(null, 'ON');
     await noisePolicy(s.svcA.id, 'SHADOW');
     const window = (data: Record<string, unknown>) =>
-      db.maintenanceWindow.create({
+      db.noiseMaintenanceWindow.create({
         data: {
           name: 'window',
           scope: 'SERVICE',
@@ -541,7 +541,7 @@ describe('service list badges', () => {
       await createTestIncident('Down', service.id, {
         createdAt: new Date(now.getTime() - 20 * MIN),
       });
-      await db.maintenanceWindow.create({
+      await db.noiseMaintenanceWindow.create({
         data: {
           name: `Upgrade ${service.id}`,
           scope: 'SERVICE',
@@ -578,7 +578,7 @@ describe('service list badges', () => {
   it('badges a team-wide maintenance window on that team’s services only', async () => {
     const s = await seed();
     const now = new Date();
-    await db.maintenanceWindow.create({
+    await db.noiseMaintenanceWindow.create({
       data: {
         name: 'Team A freeze',
         scope: 'TEAM',

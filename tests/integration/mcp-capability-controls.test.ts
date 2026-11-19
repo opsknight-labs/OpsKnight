@@ -159,7 +159,7 @@ describe('administrator-disabled MCP capabilities', () => {
     expect(tools).toContain('incident_get');
     const direct = await callTool(bearer, 'incident_search', { query: {} });
     expect(direct.error ?? direct.result?.isError).toBeTruthy();
-    const generic = await callTool(bearer, 'call_operation', {
+    const generic = await callTool(bearer, 'read_operation', {
       operationId: 'listIncidents',
       args: { query: {} },
     });
@@ -192,7 +192,7 @@ describe('administrator-disabled MCP capabilities', () => {
     const described = await callTool(bearer, 'describe_operation', { operationId: 'listTeams' });
     expect(described.result?.isError).toBe(true);
     expect(described.result?.content?.[0].text).toMatch(/^MCP_OPERATION_UNAVAILABLE\b/);
-    const called = await callTool(bearer, 'call_operation', {
+    const called = await callTool(bearer, 'read_operation', {
       operationId: 'listTeams',
       args: { query: {} },
     });

@@ -14,18 +14,32 @@ import {
   mcpGrantBlockError,
   type GrantAccessSnapshot,
 } from './effective-access';
+import { effectiveDisabledMcpCapabilities } from './effective-capabilities';
+import { getAccessControlSettings } from '@/lib/access/settings';
 
 interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   clientId: string;
+  userName: string | null;
+  clientName: string | null;
   teamIds: string[];
+  /** Active custom role, so assistants act with the person's effective access. */
+  customRoleId: string | null;
+  customRoleName: string | null;
+  customRoleCapabilities: string[] | null;
+  /** Active temporary/emergency grants as JSON rows. */
+  accessGrants:
+    { id: string; role: string | null; incidentId: string | null; expiresAt: string }[] | null;
   writesEnabled: boolean | null;
   sensitiveReadsEnabled: boolean | null;
   maxInFlight: number | null;
   maxOperations: number | null;
   requestsPerMinute: number | null;
   disabledCapabilities: string[] | null;
+  roleDisabledCapabilities: unknown;
+  clientDisabledCapabilities: string[] | null;
   scopeStepUpEnabled: boolean | null;
   perUserRequestsPerMinute: number | null;
+  responderDirectWritesEnabled: boolean | null;
 }
 
 /** OAUTH: an assistant's consent. PAT: a personal access token (one token, never refreshed). */
@@ -39,11 +53,14 @@ export interface McpRuntimePolicy {
   maxInFlight: number;
   maxOperations: number;
   requestsPerMinute: number;
+  /** Effective for the principal (effective-capabilities.ts); the stored global list on failure paths. */
   disabledCapabilities: string[];
   /** Answer a grantable missing permission with 403 insufficient_scope (step-up.ts). */
   scopeStepUpEnabled: boolean;
   /** Optional cap on one person's requests per minute across all their connections; null is off. */
   perUserRequestsPerMinute: number | null;
+  /** Routine responder changes may run without a review (catalog "responderDirect"). */
+  responderDirectWritesEnabled: boolean;
 }
 
 const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
@@ -60,6 +77,7 @@ const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
         disabledCapabilities: true,
         scopeStepUpEnabled: true,
         perUserRequestsPerMinute: true,
+        responderDirectWritesEnabled: true,
       },
     })
   );
@@ -80,12 +98,18 @@ export async function resolveMcpGrant(
 // The authority columns shared by both lookups. The access columns are the same ones the
 // settings lists read (effective-access.ts), so the admin page shows what is enforced here.
 const AUTHORITY_COLUMNS = Prisma.sql`
-  ${GRANT_ACCESS_COLUMNS}, g."clientId",
+  ${GRANT_ACCESS_COLUMNS}, g."clientId", u.name AS "userName", c.name AS "clientName",
   ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
+  cr.id AS "customRoleId", cr.name AS "customRoleName", cr.capabilities AS "customRoleCapabilities",
+  (SELECT COALESCE(json_agg(json_build_object(
+      'id', ag.id, 'role', ag.role, 'incidentId', ag."incidentId", 'expiresAt', ag."expiresAt")), '[]'::json)
+    FROM "AccessGrant" ag
+    WHERE ag."userId" = u.id AND ag."revokedAt" IS NULL AND ag."expiresAt" > NOW()) AS "accessGrants",
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
   p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities",
-  p."scopeStepUpEnabled", p."perUserRequestsPerMinute"`;
+  p."scopeStepUpEnabled", p."perUserRequestsPerMinute", p."responderDirectWritesEnabled",
+  p."roleDisabledCapabilities", c."disabledCapabilities" AS "clientDisabledCapabilities"`;
 
 /**
  * The grant's current authority and the MCP policy as of the same statement. The policy is null
@@ -97,6 +121,7 @@ export async function resolveMcpGrantWithPolicy(
   credentialId?: string,
   db: Prisma.TransactionClient = prisma
 ): Promise<{ auth: V2AuthContext; policy: McpRuntimePolicy | null; clientId: string }> {
+  await getAccessControlSettings();
   const now = new Date();
   // One current-statement snapshot avoids four ORM round trips per domain step.
   // No values are interpolated into SQL syntax and no authority is cached.
@@ -104,6 +129,7 @@ export async function resolveMcpGrantWithPolicy(
     SELECT ${AUTHORITY_COLUMNS}
     FROM "McpGrant" g JOIN "McpClient" c ON c.id = g."clientId"
     LEFT JOIN "User" u ON u.id = g."userId"
+    LEFT JOIN "CustomRole" cr ON cr.id = u."customRoleId" AND cr."archivedAt" IS NULL
     LEFT JOIN "McpPolicy" p ON p.id = 'default'
     WHERE g.id = ${grantId}
       AND (${credentialId ?? null}::text IS NULL OR EXISTS (
@@ -112,6 +138,19 @@ export async function resolveMcpGrantWithPolicy(
       ))
   `;
   return authorityFrom(grant, now);
+}
+
+/**
+ * How a change made through an assistant is named on timelines, in Jira and in chat. The
+ * assistant name is self-declared at registration, so markup and mention characters are removed
+ * and it is kept short.
+ */
+export function mcpActorLabel(userName: string | null | undefined, clientName: string | null) {
+  const assistant = (clientName ?? '')
+    .replace(/[\p{Cc}*_~`<>@|[\]]/gu, '')
+    .trim()
+    .slice(0, 40);
+  return `${userName?.trim() || 'A user'} via ${assistant || 'an assistant'} (AI)`;
 }
 
 function authorityFrom(
@@ -129,6 +168,20 @@ function authorityFrom(
     role: grant.role ?? '',
     status: grant.status ?? '',
     teamMemberships: grant.teamIds.map(teamId => ({ teamId })),
+    customRole: grant.customRoleId
+      ? {
+          id: grant.customRoleId,
+          name: grant.customRoleName ?? '',
+          capabilities: grant.customRoleCapabilities ?? [],
+          archivedAt: null,
+        }
+      : null,
+    accessGrants: (grant.accessGrants ?? []).map(accessGrant => ({
+      id: accessGrant.id,
+      role: accessGrant.role,
+      incidentId: accessGrant.incidentId,
+      expiresAt: new Date(accessGrant.expiresAt),
+    })),
   });
   requireMcp(base, 'MCP_INACTIVE_PRINCIPAL', 401);
   const id = `mcp:${grant.grantId}`;
@@ -138,7 +191,7 @@ function authorityFrom(
       actor: { ...base, apiKey: { id, scopes } },
       apiKey: {
         id,
-        name: 'MCP',
+        name: mcpActorLabel(grant.userName, grant.clientName),
         prefix: 'mcp',
         tokenHash: '',
         userId: grant.userId,
@@ -156,9 +209,11 @@ function authorityFrom(
             maxInFlight: grant.maxInFlight!,
             maxOperations: grant.maxOperations!,
             requestsPerMinute: grant.requestsPerMinute!,
-            disabledCapabilities: grant.disabledCapabilities ?? [],
+            // Global, the actor's role and this assistant: one list for listing and execution.
+            disabledCapabilities: effectiveDisabledMcpCapabilities(grant, grant.role),
             scopeStepUpEnabled: grant.scopeStepUpEnabled ?? false,
             perUserRequestsPerMinute: grant.perUserRequestsPerMinute ?? null,
+            responderDirectWritesEnabled: grant.responderDirectWritesEnabled ?? false,
           },
   };
 }
@@ -187,6 +242,7 @@ async function resolveBearer(accessHash: string) {
     LEFT JOIN "McpGrant" g ON g.id = t."grantId"
     LEFT JOIN "McpClient" c ON c.id = g."clientId"
     LEFT JOIN "User" u ON u.id = g."userId"
+    LEFT JOIN "CustomRole" cr ON cr.id = u."customRoleId" AND cr."archivedAt" IS NULL
     LEFT JOIN "McpPolicy" p ON p.id = 'default'
     WHERE t."accessHash" = ${accessHash}
   `;
@@ -220,8 +276,12 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     // No credential at all is a first connection, not a bad token: it is answered with a plain
     // challenge and never counts against the peer.
     requireMcp(header.trim() !== '', 'MCP_TOKEN_REQUIRED', 401);
-    requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
-    const row = await resolveBearer(digestMcpSecret(header.slice(7)));
+    // The scheme name is case-insensitive (RFC 9110 section 11.1); the token itself is not.
+    requireMcp(/^bearer [A-Za-z0-9_-]{32,256}$/i.test(header), 'MCP_INVALID_TOKEN', 401);
+    const [row] = await Promise.all([
+      resolveBearer(digestMcpSecret(header.slice(7))),
+      getAccessControlSettings(),
+    ]);
     unknownCredential = !row;
     const now = new Date();
     requireMcp(row && !row.rotatedAt && row.accessExpiresAt > now, 'MCP_INVALID_TOKEN', 401);

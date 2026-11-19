@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/rbac';
+import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import prisma from '@/lib/prisma';
 import { getGlobalWarRoomPolicy } from '@/lib/incident-collaboration/policy';
@@ -14,7 +15,7 @@ export async function GET(_request: NextRequest) {
     return jsonError('Authentication required', 401);
   }
 
-  if (user.role !== 'ADMIN') {
+  if (!capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE)) {
     return jsonError('Admin access required', 403);
   }
 
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     return jsonError('Authentication required', 401);
   }
 
-  if (user.role !== 'ADMIN') {
+  if (!capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE)) {
     return jsonError('Admin access required', 403);
   }
 

@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { logAudit } from '@/lib/audit';
+import { findServicesInMaintenance } from '@/lib/service-maintenance/windows';
 import {
   getCurrentAuthorizationActor,
   getUserPermissions,
@@ -23,6 +24,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import { getServiceListBadges } from '@/lib/intelligence/surfaces/service-list-badges';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -93,6 +95,7 @@ type ServicesPageProps = {
 };
 
 export default async function ServicesPage({ searchParams }: ServicesPageProps) {
+  await requirePageAccess('/services');
   const params = await searchParams;
   const searchQuery = typeof params?.search === 'string' ? params.search.trim() : '';
   const statusFilter = typeof params?.status === 'string' ? params.status : 'all';
@@ -351,6 +354,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const metricDataState = slaMetrics ? ('available' as const) : ('unavailable' as const);
 
   const intelligenceBadges = await intelligenceBadgesPromise;
+  const inMaintenance = await findServicesInMaintenance(services.map(s => s.id));
   const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
     const dynamicStatus = (slaData?.dynamicStatus || service.status || 'OPERATIONAL') as
@@ -367,6 +371,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       incidentCount,
       metricDataState,
       intelligenceBadges: intelligenceBadges[service.id],
+      maintenanceTitle: inMaintenance.get(service.id)?.title ?? null,
     };
   });
 

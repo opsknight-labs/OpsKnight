@@ -60,6 +60,7 @@ import {
   registerMcpClient,
   restoreMcpClient,
   revokeAllMcpConnections,
+  revokeMyMcpConnections,
   revokeMcpAccess,
   testMcpConnection,
   updateMcpPolicy,
@@ -83,6 +84,8 @@ import {
   loadMcpPagePermissions,
   loadMcpViewer,
 } from './queries';
+import { getOidcConfig } from '@/lib/oidc-config';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -117,6 +120,7 @@ export default async function McpSettings({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/settings/integrations/mcp');
   // Signed-in users see their own MCP access; every admin-only read below is gated on isAdmin.
   const permissions = await loadMcpPagePermissions();
   const isAdmin = permissions.isAdmin;
@@ -272,7 +276,7 @@ export default async function McpSettings({
             icon: <Globe className="h-4 w-4" />,
             tooltip: endpoint ?? undefined,
             valueClassName: endpoint
-              ? 'text-primary-foreground font-semibold text-xs sm:text-sm font-mono truncate max-w-full'
+              ? 'text-primary-foreground font-semibold text-xs sm:text-sm font-mono break-all sm:truncate max-w-full'
               : 'text-amber-300 font-semibold text-xs sm:text-sm',
             subtext: originSource ?? 'Set App URL in System settings',
           },
@@ -453,6 +457,7 @@ export default async function McpSettings({
             describeScope={describeMcpScope}
             revokeAction={revokeMcpAccess}
             revokeAllAction={revokeAllMcpConnections}
+            revokeMineAction={revokeMyMcpConnections}
             activityAction={loadMcpConnectionActivity}
           />
         );
@@ -536,7 +541,9 @@ export default async function McpSettings({
               deviceFlowEnabled: policy?.deviceFlowEnabled ?? false,
               callLogRetentionDays: policy?.callLogRetentionDays ?? 30,
               requireDistinctReviewer: policy?.requireDistinctReviewer ?? false,
+              responderDirectWritesEnabled: policy?.responderDirectWritesEnabled ?? false,
               perUserRequestsPerMinute: policy?.perUserRequestsPerMinute ?? null,
+              enterpriseManagedAuthEnabled: policy?.enterpriseManagedAuthEnabled ?? false,
             }}
             revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}
@@ -545,15 +552,31 @@ export default async function McpSettings({
             activeAdminCount={await prisma.user.count({
               where: { role: 'ADMIN', status: 'ACTIVE' },
             })}
+            ssoConfigured={Boolean(await getOidcConfig())}
           />
         );
       case 'usage': {
-        const usage = await getMcpUsage(viewer, {
-          window: params.usageWindow,
-          by: params.usageBy,
-          q: params.q,
-        });
-        return <McpUsageSection usage={usage} q={params.q} exportAction={exportMcpUsage} />;
+        const usage = await getMcpUsage(
+          viewer,
+          {
+            window: params.usageWindow,
+            from: params.usageFrom,
+            to: params.usageTo,
+            by: params.usageBy,
+            q: params.q,
+            page: params.page,
+          },
+          now
+        );
+        return (
+          <McpUsageSection
+            usage={usage}
+            q={params.q}
+            exportAction={exportMcpUsage}
+            requestedRange={{ from: params.usageFrom, to: params.usageTo }}
+            now={now}
+          />
+        );
       }
       case 'capabilities':
         return (
@@ -562,6 +585,7 @@ export default async function McpSettings({
             <McpCapabilityControls
               isAdmin={isAdmin}
               disabledCapabilities={policy?.disabledCapabilities ?? []}
+              roleDisabledCapabilities={policy?.roleDisabledCapabilities}
             />
           </div>
         );

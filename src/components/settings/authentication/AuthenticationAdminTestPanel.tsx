@@ -185,7 +185,7 @@ export default function AuthenticationAdminTestPanel() {
           className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed"
         >
           <p className="mb-1.5 flex items-center gap-1.5 font-semibold text-foreground">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-hidden />
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
             Before you test
           </p>
           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">

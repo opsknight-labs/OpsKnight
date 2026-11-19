@@ -72,8 +72,6 @@ export default memo(function IncidentTable({
     router.push(newUrl, { scroll: false });
   };
 
-  const renderSortArrow = () => (sortOrder === 'asc' ? '↑' : '↓');
-
   const buildUrgencyChip = (urgency: string | null | undefined) => {
     if (!urgency) return null;
     const u = urgency.toUpperCase();
@@ -263,7 +261,7 @@ export default memo(function IncidentTable({
       {/* Card list */}
       <div className="p-3.5 px-4 bg-card">
         {incidents.length === 0 ? (
-          <div className="py-9 px-6 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-gradient-to-br from-neutral-50 to-white">
+          <div className="py-9 px-6 text-center text-muted-foreground border border-dashed border-border rounded-lg bg-gradient-to-br from-ink-50 to-card">
             <FileText className="h-9 w-9 mx-auto mb-3 opacity-30" />
             <div className="text-base font-bold text-secondary-foreground mb-1">
               No incidents found
@@ -286,7 +284,7 @@ export default memo(function IncidentTable({
                     'border rounded-xl overflow-hidden cursor-pointer transition-all duration-150',
                     isSelected
                       ? 'border-primary/35 bg-primary/5 shadow-[0_12px_26px_rgba(15,23,42,0.10)]'
-                      : 'border-border bg-white shadow-xs hover:shadow-sm hover:-translate-y-px'
+                      : 'border-border bg-card shadow-xs hover:shadow-sm hover:-translate-y-px'
                   )}
                   style={
                     isSelected
@@ -378,18 +376,18 @@ export default memo(function IncidentTable({
                           >
                             <summary
                               aria-label="More actions"
-                              className="cursor-pointer py-1.5 px-2.5 rounded-lg border border-border bg-white text-secondary-foreground text-sm leading-none select-none shadow-xs"
+                              className="cursor-pointer py-1.5 px-2.5 rounded-lg border border-border bg-card text-secondary-foreground text-sm leading-none select-none shadow-xs"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </summary>
-                            <div className="absolute right-0 top-[calc(100%+8px)] min-w-[220px] bg-white border border-border rounded-lg shadow-lg p-1.5 z-50">
+                            <div className="absolute right-0 top-[calc(100%+8px)] min-w-[220px] bg-card border border-border rounded-lg shadow-lg p-1.5 z-50">
                               <Link
                                 href={`/incidents/${incident.id}`}
                                 onClick={e => {
                                   e.stopPropagation();
                                   closeDetailsMenu(e.currentTarget as unknown as HTMLElement);
                                 }}
-                                className="flex items-center gap-2 py-2 px-2.5 rounded-lg no-underline text-foreground font-semibold text-sm hover:bg-neutral-50 transition-colors"
+                                className="flex items-center gap-2 py-2 px-2.5 rounded-lg no-underline text-foreground font-semibold text-sm hover:bg-ink-50 transition-colors"
                               >
                                 View details →
                               </Link>
@@ -426,7 +424,7 @@ export default memo(function IncidentTable({
                                       closeDetailsMenu(e.currentTarget);
                                       handleStatusChange(incident.id, 'ACKNOWLEDGED');
                                     }}
-                                    className="w-full justify-start text-sm font-semibold hover:bg-neutral-50"
+                                    className="w-full justify-start text-sm font-semibold hover:bg-ink-50"
                                   >
                                     <Check className="h-3.5 w-3.5 mr-2" />
                                     Acknowledge
@@ -444,7 +442,7 @@ export default memo(function IncidentTable({
                                     closeDetailsMenu(e.currentTarget);
                                     handleStatusChange(incident.id, 'OPEN');
                                   }}
-                                  className="w-full justify-start text-sm font-semibold hover:bg-neutral-50"
+                                  className="w-full justify-start text-sm font-semibold hover:bg-ink-50"
                                 >
                                   ↩ Unacknowledge
                                 </Button>
@@ -474,7 +472,7 @@ export default memo(function IncidentTable({
                       </div>
 
                       <div className="mt-2.5 flex gap-1.5 flex-wrap items-center">
-                        <StatusBadge status={incident.status as any} size="sm" showDot />
+                        <StatusBadge status={incident.status} size="sm" showDot />
                         {urgencyChip}
                         <span className="text-muted-foreground text-xs">•</span>
                         {incident.assignee ? (

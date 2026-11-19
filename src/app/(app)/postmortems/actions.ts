@@ -10,7 +10,7 @@ import {
   getUserPermissions,
 } from '@/lib/rbac';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { CAPABILITIES, hasCapability, capabilitiesOf } from '@/lib/authorization';
 import {
   getStoredActionItemId,
   parseActionItemDueDate,
@@ -113,7 +113,11 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
     select: { createdById: true },
   });
 
-  if (existing && user.role !== 'ADMIN' && existing.createdById !== user.id) {
+  if (
+    existing &&
+    !capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE) &&
+    existing.createdById !== user.id
+  ) {
     const isTeamMember = incident.service?.team?.members.some(m => m.userId === user.id) ?? false;
     const isAssignee = incident.assigneeId === user.id;
     if (!isTeamMember && !isAssignee) {
@@ -398,7 +402,7 @@ export async function deletePostmortem(incidentId: string) {
     throw new Error('Postmortem not found');
   }
 
-  if (user.role !== 'ADMIN' && pm.createdById !== user.id) {
+  if (!capabilitiesOf(user).includes(CAPABILITIES.ADMIN_MANAGE) && pm.createdById !== user.id) {
     throw new Error(
       'Forbidden: Only administrators or the postmortem author can delete this record'
     );
@@ -598,7 +602,7 @@ export async function bulkDeletePostmortems(ids: string[]) {
   }
 
   if (
-    currentUser.role !== 'ADMIN' &&
+    !capabilitiesOf(currentUser).includes(CAPABILITIES.ADMIN_MANAGE) &&
     selected.some(postmortem => postmortem.createdById !== currentUser.id)
   ) {
     return {

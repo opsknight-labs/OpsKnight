@@ -31,6 +31,7 @@ import Link from 'next/link';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
 import { getScimConfig } from '@/lib/scim';
 import ScimIntegrationSummary from '@/components/settings/ScimIntegrationSummary';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -126,6 +127,7 @@ async function loadSystemSettings() {
 }
 
 export default async function SystemSettingsPage() {
+  await requirePageAccess('/settings/system');
   // Data loading is isolated from rendering: a try/catch cannot catch render errors, and the
   // failure path must never echo internal error details to the browser.
   let loaded: Awaited<ReturnType<typeof loadSystemSettings>> | null = null;

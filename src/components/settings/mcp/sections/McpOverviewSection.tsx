@@ -198,7 +198,7 @@ export default function McpOverviewSection({
                 ).map(point => (
                   <li key={point} className="flex gap-2 py-0 pl-0 text-muted-foreground">
                     <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
                       aria-hidden="true"
                     />
                     <span>{point}</span>

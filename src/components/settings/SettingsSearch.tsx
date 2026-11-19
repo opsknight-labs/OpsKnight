@@ -126,7 +126,7 @@ export default function SettingsSearch({
           }
           aria-autocomplete="list"
           role="combobox"
-          className="w-full h-11 px-4 pr-20 bg-white border border-slate-200 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs transition-all"
+          className="w-full h-11 px-4 pr-20 bg-card border border-ink-200 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs transition-all"
         />
 
         <div className="absolute right-3 flex items-center gap-1.5 pointer-events-none">
@@ -139,7 +139,7 @@ export default function SettingsSearch({
               <X className="h-3.5 w-3.5" />
             </button>
           ) : enableHotkey ? (
-            <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground bg-slate-100 border border-slate-200 rounded-md">
+            <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground bg-ink-100 border border-ink-200 rounded-md">
               <Command className="h-3 w-3" />
               <span>K</span>
             </kbd>
@@ -152,7 +152,7 @@ export default function SettingsSearch({
         <div
           id={listboxId}
           role="listbox"
-          className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden z-50 animate-in fade-in-0 zoom-in-95 duration-100 divide-y divide-slate-100"
+          className="absolute left-0 right-0 top-full mt-2 bg-card rounded-xl border border-ink-200 shadow-xl overflow-hidden z-50 animate-in fade-in-0 zoom-in-95 duration-100 divide-y divide-ink-100"
         >
           {displayResults.length > 0 ? (
             <div className="p-1.5 space-y-1">
@@ -169,9 +169,7 @@ export default function SettingsSearch({
                     onMouseEnter={() => setActiveIndex(index)}
                     className={cn(
                       'flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors text-left',
-                      isSelected
-                        ? 'bg-slate-100 text-foreground'
-                        : 'hover:bg-slate-50 text-slate-700'
+                      isSelected ? 'bg-ink-100 text-foreground' : 'hover:bg-ink-50 text-ink-700'
                     )}
                   >
                     <div className="flex-1 min-w-0 pr-3">

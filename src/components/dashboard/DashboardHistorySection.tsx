@@ -435,12 +435,12 @@ function activityIcon(type: string | null): { icon: LucideIcon; tone: string } {
     case 'COMMENT':
       return {
         icon: MessageSquare,
-        tone: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+        tone: 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300',
       };
     default:
       return {
         icon: AlertTriangle,
-        tone: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+        tone: 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300',
       };
   }
 }

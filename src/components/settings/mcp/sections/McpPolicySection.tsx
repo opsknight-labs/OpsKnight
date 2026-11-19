@@ -35,8 +35,11 @@ export type McpPolicyValues = {
   callLogRetentionDays?: number;
   /** Strict four-eyes: nobody approves their own request. Absent means off. */
   requireDistinctReviewer?: boolean;
+  responderDirectWritesEnabled?: boolean;
   /** Optional cap on one person's requests per minute across all their connections. Null is off. */
   perUserRequestsPerMinute?: number | null;
+  /** Assistants may be granted access by the organization's identity provider (ID-JAG). */
+  enterpriseManagedAuthEnabled?: boolean;
 };
 
 /** Never offered for a personal token, whatever is ticked (effective-access.ts). */
@@ -83,18 +86,21 @@ function CheckRow({
   label,
   description,
   defaultChecked,
+  disabled,
 }: {
   name: string;
   label: string;
   description: string;
   defaultChecked: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/[0.03]">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/[0.03] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
       <input
         type="checkbox"
         name={name}
         defaultChecked={defaultChecked}
+        disabled={disabled}
         className={checkboxClass}
       />
       <span className="space-y-1">
@@ -112,6 +118,7 @@ export default function McpPolicySection({
   selectedScopes,
   action,
   activeAdminCount,
+  ssoConfigured,
 }: {
   policy: McpPolicyValues;
   /** The policyRevision this page was rendered from; a stale save is refused. */
@@ -121,6 +128,8 @@ export default function McpPolicySection({
   action: McpPolicyAction;
   /** Active administrators, to warn that strict review needs a second one. */
   activeAdminCount?: number;
+  /** Single sign-on is configured and enabled; the identity-provider grant needs it. */
+  ssoConfigured?: boolean;
 }) {
   return (
     <McpPolicyForm action={action} revision={revision}>
@@ -265,6 +274,12 @@ export default function McpPolicySection({
           description="Nobody, administrators included, can approve a change or runbook run that they or their own assistant requested. A second administrator must review it."
           defaultChecked={policy.requireDistinctReviewer ?? false}
         />
+        <CheckRow
+          name="responderDirectWritesEnabled"
+          label="Let routine responder actions run without review"
+          description="Snoozing or un-acknowledging an incident, editing an incident and adding a schedule override run as soon as an assistant asks, for people whose role already allows them. Each one is still recorded with the person and assistant. Everything else keeps its review. Applies only while reviewed actions are allowed."
+          defaultChecked={policy.responderDirectWritesEnabled ?? false}
+        />
         {activeAdminCount !== undefined && activeAdminCount < 2 && (
           <p
             role="note"
@@ -369,7 +384,7 @@ export default function McpPolicySection({
           <span className="flex flex-col">
             <span>Advanced</span>
             <span className="text-xs font-normal text-muted-foreground">
-              Trusted hosts, browser clients and workload limits
+              Trusted hosts, browser clients, identity provider access and workload limits
             </span>
           </span>
           <ChevronDown
@@ -437,6 +452,24 @@ export default function McpPolicySection({
             />
           </PolicyGroup>
           <PolicyGroup
+            title="Identity provider access"
+            description="Off by default. Lets your organization's identity provider grant its people's assistants access, without each person approving a permissions screen. The identity provider decides who may use which assistant; OpsKnight still limits access to the assistant's permissions and the person's role."
+          >
+            {/* Without single sign-on the box cannot be submitted, so the stored value is kept. */}
+            {ssoConfigured && <input type="hidden" name="enterpriseControls" value="1" />}
+            <CheckRow
+              name="enterpriseManagedAuthEnabled"
+              label="Allow access granted by your identity provider"
+              description={
+                ssoConfigured
+                  ? 'Assistants present a short-lived grant from your single sign-on provider (Enterprise-Managed Authorization) and get a five-minute access token for the person it names. Only people who already signed in to OpsKnight with single sign-on are recognised. Turning this on needs a recent sign-in.'
+                  : 'Requires single sign-on. Configure and enable single sign-on first.'
+              }
+              defaultChecked={policy.enterpriseManagedAuthEnabled ?? false}
+              disabled={!ssoConfigured}
+            />
+          </PolicyGroup>
+          <PolicyGroup
             title="Workload limits"
             description="Protects OpsKnight from busy or misbehaving assistants."
           >
@@ -472,14 +505,14 @@ export default function McpPolicySection({
                   required
                 />
                 <p id="mcp-max-operations-help" className="text-xs text-muted-foreground">
-                  Up to {MCP_MAX_OPERATIONS}. Composite tools use several (incident context 3,
+                  Up to {MCP_MAX_OPERATIONS}. Composite tools use several (incident context 4,
                   postmortem context 4).
                 </p>
                 {policy.maxOperations < 4 && (
                   <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
                     {policy.maxOperations < 3
-                      ? 'Below 3, incident_get_context, postmortem_get_context and approval commits stop working.'
-                      : 'Below 4, postmortem_get_context stops working.'}
+                      ? 'Below 3, approval commits stop working, and so do incident_get_context and postmortem_get_context (they need 4).'
+                      : 'Below 4, incident_get_context and postmortem_get_context stop working.'}
                   </p>
                 )}
               </div>

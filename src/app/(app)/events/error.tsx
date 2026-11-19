@@ -28,17 +28,17 @@ export default function EventsError({
           <AlertCircle className="w-6 h-6 text-rose-600 dark:text-rose-400" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-zinc-100">
             Events couldn&apos;t load
           </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-600 dark:text-zinc-400 mt-1">
             {getUserFacingErrorMessage(error)}
           </p>
         </div>
         <button
           type="button"
           onClick={reset}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 transition"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition"
         >
           <RefreshCw className="w-4 h-4" />
           Try again

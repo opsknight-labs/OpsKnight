@@ -263,7 +263,7 @@ export async function loadReplayIntelligence(
   if (!settings.enabled || !settings.automationIntelligenceFieldsEnabled) return undefined;
   const [signals, windows, service] = await Promise.all([
     loadServiceSignals(tx, { from, to, serviceId }),
-    tx.maintenanceWindow.findMany({
+    tx.noiseMaintenanceWindow.findMany({
       where: {
         enabled: true,
         scope: { in: ['SERVICE', 'TEAM', 'ALL'] },

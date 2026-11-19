@@ -7,7 +7,7 @@ product_area: mcp
 audience: [developer]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - src/lib/mcp/catalog/parity.ts
     - scripts/mcp/coverage-matrix.ts
@@ -56,9 +56,9 @@ CI notes from certifying this branch: the browser step is sensitive to slow shar
 
 ## Current checkpoint
 
-Inventory (from `npm run --silent mcp:coverage`): 322 operations.
+Inventory (from `npm run --silent mcp:coverage`, 2026-11-09): 325 operations.
 
-- 144 generic candidates: 82 ordinary, plus 62 sensitive reads behind the administrator opt-in. Escalate (a new REST route), reopen and unsnooze run directly as reviewed R1 responder actions. Round 3 adds the user directory (`listUsers`, `getUser`) and integration health (`getIntegrationDiagnostics`) as R0 reads, the audit log (`listAuditLogs`) as a sensitive read, and `oncall_my_shifts` (a new REST route, `listMyOnCallShifts`). Directory and audit reads pass a per-operation field allowlist before redaction.
+- 147 generic candidates: 85 ordinary, plus 62 sensitive reads behind the administrator opt-in. Escalate (a new REST route), reopen and unsnooze run directly as reviewed R1 responder actions. Round 3 adds the user directory (`listUsers`, `getUser`) and integration health (`getIntegrationDiagnostics`) as R0 reads, the audit log (`listAuditLogs`) as a sensitive read, and `oncall_my_shifts` (a new REST route, `listMyOnCallShifts`). Directory and audit reads pass a per-operation field allowlist before redaction.
 - 105 approval-gated: 85 R2 and 20 R3.
 - 1 native equivalent (approved runbook execution).
 - 72 open. The [exclusion review packet](./exclusion-review.md) proposes implementing 1 (`updateStatusPage`) and excluding 71. Audit and report exports stay closed: their rows require an API-key owner (`apiKeyId` is a NOT NULL foreign key) that an MCP principal does not have, and opening them needs a non-additive schema change. No exclusion is reviewed: `reviewedExclusions` is 0.
@@ -72,7 +72,7 @@ Implemented since the previous checkpoint:
 - Sensitive reads, including 4 reviewed side-effect-free POST reads.
 - Resource subscriptions, completions and the Tasks extension for approved runbook execution.
 
-Local evidence on PostgreSQL (not CI, not production):
+Local evidence on PostgreSQL (not CI, not production; test counts are from the previous checkpoint and are not refreshed here):
 
 - `npm run test:mcp` passes 55 tests. `npm run test:mcp:db` passes 902 tests in 28 files; the two child-only harness files are skipped by design.
 - `tests/integration/mcp-fault-injection.test.ts` runs a commit in a separate OS process.
@@ -87,7 +87,7 @@ Local evidence on PostgreSQL (not CI, not production):
 
 Still outstanding:
 
-- Named human review of the 75 proposed exclusions.
+- Named human review of the 71 proposed exclusions.
 - A transactional design for disabling a status page that keeps the withdraw-before-commit privacy guarantee (`updateStatusPage`).
 - Certification with real external clients (ChatGPT, Claude, Cursor, VS Code).
 - Multi-replica and PostgreSQL failover drills on production-like infrastructure.

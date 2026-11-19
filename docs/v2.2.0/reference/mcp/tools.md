@@ -7,7 +7,7 @@ product_area: mcp
 audience: [developer, administrator]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - src/lib/mcp/protocol/server.ts
     - src/lib/mcp/catalog/capabilities.ts
@@ -58,7 +58,7 @@ Requirements: **Changes** means the tool is offered only when the policy allows 
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `operationId` | one of 105 values | yes |  |
+| `operationId` | one of 112 values | yes |  |
 | `args` | object | yes |  |
 | `idempotencyKey` | string | yes | Unique 16-128 characters of A-Z a-z 0-9 _ -, e.g. a UUID without dashes. Reuse it only to retry the identical request. |
 
@@ -355,7 +355,7 @@ Requirements: **Changes** means the tool is offered only when the policy allows 
 
 ### `execute_plan`
 
-**Run several reads.** Run at most eight independent authorized reads in one call (a single read is fine). dependsOn orders steps and skips a step whose dependency failed; results are not passed between steps. Partial results; no transaction or changes.
+**Run several reads.** Run at most eight authorized reads in one call (a single read is fine). dependsOn orders steps and skips a step whose dependency failed. A later step can use an earlier result: put {"$from": "<stepId>", "pointer": "/data/0/id"} in its args (a JSON Pointer into that step's result.data; list the step in dependsOn). Partial results; no transaction or changes.
 
 | Read only | Destructive | Idempotent | Scopes | Requires |
 | --- | --- | --- | --- | --- |

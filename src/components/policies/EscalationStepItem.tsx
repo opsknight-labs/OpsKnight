@@ -157,8 +157,8 @@ export default function EscalationStepItem({
         {/* Step Number Circle */}
         <div
           className={cn(
-            'flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center font-bold text-sm bg-white shadow-xs z-10',
-            step.stepOrder === 0 ? 'border-primary text-primary' : 'border-slate-300 text-slate-600'
+            'flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center font-bold text-sm bg-card shadow-xs z-10',
+            step.stepOrder === 0 ? 'border-primary text-primary' : 'border-ink-300 text-ink-600'
           )}
         >
           {step.stepOrder + 1}
@@ -167,9 +167,9 @@ export default function EscalationStepItem({
         {/* Card Content */}
         <div
           className={cn(
-            'flex-1 group relative rounded-xl border bg-white shadow-xs transition-all',
-            'hover:shadow-md hover:border-slate-300',
-            'border-slate-200'
+            'flex-1 group relative rounded-xl border bg-card shadow-xs transition-all',
+            'hover:shadow-md hover:border-ink-300',
+            'border-ink-200'
           )}
         >
           <div className="flex items-center justify-between p-3.5 md:p-4">
@@ -185,7 +185,7 @@ export default function EscalationStepItem({
                     size="md"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                  <div className="w-10 h-10 rounded-full bg-ink-100 flex items-center justify-center text-ink-500">
                     {icon}
                   </div>
                 )}
@@ -193,8 +193,8 @@ export default function EscalationStepItem({
 
               {/* Info */}
               <div>
-                <div className="text-sm font-bold text-slate-900 leading-tight">{label}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{subLabel}</div>
+                <div className="text-sm font-bold text-ink-900 leading-tight">{label}</div>
+                <div className="text-xs text-ink-500 mt-0.5">{subLabel}</div>
                 <StepOutcomeStrip stat={stat} />
               </div>
             </div>
@@ -206,21 +206,22 @@ export default function EscalationStepItem({
                 <Badge
                   variant="outline"
                   className={cn(
-                    'text-slate-600 font-normal bg-slate-50 border-slate-200',
-                    canManage && 'cursor-pointer hover:bg-slate-100 transition-colors'
+                    'text-ink-600 font-normal bg-ink-50 border-ink-200',
+                    canManage && 'cursor-pointer hover:bg-ink-100 transition-colors'
                   )}
                   onClick={() => canManage && setIsEditOpen(true)}
                   title={canManage ? 'Click to edit step delay' : undefined}
                 >
-                  <Clock className="mr-1.5 h-3 w-3 text-slate-400" />
+                  <Clock className="mr-1.5 h-3 w-3 text-ink-400" />
                   Wait {step.delayMinutes}m
                 </Badge>
               ) : (
                 <Badge
                   variant="outline"
                   className={cn(
-                    'text-emerald-700 bg-emerald-50 border-emerald-200 font-medium',
-                    canManage && 'cursor-pointer hover:bg-emerald-100/70 transition-colors'
+                    'text-emerald-700 bg-emerald-50 border-emerald-200 font-medium dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/30',
+                    canManage &&
+                      'cursor-pointer hover:bg-emerald-100/70 transition-colors dark:hover:bg-emerald-500/15'
                   )}
                   onClick={() => canManage && setIsEditOpen(true)}
                   title={canManage ? 'Click to edit step delay' : undefined}
@@ -235,7 +236,7 @@ export default function EscalationStepItem({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-8 p-0 rounded-full text-slate-400 hover:text-slate-600"
+                      className="h-8 w-8 p-0 rounded-full text-ink-400 hover:text-ink-600"
                     >
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
@@ -259,7 +260,7 @@ export default function EscalationStepItem({
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      className="text-red-600 focus:text-red-600"
+                      className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
                       onClick={handleDelete}
                     >
                       <Trash2 className="mr-2 h-4 w-4" /> Delete Step

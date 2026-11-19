@@ -35,6 +35,21 @@ describe('MCP transport boundaries', () => {
     }
     expect(() => assertMcpHost(new Request('https://attacker.test/mcp'))).toThrow();
   });
+  it('accepts only the exact extra Host values an operator listed for a rewriting proxy', () => {
+    vi.stubEnv('MCP_PUBLIC_ORIGIN', 'https://ops.example.test');
+    vi.stubEnv('MCP_ALLOWED_HOSTS', 'opsknight.internal:3000, OpsKnight-Svc ,https://bad/path');
+    const withHost = (headers: Record<string, string>) => () =>
+      assertMcpHost(new Request('http://localhost:3000/mcp', { headers }));
+    expect(withHost({ host: 'opsknight.internal:3000' })).not.toThrow();
+    expect(withHost({ host: 'opsknight-svc' })).not.toThrow();
+    // Not listed, a different port, and a forwarded header are all still refused.
+    expect(withHost({ host: 'attacker.test' })).toThrow();
+    expect(withHost({ host: 'opsknight.internal:9999' })).toThrow();
+    expect(withHost({ host: 'attacker.test', 'x-forwarded-host': 'opsknight-svc' })).toThrow();
+    expect(withHost({ host: 'bad' })).toThrow();
+    // A browser page on another site is refused even when it reaches a listed Host.
+    expect(withHost({ host: 'opsknight-svc', origin: 'https://attacker.test' })).toThrow();
+  });
   it.each([
     ['{', -32700],
     ['[]', -32600],

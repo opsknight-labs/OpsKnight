@@ -28,6 +28,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
+import { useEffectiveCapabilities } from '@/components/access/AccessProvider';
+import { canAccessPath, resolvePageAccess } from '@/lib/access/pages';
+
+const isAdminOnlyPath = (href: string) => {
+  const anyOf = resolvePageAccess(href)?.anyOf;
+  return anyOf?.length === 1 && anyOf[0] === 'admin.manage';
+};
 
 type Props = {
   isAdmin?: boolean;
@@ -41,11 +48,6 @@ export type SettingsTab = {
   href: string;
   icon: LucideIcon | React.ComponentType<{ className?: string }>;
   matchPrefixes: string[];
-  requiresAdmin?: boolean;
-  requiresAuditor?: boolean;
-  requiresResponder?: boolean;
-  /** Visible to responders and above, and to auditors (the roles holding intelligence.read). */
-  requiresResponderOrAuditor?: boolean;
 };
 
 export const SETTINGS_TABS: SettingsTab[] = [
@@ -76,7 +78,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     href: '/settings/security-compliance',
     icon: ShieldCheck,
     matchPrefixes: ['/settings/security-compliance'],
-    requiresAdmin: true,
   },
   {
     id: 'incident-sla',
@@ -84,7 +85,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     href: '/settings/incident-sla',
     icon: Activity,
     matchPrefixes: ['/settings/incident-sla'],
-    requiresAdmin: true,
   },
   {
     id: 'integrations',
@@ -92,7 +92,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     href: '/settings/integrations/slack',
     icon: Puzzle,
     matchPrefixes: ['/settings/integrations', '/settings/slack-oauth'],
-    requiresAdmin: true,
   },
   {
     // First-class entry for Settings → Intelligence; the Workspace & Governance card links here too.
@@ -101,7 +100,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     href: '/settings/intelligence',
     icon: Sparkles,
     matchPrefixes: ['/settings/intelligence'],
-    requiresResponderOrAuditor: true,
   },
   {
     id: 'custom-fields',
@@ -109,7 +107,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     href: '/settings/custom-fields',
     icon: SlidersHorizontal,
     matchPrefixes: ['/settings/custom-fields'],
-    requiresAdmin: true,
   },
   {
     id: 'status-pages',
@@ -117,7 +114,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     href: '/settings/status-pages',
     icon: Globe,
     matchPrefixes: ['/settings/status-pages', '/settings/status-page'],
-    requiresAdmin: true,
   },
   {
     id: 'api-keys',
@@ -132,7 +128,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     href: '/settings/system',
     icon: Settings,
     matchPrefixes: ['/settings/system', '/settings/notifications'],
-    requiresAdmin: true,
   },
   {
     id: 'audit',
@@ -140,7 +135,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     href: '/audit',
     icon: ClipboardList,
     matchPrefixes: ['/audit'],
-    requiresAdmin: true,
   },
 ];
 
@@ -161,13 +155,8 @@ export default function SettingsTopNav({
 }: Props) {
   const pathname = usePathname();
 
-  const canAccess = (tab: SettingsTab) => {
-    if (tab.requiresAdmin && !isAdmin) return false;
-    if (tab.requiresAuditor && !isAdmin && !isAuditor) return false;
-    if (tab.requiresResponder && !isResponderOrAbove) return false;
-    if (tab.requiresResponderOrAuditor && !isResponderOrAbove && !isAuditor) return false;
-    return true;
-  };
+  const capabilities = useEffectiveCapabilities({ isAdmin, isAuditor, isResponderOrAbove });
+  const canAccess = (tab: SettingsTab) => canAccessPath(tab.href, capabilities);
 
   const visibleTabs = SETTINGS_TABS.filter(canAccess);
 
@@ -284,7 +273,7 @@ export default function SettingsTopNav({
                     >
                       <Icon className="h-4 w-4 text-muted-foreground" />
                       <span className="flex-1">{tab.label}</span>
-                      {tab.requiresAdmin && (
+                      {isAdminOnlyPath(tab.href) && (
                         <span className="text-[10px] uppercase font-semibold text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded">
                           Admin
                         </span>

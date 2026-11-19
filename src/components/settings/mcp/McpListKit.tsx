@@ -72,8 +72,9 @@ export function FilterChips({
   selected: string;
 }) {
   return (
-    <nav aria-label={label} className="relative min-w-0 overflow-x-auto scrollbar-none">
-      <ul className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/50 p-1">
+    <nav aria-label={label} className="relative min-w-0 max-w-full">
+      {/* Wraps instead of scrolling sideways, so every option is visible on a phone. */}
+      <ul className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg border border-border/80 bg-muted/50 p-1">
         {options.map(option => {
           const active = option.value === selected;
           return (
@@ -287,38 +288,47 @@ export function ResponsiveTable({
   children: ReactNode;
 }) {
   return (
-    <table role="table" className="block w-full border-collapse text-sm md:table">
-      <caption className="sr-only">{caption}</caption>
-      <thead className="sr-only md:not-sr-only" role="rowgroup">
-        <tr role="row" className="border-b border-border bg-muted/30">
-          {columns.map(column => (
-            <th
-              key={column.label}
-              role="columnheader"
-              scope="col"
-              className={cn(
-                // Inner spans carry the type size and edge inset: topbar.css forces th/td padding and
-                // font size with !important on 1024–1600px screens.
-                'h-9 px-4 text-left align-middle first:*:ml-2 last:*:mr-2',
-                column.className
-              )}
-            >
-              <span
+    // A table wider than its card scrolls inside it (keyboard-focusable, named) instead of
+    // cutting off the last column's buttons.
+    <div
+      className="md:overflow-x-auto"
+      role="region"
+      aria-label={`${caption} (scrolls sideways when narrow)`}
+      tabIndex={0}
+    >
+      <table role="table" className="block w-full border-collapse text-sm md:table">
+        <caption className="sr-only">{caption}</caption>
+        <thead className="sr-only md:not-sr-only" role="rowgroup">
+          <tr role="row" className="border-b border-border bg-muted/30">
+            {columns.map(column => (
+              <th
+                key={column.label}
+                role="columnheader"
+                scope="col"
                 className={cn(
-                  'inline-block whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground',
-                  column.srOnly && 'sr-only'
+                  // Inner spans carry the type size and edge inset: topbar.css forces th/td padding and
+                  // font size with !important on 1024–1600px screens.
+                  'h-9 px-4 text-left align-middle first:*:ml-2 last:*:mr-2',
+                  column.className
                 )}
               >
-                {column.label}
-              </span>
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody role="rowgroup" className="block md:table-row-group">
-        {children}
-      </tbody>
-    </table>
+                <span
+                  className={cn(
+                    'inline-block whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground',
+                    column.srOnly && 'sr-only'
+                  )}
+                >
+                  {column.label}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody role="rowgroup" className="block md:table-row-group">
+          {children}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

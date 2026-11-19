@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/access/server';
 
 /**
  * Compatibility route for bookmarks from the single-page settings UI.
@@ -9,6 +10,7 @@ export default async function LegacyStatusPageSettings({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  await requirePageAccess('/settings/status-page');
   const { page } = await searchParams;
   redirect(page ? `/settings/status-pages/${encodeURIComponent(page)}` : '/settings/status-pages');
 }

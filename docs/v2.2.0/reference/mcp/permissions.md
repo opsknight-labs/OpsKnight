@@ -6,7 +6,7 @@ product_area: mcp
 audience: [administrator, responder, developer]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - scripts/mcp/docs-reference.ts
     - src/lib/mcp/auth/role-scopes.ts
@@ -71,15 +71,15 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 24 | 12 | 2 | 16 |
-| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 11 | 10 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 25 | 12 | 2 | 16 |
+| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 11 | 10 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
 | `integrations:test` | Send test messages through integrations | Services | Change | ✓ |  |  |  | 0 | 2 | 0 | 0 |
 | `integrations:write` | Change integrations (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `notifications:read` | View notifications | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 2 | 4 | 0 | 0 |
 | `notifications:write` | Change notifications (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 1 |
-| `postmortems:read` | View postmortems | Incidents | View | ✓ | ✓ | ✓ | ✓ | 6 | 0 | 0 | 2 |
+| `postmortems:read` | View postmortems | Incidents | View | ✓ | ✓ | ✓ | ✓ | 7 | 0 | 0 | 2 |
 | `postmortems:write` | Change postmortems (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 8 |
 | `reports:read` | View reports and analytics | Reports and audit | View | ✓ | ✓ | ✓ | ✓ | 3 | 6 | 0 | 2 |
 | `reports:write` | Change reports and analytics (higher-risk changes wait for approval) | Reports and audit | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 8 |
@@ -100,8 +100,8 @@ Operation columns count catalog operations that need the permission: plain reads
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 7 | 0 | 0 |
 | `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | 3 | 2 | 0 | 1 |
-| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 4 |
+| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | 7 | 2 | 0 | 3 |
+| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 11 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  | 4 | 9 | 0 | 2 |
 | `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  | 0 | 0 | 0 | 10 |
@@ -121,6 +121,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Area | Operations | Direct | With approval | Not available |
 | --- | --: | --: | --: | --: |
+| action-items | 1 | 1 | 0 | 0 |
 | audit-exports | 3 | 0 | 0 | 3 |
 | audit-logs | 1 | 1 | 0 | 0 |
 | custom-fields | 5 | 2 | 3 | 0 |
@@ -128,6 +129,8 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | escalation-policies | 8 | 5 | 3 | 0 |
 | incidents | 42 | 32 | 10 | 0 |
 | integrations | 11 | 6 | 2 | 3 |
+| maintenance-schedules | 5 | 2 | 3 | 0 |
+| maintenance-windows | 6 | 2 | 4 | 0 |
 | notification-providers | 6 | 0 | 0 | 6 |
 | notifications | 4 | 3 | 1 | 0 |
 | operational-events | 1 | 1 | 0 | 0 |
@@ -142,10 +145,16 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 328 | 148 | 106 | 74 |
+| **All** | 340 | 153 | 113 | 74 |
 
 <details>
 <summary>Operations by area</summary>
+
+### action-items
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `listActionItems` | `read_operation` |
 
 ### audit-exports
 
@@ -261,6 +270,27 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `updateIntegration` | `operation_prepare`, then approval |
 | `validateIntegrationConfiguration` | `read_operation` (sensitive reads on) |
 | `validateIntegrationPayload` | `read_operation` (sensitive reads on) |
+
+### maintenance-schedules
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createMaintenanceSchedule` | `operation_prepare`, then approval |
+| `deleteMaintenanceSchedule` | `operation_prepare`, then approval |
+| `getMaintenanceSchedule` | `read_operation` |
+| `listMaintenanceSchedules` | `read_operation` |
+| `updateMaintenanceSchedule` | `operation_prepare`, then approval |
+
+### maintenance-windows
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createMaintenanceWindow` | `operation_prepare`, then approval |
+| `deleteMaintenanceWindow` | `operation_prepare`, then approval |
+| `endMaintenanceWindow` | `operation_prepare`, then approval |
+| `getMaintenanceWindow` | `read_operation` |
+| `listMaintenanceWindows` | `read_operation` |
+| `updateMaintenanceWindow` | `operation_prepare`, then approval |
 
 ### notification-providers
 

@@ -1,0 +1,21 @@
+{
+  "name": "@opsknight/mcp-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "stdio MCP bridge to a self-hosted OpsKnight server",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "opsknight-mcp": "./bin/opsknight-mcp.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "check": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

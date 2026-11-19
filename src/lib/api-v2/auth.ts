@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashLegacyTokenCandidates, hashTokenV2, isLegacy1xTokenShape } from '@/lib/api-keys';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
+import { effectiveAccessSelect } from '@/lib/access/effective';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { getClientIp } from '@/lib/client-ip';
@@ -24,6 +25,7 @@ import {
   recordFailedAuthAttempt,
   rememberVerifiedCredential,
 } from './rate-limit';
+import { getAccessControlSettings } from '@/lib/access/settings';
 
 export { hashTokenV2 } from '@/lib/api-keys';
 
@@ -187,6 +189,7 @@ async function verifyTokenAgainstDatabase(
           jobTitle: true,
           email: true,
           teamMemberships: { select: { teamId: true } },
+          ...effectiveAccessSelect(),
         },
       },
     },
@@ -241,6 +244,7 @@ async function verifyTokenAgainstDatabase(
               jobTitle: true,
               email: true,
               teamMemberships: { select: { teamId: true } },
+              ...effectiveAccessSelect(),
             },
           },
         },
@@ -268,6 +272,7 @@ async function verifyTokenAgainstDatabase(
   }
 
   const user = apiKeyRecord.user;
+  await getAccessControlSettings();
   const actor = authorizationActorFromUser(user);
   if (!actor) {
     forgetVerifiedCredential(v2Hash);

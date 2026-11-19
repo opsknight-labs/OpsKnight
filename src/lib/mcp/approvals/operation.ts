@@ -26,6 +26,7 @@ import {
 } from '../core/execution';
 import { lockMcpMutationAuthority } from '../core/mutation-authority';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
+import { loadEffectiveDisabledMcpCapabilities } from '../auth/effective-capabilities';
 import { projectMcpData } from '../core/projection';
 import {
   commitDeadline,
@@ -149,6 +150,10 @@ export function mcpApprovalCommitKey(id: string) {
 }
 
 const secretKey = /secret|password|token|credential|authorization|api.?key|private.?key/i;
+/** Appended where the redaction pass changed a value (a URL query, a bearer string, hidden characters). */
+const REDACTED_NOTE = ' [part not shown]';
+/** Stands in for list members beyond the first 40; the count is real, so nothing is cut silently. */
+const MORE_ITEMS = /^\[\d+ more items not shown\]$/;
 function flatten(
   value: unknown,
   path: string,
@@ -166,6 +171,7 @@ function flatten(
     value
       .slice(0, 40)
       .forEach((item, index) => flatten(item, `${path}[${index}]`, out, depth + 1, limit));
+    if (value.length > 40) out.push([`${path}[…]`, `[${value.length - 40} more items not shown]`]);
     return;
   }
   if (value && typeof value === 'object') {
@@ -176,8 +182,16 @@ function flatten(
       else flatten(child, path ? `${path}.${key}` : key, out, depth + 1, limit);
     return;
   }
+  // A value the redaction pass changed is shown as changed-and-marked: two different URLs that
+  // differ only in a stripped query would otherwise display as the same text, and an edit of
+  // exactly that part would read as "unchanged".
+  const projected = typeof value === 'string' ? String(projectMcpData(value)) : undefined;
   const text =
-    typeof value === 'string' ? String(projectMcpData(value)) : (JSON.stringify(value) ?? 'null');
+    projected === undefined
+      ? (JSON.stringify(value) ?? 'null')
+      : projected === value
+        ? projected
+        : `${projected}${REDACTED_NOTE}`;
   out.push([path || '(value)', text.length > 300 ? `${text.slice(0, 300)}…` : text]);
 }
 
@@ -200,7 +214,11 @@ export function reviewSummary(operationId: string, frozen: Frozen) {
       String(value).slice(0, 300),
     ]),
     changes,
-    truncated: changes.length >= 80,
+    // Cut short when the entry limit is hit, or when list members were left out or a string was
+    // clipped: each of those shows a marker row, and none of them may read as "all of it".
+    truncated:
+      changes.length >= 80 ||
+      changes.some(([, value]) => MORE_ITEMS.test(value) || value.endsWith('…')),
   });
 }
 
@@ -212,6 +230,8 @@ function placeholderValue(text: string) {
   return (
     text === '[withheld]' ||
     text === '[too deep]' ||
+    MORE_ITEMS.test(text) ||
+    text.endsWith(REDACTED_NOTE) ||
     (text.length > MAX_DIFF_TEXT && text.endsWith('…'))
   );
 }
@@ -704,13 +724,9 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
         // An operation disabled after it was prepared must not run. The approval is left as it is,
         // so it can still be committed before it expires if an administrator re-enables it.
         await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
-        const policy = await tx.mcpPolicy.findUnique({
-          where: { id: 'default' },
-          select: { disabledCapabilities: true },
-        });
         requireMcp(
           !isMcpCapabilityDisabled(
-            policy?.disabledCapabilities,
+            await loadEffectiveDisabledMcpCapabilities(context.grantId, tx),
             approval.operationId,
             'operation_commit_approved'
           ),

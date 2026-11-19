@@ -298,7 +298,7 @@ export default function ServiceSupportHoursSettings({
                         className={cn(
                           'text-[9px] font-medium px-1.5 py-0',
                           isStaffed
-                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
                             : 'bg-muted text-muted-foreground border-border'
                         )}
                       >

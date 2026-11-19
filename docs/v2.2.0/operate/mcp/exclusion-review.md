@@ -7,7 +7,7 @@ product_area: mcp
 audience: [developer, operator]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - src/lib/mcp/catalog/review.json
     - src/lib/mcp/catalog/parity.ts
@@ -17,7 +17,7 @@ verification:
 
 This packet lists every operation still open in the MCP parity inventory, with a proposed disposition. It was generated from `npm run --silent mcp:coverage` to help reviewers; it does not record any decision. Automated tooling must not author `exclusion` records. An exclusion counts only when a named reviewer records it in `src/lib/mcp/catalog/review.json`. The record needs a date, a rationale of at least 20 characters, and a safe equivalent where one exists. The schema rejects anything else.
 
-Snapshot: 72 open operations of 322. Proposed: implement 1, exclude 71. Regenerate the inventory before reviewing. The operation IDs, risks and reasons below come from the registry.
+Snapshot (2026-11-09): 72 open operations of 325. Proposed: implement 1, exclude 71. Regenerate the inventory before reviewing. The operation IDs, risks and reasons below come from the registry.
 
 ## How to record a decision
 

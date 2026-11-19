@@ -13,7 +13,7 @@ import { resolveV2RunbookExecution } from '@/lib/api-v2/runbook-execution';
 import { enforceV2RateLimit } from '@/lib/api-v2/rate-limit';
 import { previewRunbookExecution, startRunbookExecution } from '@/lib/runbooks/orchestrator';
 import { parseRunbookDefinition, flattenSteps } from '@/lib/runbooks/definition';
-import { resolvedApprovalPlan } from '@/lib/runbooks/approval-plan';
+import { approvalInputPreview, resolvedApprovalPlan } from '@/lib/runbooks/approval-plan';
 import { assertPreviewReviewer, reviewRunbookPreview } from '@/lib/runbooks/preview-review';
 import { logAudit } from '@/lib/audit';
 import { resolveMcpGrant } from '../auth/principal';
@@ -69,6 +69,10 @@ export const runbookReviewSummarySchema = z
     agentPoolId: z.string().nullable(),
     incidentId: z.string().nullable(),
     serviceId: z.string().nullable(),
+    // Older pending requests were stored without this list.
+    inputs: z
+      .array(z.object({ key: z.string(), type: z.string(), value: z.string() }).strict())
+      .default([]),
     steps: z.array(
       z
         .object({
@@ -198,11 +202,12 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
             const previewId = createHash('sha256').update(plan.authorizationToken).digest('hex');
             const version = await tx.runbookVersion.findUniqueOrThrow({
               where: { id: plan.versionId },
-              select: { definition: true },
+              select: { definition: true, inputs: { select: { key: true, type: true } } },
             });
             const authored = new Map(
               flattenSteps(parseRunbookDefinition(version.definition)).map(step => [step.key, step])
             );
+            const shownInputs = approvalInputPreview(version.inputs, plan.inputs);
             const summary = runbookReviewSummarySchema.parse({
               runbookId: input.runbookId,
               versionId: plan.versionId,
@@ -212,6 +217,7 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
               agentPoolId: plan.agentPoolId,
               incidentId: request.incidentId ?? null,
               serviceId: request.serviceId ?? null,
+              inputs: shownInputs,
               steps: plan.steps.map(step => ({
                 key: step.key,
                 name: step.name,
@@ -220,7 +226,8 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
                 configuration: resolvedApprovalPlan(
                   step.type,
                   authored.get(step.key)?.config ?? {},
-                  plan.inputs
+                  plan.inputs,
+                  Object.fromEntries(shownInputs.map(input => [input.key, input.value]))
                 ),
               })),
             });

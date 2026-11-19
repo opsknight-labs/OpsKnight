@@ -11,7 +11,7 @@ function getStatusStyle(status: string): string {
     case 'SNOOZED':
       return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/70 dark:bg-blue-950/35 dark:text-blue-300';
     case 'SUPPRESSED':
-      return 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
+      return 'border-slate-200 bg-slate-100 text-slate-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300';
     default:
       return 'border-border bg-muted text-muted-foreground';
   }

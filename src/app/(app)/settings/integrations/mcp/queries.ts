@@ -1,4 +1,5 @@
 import 'server-only';
+import { MCP_IDP_GRANT_KIND } from '@/lib/mcp/auth/enterprise-grant';
 import { cache } from 'react';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -200,6 +201,8 @@ export type McpGrantRow = {
   id: string;
   /** oauth: an assistant's consent. pat: a personal access token. */
   kind: 'oauth' | 'pat';
+  /** Granted by the organization's identity provider (ID-JAG), not by a consent click. */
+  idpGranted?: boolean;
   /** The name a personal token's owner gave it; null for OAuth connections. */
   label: string | null;
   /** What the person approved. */
@@ -266,10 +269,18 @@ type GrantCounts = {
 
 export async function listMcpGrants(
   viewer: McpViewer,
-  input: { status: GrantStatus; q: string; clientId: string | null; page: number },
+  input: {
+    status: GrantStatus;
+    q: string;
+    clientId: string | null;
+    page: number;
+    /** One person's connections (the user detail page); administrators only. */
+    userId?: string | null;
+  },
   now = new Date()
 ) {
-  if (input.clientId) requireAdmin(viewer);
+  if (input.clientId || input.userId) requireAdmin(viewer);
+  const userId = input.userId ?? null;
   const [people, resource] = await Promise.all([
     input.q && viewer.isAdmin
       ? prisma.user.findMany({
@@ -286,6 +297,7 @@ export async function listMcpGrants(
   const scope = viewer.isAdmin ? Prisma.sql`TRUE` : Prisma.sql`g."userId" = ${viewer.id}`;
   const base = Prisma.sql`${scope}
     AND (${input.clientId}::text IS NULL OR g."clientId" = ${input.clientId})
+    AND (${userId}::text IS NULL OR g."userId" = ${userId})
     AND (${input.q} = '' OR c.name ILIKE ${pattern} OR g.label ILIKE ${pattern}
       OR g."userId" = ANY(${personIds}::text[]))`;
   const [rows, [counts], client] = await Promise.all([
@@ -333,6 +345,7 @@ export async function listMcpGrants(
       return {
         id: row.grantId,
         kind: row.grantKind === 'PAT' ? 'pat' : 'oauth',
+        idpGranted: row.grantKind === MCP_IDP_GRANT_KIND,
         label: row.label,
         scopes: row.grantScopes,
         effectiveScopes: access.effectiveScopes,
@@ -417,29 +430,45 @@ export type McpClientRow = {
   effectiveScopes: string[];
   /** Set for an allowed (not revoked) assistant the policy currently refuses. */
   blockedReason: McpClientBlock | null;
+  /** The access policy trusts it today (for a metadata client: its host is trusted). */
+  trusted: boolean;
   createdAt: Date;
+  /** When someone first approved a connection to it. */
+  firstAuthorizedAt: Date | null;
   revokedAt: Date | null;
   activeConnections: number;
   lastUsedAt: Date | null;
   lastCallAt: Date | null;
+  /** Entries in this assistant's own capability restrictions (on top of global and role lists). */
+  restrictedCapabilities: number;
 };
 
 export async function listMcpClients(
   viewer: McpViewer,
-  input: { status: ClientStatus; type: ClientType; q: string; page: number },
+  input: {
+    status: ClientStatus;
+    type: ClientType;
+    q: string;
+    page: number;
+    /** Exactly this assistant (the detail page). */
+    id?: string;
+  },
   now = new Date()
 ) {
   requireAdmin(viewer);
+  const id = input.id ?? null;
   const where = (status: ClientStatus): Prisma.McpClientWhereInput => ({
     AND: [
       // Personal tokens are listed under Connections; their internal client is not an assistant.
       { id: { not: MCP_PAT_CLIENT_ID } },
+      id ? { id } : {},
       clientTypeWhere(input.type),
       clientStatusWhere(status),
       input.q ? { name: contains(input.q) } : {},
     ],
   });
-  const filter = Prisma.sql`c.id <> ${MCP_PAT_CLIENT_ID} AND ${clientTypeSql(input.type)}
+  const filter = Prisma.sql`c.id <> ${MCP_PAT_CLIENT_ID} AND (${id}::text IS NULL OR c.id = ${id})
+    AND ${clientTypeSql(input.type)}
     AND (${input.q} = '' OR c.name ILIKE ${`%${input.q}%`})`;
   const [rows, [counts]] = await Promise.all([
     prisma.mcpClient.findMany({
@@ -455,7 +484,9 @@ export async function listMcpClients(
         metadataUrl: true,
         dynamicRegistration: true,
         createdAt: true,
+        firstAuthorizedAt: true,
         revokedAt: true,
+        disabledCapabilities: true,
         _count: { select: { grants: { where: activeGrantWhere(now) } } },
       },
     }),
@@ -509,16 +540,34 @@ export async function listMcpClients(
         scopes: row.scopes,
         effectiveScopes: blockedReason || row.revokedAt ? [] : (ceiling?.clientScopes ?? []),
         blockedReason,
+        trusted: Boolean(ceiling?.clientTrusted),
         createdAt: row.createdAt,
+        firstAuthorizedAt: row.firstAuthorizedAt,
         revokedAt: row.revokedAt,
         activeConnections: row._count.grants,
         lastUsedAt: lastUsed.get(row.id)?.lastUsedAt ?? null,
         lastCallAt: lastUsed.get(row.id)?.lastCallAt ?? null,
+        restrictedCapabilities: row.disabledCapabilities.length,
       };
     }),
     counts: statusCounts,
     total: statusCounts[input.status],
   };
+}
+
+/**
+ * One assistant for its detail page, or null for an unknown id and for the internal client that
+ * personal tokens hang off (it is not an assistant).
+ */
+export async function getMcpClient(viewer: McpViewer, id: string, now = new Date()) {
+  requireAdmin(viewer);
+  if (id === MCP_PAT_CLIENT_ID || id.length > 256) return null;
+  const { rows } = await listMcpClients(
+    viewer,
+    { status: 'all', type: 'all', q: '', page: 1, id },
+    now
+  );
+  return rows[0] ?? null;
 }
 
 /**

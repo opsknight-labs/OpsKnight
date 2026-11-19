@@ -32,7 +32,7 @@ export default function PolicyDetailLoading() {
       </div>
 
       {/* Tab Content Container Skeleton */}
-      <Card className="border-slate-200/80 bg-white p-6 space-y-4">
+      <Card className="border-ink-200/80 bg-card p-6 space-y-4">
         <div className="flex items-center justify-between border-b pb-4">
           <Skeleton className="h-6 w-40" />
           <Skeleton className="h-8 w-28 rounded-lg" />
@@ -42,7 +42,7 @@ export default function PolicyDetailLoading() {
           {[1, 2, 3].map(i => (
             <div
               key={i}
-              className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center justify-between gap-4"
+              className="p-4 rounded-xl border border-ink-200 bg-ink-50/50 flex items-center justify-between gap-4"
             >
               <div className="flex items-center gap-3">
                 <Skeleton className="h-7 w-7 rounded-full" />

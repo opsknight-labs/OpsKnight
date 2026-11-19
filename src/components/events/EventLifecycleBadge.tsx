@@ -8,12 +8,7 @@ export type EventLifecycleBadgeProps = {
 };
 
 export type EventCategory =
-  | 'triggered'
-  | 'acknowledged'
-  | 'resolved'
-  | 'escalated'
-  | 'note'
-  | 'general';
+  'triggered' | 'acknowledged' | 'resolved' | 'escalated' | 'note' | 'general';
 
 export function getEventCategory(message: string): EventCategory {
   const lower = message.toLowerCase();
@@ -73,11 +68,11 @@ function EventLifecycleBadge({ message, className }: EventLifecycleBadgeProps) {
       return (
         <span
           className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/80',
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30',
             className
           )}
         >
-          <Flame className="h-3 w-3 text-rose-600" />
+          <Flame className="h-3 w-3 text-rose-600 dark:text-rose-400" />
           <span>TRIGGER</span>
         </span>
       );
@@ -85,11 +80,11 @@ function EventLifecycleBadge({ message, className }: EventLifecycleBadgeProps) {
       return (
         <span
           className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80',
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30',
             className
           )}
         >
-          <Eye className="h-3 w-3 text-amber-600" />
+          <Eye className="h-3 w-3 text-amber-600 dark:text-amber-400" />
           <span>ACK</span>
         </span>
       );
@@ -97,11 +92,11 @@ function EventLifecycleBadge({ message, className }: EventLifecycleBadgeProps) {
       return (
         <span
           className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80',
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30',
             className
           )}
         >
-          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+          <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
           <span>RESOLVED</span>
         </span>
       );
@@ -109,11 +104,11 @@ function EventLifecycleBadge({ message, className }: EventLifecycleBadgeProps) {
       return (
         <span
           className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/80',
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30',
             className
           )}
         >
-          <ArrowRightCircle className="h-3 w-3 text-blue-600" />
+          <ArrowRightCircle className="h-3 w-3 text-blue-600 dark:text-blue-400" />
           <span>ESCALATED</span>
         </span>
       );
@@ -121,11 +116,11 @@ function EventLifecycleBadge({ message, className }: EventLifecycleBadgeProps) {
       return (
         <span
           className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200/80',
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-500/10 dark:text-purple-300 dark:border-purple-500/30',
             className
           )}
         >
-          <MessageSquare className="h-3 w-3 text-purple-600" />
+          <MessageSquare className="h-3 w-3 text-purple-600 dark:text-purple-400" />
           <span>NOTE</span>
         </span>
       );
@@ -133,11 +128,11 @@ function EventLifecycleBadge({ message, className }: EventLifecycleBadgeProps) {
       return (
         <span
           className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200/80',
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-ink-100 text-ink-700 border border-ink-200/80',
             className
           )}
         >
-          <Activity className="h-3 w-3 text-slate-600" />
+          <Activity className="h-3 w-3 text-ink-600" />
           <span>EVENT</span>
         </span>
       );

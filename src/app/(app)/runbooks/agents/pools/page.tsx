@@ -41,6 +41,7 @@ import {
   removeAgentFromPoolAction,
   updateSchedulingLabelsAction,
 } from '../../actions';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -57,6 +58,7 @@ export default async function RunbookAgentPoolsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePageAccess('/runbooks/agents/pools');
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const [permissions, user, navigation] = await Promise.all([
     getUserPermissions(),

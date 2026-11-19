@@ -58,7 +58,9 @@ describe('scopes a role can actually exercise', () => {
     const user = mcpScopesUsableByRole('USER');
     expect(user.has('incidents:read')).toBe(true);
     expect(user.has('services:read')).toBe(true);
-    expect(user.has('incidents:write')).toBe(false);
+    // Users may work incidents they are assigned to, paged for, or own through a team; each call
+    // is still checked against that specific incident.
+    expect(user.has('incidents:write')).toBe(true);
     expect(user.has('audit:read')).toBe(false);
     expect(user.has('runbooks:read')).toBe(false);
   });

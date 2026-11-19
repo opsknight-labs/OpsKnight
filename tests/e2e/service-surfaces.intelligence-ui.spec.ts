@@ -29,7 +29,7 @@ async function cleanup() {
   const services = { name: { startsWith: prefix } };
   await prisma.prePagingDecision.deleteMany({ where: { service: services } });
   await prisma.noiseControlPolicy.deleteMany({ where: { service: services } });
-  await prisma.maintenanceWindow.deleteMany({ where: { name: { startsWith: prefix } } });
+  await prisma.noiseMaintenanceWindow.deleteMany({ where: { name: { startsWith: prefix } } });
   await prisma.heartbeatMonitor.deleteMany({ where: { service: services } });
   // Objective revisions are immutable (a row trigger refuses DELETE), so the fixture rows are removed with
   // the trigger switched off inside one transaction. beforeAll refuses any database that is not a test one.
@@ -170,7 +170,7 @@ async function seed() {
         createdAt: new Date(now - 2 * 3_600_000),
       },
     });
-  await prisma.maintenanceWindow.create({
+  await prisma.noiseMaintenanceWindow.create({
     data: {
       name: `${prefix}database upgrade`,
       scope: 'SERVICE',

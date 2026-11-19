@@ -67,8 +67,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "54fbc0051c2ed391180225536f20a3562af6ca96b83411e185d225021ca3087b",
-    "descriptionSha256": "b01de9dc14e9bcb23302a2401c1361a78d1bcebc02b3b623b61a1e5e5ea79278"
+    "inputSchemaSha256": "077c6906d91c23ef9a3827c1492d3bc988ab0bbd5460c6f5d609ede2c894438f",
+    "descriptionSha256": "3fc4ac0bc8fe5968aada7538697a2b4f553b0ef097757206a5521936df926d3c"
   },
   {
     "name": "fetch",
@@ -377,7 +377,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "bce0ee7ef67c3fb33ae731858fa89f76293d605ed10634812c1f12f87832fbb5",
+    "inputSchemaSha256": "c845f7ff068a03ea0341b06cf7a8c4dbdd635e9d796d90c4543c7199aa6e2f45",
     "descriptionSha256": "57c12cb6a7474e26672530e10249aebe03b8f5c436fafd66a4ba26e8e7ebf8bd"
   },
   {
@@ -567,7 +567,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "1989a1ba48c7606368cad616028605513a914fc4fdd6af6e4dc78b5ad42b0703",
+    "inputSchemaSha256": "963a9bc00099f8eb7b7f700dd15196287ea326ce333dde2901634cf06ab985d3",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

@@ -62,8 +62,8 @@ const PRIORITY_OPTIONS = [
     key: 'P5',
     label: INCIDENT_PRIORITY_DEFINITIONS.P5.label,
     icon: Info,
-    iconColor: 'text-slate-500 dark:text-slate-400',
-    textColor: 'text-slate-700 dark:text-slate-400',
+    iconColor: 'text-slate-500 dark:text-zinc-400',
+    textColor: 'text-slate-700 dark:text-zinc-400',
   },
 ] as const;
 

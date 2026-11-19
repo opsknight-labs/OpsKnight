@@ -72,6 +72,42 @@ describe('honest MCP workflow inventory', () => {
       operationReviewSchema.safeParse({ ...base, status: 'DENIED_WITH_REASON', risk: 'R4' }).success
     ).toBe(true);
   });
+  it('marks only sensitive (R2) approval-gated operations as routine responder changes', () => {
+    const gated = { status: 'APPROVAL_REQUIRED', tool: null, responderDirect: true };
+    const review = (operationId: string) => {
+      const { status, risk, reason, tool, routeSha256, contractSha256, resourceFilter } =
+        MCP_CATALOG.find(op => op.operationId === operationId)!;
+      const { evidence, actions, impactPreview } = MCP_CATALOG.find(
+        op => op.operationId === operationId
+      )!;
+      return {
+        ...{ status, risk, reason, tool, routeSha256, contractSha256, resourceFilter },
+        ...{ evidence, actions },
+        ...(impactPreview ? { impactPreview } : {}),
+      };
+    };
+    expect(operationReviewSchema.safeParse({ ...review('snoozeIncident'), ...gated }).success).toBe(
+      true
+    );
+    // Never a destructive (R3) change, and never something that is not approval-gated.
+    expect(
+      operationReviewSchema.safeParse({ ...review('cancelScheduleOverride'), ...gated }).success
+    ).toBe(false);
+    expect(
+      operationReviewSchema.safeParse({ ...review('listIncidentTags'), responderDirect: true })
+        .success
+    ).toBe(false);
+    expect(
+      MCP_CATALOG.filter(op => op.responderDirect)
+        .map(op => op.operationId)
+        .sort()
+    ).toEqual([
+      'createScheduleOverride',
+      'snoozeIncident',
+      'unacknowledgeIncident',
+      'updateIncident',
+    ]);
+  });
   it('only approval-gates replay-safe sensitive writes and never exposes them generically', () => {
     const gated = MCP_CATALOG.filter(isMcpApprovalGated);
     expect(gated.map(op => op.operationId).sort()).toEqual(

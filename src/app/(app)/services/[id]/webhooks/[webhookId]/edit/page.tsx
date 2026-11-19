@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { ChevronLeft, AlertCircle, Save, Webhook } from 'lucide-react';
 import { assertCanModifyService } from '@/lib/rbac';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function EditWebhookPage({
   params,
@@ -25,6 +26,7 @@ export default async function EditWebhookPage({
   params: Promise<{ id: string; webhookId: string }>;
   searchParams?: Promise<{ error?: string }>;
 }) {
+  await requirePageAccess('/services/[id]/webhooks/[webhookId]/edit');
   const { id, webhookId } = await params;
   await assertCanModifyService(id);
   const resolvedSearchParams = await searchParams;
@@ -203,7 +205,7 @@ export default async function EditWebhookPage({
                   name="enabled"
                   value="true"
                   defaultChecked={webhook.enabled}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="h-4 w-4 rounded border-ink-300 text-primary focus:ring-primary"
                 />
                 <Label htmlFor="enabled" className="cursor-pointer font-medium">
                   Enable this integration

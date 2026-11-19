@@ -127,7 +127,9 @@ export function createIntegrationHandler<T>(
           integration.previousKeyExpiresAt
         ))
       ) {
-        throw IntegrationErrors.invalidPayload('Invalid integration key');
+        // A missing or wrong key is an authentication failure (401), not a
+        // payload problem; match withIntegrationMiddleware below.
+        throw IntegrationErrors.unauthorized('Invalid integration key');
       }
 
       integrationType = integration.type;

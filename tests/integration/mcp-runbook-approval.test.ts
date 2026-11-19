@@ -91,6 +91,14 @@ async function fixture(stepApproval = false) {
           description: '',
           sequence: 0,
         },
+        {
+          key: 'access_token',
+          label: 'Access token',
+          type: 'STRING',
+          required: false,
+          description: '',
+          sequence: 1,
+        },
       ],
     },
     user.id
@@ -105,7 +113,7 @@ async function fixture(stepApproval = false) {
   });
   const input = {
     runbookId: runbook.id,
-    body: { parameters: { note: 'private review input' } },
+    body: { parameters: { note: 'private review input', access_token: 'tok-do-not-show' } },
     idempotencyKey: 'prepare',
   };
   const prepare = () => prepareMcpRunbook(ctx(), input);
@@ -149,6 +157,14 @@ describe('independently reviewed MCP runbook execution', () => {
             required: false,
             description: '',
             sequence: 0,
+          },
+          {
+            key: 'access_token',
+            label: 'Access token',
+            type: 'STRING',
+            required: false,
+            description: '',
+            sequence: 1,
           },
         ],
       },
@@ -248,11 +264,20 @@ describe('independently reviewed MCP runbook execution', () => {
     });
     expect(stored.independentReview).toBe(true);
     expect(stored.requestEnvelope).toMatch(/^v3:/);
-    expect(JSON.stringify(stored)).not.toContain('private review input');
+    // The request itself stays encrypted; a credential-like input appears nowhere.
+    expect(stored.requestEnvelope).not.toContain('private review input');
+    expect(JSON.stringify(stored)).not.toContain('tok-do-not-show');
     expect(JSON.stringify(prepared)).not.toContain('authorizationToken');
     const reviewed = await loadMcpRunbookReview(prepared.previewId, f.reviewer);
     expect(reviewed.summary.versionId).toBe(f.version.id);
-    expect(JSON.stringify(reviewed.summary)).not.toContain('private review input');
+    // The reviewer sees the ordinary input the assistant supplied, and that a credential exists.
+    expect(reviewed.summary.inputs).toEqual(
+      expect.arrayContaining([
+        { key: 'note', type: 'STRING', value: 'private review input' },
+        { key: 'access_token', type: 'STRING', value: '[withheld: credential]' },
+      ])
+    );
+    expect(JSON.stringify(reviewed.summary)).not.toContain('tok-do-not-show');
   });
   it('requires a native review before execution; an administrator may confirm their own', async () => {
     const f = await fixture();

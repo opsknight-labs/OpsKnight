@@ -70,8 +70,9 @@ describe('RBAC page guard contract', () => {
       'src/app/(app)/settings/security/page.tsx',
       'src/app/(mobile)/m/more/page.tsx',
     ]);
+    // requirePageAccess(route) enforces the shared page rule (src/lib/access/pages.ts).
     const authorizationDecision =
-      /assertCan|assertCapability|getCurrentAuthorizationActor|ReadWhere\(|getViewable|assertAdmin|assertResponder|assertAuditor|permissions\.(capabilities\.includes|isAdmin|isResponderOrAbove|isAuditor)|user\.role\s*[!=]==?/;
+      /requirePageAccess(Snapshot)?\('|assertCan|assertCapability|getCurrentAuthorizationActor|ReadWhere\(|getViewable|assertAdmin|assertResponder|assertAuditor|permissions\.(capabilities\.includes|isAdmin|isResponderOrAbove|isAuditor)|user\.role\s*[!=]==?/;
 
     const unguarded = Object.entries(pageSources)
       .map(([key, page]) => ({ path: key.slice(key.indexOf('src/app/')), page }))

@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { readChangeReference } from '@/lib/intelligence/squire/references';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function ChangeReferencePage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageAccess('/changes/[id]');
   const { id } = await params;
   let change;
   try {

@@ -81,7 +81,7 @@ async function policy(serviceId: string, mode: Mode, definition: Record<string, 
 
 async function window(serviceId: string, effect: 'SUPPRESS' | 'DOWNGRADE' = 'SUPPRESS') {
   const now = Date.now();
-  return db.maintenanceWindow.create({
+  return db.noiseMaintenanceWindow.create({
     data: {
       name: 'Patching',
       scope: 'SERVICE',

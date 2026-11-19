@@ -93,4 +93,47 @@ describe('application theme contract', () => {
       expect(css).not.toContain('@media (prefers-color-scheme: dark)');
     }
   });
+
+  it('lets the desktop console follow the user preference instead of forcing light', () => {
+    expect(sources.providers).not.toMatch(/forcedTheme: 'light' as const, defaultTheme: 'light'/);
+    expect(sources.providers).toContain('isLightPinnedRoute(pathname)');
+    expect(sources.providers).toContain('defaultTheme="system"');
+  });
+
+  it('keeps Windows forced colours available', () => {
+    expect(sources.base).not.toMatch(/forced-color-adjust:\s*none/);
+    expect(sources.base).toContain('@media (forced-colors: active)');
+  });
+
+  it('defines the ink scale for light, dark and inverse surfaces, with light equal to slate', () => {
+    const styles = sources.styles;
+    expect(styles.match(/--ink-500:/g)?.length).toBe(3);
+    expect(styles).toContain('--ink-500: 100 116 139;');
+    expect(styles).toContain('--ink-500: 161 161 170;');
+    expect(styles).toContain('.ok-inverse-surface');
+    expect(sources.tailwind).toContain('rgb(var(--ink-${shade}) / <alpha-value>)');
+  });
+
+  it('pairs inverse foregrounds with dark backgrounds for inline chrome controls', () => {
+    const inverse = sources.styles.split('.ok-inverse-surface {')[1].split('}')[0];
+    const dark = sources.styles.split("[data-theme='dark'] {")[1].split('}')[0];
+    const tokens = (css: string) =>
+      Object.fromEntries([...css.matchAll(/(--ui-[\w-]+):\s*([^;]+);/g)].map(m => [m[1], m[2]]));
+    const inverseTokens = tokens(inverse);
+    const darkTokens = tokens(dark);
+    for (const surface of ['background', 'card', 'popover', 'secondary', 'accent']) {
+      expect(inverseTokens[`--ui-${surface}`], surface).toBe(darkTokens[`--ui-${surface}`]);
+      const foreground = surface === 'background' ? 'foreground' : `${surface}-foreground`;
+      expect(inverseTokens[`--ui-${foreground}`], foreground).toBe(
+        darkTokens[`--ui-${foreground}`]
+      );
+    }
+    expect(inverseTokens['--ui-input']).toBe(inverseTokens['--ui-border']);
+  });
+
+  it('gives every element a themed default border colour', () => {
+    expect(sources.styles).toMatch(
+      /\*,\s*::before,\s*::after \{\s*border-color: hsl\(var\(--ui-border\)\);/
+    );
+  });
 });

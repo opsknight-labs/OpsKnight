@@ -20,12 +20,15 @@ OpsKnight connects to one OpenID Connect (OIDC) identity provider such as Micros
 Google Workspace, Okta, Auth0 or Keycloak. You set it up in **Settings → System → SSO /
 Authentication**, in four steps:
 
-| Step | What you do | Guide |
-| --- | --- | --- |
-| **1 · Connect provider** | Choose your provider, copy two callback URLs into it, paste the client ID and secret, and save. Saving checks the connection. | [Configure single sign-on](./configure-oidc/) |
-| **2 · Who can sign in** | Decide whether new people get an account automatically, which email domains are allowed, and approve existing accounts. | [Link existing accounts](./link-existing-accounts/) |
-| **3 · Roles & teams** | Optional. Give people a role and teams from their identity provider groups, and try your rules with sample claims. | [Map groups to roles and teams](./map-roles-and-teams/) |
-| **4 · Test & activate** | Sign in once yourself, see exactly what will change, and turn single sign-on on. | [Test and turn on single sign-on](./test-and-enforce-sso/) |
+| Step                     | What you do                                                                                                                   | Guide                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **1 · Connect provider** | Choose your provider, copy two callback URLs into it, paste the client ID and secret, and save. Saving checks the connection. | [Configure single sign-on](./configure-oidc/)              |
+| **2 · Who can sign in**  | Decide whether new people get an account automatically, which email domains are allowed, and approve existing accounts.       | [Link existing accounts](./link-existing-accounts/)        |
+| **3 · Roles & teams**    | Optional. Give people a role and teams from their identity provider groups, and try your rules with sample claims.            | [Map groups to roles and teams](./map-roles-and-teams/)    |
+| **4 · Test & activate**  | Sign in once yourself, see exactly what will change, and turn single sign-on on.                                              | [Test and turn on single sign-on](./test-and-enforce-sso/) |
+
+For what each role and team role can do, how people request access, emergency access, custom
+roles and access reviews, see [Roles, permissions and access requests](./roles-and-access/).
 
 Nothing changes for anyone until the last step. Until then, everyone keeps signing in the way
 they do today.

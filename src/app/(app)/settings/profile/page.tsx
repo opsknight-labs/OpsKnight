@@ -10,11 +10,13 @@ import NoiseSettings from '@/components/settings/NoiseSettings';
 import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
 import ProfileHeroBanner from '@/components/settings/ProfileHeroBanner';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import AppearanceControl from '@/components/theme/AppearanceControl';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { Users, Calendar, Flame, ShieldCheck } from 'lucide-react';
 import ConnectedChatOpsAccounts from '@/components/settings/ConnectedChatOpsAccounts';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -37,6 +39,7 @@ function formatLocalTimeInTz(timeZone: string): string {
 }
 
 export default async function ProfileSettingsPage({ searchParams }: ProfileSettingsPageProps) {
+  await requirePageAccess('/settings/profile');
   const resolvedSearchParams = await searchParams;
   const defaultTab = resolvedSearchParams?.tab || 'profile';
 
@@ -247,6 +250,15 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         scheduleContent={
           <>
             {/* Timezone Preferences */}
+            <SettingsSection
+              title="Appearance"
+              description="Choose a light or dark interface, or follow your device. Saved to your account, so it applies on every device you sign in to."
+            >
+              <div className="max-w-sm py-2">
+                <AppearanceControl />
+              </div>
+            </SettingsSection>
+
             <SettingsSection
               title="Timezone"
               description="Your primary timezone for incident timestamps, on-call schedules, and analytics"

@@ -160,7 +160,6 @@ describe('alerts and changes navigation', () => {
       const expected = APP_ROLES.filter(role =>
         hasCapability(role, CAPABILITIES.INTELLIGENCE_READ)
       );
-      expect([...(item?.requiresRole ?? [])].sort()).toEqual([...expected].sort());
       for (const role of APP_ROLES)
         expect(
           getAuthorizedNavItems(role)

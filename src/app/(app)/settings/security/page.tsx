@@ -14,8 +14,12 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import Link from 'next/link';
 import { ShieldCheck, KeyRound, Fingerprint, ExternalLink } from 'lucide-react';
+import McpConnectEntry from '@/components/settings/mcp/McpConnectEntry';
+import { loadMcpInForce } from '@/lib/mcp/core/policy-in-force';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function SecuritySettingsPage() {
+  await requirePageAccess('/settings/security');
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
 
@@ -42,6 +46,7 @@ export default async function SecuritySettingsPage() {
       })
     : null;
 
+  const mcpInForce = await loadMcpInForce();
   const passwordOperationsAllowed = (await checkAuthenticationPolicy('PASSWORD_WRITE')).allowed;
   const systemPolicy = await getAuthenticationPolicy();
   const hasPassword = Boolean(user?.passwordHash);
@@ -315,6 +320,8 @@ export default async function SecuritySettingsPage() {
           </div>
         </SettingsSection>
       )}
+
+      {mcpInForce && <McpConnectEntry />}
 
       {/* Section 5: Recent Security Activity */}
       <SettingsSection

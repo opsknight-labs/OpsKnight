@@ -2,7 +2,7 @@
 
 import React, { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
-import { Flame, ShieldAlert, Zap, Bell, Settings, Sparkles, Workflow } from 'lucide-react';
+import { Flame, ShieldAlert, Zap, Bell, Settings, Sparkles, Workflow, Wrench } from 'lucide-react';
 
 export type ServiceDetailTab =
   | 'automation'
@@ -12,6 +12,7 @@ export type ServiceDetailTab =
   | 'integrations'
   | 'notifications'
   | 'intelligence'
+  | 'maintenance'
   | 'settings';
 
 export type ServiceDetailTabsProps = {
@@ -26,6 +27,8 @@ export type ServiceDetailTabsProps = {
   runbooksContent: ReactNode;
   integrationsContent: ReactNode;
   notificationsContent: ReactNode;
+  maintenanceContent: ReactNode;
+  maintenanceActive?: boolean;
   settingsContent: ReactNode;
   /** Offers the Intelligence tab. The page passes its content only while the tab is selected. */
   showIntelligenceTab?: boolean;
@@ -45,6 +48,8 @@ export default function ServiceDetailTabs({
   runbooksContent,
   integrationsContent,
   notificationsContent,
+  maintenanceContent,
+  maintenanceActive,
   settingsContent,
   showIntelligenceTab = false,
   intelligenceContent,
@@ -87,6 +92,12 @@ export default function ServiceDetailTabs({
       ? [{ id: 'intelligence', label: 'Intelligence', icon: <Sparkles className="h-4 w-4" /> }]
       : []),
     {
+      id: 'maintenance',
+      label: 'Maintenance',
+      icon: <Wrench className="h-4 w-4" />,
+      count: maintenanceActive ? 'Active' : undefined,
+    },
+    {
       id: 'settings',
       label: 'Service Settings',
       icon: <Settings className="h-4 w-4" />,
@@ -126,6 +137,9 @@ export default function ServiceDetailTabs({
           {intelligenceContent}
         </DetailTabContent>
       )}
+      <DetailTabContent value="maintenance" className="mt-0 space-y-6">
+        {maintenanceContent}
+      </DetailTabContent>
       <DetailTabContent value="settings" className="mt-0 space-y-6">
         {settingsContent}
       </DetailTabContent>

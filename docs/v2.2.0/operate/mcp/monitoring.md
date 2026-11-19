@@ -6,7 +6,7 @@ product_area: mcp
 audience: [operator, administrator]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-09
   evidence:
     - scripts/mcp/docs-reference.ts
     - src/lib/metrics/operational/registry.ts

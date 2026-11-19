@@ -21,6 +21,7 @@ import {
   SECTION_TITLES,
   SpeedSection,
 } from './sections';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -34,6 +35,7 @@ export default async function IntelligenceOverviewPage({
 }: {
   searchParams?: Promise<{ window?: string | string[] }>;
 }) {
+  await requirePageAccess('/intelligence');
   await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const actor = await getCurrentAuthorizationActor();
   const canManage = hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE);

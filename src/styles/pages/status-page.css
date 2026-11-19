@@ -5,10 +5,10 @@
 .status-page-input,
 .status-page-select {
   padding: 0.5rem 0.75rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgb(var(--ink-200));
   border-radius: 0.5rem;
   font-size: 0.8125rem;
-  background: #ffffff;
+  background: hsl(var(--ui-card));
   color: inherit;
 }
 
@@ -34,8 +34,8 @@
   --status-major-outage-bg: #fff1f2;
   --status-unknown: #475569;
   --status-unknown-bg: #f1f5f9;
-  color: var(--status-text, #111827);
-  background-color: var(--status-bg, #ffffff);
+  color: var(--status-text, rgb(var(--ink-900)));
+  background-color: var(--status-bg, hsl(var(--ui-card)));
   font-family: var(--status-font-family, inherit);
   --primary: var(--status-primary, var(--primary-color, #2563eb));
   --primary-hover: var(--status-primary-hover, var(--primary-hover, #1d4ed8));
@@ -56,9 +56,9 @@
 .status-page-button {
   padding: 0.4rem 0.75rem;
   border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
+  border: 1px solid rgb(var(--ink-200));
+  background: hsl(var(--ui-card));
+  color: rgb(var(--ink-500));
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
@@ -95,8 +95,8 @@
 }
 
 .status-page-button:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: rgb(var(--ink-50));
+  border-color: rgb(var(--ink-300));
 }
 
 .status-page-button[data-active="true"]:hover,
@@ -111,8 +111,8 @@
    ============================================ */
 
 .status-page-config-topbar {
-  background: linear-gradient(180deg, #f9fafb 0%, #f1f5f9 100%) !important;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.3) !important;
+  background: linear-gradient(180deg, rgb(var(--ink-50)) 0%, rgb(var(--ink-100)) 100%) !important;
+  border-bottom: 1px solid rgb(var(--ink-400) / 0.3) !important;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
   /* UI: richer navigation bar with calmer depth */
 }
@@ -129,7 +129,7 @@
 .status-page-config-settings {
   position: relative;
   background: radial-gradient(900px 220px at 0% 0%, rgba(59, 130, 246, 0.08), transparent 60%),
-    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+    linear-gradient(180deg, rgb(var(--ink-50)) 0%, rgb(var(--ink-100)) 100%) !important;
   /* UI: add subtle ambient depth to the settings panel */
 }
 
@@ -152,8 +152,8 @@
 
 .status-page-settings .ui-card {
   position: relative;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
-  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  background: linear-gradient(180deg, hsl(var(--ui-card)) 0%, rgb(var(--ink-50)) 100%) !important;
+  border: 1px solid rgb(var(--ink-400) / 0.28) !important;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06) !important;
   /* UI: refined card surface for status page settings */
 }
@@ -189,7 +189,7 @@
 .status-page-template-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14) !important;
-  border-color: rgba(148, 163, 184, 0.5) !important;
+  border-color: rgb(var(--ink-400) / 0.5) !important;
 }
 
 .status-page-template-card.is-selected {
@@ -203,7 +203,7 @@
 }
 
 .status-page-template-preview {
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  border-bottom: 1px solid rgb(var(--ink-400) / 0.2);
 }
 
 .status-page-template-filter {
@@ -224,7 +224,7 @@
   position: sticky;
   bottom: var(--spacing-4);
   background: var(--glass-bg) !important;
-  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  border: 1px solid rgb(var(--ink-400) / 0.25) !important;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
   backdrop-filter: blur(12px);
   z-index: 2;
@@ -232,7 +232,7 @@
 }
 
 .status-page-config-preview {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  background: linear-gradient(180deg, rgb(var(--ink-50)) 0%, rgb(var(--ink-100)) 100%) !important;
   /* UI: softer preview panel contrast */
 }
 
@@ -241,7 +241,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  border-bottom: 1px solid rgb(var(--ink-400) / 0.15);
   background: rgba(255, 255, 255, 0.6);
   font-size: clamp(0.8rem, 1.05vw, 0.9rem);
   font-weight: 600;
@@ -267,8 +267,8 @@
   flex: 1;
   margin: var(--spacing-4);
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: #ffffff;
+  border: 1px solid rgb(var(--ink-400) / 0.28);
+  background: hsl(var(--ui-card));
   overflow: hidden;
 }
 
@@ -281,7 +281,7 @@
 
   .status-page-config-settings {
     border-right: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    border-bottom: 1px solid rgb(var(--ink-400) / 0.2);
   }
 
   .status-page-config-preview {
@@ -311,7 +311,7 @@
 
   .status-page-config-settings {
     border-right: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    border-bottom: 1px solid rgb(var(--ink-400) / 0.2);
   }
 
   .status-page-config-preview {
@@ -351,8 +351,8 @@
    ============================================ */
 
 .status-page-config-topbar {
-  background: linear-gradient(180deg, #f9fafb 0%, #f1f5f9 100%) !important;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.3) !important;
+  background: linear-gradient(180deg, rgb(var(--ink-50)) 0%, rgb(var(--ink-100)) 100%) !important;
+  border-bottom: 1px solid rgb(var(--ink-400) / 0.3) !important;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
   /* UI: richer navigation bar with calmer depth */
 }
@@ -369,7 +369,7 @@
 .status-page-config-settings {
   position: relative;
   background: radial-gradient(900px 220px at 0% 0%, rgba(59, 130, 246, 0.08), transparent 60%),
-    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+    linear-gradient(180deg, rgb(var(--ink-50)) 0%, rgb(var(--ink-100)) 100%) !important;
   /* UI: add subtle ambient depth to the settings panel */
 }
 
@@ -392,8 +392,8 @@
 
 .status-page-settings .ui-card {
   position: relative;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
-  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  background: linear-gradient(180deg, hsl(var(--ui-card)) 0%, rgb(var(--ink-50)) 100%) !important;
+  border: 1px solid rgb(var(--ink-400) / 0.28) !important;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06) !important;
   /* UI: refined card surface for status page settings */
 }
@@ -429,7 +429,7 @@
 .status-page-template-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14) !important;
-  border-color: rgba(148, 163, 184, 0.5) !important;
+  border-color: rgb(var(--ink-400) / 0.5) !important;
 }
 
 .status-page-template-card.is-selected {
@@ -443,7 +443,7 @@
 }
 
 .status-page-template-preview {
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  border-bottom: 1px solid rgb(var(--ink-400) / 0.2);
 }
 
 .status-page-template-filter {
@@ -464,7 +464,7 @@
   position: sticky;
   bottom: var(--spacing-4);
   background: rgba(255, 255, 255, 0.92) !important;
-  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  border: 1px solid rgb(var(--ink-400) / 0.3) !important;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(8px);
   z-index: 2;
@@ -472,7 +472,7 @@
 }
 
 .status-page-config-preview {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  background: linear-gradient(180deg, rgb(var(--ink-50)) 0%, rgb(var(--ink-100)) 100%) !important;
   /* UI: softer preview panel contrast */
 }
 
@@ -481,7 +481,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  border-bottom: 1px solid rgb(var(--ink-400) / 0.25);
   background: rgba(255, 255, 255, 0.9);
   font-size: clamp(0.8rem, 1.05vw, 0.9rem);
   font-weight: 600;
@@ -507,8 +507,8 @@
   flex: 1;
   margin: var(--spacing-4);
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: #ffffff;
+  border: 1px solid rgb(var(--ink-400) / 0.28);
+  background: hsl(var(--ui-card));
   overflow: hidden;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
   /* UI: premium preview stage */
@@ -519,10 +519,10 @@
 .status-page-input,
 .status-page-select {
   padding: 0.5rem 0.75rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgb(var(--ink-200));
   border-radius: 0.5rem;
   font-size: 0.8125rem;
-  background: #ffffff;
+  background: hsl(var(--ui-card));
   color: inherit;
 }
 
@@ -552,9 +552,9 @@
 .status-page-button {
   padding: 0.4rem 0.75rem;
   border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
+  border: 1px solid rgb(var(--ink-200));
+  background: hsl(var(--ui-card));
+  color: rgb(var(--ink-500));
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
@@ -591,8 +591,8 @@
 }
 
 .status-page-button:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: rgb(var(--ink-50));
+  border-color: rgb(var(--ink-300));
 }
 
 .status-page-button[data-active="true"]:hover,
@@ -720,7 +720,7 @@
 
 .status-page-config-settings {
   min-width: 0;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9) 0%, rgba(239, 242, 247, 0.9) 100%);
+  background: linear-gradient(180deg, rgb(var(--ink-50) / 0.9) 0%, rgb(var(--ink-100) / 0.9) 100%);
 }
 
 .status-page-config-settings-inner {
@@ -734,8 +734,8 @@
 }
 
 .status-page-config-card {
-  background: var(--card-bg, #ffffff);
-  border: 1px solid var(--card-border, #e2e8f0);
+  background: var(--card-bg, hsl(var(--ui-card)));
+  border: 1px solid var(--card-border, rgb(var(--ink-200)));
   border-radius: 0.75rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
   overflow: hidden;
@@ -748,8 +748,8 @@
 }
 
 .status-page-card-header {
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: rgb(var(--ink-50));
+  border-bottom: 1px solid rgb(var(--ink-200));
 }
 
 [data-theme='dark'] .status-page-card-header {
@@ -788,9 +788,9 @@
 .status-page-config .ui-input,
 .status-page-config .ui-formfield-textarea,
 .status-page-config .ui-select {
-  border: 1px solid #cbd5e1 !important;
-  background-color: #ffffff;
-  color: #0f172a;
+  border: 1px solid rgb(var(--ink-300)) !important;
+  background-color: hsl(var(--ui-card));
+  color: rgb(var(--ink-900));
   border-radius: 0.5rem;
   padding: 0.625rem 0.875rem !important;
   box-sizing: border-box !important;
@@ -809,7 +809,7 @@
 .status-page-config .ui-input:hover,
 .status-page-config .ui-formfield-textarea:hover,
 .status-page-config .ui-select:hover {
-  border-color: #94a3b8 !important;
+  border-color: rgb(var(--ink-400)) !important;
 }
 
 .status-page-config input[type="text"]:focus,
@@ -892,10 +892,10 @@
 }
 
 .status-page-config-preview {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  background: linear-gradient(180deg, rgb(var(--ink-50)) 0%, rgb(var(--ink-100)) 100%);
   position: relative;
   min-width: 0;
-  border-left: 1px solid rgba(148, 163, 184, 0.25);
+  border-left: 1px solid rgb(var(--ink-400) / 0.25);
 }
 
 .status-page-config-preview::before {
@@ -925,7 +925,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.65rem 0.9rem;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgb(var(--ink-400) / 0.2);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.65);
   font-weight: 700;
@@ -947,8 +947,8 @@
 .status-page-preview-frame {
   flex: 1;
   border-radius: calc(var(--radius-xl) + 2px);
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #ffffff;
+  border: 1px solid rgb(var(--ink-400) / 0.35);
+  background: hsl(var(--ui-card));
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
   overflow: hidden;
   transition: box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out);
@@ -964,13 +964,13 @@
 
 .status-page-preview-controls {
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid rgb(var(--ink-400) / 0.35);
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
   padding: var(--status-preview-controls-padding, 0.75rem 0.95rem);
 }
 
 .status-page-preview-device-toggle {
-  background: rgba(226, 232, 240, 0.9);
+  background: rgb(var(--ink-200) / 0.9);
 }
 
 .status-page-preview-device-btn {
@@ -988,7 +988,7 @@
 }
 
 .status-page-preview-zoom-controls {
-  background: #f8fafc;
+  background: rgb(var(--ink-50));
 }
 
 .status-page-preview-zoom-controls button {
@@ -1072,7 +1072,7 @@
 
   .status-page-config-settings {
     border-right: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    border-bottom: 1px solid rgb(var(--ink-400) / 0.2);
   }
 
   .status-page-config-preview {
@@ -1102,7 +1102,7 @@
 
   .status-page-config-settings {
     border-right: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    border-bottom: 1px solid rgb(var(--ink-400) / 0.2);
   }
 
   .status-page-config-preview {

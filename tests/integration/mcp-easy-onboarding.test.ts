@@ -544,6 +544,22 @@ describe('saving the policy form', () => {
     );
     expect(await db.mcpPolicy.findUnique({ where: { id: 'default' } })).toBeNull();
   });
+  it('refuses identity-provider access while single sign-on is not configured', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    await db.oidcConfig.deleteMany();
+    const { updateMcpPolicy } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    expect(
+      await updateMcpPolicy(
+        form({ enabled: 'on', enterpriseControls: '1', enterpriseManagedAuthEnabled: 'on' })
+      )
+    ).toEqual({ ok: false, code: 'MCP_POLICY_INVALID', reason: 'MCP_SSO_REQUIRED' });
+    expect(
+      (await db.mcpPolicy.findUnique({ where: { id: 'default' } }))?.enterpriseManagedAuthEnabled ??
+        false
+    ).toBe(false);
+  });
   it('saves the approval windows and keeps them when a form leaves them out', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     actor.id = admin.id;

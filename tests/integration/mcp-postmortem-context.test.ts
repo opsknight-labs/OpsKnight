@@ -96,9 +96,11 @@ describe('MCP postmortem evidence workflow', () => {
     expect(result.contributors.data).toMatchObject({
       data: { contributors: [{ userId: f.user.id, role: 'AUTHOR' }] },
     });
+    // The newest snapshot is the current revision, so it is not repeated: a marker stands in.
     expect(result.versions.data).toMatchObject({
-      data: { versions: [{ snapshot: { title: 'Current title' } }] },
+      data: { versions: [{ snapshotOmitted: expect.stringContaining('current postmortem') }] },
     });
+    expect(JSON.stringify(result.versions)).not.toContain('Current title');
     expect(JSON.stringify(result)).not.toMatch(/never-disclose-this|hidden-token|signature=secret/);
     expect(result.interpretation.rootCause).toEqual({ status: 'unknown', confirmed: false });
     const history = result.versions.data as {

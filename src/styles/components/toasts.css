@@ -12,14 +12,14 @@
 .ok-toaster[data-sonner-theme='light'] {
   --toast-bg: #ffffff;
   --toast-border: rgb(15 23 42 / 0.09);
-  --toast-fg: #0f172a;
-  --toast-muted: #475569;
+  --toast-fg: #18181b;
+  --toast-muted: #52525b;
   --toast-shadow:
     0 1px 2px rgb(15 23 42 / 0.05), 0 6px 16px -4px rgb(15 23 42 / 0.1),
     0 20px 40px -12px rgb(15 23 42 / 0.16);
   --toast-close-fg: #64748b;
   --toast-close-hover-bg: #f1f5f9;
-  --toast-close-hover-fg: #0f172a;
+  --toast-close-hover-fg: #18181b;
   --toast-focus: #2563eb;
 
   --toast-success: #059669;
@@ -34,7 +34,7 @@
   --toast-info: #2563eb;
   --toast-info-soft: #eff6ff;
   --toast-info-ring: #bfdbfe;
-  --toast-loading: #475569;
+  --toast-loading: #52525b;
   --toast-loading-soft: #f1f5f9;
   --toast-loading-ring: #e2e8f0;
 }

@@ -161,6 +161,7 @@ export default function LiveIncidentsPanel({
 }) {
   const { showToast } = useToast();
   const live = useLiveDashboard();
+  const { canAcknowledgeIncident } = live;
   const {
     query,
     incidents,
@@ -307,7 +308,7 @@ export default function LiveIncidentsPanel({
           if (visible.length) focusRow(focusedIndex === null ? 0 : Math.max(focusedIndex - 1, 0));
           return;
         case 'a':
-          if (focused && canAcknowledge && focused.status === 'OPEN') {
+          if (focused && canAcknowledgeIncident(focused) && focused.status === 'OPEN') {
             event.preventDefault();
             void acknowledge(focused);
           }
@@ -347,6 +348,7 @@ export default function LiveIncidentsPanel({
     acknowledge,
     assignSelf,
     canAcknowledge,
+    canAcknowledgeIncident,
     canAssignSelf,
     currentUserId,
     focusRow,
@@ -742,7 +744,7 @@ export default function LiveIncidentsPanel({
                 highlighted={highlighted.has(incident.id)}
                 focused={focusedIndex === index}
                 isSelected={selectedIncidentId === incident.id}
-                canAcknowledge={canAcknowledge && !wallboard}
+                canAcknowledge={canAcknowledge && !wallboard && canAcknowledgeIncident(incident)}
                 canAssignSelf={canAssignSelf && !wallboard}
                 isMine={incident.assignee?.id === currentUserId}
                 busy={busy[incident.id] ?? null}

@@ -16,6 +16,7 @@ import { Prisma, IncidentUrgency } from '@prisma/client';
 import type { ProcessingLease } from './ingestion/contract';
 import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
+import { findActiveMaintenanceWindow } from '@/lib/service-maintenance/active';
 import { logger } from './logger';
 import {
   beginIngestNoiseLookups,
@@ -301,14 +302,21 @@ async function applyEvent(
     // transaction client avoids opening a second pooled connection while this
     // interactive transaction is active.
     let isFlapping = false;
+    // Only a brand-new incident is held; incidents already open before the
+    // window keep escalating, as PagerDuty does.
+    let maintenanceWindow: { id: string; title: string } | null = null;
     if (event_action === 'trigger' && !existingIncident) {
-      try {
-        const flappingResult = await checkAlertFlapping(dedup_key, serviceId, undefined, tx);
-        isFlapping = flappingResult.isFlapping;
-      } catch (_) {
-        // Non-critical: if flapping check fails, proceed with normal incident creation
+      maintenanceWindow = await findActiveMaintenanceWindow(tx, serviceId, new Date());
+      if (!maintenanceWindow) {
+        try {
+          const flappingResult = await checkAlertFlapping(dedup_key, serviceId, undefined, tx);
+          isFlapping = flappingResult.isFlapping;
+        } catch (_) {
+          // Non-critical: if flapping check fails, proceed with normal incident creation
+        }
       }
     }
+    const isSuppressed = isFlapping || maintenanceWindow !== null;
 
     // 3. For acknowledge, skip alert creation if no matching incident
     if (event_action === 'acknowledge' && !existingIncident) {
@@ -432,9 +440,9 @@ async function applyEvent(
       // This event opens a new incident. Send the pre-paging lookups now (dedicated pool, own deadline) so
       // they overlap the reads below instead of holding this transaction's connection later. Nothing
       // happens when the service's policy is OFF; the hook further down decides what the answers mean. A
-      // buffered resolve or flapping skips the noise hook, so it skips the lookups too.
+      // buffered resolve, a maintenance hold or flapping skips the noise hook, so it skips the lookups too.
       const noisePrefetch =
-        recentResolveAlert || isFlapping
+        recentResolveAlert || isSuppressed
           ? null
           : beginIngestNoiseLookups(
               {
@@ -473,7 +481,7 @@ async function applyEvent(
       // One pipeline (J1.5, per service, default OFF): an in-process lookup. OFF keeps today's order with
       // no extra await; SHADOW/ON evaluate the noise decision first (it does not depend on automation).
       const pipelineOrder =
-        recentResolveAlert || isFlapping ? 'OFF' : noisePipelineOrder(serviceId, integrationId);
+        recentResolveAlert || isSuppressed ? 'OFF' : noisePipelineOrder(serviceId, integrationId);
       let noise =
         pipelineOrder === 'OFF'
           ? null
@@ -599,8 +607,9 @@ async function applyEvent(
       // Pre-paging noise controls (per-service, default OFF). OFF is one in-process map lookup; SHADOW
       // and ON make at most a few index-backed reads under one shared deadline and fail open on any
       // error, timeout or cold cache. Only ON decisions change what happens below.
+      // A maintenance hold or flapping suppression already decides this incident; noise controls stay out.
       if (pipelineOrder === 'OFF')
-        noise = isFlapping
+        noise = isSuppressed
           ? null
           : await evaluateIngestNoiseControls(tx, noiseInput(), {
               integrationId,
@@ -716,7 +725,7 @@ async function applyEvent(
           ? applied.urgency
           : (applied?.transform?.urgency ?? urgency);
       const noiseSuppressed = applied?.action === 'SUPPRESS';
-      const suppressed = isFlapping || noiseSuppressed;
+      const suppressed = isSuppressed || noiseSuppressed;
       const stormParent = applied?.action === 'GROUP_CHILD' ? noiseTarget : null;
       // Holds are bounded (≤ 60 s) and never delay HIGH urgency, whatever the policy says.
       const holdUntil =
@@ -829,13 +838,15 @@ async function applyEvent(
         holdUntil && holdUntil > engagement.earliestDeliveryAt
           ? holdUntil
           : engagement.earliestDeliveryAt;
-      const creationMessage = isFlapping
-        ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
-        : noiseSuppressed
-          ? `Incident created in SUPPRESSED state by noise control (${applied!.control}) from ${normalizedSource}: ${applied!.reason}. It does not page; reverse the decision under Settings → Intelligence → Noise controls to page it.`
-          : stormParent
-            ? `Incident triggered via API from ${normalizedSource} and grouped under storm parent "${truncateString(stormParent.title, 200)}" (${stormParent.id}) by noise control (STORM): ${applied!.reason}. Paging rolls up to the parent; reverse the decision to page it on its own.`
-            : `Incident triggered via API from ${normalizedSource}`;
+      const creationMessage = maintenanceWindow
+        ? `Incident created in SUPPRESSED state: service is in maintenance window "${truncateString(maintenanceWindow.title, 200)}". Nobody is paged until the window ends.`
+        : isFlapping
+          ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
+          : noiseSuppressed
+            ? `Incident created in SUPPRESSED state by noise control (${applied!.control}) from ${normalizedSource}: ${applied!.reason}. It does not page; reverse the decision under Settings → Intelligence → Noise controls to page it.`
+            : stormParent
+              ? `Incident triggered via API from ${normalizedSource} and grouped under storm parent "${truncateString(stormParent.title, 200)}" (${stormParent.id}) by noise control (STORM): ${applied!.reason}. Paging rolls up to the parent; reverse the decision to page it on its own.`
+              : `Incident triggered via API from ${normalizedSource}`;
       const creationMessages = [
         truncateString(creationMessage, 1_000),
         ...(applied
@@ -848,6 +859,7 @@ async function applyEvent(
           automationSourceRestricted: !!automation,
           description: truncatedDescription,
           status: suppressed ? 'SUPPRESSED' : 'OPEN',
+          maintenanceWindowId: maintenanceWindow?.id ?? null,
           urgency: effectiveUrgency,
           priority: finalPriority,
           dedupKey: dedupKeys.primary,
@@ -893,7 +905,11 @@ async function applyEvent(
                 slaPauseStartedAt: incidentCreatedAt,
                 slaPauses: {
                   create: {
-                    reason: isFlapping ? 'flapping-suppression' : 'noise-control-suppression',
+                    reason: maintenanceWindow
+                      ? 'maintenance-window'
+                      : isFlapping
+                        ? 'flapping-suppression'
+                        : 'noise-control-suppression',
                     startedAt: incidentCreatedAt,
                   },
                 },
@@ -906,13 +922,15 @@ async function applyEvent(
       });
 
       logger.info(
-        isFlapping
-          ? 'event.incident_created_suppressed_flapping'
-          : noiseSuppressed
-            ? 'event.incident_created_suppressed_noise_control'
-            : stormParent
-              ? 'event.incident_created_storm_child'
-              : 'event.incident_created',
+        maintenanceWindow
+          ? 'event.incident_created_suppressed_maintenance'
+          : isFlapping
+            ? 'event.incident_created_suppressed_flapping'
+            : noiseSuppressed
+              ? 'event.incident_created_suppressed_noise_control'
+              : stormParent
+                ? 'event.incident_created_storm_child'
+                : 'event.incident_created',
         {
           incidentId: newIncident.id,
           dedupKey: dedup_key,
@@ -920,6 +938,7 @@ async function applyEvent(
           severity: eventData.severity,
           urgency: effectiveUrgency,
           isFlapping,
+          maintenanceWindowId: maintenanceWindow?.id,
           ...(noise
             ? { noiseControl: noise.control, noiseAction: noise.action, noiseApplied: noise.apply }
             : {}),

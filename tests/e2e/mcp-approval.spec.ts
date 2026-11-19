@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
+import { clearSignInThrottle } from './mcp-login-limits';
+
+test.beforeEach(clearSignInThrottle);
 
 async function login(page: Page, email: string) {
   await page.goto('/login');
@@ -136,7 +139,27 @@ test('remote request requires a different native reviewer and commits one recove
     // The plan digest sits in the collapsed verification details.
     await reviewMain.getByText('Verification details', { exact: true }).click();
     await expect(reviewMain.getByText(proposal.planDigest, { exact: true })).toBeVisible();
-    await reviewPage.setViewportSize({ width: 390, height: 844 });
+    // Phone and desktop: nothing scrolls sideways and the decision buttons are full tap targets.
+    for (const width of [1440, 375]) {
+      await reviewPage.setViewportSize({ width, height: 844 });
+      const overflow = await reviewPage.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow, `horizontal scroll at ${width}px`).toBeLessThanOrEqual(0);
+      for (const name of ['Approve frozen plan (runbook run)', /^Reject/]) {
+        // Laid-out height, not the on-screen box: the page scales in from 95% when it opens.
+        const height = await reviewMain
+          .getByRole('button', { name })
+          .first()
+          .evaluate(button => (button as HTMLElement).offsetHeight);
+        expect(height).toBeGreaterThanOrEqual(44);
+      }
+      if (process.env.MCP_E2E_SCREENSHOTS)
+        await reviewPage.screenshot({
+          path: `${process.env.MCP_E2E_SCREENSHOTS}/review-${browserName}-${width}.png`,
+          fullPage: true,
+        });
+    }
     await reviewPage
       .getByRole('button', { name: 'Approve frozen plan (runbook run)', exact: true })
       .click();

@@ -15,8 +15,10 @@ import {
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { requirePageAccess } from '@/lib/access/server';
 
 export default async function NotificationProviderSettingsPage() {
+  await requirePageAccess('/settings/notifications');
   const permissions = await getUserPermissions();
 
   if (!permissions.isAdmin) {
@@ -56,11 +58,9 @@ export default async function NotificationProviderSettingsPage() {
 
   // 2. WhatsApp Check
   const whatsappAccountSid = (twilioConfig.whatsappAccountSid || twilioConfig.accountSid) as
-    | string
-    | undefined;
+    string | undefined;
   const whatsappAuthToken = (twilioConfig.whatsappAuthToken || twilioConfig.authToken) as
-    | string
-    | undefined;
+    string | undefined;
   const isWhatsappValid = Boolean(
     twilioConfig.whatsappNumber &&
     whatsappAccountSid &&

@@ -99,7 +99,7 @@ export default function MobileHelpPage() {
           </div>
           <a
             href="mailto:help@opsknight.com"
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-white shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
           >
             Email Support
           </a>

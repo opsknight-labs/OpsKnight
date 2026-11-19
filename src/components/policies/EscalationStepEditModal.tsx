@@ -280,7 +280,7 @@ export default function EscalationStepEditModal({
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 text-slate-500" />
+                <Clock className="h-3.5 w-3.5 text-ink-500" />
                 Wait Time (Minutes)
               </Label>
               <span className="text-[11px] font-semibold text-primary">

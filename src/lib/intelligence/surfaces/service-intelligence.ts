@@ -382,7 +382,7 @@ export async function getServiceNoiseStatus(
   client: typeof prisma = prisma
 ): Promise<ServiceNoiseStatus> {
   const { service } = access;
-  const scopes: Prisma.MaintenanceWindowWhereInput[] = [
+  const scopes: Prisma.NoiseMaintenanceWindowWhereInput[] = [
     { scope: 'SERVICE', serviceId: service.id },
     { scope: 'ALL' },
   ];
@@ -393,7 +393,7 @@ export async function getServiceNoiseStatus(
       { days: SERVICE_INTELLIGENCE_LIMITS.noiseKpiDays, serviceId: service.id, now },
       client
     ),
-    client.maintenanceWindow.findMany({
+    client.noiseMaintenanceWindow.findMany({
       where: {
         enabled: true,
         endedAt: null,

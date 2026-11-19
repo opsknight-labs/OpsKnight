@@ -101,8 +101,10 @@ export function IncidentHeatmapWidget({
         return 'bg-slate-200/60 hover:bg-slate-300/80 border border-slate-300/60 dark:bg-zinc-800/60 dark:hover:bg-zinc-700/80 dark:border-zinc-700/50';
       const scale = Math.max(maxCount, 4);
       const v = count / scale;
-      if (v <= 0.25) return 'bg-emerald-100 hover:bg-emerald-200 border border-emerald-300/70 dark:bg-emerald-950/40 dark:border-emerald-800/40';
-      if (v <= 0.5) return 'bg-emerald-300 hover:bg-emerald-400 border border-emerald-500/70 dark:bg-emerald-800/60 dark:border-emerald-600/50';
+      if (v <= 0.25)
+        return 'bg-emerald-100 hover:bg-emerald-200 border border-emerald-300/70 dark:bg-emerald-950/40 dark:border-emerald-800/40';
+      if (v <= 0.5)
+        return 'bg-emerald-300 hover:bg-emerald-400 border border-emerald-500/70 dark:bg-emerald-800/60 dark:border-emerald-600/50';
       if (v <= 0.75)
         return 'bg-emerald-500 hover:bg-emerald-600 border border-emerald-600/70 text-white dark:bg-emerald-600';
       return 'bg-emerald-700 hover:bg-emerald-800 border border-emerald-800 shadow-2xs text-white dark:bg-emerald-500';
@@ -140,58 +142,57 @@ export function IncidentHeatmapWidget({
 
         <div ref={scrollRef} className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
           <div className="min-w-[40rem]">
-        {/* Month labels */}
-        <div
-          className="grid mb-2 text-xs font-medium text-muted-foreground"
-          style={{
-            gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`,
-          }}
-        >
-          {monthLabels.map((m, i) => (
-            <div key={i} style={{ gridColumnStart: m.index + 1 }}>
-              {m.label}
+            {/* Month labels */}
+            <div
+              className="grid mb-2 text-xs font-medium text-muted-foreground"
+              style={{
+                gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {monthLabels.map((m, i) => (
+                <div key={i} style={{ gridColumnStart: m.index + 1 }}>
+                  {m.label}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Heatmap */}
-        <div
-          className="grid grid-rows-7 grid-flow-col gap-[1.5px] sm:gap-[2px]"
-          style={{
-            gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`,
-          }}
-        >
-          {weeks.map((week, w) =>
-            week.map((day, d) => (
-              <Tooltip key={`${w}-${d}`} delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <div
-                    className={cn(
-                      'rounded-[1.5px] transition-all duration-150 hover:scale-125 hover:ring-1 hover:ring-zinc-400 dark:hover:ring-zinc-500 cursor-pointer',
-                      getColor(day.count),
-                      day.date > today && 'opacity-35'
-                    )}
-                    style={{
-                      aspectRatio: '1 / 1',
-                      minWidth: '6px',
-                      minHeight: '6px',
-                    }}
-                  />
-                </TooltipTrigger>
-                <TooltipContent className="text-xs font-medium bg-slate-900 text-white shadow-lg border-slate-800">
-                  <span className="font-bold">{day.count}</span> incident
-                  {day.count === 1 ? '' : 's'} ·{' '}
-                  {day.date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </TooltipContent>
-              </Tooltip>
-            ))
-          )}
-        </div>
-
+            {/* Heatmap */}
+            <div
+              className="grid grid-rows-7 grid-flow-col gap-[1.5px] sm:gap-[2px]"
+              style={{
+                gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {weeks.map((week, w) =>
+                week.map((day, d) => (
+                  <Tooltip key={`${w}-${d}`} delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={cn(
+                          'rounded-[1.5px] transition-all duration-150 hover:scale-125 hover:ring-1 hover:ring-zinc-400 dark:hover:ring-zinc-500 cursor-pointer',
+                          getColor(day.count),
+                          day.date > today && 'opacity-35'
+                        )}
+                        style={{
+                          aspectRatio: '1 / 1',
+                          minWidth: '6px',
+                          minHeight: '6px',
+                        }}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent className="text-xs font-medium bg-slate-900 text-white shadow-lg border-slate-800">
+                      <span className="font-bold">{day.count}</span> incident
+                      {day.count === 1 ? '' : 's'} ·{' '}
+                      {day.date.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </TooltipContent>
+                  </Tooltip>
+                ))
+              )}
+            </div>
           </div>
         </div>
 
@@ -202,7 +203,7 @@ export function IncidentHeatmapWidget({
             {/* 0 incidents */}
             <div className="w-2.5 h-2.5 rounded-[1.5px] bg-slate-200/60 border border-slate-300/60 dark:bg-zinc-800/60 dark:border-zinc-700/50" />
             {/* Low intensity (<25%) */}
-            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-100 border border-emerald-300/70" />
+            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-100 border border-emerald-300/70 dark:bg-emerald-500/15 dark:border-emerald-500/30" />
             {/* Medium intensity (<50%) */}
             <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-300 border border-emerald-500/70" />
             {/* High intensity (<75%) */}

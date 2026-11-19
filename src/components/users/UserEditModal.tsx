@@ -194,16 +194,28 @@ export default function UserEditModal({
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ADMIN" className="text-xs font-medium text-rose-600">
+                  <SelectItem
+                    value="ADMIN"
+                    className="text-xs font-medium text-rose-600 dark:text-rose-400"
+                  >
                     Administrator (Full Access)
                   </SelectItem>
-                  <SelectItem value="RESPONDER" className="text-xs font-medium text-indigo-600">
+                  <SelectItem
+                    value="RESPONDER"
+                    className="text-xs font-medium text-indigo-600 dark:text-indigo-400"
+                  >
                     Responder (Incident Access)
                   </SelectItem>
-                  <SelectItem value="USER" className="text-xs font-medium text-sky-600">
+                  <SelectItem
+                    value="USER"
+                    className="text-xs font-medium text-sky-600 dark:text-sky-400"
+                  >
                     User (Member View)
                   </SelectItem>
-                  <SelectItem value="AUDITOR" className="text-xs font-medium text-amber-600">
+                  <SelectItem
+                    value="AUDITOR"
+                    className="text-xs font-medium text-amber-600 dark:text-amber-400"
+                  >
                     Auditor (Read-Only)
                   </SelectItem>
                 </SelectContent>
@@ -281,7 +293,7 @@ export default function UserEditModal({
           </div>
 
           {/* Notification Preferences */}
-          <div className="space-y-2 pt-2 border-t border-slate-100">
+          <div className="space-y-2 pt-2 border-t border-ink-100">
             <Label className="text-xs font-semibold flex items-center gap-1.5">
               <Bell className="h-3.5 w-3.5 text-muted-foreground" />
               Direct Alert Channels

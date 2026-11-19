@@ -358,7 +358,7 @@ export default function IncidentHeader({
                   className={cn(SELECTOR_BASE_CLASS, 'cursor-default text-foreground/80')}
                   title="Escalation ended upon resolution"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 dark:text-emerald-400" />
                   <span>Completed</span>
                 </div>
               );
@@ -374,7 +374,7 @@ export default function IncidentHeader({
                   )}
                   title="Escalation paused while incident is snoozed/suppressed"
                 >
-                  <Pause className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                  <Pause className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
                   <span>Paused</span>
                 </div>
               );
@@ -395,7 +395,7 @@ export default function IncidentHeader({
                   )}
                   title="Escalation stopped because incident was acknowledged"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 dark:text-emerald-400" />
                   <span className="truncate">{stepLabel}</span>
                 </div>
               );
@@ -424,7 +424,7 @@ export default function IncidentHeader({
                   )}
                   title="All escalation policy steps have been exhausted"
                 >
-                  <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                  <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0 dark:text-rose-400" />
                   <span>Max Step Reached</span>
                 </div>
               );

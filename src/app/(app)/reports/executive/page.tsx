@@ -10,6 +10,7 @@ import { serializeSlaMetrics } from '@/lib/sla';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { getTemplateById, DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
 import DashboardViewer from './DashboardViewer';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,7 @@ export default async function ExecutiveDashboardPage({
 }: {
   searchParams?: Promise<SearchParams>;
 }) {
+  await requirePageAccess('/reports/executive');
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
     redirect('/login?callbackUrl=/reports/executive');

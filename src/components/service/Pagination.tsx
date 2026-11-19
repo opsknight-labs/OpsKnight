@@ -46,7 +46,7 @@ export default function Pagination({
 
   if (totalPages <= 1) {
     return (
-      <div className="flex items-center justify-between px-4 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+      <div className="flex items-center justify-between px-4 py-4 border-t border-ink-200 bg-ink-50 rounded-b-xl">
         <span className="text-sm text-muted-foreground">
           Showing <span className="font-medium text-foreground">{totalItems}</span> {itemLabel}
           {totalItems !== 1 ? 's' : ''}
@@ -91,7 +91,7 @@ export default function Pagination({
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50/50 rounded-b-xl gap-4">
+    <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-ink-200 bg-ink-50/50 rounded-b-xl gap-4">
       <div className="text-sm text-muted-foreground">
         Showing <span className="font-medium text-foreground">{startItem}</span> to{' '}
         <span className="font-medium text-foreground">{endItem}</span> of{' '}
@@ -155,7 +155,7 @@ export default function Pagination({
                 size="sm"
                 className={cn(
                   'h-8 w-8 p-0 font-medium',
-                  isCurrentPage ? 'pointer-events-none' : 'hover:bg-slate-100'
+                  isCurrentPage ? 'pointer-events-none' : 'hover:bg-ink-100'
                 )}
                 asChild={!isCurrentPage}
               >

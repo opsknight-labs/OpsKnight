@@ -6,11 +6,13 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Shield, MessageSquare, Video, Archive, Users, Hash } from 'lucide-react';
 import ChatOpsSettingsPage from '@/components/settings/ChatOpsSettingsPage';
 import { getGlobalWarRoomPolicy } from '@/lib/incident-collaboration/policy';
+import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function GlobalChatOpsIntegrationPage() {
+  await requirePageAccess('/settings/integrations/chatops');
   const permissions = await getUserPermissions();
   if (!permissions) redirect('/login');
   if (!permissions.isAdmin) redirect('/settings');

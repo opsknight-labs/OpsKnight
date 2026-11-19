@@ -12,7 +12,7 @@ import { assertMcpHost } from './http';
  */
 
 const ALLOW_HEADERS =
-  'Authorization, Content-Type, Mcp-Protocol-Version, Mcp-Session-Id, Mcp-Method, Mcp-Name, Last-Event-ID';
+  'Authorization, Content-Type, Mcp-Protocol-Version, Mcp-Session-Id, Mcp-Method, Mcp-Name, Last-Event-ID, X-OpsKnight-Toolsets';
 const EXPOSE_HEADERS = 'WWW-Authenticate, Mcp-Session-Id, X-Request-Id, Retry-After';
 
 /** Discovery documents are public and uncredentialed, so any page may read them. */
