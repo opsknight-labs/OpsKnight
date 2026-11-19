@@ -47,6 +47,11 @@ export async function applyRecommendedPreset(
   expected: SetupRevisions,
   actor: IntelligenceActor
 ): Promise<string[]> {
+  // The noise policy saves in its own transaction after the rest: check it first so a stale page changes
+  // nothing. shortcut: an edit landing between this read and the save still fails after the commit.
+  const noise = await getNoiseControlPolicy(null);
+  if (noise.revision !== expected.noiseRevision)
+    throw new AppError({ code: 'PRECONDITION_FAILED' });
   const changed = await prisma.$transaction(async tx => {
     const done: string[] = [];
     const { revision, ...settings } = await getIntelligenceSettings(tx);
@@ -85,7 +90,6 @@ export async function applyRecommendedPreset(
     return done;
   });
 
-  const noise = await getNoiseControlPolicy(null);
   if (noise.mode === 'OFF') {
     await saveNoiseControlPolicy(
       {

@@ -80,4 +80,24 @@ describe('Recommended intelligence preset', () => {
     expect(changed).not.toContain('noiseShadow');
     expect((await getNoiseControlPolicy(null)).mode).toBe('ON');
   });
+
+  it('changes nothing when only the noise policy moved since the page loaded', async () => {
+    const actor = await setup();
+    const stale = setupRevisions(await getSetupState());
+    const noise = await getNoiseControlPolicy(null);
+    await saveNoiseControlPolicy(
+      {
+        serviceId: null,
+        mode: 'OFF',
+        definition: noise.definition,
+        expectedRevision: noise.revision,
+      },
+      actor
+    );
+    await expect(applyRecommendedPreset(stale, actor)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect((await getIntelligenceSettings()).enabled).toBe(false);
+    expect((await resolveEffectivePolicy(null)).mode).not.toBe('SUGGEST');
+  });
 });
