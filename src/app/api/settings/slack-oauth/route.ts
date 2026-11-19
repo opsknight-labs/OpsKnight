@@ -32,7 +32,26 @@ export async function DELETE(_request: NextRequest) {
     await assertAdmin();
 
     const prisma = (await import('@/lib/prisma')).default;
-    await prisma.slackOAuthConfig.deleteMany({});
+    const existing = await prisma.slackOAuthConfig.findFirst({
+      where: { signingSecret: { not: null } },
+      select: { id: true },
+    });
+    if (existing) {
+      // Reset clears only the OAuth app credentials. The signing secret verifies
+      // every inbound Slack request, so keep it (same sentinel as a
+      // signing-secret-only save in saveSlackOAuthConfig).
+      const { encrypt } = await import('@/lib/encryption');
+      await prisma.slackOAuthConfig.updateMany({
+        data: {
+          clientId: 'workspace-credentials',
+          clientSecret: await encrypt('managed-credentials'),
+        },
+      });
+    } else {
+      await prisma.slackOAuthConfig.deleteMany({});
+    }
+    const { resetSigningSecretCache } = await import('@/lib/slack-signature');
+    resetSigningSecretCache();
 
     const { logAudit } = await import('@/lib/audit');
     const user = await getCurrentUser();
