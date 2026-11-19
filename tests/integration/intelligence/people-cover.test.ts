@@ -125,7 +125,7 @@ describe('override cover suggestions', () => {
     expect(gap?.gap).toBe(true);
     expect(gap?.candidates.map(c => c.name)).toEqual(['Quiet', 'Busy', 'Owl']);
 
-    // A schedule member sees the ranking but not other people's page counts.
+    // A schedule member sees neither other people's page counts nor an order derived from them.
     const member = await suggestCoverCandidates(await actorOf(onCall.id), {
       scheduleId: schedule.id,
       start: START,
@@ -133,8 +133,8 @@ describe('override cover suggestions', () => {
       replacesUserId: onCall.id,
     });
     expect(member?.candidates.map(c => [c.name, c.pages])).toEqual([
-      ['Quiet', null],
       ['Busy', null],
+      ['Quiet', null],
       ['Owl', null],
     ]);
   });

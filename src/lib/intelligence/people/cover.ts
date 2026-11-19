@@ -97,21 +97,26 @@ export async function suggestCoverCandidates(
       to: window.to,
     }).people.map(person => [person.userId, person])
   );
-  // shortcut: hidden people are still ordered by their load (the ranking is the feature); only the numbers are hidden.
-  const ranked = rankCoverCandidates(
-    pool.map(person => ({
-      userId: person.id,
-      name: person.name,
-      daytime: isDaytimeFor(start, end, person.timeZone),
-      pages: load.get(person.id)?.pages ?? 0,
-      nightPages: load.get(person.id)?.nightPages ?? 0,
-    }))
-  ).slice(0, MAX_SHOWN);
+  // People whose load the viewer may see are ranked by it; the rest follow, by daytime then name only, so
+  // the order cannot reveal the load the USER rule hides.
+  const candidates = pool.map(person => ({
+    userId: person.id,
+    name: person.name,
+    daytime: isDaytimeFor(start, end, person.timeZone),
+    pages: visible.has(person.id) ? (load.get(person.id)?.pages ?? 0) : 0,
+    nightPages: visible.has(person.id) ? (load.get(person.id)?.nightPages ?? 0) : 0,
+  }));
+  const hidden = rankCoverCandidates(candidates.filter(c => !visible.has(c.userId))).map(c => ({
+    ...c,
+    pages: null,
+    nightPages: null,
+  }));
   return {
     gap,
     windowDays: LOAD_WINDOW_DAYS,
-    candidates: ranked.map(candidate =>
-      visible.has(candidate.userId) ? candidate : { ...candidate, pages: null, nightPages: null }
-    ),
+    candidates: [
+      ...rankCoverCandidates(candidates.filter(c => visible.has(c.userId))),
+      ...hidden,
+    ].slice(0, MAX_SHOWN),
   };
 }
