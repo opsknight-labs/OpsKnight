@@ -12,6 +12,8 @@ interface AttemptRecord {
   count: number;
   lastAttempt: number;
   lockedUntil: number | null;
+  // Lockouts served so far; drives the progressive schedule.
+  lockouts?: number;
 }
 
 const attemptStore = new Map<string, AttemptRecord>();
@@ -115,6 +117,16 @@ export function checkLoginAttempt(
     };
   }
 
+  // Lockout served: allow a fresh round of attempts (recordFailedAttempt resets the count).
+  if (record.lockedUntil) {
+    return {
+      allowed: true,
+      remainingAttempts: LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS,
+      lockedUntil: null,
+      lockoutDurationMs: null,
+    };
+  }
+
   // Check remaining attempts
   const remaining = LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS - record.count;
   return {
@@ -152,6 +164,7 @@ export function recordFailedAttempt(
   // If lockout has expired, reset count but keep history for progressive lockouts
   if (record.lockedUntil && now >= record.lockedUntil) {
     record.lockedUntil = null;
+    record.count = 0;
   }
 
   // Increment attempt count
@@ -161,7 +174,8 @@ export function recordFailedAttempt(
   // Check if should lock out
   if (record.count >= LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS) {
     // Calculate lockout count (how many times we've locked this key)
-    const lockoutCount = Math.floor(record.count / LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS);
+    const lockoutCount = (record.lockouts ?? 0) + 1;
+    record.lockouts = lockoutCount;
     const multiplier = getLockoutMultiplier(lockoutCount - 1);
     const lockoutDuration = LOGIN_SECURITY_CONFIG.BASE_LOCKOUT_MS * multiplier;
     record.lockedUntil = now + lockoutDuration;
