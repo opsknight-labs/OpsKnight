@@ -109,7 +109,7 @@ export function transformSentryToEvent(payload: SentryEvent): {
       payload: {
         summary: title,
         source,
-        severity: SEVERITY_MAP[issue.level?.toLowerCase() || ''] || 'error',
+        severity: SEVERITY_MAP[str(issue.level)?.toLowerCase() || ''] || 'error',
         custom_details: {
           action,
           issue: {
@@ -132,21 +132,22 @@ export function transformSentryToEvent(payload: SentryEvent): {
   // Issue alert (data.event) or legacy plugin (top-level event)
   const event = (asRecord(data?.event) || payload.event) as SentryLegacyEvent | undefined;
   if (event) {
-    const level = event.level || str(payload.level);
+    // data.event/data.issue are not schema-validated, so read every field defensively.
+    const level = str(event.level) || str(payload.level);
     // Group events by their Sentry issue so repeat occurrences dedup into one incident.
     const groupKey =
       str(event.issue_id) ||
       str(event.group_id) ||
       (data ? undefined : str(payload.id)) ||
-      event.fingerprint?.[0] ||
-      event.event_id ||
+      str(event.fingerprint?.[0]) ||
+      str(event.event_id) ||
       'unknown';
 
     return {
       event_action: 'trigger',
       dedup_key: `sentry-${groupKey}`,
       payload: {
-        summary: event.title || event.message || str(payload.message) || 'Sentry Error',
+        summary: str(event.title) || str(event.message) || str(payload.message) || 'Sentry Error',
         source,
         severity: SEVERITY_MAP[level?.toLowerCase() || 'error'] || 'error',
         custom_details: {

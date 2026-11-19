@@ -146,6 +146,15 @@ describe('Sentry payload shapes', () => {
     expect(parseSentry({ action: 'unassigned', issue: { id: '1' } }).event_action).toBe('trigger');
     expect(parseSentry({ action: 'ignored', issue: { id: '1' } }).event_action).toBe('resolve');
   });
+
+  it('tolerates non-string fields inside the unvalidated data wrapper', () => {
+    const fromEvent = parseSentry({
+      action: 'triggered',
+      data: { event: { issue_id: 7, title: { x: 1 }, level: 3 } },
+    });
+    expect(fromEvent).toMatchObject({ dedup_key: 'sentry-7', payload: { summary: 'Sentry Error' } });
+    expect(parseSentry({ data: { issue: { id: '2', level: 5 } } }).payload.severity).toBe('error');
+  });
 });
 
 describe('New Relic payload shapes', () => {
