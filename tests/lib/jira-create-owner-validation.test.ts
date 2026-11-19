@@ -23,6 +23,7 @@ vi.mock('@/lib/jira-concurrency', () => ({
   acquireJiraExternalIssueLinkFence: vi.fn(),
 }));
 vi.mock('@/lib/provider-admission', () => ({
+  ProviderCooldownError: class ProviderCooldownError extends Error {},
   assertProviderAdmitted: vi.fn(),
   recordProviderFailure: vi.fn(),
   recordProviderSuccess: vi.fn(),

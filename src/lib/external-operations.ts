@@ -18,6 +18,7 @@ import {
 } from '@/lib/jira-concurrency';
 import {
   assertProviderAdmitted,
+  ProviderCooldownError,
   recordProviderFailure,
   recordProviderSuccess,
 } from '@/lib/provider-admission';
@@ -271,6 +272,22 @@ async function releaseFailedOperation(
   attempts: number,
   error: unknown
 ): Promise<void> {
+  if (error instanceof ProviderCooldownError) {
+    // Admission refused before any Jira I/O: wait out the cooldown without
+    // spending the retry budget, so an open breaker cannot exhaust it.
+    await prisma.externalOperation.updateMany({
+      where: { id, status: 'PROCESSING', leaseToken },
+      data: {
+        status: 'AMBIGUOUS',
+        attempts: { decrement: 1 },
+        nextAttemptAt: error.retryAt,
+        lastError: operationFailureMessage(error),
+        leaseToken: null,
+        leaseExpiresAt: null,
+      },
+    });
+    return;
+  }
   await prisma.externalOperation.updateMany({
     where: { id, status: 'PROCESSING', leaseToken },
     data: {

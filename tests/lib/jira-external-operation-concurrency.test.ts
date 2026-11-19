@@ -57,12 +57,21 @@ vi.mock('@/lib/jira-concurrency', () => ({
 }));
 
 vi.mock('@/lib/provider-admission', () => ({
+  ProviderCooldownError: class ProviderCooldownError extends Error {
+    constructor(
+      readonly providerKey: string,
+      readonly retryAt: Date
+    ) {
+      super(`Provider ${providerKey} is in cooldown`);
+    }
+  },
   assertProviderAdmitted: mocks.assertProviderAdmitted,
   recordProviderFailure: mocks.recordProviderFailure,
   recordProviderSuccess: mocks.recordProviderSuccess,
 }));
 
 import { processExternalOperation } from '@/lib/external-operations';
+import { ProviderCooldownError } from '@/lib/provider-admission';
 
 function actionItemCreateOperation(attempts = 1) {
   return {
@@ -221,6 +230,27 @@ describe('durable Jira provider concurrency contract', () => {
       expect.objectContaining({
         where: expect.objectContaining({ id: 'op-1', status: 'PROCESSING' }),
         data: expect.objectContaining({ status: 'FAILED' }),
+      })
+    );
+  });
+
+  it('waits out an open Jira breaker without spending the retry budget', async () => {
+    const retryAt = new Date(Date.now() + 300_000);
+    mocks.externalOperationFindUnique.mockResolvedValue(actionItemCreateOperation(8));
+    mocks.assertProviderAdmitted.mockRejectedValue(
+      new ProviderCooldownError('jira:workspace', retryAt)
+    );
+
+    await expect(processExternalOperation('op-1')).rejects.toThrow('cooldown');
+
+    expect(mocks.createJiraIssue).not.toHaveBeenCalled();
+    expect(mocks.externalOperationUpdateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'AMBIGUOUS',
+          attempts: { decrement: 1 },
+          nextAttemptAt: retryAt,
+        }),
       })
     );
   });
