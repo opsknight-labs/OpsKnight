@@ -390,6 +390,7 @@ async function revertTeamGrant(
   });
   // Someone changed the membership after the grant; their later decision wins.
   if (!member || member.role !== grant.teamRole) return 'membership changed since grant';
+  let note: string | null = null;
   if (member.role === 'OWNER') {
     const otherOwner = await tx.teamMember.findFirst({
       where: {
@@ -400,7 +401,24 @@ async function revertTeamGrant(
       },
       select: { id: true },
     });
-    if (!otherOwner) return 'kept: team would have no owner';
+    // Temporary access must end; keeping the role would make the grant permanent.
+    // Admins can still manage the team, so ask them to assign a real owner.
+    if (!otherOwner) {
+      note = 'reverted: team is left without an active owner';
+      await createInAppNotifications(
+        {
+          userIds: await activeAdminIds(tx),
+          type: 'SECURITY',
+          title: 'Team has no owner',
+          message:
+            'A temporary team Owner grant ended and the team has no other active owner. Assign an owner.',
+          entityType: 'TEAM',
+          entityId: grant.teamId,
+          dedupeKey: `access-grant-ownerless:${grant.id}`,
+        },
+        tx
+      );
+    }
   }
   await advanceUserSessionVersions(tx, [grant.userId]);
   if (grant.createdMembership) {
@@ -415,5 +433,5 @@ async function revertTeamGrant(
       data: { role: grant.previousTeamRole },
     });
   }
-  return null;
+  return note;
 }

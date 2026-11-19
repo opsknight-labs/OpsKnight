@@ -161,6 +161,46 @@ describe('time-bound team access through a request', () => {
   });
 });
 
+describe('temporary team ownership', () => {
+  it('ends a temporary Owner grant even when no other active owner remains', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const holder = await createTestUser();
+    const team = await db.team.create({ data: { name: `team-${Math.random()}` } });
+    await db.teamMember.create({ data: { teamId: team.id, userId: holder.id, role: 'MEMBER' } });
+    const grant = await db.accessGrant.create({
+      data: {
+        userId: holder.id,
+        source: 'ADMIN',
+        teamId: team.id,
+        teamRole: 'OWNER',
+        previousTeamRole: 'MEMBER',
+        createdMembership: false,
+        reason: 'Cover the on-call rotation',
+        grantedById: admin.id,
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    });
+    await db.teamMember.update({
+      where: { userId_teamId: { userId: holder.id, teamId: team.id } },
+      data: { role: 'OWNER' },
+    });
+
+    await processEndedAccessGrants();
+
+    expect(
+      await db.teamMember.findUnique({
+        where: { userId_teamId: { userId: holder.id, teamId: team.id } },
+      })
+    ).toMatchObject({ role: 'MEMBER' });
+    expect(await db.accessGrant.findUnique({ where: { id: grant.id } })).toMatchObject({
+      endProcessedAt: expect.any(Date),
+    });
+    expect(
+      await db.inAppNotification.count({ where: { userId: admin.id, title: 'Team has no owner' } })
+    ).toBe(1);
+  });
+});
+
 describe('team admin role', () => {
   it('manages members but cannot add, change or remove owners', async () => {
     const owner = await createTestUser();
