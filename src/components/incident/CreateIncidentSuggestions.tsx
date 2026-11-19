@@ -26,6 +26,7 @@ export default function CreateIncidentSuggestions({
   selectableServiceIds,
   onPickService,
   onPickUrgency,
+  incidentHrefBase = '/incidents',
 }: {
   title: string;
   serviceId: string;
@@ -35,6 +36,8 @@ export default function CreateIncidentSuggestions({
   selectableServiceIds: ReadonlySet<string>;
   onPickService: (serviceId: string) => void;
   onPickUrgency: (urgency: Urgency) => void;
+  /** Where the possible duplicate links: `/m/incidents` on the mobile create page. */
+  incidentHrefBase?: string;
 }) {
   const [suggestions, setSuggestions] = useState<DraftSuggestions | null>(null);
   const request = useRef(0);
@@ -88,7 +91,7 @@ export default function CreateIncidentSuggestions({
         <p>
           Possibly already open:{' '}
           <Link
-            href={`/incidents/${duplicate.incidentId}`}
+            href={`${incidentHrefBase}/${duplicate.incidentId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2 hover:text-primary"

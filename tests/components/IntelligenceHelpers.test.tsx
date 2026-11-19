@@ -88,6 +88,26 @@ describe('CreateIncidentSuggestions', () => {
     expect(onPickService).toHaveBeenCalledWith('svc-pay');
     expect(screen.getByRole('button', { name: 'Set urgency to High' })).toBeInTheDocument();
   });
+
+  it('links the possible duplicate to the mobile incident page on /m', async () => {
+    render(
+      <CreateIncidentSuggestions
+        title="checkout returns 500"
+        serviceId=""
+        urgency="LOW"
+        getDescription={() => undefined}
+        selectableServiceIds={new Set(['svc-pay'])}
+        onPickService={vi.fn()}
+        onPickUrgency={vi.fn()}
+        incidentHrefBase="/m/incidents"
+      />
+    );
+    await act(() => vi.advanceTimersByTimeAsync(600));
+    expect(screen.getByRole('link', { name: 'Checkout 500s' })).toHaveAttribute(
+      'href',
+      '/m/incidents/inc-1'
+    );
+  });
 });
 
 describe('MetricChangeWhy', () => {
