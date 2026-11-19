@@ -1,4 +1,7 @@
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
+import { listInsightsInbox } from '@/lib/intelligence/ops-insights/view';
 import {
   getOverviewAttention,
   getOverviewChange,
@@ -34,6 +37,8 @@ interface SectionProps {
   status: OverviewStatus;
 }
 
+const ATTENTION_INSIGHT_LIMIT = 10;
+
 export const SECTION_TITLES = {
   noise: 'Noise',
   speed: 'Speed',
@@ -44,13 +49,38 @@ export const SECTION_TITLES = {
 } as const;
 
 /**
- * The "Needs attention" inbox. Absent when there is nothing to act on; a probe that fails drops out on
- * its own inside the loader, so this section never renders an error or an empty card.
+ * The one "Needs attention" inbox: the overview's decision probes and the open operations insights, ranked
+ * together. Absent when there is nothing to act on; either source failing drops out on its own (the probes
+ * inside their loader, the insights here), so this section never renders an error or an empty card.
  */
-export async function AttentionSection({ actor }: { actor: AuthorizationActor }) {
-  const result = await loadSection('needs attention', () => getOverviewAttention(actor));
-  if (!result.ok) return null;
-  return <NeedsAttention items={result.data.items} />;
+export async function AttentionSection({
+  actor,
+  resolveHref,
+}: {
+  actor: AuthorizationActor;
+  resolveHref?: (href: string) => string;
+}) {
+  const [result, inbox] = await Promise.all([
+    loadSection('needs attention', () => getOverviewAttention(actor)),
+    loadSection('operations insights', () =>
+      listInsightsInbox(actor, { limit: ATTENTION_INSIGHT_LIMIT })
+    ),
+  ]);
+  const items = result.ok ? result.data.items : [];
+  const insights = inbox.ok ? inbox.data.items : [];
+  if (items.length === 0 && insights.length === 0) return null;
+  // The assistant hand-off only shows while Squire is on; a failed status read just hides it.
+  const squire = insights.length > 0 ? await getAiPublicStatus().catch(() => null) : null;
+  return (
+    <NeedsAttention
+      items={items}
+      insights={insights}
+      moreInsights={inbox.ok && inbox.data.nextCursor !== null}
+      canDecide={hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_FEEDBACK)}
+      squireName={squire?.squireEnabled ? squire.squireName : null}
+      resolveHref={resolveHref}
+    />
+  );
 }
 
 export async function NoiseSection({ scope, range, canManage }: SectionProps) {

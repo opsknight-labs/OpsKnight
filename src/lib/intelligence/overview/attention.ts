@@ -69,6 +69,8 @@ interface PendingIncident {
   id: string;
   title: string;
   count: number;
+  /** Newest suggestion on the incident (rows are read newest first). */
+  at: Date;
 }
 
 function incidentItems(
@@ -84,6 +86,7 @@ function incidentItems(
     title: incident.title,
     detail: describe(incident),
     href: `/incidents/${encodeURIComponent(incident.id)}?insights=${kind}`,
+    at: incident.at,
   }));
   const rest = pending.length - shown.length;
   if (rest > 0)
@@ -93,6 +96,7 @@ function incidentItems(
       title: more(rest),
       detail: 'Open the incident list to work through them.',
       href: '/incidents',
+      at: pending[shown.length].at,
     });
   return items;
 }
@@ -119,6 +123,7 @@ async function pendingTriage(
         select: {
           id: true,
           incidentId: true,
+          createdAt: true,
           incident: { select: { title: true, serviceId: true } },
         },
       });
@@ -146,6 +151,7 @@ async function pendingTriage(
       id: row.incidentId,
       title: row.incident.title,
       count: 0,
+      at: row.createdAt,
     };
     entry.count += 1;
     byIncident.set(row.incidentId, entry);
@@ -180,6 +186,7 @@ async function pendingRelated(
         take: ATTENTION_SAMPLE,
         select: {
           sourceIncidentId: true,
+          updatedAt: true,
           source: { select: { title: true, serviceId: true } },
         },
       }),
@@ -198,6 +205,7 @@ async function pendingRelated(
       id: row.sourceIncidentId,
       title: row.source.title,
       count: 0,
+      at: row.updatedAt,
     };
     entry.count += 1;
     byIncident.set(row.sourceIncidentId, entry);

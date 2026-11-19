@@ -31,10 +31,14 @@ export const INTELLIGENCE_SETTINGS_GROUPS = [
     id: 'engine',
     label: 'Engine',
     href: INTELLIGENCE_SETTINGS_ROOT,
-    summary: 'Master switch, global policy, triage, correlation rules and lane health.',
+    summary:
+      'Setup, master switch, operations insights, global policy, triage, correlation rules and lane health.',
     sections: [
+      { id: 'setup', label: 'Setup' },
       { id: 'lane-health', label: 'Lane health' },
       { id: 'general', label: 'General' },
+      { id: 'operations-insights', label: 'Operations insights' },
+      { id: 'digest', label: 'Weekly digest' },
       { id: 'global-policy', label: 'Global policy' },
       { id: 'triage', label: 'Triage' },
       { id: 'correlation-rules', label: 'Correlation rules' },
@@ -96,7 +100,6 @@ export const INTELLIGENCE_SETTINGS_GROUPS = [
       { id: 'answer-feedback', label: 'Answer evaluation' },
       { id: 'insights', label: 'Insights' },
       { id: 'learned-weights', label: 'Learned weights' },
-      { id: 'digest', label: 'Weekly digest' },
       { id: 'usage', label: 'Usage' },
       { id: 'ai-spend', label: 'Spend and budgets' },
     ],
@@ -153,6 +156,29 @@ export const LEGACY_INTELLIGENCE_ROUTES = [
     section: 'knowledge-memory',
   },
 ] as const satisfies readonly LegacyIntelligenceRoute[];
+
+/**
+ * Sections that moved to another group. A fragment never reaches the server, so the old group page sends
+ * a matching hash on (`MovedSectionRedirect`); new links use `intelligenceSettingsHref` directly.
+ */
+export const MOVED_INTELLIGENCE_SECTIONS = [
+  { fromGroup: 'evaluation', section: 'digest', group: 'engine' },
+] as const satisfies ReadonlyArray<{
+  fromGroup: IntelligenceSettingsGroupId;
+  section: string;
+  group: IntelligenceSettingsGroupId;
+}>;
+
+/** Where `#section` on a group page now lives, or null when it has not moved. */
+export function movedIntelligenceSection(
+  fromGroup: IntelligenceSettingsGroupId,
+  section: string
+): string | null {
+  const moved = MOVED_INTELLIGENCE_SECTIONS.find(
+    candidate => candidate.fromGroup === fromGroup && candidate.section === section
+  );
+  return moved ? intelligenceSettingsHref(moved.group, moved.section) : null;
+}
 
 export type LegacyIntelligenceRoutePath = (typeof LEGACY_INTELLIGENCE_ROUTES)[number]['from'];
 

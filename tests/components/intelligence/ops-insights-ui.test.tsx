@@ -15,10 +15,10 @@ vi.mock('@/components/squire/squire-bus', () => ({
 }));
 
 import InsightBadge from '@/components/intelligence/insights/InsightBadge';
+import NeedsAttention from '@/components/intelligence/overview/NeedsAttention';
 import InsightsPanel, {
   type InsightsPanelItem,
 } from '@/components/intelligence/insights/InsightsPanel';
-import InsightStrip from '@/components/intelligence/insights/InsightStrip';
 
 const insight = (overrides: Partial<InsightsPanelItem> = {}): InsightsPanelItem => ({
   id: 'ins-1',
@@ -71,32 +71,6 @@ describe('InsightBadge', () => {
   it('caps a large count', () => {
     render(<InsightBadge count={{ open: 250, highest: 'INFO' }} />);
     expect(screen.getByRole('img')).toHaveTextContent('99+');
-  });
-});
-
-describe('InsightStrip', () => {
-  it('renders nothing without insights', () => {
-    const { container } = render(<InsightStrip insights={[]} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it('leads with the most severe insight and counts the rest', () => {
-    render(
-      <InsightStrip
-        href="/policies/p1?tab=insights"
-        insights={[
-          { severity: 'INFO', title: 'Policy is unused' },
-          { severity: 'CRITICAL', title: 'Step 2 never acknowledges' },
-          { severity: 'WARNING', title: 'Step 1 times out at night' },
-        ]}
-      />
-    );
-    const link = screen.getByRole('link');
-    expect(link).toHaveTextContent('Step 2 never acknowledges and 2 more');
-    expect(link).toHaveAttribute('href', '/policies/p1?tab=insights');
-    expect(screen.getByRole('img')).toHaveAccessibleName(
-      '3 open insights, highest severity critical'
-    );
   });
 });
 
@@ -219,5 +193,55 @@ describe('InsightsPanel plain-language phrasing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Explain in plain words' }));
     expect(await screen.findByText('Budget used up.')).toBeInTheDocument();
     expect(screen.queryByText(/Written by AI/)).toBeNull();
+  });
+});
+
+describe('NeedsAttention with operations insights', () => {
+  it('ranks probes and insights in one list under one title, most severe first', () => {
+    render(
+      <NeedsAttention
+        items={[
+          {
+            id: 'dependencies',
+            kind: 'dependencies',
+            title: '4 observed dependencies to review',
+            detail: 'Inferred from incidents that keep occurring together.',
+            href: '/settings/intelligence/services#dependencies',
+          },
+        ]}
+        insights={[
+          insight({ id: 'warn', severity: 'WARNING', title: 'No alerts for 3 days' }),
+          insight({
+            id: 'crit',
+            severity: 'CRITICAL',
+            title: 'Step 2 never acknowledges',
+            scopeName: 'Checkout',
+            scopeHref: '/services/svc-1',
+          }),
+        ]}
+        moreInsights
+        canDecide
+        resolveHref={href => `/m${href}`}
+      />
+    );
+    const section = screen.getByRole('region', { name: 'Needs attention' });
+    expect(screen.getAllByRole('heading', { name: 'Needs attention' })).toHaveLength(1);
+    const rows = within(section).getAllByRole('listitem');
+    expect(rows.map(row => row.textContent)).toEqual([
+      expect.stringContaining('Step 2 never acknowledges'),
+      expect.stringContaining('No alerts for 3 days'),
+      expect.stringContaining('4 observed dependencies'),
+    ]);
+    expect(within(section).getByRole('link', { name: 'Checkout' })).toHaveAttribute(
+      'href',
+      '/m/services/svc-1'
+    );
+    expect(section).toHaveTextContent('3+ items');
+    expect(section).toHaveTextContent('Accept or dismiss some to see more.');
+  });
+
+  it('renders nothing when both sources are empty', () => {
+    const { container } = render(<NeedsAttention items={[]} insights={[]} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

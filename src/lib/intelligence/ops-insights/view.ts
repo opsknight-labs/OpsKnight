@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
@@ -289,3 +290,20 @@ export async function listInsightsInbox(
   }
   return { items, nextCursor: cursor };
 }
+
+/** Badge cap: the topbar shows "9+" past it. */
+export const OPS_INSIGHT_BADGE_CAP = 9;
+
+/**
+ * The topbar "Needs attention" count: open insights the viewer may see, capped, read once per request.
+ *
+ * shortcut: reuses the inbox read (one bounded page plus one visibility query per scope type, at most
+ * `inboxRounds`) rather than a single COUNT, because visibility is per scope; upgrade with a team column on
+ * OpsInsight. The overview's decision probes are not counted here: they are several probes, not one read.
+ */
+export const countInsightsInboxBadge = cache(
+  async (actor: AuthorizationActor): Promise<{ count: number; more: boolean }> => {
+    const inbox = await listInsightsInbox(actor, { limit: OPS_INSIGHT_BADGE_CAP });
+    return { count: inbox.items.length, more: inbox.nextCursor !== null };
+  }
+);

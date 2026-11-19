@@ -127,6 +127,13 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     icon: GitCommitHorizontal,
     section: 'MAIN',
   },
+  {
+    // Shown by the page access rule (intelligence.read); pinned by tests/unit/intelligence-overview.test.ts.
+    href: '/intelligence',
+    label: 'Intelligence',
+    icon: Sparkles,
+    section: 'MAIN',
+  },
 
   // ── RELIABILITY ───────────────────────────────────────────────────────────
   // Status Pages are rendered dynamically by Sidebar (conditional on enabled pages)
@@ -180,13 +187,6 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     href: '/reports',
     label: 'Reports & Dashboards',
     icon: BarChart,
-    section: 'ANALYTICS',
-  },
-  {
-    // Shown by the page access rule (intelligence.read); pinned by tests/unit/intelligence-overview.test.ts.
-    href: '/intelligence',
-    label: 'AIOps Overview',
-    icon: Sparkles,
     section: 'ANALYTICS',
   },
 
