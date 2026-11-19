@@ -1788,11 +1788,12 @@ the step editor opens with the wait filled in. Nothing is saved until the person
 
 ### UI kit
 
-`src/components/intelligence/insights/`: `InsightBadge` (count and highest severity for a list row),
-`InsightStrip` (one line for a tab header), `InsightsPanel` (the list, with an evidence popover, accept and
-dismiss, an optional "Create draft" link and "Ask Squire about this", which only hands a question to the
-assistant) and `InsightsInboxSection` (the "Needs attention" section on `/intelligence`). All render
-nothing when there is nothing to say. Only `InsightActions` is client code.
+`src/components/intelligence/insights/`: `InsightBadge` (count and highest severity for a list row) and
+`InsightsPanel` (the list, and its `InsightRow`, with an evidence popover, accept and dismiss, an optional
+"Create draft" link and "Ask Squire about this", which only hands a question to the assistant). The one
+"Needs attention" section on `/intelligence` and `/m/intelligence` (`overview/NeedsAttention`, loaded by
+`AttentionSection`) ranks the overview's decision probes and open insights together by severity, then age
+(`rankAttention`). All render nothing when there is nothing to say. Only `InsightActions` is client code.
 
 ### Service automation (J1.1 to J1.3, J1.6)
 
