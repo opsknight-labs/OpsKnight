@@ -4,6 +4,10 @@ import { performDataCleanup } from '@/lib/data-cleanup';
 // Mock dependencies
 const { mockPrisma } = vi.hoisted(() => {
   const mockPrisma = {
+    inboundDelivery: {
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     incident: {
       count: vi.fn(),
       findMany: vi.fn(),
@@ -170,6 +174,10 @@ describe('Data Cleanup Service', () => {
     mockPrisma.auditLog.deleteMany.mockResolvedValue({ count: 1 });
     mockPrisma.inAppNotification.findMany.mockResolvedValue([]);
     mockPrisma.sLAPerformanceLog.findMany.mockResolvedValue([]);
+    mockPrisma.inboundDelivery.findMany
+      .mockResolvedValueOnce([{ id: 'delivery-1' }])
+      .mockResolvedValueOnce([]);
+    mockPrisma.inboundDelivery.deleteMany.mockResolvedValue({ count: 1 });
 
     const result = await performDataCleanup(false);
 
@@ -184,6 +192,12 @@ describe('Data Cleanup Service', () => {
     expect(mockPrisma.alert.deleteMany).toHaveBeenCalled();
     expect(mockPrisma.logEntry.deleteMany).toHaveBeenCalled();
     expect(mockPrisma.auditLog.deleteMany).toHaveBeenCalled();
+    expect(mockPrisma.inboundDelivery.findMany.mock.calls[0][0].where.status).toEqual({
+      in: ['COMPLETED', 'FAILED'],
+    });
+    expect(mockPrisma.inboundDelivery.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['delivery-1'] } },
+    });
     const slaCutoff = mockPrisma.sLAPerformanceLog.findMany.mock.calls[0][0].where.timestamp.lt;
     expect(Date.now() - slaCutoff.getTime()).toBeGreaterThan(360 * 24 * 60 * 60 * 1000);
   });

@@ -1010,6 +1010,21 @@ export async function performDataCleanup(
       );
     }
 
+    // Inbound webhook dedupe rows (every provider, including Jira events for
+    // unlinked issues) are only needed for the provider's retry window.
+    if (prisma.inboundDelivery?.findMany && prisma.inboundDelivery?.deleteMany) {
+      await deleteInBatches(
+        () =>
+          prisma.inboundDelivery.findMany({
+            where: { createdAt: { lt: logCutoff }, status: { in: ['COMPLETED', 'FAILED'] } },
+            select: { id: true },
+            orderBy: { id: 'asc' },
+            take: BATCH_SIZE,
+          }),
+        ids => prisma.inboundDelivery.deleteMany({ where: { id: { in: ids } } })
+      );
+    }
+
     // Cleanup old metric rollups (with exact cutoff matching preview)
     metricsCount = await cleanupOldRollups(metricsCutoff);
 
