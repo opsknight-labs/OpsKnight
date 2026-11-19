@@ -243,6 +243,10 @@ export function extractJiraWebhookAssignee(payload: JiraWebhookPayload): {
   };
 }
 
+function jiraStatusChanged(previous: string | null, next: string): boolean {
+  return previous?.trim().toLowerCase() !== next.trim().toLowerCase();
+}
+
 export type LinkedEntitySyncParams = {
   externalKey: string;
   externalStatus: string;
@@ -340,26 +344,21 @@ export async function syncLinkedEntitiesForJiraIssue(
     for (const link of incidentLinks) {
       if (!link.incidentId) continue;
 
-      const previousStatus = link.externalStatus;
-      const statusChanged =
-        previousStatus?.trim().toLowerCase() !== externalStatus.trim().toLowerCase();
+      const statusChanged = jiraStatusChanged(link.externalStatus, externalStatus);
 
       if (statusChanged) {
         const message = isDone
           ? `Jira issue ${link.externalKey} marked as Done (${externalStatus})`
           : `Jira issue ${link.externalKey} status updated to "${externalStatus}"`;
 
+        // A Jira status is not an incident status change: record it as an
+        // informational event and leave incident.updatedAt (sort order) alone.
         await client.incidentEvent.create({
           data: {
             incidentId: link.incidentId,
-            type: 'STATUS_CHANGE',
+            type: 'LEGACY_OTHER',
             message,
           },
-        });
-
-        await client.incident.update({
-          where: { id: link.incidentId },
-          data: { updatedAt: new Date() },
         });
 
         await logAudit({
@@ -369,7 +368,7 @@ export async function syncLinkedEntitiesForJiraIssue(
           actorId,
           details: {
             externalKey: link.externalKey,
-            previousStatus,
+            previousStatus: link.externalStatus,
             newStatus: externalStatus,
             isDone,
           },
@@ -456,7 +455,10 @@ export async function syncExternalIssueLink(linkId: string) {
         externalKey: link.externalKey,
         externalStatus: newStatus,
         isDone,
-        actionItemIds: link.actionItemId ? [link.actionItemId] : [],
+        actionItemIds:
+          link.actionItemId && jiraStatusChanged(link.externalStatus, newStatus)
+            ? [link.actionItemId]
+            : [],
         incidentLinks: link.incidentId
           ? [
               {
@@ -690,7 +692,7 @@ export async function processJiraWebhookEvent(
         await tx.incidentEvent.create({
           data: {
             incidentId: link.incidentId,
-            type: 'STATUS_CHANGE',
+            type: 'LEGACY_OTHER',
             message: `Jira issue ${link.externalKey} was deleted in Jira`,
           },
         });
@@ -731,7 +733,12 @@ export async function processJiraWebhookEvent(
 
     if (isStatusPresent && statusName) {
       const isDone = isJiraStatusDone(statusName, statusCategoryKey, statusCategoryName);
-      const actionItemIds = validLinks.map(l => l.actionItemId).filter(Boolean) as string[];
+      // Only a Jira status transition may move an action item; otherwise an
+      // unrelated edit (e.g. a comment) would reopen an item a responder completed.
+      const actionItemIds = validLinks
+        .filter(l => jiraStatusChanged(l.externalStatus, statusName))
+        .map(l => l.actionItemId)
+        .filter(Boolean) as string[];
       const incidentLinks = validLinks
         .filter(l => Boolean(l.incidentId))
         .map(l => ({
