@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SlidersHorizontal, Settings, Plus, Loader2, Check } from 'lucide-react';
@@ -61,6 +61,12 @@ function formatFieldValue(value: string | null, type: string): string {
   return value;
 }
 
+// DATE values are stored as ISO timestamps, but <input type="date"> only accepts
+// yyyy-mm-dd and renders anything else as blank (then blur would erase it).
+function toInputValue(value: string, type: string): string {
+  return type === 'DATE' && value ? value.slice(0, 10) : value;
+}
+
 export default function IncidentCustomFieldsCard({
   incidentId,
   customFieldValues,
@@ -75,19 +81,24 @@ export default function IncidentCustomFieldsCard({
   const [formValues, setFormValues] = useState<Map<string, string>>(() => {
     const initial = new Map<string, string>();
     for (const field of allCustomFields) {
-      initial.set(field.id, valueMap.get(field.id) ?? (field.defaultValue || ''));
+      initial.set(
+        field.id,
+        toInputValue(valueMap.get(field.id) ?? (field.defaultValue || ''), field.type)
+      );
     }
     return initial;
   });
+  // Last value sent to the server per field. onChange already writes formValues,
+  // so "changed" must be judged against this, not against formValues.
+  const savedValues = useRef<Map<string, string>>(new Map(formValues));
 
   const [savingFieldId, setSavingFieldId] = useState<string | null>(null);
   const [savedFieldId, setSavedFieldId] = useState<string | null>(null);
 
   const handleSave = async (fieldId: string, newValue: string) => {
-    // Only save if changed
-    if (formValues.get(fieldId) === newValue && savingFieldId !== fieldId) {
-      return;
-    }
+    const previous = savedValues.current.get(fieldId) ?? '';
+    if (previous === newValue) return;
+    savedValues.current.set(fieldId, newValue);
 
     setSavingFieldId(fieldId);
     try {
@@ -114,6 +125,7 @@ export default function IncidentCustomFieldsCard({
       setTimeout(() => setSavedFieldId(null), 2000);
       router.refresh();
     } catch (err) {
+      savedValues.current.set(fieldId, previous);
       notify.error(err instanceof Error ? err.message : 'Failed to update custom field');
     } finally {
       setSavingFieldId(null);
