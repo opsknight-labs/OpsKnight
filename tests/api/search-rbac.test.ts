@@ -94,4 +94,43 @@ describe('global search RBAC', () => {
     expect(response.status).toBe(200);
     expect(mocks.findMany.mock.calls[0][0].where.AND[0]).toEqual({});
   });
+
+  it('redacts restricted automation-source incidents for actors without sensitive read', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'auditor-1',
+      role: 'AUDITOR',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+    mocks.findMany.mockImplementation(async (args: any) =>
+      args?.select?.urgency
+        ? [
+            {
+              id: 'inc-1',
+              title: 'secret payload',
+              status: 'OPEN',
+              urgency: 'HIGH',
+              automationSourceRestricted: true,
+              automationTraces: [],
+              automationDecision: null,
+              service: { id: 's1', name: 'API' },
+            },
+          ]
+        : []
+    );
+
+    const response = await GET(new NextRequest('http://localhost/api/search?q=secret'));
+    const body = await response.json();
+    const results = body.data?.results ?? body.results;
+
+    expect(results[0].title).toBe('Restricted alert content');
+    expect(results[0]).not.toHaveProperty('priority');
+    expect(JSON.stringify(results)).not.toContain('secret payload');
+    const textMatch = mocks.findMany.mock.calls[0][0].where.AND[1].OR[0].AND[0];
+    expect(textMatch).toEqual({
+      automationSourceRestricted: false,
+      automationDecision: { is: null },
+      automationTraces: { none: {} },
+    });
+  });
 });

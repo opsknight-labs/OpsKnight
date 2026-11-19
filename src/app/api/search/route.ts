@@ -9,6 +9,7 @@ import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 
 const INSENSITIVE_MODE = 'insensitive' as const;
 
@@ -17,6 +18,9 @@ type IncidentWithService = {
   title: string;
   status: IncidentStatus;
   urgency: IncidentUrgency;
+  automationSourceRestricted?: boolean;
+  automationTraces?: Array<{ incidentId: string }>;
+  automationDecision?: { incidentId: string } | null;
   service?: {
     id: string;
     name: string;
@@ -100,6 +104,15 @@ export async function GET(req: NextRequest) {
       teamIds: currentUser.teamMemberships.map(membership => membership.teamId),
     };
     const isPrivileged = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_READ_ALL);
+    const canReadSensitive = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_SENSITIVE_READ);
+    // Restricted automation-source content must not be matchable (or shown) by text.
+    const unrestrictedSource = canReadSensitive
+      ? {}
+      : {
+          automationSourceRestricted: false,
+          automationDecision: { is: null },
+          automationTraces: { none: {} },
+        };
     const teamIds = [...actor.teamIds];
     const incidentAccess = incidentReadWhere(actor);
     const serviceAccess = serviceReadWhere(actor);
@@ -151,17 +164,26 @@ export async function GET(req: NextRequest) {
             incidentAccess,
             {
               OR: [
-                { title: { equals: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                ...(searchWords.length > 1
-                  ? searchWords.slice(0, 3).map(word => ({
+                {
+                  AND: [
+                    unrestrictedSource,
+                    {
                       OR: [
-                        { title: { contains: word, mode: INSENSITIVE_MODE } },
-                        { description: { contains: word, mode: INSENSITIVE_MODE } },
+                        { title: { equals: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                        { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                        { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                        ...(searchWords.length > 1
+                          ? searchWords.slice(0, 3).map(word => ({
+                              OR: [
+                                { title: { contains: word, mode: INSENSITIVE_MODE } },
+                                { description: { contains: word, mode: INSENSITIVE_MODE } },
+                              ],
+                            }))
+                          : []),
                       ],
-                    }))
-                  : []),
+                    },
+                  ],
+                },
                 { id: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
               ],
             },
@@ -174,6 +196,9 @@ export async function GET(req: NextRequest) {
           title: true,
           status: true,
           urgency: true,
+          automationSourceRestricted: true,
+          automationTraces: { select: { incidentId: true }, take: 1 },
+          automationDecision: { select: { incidentId: true } },
           service: { select: { id: true, name: true } },
         },
       }),
@@ -313,6 +338,9 @@ export async function GET(req: NextRequest) {
                 select: {
                   id: true,
                   title: true,
+                  automationSourceRestricted: true,
+                  automationTraces: { select: { incidentId: true }, take: 1 },
+                  automationDecision: { select: { incidentId: true } },
                 },
               },
             },
@@ -333,7 +361,8 @@ export async function GET(req: NextRequest) {
 
     // Format results with proper priorities (incidents first, then services, etc.)
     const results = [
-      ...incidents.map(i => {
+      ...incidents.map(source => {
+        const i = visibleIncidentSource(source, canReadSensitive);
         const urgencyLabel =
           i.urgency === 'HIGH' ? 'High' : i.urgency === 'MEDIUM' ? 'Medium' : 'Low';
         const urgencyPriority = i.urgency === 'HIGH' ? 1 : i.urgency === 'MEDIUM' ? 2 : 3;
@@ -383,7 +412,7 @@ export async function GET(req: NextRequest) {
         type: 'postmortem' as const,
         id: pm.id,
         title: pm.title,
-        subtitle: `Postmortem for ${pm.incident.title} - ${pm.status}`,
+        subtitle: `Postmortem for ${visibleIncidentSource(pm.incident, canReadSensitive).title} - ${pm.status}`,
         href: `/postmortems/${pm.incidentId}`,
         priority: 8,
       })),
@@ -398,7 +427,9 @@ export async function GET(req: NextRequest) {
       if (aExact && !bExact) return -1;
       if (!aExact && bExact) return 1;
       return 0;
-    });
+    })
+      // priority is an internal type sort key, not incident priority; never expose it.
+      .map(({ priority: _priority, ...result }) => result);
 
     // Add cache headers for search results (short cache, private)
     return jsonOk({ results }, 200, {

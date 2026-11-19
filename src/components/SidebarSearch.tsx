@@ -46,7 +46,6 @@ type SearchResult = {
   title: string;
   subtitle?: string;
   href: string;
-  priority?: number;
   metadata?: Record<string, unknown>;
   avatarUrl?: string | null;
   gender?: string | null;
@@ -727,11 +726,6 @@ export default function SidebarSearch() {
                             <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium truncate text-sm">{result.title}</span>
-                                {result.priority && (
-                                  <Badge variant="neutral" size="xs" className="uppercase">
-                                    P{result.priority}
-                                  </Badge>
-                                )}
                               </div>
                               {result.subtitle && (
                                 <span className="text-[10px] text-muted-foreground truncate">
