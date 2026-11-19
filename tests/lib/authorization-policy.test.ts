@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CAPABILITIES } from '@/lib/authorization';
 import {
   AUTHORIZATION_ACTIONS,
   authorize,
@@ -219,5 +220,39 @@ describe('authorization policy matrix', () => {
         action: AUTHORIZATION_ACTIONS.EVENT_CREATE,
       })
     ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
+  });
+});
+
+describe('scoped incident creation', () => {
+  const scoped = actor({ capabilities: new Set([CAPABILITIES.INCIDENT_CREATE_SCOPED]) });
+
+  it('allows incident.create.scoped on a service owned by one of the actor teams', () => {
+    expect(
+      authorize({
+        actor: scoped,
+        action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+        resource: { type: 'service', teamId: 'team-1' },
+      }).allowed
+    ).toBe(true);
+  });
+
+  it('denies incident.create.scoped on another team service', () => {
+    expect(
+      authorize({
+        actor: scoped,
+        action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+        resource: { type: 'service', teamId: 'team-2' },
+      })
+    ).toMatchObject({ allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE' });
+  });
+
+  it('still denies a plain USER without the scoped capability', () => {
+    expect(
+      authorize({
+        actor: actor(),
+        action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+        resource: { type: 'service', teamId: 'team-1' },
+      }).allowed
+    ).toBe(false);
   });
 });

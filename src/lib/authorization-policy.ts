@@ -343,6 +343,7 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
     {
       global: CAPABILITIES.INCIDENT_CREATE_ALL,
+      scoped: CAPABILITIES.INCIDENT_CREATE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
