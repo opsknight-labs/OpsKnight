@@ -276,7 +276,8 @@ export async function applyIncidentCreation(
         serviceId: input.serviceId,
         status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] },
       },
-      orderBy: { createdAt: 'desc' },
+      // Same owner as event ingestion (findOpenEventIncident): the oldest open incident.
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
 
     if (existing) {

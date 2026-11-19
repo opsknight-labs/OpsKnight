@@ -43,6 +43,8 @@ import { hasHealthyDedicatedIngestionWorker } from '@/lib/ingestion/fallback';
 import { getIngestionWorkerHealth } from '@/lib/ingestion/worker-health';
 import { acquireDurableTextAdvisoryLocks } from '@/lib/db-locks';
 import { lockEventDedupKeys } from '@/lib/incidents/event-identity';
+import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
+import { releaseStableFlappingHolds } from '@/lib/flapping';
 import { applyIngestionCommand, ingestionSnapshot } from '@/lib/ingestion/operations';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { emptySnapshot } from '@/lib/automation/contract';
@@ -3333,6 +3335,95 @@ describe('PostgreSQL ingestion durability', () => {
     expect(incidents).toHaveLength(1);
     expect(incidents[0].status).toBe('RESOLVED');
     expect(await prisma.ingestionReceipt.count({ where: { status: 'COMPLETED' } })).toBe(2);
+  });
+
+  it('keeps a manual dedup key intact and routes events to the oldest open incident', async () => {
+    const older = await prisma.incident.create({
+      data: {
+        serviceId,
+        title: 'manual',
+        dedupKey: 'db-primary',
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    });
+    await prisma.incident.create({
+      data: { serviceId, title: 'manual dup', dedupKey: 'db-primary' },
+    });
+    const result = await processEvent(envelope('db-primary').event, serviceId, 'integration');
+    expect(result).toMatchObject({ action: 'deduplicated', incident: { id: older.id } });
+    expect((await prisma.incident.findUniqueOrThrow({ where: { id: older.id } })).dedupKey).toBe(
+      'db-primary'
+    );
+  });
+
+  it('attaches a late recovery to the incident a responder resolved instead of buffering it', async () => {
+    await processEvent(envelope('late-recovery').event, serviceId, 'integration');
+    const first = await prisma.incident.findFirstOrThrow({ where: { serviceId } });
+    await runReadCommittedTransaction(tx =>
+      applyIncidentLifecycleCommand(tx, {
+        incidentId: first.id,
+        command: 'RESOLVE',
+        source: 'WEB',
+      })
+    );
+    const late = await processEvent(
+      envelope('late-recovery', 'resolve').event,
+      serviceId,
+      'integration'
+    );
+    expect(late).toMatchObject({ action: 'ignored', reason: 'Incident already resolved' });
+    expect(
+      await prisma.alert.count({ where: { serviceId, status: 'RESOLVED', incidentId: null } })
+    ).toBe(0);
+    await processEvent(envelope('late-recovery').event, serviceId, 'integration');
+    const recurrence = await prisma.incident.findFirstOrThrow({
+      where: { serviceId, id: { not: first.id } },
+    });
+    expect(recurrence.status).toBe('OPEN');
+  });
+
+  it('releases a flapping hold once the alert stops oscillating, but not while it still flaps', async () => {
+    const flap = async (key: string) => {
+      const at = Date.now();
+      // Earlier flap cycles belong to an incident that each recovery already closed.
+      const prior = await prisma.incident.create({
+        data: { serviceId, title: key, status: 'RESOLVED', dedupKey: `integration:${key}` },
+      });
+      await prisma.alert.createMany({
+        data: Array.from({ length: 5 }, (_, i) => ({
+          serviceId,
+          incidentId: prior.id,
+          dedupKey: `integration:${key}`,
+          status: i % 2 ? 'RESOLVED' : 'TRIGGERED',
+          createdAt: new Date(at - (i + 1) * 1000),
+          payload: {},
+        })),
+      });
+      const result = await processEvent(envelope(key).event, serviceId, 'integration');
+      expect(result).toMatchObject({ action: 'suppressed' });
+      return (result as { incident: { id: string } }).incident.id;
+    };
+    const stable = await flap('flap-stable');
+    const flapping = await flap('flap-still');
+    const past = new Date(Date.now() - 10 * 60_000);
+    await prisma.alert.updateMany({
+      where: { serviceId, dedupKey: 'integration:flap-stable' },
+      data: { createdAt: past },
+    });
+    await prisma.incidentSlaPause.updateMany({
+      where: { incidentId: { in: [stable, flapping] } },
+      data: { startedAt: past },
+    });
+
+    // Other services in this shared database may hold their own released incidents.
+    expect(await releaseStableFlappingHolds()).toBeGreaterThanOrEqual(1);
+    expect(await prisma.incident.findUniqueOrThrow({ where: { id: stable } })).toMatchObject({
+      status: 'OPEN',
+      escalationStatus: 'ESCALATING',
+    });
+    expect((await prisma.incident.findUniqueOrThrow({ where: { id: flapping } })).status).toBe(
+      'SUPPRESSED'
+    );
   });
 
   it('does not apply an old buffered resolve beyond the five minute acceptance window', async () => {

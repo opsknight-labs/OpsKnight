@@ -199,17 +199,10 @@ export async function processEvent(
 
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
+    // An incident keyed with the raw (legacy or manually supplied) key is matched
+    // through the legacy candidate; its key is left as-is so manual reports that
+    // reuse the same key keep deduplicating into it.
     const existingIncident = await findOpenEventIncident(tx, serviceId, candidateDedupKeys);
-
-    // Rolling-upgrade compatibility: move an open incident created with an
-    // older, unscoped key to the integration-scoped key on first contact.
-    if (existingIncident && existingIncident.dedupKey !== dedupKeys.primary) {
-      await tx.incident.update({
-        where: { id: existingIncident.id },
-        data: { dedupKey: dedupKeys.primary },
-      });
-      existingIncident.dedupKey = dedupKeys.primary;
-    }
 
     // Run this after the advisory lock so a queued event observes alert
     // history committed by earlier events for the same dedup key. Passing the
@@ -278,6 +271,14 @@ export async function processEvent(
       });
     if (existingIncident) await persistAlert(existingIncident.id);
 
+    // Out-of-order resolve buffering covers a resolve that precedes its trigger.
+    const outOfOrderWindow = processingLease
+      ? {
+          gte: new Date(envelope.receivedAt.getTime() - OUT_OF_ORDER_RESOLVE_WINDOW_MS),
+          lte: envelope.receivedAt,
+        }
+      : { gte: new Date(Date.now() - OUT_OF_ORDER_RESOLVE_WINDOW_MS) };
+
     if (event_action === 'resolve' && !existingIncident) {
       // A CI success with no open failure is a routine pass, not an early copy of
       // a pending trigger; buffering it would pre-resolve the next real failure.
@@ -311,6 +312,11 @@ export async function processEvent(
       });
       if (recentlyClosed) {
         await persistAlert(recentlyClosed.id);
+        logger.info('event.resolve_late_for_resolved_incident', {
+          dedupKey: dedup_key,
+          serviceId,
+          incidentId: recentlyClosed.id,
+        });
         return {
           action: 'ignored',
           reason: 'Incident already resolved',
@@ -426,12 +432,7 @@ export async function processEvent(
           serviceId,
           status: 'RESOLVED',
           incidentId: null,
-          createdAt: processingLease
-            ? {
-                gte: new Date(envelope.receivedAt.getTime() - OUT_OF_ORDER_RESOLVE_WINDOW_MS),
-                lte: envelope.receivedAt,
-              }
-            : { gte: new Date(Date.now() - OUT_OF_ORDER_RESOLVE_WINDOW_MS) },
+          createdAt: outOfOrderWindow,
         },
         orderBy: { createdAt: 'desc' },
       });

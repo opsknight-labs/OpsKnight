@@ -65,6 +65,8 @@ export async function findOpenEventIncident(
     ) candidate
     WHERE candidate."serviceId" = ${serviceId}
       AND candidate.status IN ('OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED')
+    -- Deterministic when several incidents share a key: the oldest open one owns it.
+    ORDER BY candidate."createdAt" ASC, candidate.id ASC
     LIMIT 1
   `;
   return incident ?? null;
