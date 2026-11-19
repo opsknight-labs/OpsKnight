@@ -183,16 +183,16 @@ export async function POST(request: NextRequest) {
           }
 
           const foundMsg = historyData.ok
-            ? historyData.messages?.find(
-                (m: { ts: string; text?: string }) => m.ts === messageTs
-              ) || historyData.messages?.[0]
+            ? // Exact match only: a thread reply is not in channel history, and the
+              // latest top-level message must never be saved in its place.
+              historyData.messages?.find((m: { ts: string; text?: string }) => m.ts === messageTs)
             : null;
 
           if (foundMsg?.text) {
             messageText = foundMsg.text;
           } else {
             // Fallback to conversations.replies for thread replies
-            const repliesUrl = `https://slack.com/api/conversations.replies?channel=${channelId}&ts=${messageTs}&limit=5`;
+            const repliesUrl = `https://slack.com/api/conversations.replies?channel=${channelId}&ts=${messageTs}&oldest=${messageTs}&latest=${messageTs}&inclusive=true&limit=5`;
             const repliesRes = await retryFetch(repliesUrl, {
               headers: { Authorization: `Bearer ${botToken}` },
             });
@@ -201,9 +201,7 @@ export async function POST(request: NextRequest) {
               lookupError = lookupError || repliesData.error || 'unknown_error';
             }
             const foundReply = repliesData.ok
-              ? repliesData.messages?.find(
-                  (m: { ts: string; text?: string }) => m.ts === messageTs
-                ) || repliesData.messages?.[0]
+              ? repliesData.messages?.find((m: { ts: string; text?: string }) => m.ts === messageTs)
               : null;
             if (foundReply?.text) {
               messageText = foundReply.text;
