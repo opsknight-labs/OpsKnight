@@ -875,7 +875,12 @@ export async function enqueueCentralNotification(
 function payloadProviderKey(payload: CentralNotificationPayload): string {
   if (payload.kind === 'WEBHOOK' || payload.kind === 'STATUS_PAGE_WEBHOOK') {
     try {
-      return new URL(payload.url).origin;
+      // Scope deferral to the individual webhook, not the whole host: one
+      // service's Discord 429 must not defer every Discord webhook. The path is
+      // hashed because it usually carries the webhook token.
+      const url = new URL(payload.url);
+      const pathHash = crypto.createHash('sha256').update(url.pathname).digest('hex').slice(0, 16);
+      return `${url.origin}#${pathHash}`;
     } catch {
       return 'invalid-webhook';
     }
