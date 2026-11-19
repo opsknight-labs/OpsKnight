@@ -1,13 +1,13 @@
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { activeSignatureSecrets } from '@/lib/integrations/auth';
 import { processIntegrationEvent } from '@/lib/events';
 import { transformSentryToEvent, SentryEvent } from '@/lib/integrations/sentry';
 
 import { verifySentrySignature } from '@/lib/integrations/signature-verification';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
-import { decryptStoredSecret } from '@/lib/encryption';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, SentryEventSchema } from '@/lib/integrations/schemas';
 import {
@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.sentry_missing_signature', { integrationId });
           return jsonError('Missing Sentry-Hook-Signature header', 401);
         }
-        const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
-        if (!verifySentrySignature(rawBody, signature, signatureSecret)) {
+        const secrets = await activeSignatureSecrets(integration);
+        if (!secrets.some(secret => verifySentrySignature(rawBody, signature, secret))) {
           logger.warn('api.integration.sentry_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }

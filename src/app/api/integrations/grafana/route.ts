@@ -1,13 +1,13 @@
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { activeSignatureSecrets } from '@/lib/integrations/auth';
 import { processIntegrationBatch } from '@/lib/events';
 import { transformGrafanaToEvents, GrafanaAlert } from '@/lib/integrations/grafana';
 
 import { verifyGrafanaSignature } from '@/lib/integrations/signature-verification';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
-import { decryptStoredSecret } from '@/lib/encryption';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, GrafanaAlertSchema } from '@/lib/integrations/schemas';
 import {
@@ -59,8 +59,8 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.grafana_missing_signature', { integrationId });
           return jsonError('Missing X-Grafana-Signature header', 401);
         }
-        const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
-        if (!verifyGrafanaSignature(rawBody, signature, signatureSecret)) {
+        const secrets = await activeSignatureSecrets(integration);
+        if (!secrets.some(secret => verifyGrafanaSignature(rawBody, signature, secret))) {
           logger.warn('api.integration.grafana_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }

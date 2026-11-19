@@ -57,3 +57,19 @@ export async function isIntegrationAuthorized(
     : false;
   return currentMatches || previousMatches;
 }
+
+/** Signature secrets accepted now: the current one, plus the previous one during a rotation overlap. */
+export async function activeSignatureSecrets(integration: {
+  signatureSecret: string | null;
+  previousSignatureSecret: string | null;
+  previousSignatureSecretExpiresAt: Date | null;
+}): Promise<string[]> {
+  const stored = [integration.signatureSecret];
+  if (
+    integration.previousSignatureSecretExpiresAt &&
+    integration.previousSignatureSecretExpiresAt.getTime() > Date.now()
+  ) {
+    stored.push(integration.previousSignatureSecret);
+  }
+  return Promise.all(stored.filter((s): s is string => !!s).map(decryptStoredSecret));
+}

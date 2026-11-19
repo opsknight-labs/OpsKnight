@@ -1,13 +1,13 @@
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { activeSignatureSecrets } from '@/lib/integrations/auth';
 import { processIntegrationEvent } from '@/lib/events';
 import { transformGitHubToEvent, GitHubEvent } from '@/lib/integrations/github';
 
 import { verifyGitHubSignature } from '@/lib/integrations/signature-verification';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
-import { decryptStoredSecret } from '@/lib/encryption';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, GitHubEventSchema } from '@/lib/integrations/schemas';
 import {
@@ -69,8 +69,8 @@ export async function POST(req: NextRequest) {
           return jsonError('Missing X-Hub-Signature-256 header', 401);
         }
 
-        const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
-        if (!verifyGitHubSignature(rawBody, signature, signatureSecret)) {
+        const secrets = await activeSignatureSecrets(integration);
+        if (!secrets.some(secret => verifyGitHubSignature(rawBody, signature, secret))) {
           logger.warn('api.integration.github_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }
