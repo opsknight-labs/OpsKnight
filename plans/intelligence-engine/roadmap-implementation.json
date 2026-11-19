@@ -513,5 +513,49 @@
       "Local million-row benchmark: 1M incidents, alerts and normalized fingerprints, durable PostgreSQL; 5k-alert incremental p50 12.53ms / p99 15.21ms, all index-plan gates passed. Foundation-only nightly workflow added; not full ingestion A/B certification."
     ],
     "scope": "Expanded roadmap still in progress. Incremental indexing, bounded observer, shared alert shape/backfill and foundation benchmark now implemented and verified locally."
+  },
+  "gap_audit": {
+    "branch": "wip/intel-m12-int (merges wip/intel-m1-engine, wip/intel-m1-ingest, wip/intel-m2-bg, wip/intel-m2-chat onto feat/intelligence-engine a445b0c11)",
+    "M1": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "1 legacy fixed-threshold flapping check removed from processEvent (flapping.ts kept only to drain pre-existing holds)",
+        "2 lane sweep un-suppresses noise-control and legacy flapping holds whose reason ended (NoiseMaintenanceWindow); incidents held by product maintenance are left to the service-maintenance end sweep",
+        "3 resolve matches content-dedup appended keys; incident stays open until every alert key is clear",
+        "4 storm parent takes children's top urgency, prefers its own service, cascades resolve/re-page on parent resolve",
+        "5 automatic runbooks skip storm children and are rate-limited per rule with a recorded skip",
+        "6 triage SLO burn excludes the subject incident",
+        "7 change risk uses local time zone",
+        "8 root cause keeps changes trailing onset slightly, ranked below preceding ones",
+        "9 automation tool evidence verified",
+        "10 oversized tool output trimmed, not dropped",
+        "11 triage owner limited to current active members",
+        "12 weight fits moved to the daily lane job"
+      ],
+      "gaps": [
+        "SUPPRESSION-rule (automation suppression rule) suppressions are not lifted by the sweep; only noise-control and legacy flapping holds are",
+        "Storm cascade has shortcuts: parents resolved more than 24h ago are not cascaded and storm links older than 7 days are not probed"
+      ]
+    },
+    "M2": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "1 cache-friendly prompt order, volatile briefing after the prefix",
+        "2 rolling cache breakpoint and per-step holds",
+        "3 tool subset by intent",
+        "4 short evidence handles",
+        "5 lean planner with fixed first read round; diagnosis gets system prompt + current briefing only",
+        "6 narrower investigation trigger",
+        "7 model tiering on by default",
+        "8 compact, block-stable history",
+        "9 one handoff narrative per handoff; stakeholder nudge has its own prompt (stakeholder.update) and schema; one shared incident summary reused by inspector, pinned briefing and the chat-turn brief",
+        "10 per-step holds; cache reads weighted 0.1 against daily, per-user, team and capability token budgets (dollars unchanged)",
+        "11 scripted investigation prompt-token median gated in baseline.json"
+      ],
+      "gaps": [
+        "Target (-50-70% input tokens per turn) not met: scripted eval median -1.2%, representative incident turn -26.5%",
+        "Provider prompt-cache savings unmeasured (needs a live Anthropic/Bedrock eval run)"
+      ]
+    }
   }
 }
