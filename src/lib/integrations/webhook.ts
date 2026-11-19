@@ -3,6 +3,8 @@
  * Handles custom webhook integrations with flexible payload mapping
  */
 
+import { matchesActionValue } from './normalization';
+
 export type WebhookPayload = {
   [key: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 };
@@ -91,14 +93,15 @@ export function transformWebhookToEvent(
     'triggered';
 
   // Determine event action
-  const actionValueStr = String(actionValue).toLowerCase();
+  // Word-aware matching: 'broken' must not resolve via 'ok', nor 'unresolved' via 'resolved'.
+  const actionValueStr = String(actionValue);
   let eventAction: 'trigger' | 'resolve' | 'acknowledge' = 'trigger';
 
-  if (finalConfig.resolveValues?.some(v => actionValueStr.includes(v.toLowerCase()))) {
+  if (matchesActionValue(actionValueStr, finalConfig.resolveValues ?? [])) {
     eventAction = 'resolve';
-  } else if (finalConfig.triggerValues?.some(v => actionValueStr.includes(v.toLowerCase()))) {
+  } else if (matchesActionValue(actionValueStr, finalConfig.triggerValues ?? [])) {
     eventAction = 'trigger';
-  } else if (actionValueStr.includes('acknowledge') || actionValueStr.includes('ack')) {
+  } else if (matchesActionValue(actionValueStr, ['ack', 'acknowledge'])) {
     eventAction = 'acknowledge';
   }
 

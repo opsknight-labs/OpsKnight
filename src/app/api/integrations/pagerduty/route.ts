@@ -15,6 +15,7 @@ import {
 } from '@/lib/integrations/request-security';
 import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
 import { decryptStoredSecret } from '@/lib/encryption';
+import { logger } from '@/lib/logger';
 
 async function postEvent(req: NextRequest) {
   const startTime = performance.now();
@@ -50,6 +51,8 @@ async function postEvent(req: NextRequest) {
     const payload = validation.data;
     const paramId = searchParams.get('integrationId');
     const providedKey =
+      searchParams.get('integrationKey') ||
+      searchParams.get('integration_key') ||
       searchParams.get('key') ||
       searchParams.get('token') ||
       payload.routing_key ||
@@ -140,6 +143,18 @@ async function postEvent(req: NextRequest) {
     }
 
     const event = transformPagerDutyToEvent(payload);
+    // PagerDuty rejects acknowledge/resolve without dedup_key; a generated key
+    // would silently match nothing.
+    if (event.event_action !== 'trigger' && !(payload.dedup_key || payload.dedupKey)) {
+      return new Response(
+        JSON.stringify({
+          status: 'invalid event',
+          message: 'Event object is invalid',
+          errors: ["'dedup_key' is required for acknowledge and resolve events"],
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
     const result = await withIngestionDelivery(
       ingestionDeliveryKey(req.headers, 'PAGERDUTY'),
       () =>
@@ -178,6 +193,10 @@ async function postEvent(req: NextRequest) {
       });
     }
     const duration = performance.now() - startTime;
+    logger.error('api.integration.pagerduty_error', {
+      integrationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     recordWebhookReceived(
       'PAGERDUTY',
       integrationId || 'unknown',
@@ -188,7 +207,7 @@ async function postEvent(req: NextRequest) {
     return new Response(
       JSON.stringify({
         status: 'error',
-        message: error instanceof Error ? error.message : 'Internal error',
+        message: 'Internal error',
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
