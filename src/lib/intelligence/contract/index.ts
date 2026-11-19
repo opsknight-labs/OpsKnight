@@ -63,6 +63,8 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   automationIntelligenceFieldsEnabled: false,
   pageContextEnabled: false,
   peopleInsightsEnabled: false,
+  warRoomKickoffEnabled: false,
+  warRoomCaptureEnabled: false,
 } as const;
 
 const bounded = (range: { min: number; max: number }) =>
@@ -99,6 +101,8 @@ export const intelligenceSettingsInputSchema = z
     automationIntelligenceFieldsEnabled: z.boolean().optional(),
     pageContextEnabled: z.boolean().optional(),
     peopleInsightsEnabled: z.boolean().optional(),
+    warRoomKickoffEnabled: z.boolean().optional(),
+    warRoomCaptureEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()

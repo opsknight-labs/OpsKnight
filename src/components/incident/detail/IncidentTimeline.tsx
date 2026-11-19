@@ -60,7 +60,7 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
 // not an authoritative classification.
 export function categorize(type: string, message: string): TimelineFilter {
   if (type === 'INTELLIGENCE') return 'INTELLIGENCE';
-  if (type === 'NOTE' || type === 'COMMENT') return 'NOTES';
+  if (type === 'NOTE' || type === 'COMMENT' || type === 'CHAT_MESSAGE') return 'NOTES';
   if (type === 'CREATED' || type === 'ACKNOWLEDGED' || type === 'RESOLVED') return 'LIFECYCLE';
   if (type === 'NOTIFICATION') return 'NOTIFICATIONS';
   if (isRunbookEventType(type)) return 'RUNBOOKS';
@@ -479,9 +479,10 @@ export default function IncidentTimeline({
     // Add regular events
     loadedEvents.forEach(event => {
       const isNoteEvent =
-        event.type === 'NOTE' ||
-        event.type === 'COMMENT' ||
-        /\bnote\b|pinned message|comment/i.test(event.message);
+        event.type !== 'CHAT_MESSAGE' &&
+        (event.type === 'NOTE' ||
+          event.type === 'COMMENT' ||
+          /\bnote\b|pinned message|comment/i.test(event.message));
 
       let message = event.message;
       let eventType = event.type || 'EVENT';
@@ -698,6 +699,14 @@ export default function IncidentTimeline({
           variant: 'info' as const,
           icon: <MessageSquare className="h-4 w-4" />,
           label: 'Note',
+          avatarBg: 'bg-blue-100 dark:bg-blue-950/40',
+          avatarText: 'text-blue-600 dark:text-blue-400',
+        };
+      case 'CHAT_MESSAGE':
+        return {
+          variant: 'info' as const,
+          icon: <MessageSquare className="h-4 w-4" />,
+          label: 'War room',
           avatarBg: 'bg-blue-100 dark:bg-blue-950/40',
           avatarText: 'text-blue-600 dark:text-blue-400',
         };

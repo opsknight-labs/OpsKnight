@@ -88,6 +88,10 @@ export type IntelligenceSettingsView = {
   pageContextEnabled: boolean;
   /** People suggestions: override cover candidates, incident experts, personal load and noise cards. */
   peopleInsightsEnabled: boolean;
+  /** One deterministic kickoff message (similar incidents, causes, runbooks) when a war room opens. */
+  warRoomKickoffEnabled: boolean;
+  /** War-room channel messages saved to the incident timeline, bounded and redacted. */
+  warRoomCaptureEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -118,6 +122,8 @@ const SETTINGS_SELECT = {
   automationIntelligenceFieldsEnabled: true,
   pageContextEnabled: true,
   peopleInsightsEnabled: true,
+  warRoomKickoffEnabled: true,
+  warRoomCaptureEnabled: true,
   revision: true,
 } as const;
 

@@ -78,6 +78,8 @@ export async function saveIntelligenceSettings(
           form.get('automationIntelligenceFieldsEnabled') === 'on',
         pageContextEnabled: form.get('pageContextEnabled') === 'on',
         peopleInsightsEnabled: form.get('peopleInsightsEnabled') === 'on',
+        warRoomKickoffEnabled: form.get('warRoomKickoffEnabled') === 'on',
+        warRoomCaptureEnabled: form.get('warRoomCaptureEnabled') === 'on',
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }

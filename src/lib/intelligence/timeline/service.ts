@@ -27,7 +27,8 @@ export type TimeAxisKind =
   | 'GROUPING'
   | 'SUGGESTION'
   | 'TRIAGE'
-  | 'METRIC_ANOMALY';
+  | 'METRIC_ANOMALY'
+  | 'CHAT';
 
 export interface TimeAxisEntry {
   kind: TimeAxisKind;
@@ -86,65 +87,74 @@ export async function getIncidentTimeAxisForActor(
   const upstream = upstreamDistances(edges, incident.serviceId, RESPONSE_LIMITS.maxUpstreamDepth);
   const serviceIds = [incident.serviceId, ...upstream.keys()];
 
-  const [alerts, changes, upstreamIncidents, noise, decisions, anomalies] = await Promise.all([
-    client.alert.findMany({
-      where: { incidentId },
-      orderBy: { createdAt: 'asc' },
-      take: MAX_ROWS + 1,
-      select: { id: true, createdAt: true, severity: true, payload: true, status: true },
-    }),
-    services
-      ? client.changeEvent.findMany({
-          where: {
-            occurredAt: { gte: windowStart, lte: until },
-            OR: [{ serviceId: { in: serviceIds } }, { serviceId: null }],
-            ...(Object.keys(services).length === 0
-              ? {}
-              : { OR: [{ serviceId: null }, { service: services }] }),
-          },
-          orderBy: { occurredAt: 'asc' },
-          take: MAX_ROWS + 1,
-          select: {
-            id: true,
-            kind: true,
-            summary: true,
-            source: true,
-            url: true,
-            occurredAt: true,
-            riskScore: true,
-            service: { select: { name: true } },
-          },
-        })
-      : [],
-    upstream.size === 0
-      ? []
-      : client.incident.findMany({
-          where: {
-            AND: [
-              {
-                id: { not: incidentId },
-                serviceId: { in: [...upstream.keys()] },
-                createdAt: { gte: windowStart, lte: until },
-              },
-              readable,
-            ],
-          },
-          orderBy: { createdAt: 'asc' },
-          take: MAX_ROWS + 1,
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            createdAt: true,
-            service: { select: { name: true } },
-          },
-        }),
-    loadNoiseDecisions(client, incidentId),
-    loadSuggestionDecisions(client, incidentId, readable),
-    services
-      ? loadReadableAnomalies(client, serviceIds, services, { start: windowStart, end: until })
-      : [],
-  ]);
+  const [alerts, changes, upstreamIncidents, noise, decisions, anomalies, chat] = await Promise.all(
+    [
+      client.alert.findMany({
+        where: { incidentId },
+        orderBy: { createdAt: 'asc' },
+        take: MAX_ROWS + 1,
+        select: { id: true, createdAt: true, severity: true, payload: true, status: true },
+      }),
+      services
+        ? client.changeEvent.findMany({
+            where: {
+              occurredAt: { gte: windowStart, lte: until },
+              OR: [{ serviceId: { in: serviceIds } }, { serviceId: null }],
+              ...(Object.keys(services).length === 0
+                ? {}
+                : { OR: [{ serviceId: null }, { service: services }] }),
+            },
+            orderBy: { occurredAt: 'asc' },
+            take: MAX_ROWS + 1,
+            select: {
+              id: true,
+              kind: true,
+              summary: true,
+              source: true,
+              url: true,
+              occurredAt: true,
+              riskScore: true,
+              service: { select: { name: true } },
+            },
+          })
+        : [],
+      upstream.size === 0
+        ? []
+        : client.incident.findMany({
+            where: {
+              AND: [
+                {
+                  id: { not: incidentId },
+                  serviceId: { in: [...upstream.keys()] },
+                  createdAt: { gte: windowStart, lte: until },
+                },
+                readable,
+              ],
+            },
+            orderBy: { createdAt: 'asc' },
+            take: MAX_ROWS + 1,
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              createdAt: true,
+              service: { select: { name: true } },
+            },
+          }),
+      loadNoiseDecisions(client, incidentId),
+      loadSuggestionDecisions(client, incidentId, readable),
+      services
+        ? loadReadableAnomalies(client, serviceIds, services, { start: windowStart, end: until })
+        : [],
+      // War-room messages saved by channel capture; the incident itself is already readable.
+      client.incidentEvent.findMany({
+        where: { incidentId, type: 'CHAT_MESSAGE' },
+        orderBy: { createdAt: 'asc' },
+        take: MAX_ROWS + 1,
+        select: { createdAt: true, message: true },
+      }),
+    ]
+  );
   const canReverse =
     actor.status === 'ACTIVE' && hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE);
 
@@ -219,6 +229,16 @@ export async function getIncidentTimeAxisForActor(
   for (const decision of decisions) {
     entries.push({ ...decision, offsetMinutes: offset(decision.at) });
   }
+  for (const message of chat.slice(0, MAX_ROWS)) {
+    entries.push({
+      kind: 'CHAT',
+      at: message.createdAt,
+      title: message.message.slice(0, 200),
+      detail: 'War room',
+      href: null,
+      offsetMinutes: offset(message.createdAt),
+    });
+  }
   if (incident.resolvedAt)
     entries.push({
       kind: 'INCIDENT',
@@ -237,7 +257,8 @@ export async function getIncidentTimeAxisForActor(
       changes.length > MAX_ROWS ||
       upstreamIncidents.length > MAX_ROWS ||
       noise.length > MAX_ROWS ||
-      anomalies.length > MAX_ROWS,
+      anomalies.length > MAX_ROWS ||
+      chat.length > MAX_ROWS,
     canReverse,
   };
 }

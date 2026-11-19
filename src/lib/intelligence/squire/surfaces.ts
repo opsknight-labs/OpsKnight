@@ -37,6 +37,8 @@ export interface SquireSurfaceInput {
   message: string;
   incidentId?: string;
   pageContext?: SquireRequest['pageContext'];
+  /** Earlier turns (a chat thread). Trimmed by the request schema; unproven assistant turns are dropped. */
+  history?: SquireRequest['history'];
 }
 
 const DEFAULT_TIMEOUT_MS = 45_000;
@@ -47,7 +49,13 @@ const MAX_PROPOSALS = 2;
 export async function collectSquireTurn(
   actor: AuthorizationActor,
   input: SquireSurfaceInput,
-  options: { timeoutMs?: number; signal?: AbortSignal; scope?: SquireTurnScope } = {}
+  options: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    scope?: SquireTurnScope;
+    /** Sees every event as it arrives, for surfaces that show progress. Must not throw. */
+    onEvent?: (event: SquireEvent) => void;
+  } = {}
 ): Promise<SquireSurfaceAnswer> {
   const answer: SquireSurfaceAnswer = {
     name: 'Squire',
@@ -61,6 +69,7 @@ export async function collectSquireTurn(
     message: input.message.slice(0, SQUIRE_LIMITS.messageMax),
     ...(input.incidentId ? { incidentId: input.incidentId } : {}),
     ...(input.pageContext ? { pageContext: input.pageContext } : {}),
+    ...(input.history?.length ? { history: input.history } : {}),
   });
   if (!parsed.success) return { ...answer, error: 'Ask a question of up to 2,000 characters.' };
 
@@ -72,6 +81,7 @@ export async function collectSquireTurn(
   try {
     for await (const event of events) {
       if (controller.signal.aborted) break;
+      options.onEvent?.(event);
       switch (event.type) {
         case 'meta':
           answer.name = event.name;

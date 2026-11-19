@@ -44,7 +44,9 @@ export async function executeChatOpsPostmortemCommand(input: {
             ? 'ESCALATION'
             : event.type === 'MANUAL_RESOLVED' || event.type === 'AUTO_RESOLVED'
               ? 'RESOLUTION'
-              : 'DETECTION',
+              : event.type === 'CHAT_MESSAGE'
+                ? 'MITIGATION'
+                : 'DETECTION',
         title: event.message.slice(0, 60),
         description: event.message,
         actor: 'System',
