@@ -39,6 +39,8 @@ export type DetailTabItem = {
   count?: number | string;
   badge?: ReactNode;
   content?: ReactNode;
+  /** Keep the content mounted (hidden) while another tab is active, preserving unsaved state. */
+  keepMounted?: boolean;
   disabled?: boolean;
 };
 
@@ -254,8 +256,10 @@ export default function DetailTabs({
                 <TabsContent
                   key={tab.id}
                   value={tab.id}
+                  forceMount={tab.keepMounted ? true : undefined}
                   className={cn(
                     'focus-visible:outline-hidden data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:slide-in-from-bottom-1 data-[state=active]:duration-200',
+                    tab.keepMounted && 'data-[state=inactive]:hidden',
                     contentClassName
                   )}
                 >
