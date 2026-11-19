@@ -5140,6 +5140,8 @@ model IntelligenceSettings {
   /// Intelligence fields (inMaintenance, recentRiskyChange, sloBurning, flapping, stormActive) as
   /// automation rule conditions, read from the 30 s pre-paging snapshot. Default off.
   automationIntelligenceFieldsEnabled Boolean @default(false)
+  /// People suggestions: cover candidates on overrides, experts on incidents, personal noise and load cards.
+  peopleInsightsEnabled       Boolean  @default(false)
   revision                    Int      @default(1)
   updatedBy                   String?
   createdAt                   DateTime @default(now())

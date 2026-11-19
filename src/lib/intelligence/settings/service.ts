@@ -84,6 +84,8 @@ export type IntelligenceSettingsView = {
   opsHelpersEnabled: boolean;
   /** Intelligence fields as automation rule conditions, from the pre-paging snapshot. */
   automationIntelligenceFieldsEnabled: boolean;
+  /** People suggestions: override cover candidates, incident experts, personal load and noise cards. */
+  peopleInsightsEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -112,6 +114,7 @@ const SETTINGS_SELECT = {
   runbookFixWindowMinutes: true,
   opsHelpersEnabled: true,
   automationIntelligenceFieldsEnabled: true,
+  peopleInsightsEnabled: true,
   revision: true,
 } as const;
 
