@@ -14,9 +14,12 @@ import InsightsPanel from './InsightsPanel';
 export default async function InsightsInboxSection({
   actor,
   limit = 10,
+  resolveHref,
 }: {
   actor: AuthorizationActor;
   limit?: number;
+  /** Rewrites each insight's links, for example to their `/m` routes on the mobile page. */
+  resolveHref?: (href: string) => string;
 }) {
   let inbox: Awaited<ReturnType<typeof listInsightsInbox>>;
   try {
@@ -28,6 +31,13 @@ export default async function InsightsInboxSection({
     return null;
   }
   if (inbox.items.length === 0) return null;
+  const items = resolveHref
+    ? inbox.items.map(item => ({
+        ...item,
+        scopeHref: item.scopeHref && resolveHref(item.scopeHref),
+        draftHref: item.draftHref && resolveHref(item.draftHref),
+      }))
+    : inbox.items;
   // The assistant hand-off only shows while Squire is on; a failed status read just hides it.
   const squire = await getAiPublicStatus().catch(() => null);
   return (
@@ -37,7 +47,7 @@ export default async function InsightsInboxSection({
       description="What OpsKnight noticed about your services, policies, schedules and runbooks. Each one links to where a person can fix it; nothing changes on its own."
     >
       <InsightsPanel
-        insights={inbox.items}
+        insights={items}
         canDecide={hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_FEEDBACK)}
         squireName={squire?.squireEnabled ? squire.squireName : null}
         label="Operations insights that need attention"

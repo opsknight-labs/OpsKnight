@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { NoiseSection, SECTION_TITLES } from '@/app/(app)/intelligence/sections';
+import InsightsInboxSection from '@/components/intelligence/insights/InsightsInboxSection';
 import NeedsAttention from '@/components/intelligence/overview/NeedsAttention';
 import WindowSelector from '@/components/intelligence/overview/WindowSelector';
 import { SectionSkeleton } from '@/components/intelligence/overview/primitives';
@@ -36,7 +37,7 @@ async function MobileAttention({ actor }: { actor: AuthorizationActor }) {
 }
 
 /**
- * Mobile AIOps: the overview's Needs-attention inbox and Noise section, from the same loaders as the
+ * Mobile AIOps: the overview's Needs-attention inbox, the operations-insights inbox and the Noise section, from the same loaders as the
  * desktop page. The remaining sections stay on the desktop overview.
  */
 export default async function MobileIntelligencePage({
@@ -71,6 +72,10 @@ export default async function MobileIntelligencePage({
 
       <Suspense fallback={null}>
         <MobileAttention actor={actor} />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <InsightsInboxSection actor={actor} resolveHref={mobileHref} />
       </Suspense>
 
       <Suspense
