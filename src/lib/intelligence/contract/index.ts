@@ -61,6 +61,8 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   runbookFixWindowMinutes: 120,
   opsHelpersEnabled: false,
   automationIntelligenceFieldsEnabled: false,
+  warRoomKickoffEnabled: false,
+  warRoomCaptureEnabled: false,
 } as const;
 
 const bounded = (range: { min: number; max: number }) =>
@@ -95,6 +97,8 @@ export const intelligenceSettingsInputSchema = z
     // A save that omits it (an older API client) leaves the stored switch as it is.
     opsHelpersEnabled: z.boolean().optional(),
     automationIntelligenceFieldsEnabled: z.boolean().optional(),
+    warRoomKickoffEnabled: z.boolean().optional(),
+    warRoomCaptureEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()

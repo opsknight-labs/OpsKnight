@@ -84,6 +84,10 @@ export type IntelligenceSettingsView = {
   opsHelpersEnabled: boolean;
   /** Intelligence fields as automation rule conditions, from the pre-paging snapshot. */
   automationIntelligenceFieldsEnabled: boolean;
+  /** One deterministic kickoff message (similar incidents, causes, runbooks) when a war room opens. */
+  warRoomKickoffEnabled: boolean;
+  /** War-room channel messages saved to the incident timeline, bounded and redacted. */
+  warRoomCaptureEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -112,6 +116,8 @@ const SETTINGS_SELECT = {
   runbookFixWindowMinutes: true,
   opsHelpersEnabled: true,
   automationIntelligenceFieldsEnabled: true,
+  warRoomKickoffEnabled: true,
+  warRoomCaptureEnabled: true,
   revision: true,
 } as const;
 

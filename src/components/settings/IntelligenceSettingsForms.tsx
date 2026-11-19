@@ -50,6 +50,8 @@ type SettingsValues = {
   handoffSummaryEnabled: boolean;
   opsHelpersEnabled: boolean;
   automationIntelligenceFieldsEnabled: boolean;
+  warRoomKickoffEnabled: boolean;
+  warRoomCaptureEnabled: boolean;
   revision: number;
 };
 
@@ -184,6 +186,47 @@ export function IntelligenceSettingsForm({
             Adds In maintenance, Recent risky change, SLO burning, Flapping and Storm active as rule
             conditions. Values come from a snapshot refreshed every 30 seconds; until it loads they
             read as unknown and no rule matches on them.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${enabledId}-war-room-kickoff`}
+          name="warRoomKickoffEnabled"
+          type="checkbox"
+          defaultChecked={settings.warRoomKickoffEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <div>
+          <label htmlFor={`${enabledId}-war-room-kickoff`} className="text-sm font-medium">
+            Post a kickoff message in new war rooms
+          </label>
+          <p className="text-xs text-muted-foreground">
+            When a Slack war room opens, posts one message with similar past incidents, likely
+            causes and recommended runbooks already found for the incident. Deterministic; nothing
+            is posted when nothing was found, and private incidents are never named.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${enabledId}-war-room-capture`}
+          name="warRoomCaptureEnabled"
+          type="checkbox"
+          defaultChecked={settings.warRoomCaptureEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <div>
+          <label htmlFor={`${enabledId}-war-room-capture`} className="text-sm font-medium">
+            Save war-room messages to the incident timeline
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Saves people&apos;s messages in an incident&apos;s Slack war room to its timeline, so
+            the time axis and postmortem draft include the discussion. Secrets are redacted; at most
+            2,000 messages of 4 KB each per incident. Private channels are saved only for private
+            incidents.
           </p>
         </div>
       </div>

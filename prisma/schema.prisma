@@ -364,6 +364,7 @@ enum IncidentEventType {
   RUNBOOK_SKIPPED
   RUNBOOK_VERIFIED
   RUNBOOK_UNVERIFIED
+  CHAT_MESSAGE
 }
 
 enum ActionItemStatus {
@@ -5140,6 +5141,10 @@ model IntelligenceSettings {
   /// Intelligence fields (inMaintenance, recentRiskyChange, sloBurning, flapping, stormActive) as
   /// automation rule conditions, read from the 30 s pre-paging snapshot. Default off.
   automationIntelligenceFieldsEnabled Boolean @default(false)
+  /// Post one deterministic kickoff message (similar incidents, likely causes, runbooks) when a war room opens.
+  warRoomKickoffEnabled       Boolean  @default(false)
+  /// Save war-room channel messages to the incident timeline (bounded, secrets redacted). Default off.
+  warRoomCaptureEnabled       Boolean  @default(false)
   revision                    Int      @default(1)
   updatedBy                   String?
   createdAt                   DateTime @default(now())
