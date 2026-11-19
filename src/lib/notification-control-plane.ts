@@ -1588,6 +1588,10 @@ function isSafeEmailFailoverCondition(result: DeliveryResult): boolean {
   return false;
 }
 
+function isClientRejectionStatus(statusCode: number | undefined): boolean {
+  return typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500;
+}
+
 function isPermanentProviderError(message: string): boolean {
   return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|authentication failed|invalid (?:api )?(?:key|credentials)|unauthorized|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded/i.test(
     message
@@ -2858,7 +2862,9 @@ async function deliverCentralNotificationOwned(
       result.errorCode === 'UNKNOWN' ||
       result.errorCode === 'ETIMEDOUT' ||
       result.errorCode === 'ECONNRESET' ||
-      isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`);
+      // A 4xx is a definitive refusal; its text (e.g. SMTP "550 User unknown") is not ambiguity.
+      (!isClientRejectionStatus(result.statusCode) &&
+        isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`));
 
     if (isAmbiguous) {
       const reconciliationDeadline = new Date(Date.now() + UNKNOWN_RECONCILIATION_DELAY_MS);
