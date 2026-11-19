@@ -375,6 +375,12 @@ export default function IncidentsListTable({
   if (prevIncidents !== incidents) {
     setPrevIncidents(incidents);
     setDisplayedIncidents(incidents);
+    // Drop selections that left the list (page/filter change) so bulk actions
+    // never touch incidents the user can no longer see.
+    const visibleIds = new Set(incidents.map(i => i.id));
+    if ([...selectedIds].some(id => !visibleIds.has(id))) {
+      setSelectedIds(new Set([...selectedIds].filter(id => visibleIds.has(id))));
+    }
   }
 
   const displayedIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));

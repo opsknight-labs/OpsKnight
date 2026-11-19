@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import IncidentsListTable from '@/components/incident/IncidentsListTable';
 import type { IncidentListItem } from '@/types/incident-list';
+import { updateIncidentStatus } from '@/app/(app)/incidents/actions';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -265,5 +266,57 @@ describe('IncidentsListTable', () => {
     fireEvent.keyDown(window, { key: 'j' });
     fireEvent.keyDown(window, { key: 'x' });
     expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull();
+  });
+
+  function makeIncident(id: string, status: IncidentListItem['status'] = 'OPEN'): IncidentListItem {
+    return {
+      id,
+      title: `Incident ${id}`,
+      status,
+      escalationStatus: null,
+      currentEscalationStep: null,
+      nextEscalationAt: null,
+      priority: 'P2',
+      urgency: 'HIGH',
+      createdAt: new Date(),
+      slaPausedMs: 0,
+      slaAckTargetMs: null,
+      slaResolveTargetMs: null,
+      slaTargetSource: null,
+      slaTargetCapturedAt: null,
+      slaPauseStartedAt: null,
+      slaAckElapsedMs: null,
+      slaResolveElapsedMs: null,
+      assigneeId: null,
+      teamId: null,
+      service: { id: 'svc-1', name: 'API Gateway' },
+      team: null,
+      assignee: null,
+    };
+  }
+
+  it('clears selections that leave the list when the page changes', () => {
+    const { rerender } = render(
+      <IncidentsListTable incidents={[makeIncident('page1-a')]} users={[]} canManageIncidents />
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: /select incident/i }));
+    expect(screen.getByRole('button', { name: 'Resolve' })).toBeDefined();
+
+    rerender(
+      <IncidentsListTable incidents={[makeIncident('page2-a')]} users={[]} canManageIncidents />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Resolve' })).toBeNull();
+  });
+
+  it('sends the displayed status as expectedStatus for row status changes', async () => {
+    render(
+      <IncidentsListTable incidents={[makeIncident('inc-row', 'OPEN')]} users={[]} canManageIncidents />
+    );
+    fireEvent.click(screen.getByTitle('Acknowledge Incident'));
+
+    await waitFor(() =>
+      expect(updateIncidentStatus).toHaveBeenCalledWith('inc-row', 'ACKNOWLEDGED', 'OPEN')
+    );
   });
 });
