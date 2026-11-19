@@ -114,6 +114,23 @@ describe('application theme contract', () => {
     expect(sources.tailwind).toContain('rgb(var(--ink-${shade}) / <alpha-value>)');
   });
 
+  it('pairs inverse foregrounds with dark backgrounds for inline chrome controls', () => {
+    const inverse = sources.styles.split('.ok-inverse-surface {')[1].split('}')[0];
+    const dark = sources.styles.split("[data-theme='dark'] {")[1].split('}')[0];
+    const tokens = (css: string) =>
+      Object.fromEntries([...css.matchAll(/(--ui-[\w-]+):\s*([^;]+);/g)].map(m => [m[1], m[2]]));
+    const inverseTokens = tokens(inverse);
+    const darkTokens = tokens(dark);
+    for (const surface of ['background', 'card', 'popover', 'secondary', 'accent']) {
+      expect(inverseTokens[`--ui-${surface}`], surface).toBe(darkTokens[`--ui-${surface}`]);
+      const foreground = surface === 'background' ? 'foreground' : `${surface}-foreground`;
+      expect(inverseTokens[`--ui-${foreground}`], foreground).toBe(
+        darkTokens[`--ui-${foreground}`]
+      );
+    }
+    expect(inverseTokens['--ui-input']).toBe(inverseTokens['--ui-border']);
+  });
+
   it('gives every element a themed default border colour', () => {
     expect(sources.styles).toMatch(
       /\*,\s*::before,\s*::after \{\s*border-color: hsl\(var\(--ui-border\)\);/
