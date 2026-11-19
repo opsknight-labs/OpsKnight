@@ -14,6 +14,7 @@ import {
 import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { findTeamDeletionBlocker } from '@/lib/teams/administration';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
 export const GET = withV2Observability(async function GET(
@@ -163,6 +164,11 @@ export const DELETE = withV2Observability(async function DELETE(
         code: 'TEAM_HAS_SERVICES',
         userMessage: `Cannot delete team '${team.name}' because ${team._count.services} service(s) are assigned to it. Reassign those services first.`,
       });
+    }
+
+    const blocker = await findTeamDeletionBlocker(id);
+    if (blocker) {
+      throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: blocker });
     }
 
     await prisma.$transaction(async tx => {
