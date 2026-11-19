@@ -352,41 +352,45 @@ export type PrometheusAlert = z.infer<typeof PrometheusAlertSchema>;
 // New Relic
 // ============================================
 
-export const NewRelicEventSchema = z.object({
-  account_id: z.number().optional(),
-  account_name: z.string().optional(),
-  event_type: z.string().optional(),
-  incident: z
-    .object({
-      id: z.string(),
-      title: z.string(),
-      state: z.string().optional(),
-      severity: z.string().optional(),
-      created_at: z.string().optional(),
-      updated_at: z.string().optional(),
-      condition_name: z.string().optional(),
-      condition_id: z.number().optional(),
-      policy_name: z.string().optional(),
-      policy_id: z.number().optional(),
-    })
-    .optional(),
-  alert: z
-    .object({
-      id: z.string(),
-      alert_policy_name: z.string(),
-      alert_condition_name: z.string(),
-      severity: z.string(),
-      timestamp: z.number(),
-      state: z.string().optional(),
-      message: z.string().optional(),
-    })
-    .optional(),
-  alertType: z.string().optional(),
-  alertSeverity: z.string().optional(),
-  alertTitle: z.string().optional(),
-  alertMessage: z.string().optional(),
-  alertTimestamp: z.number().optional(),
-});
+export const NewRelicEventSchema = z
+  .object({
+    account_id: z.number().optional(),
+    account_name: z.string().optional(),
+    event_type: z.string().optional(),
+    incident: z
+      .object({
+        id: z.string(),
+        title: z.string(),
+        state: z.string().optional(),
+        severity: z.string().optional(),
+        created_at: z.string().optional(),
+        updated_at: z.string().optional(),
+        condition_name: z.string().optional(),
+        condition_id: z.number().optional(),
+        policy_name: z.string().optional(),
+        policy_id: z.number().optional(),
+      })
+      .optional(),
+    alert: z
+      .object({
+        id: z.string(),
+        alert_policy_name: z.string(),
+        alert_condition_name: z.string(),
+        severity: z.string(),
+        timestamp: z.number(),
+        state: z.string().optional(),
+        message: z.string().optional(),
+      })
+      .optional(),
+    alertType: z.string().optional(),
+    alertSeverity: z.string().optional(),
+    alertTitle: z.string().optional(),
+    alertMessage: z.string().optional(),
+    alertTimestamp: z.number().optional(),
+  })
+  // Workflow ({issueId, state, title, priority}) and legacy channel ({incident_id, current_state})
+  // payloads carry their own keys; keep them for the transformer.
+  .passthrough();
 
 export type NewRelicEvent = z.infer<typeof NewRelicEventSchema>;
 

@@ -33,7 +33,24 @@ export type NewRelicEvent = {
   alertTitle?: string;
   alertMessage?: string;
   alertTimestamp?: number;
+  [key: string]: unknown;
 };
+
+type Action = 'trigger' | 'resolve' | 'acknowledge';
+
+function text(value: unknown): string | undefined {
+  if (Array.isArray(value)) return text(value[0]);
+  if (typeof value === 'number') return String(value);
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+// Workflow states: CREATED/ACTIVATED/ACKNOWLEDGED/CLOSED; legacy current_state: open/acknowledged/closed.
+function stateAction(state: string | undefined): Action {
+  const value = state?.toLowerCase();
+  if (value === 'closed' || value === 'resolved') return 'resolve';
+  if (value === 'acknowledged') return 'acknowledge';
+  return 'trigger';
+}
 
 export function transformNewRelicToEvent(payload: NewRelicEvent): {
   event_action: 'trigger' | 'resolve' | 'acknowledge';
@@ -150,6 +167,28 @@ export function transformNewRelicToEvent(payload: NewRelicEvent): {
       },
     };
   }
+  // Workflow (issueId/id + state) and legacy channel (incident_id + current_state) formats
+  const issueId = text(payload.issueId) || text(payload.incident_id) || text(payload.id);
+  const state = text(payload.state) || text(payload.current_state);
+  if (issueId && state) {
+    const summary =
+      text(payload.title) ||
+      text(payload.condition_name) ||
+      text(payload.alertConditionNames) ||
+      text(payload.details) ||
+      'New Relic Alert';
+    return {
+      event_action: stateAction(state),
+      dedup_key: `newrelic-${issueId}`,
+      payload: {
+        summary,
+        source: `New Relic${payload.account_name ? ` - ${payload.account_name}` : ''}`,
+        severity: normalizeSeverity(text(payload.priority) || text(payload.severity), 'warning'),
+        custom_details: payload,
+      },
+    };
+  }
+
   // Fallback for unsupported payload formats - return acknowledge instead of throwing
   // Use account info for stable dedup key (avoids Date.now() which defeats dedup)
   return {
