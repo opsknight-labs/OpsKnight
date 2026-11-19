@@ -404,7 +404,7 @@ describe('ChatOps War-Room Engine', () => {
       expect(retryModule.retryFetch).not.toHaveBeenCalled();
     });
 
-    it('should delegate private-incident Slack war-room requests to the provider (which enforces PRIVATE)', async () => {
+    it('should request standard Slack war-room even when incident is private (Slack war rooms are open to org)', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-private-123',
         title: 'Confidential Incident',

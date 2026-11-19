@@ -122,7 +122,7 @@ describe('requestMicrosoftTeamsWarRoom durable request boundary', () => {
     );
   });
 
-  it('performs zero external I/O for PRIVATE incident and provisions a PRIVATE channel', async () => {
+  it('performs zero external I/O for PRIVATE incident and provisions STANDARD channel open to team', async () => {
     mockTx.incident.findUnique.mockResolvedValue({
       id: 'inc-priv',
       status: 'OPEN',
@@ -147,13 +147,13 @@ describe('requestMicrosoftTeamsWarRoom durable request boundary', () => {
     expect(mockTx.incidentWarRoom.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          membershipType: 'PRIVATE',
+          membershipType: 'STANDARD',
         }),
       })
     );
   });
 
-  it('fails closed for a PRIVATE incident when neither a chat link nor an organizer can own the private channel', async () => {
+  it('provisions standard war room without requiring private channel owner even if neither chat link nor organizer is configured', async () => {
     mockTx.incident.findUnique.mockResolvedValue({
       id: 'inc-priv',
       status: 'OPEN',
@@ -181,12 +181,12 @@ describe('requestMicrosoftTeamsWarRoom durable request boundary', () => {
       membershipType: 'STANDARD',
     });
 
-    expect(result).toEqual({ accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' });
+    expect(result).toMatchObject({ accepted: true, warRoomId: 'room-1' });
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(mockTx.backgroundJob.create).not.toHaveBeenCalled();
+    expect(mockTx.backgroundJob.create).toHaveBeenCalled();
   });
 
-  it('never downgrades a PRIVATE incident to a STANDARD Team channel, even when STANDARD is requested', async () => {
+  it('allows STANDARD war room on PRIVATE incident to ensure bot roster and public bridge availability', async () => {
     mockTx.incident.findUnique.mockResolvedValue({
       id: 'inc-priv',
       status: 'OPEN',
@@ -208,10 +208,6 @@ describe('requestMicrosoftTeamsWarRoom durable request boundary', () => {
       defaultMeetingOrganizerUpn: null,
     });
 
-    mockTx.chatIdentityLink.findMany.mockResolvedValue([
-      { userId: 'user-lead', providerUserId: 'aad-lead', providerObjectId: 'obj-lead' },
-    ]);
-
     const result = await requestMicrosoftTeamsWarRoom('inc-priv', {
       manual: true,
       allowNewGeneration: true,
@@ -220,13 +216,5 @@ describe('requestMicrosoftTeamsWarRoom durable request boundary', () => {
 
     expect(result).toMatchObject({ accepted: true, warRoomId: 'room-1' });
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(mockTx.incidentWarRoom.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          membershipType: 'PRIVATE',
-          metadata: { privateOwnerUserId: 'user-lead', privateOwnerObjectId: 'obj-lead' },
-        }),
-      })
-    );
   });
 });

@@ -238,12 +238,13 @@ export async function requestSlackWarRoom(
 
     // Reuse the incident read in this same SERIALIZABLE transaction. A second
     // read cannot observe a newer committed incident within this snapshot.
-    // PRIVATE incidents must get PRIVATE channels (policy confidentiality boundary).
+    // Slack war rooms are always open to the entire organization regardless of
+    // status-page public/private visibility.
     const decision = evaluateWarRoomPolicy({
       incident: {
         urgency: incident.urgency,
         priority: incident.priority,
-        visibility: incident.visibility,
+        visibility: 'PUBLIC',
       },
       service: { autoCreate: effectiveAutoCreate },
       destination,
@@ -280,7 +281,7 @@ export async function requestSlackWarRoom(
         },
         data: {
           providerTenantId: slackWorkspaceId,
-          membershipType: decision.membershipType,
+          membershipType: 'STANDARD',
         },
       });
       await tx.backgroundJob.create({
@@ -871,8 +872,8 @@ export async function provisionSlackWarRoom(
   const effectiveChannelName = plannedForCreate;
   const createResult = await slackApiCall('conversations.create', botToken, {
     name: effectiveChannelName,
-    // PRIVATE incidents get private channels; everything else is open to the org.
-    is_private: room.membershipType === 'PRIVATE' || room.incident.visibility === 'PRIVATE',
+    // Slack war-room channels are open to all responders in the organization
+    is_private: false,
   });
 
   if (!createResult.ok) {

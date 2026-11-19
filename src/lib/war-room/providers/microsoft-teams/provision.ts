@@ -106,15 +106,14 @@ export async function requestMicrosoftTeamsWarRoom(
       !canonicalPolicy.isCollaborationDisabled
     );
 
-    // Teams war rooms are standard channels open to the Team so the bot can post
-    // cards. PRIVATE incidents are the exception: their access is limited to the
-    // assignee/watchers/on-call, so they get a private channel even though the
-    // bot may then be locked out of it (BotNotInConversationRoster is non-retryable).
+    // Teams war rooms are open to the Team (standard channel) so that
+    // the Bot can post Adaptive Cards, sync responders, and display the meeting bridge
+    // without hitting Microsoft Teams' BotNotInConversationRoster private-channel lockout.
     const decision = evaluateWarRoomPolicy({
       incident: {
         urgency: incident.urgency,
         priority: incident.priority,
-        visibility: incident.visibility,
+        visibility: 'PUBLIC',
       },
       service: { autoCreate: effectiveAutoCreate },
       destination: destination
@@ -188,7 +187,7 @@ export async function requestMicrosoftTeamsWarRoom(
           installationId: destination.installationId,
           providerTenantId: destination.tenantId,
           providerContainerId: destination.teamId,
-          membershipType: decision.membershipType,
+          membershipType: 'STANDARD',
           ...(privateOwner
             ? {
                 metadata: {

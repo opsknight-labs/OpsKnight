@@ -48,7 +48,7 @@ export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
   usesChatOpsPolicy: true,
   capabilities: {
     createRoom: true,
-    privateRooms: true,
+    privateRooms: false,
     manageMembers: true,
     updateRoom: true,
     archiveRoom: true,
