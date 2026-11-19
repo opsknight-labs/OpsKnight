@@ -21,6 +21,7 @@ import { Button, FormField } from '@/components/ui';
 import { Badge } from '@/components/ui/shadcn/badge';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
 import StatusDraftSuggestions from '@/components/status-page/StatusDraftSuggestions';
+import StatusUpdateCadence from '@/components/status-page/StatusUpdateCadence';
 import {
   Dialog,
   DialogContent,
@@ -70,6 +71,10 @@ interface StatusPageAnnouncementManagerProps {
   setAnnouncements: React.Dispatch<React.SetStateAction<AnnouncementItem[]>>;
   allServices?: AnnouncementService[];
   browserTimeZone: string;
+  /** Opened from an incident's "Post status update": open the composer filled from that incident's draft. */
+  draftIncidentId?: string;
+  /** Minutes between updates while an incident is open; null means the 30 minute default. */
+  updateCadenceMinutes?: number | null;
 }
 
 type FilterTab = 'all' | 'active' | 'scheduled' | 'concluded' | 'draft';
@@ -183,12 +188,18 @@ export default function StatusPageAnnouncementManager({
   setAnnouncements,
   allServices = [],
   browserTimeZone,
+  draftIncidentId,
+  updateCadenceMinutes = null,
 }: StatusPageAnnouncementManagerProps) {
   const [isPending, startTransition] = useTransition();
   const [announcementError, setAnnouncementError] = useState<string | null>(null);
 
   // Dialog / Modal Composer State
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(Boolean(draftIncidentId));
+  // The incident the composer was opened for (deep link); cleared once that update is published.
+  const [fromIncidentId, setFromIncidentId] = useState(draftIncidentId);
+  // The incident whose draft filled the form; the announcement is linked to it.
+  const [linkedIncidentId, setLinkedIncidentId] = useState<string | null>(null);
 
   // Form State
   const [title, setTitle] = useState('');
@@ -418,6 +429,7 @@ export default function StatusPageAnnouncementManager({
     setEndDate('');
     setEndTime('');
     setAffectedServiceIds([]);
+    setLinkedIncidentId(null);
     setIsActive(true);
     setPublishOption('NOW');
     setNotificationTiming('ON_PUBLISH');
@@ -473,6 +485,7 @@ export default function StatusPageAnnouncementManager({
             notificationTiming,
             isActive: publishOption === 'NOW' ? isActive : true,
             affectedServiceIds: affectedServiceIds.length > 0 ? affectedServiceIds : null,
+            incidentId: linkedIncidentId,
           }),
         });
 
@@ -512,6 +525,7 @@ export default function StatusPageAnnouncementManager({
         }
 
         setIsCreateOpen(false);
+        setFromIncidentId(undefined);
         resetForm();
       } catch (err) {
         setAnnouncementError(getUserFacingErrorMessage(err) || 'Failed to create announcement');
@@ -560,6 +574,7 @@ export default function StatusPageAnnouncementManager({
         title="Status Page Announcements"
         description="Communicate scheduled maintenance windows, active incidents, and service updates to subscribers and visitors."
         icon={<Megaphone className="w-5 h-5 text-primary" />}
+        footer={<StatusUpdateCadence statusPageId={statusPageId} minutes={updateCadenceMinutes} />}
         action={
           <Button
             type="button"
@@ -960,7 +975,13 @@ export default function StatusPageAnnouncementManager({
         )}
       </div>
 
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+      <Dialog
+        open={isCreateOpen}
+        onOpenChange={open => {
+          setIsCreateOpen(open);
+          if (!open) setFromIncidentId(undefined);
+        }}
+      >
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
           <DialogHeader className="shrink-0 pb-2">
             <div className="flex items-center gap-2.5">
@@ -984,8 +1005,10 @@ export default function StatusPageAnnouncementManager({
                 {isCreateOpen && (
                   <StatusDraftSuggestions
                     statusPageId={statusPageId}
+                    incidentId={fromIncidentId}
                     onApply={draft => {
                       const offered = new Set(allServices.map(service => service.id));
+                      setLinkedIncidentId(draft.incidentId);
                       setTitle(draft.title);
                       setMessage(draft.message);
                       setType(draft.type);

@@ -84,6 +84,8 @@ export type IntelligenceSettingsView = {
   opsHelpersEnabled: boolean;
   /** Intelligence fields as automation rule conditions, from the pre-paging snapshot. */
   automationIntelligenceFieldsEnabled: boolean;
+  /** Top similar incident, likely change and best runbook in page notifications (precomputed by the lane). */
+  pageContextEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -112,6 +114,7 @@ const SETTINGS_SELECT = {
   runbookFixWindowMinutes: true,
   opsHelpersEnabled: true,
   automationIntelligenceFieldsEnabled: true,
+  pageContextEnabled: true,
   revision: true,
 } as const;
 

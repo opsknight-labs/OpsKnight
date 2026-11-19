@@ -76,6 +76,7 @@ export async function saveIntelligenceSettings(
         opsHelpersEnabled: form.get('opsHelpersEnabled') === 'on',
         automationIntelligenceFieldsEnabled:
           form.get('automationIntelligenceFieldsEnabled') === 'on',
+        pageContextEnabled: form.get('pageContextEnabled') === 'on',
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }

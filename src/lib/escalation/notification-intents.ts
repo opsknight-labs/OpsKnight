@@ -133,6 +133,8 @@ export type EscalationNotificationIncident = {
   service?: { id?: string; name?: string | null } | null;
   assignee?: { id?: string; name?: string | null; email?: string | null } | null;
   team?: { id?: string; name?: string | null } | null;
+  /** Precomputed leads on the incident row; the executor's full-row read already has it. */
+  pageContext?: unknown;
 };
 
 /**

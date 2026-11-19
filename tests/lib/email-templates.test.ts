@@ -81,18 +81,42 @@ describe('Dynamic Colorful Incident Email Templates', () => {
   });
 
   it('generates a Cobalt template for updated incidents', async () => {
-    const html = await generateIncidentEmailHTML({ ...baseIncident, urgency: 'LOW' }, 'UTC', 'updated');
+    const html = await generateIncidentEmailHTML(
+      { ...baseIncident, urgency: 'LOW' },
+      'UTC',
+      'updated'
+    );
     expectHeaderTone(html, 'info');
     expect(html).toContain('Updated');
+  });
+
+  it('lists precomputed page leads as detail rows', async () => {
+    const html = await generateIncidentEmailHTML(
+      {
+        ...baseIncident,
+        leads: [{ label: 'Likely change', value: 'https://ops.example/changes/chg_1' }],
+      },
+      'UTC',
+      'triggered'
+    );
+    expect(html).toContain('Likely change');
+    expect(html).toContain('https://ops.example/changes/chg_1');
   });
 
   it('renders a 640px Outlook ghost table with responsive and big-screen tiers', async () => {
     const html = await generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
 
     expect(html).toContain('max-width:640px');
-    expect(html).toContain('<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640"');
+    expect(html).toContain(
+      '<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640"'
+    );
     expect(html).toContain('name="viewport"');
-    for (const hook of ['mobile-container', 'mobile-outer-padding', 'mobile-table-cell', 'mobile-table-label'])
+    for (const hook of [
+      'mobile-container',
+      'mobile-outer-padding',
+      'mobile-table-cell',
+      'mobile-table-label',
+    ])
       expect(html).toContain(hook);
     expect(html).toContain('.desktop-container{max-width:1080px!important');
     expect(html).toContain('.desktop-container{max-width:1180px!important');
@@ -310,7 +334,9 @@ describe('User Invite Email Template', () => {
     expect(result.html).toContain('Hi <!-- -->Jordan Lee<!-- -->,');
     expect(result.html).toContain('<strong class="dm-text-heading"');
     expect(result.html).toContain('Admin Team');
-    expect(result.html).toContain('Click the button below to set your password and access your account.');
+    expect(result.html).toContain(
+      'Click the button below to set your password and access your account.'
+    );
     expect(result.html).toContain('This invite link expires in <!-- -->7 days');
     expect(result.html).toContain('https://opsknight.com/invite/tok123');
     expect(result.html).toContain('@media (prefers-color-scheme:dark)');
