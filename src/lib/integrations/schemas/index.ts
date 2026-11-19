@@ -307,6 +307,7 @@ export const GrafanaAlertSchema = z.object({
         annotations: z.record(z.string()).optional(),
         startsAt: z.string(),
         endsAt: z.string().optional(),
+        fingerprint: z.string().optional(),
       })
     )
     .optional(),

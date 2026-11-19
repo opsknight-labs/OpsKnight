@@ -31,6 +31,7 @@ export type GrafanaAlert = {
     annotations?: Record<string, string>;
     startsAt: string;
     endsAt?: string;
+    fingerprint?: string;
   }>;
   status?: string;
   groupLabels?: Record<string, string>;
@@ -52,8 +53,10 @@ export type GrafanaStandardEvent = {
 export function transformGrafanaToEvent(
   payload: GrafanaAlert
 ): GrafanaStandardEvent | GrafanaStandardEvent[] {
-  // Handle new Grafana alert format
-  if (payload.state !== undefined || payload.ruleName) {
+  // Legacy (pre-unified) Grafana alert format. Unified alerting also sends top-level
+  // state/title next to alerts[], so a non-empty alerts[] always takes the per-alert path.
+  const hasAlerts = Array.isArray(payload.alerts) && payload.alerts.length > 0;
+  if (!hasAlerts && (payload.state !== undefined || payload.ruleName)) {
     const isResolved = payload.state === 'ok';
     const summary = payload.title || payload.ruleName || payload.message || 'Grafana Alert';
     // Use ruleId if available, otherwise create stable key from ruleName/title
@@ -120,9 +123,12 @@ export function transformGrafanaToEvent(
 
       const alertName = alert.labels?.alertname || 'alert';
       const instance = alert.labels?.instance;
-      const dedupKey = instance
-        ? `grafana-${alertName}-${instance}`.slice(0, 512)
-        : `grafana-${alertName}`.slice(0, 512);
+      // The fingerprint identifies the full label set, so alerts sharing an alertname stay apart.
+      const dedupKey = alert.fingerprint
+        ? `grafana-${alert.fingerprint}`.slice(0, 512)
+        : instance
+          ? `grafana-${alertName}-${instance}`.slice(0, 512)
+          : `grafana-${alertName}`.slice(0, 512);
 
       return {
         event_action: isResolved ? ('resolve' as const) : ('trigger' as const),

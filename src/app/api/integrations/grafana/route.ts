@@ -54,10 +54,12 @@ export async function POST(req: NextRequest) {
       }
 
       if (VERIFY_SIGNATURES && integration.signatureSecret) {
-        const signature = req.headers.get('x-grafana-signature');
+        // Grafana's HMAC header defaults to X-Grafana-Alerting-Signature and is configurable.
+        const signature =
+          req.headers.get('x-grafana-alerting-signature') || req.headers.get('x-grafana-signature');
         if (!signature) {
           logger.warn('api.integration.grafana_missing_signature', { integrationId });
-          return jsonError('Missing X-Grafana-Signature header', 401);
+          return jsonError('Missing X-Grafana-Alerting-Signature header', 401);
         }
         const secrets = await activeSignatureSecrets(integration);
         if (!secrets.some(secret => verifyGrafanaSignature(rawBody, signature, secret))) {
