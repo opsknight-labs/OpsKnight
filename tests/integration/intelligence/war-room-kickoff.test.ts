@@ -12,6 +12,7 @@ import {
 import {
   createTestIncident,
   createTestService,
+  createTestTeam,
   createTestUser,
   resetDatabase,
   testPrisma as db,
@@ -48,7 +49,8 @@ async function world(options: { kickoff?: boolean } = {}) {
       warRoomKickoffEnabled: options.kickoff ?? true,
     },
   });
-  const service = await createTestService('Checkout API', undefined, { name: 'Checkout API' });
+  const team = await createTestTeam('Payments');
+  const service = await createTestService('Checkout API', team.id, { name: 'Checkout API' });
   const incident = await createTestIncident('Checkout errors', service.id);
   const precedent = await createTestIncident('Checkout errors last week', service.id, {
     status: 'RESOLVED',
@@ -84,7 +86,7 @@ async function world(options: { kickoff?: boolean } = {}) {
   await finding('SIMILAR_INCIDENT', secret.id, 1);
   await finding('CHANGE_CORRELATION', change.id);
   await finding('RUNBOOK_RECOMMENDATION', runbook.id);
-  return { incident, precedent, secret, change, runbook };
+  return { team, service, incident, precedent, secret, change, runbook, finding };
 }
 
 describe('war-room kickoff', () => {
@@ -143,5 +145,46 @@ describe('war-room kickoff', () => {
     const json = JSON.stringify(blocks);
     expect(json).not.toContain('<!channel>');
     expect(json).not.toContain('<https://x|y>');
+  });
+
+  it("never posts another team's incidents, changes or runbooks, and redacts secrets", async () => {
+    const w = await world();
+    const otherTeam = await createTestTeam('Search');
+    const otherService = await createTestService('Search API', otherTeam.id, {
+      name: 'Search API',
+    });
+    const foreign = await createTestIncident('Search outage at customer acme', otherService.id, {
+      status: 'RESOLVED',
+      resolvedAt: new Date(),
+    });
+    const foreignChange = await db.changeEvent.create({
+      data: {
+        serviceId: otherService.id,
+        source: 'ci',
+        kind: 'DEPLOY',
+        summary: 'search v9',
+        dedupKey: 'run-9',
+        occurredAt: new Date(),
+      },
+    });
+    const foreignRunbook = await db.runbook.create({
+      data: { name: 'Search failover', slug: 'sf', ownerTeamId: otherTeam.id },
+    });
+    await db.changeEvent.update({
+      where: { id: w.change.id },
+      data: { summary: 'checkout v42 key AKIAIOSFODNN7EXAMPLE' },
+    });
+    await w.finding('SIMILAR_INCIDENT', foreign.id, 2);
+    await w.finding('CHANGE_CORRELATION', foreignChange.id, 1);
+    await w.finding('RUNBOOK_RECOMMENDATION', foreignRunbook.id, 1);
+
+    const json = JSON.stringify(await loadWarRoomKickoff(w.incident.id));
+    expect(json).toContain(w.precedent.id);
+    expect(json).toContain('Restart checkout pods');
+    expect(json).not.toContain('acme');
+    expect(json).not.toContain('search v9');
+    expect(json).not.toContain('Search failover');
+    expect(json).toContain('checkout v42');
+    expect(json).not.toContain('AKIAIOSFODNN7EXAMPLE');
   });
 });

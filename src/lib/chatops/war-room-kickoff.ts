@@ -6,13 +6,16 @@ import {
   resolveEffectivePolicy,
 } from '@/lib/intelligence/settings/service';
 import { escapeSlack } from '@/lib/chatops/squire/render';
+import { redactSecrets } from '@/lib/intelligence/ai/redact';
 import { slackApiCall } from '@/lib/war-room/providers/slack/client';
 
 /**
  * War-room kickoff: one deterministic message when an incident's war room opens, built only from findings the
  * intelligence engine already stored for the incident (similar incidents, likely causes, recommended
- * runbooks). No AI, no new analysis. The channel's audience is not one person, so other incidents are named
- * only when they are PUBLIC; with nothing to say, nothing is posted. Off unless an administrator turns it on.
+ * runbooks). No AI, no new analysis. The channel's audience is not one person (war rooms are public channels),
+ * so, as for a stored postmortem draft, other incidents are named only when PUBLIC and sharing a team with this
+ * one; changes and runbooks only when unowned or owned by those teams; stored text is redacted. With nothing
+ * to say, nothing is posted. Off unless an administrator turns it on.
  */
 
 export const KICKOFF_LIMITS = { similar: 3, causes: 3, runbooks: 3 } as const;
@@ -26,7 +29,7 @@ export interface WarRoomKickoff {
 type Client = typeof prisma;
 
 const clip = (text: string, max: number) => {
-  const value = text.replace(/\s+/g, ' ').trim();
+  const value = redactSecrets(text).replace(/\s+/g, ' ').trim();
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 };
 
@@ -38,9 +41,13 @@ export async function loadWarRoomKickoff(
   if (!settings.enabled || !settings.warRoomKickoffEnabled) return null;
   const incident = await client.incident.findUnique({
     where: { id: incidentId },
-    select: { serviceId: true },
+    select: { serviceId: true, teamId: true, service: { select: { teamId: true } } },
   });
   if (!incident) return null;
+  const teams = [incident.teamId, incident.service.teamId].filter(
+    (team): team is string => team !== null
+  );
+  const teamService = { service: { teamId: { in: teams } } };
   const policy = await resolveEffectivePolicy(incident.serviceId, client);
   if (policy.effectiveMode !== 'SUGGEST' && policy.effectiveMode !== 'AUTO') return null;
   const kinds = [
@@ -70,6 +77,7 @@ export async function loadWarRoomKickoff(
           where: {
             id: { in: [...similarIds, ...causeIncidentIds], not: incidentId },
             visibility: 'PUBLIC',
+            OR: [{ teamId: { in: teams } }, teamService],
           },
           select: {
             id: true,
@@ -81,13 +89,24 @@ export async function loadWarRoomKickoff(
     changeIds.length === 0
       ? []
       : client.changeEvent.findMany({
-          where: { id: { in: changeIds } },
+          where: {
+            id: { in: changeIds },
+            OR: [{ serviceId: null }, { serviceId: incident.serviceId }, teamService],
+          },
           select: { id: true, summary: true, service: { select: { name: true } } },
         }),
     runbookIds.length === 0
       ? []
       : client.runbook.findMany({
-          where: { id: { in: runbookIds }, archivedAt: null },
+          where: {
+            id: { in: runbookIds },
+            archivedAt: null,
+            OR: [
+              { ownerTeamId: null },
+              { ownerTeamId: { in: teams } },
+              { bindings: { some: { OR: [{ serviceId: incident.serviceId }, teamService] } } },
+            ],
+          },
           select: { id: true, name: true },
         }),
   ]);
