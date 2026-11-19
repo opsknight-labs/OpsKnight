@@ -71,11 +71,19 @@ export default async function PolicyDetailPage({
       include: {
         steps: {
           include: {
-            targetUser: true,
-            targetTeam: {
-              include: { teamLead: true },
+            // StepsList is a client component: select only rendered fields so user
+            // rows (passwordHash, phone numbers, token state) never reach the payload.
+            targetUser: {
+              select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
             },
-            targetSchedule: true,
+            targetTeam: {
+              select: {
+                id: true,
+                name: true,
+                teamLead: { select: { id: true, name: true, email: true } },
+              },
+            },
+            targetSchedule: { select: { id: true, name: true } },
             conditions: true,
           },
           orderBy: { stepOrder: 'asc' },
