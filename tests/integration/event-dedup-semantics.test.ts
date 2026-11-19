@@ -225,7 +225,14 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
     const service = await createTestService('Flapping release service');
     const dedupKey = `flapping-release-${Date.now()}`;
     const now = Date.now();
-    for (const action of ['trigger', 'resolve', 'trigger', 'resolve', 'trigger', 'resolve'] as const) {
+    for (const action of [
+      'trigger',
+      'resolve',
+      'trigger',
+      'resolve',
+      'trigger',
+      'resolve',
+    ] as const) {
       await fire(service.id, dedupKey, action);
     }
     await fire(service.id, dedupKey, 'trigger');
@@ -250,11 +257,15 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
     const service = await createTestService('Duplicate trigger service');
     const dedupKey = `duplicate-trigger-${Date.now()}`;
     await fire(service.id, dedupKey, 'trigger');
-    const incident = await testPrisma.incident.findFirstOrThrow({ where: { serviceId: service.id } });
+    const incident = await testPrisma.incident.findFirstOrThrow({
+      where: { serviceId: service.id },
+    });
     const before = await testPrisma.incidentEvent.count({ where: { incidentId: incident.id } });
     await fire(service.id, dedupKey, 'trigger');
     await fire(service.id, dedupKey, 'trigger');
-    expect(await testPrisma.incidentEvent.count({ where: { incidentId: incident.id } })).toBe(before);
+    expect(await testPrisma.incidentEvent.count({ where: { incidentId: incident.id } })).toBe(
+      before
+    );
     expect(await testPrisma.alert.count({ where: { incidentId: incident.id } })).toBe(3);
   });
 });

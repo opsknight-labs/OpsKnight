@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 
 const responder = { id: 'u1', role: 'RESPONDER', status: 'ACTIVE', teamIds: ['team-a'] } as const;
-const update = (teamId: string | null, actor: Parameters<typeof authorize>[0]['actor'] = responder) =>
-  authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_UPDATE, resource: { type: 'service', teamId } });
+const update = (
+  teamId: string | null,
+  actor: Parameters<typeof authorize>[0]['actor'] = responder
+) =>
+  authorize({
+    actor,
+    action: AUTHORIZATION_ACTIONS.SERVICE_UPDATE,
+    resource: { type: 'service', teamId },
+  });
 
 describe('SERVICE_UPDATE is team scoped like the UI', () => {
   it('lets a responder update only their own team services', () => {

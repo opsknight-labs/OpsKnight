@@ -52,9 +52,10 @@ export async function isIntegrationAuthorized(
     previousKey ? decryptStoredSecret(previousKey) : Promise.resolve(null),
   ]);
   const currentMatches = safeEqual(provided, currentValue);
-  const previousMatches = previousValue && previousKeyExpiresAt && previousKeyExpiresAt.getTime() > Date.now()
-    ? safeEqual(provided, previousValue)
-    : false;
+  const previousMatches =
+    previousValue && previousKeyExpiresAt && previousKeyExpiresAt.getTime() > Date.now()
+      ? safeEqual(provided, previousValue)
+      : false;
   return currentMatches || previousMatches;
 }
 

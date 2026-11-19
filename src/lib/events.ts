@@ -327,7 +327,11 @@ export async function processEvent(
         let releasedFlappingHold = false;
         if (existingIncident.status === 'SUPPRESSED') {
           const flappingHold = await tx.incidentSlaPause.findFirst({
-            where: { incidentId: existingIncident.id, endedAt: null, reason: 'flapping-suppression' },
+            where: {
+              incidentId: existingIncident.id,
+              endedAt: null,
+              reason: 'flapping-suppression',
+            },
             select: { id: true },
           });
           if (
