@@ -29,6 +29,25 @@ type SlackMessageEnvelope = {
   };
 };
 
+/**
+ * Every message in every channel the bot sits in reaches the route, so the switch is read at most once per
+ * TTL per process instead of once per message. A change takes up to the TTL to apply.
+ */
+const SWITCH_TTL_MS = 30_000;
+let captureSwitch: { on: boolean; readAt: number } | null = null;
+
+async function captureEnabled(client: typeof prisma): Promise<boolean> {
+  if (captureSwitch && Date.now() - captureSwitch.readAt < SWITCH_TTL_MS) return captureSwitch.on;
+  const settings = await getIntelligenceSettings(client);
+  captureSwitch = { on: settings.enabled && settings.warRoomCaptureEnabled, readAt: Date.now() };
+  return captureSwitch.on;
+}
+
+/** Tests flip the switch between cases. */
+export function resetCaptureSwitchCache() {
+  captureSwitch = null;
+}
+
 const str = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
 /** Cuts to a UTF-8 byte budget without splitting a character. */
@@ -77,8 +96,7 @@ export async function captureSlackChannelMessage(
     return 'NOT_A_PERSON_MESSAGE';
   const channelType = str(event.channel_type);
   if (channelType !== 'channel' && channelType !== 'group') return 'NOT_A_WAR_ROOM';
-  const settings = await getIntelligenceSettings(client);
-  if (!settings.enabled || !settings.warRoomCaptureEnabled) return 'DISABLED';
+  if (!(await captureEnabled(client))) return 'DISABLED';
   const workspaceId = str(envelope.team_id) || str(event.team);
   const incident = await findSlackIncidentForChannel(workspaceId, channel);
   if (!incident) return 'NOT_A_WAR_ROOM';

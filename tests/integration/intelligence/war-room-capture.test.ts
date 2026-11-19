@@ -7,6 +7,7 @@ import {
   CAPTURE_LIMITS,
   captureSlackChannelMessage,
   clipBytes,
+  resetCaptureSwitchCache,
 } from '@/lib/chatops/war-room-capture';
 import {
   LIFECYCLE_EVENT_WHERE,
@@ -28,6 +29,7 @@ beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
     throw new Error('Dedicated test DB required');
   await resetDatabase();
+  resetCaptureSwitchCache();
 });
 
 async function world(options: { capture?: boolean; visibility?: 'PUBLIC' | 'PRIVATE' } = {}) {
@@ -65,10 +67,18 @@ const chatRows = (incidentId: string) =>
   db.incidentEvent.findMany({ where: { incidentId, type: 'CHAT_MESSAGE' } });
 
 describe('war-room channel capture', () => {
-  it('saves nothing while the switch is off (the default)', async () => {
+  it('saves nothing while the switch is off (the default), reading the switch once per TTL', async () => {
     const w = await world({ capture: false });
     expect(await captureSlackChannelMessage(message('rolling back now'))).toBe('DISABLED');
     expect(await chatRows(w.incident.id)).toHaveLength(0);
+    // Turned on in the database, but the cached "off" holds until the TTL passes.
+    await db.intelligenceSettings.update({
+      where: { id: 'default' },
+      data: { warRoomCaptureEnabled: true },
+    });
+    expect(await captureSlackChannelMessage(message('second message'))).toBe('DISABLED');
+    resetCaptureSwitchCache();
+    expect(await captureSlackChannelMessage(message('third message'))).toBe('CAPTURED');
   });
 
   it('saves a person message as a timeline entry, with secrets redacted', async () => {
