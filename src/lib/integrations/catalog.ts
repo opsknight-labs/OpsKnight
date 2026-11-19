@@ -6,3 +6,22 @@ export const INTEGRATION_TYPES = [
   'PINGDOM', 'BETTER_UPTIME', 'UPTIME_KUMA', 'NAGIOS', 'ICINGA', 'ZABBIX', 'MANAGEENGINE',
   'PAGERDUTY', 'GITLAB', 'VERCEL', 'WEBHOOK',
 ] as const;
+
+/**
+ * Providers that cannot HMAC-sign webhook bodies (or sign with a vendor-held secret OpsKnight cannot
+ * import). A generated signing secret can never be matched by these senders, so the UI does not offer one.
+ */
+export const UNSIGNABLE_INTEGRATION_TYPES: ReadonlySet<string> = new Set([
+  'CLOUDWATCH',
+  'AZURE',
+  'DATADOG',
+  'PROMETHEUS',
+  'NEWRELIC',
+  'SENTRY',
+  'GOOGLE_CLOUD_MONITORING',
+  'SPLUNK_OBSERVABILITY',
+  'DYNATRACE',
+  'APPDYNAMICS',
+  'ELASTIC',
+  'HONEYCOMB',
+]);
