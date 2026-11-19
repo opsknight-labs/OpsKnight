@@ -19,8 +19,9 @@ async function loadStatus() {
 }
 
 /**
- * The assistant on mobile incident pages: the same launcher, lazy-loaded and full screen, with the
- * page's incident as context (read from the URL, like on desktop). Mounted only when an administrator
+ * The assistant on mobile incident and entity pages (service, team, schedule, policy, postmortem): the
+ * same launcher, lazy-loaded and full screen, with the page's entity as context (read from the URL, like
+ * on desktop; see `page-context.ts`). Mounted only when an administrator
  * has turned on both the assistant and its mobile surface; otherwise nothing is sent to the browser.
  */
 export default async function MobileSquireMount() {

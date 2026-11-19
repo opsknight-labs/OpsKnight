@@ -121,7 +121,7 @@ export async function* streamSquire(
       request.incidentId ? readIncidentForActor(actor, request.incidentId) : Promise.resolve(null),
       resolvePageContext(actor, request.pageContext),
     ]);
-    // An alert page is its incident's page, when the person may read that incident.
+    // An alert or postmortem page is its incident's page, when the person may read that incident.
     const incident =
       requestedIncident ??
       (page?.incidentId ? await readIncidentForActor(actor, page.incidentId) : null);

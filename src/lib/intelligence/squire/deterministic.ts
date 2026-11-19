@@ -7,13 +7,15 @@ import { redactSecrets } from '../ai/redact';
 import { getAiSettings } from '../ai/settings';
 import {
   incidentReadWhere,
+  postmortemReadWhere,
   runbookReadWhere,
   scheduleReadWhere,
   serviceReadWhere,
   teamReadWhere,
 } from '@/lib/authorization-filters';
 import { readChangeReference } from './references';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { actorHasCapability, type AuthorizationActor } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
 import { getRelatedIncidentsForActor } from '../correlation/view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
@@ -363,6 +365,47 @@ export async function resolvePageContext(
               ...(row.incidentId ? { incidentId: row.incidentId } : {}),
             }
           : null;
+      }
+      case 'postmortem': {
+        // Desktop URLs carry the incident id, mobile ones the postmortem id. Drafts follow the
+        // capability that guards draft postmortems.
+        const row = await prisma.postmortem.findFirst({
+          where: {
+            AND: [
+              { OR: [{ id: context.id }, { incidentId: context.id }] },
+              postmortemReadWhere(actor),
+              ...(actorHasCapability(actor, CAPABILITIES.POSTMORTEM_DRAFT_READ)
+                ? []
+                : [{ status: 'PUBLISHED' }]),
+            ],
+          },
+          select: { id: true, title: true, incidentId: true },
+        });
+        return row
+          ? {
+              kind: 'postmortem',
+              id: row.id,
+              name: redactSecrets(row.title).slice(0, 120),
+              incidentId: row.incidentId,
+            }
+          : null;
+      }
+      case 'escalation_policy': {
+        if (!actorHasCapability(actor, CAPABILITIES.POLICY_READ_ALL)) return null;
+        const row = await prisma.escalationPolicy.findUnique({
+          where: { id: context.id },
+          select: { id: true, name: true },
+        });
+        return row ? { kind: 'escalation_policy', id: row.id, name: row.name } : null;
+      }
+      case 'status_page': {
+        // The status page settings are administrator-only, like the page that links here.
+        if (!actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE)) return null;
+        const row = await prisma.statusPage.findUnique({
+          where: { id: context.id },
+          select: { id: true, name: true },
+        });
+        return row ? { kind: 'status_page', id: row.id, name: row.name } : null;
       }
     }
   } catch {

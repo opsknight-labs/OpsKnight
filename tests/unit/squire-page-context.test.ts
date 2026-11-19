@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { incidentIdFromPath, pageContextFromPath } from '@/components/squire/page-context';
+import {
+  describeSquireContext,
+  incidentIdFromPath,
+  pageContextFromPath,
+} from '@/components/squire/page-context';
 import { squireRequestSchema } from '@/lib/intelligence/squire/contract';
 
 describe('Squire page context from the URL', () => {
@@ -13,6 +17,11 @@ describe('Squire page context from the URL', () => {
     ['/runbooks/rb1/compare', { kind: 'runbook', id: 'rb1' }],
     ['/alerts/a1', { kind: 'alert', id: 'a1' }],
     ['/changes/c1', { kind: 'change', id: 'c1' }],
+    ['/postmortems/inc1', { kind: 'postmortem', id: 'inc1' }],
+    ['/m/postmortems/pm1', { kind: 'postmortem', id: 'pm1' }],
+    ['/policies/p1', { kind: 'escalation_policy', id: 'p1' }],
+    ['/m/policies/p1', { kind: 'escalation_policy', id: 'p1' }],
+    ['/settings/status-pages/sp1', { kind: 'status_page', id: 'sp1' }],
   ])('%s', (path, expected) => {
     expect(pageContextFromPath(path)).toEqual(expected);
     // Every kind the browser sends is accepted by the request contract.
@@ -27,6 +36,9 @@ describe('Squire page context from the URL', () => {
     '/runbooks/agents',
     '/runbooks/executions/x',
     '/runbooks/health',
+    '/postmortems/create',
+    '/policies/create',
+    '/m/settings/status-pages/sp1',
     '/',
     '/settings/x',
   ])('ignores %s', path => expect(pageContextFromPath(path)).toBeUndefined());
@@ -37,5 +49,12 @@ describe('Squire page context from the URL', () => {
     expect(incidentIdFromPath('/incidents/new')).toBeUndefined();
     expect(incidentIdFromPath('/m/incidents/create')).toBeUndefined();
     expect(incidentIdFromPath('/services/x')).toBeUndefined();
+  });
+
+  it('words multi-word kinds in the context chip', () => {
+    expect(describeSquireContext('/policies/p1').label).toBe('Discussing this escalation policy');
+    expect(describeSquireContext('/settings/status-pages/sp1').label).toBe(
+      'Discussing this status page'
+    );
   });
 });

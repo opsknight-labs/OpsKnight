@@ -41,7 +41,17 @@ export const squireRequestSchema = z
      */
     pageContext: z
       .object({
-        kind: z.enum(['service', 'team', 'schedule', 'runbook', 'alert', 'change']),
+        kind: z.enum([
+          'service',
+          'team',
+          'schedule',
+          'runbook',
+          'alert',
+          'change',
+          'postmortem',
+          'escalation_policy',
+          'status_page',
+        ]),
         id: z.string().trim().min(1).max(64),
       })
       .strict()

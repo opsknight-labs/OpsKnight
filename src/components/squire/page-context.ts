@@ -5,12 +5,23 @@
  * Both the desktop routes (`/services/x`) and the mobile routes (`/m/services/x`) are recognised.
  */
 
-export type SquirePageKind = 'service' | 'team' | 'schedule' | 'runbook' | 'alert' | 'change';
+export type SquirePageKind =
+  | 'service'
+  | 'team'
+  | 'schedule'
+  | 'runbook'
+  | 'alert'
+  | 'change'
+  | 'postmortem'
+  | 'escalation_policy'
+  | 'status_page';
 export type SquirePageContext = { kind: SquirePageKind; id: string };
 
 const INCIDENT = /^(?:\/m)?\/incidents\/([A-Za-z0-9_-]{1,64})(?:\/|$)/;
 const ENTITY =
-  /^(?:\/m)?\/(services|teams|schedules|runbooks|alerts|changes)\/([A-Za-z0-9_-]{1,64})(?:\/|$)/;
+  /^(?:\/m)?\/(services|teams|schedules|runbooks|alerts|changes|postmortems|policies)\/([A-Za-z0-9_-]{1,64})(?:\/|$)/;
+/** Status pages are edited only on the desktop settings page; there is no mobile route for one. */
+const STATUS_PAGE = /^\/settings\/status-pages\/([A-Za-z0-9_-]{1,64})(?:\/|$)/;
 
 /** Path segments that are pages of their own, not entity ids. */
 const RESERVED = new Set(['new', 'create', 'agents', 'executions', 'health', 'compare']);
@@ -22,6 +33,8 @@ const KINDS: Record<string, SquirePageKind> = {
   runbooks: 'runbook',
   alerts: 'alert',
   changes: 'change',
+  postmortems: 'postmortem',
+  policies: 'escalation_policy',
 };
 
 export function incidentIdFromPath(pathname: string | null | undefined): string | undefined {
@@ -32,6 +45,8 @@ export function incidentIdFromPath(pathname: string | null | undefined): string 
 export function pageContextFromPath(
   pathname: string | null | undefined
 ): SquirePageContext | undefined {
+  const statusPage = pathname?.match(STATUS_PAGE);
+  if (statusPage) return { kind: 'status_page', id: statusPage[1] };
   const match = pathname?.match(ENTITY);
   if (!match || RESERVED.has(match[2])) return undefined;
   const kind = KINDS[match[1]];
@@ -57,5 +72,5 @@ export function describeSquireContext(
     ? 'incident'
     : pageContextFromPath(pathname)?.kind;
   if (!subject) return { subject: 'general', label: 'General conversation' };
-  return { subject, label: `Discussing this ${subject}` };
+  return { subject, label: `Discussing this ${subject.replace('_', ' ')}` };
 }
