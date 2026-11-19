@@ -9,6 +9,8 @@ import { askSquireForMcp } from '@/lib/mcp/core/ask-squire';
 import { ASK_SQUIRE_SCOPES } from '@/lib/mcp/core/ask-squire-contract';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';
 import { INVESTIGATION_CASES } from '../../evals/squire/investigation-cases';
+import baseline from '../../evals/squire/baseline.json';
+import { estimateTokens } from '@/lib/intelligence/squire/investigation/engine';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import {
   createTestIncident,
@@ -146,6 +148,8 @@ beforeEach(async () => {
 });
 
 describe('Squire investigation mode (scripted model)', () => {
+  /** Estimated prompt tokens sent to the model per investigating case. */
+  const promptTokens = new Map<string, number>();
   it.each(INVESTIGATION_CASES.map(c => [c.id, c] as const))('%s', async (_id, c) => {
     const seeded = await world(c.enabled ?? true);
     const fill = (value: string | number) =>
@@ -232,6 +236,10 @@ describe('Squire investigation mode (scripted model)', () => {
     expect(events.some(event => event.type === 'error')).toBe(false);
     expect(steps.length > 0).toBe(c.expect.investigation);
     if (!c.expect.investigation) return;
+    promptTokens.set(
+      c.id,
+      model.requests.reduce((sum, request) => sum + estimateTokens(JSON.stringify(request.body)), 0)
+    );
 
     const indexes = new Set(steps.map(step => step.index));
     if (c.expect.minSteps) expect(indexes.size).toBeGreaterThanOrEqual(c.expect.minSteps);
@@ -263,6 +271,23 @@ describe('Squire investigation mode (scripted model)', () => {
     }
     // Investigation never proposes or performs a write.
     expect(events.some(event => event.type === 'proposal')).toBe(false);
+  });
+
+  // The scripted planner is deterministic, so the median is stable; raise baseline.json
+  // `investigationMedianPromptTokens` deliberately, in a reviewed commit.
+  it('keeps the median prompt size per investigation within 15% of the committed baseline', ctx => {
+    const investigating = INVESTIGATION_CASES.filter(c => c.expect.investigation);
+    if (promptTokens.size < investigating.length) ctx.skip(); // a filtered run (-t) measures a subset
+    const sorted = [...promptTokens.values()].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median =
+      sorted.length % 2 ? sorted.at(mid)! : (sorted.at(mid - 1)! + sorted.at(mid)!) / 2;
+    expect(
+      median,
+      `median investigation prompt tokens ${median} (${JSON.stringify(Object.fromEntries(promptTokens))}) vs baseline ${baseline.investigationMedianPromptTokens}; if the rise is intended, commit the new median in tests/evals/squire/baseline.json`
+    ).toBeLessThanOrEqual(
+      baseline.investigationMedianPromptTokens * (1 + baseline.maxMedianTokenRise)
+    );
   });
 
   it('streams each read step as running then finished, then the conclusion', async () => {

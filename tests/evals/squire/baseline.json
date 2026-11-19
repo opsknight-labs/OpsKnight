@@ -12,6 +12,7 @@
   "maxMedianTokenRise": 0.15,
   "medianTokensPerCase": null,
   "modelMedianPromptTokens": 10916,
+  "investigationMedianPromptTokens": 7495,
   "judge": {
     "minimumMeanScore": 3.5,
     "minimumPassRate": 0.75,
