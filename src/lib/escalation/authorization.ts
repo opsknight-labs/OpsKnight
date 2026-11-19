@@ -151,6 +151,7 @@ export async function requestIncidentEscalation(input: {
   // escalation to advance, not for a specific historical run to resume.
   const execution = await executeEscalation(input.incidentId, planned.stepIndex, {
     generation: planned.generation,
+    immediate: true,
   });
   if (planned.recordId) {
     await prisma.backgroundJob.updateMany({

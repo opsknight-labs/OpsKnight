@@ -218,6 +218,25 @@ describe('escalation lifecycle generation fencing', () => {
     expect(mocks.planEscalationNotificationIntents).toHaveBeenCalledTimes(1);
   });
 
+  it('fires a delayed step immediately for a manual escalation instead of waiting its timer', async () => {
+    const pending = () => {
+      const incident = incidentAtStart();
+      incident.service.policy.steps[0].delayMinutes = 15;
+      return { ...incident, nextEscalationAt: new Date(NOW.getTime() + 13 * 60_000) };
+    };
+    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce(pending() as never);
+    expect(await executeEscalation('inc-generation', 0, { generation: 0 })).toMatchObject({
+      outcome: 'STEP_SCHEDULED',
+      escalated: false,
+    });
+
+    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce(pending() as never);
+    vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+    expect(
+      await executeEscalation('inc-generation', 0, { generation: 0, immediate: true })
+    ).toMatchObject({ escalated: true, stepIndex: 0 });
+  });
+
   it('persists pages inside the step transaction, and delivers only after it', async () => {
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce(incidentAtStart() as never);
     vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 1 } as never);
