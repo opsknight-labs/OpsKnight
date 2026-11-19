@@ -32,9 +32,22 @@ const getRequestOrigin = (request: NextRequest): string | null => {
   }
 };
 
-/** The workspace row bound to no service is the global installation (see resolveSlackBotToken). */
-const isGlobalWorkspace = async (integrationId: string) =>
-  (await prisma.service.count({ where: { slackIntegrationId: integrationId } })) === 0;
+/**
+ * Bind a service to an existing workspace installation. Binding the global
+ * (service-less) installation would stop it counting as global and cut every
+ * other service off, so services on the global workspace stay unbound and use
+ * the global fallback instead.
+ */
+async function bindServiceToWorkspace(serviceId: string, integrationId: string) {
+  const global = await prisma.slackIntegration.findFirst({
+    where: { enabled: true, services: { none: {} } },
+    select: { id: true },
+  });
+  await prisma.service.update({
+    where: { id: serviceId },
+    data: { slackIntegrationId: global?.id === integrationId ? null : integrationId },
+  });
+}
 
 export async function GET(request: NextRequest) {
   // Default to sync/env URL initially
@@ -194,15 +207,14 @@ export async function GET(request: NextRequest) {
                 data: integrationData,
               })
             : await prisma.slackIntegration.create({ data: integrationData });
-          await prisma.service.update({
-            where: { id: serviceId },
-            data: {
-              slackIntegrationId:
-                targetWorkspace && (await isGlobalWorkspace(targetWorkspace.id))
-                  ? null
-                  : integration.id,
-            },
-          });
+          if (targetWorkspace) {
+            await bindServiceToWorkspace(serviceId, integration.id);
+          } else {
+            await prisma.service.update({
+              where: { id: serviceId },
+              data: { slackIntegrationId: integration.id },
+            });
+          }
         }
       } else {
         // Check if workspace integration already exists
@@ -211,16 +223,12 @@ export async function GET(request: NextRequest) {
         });
 
         if (existing) {
-          // Use existing integration
-          integration = existing;
-          // Binding a service to the global installation would make it non-global;
-          // an unbound service already falls back to it.
-          if (!(await isGlobalWorkspace(existing.id))) {
-            await prisma.service.update({
-              where: { id: serviceId },
-              data: { slackIntegrationId: integration.id },
-            });
-          }
+          // Refresh the installation: it may be disabled with a revoked token.
+          integration = await prisma.slackIntegration.update({
+            where: { id: existing.id },
+            data: integrationData,
+          });
+          await bindServiceToWorkspace(serviceId, integration.id);
         } else {
           // Create new integration
           integration = await prisma.slackIntegration.create({
