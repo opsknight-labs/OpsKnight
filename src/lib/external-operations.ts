@@ -25,6 +25,7 @@ import {
 const LEASE_MS = 5 * 60_000;
 const MAX_JIRA_OPERATION_ATTEMPTS = 8;
 const JIRA_PROVIDER_KEY = 'jira:workspace';
+const CREATE_FALLBACK_DELAY_MS = 60_000;
 
 export type JiraCreateOperationInput = {
   incidentId?: string;
@@ -143,11 +144,51 @@ export async function enqueueJiraCreateOperation(input: JiraCreateOperationInput
   assertExactlyOneCreateOwner(input);
   const idempotencyKey = jiraCreateKey(input);
   return prisma.$transaction(async tx => {
+    const now = new Date();
     const existing = await tx.externalOperation.findUnique({
       where: { provider_idempotencyKey: { provider: 'JIRA', idempotencyKey } },
-      select: { id: true },
+      select: { id: true, status: true, externalId: true, leaseExpiresAt: true },
     });
-    if (existing) return existing.id;
+    if (existing) {
+      if (existing.status === 'COMPLETED') {
+        const stillLinked = existing.externalId
+          ? await tx.externalIssueLink.findUnique({
+              where: {
+                provider_externalId: { provider: 'JIRA', externalId: existing.externalId },
+              },
+              select: { id: true },
+            })
+          : null;
+        if (stillLinked) return existing.id;
+        // The created issue was unlinked since. Retire the old key so this
+        // request gets its own operation (and its own correlation marker).
+        await tx.externalOperation.update({
+          where: { id: existing.id },
+          data: { idempotencyKey: `${idempotencyKey}:retired:${existing.id}` },
+        });
+      } else if (
+        existing.status === 'PROCESSING' &&
+        existing.leaseExpiresAt &&
+        existing.leaseExpiresAt > now
+      ) {
+        return existing.id;
+      } else {
+        // Not in flight: apply the latest request (e.g. a corrected issue type)
+        // and grant a fresh retry budget. The operation id, and so its
+        // correlation marker, is kept so an issue Jira already accepted is
+        // adopted rather than duplicated.
+        await tx.externalOperation.update({
+          where: { id: existing.id },
+          data: {
+            requestPayload: input as Prisma.InputJsonObject,
+            attempts: 0,
+            nextAttemptAt: now,
+            lastError: null,
+          },
+        });
+        return existing.id;
+      }
+    }
     const operation = await tx.externalOperation.create({
       data: {
         provider: 'JIRA',
@@ -162,7 +203,9 @@ export async function enqueueJiraCreateOperation(input: JiraCreateOperationInput
       data: {
         type: 'EXTERNAL_OPERATION',
         status: 'PENDING',
-        scheduledAt: new Date(),
+        // The caller processes the create inline; the job is only the durable
+        // fallback, so do not let the worker race the user's request for it.
+        scheduledAt: new Date(now.getTime() + CREATE_FALLBACK_DELAY_MS),
         maxAttempts: MAX_JIRA_OPERATION_ATTEMPTS,
         payload: { operationId: operation.id },
       },
