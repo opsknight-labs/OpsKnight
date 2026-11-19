@@ -147,8 +147,8 @@ export async function requestIncidentEscalation(input: {
   if (planned.result) return { requested: true, execution: planned.result, replayed: true };
   if (planned.created) await recordManualEscalationRequest(input);
 
-  // No generation is passed: a person is asking for the incident's *current*
-  // escalation to advance, not for a specific historical run to resume.
+  // A person is asking for the incident's *current* escalation to advance now,
+  // so the pending step pages immediately instead of waiting out its delay.
   const execution = await executeEscalation(input.incidentId, planned.stepIndex, {
     generation: planned.generation,
     immediate: true,
