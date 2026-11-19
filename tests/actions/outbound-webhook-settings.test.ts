@@ -26,7 +26,7 @@ describe('saveOutboundWebhookSettings', () => {
 
   it('saves the switch and audits old and new values', async () => {
     tx.systemSettings.findUnique.mockResolvedValue({ allowInsecureWebhookUrls: false });
-    await expect(saveOutboundWebhookSettings(true)).resolves.toEqual({
+    await expect(saveOutboundWebhookSettings({ allowInsecureWebhookUrls: true })).resolves.toEqual({
       allowInsecureWebhookUrls: true,
     });
     expect(tx.systemSettings.upsert).toHaveBeenCalledWith({
@@ -44,9 +44,20 @@ describe('saveOutboundWebhookSettings', () => {
     );
   });
 
+  it('rejects malformed or extra input before touching settings', async () => {
+    await expect(
+      saveOutboundWebhookSettings({ allowInsecureWebhookUrls: 'yes' } as never)
+    ).rejects.toThrow();
+    await expect(
+      saveOutboundWebhookSettings({ allowInsecureWebhookUrls: true, extra: 1 } as never)
+    ).rejects.toThrow();
+    expect(assertAdmin).not.toHaveBeenCalled();
+    expect(tx.systemSettings.upsert).not.toHaveBeenCalled();
+  });
+
   it('refuses non-admins', async () => {
     vi.mocked(assertAdmin).mockRejectedValueOnce(new Error('Forbidden'));
-    await expect(saveOutboundWebhookSettings(true)).rejects.toThrow('Forbidden');
+    await expect(saveOutboundWebhookSettings({ allowInsecureWebhookUrls: true })).rejects.toThrow('Forbidden');
     expect(tx.systemSettings.upsert).not.toHaveBeenCalled();
   });
 });

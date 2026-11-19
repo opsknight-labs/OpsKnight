@@ -15,7 +15,7 @@ export default function OutboundWebhookSettings({ allowHttp }: { allowHttp: bool
     setChecked(next);
     startTransition(async () => {
       try {
-        await saveOutboundWebhookSettings(next);
+        await saveOutboundWebhookSettings({ allowInsecureWebhookUrls: next });
         showToast(next ? 'Webhooks can now use http:// URLs' : 'Webhooks now require HTTPS', 'success');
       } catch {
         setChecked(!next);

@@ -2,6 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import { logAudit } from '@/lib/audit';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { decryptProviderConfig, maskSensitiveFields } from '@/lib/encrypted-provider-config';
@@ -91,16 +92,19 @@ export async function refreshSingleHealthCheckAction(checkId: string): Promise<{
   return { check, report };
 }
 
+/** Client input for the outgoing-webhook setting, parsed strictly before authorization. */
+const outboundWebhookSettingsInput = z
+  .object({ allowInsecureWebhookUrls: z.boolean() })
+  .strict();
+
 /**
  * Allow or forbid plain http:// URLs for outgoing service webhooks (HTTPS-only by default).
  */
 export async function saveOutboundWebhookSettings(
-  allowInsecureWebhookUrls: boolean
+  input: z.input<typeof outboundWebhookSettingsInput>
 ): Promise<{ allowInsecureWebhookUrls: boolean }> {
+  const { allowInsecureWebhookUrls } = outboundWebhookSettingsInput.parse(input);
   await assertAdmin();
-  if (typeof allowInsecureWebhookUrls !== 'boolean') {
-    throw new Error('allowInsecureWebhookUrls must be true or false');
-  }
   const actor = await getCurrentUser();
   return prisma.$transaction(async tx => {
     const existing = await tx.systemSettings.findUnique({
