@@ -810,7 +810,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                         <DeleteIntegrationButton
                           action={async () => {
                             'use server';
-                            await deleteIntegration(integration.id, id);
+                            return deleteIntegration(integration.id, id);
                           }}
                           integrationName={integration.name}
                           variant="icon"

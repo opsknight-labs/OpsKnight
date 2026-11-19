@@ -74,20 +74,34 @@ export async function deleteIntegration(
   integrationId: string,
   serviceId: string,
   _formData?: FormData
-) {
+): Promise<{ error?: string }> {
   let currentUser: { id: string } | null = null;
   try {
     currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : 'Unauthorized');
+    // Returned, not thrown: production sanitises thrown server-action messages.
+    return { error: error instanceof Error ? error.message : 'Unauthorized' };
   }
 
-  const integration = await prisma.integration.findFirst({
-    where: { id: integrationId, serviceId },
-    select: { id: true },
+  // Same guard as the v2 DELETE: never orphan in-flight deliveries, and purge
+  // the delivery history (there is no foreign key to cascade it).
+  const blocked = await prisma.$transaction(async tx => {
+    const integration = await tx.integration.findFirst({
+      where: { id: integrationId, serviceId },
+      select: { id: true },
+    });
+    if (!integration) return 'Integration not found for this service.';
+    const inFlight = await tx.inboundDelivery.count({
+      where: { integrationId: integration.id, status: 'PROCESSING' },
+    });
+    if (inFlight > 0) {
+      return 'Integration has inbound deliveries in progress. Retry after they finish.';
+    }
+    await tx.inboundDelivery.deleteMany({ where: { integrationId: integration.id } });
+    await tx.integration.delete({ where: { id: integration.id } });
+    return null;
   });
-  if (!integration) throw new Error('Integration not found for this service.');
-  await prisma.integration.delete({ where: { id: integration.id } });
+  if (blocked) return { error: blocked };
 
   await logAudit({
     action: 'integration.deleted',
@@ -99,6 +113,7 @@ export async function deleteIntegration(
 
   revalidatePath(`/services/${serviceId}/integrations`);
   revalidatePath(`/services/${serviceId}`);
+  return {};
 }
 
 export async function updateService(serviceId: string, formData: FormData) {
