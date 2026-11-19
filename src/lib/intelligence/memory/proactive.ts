@@ -407,15 +407,14 @@ export async function runProactiveJob(
       thresholdMinutes: threshold,
     });
     const ai = await generate(
-      'incident.summary',
+      'stakeholder.update',
       stakeholderUpdateSchema,
       'stakeholder_update',
       'Write a short stakeholder update on the current state and impact in "update". Plain language, no internal jargon.',
       proactiveModelBrief(facts, { similar: [], changes: [], runbooks: [] }),
       incidentId,
       gathered.serviceId,
-      signal,
-      'stakeholder.nudge'
+      signal
     );
     if (ai) {
       mode = 'AI';
@@ -498,7 +497,7 @@ async function writeProactiveNote(
  * output or any error.
  */
 async function generate<T>(
-  promptId: 'incident.summary' | 'postmortem.draft',
+  promptId: 'incident.summary' | 'postmortem.draft' | 'stakeholder.update',
   schema: AiOutputSchema<T> & object,
   schemaName: string,
   instruction: string,
@@ -506,7 +505,7 @@ async function generate<T>(
   incidentId: string,
   serviceId: string,
   signal?: AbortSignal,
-  feature: AiFeature = promptId
+  feature: AiFeature = promptId === 'stakeholder.update' ? 'stakeholder.nudge' : promptId
 ): Promise<{ value: T; model: string } | null> {
   try {
     const settings = await getAiSettings();

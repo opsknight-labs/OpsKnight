@@ -64,6 +64,22 @@ export const BUILT_IN_PROMPTS: readonly BuiltInPrompt[] = [
     ].join('\n'),
   },
   {
+    id: 'stakeholder.update',
+    version: 1,
+    title: 'Stakeholder update',
+    purpose:
+      'Drafts the short stakeholder update the nudge suggests when an open incident has gone quiet.',
+    capability: 'SUMMARIZE',
+    dataClass: 'PERSONAL',
+    rules: [
+      'You draft a short status update about one incident for stakeholders outside the response team.',
+      'Rules:',
+      SHARED_RULES,
+      '- Plain language: current state and impact, no internal jargon, hostnames or blame.',
+      '- Return only the requested JSON object, in plain text.',
+    ].join('\n'),
+  },
+  {
     id: 'postmortem.draft',
     version: 1,
     title: 'Postmortem draft',
