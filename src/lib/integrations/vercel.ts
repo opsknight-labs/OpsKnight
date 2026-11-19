@@ -1,4 +1,4 @@
-import { normalizeEventAction, normalizeSeverity, firstString } from './normalization';
+import { firstString } from './normalization';
 import type { VercelPayload } from './schemas';
 
 export function transformVercelToEvent(data: VercelPayload): {

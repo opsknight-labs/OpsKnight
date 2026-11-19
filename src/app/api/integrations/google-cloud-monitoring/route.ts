@@ -5,7 +5,15 @@ import {
 } from '@/lib/integrations/google-cloud-monitoring';
 
 function parsePubSubPayload(body: string): GoogleCloudMonitoringEvent {
-  const parsed = JSON.parse(body) as Record<string, any>;
+  const parsed = JSON.parse(body) as {
+    message?: {
+      data?: string;
+      messageId?: string;
+      publishTime?: string;
+      attributes?: Record<string, string>;
+    };
+    subscription?: string;
+  };
   const message = parsed?.message;
   if (message?.data) {
     try {

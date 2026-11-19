@@ -122,7 +122,8 @@ export async function DELETE(request: NextRequest) {
 
       return NextResponse.json({ error: 'No integration found to disconnect' }, { status: 404 });
     }
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as Error;
     logger.error('[Slack] Disconnect error', {
       error: error.message,
       stack: error.stack,

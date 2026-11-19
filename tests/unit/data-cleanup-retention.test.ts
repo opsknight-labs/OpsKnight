@@ -216,7 +216,7 @@ describe('Data Cleanup Retention Logic', () => {
   });
 
   it('cascades deletion across all incident relations before deleting incidents', async () => {
-    const mockTx: Record<string, any> = {
+    const mockTx = {
       $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
       externalIssueLink: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
       actionItem: { deleteMany: vi.fn().mockResolvedValue({ count: 2 }) },

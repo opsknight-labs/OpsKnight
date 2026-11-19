@@ -74,7 +74,7 @@ const { mockPrisma } = vi.hoisted(() => {
     },
     $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
-    $transaction: vi.fn(async (callback: (tx: any) => unknown) => callback(mockPrisma)),
+    $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(mockPrisma)),
   };
   return { mockPrisma };
 });

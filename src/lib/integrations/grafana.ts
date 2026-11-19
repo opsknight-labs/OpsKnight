@@ -3,7 +3,6 @@
  * Transforms Grafana alert webhooks to standard event format
  */
 
-import crypto from 'crypto';
 import { normalizeSeverity } from './normalization';
 
 export type GrafanaAlert = {

@@ -8,13 +8,10 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { notify } from '@/lib/toast';
 import {
-  Trash2,
   AlertTriangle,
-  CheckCircle2,
   RotateCcw,
   Clock,
   BarChart3,
@@ -23,7 +20,6 @@ import {
   Bell,
   Loader2,
   XCircle,
-  Sparkles,
   RefreshCw,
   UserX,
   FileKey,
@@ -60,17 +56,6 @@ interface Preset {
   completedPrivacyRequestRetentionDays?: number;
   expiredPrivacyArtifactRetentionDays?: number;
   unsubscribedSubscriberRetentionDays?: number;
-}
-
-interface CleanupResult {
-  incidents: number;
-  alerts: number;
-  logs: number;
-  metrics: number;
-  events: number;
-  auditLogs: number;
-  executionTimeMs: number;
-  dryRun: boolean;
 }
 
 const DEFAULT_POLICY: RetentionPolicy = {
@@ -127,6 +112,7 @@ export default function RetentionPolicySettings() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount; loading state is set before the request starts
     fetchData();
   }, [fetchData]);
 
@@ -750,17 +736,6 @@ function CompactStatRowItem({
           <span className="truncate">Oldest: {formatDate(oldest)}</span>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatItem({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex flex-col p-2 rounded-lg bg-background border border-border/60">
-      <span className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5 truncate">
-        {label}
-      </span>
-      <span className="font-mono font-bold text-foreground text-sm">{value.toLocaleString()}</span>
     </div>
   );
 }

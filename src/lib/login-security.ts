@@ -59,6 +59,7 @@ function getAttemptKey(email: string, ip: string): string {
  */
 function getLockoutMultiplier(lockoutCount: number): number {
   const idx = Math.min(lockoutCount, LOGIN_SECURITY_CONFIG.LOCKOUT_MULTIPLIERS.length - 1);
+  // eslint-disable-next-line security/detect-object-injection -- idx is clamped to the array bounds above
   return LOGIN_SECURITY_CONFIG.LOCKOUT_MULTIPLIERS[idx];
 }
 
@@ -263,6 +264,7 @@ export function isValidEmail(email: string): boolean {
 
   // RFC 5322 compliant regex (simplified)
   const emailRegex =
+    // eslint-disable-next-line security/detect-unsafe-regex -- input is capped at 254 chars above, which bounds backtracking
     /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
 
   if (!emailRegex.test(trimmed)) return false;

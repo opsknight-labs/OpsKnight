@@ -102,7 +102,7 @@ describe('global search RBAC', () => {
       status: 'ACTIVE',
       teamMemberships: [],
     });
-    mocks.findMany.mockImplementation(async (args: any) =>
+    mocks.findMany.mockImplementation(async (args?: { select?: { urgency?: unknown } }) =>
       args?.select?.urgency
         ? [
             {

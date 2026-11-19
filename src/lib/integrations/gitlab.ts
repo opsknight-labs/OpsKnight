@@ -1,4 +1,4 @@
-import { normalizeEventAction, normalizeSeverity, firstString } from './normalization';
+import { normalizeSeverity, firstString } from './normalization';
 import type { GitLabPayload } from './schemas';
 
 export function transformGitLabToEvent(data: GitLabPayload): {

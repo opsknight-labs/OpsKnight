@@ -408,6 +408,7 @@ export async function GET(req: NextRequest) {
         href: `/policies/${p.id}`,
         priority: 7,
       })),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostmortemSearchResult does not model the selected incident automation fields; typing pm also surfaces pre-existing nullable titles in the merged sort, a separate fix
       ...postmortems.map((pm: any) => ({
         type: 'postmortem' as const,
         id: pm.id,
@@ -416,18 +417,19 @@ export async function GET(req: NextRequest) {
         href: `/postmortems/${pm.incidentId}`,
         priority: 8,
       })),
-    ].sort((a, b) => {
-      // Sort by priority first
-      if (a.priority !== b.priority) {
-        return a.priority - b.priority;
-      }
-      // Then by relevance (exact matches first)
-      const aExact = a.title.toLowerCase() === searchTermLower;
-      const bExact = b.title.toLowerCase() === searchTermLower;
-      if (aExact && !bExact) return -1;
-      if (!aExact && bExact) return 1;
-      return 0;
-    })
+    ]
+      .sort((a, b) => {
+        // Sort by priority first
+        if (a.priority !== b.priority) {
+          return a.priority - b.priority;
+        }
+        // Then by relevance (exact matches first)
+        const aExact = a.title.toLowerCase() === searchTermLower;
+        const bExact = b.title.toLowerCase() === searchTermLower;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+        return 0;
+      })
       // priority is an internal type sort key, not incident priority; never expose it.
       .map(({ priority: _priority, ...result }) => result);
 
@@ -435,7 +437,8 @@ export async function GET(req: NextRequest) {
     return jsonOk({ results }, 200, {
       'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
     });
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as { message?: string; stack?: string } | null | undefined;
     logger.error('api.search.error', {
       error: error instanceof Error ? error.message : String(error),
     });

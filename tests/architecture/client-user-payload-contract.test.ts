@@ -11,6 +11,7 @@ const PAGES = [
 
 describe('client-bound user relations', () => {
   it.each(PAGES)('%s never includes full user rows', file => {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed repository paths in this test
     const source = readFileSync(path.join(process.cwd(), file), 'utf8');
     expect(source).not.toMatch(/\b(user|assignee|targetUser|teamLead)\s*:\s*true\b/);
     expect(source).not.toMatch(/include:\s*\{\s*(user|teamLead)\s*:\s*true/);

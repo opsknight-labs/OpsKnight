@@ -39,9 +39,12 @@ const DEFAULT_CONFIG: WebhookConfig = {
   },
 };
 
-function getNestedValue(obj: any, path: string): any {
-  // eslint-disable-line @typescript-eslint/no-explicit-any
-  return path.split('.').reduce((current, key) => current?.[key], obj);
+function getNestedValue(obj: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>(
+    // eslint-disable-next-line security/detect-object-injection -- read-only lookup along an admin-configured field path
+    (current, key) => (current as Record<string, unknown> | null | undefined)?.[key],
+    obj
+  );
 }
 
 export function transformWebhookToEvent(
@@ -108,6 +111,7 @@ export function transformWebhookToEvent(
   // Map severity
   const severityStr = String(severityRaw).toLowerCase();
   const mappedSeverity =
+    // eslint-disable-next-line security/detect-object-injection -- read-only lookup in the admin-configured severity map
     finalConfig.severityMapping?.[severityStr] ||
     (severityStr.includes('critical') || severityStr.includes('high')
       ? 'critical'

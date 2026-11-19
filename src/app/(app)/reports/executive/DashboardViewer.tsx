@@ -125,10 +125,7 @@ export default function DashboardViewer({
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const initialVisibility =
     (savedDashboards.find(d => d.id === dashboardId)?.visibility as
-      | 'PRIVATE'
-      | 'TEAM'
-      | 'PUBLIC'
-      | undefined) || 'PRIVATE';
+      'PRIVATE' | 'TEAM' | 'PUBLIC' | undefined) || 'PRIVATE';
   const [currentVisibility, setCurrentVisibility] = useState<'PRIVATE' | 'TEAM' | 'PUBLIC'>(
     initialVisibility
   );
@@ -160,13 +157,22 @@ export default function DashboardViewer({
     }
     const vis = savedDashboards.find(d => d.id === dashboardId)?.visibility;
     if (vis === 'PRIVATE' || vis === 'TEAM' || vis === 'PUBLIC') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resyncs local edit state from props; the edit-preservation decision reads refs, so it cannot be derived during render
       setCurrentVisibility(vis);
     }
-  }, [dashboardId, currentTemplateId, widgets, dashboardName, dashboardDescription, savedDashboards]);
+  }, [
+    dashboardId,
+    currentTemplateId,
+    widgets,
+    dashboardName,
+    dashboardDescription,
+    savedDashboards,
+  ]);
 
   // Auto-refresh timer with visibility detection
   useEffect(() => {
     if (autoRefreshInterval <= 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets the countdown that this effect's timer owns when auto-refresh is switched off
       setRefreshCountdown(0);
       return;
     }
@@ -195,19 +201,18 @@ export default function DashboardViewer({
 
   // Portal mount: track whether we are safely client-side so createPortal can run.
   // Also lock document.body scroll to prevent the hidden content-shell from scrolling behind.
-  const [portalMounted, setPortalMounted] = useState(false);
-  const portalRef = useRef<HTMLDivElement | null>(null);
+  const [portalHost, setPortalHost] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     // Create and attach the portal host div to body once on the client.
     const el = document.createElement('div');
     el.id = 'kiosk-portal-root';
     document.body.appendChild(el);
-    portalRef.current = el;
-    setPortalMounted(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the portal host can only be created on the client after mount
+    setPortalHost(el);
     return () => {
       document.body.removeChild(el);
-      portalRef.current = null;
+      setPortalHost(null);
     };
   }, []);
 
@@ -263,7 +268,11 @@ export default function DashboardViewer({
   const exitKioskMode = useCallback(async () => {
     setIsKioskMode(false);
     try {
-      if (typeof document !== 'undefined' && document.fullscreenElement && document.exitFullscreen) {
+      if (
+        typeof document !== 'undefined' &&
+        document.fullscreenElement &&
+        document.exitFullscreen
+      ) {
         await document.exitFullscreen();
       }
     } catch {
@@ -435,9 +444,7 @@ export default function DashboardViewer({
       }
     }
 
-    const basePath = dashboardId
-      ? `/reports/executive/${dashboardId}`
-      : '/reports/executive';
+    const basePath = dashboardId ? `/reports/executive/${dashboardId}` : '/reports/executive';
     return `${basePath}?${params.toString()}`;
   };
 
@@ -489,7 +496,8 @@ export default function DashboardViewer({
       setSavedBaseline(updatedWidgets);
       setLocalWidgets(updatedWidgets);
       if (data.dashboard?.name) setDashboardTitle(data.dashboard.name);
-      if (data.dashboard?.description !== undefined) setDashboardDesc(data.dashboard.description || '');
+      if (data.dashboard?.description !== undefined)
+        setDashboardDesc(data.dashboard.description || '');
       setIsEditing(false);
       notify.success('Dashboard saved successfully');
     } catch (error) {
@@ -546,9 +554,8 @@ export default function DashboardViewer({
 
       {/* TV / NOC Wallboard Full-Screen Takeover — rendered via portal at document.body
           so it is NEVER clipped by overflow-y:auto on .content-shell */}
-      {portalMounted &&
-        isKioskMode &&
-        portalRef.current &&
+      {isKioskMode &&
+        portalHost &&
         createPortal(
           <div
             role="region"
@@ -595,7 +602,8 @@ export default function DashboardViewer({
                   <span>•</span>
                   <span>
                     {currentFilters.teamId
-                      ? filterOptions.teams.find(t => t.id === currentFilters.teamId)?.name || 'Team'
+                      ? filterOptions.teams.find(t => t.id === currentFilters.teamId)?.name ||
+                        'Team'
                       : 'All Teams'}
                   </span>
                   <span>•</span>
@@ -633,7 +641,10 @@ export default function DashboardViewer({
                       <span>{autoRefreshInterval > 0 ? `${refreshCountdown}s` : 'Manual'}</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-200">
+                  <DropdownMenuContent
+                    align="end"
+                    className="bg-zinc-900 border-zinc-800 text-zinc-200"
+                  >
                     <div className="px-2 py-1 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
                       Auto-Refresh Interval
                     </div>
@@ -702,7 +713,7 @@ export default function DashboardViewer({
               />
             </div>
           </div>,
-          portalRef.current
+          portalHost
         )}
 
       {/* Header */}
@@ -810,15 +821,11 @@ export default function DashboardViewer({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAutoRefreshInterval(30)}>
                   <span>Every 30 seconds</span>
-                  {autoRefreshInterval === 30 && (
-                    <Check className="h-4 w-4 ml-auto text-primary" />
-                  )}
+                  {autoRefreshInterval === 30 && <Check className="h-4 w-4 ml-auto text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAutoRefreshInterval(60)}>
                   <span>Every 1 minute</span>
-                  {autoRefreshInterval === 60 && (
-                    <Check className="h-4 w-4 ml-auto text-primary" />
-                  )}
+                  {autoRefreshInterval === 60 && <Check className="h-4 w-4 ml-auto text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAutoRefreshInterval(300)}>
                   <span>Every 5 minutes</span>
@@ -1009,13 +1016,17 @@ export default function DashboardViewer({
           </SelectContent>
         </Select>
 
-        {Boolean(currentFilters.teamId || currentFilters.serviceId || currentFilters.windowDays !== 7) && (
+        {Boolean(
+          currentFilters.teamId || currentFilters.serviceId || currentFilters.windowDays !== 7
+        ) && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => {
-              const basePath = dashboardId ? `/reports/executive/${dashboardId}` : '/reports/executive';
+              const basePath = dashboardId
+                ? `/reports/executive/${dashboardId}`
+                : '/reports/executive';
               const params = new URLSearchParams();
               if (currentTemplateId && !dashboardId) params.set('template', currentTemplateId);
               const qs = params.toString();
@@ -1032,10 +1043,15 @@ export default function DashboardViewer({
         {/* Dashboard & Template Selector */}
         <div className="ml-auto">
           <Select
-            value={dashboardId ? `saved:${dashboardId}` : `template:${currentTemplateId || 'executive-summary'}`}
+            value={
+              dashboardId
+                ? `saved:${dashboardId}`
+                : `template:${currentTemplateId || 'executive-summary'}`
+            }
             onValueChange={value => {
               const params = new URLSearchParams();
-              if (currentFilters.windowDays !== 7) params.set('window', String(currentFilters.windowDays));
+              if (currentFilters.windowDays !== 7)
+                params.set('window', String(currentFilters.windowDays));
               if (currentFilters.teamId) params.set('teamId', currentFilters.teamId);
               if (currentFilters.serviceId) params.set('serviceId', currentFilters.serviceId);
               const qs = params.toString();
@@ -1054,7 +1070,8 @@ export default function DashboardViewer({
               <SelectValue placeholder="Select dashboard" />
             </SelectTrigger>
             <SelectContent>
-              {savedDashboards.filter(d => !currentUserId || d.userId === currentUserId).length > 0 && (
+              {savedDashboards.filter(d => !currentUserId || d.userId === currentUserId).length >
+                0 && (
                 <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   My Dashboards
                 </div>
@@ -1067,7 +1084,8 @@ export default function DashboardViewer({
                   </SelectItem>
                 ))}
 
-              {savedDashboards.filter(d => currentUserId && d.userId !== currentUserId).length > 0 && (
+              {savedDashboards.filter(d => currentUserId && d.userId !== currentUserId).length >
+                0 && (
                 <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-1.5">
                   Team & Shared
                 </div>

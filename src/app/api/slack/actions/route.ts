@@ -365,7 +365,8 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as Error;
     logger.error('[Slack] Actions API error', {
       error: error.message,
       stack: error.stack,

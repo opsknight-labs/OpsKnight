@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { transformGitLabToEvent } from '@/lib/integrations/gitlab';
-import { GitLabPayloadSchema, validatePayload } from '@/lib/integrations/schemas';
+import {
+  GitLabPayloadSchema,
+  validatePayload,
+  type GitLabPayload,
+} from '@/lib/integrations/schemas';
 import { verifyGitLabToken } from '@/lib/integrations/signature-verification';
 
 describe('GitLab Webhooks Integration', () => {
@@ -30,7 +34,7 @@ describe('GitLab Webhooks Integration', () => {
     const validation = validatePayload(GitLabPayloadSchema, payload);
     expect(validation.success).toBe(true);
 
-    const event = transformGitLabToEvent(payload as any);
+    const event = transformGitLabToEvent(payload as GitLabPayload);
     expect(event.event_action).toBe('trigger');
     expect(event.payload.severity).toBe('error');
     // Keyed by project + ref so a later pipeline on the same branch can resolve it
@@ -55,7 +59,7 @@ describe('GitLab Webhooks Integration', () => {
       status: 'success',
     };
 
-    const event = transformGitLabToEvent(payload as any);
+    const event = transformGitLabToEvent(payload as GitLabPayload);
     expect(event.event_action).toBe('resolve');
     // A new pipeline id (992) still resolves the failure from pipeline 991
     expect(event.dedup_key).toBe('gitlab-fintech-payment-service-main');
@@ -81,7 +85,7 @@ describe('GitLab Webhooks Integration', () => {
     const validation = validatePayload(GitLabPayloadSchema, payload);
     expect(validation.success).toBe(true);
 
-    const event = transformGitLabToEvent(payload as any);
+    const event = transformGitLabToEvent(payload as GitLabPayload);
     expect(event.event_action).toBe('acknowledge');
     expect(event.payload.severity).toBe('info');
     expect(event.dedup_key).toBe('gitlab-fintech-payment-service-mr-12');
@@ -101,7 +105,7 @@ describe('GitLab Webhooks Integration', () => {
       },
     };
 
-    const event = transformGitLabToEvent(payload as any);
+    const event = transformGitLabToEvent(payload as GitLabPayload);
     expect(event.event_action).toBe('resolve');
     expect(event.dedup_key).toBe('gitlab-fintech-payment-service-mr-12');
   });
@@ -120,7 +124,7 @@ describe('GitLab Webhooks Integration', () => {
     const validation = validatePayload(GitLabPayloadSchema, payload);
     expect(validation.success).toBe(true);
 
-    const event = transformGitLabToEvent(payload as any);
+    const event = transformGitLabToEvent(payload as GitLabPayload);
     expect(event.event_action).toBe('trigger');
     expect(event.payload.severity).toBe('error');
     expect(event.dedup_key).toBe('gitlab-fintech-payment-service-deploy-production');
@@ -136,7 +140,7 @@ describe('GitLab Webhooks Integration', () => {
       ref: 'refs/heads/main',
     };
 
-    const event = transformGitLabToEvent(payload as any);
+    const event = transformGitLabToEvent(payload as GitLabPayload);
     expect(event.event_action).toBe('acknowledge');
     expect(event.payload.severity).toBe('info');
   });

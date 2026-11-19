@@ -278,7 +278,8 @@ export async function GET(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as Error;
     logger.error('[Slack] OAuth callback error', {
       error: error.message,
       stack: error.stack,

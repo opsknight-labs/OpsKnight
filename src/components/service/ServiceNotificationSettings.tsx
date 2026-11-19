@@ -517,6 +517,7 @@ export default function ServiceNotificationSettings({
             Boolean(slackWebhookUrl || slackChannel || existingSlackDests.some(d => d.enabled));
           if (
             removesSlack &&
+            // eslint-disable-next-line no-alert -- form onSubmit must decide synchronously whether to preventDefault the server action
             !window.confirm(
               'Turning off Slack removes the Slack webhook URL and channel and disables all linked Slack destinations. Continue?'
             )

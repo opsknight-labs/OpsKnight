@@ -261,6 +261,7 @@ describe('IdP default attribute mappings', () => {
         [enterpriseSchema]: { department: 'SRE', employeeNumber: '7', manager: { value: 'm' } },
       })
     );
+    // eslint-disable-next-line security/detect-object-injection -- enterpriseSchema is a constant SCIM schema URN
     expect(parsed[enterpriseSchema]).toEqual({ department: 'SRE' });
 
     const result = patchUser(
