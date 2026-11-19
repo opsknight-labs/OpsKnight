@@ -58,6 +58,27 @@ export async function checkRateLimit(
 }
 
 /**
+ * Read-only check of a checkRateLimit bucket: true while fewer than `limit` hits were
+ * recorded in the current window. Fails closed on database error, like checkRateLimit.
+ */
+export async function isUnderRateLimit(
+  key: string,
+  limit: number,
+  windowMs: number
+): Promise<boolean> {
+  try {
+    const row = await prisma.rateLimit.findUnique({
+      where: { key: `${key}:${Math.floor(Date.now() / windowMs)}` },
+      select: { count: true },
+    });
+    return (row?.count ?? 0) < limit;
+  } catch (error) {
+    logger.error('Rate limit DB peek failed, blocking request for safety', { error });
+    return false;
+  }
+}
+
+/**
  * Atomically increment a shared fixed-window counter in PostgreSQL and return
  * the post-increment count. Unlike checkRateLimit this throws on database
  * failure, so callers can choose their own fail-open/fail-closed policy

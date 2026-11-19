@@ -438,18 +438,22 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     return null;
                   }
 
-                  const { checkRateLimit } = await import('@/lib/rate-limit');
+                  const { checkRateLimit, isUnderRateLimit } = await import('@/lib/rate-limit');
+                  const ACCOUNT_WINDOW_MS = 15 * 60 * 1000;
+                  const accountKey = `auth:credentials:account:${email}`;
                   const distributedAttempt = await checkRateLimit(
                     `auth:credentials:${email}:${ip}`,
                     20,
-                    15 * 60 * 1000
+                    ACCOUNT_WINDOW_MS
                   );
-                  const accountAttempt = await checkRateLimit(
-                    `auth:credentials:account:${email}`,
-                    10,
-                    15 * 60 * 1000
-                  );
-                  if (!distributedAttempt.allowed || !accountAttempt.allowed) {
+                  // The cluster-wide account bucket only counts failed attempts, so successful
+                  // sign-ins (a responder switching devices) never lock the account.
+                  const accountAllowed = await isUnderRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
+                  const recordAccountFailure = () =>
+                    checkRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
+                  if (!distributedAttempt.allowed || !accountAllowed) {
+                    const accountResetAt =
+                      (Math.floor(Date.now() / ACCOUNT_WINDOW_MS) + 1) * ACCOUNT_WINDOW_MS;
                     await logLoginBlocked(
                       email,
                       ip,
@@ -457,7 +461,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                       'RATE_LIMITED',
                       Math.max(
                         0,
-                        Math.max(distributedAttempt.resetAt, accountAttempt.resetAt) - Date.now()
+                        (accountAllowed ? distributedAttempt.resetAt : accountResetAt) - Date.now()
                       )
                     );
                     return null;
@@ -488,6 +492,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   }
                   if (!user || !user.passwordHash) {
                     recordFailedAttempt(email, ip);
+                    await recordAccountFailure();
                     await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
                     logger.debug('[Auth-Debug] User not found or no password hash', {
                       component: 'auth:credentials',
@@ -505,6 +510,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   const isValid = await bcrypt.compare(password, user.passwordHash);
                   if (!isValid) {
                     const result = recordFailedAttempt(email, ip);
+                    await recordAccountFailure();
                     await logLoginFailed(
                       email,
                       ip,
