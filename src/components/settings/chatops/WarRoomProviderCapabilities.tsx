@@ -56,7 +56,7 @@ export function WarRoomProviderCapabilities() {
 
   const teamsCaps: Record<string, boolean> = {
     createRoom: true,
-    privateRooms: false,
+    privateRooms: true,
     manageMembers: true,
     interactiveProjection: true,
     projectionUpdates: true,
