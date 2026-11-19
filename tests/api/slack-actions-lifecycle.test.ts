@@ -220,4 +220,45 @@ describe('Slack interactive lifecycle actions', () => {
     expect(body.text).toContain('already assigned');
     expect(executeChatOpsAssignment).toHaveBeenCalledTimes(1);
   });
+  it('rethrows transient failures in the intent worker so the intent is retried', async () => {
+    vi.mocked(executeChatOpsLifecycleCommand).mockRejectedValue(
+      Object.assign(new Error('could not serialize access'), { code: 'P2034' })
+    );
+
+    await expect(
+      handleSlackActionRequest({ ...payload('ack'), __opsknightIntentId: 'intent-1' })
+    ).rejects.toThrow('could not serialize access');
+  });
+
+  it('still replies (no retry) when the worker hits a domain rejection', async () => {
+    const { AppError } = await import('@/lib/errors');
+    vi.mocked(executeChatOpsLifecycleCommand).mockRejectedValue(
+      new AppError({ code: 'INCIDENT_ACCESS_DENIED' })
+    );
+
+    const response = await handleSlackActionRequest({
+      ...payload('ack'),
+      __opsknightIntentId: 'intent-1',
+    });
+    expect((await response.json()).response_type).toBe('ephemeral');
+  });
+
+  it('shows the real reason when Assign to Me is denied', async () => {
+    vi.mocked(executeChatOpsAssignment).mockRejectedValue(new Error('denied'));
+    vi.mocked(chatOpsLifecycleErrorMessage).mockReturnValue('You do not have permission.');
+
+    const body = await (await handleSlackActionRequest(payload('assign_me'))).json();
+    expect(body.text).toBe('⚠️ You do not have permission.');
+  });
+
+  it('produces no response for URL buttons and a Slack-renderable reply for malformed values', async () => {
+    const url = await handleSlackActionRequest({
+      ...payload('ack'),
+      actions: [{ action_id: 'view_details' }],
+    });
+    expect(await url.json()).toBeNull();
+
+    const bad = await handleSlackActionRequest({ ...payload('ack'), actions: [{ value: '{oops' }] });
+    expect((await bad.json()).text).toContain('no longer valid');
+  });
 });

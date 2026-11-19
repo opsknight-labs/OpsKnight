@@ -8,6 +8,7 @@ import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { verifySlackSignature } from '@/lib/slack-signature';
+import { normalizeError } from '@/lib/errors';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
@@ -87,6 +88,19 @@ type SlackActionPayload = {
   [key: string]: unknown;
 };
 
+/**
+ * In the durable intent worker, a transient failure (DB timeout, serialization
+ * conflict, internal error) must throw so the intent is retried instead of
+ * recording a "try again" reply as the completed effect.
+ */
+function rethrowIfTransient(error: unknown, payload: SlackActionPayload): void {
+  if (payload.__opsknightIntentId && normalizeError(error).retryable) throw error;
+}
+
+function ephemeral(text: string) {
+  return NextResponse.json({ response_type: 'ephemeral', text });
+}
+
 function lifecycleFailureResponse(error: unknown) {
   return NextResponse.json({
     response_type: 'ephemeral',
@@ -104,12 +118,17 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
     // Handle interactive button clicks
     if (payload.type === 'block_actions') {
       const action = payload.actions?.[0];
-      if (!action) {
-        return NextResponse.json({ error: 'No action found' }, { status: 400 });
-      }
+      // URL buttons (View Details) carry no value: nothing to do and nothing to reply.
+      if (!action?.value) return NextResponse.json(null);
 
-      const actionValue = JSON.parse(action.value || '{}');
-      const { action: actionType, incidentId } = actionValue;
+      let actionValue: Record<string, unknown>;
+      try {
+        actionValue = JSON.parse(action.value);
+      } catch {
+        return ephemeral('⚠️ This button is no longer valid. Open the incident in OpsKnight.');
+      }
+      const actionType = typeof actionValue?.action === 'string' ? actionValue.action : '';
+      const incidentId = typeof actionValue?.incidentId === 'string' ? actionValue.incidentId : '';
       const slackUserId = payload.user?.id;
       const slackUserName = payload.user?.name || payload.user?.username;
       const idempotency = payload.__opsknightIntentId
@@ -117,7 +136,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         : undefined;
 
       if (!incidentId || !actionType) {
-        return NextResponse.json({ error: 'Invalid action data' }, { status: 400 });
+        return ephemeral('⚠️ This button is no longer valid. Open the incident in OpsKnight.');
       }
 
       // Get incident context needed for Slack identity resolution and non-lifecycle actions.
@@ -131,7 +150,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       });
 
       if (!incident) {
-        return NextResponse.json({ error: 'Incident not found' }, { status: 404 });
+        return ephemeral('⚠️ Incident not found.');
       }
       const workspaceId = payload.team?.id;
       const incidentWorkspaceId =
@@ -144,7 +163,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
           workspaceId,
           incidentWorkspaceId,
         });
-        return NextResponse.json({ error: 'Incident not found' }, { status: 404 });
+        return ephemeral('⚠️ Incident not found.');
       }
 
       const { getSlackBotToken } = await import('@/lib/slack');
@@ -182,6 +201,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             userId: actorUser.id,
             error,
           });
+          rethrowIfTransient(error, payload);
           return lifecycleFailureResponse(error);
         }
 
@@ -208,6 +228,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             userId: actorUser.id,
             error,
           });
+          rethrowIfTransient(error, payload);
           return lifecycleFailureResponse(error);
         }
 
@@ -252,10 +273,9 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
               : `ℹ️ Incident is already assigned to *${targetUser.name}* (<@${slackUserId}>)`;
           } catch (err) {
             logger.warn('[Slack] Assign to Me failed', { error: err, incidentId });
-            return NextResponse.json({
-              response_type: 'ephemeral',
-              text: '⚠️ Could not assign this incident. Please try again, or assign it from the OpsKnight incident page.',
-            });
+            rethrowIfTransient(err, payload);
+            // Show the real reason (e.g. missing permission) instead of a misleading "try again".
+            return lifecycleFailureResponse(err);
           }
         } else {
           return NextResponse.json({
@@ -290,6 +310,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             userId: actorUser.id,
             error,
           });
+          rethrowIfTransient(error, payload);
           return lifecycleFailureResponse(error);
         }
 
@@ -316,6 +337,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             userId: actorUser.id,
             error,
           });
+          rethrowIfTransient(error, payload);
           return NextResponse.json({
             response_type: 'ephemeral',
             text: '🚫 You do not have permission to escalate this incident.',
@@ -333,7 +355,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         // and the audit log.
         responseMessage = `⚡ Incident escalated by <@${slackUserId || 'responder'}>`;
       } else {
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        return ephemeral('⚠️ This action is not supported.');
       }
 
       return NextResponse.json({
@@ -348,6 +370,8 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       error: error.message,
       stack: error.stack,
     });
+    // Worker mode: fail the intent so it is retried rather than completed with an error body.
+    if (payload.__opsknightIntentId) throw error;
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -384,6 +408,10 @@ export async function POST(request: NextRequest) {
         : '';
   const slackUserId = typeof payload.user?.id === 'string' ? payload.user.id : '';
   if (!workspaceId) return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
+  // URL buttons (View Details) only open a link; there is no effect to queue.
+  if (payload.type === 'block_actions' && !payload.actions?.[0]?.value) {
+    return new Response(null, { status: 200 });
+  }
 
   try {
     await enqueueChatOpsIntent({
