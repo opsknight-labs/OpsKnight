@@ -394,54 +394,73 @@ export type NewRelicEvent = z.infer<typeof NewRelicEventSchema>;
 // Sentry
 // ============================================
 
-export const SentryEventSchema = z.object({
-  action: z.string().optional(),
-  issue: z
-    .object({
-      id: z.string().optional(),
-      shortId: z.string().nullable().optional(),
-      title: z.string().optional(),
-      culprit: z.string().nullable().optional(),
-      level: z.enum(['fatal', 'error', 'warning', 'info', 'debug']).optional(),
-      status: z.enum(['unresolved', 'resolved', 'ignored']).optional(),
-      assignedTo: z
-        .object({
-          name: z.string().optional(),
-          email: z.string().optional(),
-        })
-        .nullable()
-        .optional(),
-      metadata: z
-        .object({
-          type: z.string().optional(),
-          value: z.string().optional(),
-        })
-        .nullable()
-        .optional(),
-      permalink: z.string().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
-  event: z
-    .object({
-      event_id: z.string().optional(),
-      message: z.string().optional(),
-      level: z.string().optional(),
-      timestamp: z.union([z.number(), z.string()]).optional(),
-      platform: z.string().optional(),
-      tags: z.record(z.string()).optional(),
-      contexts: z.record(z.unknown()).optional(),
-    })
-    .nullable()
-    .optional(),
-  project: z
-    .object({
-      name: z.string().optional(),
-      slug: z.string().optional(),
-    })
-    .nullable()
-    .optional(),
-});
+export const SentryEventSchema = z
+  .object({
+    action: z.string().optional(),
+    issue: z
+      .object({
+        id: z.union([z.string(), z.number()]).optional(),
+        shortId: z.string().nullable().optional(),
+        title: z.string().optional(),
+        culprit: z.string().nullable().optional(),
+        level: z.string().optional(),
+        status: z.string().optional(),
+        assignedTo: z
+          .object({
+            name: z.string().optional(),
+            email: z.string().optional(),
+          })
+          .passthrough()
+          .nullable()
+          .optional(),
+        metadata: z
+          .object({
+            type: z.string().optional(),
+            value: z.string().optional(),
+          })
+          .passthrough()
+          .nullable()
+          .optional(),
+        permalink: z.string().nullable().optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    event: z
+      .object({
+        event_id: z.string().optional(),
+        issue_id: z.union([z.string(), z.number()]).optional(),
+        group_id: z.union([z.string(), z.number()]).optional(),
+        fingerprint: z.array(z.string()).optional(),
+        title: z.string().optional(),
+        message: z.string().optional(),
+        level: z.string().optional(),
+        timestamp: z.union([z.number(), z.string()]).optional(),
+        platform: z.string().optional(),
+        // Legacy plugin sends tags as [key, value] pairs.
+        tags: z.union([z.record(z.string()), z.array(z.array(z.string()))]).optional(),
+        contexts: z.record(z.unknown()).optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    // Integration-platform webhooks wrap the resource in data (issue, event or metric_alert).
+    data: z.record(z.unknown()).nullable().optional(),
+    // Legacy plugin sends the project slug as a string.
+    project: z
+      .union([
+        z.string(),
+        z
+          .object({
+            name: z.string().optional(),
+            slug: z.string().optional(),
+          })
+          .passthrough(),
+      ])
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
 
 export type SentryEvent = z.infer<typeof SentryEventSchema>;
 

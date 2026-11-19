@@ -27,8 +27,8 @@ const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
  */
 export async function POST(req: NextRequest) {
   return withIntegrationMiddleware(req, 'SENTRY', async () => {
-  const startTime = Date.now();
-  let deliveryClaim: Extract<InboundDeliveryClaim, { disposition: 'CLAIMED' }> | null = null;
+    const startTime = Date.now();
+    let deliveryClaim: Extract<InboundDeliveryClaim, { disposition: 'CLAIMED' }> | null = null;
 
     try {
       const { searchParams } = new URL(req.url);
@@ -92,7 +92,14 @@ export async function POST(req: NextRequest) {
       }
 
       const event = transformSentryToEvent(validation.data as SentryEvent);
-      const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'SENTRY', providerPayload: validation.data, receivedAt: new Date() });
+      const result = await processIntegrationEvent({
+        event,
+        serviceId: integration.serviceId,
+        integrationId: integration.id,
+        integrationType: 'SENTRY',
+        providerPayload: validation.data,
+        receivedAt: new Date(),
+      });
       if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
       logger.info('api.integration.sentry_success', {
