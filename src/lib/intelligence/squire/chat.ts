@@ -44,7 +44,7 @@ import {
 import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
-import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';
+import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS, toolsForMessage } from './tools';
 import { OBSERVABILITY_TOOL_LABELS, OBSERVABILITY_TOOL_NAMES } from './tools-observability';
 import { listEligibleConnections } from '../connectors/service';
 import { INCIDENT_TOOL_LABELS } from './tools-incident';
@@ -289,21 +289,25 @@ export async function* streamSquire(
           prompt: prompt.meta,
         },
         messages,
-        tools: buildSquireTools(actor, {
-          personal: true,
-          extendedActions: settings.squireExtendedActions,
-          // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
-          knowledge: await squireKnowledgeEnabled(),
-          dataClass,
-          signal,
-          observability,
-          observe: (name, input, result) => {
-            // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
-            ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
-            readUntrusted = true;
-            return evidence.observe(name, input, result);
-          },
-        }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
+        tools: toolsForMessage(
+          buildSquireTools(actor, {
+            personal: true,
+            extendedActions: settings.squireExtendedActions,
+            // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
+            knowledge: await squireKnowledgeEnabled(),
+            dataClass,
+            signal,
+            observability,
+            observe: (name, input, result) => {
+              // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
+              ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
+              readUntrusted = true;
+              return evidence.observe(name, input, result);
+            },
+          }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
+          request.message,
+          Boolean(incident)
+        ),
         maxSteps: SQUIRE_LIMITS.maxSteps,
       })) {
         for (const text of evidence.notices()) {
@@ -589,6 +593,21 @@ async function brief(
   };
 }
 
+/** Messages summarised together: the replay boundary moves in steps of this many (three exchanges). */
+const HISTORY_BLOCK = 6;
+const SOURCE_LINK =
+  /\/(?:incidents|runbooks|changes|alerts|services|schedules|postmortems)\/[A-Za-z0-9_-]{1,64}(?![A-Za-z0-9_-])/g;
+
+/** An older answer as history: its first sentence plus the in-app sources it cited. */
+export function replayDigest(answer: string): string {
+  const text = answer.trim();
+  const first = (text.match(/^[\s\S]*?[.!?](?=\s|$)/)?.[0] ?? text).slice(0, 400);
+  const sources = [...new Set(text.match(SOURCE_LINK) ?? [])]
+    .filter(link => !first.includes(link))
+    .slice(0, 8);
+  return sources.length ? `${first} Sources: ${sources.join(' ')}` : first;
+}
+
 /**
  * Earlier turns. A saved conversation is the source of truth when history is on (the person's own, read
  * on the server); otherwise the browser's copy is used, already trimmed by the request schema.
@@ -600,7 +619,13 @@ async function priorTurns(
   incidentId: string | null
 ): Promise<{ messages: AiMessage[]; omitted: boolean }> {
   if (saved) {
-    const turns = saved.messages.slice(-SQUIRE_LIMITS.historyMax);
+    // The summarised/verbatim boundary moves in fixed blocks, so the summary and the replayed turns stay
+    // byte-identical (and cached) for several turns instead of shifting by one on every turn.
+    const cut = Math.max(
+      0,
+      Math.ceil((saved.messages.length - SQUIRE_LIMITS.historyMax) / HISTORY_BLOCK) * HISTORY_BLOCK
+    );
+    const turns = saved.messages.slice(cut);
     const isReplayable = (message: ConversationDetail['messages'][number]) =>
       message.role === 'user' ||
       (message.replayable !== false &&
@@ -611,18 +636,23 @@ async function priorTurns(
     // summary is the deterministic digest: a model summary here would add a SUMMARIZE call, a per-user
     // rate-limit slot, budget spend and a serial round trip before the answer to every turn of a long
     // conversation, with nothing to switch it off.
-    const summary = await summarizeOlderTurns(
-      saved.messages.slice(0, -SQUIRE_LIMITS.historyMax).filter(isReplayable),
-      { actorId: actor.id, incidentId: incidentId ?? undefined }
-    ).catch(() => null);
+    const summary = await summarizeOlderTurns(saved.messages.slice(0, cut).filter(isReplayable), {
+      actorId: actor.id,
+      incidentId: incidentId ?? undefined,
+    }).catch(() => null);
     return {
       messages: [
         ...(summary ? [summary] : []),
-        ...replayable.map(message => ({
+        ...replayable.map((message, index) => ({
           role: message.role,
           content:
             message.role === 'assistant'
-              ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]\n${message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)}`
+              ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]\n${
+                  // Only the latest answer is replayed in full; older ones as their gist and sources.
+                  replayable.slice(index + 1).some(later => later.role === 'assistant')
+                    ? replayDigest(message.content)
+                    : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)
+                }`
               : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
           dataClass: message.dataClass,
         })),

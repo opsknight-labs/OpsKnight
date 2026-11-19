@@ -37,6 +37,7 @@ import {
 } from './actions/catalog';
 import { FOLLOW_UP_ONLY_ACTIONS, isExtendedSquireAction } from './actions/catalog-extended';
 import { readIncidentForActor } from './deterministic';
+import { classifyIntent, normalizeMessage, parseSlashCommand } from './basic/nlu';
 // --- Observability connectors (slice F1): tools live in their own module and are appended below.
 import type { EligibleConnection } from '../connectors/service';
 import { buildObservabilityTools, OBSERVABILITY_TOOL_DATA_CLASS } from './tools-observability';
@@ -839,6 +840,33 @@ export function buildSquireTools(
         }
       : {}),
   }));
+}
+
+/** The everyday incident actions stay on offer for any question; the rest only when the message asks to act. */
+const CORE_PROPOSALS = new Set([
+  'propose_acknowledge_incident',
+  'propose_resolve_incident',
+  'propose_add_incident_note',
+]);
+// Bounded, literal alternatives over a message capped by the request schema.
+
+const ACTION_WORDS =
+  /\b(ack|acknowledge|resolve|close|reopen|re-?assign|assign|hand ?over|snooze|mute|escalate|page|un-?link|link|note|add|remove|draft|start|open|create|run|execute|publish|post|mark|set|raise|lower|bump|make|remember|learn|follow(?!-ups)|unfollow|notify|invite|subscribe|propose|suggest)\b/;
+
+/**
+ * Tool subset by intent, so a plain question does not carry every proposal schema. Uses the basic-mode NLU:
+ * an action-like message (slash command or action verb) or an UNKNOWN intent keeps the full set; any other
+ * recognised question keeps every read tool and only the core incident proposals.
+ */
+export function toolsForMessage(
+  tools: AiToolDefinition[],
+  message: string,
+  onIncident: boolean
+): AiToolDefinition[] {
+  const text = normalizeMessage(message);
+  if (parseSlashCommand(message) || ACTION_WORDS.test(text)) return tools;
+  if (classifyIntent(text, onIncident).intent === 'UNKNOWN') return tools;
+  return tools.filter(tool => tool.kind !== 'PROPOSE_WRITE' || CORE_PROPOSALS.has(tool.name));
 }
 
 function proposalTool(name: SquireActionName): AiToolDefinition {
