@@ -23,8 +23,7 @@ import { getAiSettings } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
 import { getHistoryStatus, type ConversationDetail } from '../conversations/store';
 import { getConversationForActor } from '../conversations/view';
-import { getResponseIntelligenceForActor } from '../response/view';
-import { getSimilarIncidentsForActor } from '../similarity/view';
+import { getPinnedBriefingForActor } from './briefing-view';
 import { buildProposal } from './actions/proposals';
 import {
   SQUIRE_LIMITS,
@@ -203,15 +202,11 @@ export async function* streamSquire(
         ? []
         : await listEligibleConnections(actor).catch(() => []);
       const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
-      const messages: AiMessage[] = [
-        { role: 'system', content: prompt.system, dataClass: 'PERSONAL' },
-        ...history,
-        // After the cached prefix (system + history): the parts of the briefing that change between turns.
-        ...(prompt.volatile
-          ? [{ role: 'user' as const, content: prompt.volatile, dataClass: 'PERSONAL' as const }]
-          : []),
-        { role: 'user', content: request.message, dataClass: 'PERSONAL' },
-      ];
+      const system: AiMessage = { role: 'system', content: prompt.system, dataClass: 'PERSONAL' };
+      // The parts of the briefing that change between turns, sent after the cached prefix.
+      const volatile: AiMessage[] = prompt.volatile
+        ? [{ role: 'user', content: prompt.volatile, dataClass: 'PERSONAL' }]
+        : [];
 
       // ---- Investigation mode (off unless an administrator enables it) ----
       const investigationContext = {
@@ -234,7 +229,9 @@ export async function* streamSquire(
         yield* streamInvestigation({
           actor,
           question: request.message,
-          preamble: messages.slice(0, -1),
+          // Only the final diagnosis reads this (the planner has its own prompt): the system prompt and
+          // the current briefing, without the chat history.
+          preamble: [system, ...volatile],
           context: investigationContext,
           dataClass,
           chatPort: port,
@@ -270,6 +267,12 @@ export async function* streamSquire(
         return;
       }
 
+      const messages: AiMessage[] = [
+        system,
+        ...history,
+        ...volatile,
+        { role: 'user', content: request.message, dataClass: 'PERSONAL' },
+      ];
       let answer = '';
       let proposals = 0;
       let failed = false;
@@ -545,9 +548,9 @@ async function brief(
   actor: AuthorizationActor,
   incident: ReadableIncident
 ): Promise<IncidentBriefing> {
-  const [similar, response, events, analysis] = await Promise.all([
-    getSimilarIncidentsForActor(incident.id, actor).catch(() => null),
-    getResponseIntelligenceForActor(incident.id, actor).catch(() => null),
+  // The pinned briefing is the panel's view of the same findings, with the incident's one shared AI summary.
+  const [pinned, events, analysis] = await Promise.all([
+    getPinnedBriefingForActor(actor, incident.id).catch(() => null),
     prisma.incidentEvent
       .findMany({
         where: { incidentId: incident.id },
@@ -567,24 +570,29 @@ async function brief(
           lastSuccessfulAt: analysis.lastSuccessfulAt,
         }
       : { status: 'UNAVAILABLE', message: 'Recommendation freshness could not be verified.' },
-    timeline: events.map(event => ({
-      type: event.type ?? 'EVENT',
-      at: event.createdAt.toISOString(),
-      summary: event.message.slice(0, 240),
-    })),
-    similar: (similar ?? []).slice(0, 3).map(s => ({
+    // The shared summary already covers the incident's story; the raw timeline is only the fallback.
+    ...(pinned?.summary
+      ? { summary: pinned.summary }
+      : {
+          timeline: events.map(event => ({
+            type: event.type ?? 'EVENT',
+            at: event.createdAt.toISOString(),
+            summary: event.message.slice(0, 240),
+          })),
+        }),
+    similar: (pinned?.similar ?? []).map(s => ({
       id: s.incidentId,
       title: s.title,
       matchPercent: s.matchPercent,
       status: s.status,
     })),
-    changes: (response?.changes ?? []).slice(0, 3).map(c => ({
+    changes: (pinned?.changes ?? []).map(c => ({
       id: c.changeId,
       summary: c.summary,
       kind: c.kind,
       minutesBeforeOnset: c.leadMinutes,
     })),
-    runbooks: (response?.runbooks ?? []).slice(0, 3).map(r => ({
+    runbooks: (pinned?.runbooks ?? []).map(r => ({
       id: r.runbookId,
       name: r.name,
       succeeded: r.succeeded,

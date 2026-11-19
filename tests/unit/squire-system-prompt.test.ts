@@ -52,6 +52,20 @@ describe('buildSystemPrompt', () => {
     expect(b.volatile).not.toBe(a.volatile);
   });
 
+  it('puts the shared incident summary after the cached prefix', () => {
+    const prompt = buildSystemPrompt(
+      'Squire',
+      briefing({
+        timeline: undefined,
+        summary: { headline: 'Pool exhausted after deploy', currentState: 'Rolling back.' },
+      }),
+      null
+    );
+    expect(prompt.system).not.toContain('Pool exhausted after deploy');
+    expect(prompt.volatile).toContain('Pool exhausted after deploy Rolling back.');
+    expect(prompt.volatile).not.toContain('Recent timeline');
+  });
+
   it('has no volatile part off an incident', () => {
     expect(buildSystemPrompt('Squire', null).volatile).toBeUndefined();
   });

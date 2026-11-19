@@ -32,7 +32,8 @@ afterAll(async () => {
   await model.close();
 });
 
-const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+/** The short evidence handles (E1, E2, ...) listed for the diagnosis to cite. */
+const HANDLE = /(?<=- )E\d+(?=:)/g;
 const lastText = (body: Body) => {
   const content = body.messages?.at(-1)?.content;
   return typeof content === 'string' ? content : JSON.stringify(content ?? '');
@@ -197,7 +198,7 @@ describe('Squire investigation mode (scripted model)', () => {
         };
       }
       if (text.includes('Conclude the incident investigation')) {
-        const handles = text.split('Evidence:')[0].match(UUID) ?? [];
+        const handles = text.split('Evidence:')[0].match(HANDLE) ?? [];
         const cited =
           c.diagnosis === 'cite-first' && handles[0]
             ? [handles[0]]
@@ -338,6 +339,28 @@ describe('Squire investigation mode (scripted model)', () => {
     const firstDelta = events.findIndex(event => event.type === 'delta');
     const lastStep = events.map(event => event.type).lastIndexOf('investigation');
     expect(lastStep).toBeLessThan(firstDelta);
+  });
+
+  it('concludes from the system prompt and current briefing only, without the chat history', async () => {
+    const seeded = await world(true);
+    respondWith(body =>
+      isPlanner(body)
+        ? { content: JSON.stringify({ thought: 'done', calls: [], done: true }) }
+        : { content: JSON.stringify({ summary: 's', hypotheses: [], nextChecks: [] }) }
+    );
+    for await (const _event of streamSquire(seeded.actor, {
+      message: 'investigate',
+      history: [{ role: 'user', content: 'earlier question canary-5521' }],
+      incidentId: seeded.incident.id,
+    }));
+    const diagnosis = model.requests
+      .map(request => request.body as Body)
+      .find(body => JSON.stringify(body).includes('Conclude the incident investigation'));
+    expect(diagnosis).toBeDefined();
+    expect(JSON.stringify(diagnosis)).not.toContain('canary-5521');
+    expect(diagnosis!.messages![0].role).toBe('system');
+    // System prompt, the volatile briefing, then the diagnosis prompt.
+    expect(diagnosis!.messages).toHaveLength(3);
   });
 
   it('offers the planner the connector and knowledge tools an ordinary AI answer gets', async () => {
