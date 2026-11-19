@@ -1,5 +1,6 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
+import { LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { AiGatewayError, registerAiGateway } from '../ai/gateway';
@@ -40,7 +41,7 @@ async function buildIncidentBrief(
       select: { description: true, acknowledgedAt: true, resolvedAt: true },
     }),
     prisma.incidentEvent.findMany({
-      where: { incidentId: incident.id },
+      where: { incidentId: incident.id, ...LIFECYCLE_EVENT_WHERE },
       orderBy: { createdAt: 'desc' },
       take: MAX_EVENTS,
       select: { message: true, createdAt: true },

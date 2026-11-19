@@ -3,6 +3,7 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { executeIdempotentOperation, type IdempotencyContext } from '@/lib/idempotency';
 import { getBaseUrl } from '@/lib/env-validation';
 import { authorizeChatOpsIncidentInTransaction } from './chatops-lifecycle';
+import { loadPostmortemEvents } from './event-filters';
 import { createDraftActionItemRows } from '@/lib/postmortems/action-item-commands';
 
 export async function executeChatOpsPostmortemCommand(input: {
@@ -30,10 +31,7 @@ export async function executeChatOpsPostmortemCommand(input: {
         include: { user: { select: { name: true } } },
         orderBy: { createdAt: 'asc' },
       }),
-      tx.incidentEvent.findMany({
-        where: { incidentId: input.incidentId },
-        orderBy: { createdAt: 'asc' },
-      }),
+      loadPostmortemEvents(tx, input.incidentId),
     ]);
     const timeline = [
       ...events.map(event => ({

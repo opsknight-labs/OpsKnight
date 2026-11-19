@@ -9,6 +9,11 @@ import {
   clipBytes,
 } from '@/lib/chatops/war-room-capture';
 import {
+  LIFECYCLE_EVENT_WHERE,
+  loadPostmortemEvents,
+  POSTMORTEM_CHAT_MAX,
+} from '@/lib/incidents/event-filters';
+import {
   createTestIncident,
   createTestService,
   createTestUser,
@@ -130,5 +135,38 @@ describe('war-room channel capture', () => {
     expect(toIntelligenceTimelineEvents(axis).some(row => (row.kind as string) === 'CHAT')).toBe(
       false
     );
+  });
+
+  it('keeps captured chat out of lifecycle reads and bounds it in postmortems', async () => {
+    const w = await world();
+    const at = (i: number) => new Date(Date.UTC(2026, 10, 17, 10, i));
+    await db.incidentEvent.createMany({
+      data: [
+        {
+          incidentId: w.incident.id,
+          message: 'Acknowledged',
+          type: 'ACKNOWLEDGED',
+          createdAt: at(0),
+        },
+        { incidentId: w.incident.id, message: 'Untyped', createdAt: at(1) },
+        ...Array.from({ length: POSTMORTEM_CHAT_MAX + 5 }, (_, i) => ({
+          incidentId: w.incident.id,
+          message: `Slack user U1: step ${i}`,
+          type: 'CHAT_MESSAGE' as const,
+          createdAt: at(2 + i),
+        })),
+      ],
+    });
+
+    const lifecycle = await db.incidentEvent.findMany({
+      where: { incidentId: w.incident.id, ...LIFECYCLE_EVENT_WHERE },
+      select: { message: true },
+    });
+    expect(lifecycle.map(e => e.message).sort()).toEqual(['Acknowledged', 'Untyped']);
+
+    const events = await loadPostmortemEvents(db, w.incident.id);
+    expect(events.filter(e => e.type === 'CHAT_MESSAGE')).toHaveLength(POSTMORTEM_CHAT_MAX);
+    expect(events.filter(e => e.type !== 'CHAT_MESSAGE')).toHaveLength(2);
+    expect(events.some(e => e.message.endsWith('step 0'))).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import IncidentInsights, {
   SuggestedRunbooks,
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
+import { CHAT_EVENT_DISPLAY_MAX, LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { Suspense } from 'react';
 import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
@@ -137,7 +138,12 @@ export default async function IncidentDetailScreen({
       },
       assignee: { select: CLIENT_USER_SELECT },
       team: { select: { id: true, name: true } },
-      events: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 200 },
+      // Captured chat is read separately below so it cannot push lifecycle events out of the window.
+      events: {
+        where: LIFECYCLE_EVENT_WHERE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 200,
+      },
       notes: {
         include: { user: { select: CLIENT_USER_SELECT } },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -221,30 +227,45 @@ export default async function IncidentDetailScreen({
     permissions.capabilities.includes(CAPABILITIES.AUTOMATION_READ) &&
     !!storedIncident.automationDecision;
 
-  const [users, teams, customFields, totalEventsCount, totalNotesCount, totalNotificationsCount] =
-    await Promise.all([
-      canManageIncident
-        ? prisma.user.findMany({
-            where: { status: 'ACTIVE' },
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatarUrl: true,
-              gender: true,
-              role: true,
-            },
-            orderBy: { name: 'asc' },
-          })
-        : Promise.resolve([]),
-      canManageIncident
-        ? prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
-        : Promise.resolve([]),
-      prisma.customField.findMany({ orderBy: { order: 'asc' } }),
-      prisma.incidentEvent.count({ where: { incidentId: id } }),
-      prisma.incidentNote.count({ where: { incidentId: id } }),
-      prisma.notification.count({ where: { incidentId: id } }),
-    ]);
+  const [
+    users,
+    teams,
+    customFields,
+    totalEventsCount,
+    totalNotesCount,
+    totalNotificationsCount,
+    chatEvents,
+  ] = await Promise.all([
+    canManageIncident
+      ? prisma.user.findMany({
+          where: { status: 'ACTIVE' },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+            gender: true,
+            role: true,
+          },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    canManageIncident
+      ? prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
+      : Promise.resolve([]),
+    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
+    prisma.incidentEvent.count({ where: { incidentId: id } }),
+    prisma.incidentNote.count({ where: { incidentId: id } }),
+    prisma.notification.count({ where: { incidentId: id } }),
+    prisma.incidentEvent.findMany({
+      where: { incidentId: id, type: 'CHAT_MESSAGE' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: CHAT_EVENT_DISPLAY_MAX,
+    }),
+  ]);
+  const events = [...incident.events, ...chatEvents].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id)
+  );
 
   const totalActivityCount = totalEventsCount + totalNotesCount + totalNotificationsCount;
 
@@ -324,7 +345,7 @@ export default async function IncidentDetailScreen({
 
   const timelineProps = {
     incidentId: id,
-    events: incident.events.map(event => ({
+    events: events.map(event => ({
       id: event.id,
       message: event.message,
       type: event.type,
@@ -391,7 +412,7 @@ export default async function IncidentDetailScreen({
       incidentId={id}
       incidentStatus={incident.status}
       canManage={canManageIncident}
-      eventCount={incident.events.length}
+      eventCount={events.length}
       noteCount={incident.notes.length}
       users={users}
       postmortem={postmortem}
