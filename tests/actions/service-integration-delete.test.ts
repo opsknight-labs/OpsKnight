@@ -48,3 +48,15 @@ describe('deleteIntegration', () => {
     expect(await deleteIntegration('int-1', 'svc-1')).toEqual({ error: 'Unauthorized. Nope.' });
   });
 });
+
+describe('createIntegration', () => {
+  it('returns the ARN hint instead of throwing a sanitised error', async () => {
+    const { createIntegration } = await import('@/app/(app)/services/actions');
+    const formData = new FormData();
+    formData.set('serviceId', 'svc-1');
+    formData.set('name', 'CW');
+    formData.set('type', 'CLOUDWATCH');
+    formData.set('snsTopicArn', 'not-an-arn');
+    expect((await createIntegration(formData)).error).toMatch(/SNS Topic ARN/);
+  });
+});

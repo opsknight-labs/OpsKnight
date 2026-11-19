@@ -24,18 +24,19 @@ function serviceSettingsRedirect(serviceId: string, tab = 'settings') {
   return `/services/${serviceId}?tab=${tab}&saved=1`;
 }
 
-export async function createIntegration(formData: FormData) {
+// Expected failures are returned, not thrown: production sanitises thrown server-action messages.
+export async function createIntegration(formData: FormData): Promise<{ error?: string }> {
   const serviceId = formData.get('serviceId') as string;
   const name = formData.get('name') as string;
   const type = (formData.get('type') as string) || 'EVENTS_API_V2';
   const rawSnsTopicArn = formData.get('snsTopicArn');
   const snsTopicArn = typeof rawSnsTopicArn === 'string' ? rawSnsTopicArn.trim() : '';
-  if (!serviceId || !name) throw new Error('Missing required fields');
+  if (!serviceId || !name) return { error: 'Missing required fields' };
   if (type === 'CLOUDWATCH') {
     if (
       !/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(snsTopicArn)
     ) {
-      throw new Error('A valid, exact AWS SNS Topic ARN is required for CloudWatch.');
+      return { error: 'A valid, exact AWS SNS Topic ARN is required for CloudWatch.' };
     }
   }
 
@@ -43,7 +44,7 @@ export async function createIntegration(formData: FormData) {
   try {
     currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : 'Unauthorized');
+    return { error: error instanceof Error ? error.message : 'Unauthorized' };
   }
   // Generate a random 32-char hex key
   const key = randomBytes(16).toString('hex');
@@ -68,6 +69,7 @@ export async function createIntegration(formData: FormData) {
   });
 
   revalidatePath(`/services/${serviceId}/integrations`);
+  return {};
 }
 
 export async function deleteIntegration(
