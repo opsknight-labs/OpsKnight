@@ -26,6 +26,7 @@ import { denyResourceAccess } from '@/lib/access/server';
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
 import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
+import IncidentExperts from '@/components/incident/detail/IncidentExperts';
 import IncidentCommandBar from '@/components/incident/detail/IncidentCommandBar';
 import IncidentDetailTabs from '@/components/incident/IncidentDetailTabs';
 import IncidentRunbooks from '@/components/incident/IncidentRunbooks';
@@ -399,7 +400,7 @@ export default async function IncidentDetailScreen({
     />
   );
 
-  const watchersContent = (
+  const watchersCard = (
     <IncidentWatchers
       watchers={incident.watchers.map(watcher => ({
         id: watcher.id,
@@ -412,6 +413,17 @@ export default async function IncidentDetailScreen({
       onAddWatcher={handleAddWatcher}
       onRemoveWatcher={handleRemoveWatcher}
     />
+  );
+  // Suggested responders sit with the responders card; only people who can add responders see them.
+  const watchersContent = (
+    <div className="space-y-3">
+      {watchersCard}
+      {canManageIncident && (
+        <Suspense fallback={null}>
+          <IncidentExperts incidentId={id} viewerId={user.id} onAddWatcher={handleAddWatcher} />
+        </Suspense>
+      )}
+    </div>
   );
 
   const customFieldsContent = (

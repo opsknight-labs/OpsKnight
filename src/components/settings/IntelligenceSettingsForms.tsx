@@ -51,6 +51,7 @@ type SettingsValues = {
   opsHelpersEnabled: boolean;
   automationIntelligenceFieldsEnabled: boolean;
   pageContextEnabled: boolean;
+  peopleInsightsEnabled: boolean;
   revision: number;
 };
 
@@ -206,6 +207,26 @@ export function IntelligenceSettingsForm({
             emails, from findings already computed for the incident. Links only, no titles; each one
             still checks the reader when opened. A first page often goes out before analysis
             finishes, so leads usually show from the first escalation on.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${enabledId}-people`}
+          name="peopleInsightsEnabled"
+          type="checkbox"
+          defaultChecked={settings.peopleInsightsEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <div>
+          <label htmlFor={`${enabledId}-people`} className="text-sm font-medium">
+            Suggest people
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Ranks cover candidates when someone adds a schedule override, lists people who fixed
+            similar incidents as possible responders, and adds load and expertise to profiles. Load
+            numbers are visible only to the person, their team lead and admins. Deterministic.
           </p>
         </div>
       </div>

@@ -5199,6 +5199,8 @@ model IntelligenceSettings {
   automationIntelligenceFieldsEnabled Boolean @default(false)
   /// Top similar incident, likely change and best runbook in page notifications, precomputed by the lane. Default off.
   pageContextEnabled          Boolean  @default(false)
+  /// People suggestions: cover candidates on overrides, experts on incidents, personal noise and load cards.
+  peopleInsightsEnabled       Boolean  @default(false)
   revision                    Int      @default(1)
   updatedBy                   String?
   createdAt                   DateTime @default(now())

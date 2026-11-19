@@ -62,6 +62,7 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   opsHelpersEnabled: false,
   automationIntelligenceFieldsEnabled: false,
   pageContextEnabled: false,
+  peopleInsightsEnabled: false,
 } as const;
 
 const bounded = (range: { min: number; max: number }) =>
@@ -97,6 +98,7 @@ export const intelligenceSettingsInputSchema = z
     opsHelpersEnabled: z.boolean().optional(),
     automationIntelligenceFieldsEnabled: z.boolean().optional(),
     pageContextEnabled: z.boolean().optional(),
+    peopleInsightsEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict()

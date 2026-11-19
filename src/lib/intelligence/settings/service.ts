@@ -86,6 +86,8 @@ export type IntelligenceSettingsView = {
   automationIntelligenceFieldsEnabled: boolean;
   /** Top similar incident, likely change and best runbook in page notifications (precomputed by the lane). */
   pageContextEnabled: boolean;
+  /** People suggestions: override cover candidates, incident experts, personal load and noise cards. */
+  peopleInsightsEnabled: boolean;
   /** 0 means the singleton row has not been written yet and defaults apply. */
   revision: number;
 };
@@ -115,6 +117,7 @@ const SETTINGS_SELECT = {
   opsHelpersEnabled: true,
   automationIntelligenceFieldsEnabled: true,
   pageContextEnabled: true,
+  peopleInsightsEnabled: true,
   revision: true,
 } as const;
 
