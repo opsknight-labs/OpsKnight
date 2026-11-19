@@ -210,8 +210,8 @@ export async function GET(req: NextRequest) {
                 userId: user.id,
                 error: authError instanceof Error ? authError.message : String(authError),
               });
-              // Fail closed: terminate stream on authorization recheck failure
-              send({ type: 'authorization_revoked' });
+              // Fail closed: terminate the stream, but a failed recheck (e.g. a database blip)
+              // is not a revocation, so the client reconnects instead of being signed out.
               cleanup();
               try {
                 controller.close();

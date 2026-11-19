@@ -24,6 +24,7 @@ vi.mock('@/lib/session-registry', () => ({
 import {
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
+  StreamAuthorizationUnavailableError,
 } from '@/lib/realtime-stream-authorization';
 
 describe('realtime stream authorization', () => {
@@ -59,10 +60,12 @@ describe('realtime stream authorization', () => {
     await expect(resolveStreamAuthorization('user-1', 3, 'jti-revoked')).resolves.toBeNull();
   });
 
-  it('fails closed and returns null when database query throws', async () => {
+  it('fails closed with a distinct error (not a revocation) when the database query throws', async () => {
     mocks.findUnique.mockRejectedValue(new Error('Connection lost to Postgres'));
 
-    await expect(resolveStreamAuthorization('user-1', 3, 'jti-valid')).resolves.toBeNull();
+    await expect(resolveStreamAuthorization('user-1', 3, 'jti-valid')).rejects.toBeInstanceOf(
+      StreamAuthorizationUnavailableError
+    );
   });
 
   it('rejects a stream after its session token has been revoked', async () => {

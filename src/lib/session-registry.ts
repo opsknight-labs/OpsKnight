@@ -232,7 +232,11 @@ export type RegistryCheckResult = 'allowed' | 'denied' | 'unavailable';
  * Fails closed: returns false if revoked, not found, or if DB is unreachable.
  * Used by long-lived SSE connections on each authorization recheck interval.
  */
-export async function isSessionActive(userId: string, sessionId: string): Promise<boolean> {
+export async function isSessionActive(
+  userId: string,
+  sessionId: string,
+  options: { throwOnError?: boolean } = {}
+): Promise<boolean> {
   if (!userId || !sessionId) return false;
   try {
     const row = await prisma.userDevice.findUnique({
@@ -245,7 +249,9 @@ export async function isSessionActive(userId: string, sessionId: string): Promis
     if (!policy || !metadata || metadata.digest !== digestSessionId(sessionId)) return false;
     if (isExpired(metadata.expiresAt)) return false;
     return true;
-  } catch {
+  } catch (error) {
+    // Long-lived streams need to tell a database failure apart from a revoked session.
+    if (options.throwOnError) throw error;
     return false; // Fail closed
   }
 }

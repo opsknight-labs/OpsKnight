@@ -6,6 +6,7 @@ import { GET } from '@/app/api/realtime/stream/route';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
+import { getRequestStreamAuthentication } from '@/lib/realtime-stream-authorization';
 import {
   activeRealtimeStreamCount,
   drainRealtimeStreams,
@@ -325,10 +326,17 @@ describe('API Route - Realtime Stream', () => {
     }
   );
 
-  it('fails closed and releases its subscription when the authorization recheck throws', async () => {
+  it('closes without revoking the session and releases its subscription when the recheck throws', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       arrangeAdmin();
+      // A session of its own, so no recheck result coalesced by an earlier test is reused.
+      vi.mocked(getRequestStreamAuthentication).mockResolvedValueOnce({
+        sessionJti: 'recheck-throws-jti',
+        method: 'credentials',
+        policyVersion: 1,
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      } as never);
       const controller = new AbortController();
       const response = await GET(
         new NextRequest('http://localhost:3000/api/realtime/stream?mode=signal', {
@@ -339,7 +347,8 @@ describe('API Route - Realtime Stream', () => {
       vi.mocked(prisma.user.findUnique).mockRejectedValue(new Error('db down'));
       const finished = readAll(response);
       await vi.advanceTimersByTimeAsync(17_500);
-      expect(await finished).toContain('authorization_revoked');
+      // A database blip must not sign every user out: the stream ends and the client reconnects.
+      expect(await finished).not.toContain('authorization_revoked');
       expect(changeListeners.size).toBe(0);
       controller.abort();
     } finally {
