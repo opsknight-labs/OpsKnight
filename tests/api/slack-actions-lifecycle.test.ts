@@ -258,7 +258,10 @@ describe('Slack interactive lifecycle actions', () => {
     });
     expect(await url.json()).toBeNull();
 
-    const bad = await handleSlackActionRequest({ ...payload('ack'), actions: [{ value: '{oops' }] });
+    const bad = await handleSlackActionRequest({
+      ...payload('ack'),
+      actions: [{ value: '{oops' }],
+    });
     expect((await bad.json()).text).toContain('no longer valid');
   });
 });

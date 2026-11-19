@@ -28,7 +28,10 @@ async function resolveSlackUsersByEmail(
         `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(user.email)}`,
         { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5_000) }
       );
-      const data = (await res.json()) as { ok?: boolean; user?: { id?: string; deleted?: boolean } };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        user?: { id?: string; deleted?: boolean };
+      };
       if (data.ok && data.user?.id && !data.user.deleted) resolved.set(user.id, data.user.id);
     } catch {
       // Unresolved users are recorded as IDENTITY_NOT_LINKED and retried on the next projection.
