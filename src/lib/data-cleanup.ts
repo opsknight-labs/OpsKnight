@@ -13,6 +13,9 @@ import { acquireRetentionResourceLock } from './retention/resource-lock';
 
 export const CLEANUP_MUTEX_KEY = 'mutex:data-cleanup';
 export const CLEANUP_MUTEX_LEASE_MS = 15 * 60 * 1000; // 15 minutes
+// The audit trail outlives short log retention so one admin cannot erase it (and the record
+// of the policy change) by setting logRetentionDays to a day.
+export const AUDIT_LOG_MIN_RETENTION_DAYS = 365;
 
 /**
  * Acquires the distributed cleanup mutex lease on RateLimit.
@@ -183,6 +186,10 @@ export async function performDataCleanup(
 
   const logCutoff = new Date(now);
   logCutoff.setDate(logCutoff.getDate() - policy.logRetentionDays);
+  const auditCutoff = new Date(now);
+  auditCutoff.setDate(
+    auditCutoff.getDate() - Math.max(policy.logRetentionDays, AUDIT_LOG_MIN_RETENTION_DAYS)
+  );
   const metricsCutoff = new Date(now);
   metricsCutoff.setDate(metricsCutoff.getDate() - policy.metricsRetentionDays);
 
@@ -321,7 +328,7 @@ export async function performDataCleanup(
           ...(allHeldIncidentIds.length > 0 ? { incidentId: { notIn: allHeldIncidentIds } } : {}),
         },
       }),
-      prisma.auditLog.count({ where: { createdAt: { lt: logCutoff } } }),
+      prisma.auditLog.count({ where: { createdAt: { lt: auditCutoff } } }),
       prisma.incidentMetricRollup?.count
         ? prisma.incidentMetricRollup.count({ where: { date: { lt: metricsCutoff } } })
         : Promise.resolve(0),
@@ -956,7 +963,7 @@ export async function performDataCleanup(
     auditLogCount = await deleteInBatches(
       () =>
         prisma.auditLog.findMany({
-          where: { createdAt: { lt: logCutoff } },
+          where: { createdAt: { lt: auditCutoff } },
           select: { id: true },
           orderBy: { id: 'asc' },
           take: BATCH_SIZE,

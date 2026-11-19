@@ -475,7 +475,7 @@ export default function RetentionPolicySettings() {
             <RetentionFieldRow
               icon={<FileText className="w-4 h-4 text-violet-500" />}
               label="Audit Trails & Security Events"
-              description="Cryptographic security logs, administrative policy changes, authentication traces, and user actions."
+              description="Event history, authentication traces, and user actions. Audit log entries are always kept for at least 365 days."
               value={policy.logRetentionDays}
               onChange={v => handleInputChange('logRetentionDays', v)}
               min={1}
