@@ -44,6 +44,7 @@ export default async function GlobalSlackIntegrationPage(props: {
     where: {
       services: { none: {} }, // Global integration
     },
+    orderBy: { updatedAt: 'desc' }, // same row the disconnect route removes
     select: {
       id: true,
       workspaceId: true,

@@ -27,7 +27,9 @@ vi.mock('@/lib/war-room/repository', () => ({
   }),
 }));
 vi.mock('@/lib/incident-collaboration/policy', () => ({
-  getIncidentCollaborationPolicies: vi.fn().mockResolvedValue({ globalPolicy: {}, servicePolicy: {} }),
+  getIncidentCollaborationPolicies: vi
+    .fn()
+    .mockResolvedValue({ globalPolicy: {}, servicePolicy: {} }),
   resolveIncidentCollaborationPolicy: vi.fn().mockReturnValue({
     effectiveProviders: ['SLACK'],
     isCollaborationDisabled: false,

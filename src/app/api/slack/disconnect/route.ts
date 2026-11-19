@@ -96,8 +96,10 @@ export async function DELETE(request: NextRequest) {
 
       return NextResponse.json({ success: true });
     } else {
-      // Disconnect global integration (no serviceId)
+      // Disconnect the global integration (not tied to any service) — the same row
+      // the Slack settings page shows, never a service-bound workspace.
       const globalIntegration = await prisma.slackIntegration.findFirst({
+        where: { services: { none: {} } },
         orderBy: { updatedAt: 'desc' },
       });
 
