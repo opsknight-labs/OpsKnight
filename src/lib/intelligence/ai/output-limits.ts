@@ -8,6 +8,8 @@ export const AI_OUTPUT_TOKENS = {
   // A postmortem draft fills many fields; a summary is short.
   'postmortem.draft': 4_096,
   'handoff.narrative': 200,
+  // A few sentences for a stakeholder update.
+  'stakeholder.nudge': 250,
   'squire.context-summary': 400,
   'squire.classify': 64,
   'squire.plan': 600,

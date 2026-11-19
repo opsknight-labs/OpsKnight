@@ -4,7 +4,12 @@ import type { AiDataClass, AiRequestContext, LanguageModelPort } from '../../ai/
 
 /** Asking for an investigation outright, or for a cause. */
 const EXPLICIT =
-  /\b(?:investigat\w*|root[- ]?cause|rca|diagnos\w*|troubleshoot\w*|debug\w*|why (?:is|are|did|does|do|was|were|has|have)|what (?:caused|is causing|broke|went wrong)|cause of|figure out why)\b/i;
+  /\b(?:investigat\w*|root[- ]?cause|rca|diagnos\w*|troubleshoot\w*|debug\w*|what (?:caused|is causing|broke|went wrong)|cause of|figure out why)\b/i;
+/** A bare "why is/did …" is often not diagnostic ("why is this assigned to me?"); the classifier confirms. */
+const WHY = /\bwhy (?:is|are|did|does|do|was|were|has|have)\b/i;
+/** "Why" about ownership or routing: answered from the timeline and policies, never investigated. */
+const ROUTING_WHY =
+  /\bwhy\b.*\b(?:assign\w*|paged|page me|notif\w*|on[- ]?call|escalat\w*|routed)\b/i;
 /** Symptom words that may or may not want a full investigation; a cheap classifier decides. */
 const SYMPTOM =
   /\b(?:slow|failing|fails|failed|errors?|5\d\d|latency|timeouts?|timing out|down|outage|spik\w*|degrad\w*|crash\w*|unhealthy|broken|flapping|related|correlat\w*)\b/i;
@@ -17,8 +22,9 @@ export type DiagnosticCue = 'yes' | 'maybe' | 'no';
 
 /** Deterministic first pass: no model is called for a clear yes or a clear no. */
 export function diagnosticCue(message: string): DiagnosticCue {
-  if (NOT_DIAGNOSTIC.test(message)) return 'no';
+  if (NOT_DIAGNOSTIC.test(message) || ROUTING_WHY.test(message)) return 'no';
   if (EXPLICIT.test(message)) return 'yes';
+  if (WHY.test(message)) return 'maybe';
   if (SYMPTOM.test(message) && /\?|\b(?:is|are|could|might|why|what|how)\b/i.test(message))
     return 'maybe';
   return 'no';

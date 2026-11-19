@@ -9,6 +9,8 @@ import { askSquireForMcp } from '@/lib/mcp/core/ask-squire';
 import { ASK_SQUIRE_SCOPES } from '@/lib/mcp/core/ask-squire-contract';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';
 import { INVESTIGATION_CASES } from '../../evals/squire/investigation-cases';
+import baseline from '../../evals/squire/baseline.json';
+import { estimateTokens } from '@/lib/intelligence/squire/investigation/engine';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import {
   createTestIncident,
@@ -35,6 +37,18 @@ const lastText = (body: Body) => {
   const content = body.messages?.at(-1)?.content;
   return typeof content === 'string' ? content : JSON.stringify(content ?? '');
 };
+
+/** Every message of the request, so a match finds the planner's rules in its system prompt. */
+const allText = (body: Body) =>
+  (body.messages ?? [])
+    .map(message =>
+      typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? '')
+    )
+    .join('\n');
+const isPlanner = (body: Body) =>
+  allText(body).includes('You are planning an incident investigation');
+const isClassifier = (body: Body) =>
+  allText(body).includes('Decide whether the user is asking to diagnose');
 
 /** Replaces the fake server's fixed script with a responder that reads the request it answers. */
 function respondWith(next: (body: Body) => Scripted) {
@@ -134,6 +148,8 @@ beforeEach(async () => {
 });
 
 describe('Squire investigation mode (scripted model)', () => {
+  /** Estimated prompt tokens sent to the model per investigating case. */
+  const promptTokens = new Map<string, number>();
   it.each(INVESTIGATION_CASES.map(c => [c.id, c] as const))('%s', async (_id, c) => {
     const seeded = await world(c.enabled ?? true);
     const fill = (value: string | number) =>
@@ -147,13 +163,16 @@ describe('Squire investigation mode (scripted model)', () => {
     let planIndex = 0;
     respondWith(body => {
       const text = lastText(body);
-      if (text.includes('You are planning an incident investigation')) {
+      // The classifier confirms every ambiguous question, so only the deterministic rules can say no.
+      if (isClassifier(body)) return { content: JSON.stringify({ investigate: true }) };
+      if (isPlanner(body)) {
         const index = planIndex++;
         if (c.plans === 'sweep')
           return {
             content: JSON.stringify({
-              thought: `Check changes over ${index + 1} hours`,
-              calls: [{ tool: 'get_recent_changes', input: JSON.stringify({ hours: index + 1 }) }],
+              // Counting down from 72 h so no step repeats the first round's 6-hour read.
+              thought: `Check changes over ${72 - index} hours`,
+              calls: [{ tool: 'get_recent_changes', input: JSON.stringify({ hours: 72 - index }) }],
               done: false,
             }),
           };
@@ -217,6 +236,10 @@ describe('Squire investigation mode (scripted model)', () => {
     expect(events.some(event => event.type === 'error')).toBe(false);
     expect(steps.length > 0).toBe(c.expect.investigation);
     if (!c.expect.investigation) return;
+    promptTokens.set(
+      c.id,
+      model.requests.reduce((sum, request) => sum + estimateTokens(JSON.stringify(request.body)), 0)
+    );
 
     const indexes = new Set(steps.map(step => step.index));
     if (c.expect.minSteps) expect(indexes.size).toBeGreaterThanOrEqual(c.expect.minSteps);
@@ -236,25 +259,47 @@ describe('Squire investigation mode (scripted model)', () => {
     // Citations are only ever sources read in this turn and visible to the asker.
     expect(JSON.stringify(citations)).not.toContain(seeded.hidden.id);
     // Planning used the cheap route and concluding used the diagnosis route (both fall back to chat here).
-    const prompts = model.requests.map(request => lastText(request.body as Body));
-    expect(
-      prompts.filter(prompt => prompt.includes('You are planning')).length
-    ).toBeLessThanOrEqual(12);
+    const planners = model.requests
+      .map(request => request.body as Body)
+      .filter(body => isPlanner(body));
+    expect(planners.length).toBeLessThanOrEqual(12);
+    // The planner's system prompt is byte-identical on every step, with no chat history after it.
+    if (c.expect.stablePlannerPrompt) {
+      expect(planners.length).toBeGreaterThan(1);
+      expect(new Set(planners.map(body => JSON.stringify(body.messages?.[0]))).size).toBe(1);
+      for (const body of planners) expect(body.messages).toHaveLength(2);
+    }
     // Investigation never proposes or performs a write.
     expect(events.some(event => event.type === 'proposal')).toBe(false);
+  });
+
+  // The scripted planner is deterministic, so the median is stable; raise baseline.json
+  // `investigationMedianPromptTokens` deliberately, in a reviewed commit.
+  it('keeps the median prompt size per investigation within 15% of the committed baseline', ctx => {
+    const investigating = INVESTIGATION_CASES.filter(c => c.expect.investigation);
+    if (promptTokens.size < investigating.length) ctx.skip(); // a filtered run (-t) measures a subset
+    const sorted = [...promptTokens.values()].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median =
+      sorted.length % 2 ? sorted.at(mid)! : (sorted.at(mid - 1)! + sorted.at(mid)!) / 2;
+    expect(
+      median,
+      `median investigation prompt tokens ${median} (${JSON.stringify(Object.fromEntries(promptTokens))}) vs baseline ${baseline.investigationMedianPromptTokens}; if the rise is intended, commit the new median in tests/evals/squire/baseline.json`
+    ).toBeLessThanOrEqual(
+      baseline.investigationMedianPromptTokens * (1 + baseline.maxMedianTokenRise)
+    );
   });
 
   it('streams each read step as running then finished, then the conclusion', async () => {
     const seeded = await world(true);
     let planned = false;
     respondWith(body => {
-      const text = lastText(body);
-      if (text.includes('You are planning')) {
+      if (isPlanner(body)) {
         const reply = planned
           ? { thought: 'done', calls: [], done: true }
           : {
-              thought: 'Read the incident',
-              calls: [{ tool: 'get_incident', input: JSON.stringify({ id: seeded.incident.id }) }],
+              thought: 'Read the timeline',
+              calls: [{ tool: 'get_timeline', input: JSON.stringify({ id: seeded.incident.id }) }],
               done: false,
             };
         planned = true;
@@ -277,8 +322,16 @@ describe('Squire investigation mode (scripted model)', () => {
       '1:done',
       '2:running',
       '2:done',
+      '3:running',
+      '3:done',
     ]);
-    expect(steps[0].calls).toEqual([{ tool: 'get_incident', label: 'Reading the incident' }]);
+    // Step 1 is the fixed first round (no planner call); step 2 is the planned read.
+    expect(steps[0].calls.map(call => call.tool)).toEqual([
+      'get_incident',
+      'list_alerts',
+      'get_recent_changes',
+    ]);
+    expect(steps[2].calls.map(call => call.tool)).toEqual(['get_timeline']);
     const memory = events.find(event => event.type === 'memory');
     expect(memory).toMatchObject({ turn: { mode: 'ai', completion: 'COMPLETED' } });
     // The step events are ordered before the answer text.
@@ -303,8 +356,7 @@ describe('Squire investigation mode (scripted model)', () => {
     await db.squireMemorySettings.create({ data: { id: 'default', knowledgeEnabled: true } });
     const catalogs: string[] = [];
     respondWith(body => {
-      const text = lastText(body);
-      if (text.includes('You are planning')) {
+      if (isPlanner(body)) {
         catalogs.push(JSON.stringify(body.messages ?? []));
         return { content: JSON.stringify({ thought: 'done', calls: [], done: true }) };
       }
@@ -324,17 +376,21 @@ describe('Squire investigation mode (scripted model)', () => {
     expect(catalogs[0]).not.toMatch(/- propose_[a-z_]+:/);
   });
 
-  it('falls back to a basic answer when planning fails before anything is read', async () => {
+  it('answers partially from the fixed first reads when the planner is unavailable', async () => {
     const seeded = await world(true);
     respondWith(() => ({ status: 500 }));
     const events: SquireEvent[] = [];
     for await (const event of streamSquire(seeded.actor, {
-      message: 'Why is checkout failing?',
+      message: 'Investigate checkout failures',
       history: [],
       incidentId: seeded.incident.id,
     }))
       events.push(event);
-    expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
+    const steps = events.flatMap(event => (event.type === 'investigation' ? [event.step] : []));
+    expect(steps[0]?.calls.map(call => call.tool)).toContain('list_alerts');
+    expect(events.some(event => event.type === 'notice' && /partial answer/.test(event.text))).toBe(
+      true
+    );
     expect(events.at(-1)).toEqual({ type: 'done' });
   });
 });

@@ -44,8 +44,13 @@ export async function sendHandoffSummaries(input: {
       prisma
     );
     const appUrl = getBaseUrl();
+    // The summary is built for the schedule, not the person, so every recipient gets the same narrative.
+    const narrative = await draftHandoffNarrative(
+      summary,
+      input.scheduleId,
+      input.recipients[0].userId
+    );
     for (const recipient of input.recipients) {
-      const narrative = await draftHandoffNarrative(summary, recipient.userId);
       const email = renderHandoffSummary({ ...summary, narrative }, appUrl);
       await createInAppNotifications({
         userIds: [recipient.userId],

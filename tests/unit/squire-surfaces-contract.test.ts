@@ -154,6 +154,29 @@ describe('finding anchors', () => {
     expect(findingHrefForCitation(null, { kind: 'change', id: 'chg_1' })).toBeUndefined();
   });
 
+  it('pins the shared incident summary, even with no finding rows', () => {
+    const briefing = parsePinnedBriefing({
+      incidentId: 'inc_1',
+      similar: [],
+      changes: [],
+      runbooks: [],
+      summary: { headline: 'Checkout is failing', currentState: 'Errors since the 10:02 deploy.' },
+    });
+    expect(briefing?.summary).toEqual({
+      headline: 'Checkout is failing',
+      currentState: 'Errors since the 10:02 deploy.',
+    });
+    expect(
+      parsePinnedBriefing({
+        incidentId: 'inc_1',
+        similar: [],
+        changes: [],
+        runbooks: [],
+        summary: { headline: '' },
+      })
+    ).toBeNull();
+  });
+
   it('treats a malformed or empty briefing as nothing to pin', () => {
     expect(parsePinnedBriefing(null)).toBeNull();
     expect(parsePinnedBriefing({ similar: [] })).toBeNull();

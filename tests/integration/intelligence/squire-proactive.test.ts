@@ -425,6 +425,39 @@ describe('proactive Squire with a model', () => {
     expect(model.requests).toHaveLength(1);
   });
 
+  it('drafts the stakeholder nudge with its own small schema', async () => {
+    const { service, teamA, admin } = await setup({ ai: true });
+    await updateSquireServicePolicy(
+      service.id,
+      {
+        briefingEnabled: false,
+        nudgeAfterMinutes: 30,
+        postmortemDraftEnabled: false,
+        expectedRevision: 0,
+      },
+      admin.id
+    );
+    const quiet = await createTestIncident('Checkout latency high', service.id, {
+      teamId: teamA.id,
+      createdAt: past(45 * MIN),
+    });
+    model.script.push({
+      content: JSON.stringify({
+        update: 'Checkout is slow for some customers; a fix is underway.',
+      }),
+    });
+    expect(await runProactiveJob(`STAKEHOLDER_NUDGE:${quiet.id}`, 10, budget)).toBe('written');
+    const note = await db.squireProactiveNote.findFirstOrThrow({ where: { incidentId: quiet.id } });
+    expect(note.mode).toBe('AI');
+    expect((note.content as { ai?: { draft?: string } }).ai?.draft).toBe(
+      'Checkout is slow for some customers; a fix is underway.'
+    );
+    expect(model.requests).toHaveLength(1);
+    const body = JSON.stringify(model.requests[0].body);
+    expect(body).toContain('"max_tokens":250');
+    expect(body).not.toContain('possibleCauses');
+  });
+
   it('writes AI text through the gateway and shows it only to viewers who may read its inputs', async () => {
     const { service, teamA, admin, member } = await setup({ ai: true });
     await updateSquireServicePolicy(

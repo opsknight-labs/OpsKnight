@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getAiSettings } from '../ai/settings';
+import { getProactiveNotesForActor } from '../memory/proactive-view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
 import { readIncidentForActor } from './deterministic';
@@ -38,6 +39,8 @@ export interface PinnedBriefing {
     succeeded: number;
     eligible: number;
   }>;
+  /** The incident's one AI summary (the proactive briefing's), shared with the insights inspector. */
+  summary?: { headline: string; currentState: string } | null;
 }
 
 const short = (text: string, max = 160) => {
@@ -70,10 +73,13 @@ export async function getPinnedBriefingForActor(
   ]);
   if (!settings?.squireEnabled || !incident) return null;
 
-  const [similar, response] = await Promise.all([
+  const [similar, response, proactive] = await Promise.all([
     getSimilarIncidentsForActor(incident.id, actor, client).catch(() => null),
     getResponseIntelligenceForActor(incident.id, actor, client).catch(() => null),
+    // Already scoped: its AI text is shown only to a viewer who may read every input it was written from.
+    getProactiveNotesForActor(incident.id, actor).catch(() => null),
   ]);
+  const ai = proactive?.briefing?.ai;
   const briefing: PinnedBriefing = {
     incidentId: incident.id,
     similar: (similar ?? []).slice(0, PINNED_BRIEFING_ROWS).map(row => ({
@@ -97,8 +103,12 @@ export async function getPinnedBriefingForActor(
       succeeded: row.succeeded,
       eligible: row.eligible,
     })),
+    summary: ai
+      ? { headline: short(ai.headline, 200), currentState: short(ai.currentState, 600) }
+      : null,
   };
-  return briefing.similar.length + briefing.changes.length + briefing.runbooks.length > 0
+  return briefing.summary ||
+    briefing.similar.length + briefing.changes.length + briefing.runbooks.length > 0
     ? briefing
     : null;
 }

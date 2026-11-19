@@ -34,6 +34,8 @@ export interface SquireInvestigationEvalCase {
     mustCite?: boolean;
     mustContain?: string[];
     mustNotContain?: string[];
+    /** Every planner call carries the same system prompt and no chat history. */
+    stablePlannerPrompt?: boolean;
   };
 }
 
@@ -59,6 +61,7 @@ export const INVESTIGATION_CASES: readonly SquireInvestigationEvalCase[] = [
       partial: false,
       minSteps: 2,
       mustCite: true,
+      stablePlannerPrompt: true,
       mustContain: ['## Investigation', '### Ranked hypotheses', '### Next checks'],
     },
   },
@@ -113,6 +116,13 @@ export const INVESTIGATION_CASES: readonly SquireInvestigationEvalCase[] = [
   {
     id: 'not-diagnostic',
     question: 'Who is on call?',
+    plans: [],
+    expect: { investigation: false },
+  },
+  {
+    // A "why" about routing is answered from the timeline and policies; the classifier is never asked.
+    id: 'not-diagnostic-why',
+    question: 'Why was I paged for this?',
     plans: [],
     expect: { investigation: false },
   },

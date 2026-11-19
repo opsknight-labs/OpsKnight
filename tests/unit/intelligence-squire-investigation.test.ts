@@ -8,6 +8,7 @@ import {
   INVESTIGATION_LIMITS,
   renderDiagnosis,
   runInvestigation,
+  standardFirstReads,
   type EvidenceEntry,
   type InvestigationInput,
   type InvestigationOutcome,
@@ -346,6 +347,79 @@ describe('investigation loop', () => {
   });
 });
 
+describe('lean planner', () => {
+  it('sends only a fixed system prompt and the question with observations, identical across steps', async () => {
+    const h = harness({ delayMs: 0 });
+    const planner = scriptedPort([
+      { thought: 'a', calls: [call('get_service', { id: 's1' })], done: false },
+      { thought: 'b', calls: [call('get_service', { id: 's2' })], done: false },
+      { thought: 'c', calls: [], done: true },
+    ]);
+    const diagnoser = scriptedPort([{ summary: 's', hypotheses: [], nextChecks: [] }]);
+    await drain(
+      runInvestigation(
+        inputFor(h, planner, diagnoser, {
+          context: {
+            actorId: 'u1',
+            callSite: 'interactive',
+            dataClass: 'PERSONAL',
+            incidentId: 'inc-1',
+          },
+          preamble: [
+            { role: 'system', content: 'CHAT RULES', dataClass: 'PERSONAL' },
+            { role: 'user', content: 'EARLIER TURN', dataClass: 'PERSONAL' },
+          ],
+        })
+      )
+    );
+    expect(planner.requests).toHaveLength(3);
+    const systems = planner.requests.map(request => request.messages[0]);
+    for (const request of planner.requests) {
+      expect(request.context.capability).toBe('CLASSIFY');
+      expect(request.messages.map(message => message.role)).toEqual(['system', 'user']);
+      const all = request.messages.map(message => message.content).join('\n');
+      expect(all).not.toContain('CHAT RULES');
+      expect(all).not.toContain('EARLIER TURN');
+      expect(request.messages[1].content).toContain('Why is checkout failing?');
+      expect(request.messages[1].content).toContain('inc-1');
+    }
+    expect(new Set(systems.map(system => system.content)).size).toBe(1);
+    expect(systems[0].content).toContain('get_service');
+    // The diagnosis still sees the chat preamble (pinned briefing).
+    expect(diagnoser.requests[0].messages[0].content).toBe('CHAT RULES');
+  });
+
+  it('runs a fixed first round of reads without a planner call', async () => {
+    const h = harness({ delayMs: 0 });
+    const planner = scriptedPort([{ thought: 'done', calls: [], done: true }]);
+    const diagnoser = scriptedPort([{ summary: 's', hypotheses: [], nextChecks: [] }]);
+    const firstReads = standardFirstReads(
+      h.tools.map(tool => tool.name),
+      'inc-1'
+    );
+    const { steps } = await drain(
+      runInvestigation(inputFor(h, planner, diagnoser, { firstReads }))
+    );
+    expect(h.calls.map(c => c.tool).sort()).toEqual(['get_recent_changes', 'list_alerts']);
+    expect(h.calls.find(c => c.tool === 'list_alerts')!.input).toEqual({ id: 'inc-1' });
+    expect(steps[0]).toMatchObject({ index: 1, status: 'running' });
+    expect(planner.requests).toHaveLength(1);
+    expect(planner.requests[0].messages[1].content).toContain('[step 1] list_alerts');
+  });
+
+  it('picks the standard first reads from the tools on offer', () => {
+    expect(standardFirstReads(['get_recent_changes'], undefined)).toEqual([
+      { tool: 'get_recent_changes', input: { hours: 6 } },
+    ]);
+    expect(
+      standardFirstReads(
+        ['get_incident', 'list_alerts', 'get_recent_changes', 'get_error_events', 'query_metrics'],
+        'i'
+      ).map(read => read.tool)
+    ).toEqual(['get_incident', 'list_alerts', 'get_recent_changes', 'get_error_events']);
+  });
+});
+
 describe('rendering', () => {
   it('renders evidence without a page as plain text and strips link syntax from labels', () => {
     const { text, shown } = renderDiagnosis(
@@ -365,7 +439,7 @@ describe('rendering', () => {
 
 describe('investigation trigger', () => {
   it('decides clear cases without a model', () => {
-    expect(diagnosticCue('Why is checkout returning 500s?')).toBe('yes');
+    expect(diagnosticCue('Why is checkout returning 500s?')).toBe('maybe');
     expect(diagnosticCue('investigate this incident')).toBe('yes');
     expect(diagnosticCue('What is the root cause?')).toBe('yes');
     expect(diagnosticCue('is the latency spike related to the deploy?')).toBe('maybe');
@@ -373,6 +447,20 @@ describe('investigation trigger', () => {
     expect(diagnosticCue('acknowledge this incident')).toBe('no');
     expect(diagnosticCue('/resolve fixed')).toBe('no');
     expect(diagnosticCue('list open incidents')).toBe('no');
+  });
+
+  it('sends a bare "why <aux>" question to the classifier instead of investigating outright', () => {
+    expect(diagnosticCue('why did this happen?')).toBe('maybe');
+    expect(diagnosticCue('Why are users seeing errors?')).toBe('maybe');
+    expect(diagnosticCue('figure out why checkout broke')).toBe('yes');
+  });
+
+  it('never investigates "why" questions about ownership or routing', () => {
+    expect(diagnosticCue('why was I paged?')).toBe('no');
+    expect(diagnosticCue('Why is this assigned to me?')).toBe('no');
+    expect(diagnosticCue('why did Alice get notified about the outage?')).toBe('no');
+    expect(diagnosticCue('why is Bob on-call for checkout?')).toBe('no');
+    expect(diagnosticCue('why is it escalated to the platform team')).toBe('no');
   });
 
   it('asks the classifier only for ambiguous questions on an incident, and treats failure as no', async () => {
@@ -392,7 +480,10 @@ describe('investigation trigger', () => {
         }) as unknown as LanguageModelPort
     );
     const base = { classifier, context, dataClass: 'PERSONAL' as const };
-    expect(await wantsInvestigation('why is it down?', { ...base, onIncident: false })).toBe(true);
+    expect(
+      await wantsInvestigation('investigate why it is down', { ...base, onIncident: false })
+    ).toBe(true);
+    expect(await wantsInvestigation('why is it down?', { ...base, onIncident: false })).toBe(false);
     expect(classifier).not.toHaveBeenCalled();
     expect(await wantsInvestigation('is the spike related?', { ...base, onIncident: false })).toBe(
       false

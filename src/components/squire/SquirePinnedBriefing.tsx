@@ -106,6 +106,7 @@ export default function SquirePinnedBriefing({
   if (!briefing) return null;
 
   const counts = [
+    briefing.summary && 'summary',
     briefing.changes.length && plural(briefing.changes.length, 'change', 'changes'),
     briefing.similar.length && `${briefing.similar.length} similar`,
     briefing.runbooks.length && plural(briefing.runbooks.length, 'runbook', 'runbooks'),
@@ -135,6 +136,15 @@ export default function SquirePinnedBriefing({
           />
         </CollapsibleTrigger>
         <CollapsibleContent className="max-h-56 overflow-y-auto px-2 pb-2 text-xs">
+          {/* The same summary the insights inspector shows, never a second one written for the panel. */}
+          {briefing.summary && (
+            <div className="px-2 pt-2">
+              <p className="font-medium text-foreground">{briefing.summary.headline}</p>
+              {briefing.summary.currentState && (
+                <p className="text-muted-foreground">{briefing.summary.currentState}</p>
+              )}
+            </div>
+          )}
           {briefing.changes.length > 0 && (
             <Group label={briefing.changes.length === 1 ? 'Likely change' : 'Likely changes'}>
               {briefing.changes.map(change => (
