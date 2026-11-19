@@ -887,7 +887,7 @@ describe('central notification control plane', () => {
         channel: 'EMAIL',
         recipientType: 'USER',
         recipientAddress: 'alice@example.com',
-        templateKey: 'incident-triggered',
+        templateKey: 'incident-acknowledged',
         sourceType: 'INCIDENT',
         sourceId: 'incident-1',
         eventKey: 'event-1',
@@ -898,7 +898,7 @@ describe('central notification control plane', () => {
           kind: 'INCIDENT_EMAIL',
           userId: 'u1',
           incidentId: 'incident-1',
-          eventType: 'triggered',
+          eventType: 'acknowledged',
         } as never,
       },
       scheduledAt
@@ -913,7 +913,7 @@ describe('central notification control plane', () => {
         channel: 'EMAIL',
         recipientType: 'USER',
         recipientAddress: 'alice@example.com',
-        templateKey: 'incident-triggered',
+        templateKey: 'incident-acknowledged',
         sourceType: 'INCIDENT',
         sourceId: 'incident-1',
         eventKey: 'event-1',
@@ -923,7 +923,7 @@ describe('central notification control plane', () => {
           kind: 'INCIDENT_EMAIL',
           userId: 'u1',
           incidentId: 'incident-1',
-          eventType: 'triggered',
+          eventType: 'acknowledged',
           eventAt: twoHoursAgo.toISOString(),
         } as never,
       },
@@ -950,6 +950,34 @@ describe('central notification control plane', () => {
     );
     // 12:00 + 2h TTL = 14:00
     expect(futureExpiry.toISOString()).toBe('2026-09-15T14:00:00.000Z');
+
+    // Case 4: a triggered page (escalation step/repeat) carries the incident's
+    // creation instant as eventAt, but its freshness starts when it is sent.
+    const pageExpiry = resolveNotificationExpiry(
+      {
+        category: 'INCIDENT',
+        channel: 'SMS',
+        recipientType: 'USER',
+        recipientAddress: '+15555550100',
+        templateKey: 'incident-triggered',
+        sourceType: 'INCIDENT',
+        sourceId: 'incident-1',
+        eventKey: 'event-1:step-2',
+        displayMessage: 'Alert',
+        trafficClass: 'CRITICAL',
+        eventAt: twoHoursAgo,
+        payload: {
+          kind: 'INCIDENT_SMS',
+          userId: 'u1',
+          incidentId: 'incident-1',
+          eventType: 'triggered',
+          eventAt: twoHoursAgo.toISOString(),
+        } as never,
+      },
+      scheduledAt
+    );
+    // 12:00 + 30m TTL = 12:30
+    expect(pageExpiry.toISOString()).toBe('2026-09-15T12:30:00.000Z');
   });
 
   it('skips new intents created with stale eventAt immediately upon delivery with zero provider attempts', async () => {

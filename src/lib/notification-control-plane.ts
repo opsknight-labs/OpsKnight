@@ -519,6 +519,14 @@ export function resolveNotificationExpiry(
           : NOTIFICATION_FRESHNESS_TTL_MS.BULK;
 
   let originTime = scheduledAt.getTime();
+  // A triggered page's eventAt is the incident's creation instant (its identity),
+  // but each escalation step/repeat is a fresh page: freshness starts when it is sent.
+  const isTriggeredPage =
+    input.category === 'INCIDENT' &&
+    !!input.payload &&
+    typeof input.payload === 'object' &&
+    (input.payload as { eventType?: unknown }).eventType === 'triggered';
+  if (isTriggeredPage) return new Date(originTime + ttlMs);
   if (input.eventAt) {
     const parsed = new Date(input.eventAt).getTime();
     if (!Number.isNaN(parsed)) originTime = parsed;
