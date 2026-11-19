@@ -187,6 +187,21 @@ export async function updateService(serviceId: string, formData: FormData) {
   }
 }
 
+// Same host rule sendSlackNotification enforces at delivery, so a typo fails at save, not silently later.
+function isSlackWebhookUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      ['hooks.slack.com', 'hooks.slack-gov.com'].includes(url.hostname.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function updateServiceNotificationSettings(serviceId: string, formData: FormData) {
   const currentUser = await assertCanModifyService(serviceId);
   const channels = parseServiceNotificationChannels(formData);
@@ -201,6 +216,9 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
       ? String(formData.get('slackWebhookUrl') ?? '').trim() || null
       : undefined
     : null;
+  if (slackWebhookUrl && !isSlackWebhookUrl(slackWebhookUrl)) {
+    return redirect(`/services/${serviceId}?tab=notifications&error=invalid-slack-webhook`);
+  }
 
   await prisma.service.update({
     where: { id: serviceId },

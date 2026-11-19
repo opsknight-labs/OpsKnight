@@ -1019,6 +1019,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const notificationsContent = (
     <div className="space-y-3.5">
       {isSaved && <ServiceSettingsFlashToast serviceId={id} />}
+      {errorCode === 'invalid-slack-webhook' && (
+        <InlineNotice tone="error" title="Invalid Slack webhook URL">
+          Use an incoming-webhook URL from Slack (https://hooks.slack.com/...). Nothing was saved.
+        </InlineNotice>
+      )}
 
       {canManageService ? (
         <ServiceNotificationSettings
