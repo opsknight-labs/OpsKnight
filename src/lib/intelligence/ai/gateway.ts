@@ -33,7 +33,7 @@ import { PostgresBreakerStore } from './breaker-store';
 import { embeddingSpaceIdentity } from '../semantic/identity';
 import { AI_SETTINGS_BOUNDS } from './contract';
 import { selectProviderChain } from './policy';
-import { applyCapabilityRoute, applyDefaultTiers } from './routing';
+import { applyCapabilityRoute, applyDefaultTiers, CAPABILITY_TIERS } from './routing';
 import { redactSecrets, sanitizeUntrusted, UNTRUSTED_DATA_PREAMBLE } from './redact';
 import {
   highestDataClass,
@@ -305,6 +305,25 @@ const toMessages = (request: AiGenerateRequest, kind?: GatewayProvider['kind']):
     ) as ModelMessage;
   });
 
+/**
+ * Rolling cache breakpoint: besides the system prompt's marker, the newest message of every step is marked, so
+ * the next step (and the next turn) reads the whole conversation so far from cache. At most two markers are
+ * live per request, within Anthropic's four.
+ */
+export function withRollingCacheBreakpoint(
+  messages: ModelMessage[],
+  kind: GatewayProvider['kind']
+): ModelMessage[] {
+  // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed provider-kind union
+  const hint = CACHE_HINTS[kind];
+  const last = messages.at(-1);
+  if (!hint || !last || last.role === 'system') return messages;
+  return [
+    ...messages.slice(0, -1),
+    { ...last, providerOptions: { ...last.providerOptions, ...hint } } as ModelMessage,
+  ];
+}
+
 const clampSteps = (steps: number | undefined) =>
   Math.max(1, Math.min(MAX_STEPS_CEILING, steps ?? DEFAULT_MAX_STEPS));
 
@@ -409,49 +428,83 @@ class GatewayPort implements LanguageModelPort {
     return this.degraded.has(request) ? { ...result, degraded: true } : result;
   }
 
-  private async reserve(request: AiGenerateRequest, provider: GatewayProvider, structured = false) {
-    const steps = request.tools?.length ? clampSteps(request.maxSteps) : 1;
+  /**
+   * Holds one step's worth of tokens: the prompt so far, the tool catalogue and a full answer. A multi-step
+   * call tops the same hold up before each further step (`topUp`) instead of holding every step up front.
+   */
+  private async hold(
+    request: AiGenerateRequest,
+    provider: GatewayProvider,
+    input: number,
+    structured: boolean,
+    extend?: AiReservation
+  ): Promise<AiReservation | null> {
     const output = structured
       ? this.outputLimit(request, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
       : this.outputLimit(request, this.data.settings.maxOutputTokens);
-    const estimate =
-      (estimatedInput(request) +
-        estimateTokens(
-          JSON.stringify(
-            request.tools?.map(tool => ({ name: tool.name, description: tool.description })) ?? []
-          )
-        ) +
-        output) *
-      steps;
-    try {
-      // Cost governance: charge the hold to a team and capability, with a dollar estimate when priced.
-      const [teamId, price] = await Promise.all([
-        this.teamFor(request),
-        priceForModel(provider.kind, provider.model),
-      ]);
-      const inputEstimate = estimate - output * steps;
-      const reservation = await reserveAiTokens(
-        request.context.actorId,
-        this.data.settings,
-        estimate,
-        this.data.settings.requestTimeoutMs * (this.data.chain.length + 1) + 60_000,
-        new Date(),
-        {
-          teamId,
-          capability: request.context.capability,
-          callSite: request.context.callSite,
-          costMicros: costMicrosFor(
-            { inputTokens: inputEstimate, outputTokens: output * steps },
-            price
-          ),
-        }
+    const inputEstimate =
+      input +
+      estimateTokens(
+        JSON.stringify(
+          request.tools?.map(tool => ({ name: tool.name, description: tool.description })) ?? []
+        )
       );
+    // Cost governance: charge the hold to a team and capability, with a dollar estimate when priced.
+    const [teamId, price] = await Promise.all([
+      this.teamFor(request),
+      priceForModel(provider.kind, provider.model),
+    ]);
+    return reserveAiTokens(
+      request.context.actorId,
+      this.data.settings,
+      inputEstimate + output,
+      this.data.settings.requestTimeoutMs * (this.data.chain.length + 1) + 60_000,
+      new Date(),
+      {
+        teamId,
+        capability: request.context.capability,
+        callSite: request.context.callSite,
+        costMicros: costMicrosFor({ inputTokens: inputEstimate, outputTokens: output }, price),
+      },
+      extend
+    );
+  }
+
+  private async reserve(request: AiGenerateRequest, provider: GatewayProvider, structured = false) {
+    try {
+      const reservation = await this.hold(request, provider, estimatedInput(request), structured);
       if (!reservation) throw new AiGatewayError('BUDGET_EXHAUSTED', 'Daily AI budget reached');
       return reservation;
     } catch (error) {
       breakers.release(provider.id);
       throw error;
     }
+  }
+
+  /**
+   * Per-step options for a tool loop: the rolling cache breakpoint, and from the second step a top-up of the
+   * hold. A refused top-up ends the loop gracefully: the model must answer from what it has read so far.
+   */
+  private stepper(
+    request: AiGenerateRequest,
+    provider: GatewayProvider,
+    reservation: AiReservation
+  ) {
+    return async ({ stepNumber, messages }: { stepNumber: number; messages: ModelMessage[] }) => {
+      const funded =
+        stepNumber === 0 ||
+        (await this.hold(
+          request,
+          provider,
+          estimateTokens(JSON.stringify(messages)),
+          false,
+          reservation
+        ).catch(() => null));
+      return {
+        messages: withRollingCacheBreakpoint(messages, provider.kind),
+        ...(funded ? {} : { toolChoice: 'none' as const }),
+      };
+    };
   }
 
   private signalFor(request: AiGenerateRequest): AbortSignal {
@@ -675,6 +728,7 @@ class GatewayPort implements LanguageModelPort {
               messages: toMessages(request, provider.kind),
               tools: toToolSet(request.tools),
               stopWhen: stepCountIs(clampSteps(request.maxSteps)),
+              prepareStep: this.stepper(request, provider, reservation),
               maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
               abortSignal: this.signalFor(request),
               maxRetries: 1,
@@ -771,6 +825,7 @@ class GatewayPort implements LanguageModelPort {
           messages: toMessages(request, provider.kind),
           tools: toToolSet(request.tools),
           stopWhen: stepCountIs(clampSteps(request.maxSteps)),
+          prepareStep: this.stepper(request, provider, reservation),
           maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
           abortSignal: this.signalFor(request),
           maxRetries: 0,
@@ -995,9 +1050,12 @@ export async function resolveGatewayPort(
     allowExternalFallback: settings.allowExternalFallback,
     allowedRegions: settings.allowedDataRegions,
   });
-  // Spend controls' default tiers first; an administrator's explicit route is applied on top and wins.
+  // Default tiers first; an administrator's explicit route is applied on top and wins. Small-tier work
+  // (classification, planning hops, phrasing) is always tiered; spend controls also tier the strong work.
   const tiered =
-    capability && settings.spendControlsEnabled
+    capability &&
+    (settings.spendControlsEnabled ||
+      (capability !== 'EMBED' && CAPABILITY_TIERS[capability] === 'small'))
       ? applyDefaultTiers(eligible, capability)
       : eligible;
   const chain = capability

@@ -116,16 +116,21 @@ export interface AiReservation {
   day: string;
 }
 
-/** Serialize admission and settlement by UTC day, including all active reservations. */
+/**
+ * Serialize admission and settlement by UTC day, including all active reservations. With `extend`, the same
+ * checks admit `estimate` more tokens onto that open hold (a multi-step call tops up per step) instead of
+ * opening a new one; null when the budget refuses the top-up or the hold is already settled.
+ */
 export async function reserveAiTokens(
   actorId: string,
   limits: TokenLimits,
   estimate: number,
   ttlMs = 120_000,
   now = new Date(),
-  scope?: ReservationScope
+  scope?: ReservationScope,
+  extend?: AiReservation
 ): Promise<AiReservation | null> {
-  const day = utcDay(now);
+  const day = extend?.day ?? utcDay(now);
   const tokens = Math.max(1, clampTokens(estimate));
   return prisma.$transaction(async tx => {
     await tx.$executeRaw(
@@ -181,12 +186,24 @@ export async function reserveAiTokens(
       scope?.costMicros === null || scope?.costMicros === undefined
         ? null
         : BigInt(Math.max(0, Math.round(scope.costMicros)));
+    const expiresAt = new Date(+now + Math.max(60_000, Math.min(ttlMs, 3_600_000)));
+    if (extend) {
+      const updated = await tx.aiTokenReservation.updateMany({
+        where: { id: extend.id, settledAt: null },
+        data: {
+          tokens: { increment: tokens },
+          expiresAt,
+          ...(estimatedCost === null ? {} : { costMicros: { increment: estimatedCost } }),
+        },
+      });
+      return updated.count ? extend : null;
+    }
     const row = await tx.aiTokenReservation.create({
       data: {
         day,
         actorId,
         tokens,
-        expiresAt: new Date(+now + Math.max(60_000, Math.min(ttlMs, 3_600_000))),
+        expiresAt,
         teamId: scope?.teamId ?? null,
         capability: scope?.capability ?? null,
         costMicros: estimatedCost,
@@ -201,6 +218,9 @@ export async function reserveAiTokens(
   });
 }
 
+/** Weight of one cache-read token against the token budgets. */
+export const CACHE_READ_BUDGET_WEIGHT = 0.1;
+
 export async function recordAiUsage(
   usage: AiUsage,
   now: Date = new Date(),
@@ -208,7 +228,13 @@ export async function recordAiUsage(
   reservation?: AiReservation,
   attribution?: UsageAttribution
 ): Promise<void> {
-  const inputTokens = clampTokens(usage.inputTokens);
+  const rawInputTokens = clampTokens(usage.inputTokens);
+  // Cache reads count at a tenth against token budgets (they cost about that); the breakdown keeps raw counts.
+  const inputTokens = Math.max(
+    0,
+    rawInputTokens -
+      Math.round(clampTokens(usage.cacheReadTokens ?? 0) * (1 - CACHE_READ_BUDGET_WEIGHT))
+  );
   const outputTokens = clampTokens(usage.outputTokens);
   const day = reservation?.day ?? utcDay(now);
   await prisma.$transaction(async tx => {
@@ -251,7 +277,7 @@ export async function recordAiUsage(
         tx,
         day,
         {
-          inputTokens,
+          inputTokens: rawInputTokens,
           outputTokens,
           cacheReadTokens: clampTokens(usage.cacheReadTokens ?? 0),
           cacheWriteTokens: clampTokens(usage.cacheWriteTokens ?? 0),
