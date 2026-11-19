@@ -477,7 +477,7 @@ export default function JiraIntegrationPage({
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="webhookSecret">Webhook Secret Token (Optional)</Label>
+            <Label htmlFor="webhookSecret">Webhook Secret Token</Label>
             <Button
               type="button"
               variant="ghost"
@@ -513,8 +513,9 @@ export default function JiraIntegrationPage({
             </button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Generated secrets use the browser cryptographic random-number generator. Save before
-            using the generated URL in Jira.
+            Required for Jira status sync: webhooks without this secret are rejected. Generated
+            secrets use the browser cryptographic random-number generator. Save before using the
+            generated URL in Jira.
           </p>
         </div>
       </section>
