@@ -18,6 +18,9 @@ type SlackApiChannel = {
 
 const SLACK_CHANNEL_TYPES = 'public_channel,private_channel';
 
+// shortcut: caps the picker at 10,000 channels; add search-as-you-type if a workspace exceeds it.
+const MAX_CHANNEL_PAGES = 50;
+
 function slackNotConfigured() {
   return new AppError({
     code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
@@ -43,50 +46,60 @@ export async function GET(request: NextRequest) {
       return jsonError(slackNotConfigured());
     }
 
-    const listUrl = new URL('https://slack.com/api/conversations.list');
-    listUrl.searchParams.set('exclude_archived', 'true');
-    listUrl.searchParams.set('limit', '200');
-    listUrl.searchParams.set('types', SLACK_CHANNEL_TYPES);
+    // Walk every page: a workspace can have far more than one page of channels.
+    const allChannels: SlackApiChannel[] = [];
+    let cursor = '';
+    for (let page = 0; page < MAX_CHANNEL_PAGES; page++) {
+      const listUrl = new URL('https://slack.com/api/conversations.list');
+      listUrl.searchParams.set('exclude_archived', 'true');
+      listUrl.searchParams.set('limit', '200');
+      listUrl.searchParams.set('types', SLACK_CHANNEL_TYPES);
+      if (cursor) listUrl.searchParams.set('cursor', cursor);
 
-    let response: Response;
-    try {
-      response = await retryFetch(
-        listUrl.toString(),
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${botToken}`,
-            'Content-Type': 'application/json',
+      let response: Response;
+      try {
+        response = await retryFetch(
+          listUrl.toString(),
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${botToken}`,
+              'Content-Type': 'application/json',
+            },
           },
-        },
-        { maxAttempts: 2, initialDelayMs: 500 }
-      );
-    } catch (error) {
-      throw integrationProviderError({
-        provider: 'slack',
-        operation: 'conversations.list',
-        cause: error,
-      });
+          { maxAttempts: 2, initialDelayMs: 500 }
+        );
+      } catch (error) {
+        throw integrationProviderError({
+          provider: 'slack',
+          operation: 'conversations.list',
+          cause: error,
+        });
+      }
+
+      const data = await response.json();
+
+      if (!data.ok) {
+        logger.error('[Slack] Failed to fetch channels', { error: data.error });
+        const providerError = integrationProviderError({
+          provider: 'slack',
+          operation: 'conversations.list',
+          providerCode: typeof data.error === 'string' ? data.error : undefined,
+          status: response.status,
+        });
+        return jsonProviderError(providerError, {
+          legacyError: typeof data.error === 'string' ? data.error : 'Failed to fetch channels',
+          provider: 'slack',
+          providerCode: typeof data.error === 'string' ? data.error : undefined,
+        });
+      }
+
+      allChannels.push(...(data.channels || []));
+      cursor = data.response_metadata?.next_cursor || '';
+      if (!cursor) break;
     }
 
-    const data = await response.json();
-
-    if (!data.ok) {
-      logger.error('[Slack] Failed to fetch channels', { error: data.error });
-      const providerError = integrationProviderError({
-        provider: 'slack',
-        operation: 'conversations.list',
-        providerCode: typeof data.error === 'string' ? data.error : undefined,
-        status: response.status,
-      });
-      return jsonProviderError(providerError, {
-        legacyError: typeof data.error === 'string' ? data.error : 'Failed to fetch channels',
-        provider: 'slack',
-        providerCode: typeof data.error === 'string' ? data.error : undefined,
-      });
-    }
-
-    const channels = (data.channels || [])
+    const channels = allChannels
       .filter((channel: SlackApiChannel) => channel.is_channel && !channel.is_archived)
       .map((channel: SlackApiChannel) => ({
         id: channel.id,
