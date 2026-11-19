@@ -66,6 +66,9 @@ function maxUrgency(current: IncidentUrgency, incoming: IncidentUrgency): Incide
 
 // Maximum description length to prevent DB insert failures
 const MAX_DESCRIPTION_LENGTH = 10000;
+const OUT_OF_ORDER_RESOLVE_WINDOW_MS = 5 * 60 * 1000;
+// CI/CD success is a new run's state, never a late recovery of a pending failure.
+const CI_INTEGRATION_TYPES = new Set(['GITHUB', 'GITLAB', 'BITBUCKET', 'VERCEL']);
 
 /**
  * Normalize externally supplied text for safe canonical storage.
@@ -239,6 +242,21 @@ export async function processEvent(
         dedupKey: dedup_key,
       };
     }
+    // CI parsers emit acknowledge for informational states (queued, running,
+    // skipped, canceled). No human acknowledged anything, so an open failure
+    // must keep escalating.
+    if (event_action === 'acknowledge' && CI_INTEGRATION_TYPES.has(envelope.integrationType)) {
+      logger.info('event.ci_informational_ignored', {
+        dedupKey: dedup_key,
+        serviceId,
+        source: normalizedSource,
+      });
+      return {
+        action: 'ignored',
+        reason: 'CI status updates do not acknowledge incidents',
+        dedupKey: dedup_key,
+      };
+    }
 
     // Persist the final link on insertion instead of rewriting every alert.
     // New incidents are created first so the foreign key remains immediate;
@@ -258,6 +276,20 @@ export async function processEvent(
     if (existingIncident) await persistAlert(existingIncident.id);
 
     if (event_action === 'resolve' && !existingIncident) {
+      // A CI success with no open failure is a routine pass, not an early copy of
+      // a pending trigger; buffering it would pre-resolve the next real failure.
+      if (CI_INTEGRATION_TYPES.has(envelope.integrationType)) {
+        logger.info('event.resolve_no_match', {
+          dedupKey: dedup_key,
+          serviceId,
+          source: normalizedSource,
+        });
+        return {
+          action: 'ignored',
+          reason: 'No matching incident to resolve',
+          dedupKey: dedup_key,
+        };
+      }
       // A resolve for an incident someone already closed is late, not early:
       // link it there so it cannot turn the next genuine trigger into a resolved incident.
       const receivedAt = processingLease ? envelope.receivedAt : new Date();
@@ -266,7 +298,10 @@ export async function processEvent(
           serviceId,
           dedupKey: { in: candidateDedupKeys },
           status: 'RESOLVED',
-          resolvedAt: { gte: new Date(receivedAt.getTime() - 5 * 60 * 1000), lte: receivedAt },
+          resolvedAt: {
+            gte: new Date(receivedAt.getTime() - OUT_OF_ORDER_RESOLVE_WINDOW_MS),
+            lte: receivedAt,
+          },
         },
         orderBy: { resolvedAt: 'desc' },
         select: { id: true },
@@ -390,10 +425,10 @@ export async function processEvent(
           incidentId: null,
           createdAt: processingLease
             ? {
-                gte: new Date(envelope.receivedAt.getTime() - 5 * 60 * 1000),
+                gte: new Date(envelope.receivedAt.getTime() - OUT_OF_ORDER_RESOLVE_WINDOW_MS),
                 lte: envelope.receivedAt,
               }
-            : { gte: new Date(Date.now() - 5 * 60 * 1000) },
+            : { gte: new Date(Date.now() - OUT_OF_ORDER_RESOLVE_WINDOW_MS) },
         },
         orderBy: { createdAt: 'desc' },
       });
