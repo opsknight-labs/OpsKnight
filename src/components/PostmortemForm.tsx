@@ -41,7 +41,6 @@ import PostmortemActionItems from './postmortem/PostmortemActionItems';
 import FiveWhysBuilder, { type FiveWhysStep } from './postmortem/FiveWhysBuilder';
 import ContributingFactorsSelector, {
   type FactorType,
-  ALL_FACTORS,
 } from './postmortem/ContributingFactorsSelector';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import { useTimezone } from '@/contexts/TimezoneContext';
@@ -51,6 +50,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod/v3';
 import { POSTMORTEM_STATUS_CONFIG } from './postmortem/shared';
+import {
+  formatFiveWhys,
+  parseStoredFactors,
+  parseStoredFiveWhys,
+} from './postmortem/root-cause-format';
 
 const postmortemSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100, 'Title must be less than 100 characters'),
@@ -104,90 +108,6 @@ function extractNarrative(rawRootCause?: string | null): string {
       ?.split(/\[Contributing Factors:.*\]/i)[0]
       ?.trim() || ''
   );
-}
-
-// Helper to parse 5-whys steps from existing root cause text
-function parseStoredFiveWhys(rawRootCause?: string | null): FiveWhysStep[] {
-  if (!rawRootCause) return [];
-  const lines = rawRootCause.split('\n').filter(l => l.trim().length > 0);
-  const whyLines = lines.filter(l => /^(why\s*#?\d*|why:|\d+\.\s*why)/i.test(l.trim()));
-
-  if (whyLines.length > 0) {
-    return whyLines.map((line, idx) => {
-      const parts = line.split(/:\s*|\s*-\s*|\s*➔\s*/);
-      return {
-        id: `why-${idx + 1}-${Date.now()}`,
-        question: parts[0]?.trim() || `Why #${idx + 1}`,
-        answer: parts.slice(1).join(': ').trim() || '',
-      };
-    });
-  }
-
-  return [];
-}
-
-// Helper to parse factor tags from existing root cause text
-function parseStoredFactors(
-  rawRootCause?: string | null,
-  rawSummary?: string | null
-): FactorType[] {
-  const factors: FactorType[] = [];
-  const combined = `${rawRootCause || ''} ${rawSummary || ''}`.toLowerCase();
-
-  // Match explicit [Contributing Factors: ...] header
-  const match = rawRootCause?.match(/\[Contributing Factors:\s*([^\]]+)\]/i);
-  if (match && match[1]) {
-    const factorNames = match[1].split(',').map(s => s.trim().toUpperCase());
-    ALL_FACTORS.forEach(f => {
-      if (factorNames.includes(f) || factorNames.includes(f.replace('_', ' '))) {
-        factors.push(f);
-      }
-    });
-  }
-
-  // Keyword inferences
-  if (
-    combined.includes('database') ||
-    combined.includes('server') ||
-    combined.includes('cpu') ||
-    combined.includes('memory') ||
-    combined.includes('network')
-  ) {
-    if (!factors.includes('INFRASTRUCTURE')) factors.push('INFRASTRUCTURE');
-  }
-  if (
-    combined.includes('bug') ||
-    combined.includes('null') ||
-    combined.includes('syntax') ||
-    combined.includes('deploy') ||
-    combined.includes('regression')
-  ) {
-    if (!factors.includes('CODE_DEFECT')) factors.push('CODE_DEFECT');
-  }
-  if (
-    combined.includes('monitoring') ||
-    combined.includes('alert') ||
-    combined.includes('metric') ||
-    combined.includes('blindspot')
-  ) {
-    if (!factors.includes('MONITORING_GAP')) factors.push('MONITORING_GAP');
-  }
-  if (
-    combined.includes('runbook') ||
-    combined.includes('procedure') ||
-    combined.includes('handoff')
-  ) {
-    if (!factors.includes('PROCESS')) factors.push('PROCESS');
-  }
-  if (
-    combined.includes('vendor') ||
-    combined.includes('third-party') ||
-    combined.includes('upstream')
-  ) {
-    if (!factors.includes('VENDOR_DEPENDENCY')) factors.push('VENDOR_DEPENDENCY');
-  }
-
-  return factors;
 }
 
 export default function PostmortemForm({
@@ -262,7 +182,7 @@ export default function PostmortemForm({
     parseStoredFiveWhys(initialData?.rootCause)
   );
   const [selectedFactors, setSelectedFactors] = useState<FactorType[]>(() =>
-    parseStoredFactors(initialData?.rootCause, initialData?.summary)
+    parseStoredFactors(initialData?.rootCause)
   );
 
   const handleToggleFactor = (factor: FactorType) => {
@@ -294,9 +214,7 @@ export default function PostmortemForm({
 
     const validWhys = fiveWhysSteps.filter(s => s.question.trim() || s.answer.trim());
     if (validWhys.length > 0) {
-      const whysFormatted = validWhys
-        .map((s, idx) => `Why #${idx + 1}: ${s.question.trim()} - ${s.answer.trim()}`)
-        .join('\n');
+      const whysFormatted = formatFiveWhys(validWhys);
       rootCauseParts.push(`### 5-Whys Analysis\n${whysFormatted}`);
     }
 
