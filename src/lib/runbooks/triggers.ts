@@ -59,7 +59,8 @@ async function recordRunbookSkip(input: {
   });
 }
 
-const isIncidentNotOpen = (error: unknown) =>
+/** Start-time refusals that become a recorded skip rather than a failure. */
+const isRecordedSkip = (error: unknown) =>
   error instanceof RunbookDefinitionError &&
   (error.message.startsWith(INCIDENT_NOT_OPEN) || error.message.startsWith(BINDING_RATE_LIMITED));
 
@@ -364,7 +365,7 @@ export async function evaluateIncidentTriggers(
           });
           started++;
         } catch (error) {
-          if (isIncidentNotOpen(error)) {
+          if (isRecordedSkip(error)) {
             skipped++;
             await recordRunbookSkip({
               incidentId,
