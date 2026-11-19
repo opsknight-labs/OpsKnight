@@ -190,4 +190,71 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
     });
     expect(responderJob.scheduledAt.getTime()).toBeLessThan(deferredUntil.getTime());
   });
+  const fire = (serviceId: string, dedupKey: string, action: 'trigger' | 'resolve') =>
+    processEvent(
+      {
+        event_action: action,
+        dedup_key: dedupKey,
+        payload: { summary: 'Disk full', source: 'monitor', severity: 'critical' },
+      },
+      serviceId,
+      'event-w01'
+    );
+
+  it('does not let a late resolve for a closed incident swallow the next trigger', async () => {
+    const service = await createTestService('Late resolve service');
+    const dedupKey = `late-resolve-${Date.now()}`;
+    await fire(service.id, dedupKey, 'trigger');
+    // An operator resolves it by hand before the monitor's resolve arrives.
+    await testPrisma.incident.updateMany({
+      where: { serviceId: service.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+    await fire(service.id, dedupKey, 'resolve');
+    await fire(service.id, dedupKey, 'trigger');
+
+    const latest = await testPrisma.incident.findFirstOrThrow({
+      where: { serviceId: service.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(await testPrisma.incident.count({ where: { serviceId: service.id } })).toBe(2);
+    expect(latest.status).toBe('OPEN');
+  });
+
+  it('releases a flapping hold once the alert keeps firing steadily', async () => {
+    const service = await createTestService('Flapping release service');
+    const dedupKey = `flapping-release-${Date.now()}`;
+    const now = Date.now();
+    for (const action of ['trigger', 'resolve', 'trigger', 'resolve', 'trigger', 'resolve'] as const) {
+      await fire(service.id, dedupKey, action);
+    }
+    await fire(service.id, dedupKey, 'trigger');
+    const held = await testPrisma.incident.findFirstOrThrow({
+      where: { serviceId: service.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(held.status).toBe('SUPPRESSED');
+
+    // The oscillation ages out of the window while the alert keeps firing.
+    await testPrisma.alert.updateMany({
+      where: { serviceId: service.id },
+      data: { createdAt: new Date(now - 30 * 60 * 1000) },
+    });
+    await fire(service.id, dedupKey, 'trigger');
+    const released = await testPrisma.incident.findUniqueOrThrow({ where: { id: held.id } });
+    expect(released.status).toBe('OPEN');
+    expect(released.escalationStatus).toBe('ESCALATING');
+  });
+
+  it('does not add a timeline row for every unchanged duplicate trigger', async () => {
+    const service = await createTestService('Duplicate trigger service');
+    const dedupKey = `duplicate-trigger-${Date.now()}`;
+    await fire(service.id, dedupKey, 'trigger');
+    const incident = await testPrisma.incident.findFirstOrThrow({ where: { serviceId: service.id } });
+    const before = await testPrisma.incidentEvent.count({ where: { incidentId: incident.id } });
+    await fire(service.id, dedupKey, 'trigger');
+    await fire(service.id, dedupKey, 'trigger');
+    expect(await testPrisma.incidentEvent.count({ where: { incidentId: incident.id } })).toBe(before);
+    expect(await testPrisma.alert.count({ where: { incidentId: incident.id } })).toBe(3);
+  });
 });

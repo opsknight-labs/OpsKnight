@@ -258,6 +258,27 @@ export async function processEvent(
     if (existingIncident) await persistAlert(existingIncident.id);
 
     if (event_action === 'resolve' && !existingIncident) {
+      // A resolve for an incident someone already closed is late, not early:
+      // link it there so it cannot turn the next genuine trigger into a resolved incident.
+      const receivedAt = processingLease ? envelope.receivedAt : new Date();
+      const recentlyClosed = await tx.incident.findFirst({
+        where: {
+          serviceId,
+          dedupKey: { in: candidateDedupKeys },
+          status: 'RESOLVED',
+          resolvedAt: { gte: new Date(receivedAt.getTime() - 5 * 60 * 1000), lte: receivedAt },
+        },
+        orderBy: { resolvedAt: 'desc' },
+        select: { id: true },
+      });
+      if (recentlyClosed) {
+        await persistAlert(recentlyClosed.id);
+        return {
+          action: 'ignored',
+          reason: 'Incident already resolved',
+          dedupKey: dedup_key,
+        };
+      }
       const alert = await persistAlert();
       logger.info('event.resolve_buffered_for_out_of_order', {
         dedupKey: dedup_key,
@@ -301,14 +322,41 @@ export async function processEvent(
           ).released;
         }
 
-        // Log an event instead of note (no userId needed)
-        const safeSummary = truncateString(normalizeText(eventData.summary.trim()), 500);
-        await tx.incidentEvent.create({
-          data: {
-            incidentId: existingIncident.id,
-            message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}${releaseSupportHoursDeferral ? ' Support-hours engagement deferral released.' : ''}`,
-          },
-        });
+        // A flapping hold has no timer of its own: the next trigger after the
+        // signal stabilises releases it, so a flapped-then-steady alert still pages.
+        let releasedFlappingHold = false;
+        if (existingIncident.status === 'SUPPRESSED') {
+          const flappingHold = await tx.incidentSlaPause.findFirst({
+            where: { incidentId: existingIncident.id, endedAt: null, reason: 'flapping-suppression' },
+            select: { id: true },
+          });
+          if (
+            flappingHold &&
+            !(await checkAlertFlapping(dedup_key, serviceId, undefined, tx)).isFlapping
+          ) {
+            releasedFlappingHold = (
+              await applyIncidentLifecycleCommand(tx, {
+                incidentId: existingIncident.id,
+                command: 'UNSUPPRESS',
+                source: 'EVENT',
+                expectedStatus: 'SUPPRESSED',
+                eventMessage: `Alert from ${normalizedSource} stopped flapping and is still firing; incident released for paging.`,
+              })
+            ).changed;
+          }
+        }
+
+        // The alert row already records every repeat; only a change earns a
+        // timeline entry, so a monitor firing every minute cannot flood it.
+        if (urgencyRaised || releaseSupportHoursDeferral) {
+          const safeSummary = truncateString(normalizeText(eventData.summary.trim()), 500);
+          await tx.incidentEvent.create({
+            data: {
+              incidentId: existingIncident.id,
+              message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}${releaseSupportHoursDeferral ? ' Support-hours engagement deferral released.' : ''}`,
+            },
+          });
+        }
 
         logger.info('event.deduplicated', {
           incidentId: existingIncident.id,
@@ -318,9 +366,15 @@ export async function processEvent(
           incomingUrgency,
           effectiveUrgency,
           urgencyRaised,
+          releasedFlappingHold,
         });
 
-        return { action: 'deduplicated', incident: existingIncident };
+        return {
+          action: 'deduplicated',
+          incident: releasedFlappingHold
+            ? await reloadIncident(tx, existingIncident.id)
+            : existingIncident,
+        };
       }
 
       // Check if an out-of-order resolve event arrived recently (< 5 minutes ago) for this dedupKey
