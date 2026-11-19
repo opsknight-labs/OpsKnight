@@ -88,8 +88,14 @@ const MAX_EVENT_MESSAGE_LENGTH = 2000;
 const MAX_SNOOZE_REASON_LENGTH = 1000;
 const MIN_RESOLUTION_NOTE_LENGTH = 10;
 const MAX_RESOLUTION_NOTE_LENGTH = 1000;
-/** Matches the Slack snooze button default. */
-const DEFAULT_SNOOZE_MINUTES = 60;
+export const DEFAULT_SNOOZE_MINUTES = 60;
+// Surfaces with no way to fill custom fields; gating them makes incidents unresolvable there.
+const NO_CUSTOM_FIELD_SOURCES: ReadonlySet<IncidentLifecycleSource> = new Set([
+  'EVENT',
+  'CHATOPS',
+  'VOICE',
+  'MOBILE',
+]);
 
 function invalidArgument(userMessage: string, details?: Record<string, unknown>): AppError {
   return new AppError({
@@ -165,6 +171,27 @@ function assertSnoozeInput(input: IncidentLifecycleInput, now: Date): void {
   if (!Number.isFinite(value) || value <= now.getTime()) {
     throw invalidArgument('Snooze end time must be a valid future date.');
   }
+}
+
+// A snooze without an end time would pause escalation and SLA forever because
+// AUTO_UNSNOOZE is only scheduled for a finite end. Keep an existing end when
+// re-snoozing, otherwise default to DEFAULT_SNOOZE_MINUTES.
+function withSnoozeEnd(
+  input: IncidentLifecycleInput,
+  incident: IncidentLifecycleSnapshot,
+  now: Date
+): IncidentLifecycleInput {
+  if (input.command !== 'SNOOZE' || input.snoozedUntil != null) return input;
+  const keep =
+    incident.status === 'SNOOZED' &&
+    incident.snoozedUntil &&
+    incident.snoozedUntil.getTime() > now.getTime();
+  return {
+    ...input,
+    snoozedUntil: keep
+      ? incident.snoozedUntil
+      : new Date(now.getTime() + DEFAULT_SNOOZE_MINUTES * 60_000),
+  };
 }
 
 function targetStatusFor(command: IncidentLifecycleCommand): IncidentStatus {
@@ -259,11 +286,14 @@ export function commandForTargetStatus(
 
 async function assertRequiredCustomFieldsPresent(
   tx: Prisma.TransactionClient,
-  incidentId: string
+  incidentId: string,
+  incidentCreatedAt: Date
 ): Promise<void> {
   const missing = await tx.customField.findMany({
     where: {
       required: true,
+      // Fields added after the incident was opened must not retroactively block it.
+      createdAt: { lte: incidentCreatedAt },
       values: { none: { incidentId, value: { not: '' } } },
     },
     select: { name: true },
@@ -577,24 +607,14 @@ async function loadSnapshot(
  */
 export async function applyIncidentLifecycleCommand(
   tx: Prisma.TransactionClient,
-  input: IncidentLifecycleInput
+  rawInput: IncidentLifecycleInput
 ): Promise<IncidentLifecycleResult> {
-  assertInput(input);
-  const now = input.now ?? new Date();
-  assertSnoozeInput(input, now);
-  const resolutionNote = normalizeResolutionNote(input.resolutionNote);
-  const incident = await loadSnapshot(tx, input.incidentId);
-  if (input.command === 'SNOOZE' && input.snoozedUntil == null) {
-    // A snooze always ends: callers without an end time (list row, mobile swipe,
-    // bulk, REST status) keep an existing end or get the default, so escalation resumes.
-    input = {
-      ...input,
-      snoozedUntil:
-        incident.status === 'SNOOZED' && incident.snoozedUntil
-          ? incident.snoozedUntil
-          : new Date(now.getTime() + DEFAULT_SNOOZE_MINUTES * 60_000),
-    };
-  }
+  assertInput(rawInput);
+  const now = rawInput.now ?? new Date();
+  assertSnoozeInput(rawInput, now);
+  const resolutionNote = normalizeResolutionNote(rawInput.resolutionNote);
+  const incident = await loadSnapshot(tx, rawInput.incidentId);
+  const input = withSnoozeEnd(rawInput, incident, now);
   const targetStatus = targetStatusFor(input.command);
 
   if (isAlreadyApplied(incident, input, targetStatus)) {
@@ -624,15 +644,15 @@ export async function applyIncidentLifecycleCommand(
     });
   }
 
-  // Required custom fields gate human/operator resolution. Event ingestion is
-  // authoritative automation: upstream resolve signals must not be blocked by
-  // fields that can only be completed interactively. The same holds for system
-  // automation resolutions (e.g. a maintenance window auto-resolving held alerts).
-  const automated =
-    input.source === 'EVENT' ||
-    (input.source === 'SYSTEM' && input.resolutionKind === 'AUTOMATION');
-  if (input.command === 'RESOLVE' && !automated) {
-    await assertRequiredCustomFieldsPresent(tx, input.incidentId);
+  // Required custom fields gate human/operator resolution from surfaces that
+  // can complete them. Event ingestion and system automation resolutions (e.g. a
+  // maintenance window auto-resolving held alerts) are authoritative; chat,
+  // voice and mobile have no field inputs, so they are not gated either.
+  const gated =
+    !NO_CUSTOM_FIELD_SOURCES.has(input.source) &&
+    !(input.source === 'SYSTEM' && input.resolutionKind === 'AUTOMATION');
+  if (input.command === 'RESOLVE' && gated) {
+    await assertRequiredCustomFieldsPresent(tx, input.incidentId, incident.createdAt);
   }
 
   let responderRouteNone = false;
