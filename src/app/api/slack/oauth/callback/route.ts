@@ -32,6 +32,10 @@ const getRequestOrigin = (request: NextRequest): string | null => {
   }
 };
 
+/** The workspace row bound to no service is the global installation (see resolveSlackBotToken). */
+const isGlobalWorkspace = async (integrationId: string) =>
+  (await prisma.service.count({ where: { slackIntegrationId: integrationId } })) === 0;
+
 export async function GET(request: NextRequest) {
   // Default to sync/env URL initially
   let appUrl = 'http://localhost:3000';
@@ -192,7 +196,12 @@ export async function GET(request: NextRequest) {
             : await prisma.slackIntegration.create({ data: integrationData });
           await prisma.service.update({
             where: { id: serviceId },
-            data: { slackIntegrationId: integration.id },
+            data: {
+              slackIntegrationId:
+                targetWorkspace && (await isGlobalWorkspace(targetWorkspace.id))
+                  ? null
+                  : integration.id,
+            },
           });
         }
       } else {
@@ -204,11 +213,14 @@ export async function GET(request: NextRequest) {
         if (existing) {
           // Use existing integration
           integration = existing;
-          // Update service to reference it
-          await prisma.service.update({
-            where: { id: serviceId },
-            data: { slackIntegrationId: integration.id },
-          });
+          // Binding a service to the global installation would make it non-global;
+          // an unbound service already falls back to it.
+          if (!(await isGlobalWorkspace(existing.id))) {
+            await prisma.service.update({
+              where: { id: serviceId },
+              data: { slackIntegrationId: integration.id },
+            });
+          }
         } else {
           // Create new integration
           integration = await prisma.slackIntegration.create({
