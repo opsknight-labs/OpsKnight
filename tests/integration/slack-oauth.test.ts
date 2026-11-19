@@ -16,6 +16,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     slackIntegration: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -256,6 +257,74 @@ describe('Slack OAuth Integration', () => {
       expect(prisma.service.update).toHaveBeenCalledWith({
         where: { id: 'service-a' },
         data: { slackIntegrationId: 'workspace-y-row' },
+      });
+    });
+    function serviceCallbackRequest() {
+      const req = new NextRequest(
+        'http://localhost:3000/api/slack/oauth/callback?code=valid-code&state=valid-state'
+      );
+      req.cookies.set('slack_oauth_state', 'valid-state');
+      req.cookies.set('slack_oauth_service_id', 'service-a');
+      global.fetch = vi.fn().mockResolvedValue({
+        json: async () => ({
+          ok: true,
+          access_token: 'xoxb-fresh',
+          team: { id: 'workspace-x', name: 'Workspace X' },
+          scope: 'chat:write',
+        }),
+      });
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        id: 'service-a',
+        slackIntegration: null,
+      } as unknown as Awaited<ReturnType<typeof prisma.service.findUnique>>);
+      vi.mocked(prisma.slackIntegration.findUnique).mockResolvedValue({
+        id: 'row-x',
+        workspaceId: 'workspace-x',
+        enabled: false,
+      } as unknown as Awaited<ReturnType<typeof prisma.slackIntegration.findUnique>>);
+      vi.mocked(prisma.slackIntegration.update).mockResolvedValue(
+        { id: 'row-x' } as unknown as Awaited<ReturnType<typeof prisma.slackIntegration.update>>
+      );
+      return req;
+    }
+
+    it('refreshes a stale existing workspace row when a service connects to it', async () => {
+      const req = serviceCallbackRequest();
+      vi.mocked(prisma.slackIntegration.findFirst).mockResolvedValue(null);
+
+      await callbackHandler(req);
+
+      expect(prisma.slackIntegration.update).toHaveBeenCalledWith({
+        where: { id: 'row-x' },
+        data: expect.objectContaining({ botToken: 'encrypted_xoxb-fresh', enabled: true }),
+      });
+    });
+
+    it('does not bind a service to the global workspace (keeps it global for other services)', async () => {
+      const req = serviceCallbackRequest();
+      vi.mocked(prisma.slackIntegration.findFirst).mockResolvedValue({
+        id: 'row-x',
+      } as unknown as Awaited<ReturnType<typeof prisma.slackIntegration.findFirst>>);
+
+      await callbackHandler(req);
+
+      expect(prisma.service.update).toHaveBeenCalledWith({
+        where: { id: 'service-a' },
+        data: { slackIntegrationId: null },
+      });
+    });
+
+    it('binds a service to an existing non-global workspace', async () => {
+      const req = serviceCallbackRequest();
+      vi.mocked(prisma.slackIntegration.findFirst).mockResolvedValue({
+        id: 'other-global',
+      } as unknown as Awaited<ReturnType<typeof prisma.slackIntegration.findFirst>>);
+
+      await callbackHandler(req);
+
+      expect(prisma.service.update).toHaveBeenCalledWith({
+        where: { id: 'service-a' },
+        data: { slackIntegrationId: 'row-x' },
       });
     });
   });

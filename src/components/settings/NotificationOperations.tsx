@@ -171,6 +171,7 @@ export default function NotificationOperations({
 
   // Sync status from parent (Overview card click)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- parent overview card drives the status filter; the user can still change it locally
     setStatus(initialStatus);
     setPage(1);
   }, [initialStatus]);
@@ -224,10 +225,12 @@ export default function NotificationOperations({
 
   // Reset to page 1 when filters change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- filters change in many handlers (and via the debounced query); resetting here keeps one source of truth
     setPage(1);
   }, [channel, status, category, debouncedQuery, from, to]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on filter change; loading state is set before the request starts
     void fetchOperations();
   }, [fetchOperations]);
 
@@ -346,7 +349,9 @@ export default function NotificationOperations({
         if (to) params.set('to', new Date(`${to}T23:59:59.999`).toISOString());
         params.set('cursor', nextPageCursor);
 
-        const response = await fetch(`/api/admin/notifications/operations?${params}`, { cache: 'no-store' });
+        const response = await fetch(`/api/admin/notifications/operations?${params}`, {
+          cache: 'no-store',
+        });
         if (!response.ok) {
           throw new Error(`Export fetch failed with status ${response.status}`);
         }
@@ -822,10 +827,15 @@ export default function NotificationOperations({
 
                         {canRetry && (
                           <TableCell className="text-right py-2.5">
-                            {row.status === 'FAILED' && (
+                            {(row.status === 'FAILED' || row.status === 'UNKNOWN') && (
                               <Button
                                 variant="outline"
                                 size="sm"
+                                title={
+                                  row.status === 'UNKNOWN'
+                                    ? 'Delivery outcome is unconfirmed; requeueing may send a duplicate.'
+                                    : undefined
+                                }
                                 disabled={retryingId === row.id}
                                 onClick={() => void retry(row.id)}
                                 className="h-7 text-xs font-semibold gap-1 border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400"

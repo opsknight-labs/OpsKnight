@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifyJiraError, deriveJiraCapability } from '@/lib/jira-capabilities';
+import { integrationProviderError } from '@/lib/provider-errors';
 
 describe('classifyJiraError', () => {
   it.each([
@@ -27,6 +28,45 @@ describe('classifyJiraError', () => {
     expect(result.code).toBe('JIRA_UNKNOWN');
     expect(result.retryable).toBe(false);
     expect(result.userMessage).toContain('Jira operation failed');
+  });
+});
+
+describe('classifyJiraError with real provider AppErrors', () => {
+  const providerError = (status: number | undefined, causeMessage: string, path = '/issue') =>
+    integrationProviderError({
+      provider: 'jira',
+      operation: `POST ${path}`,
+      status,
+      cause: new Error(causeMessage),
+    });
+
+  it.each([
+    [401, '', '/issue', 'JIRA_AUTH_FAILED', false],
+    [403, '', '/issue', 'JIRA_FORBIDDEN', false],
+    [404, '', '/issue/OPS-1', 'JIRA_ISSUE_NOT_FOUND', false],
+    [404, '', '/project/OPS', 'JIRA_PROJECT_NOT_FOUND', false],
+    [
+      400,
+      'Jira request failed (400) with a provider response body. Fields: issuetype.',
+      '/issue',
+      'JIRA_ISSUE_TYPE_INVALID',
+      false,
+    ],
+    [
+      400,
+      'Jira request failed (400) with a provider response body. Fields: components.',
+      '/issue',
+      'JIRA_COMPONENT_INVALID',
+      false,
+    ],
+    [400, 'Jira request failed (400).', '/issue', 'JIRA_VALIDATION_FAILED', false],
+    [429, '', '/issue', 'JIRA_RATE_LIMITED', true],
+    [503, '', '/issue', 'JIRA_UNAVAILABLE', true],
+    [undefined, 'fetch failed', '/issue', 'JIRA_TIMEOUT', true],
+  ])('status %s %s on %s -> %s', (status, cause, path, code, retryable) => {
+    const result = classifyJiraError(providerError(status, cause, path));
+    expect(result.code).toBe(code);
+    expect(result.retryable).toBe(retryable);
   });
 });
 

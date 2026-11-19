@@ -10,6 +10,7 @@ import { getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
 import {
   revokeMicrosoftTeamsOperations,
   revokeMicrosoftTeamsWarRoomProvisioning,
+  TEAMS_REVOCATION_TX_OPTIONS,
 } from '@/lib/microsoft-teams/lifecycle';
 
 const upsertSchema = z.object({
@@ -563,7 +564,7 @@ export async function DELETE(request: NextRequest) {
           }
         }
       }
-    });
+    }, TEAMS_REVOCATION_TX_OPTIONS);
 
     const user = await (await import('@/lib/rbac')).getCurrentUser().catch(() => null);
     await logAudit({

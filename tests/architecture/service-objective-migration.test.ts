@@ -36,6 +36,9 @@ describe('service objective migration contract', () => {
       cronScheduler.indexOf('processServiceObjectiveSnapshots(now)')
     );
     expect(cronScheduler).toContain('serviceObjectiveSnapshots.failed > 0');
-    expect(cronScheduler).toContain('retrying the daily run');
+    // A partial failure retries only the snapshots, not the whole daily maintenance block.
+    expect(cronScheduler).not.toContain('retrying the daily run');
+    expect(cronScheduler).toContain('state.lastObjectiveSnapshotFailed > 0');
+    expect(cronScheduler).toContain('OBJECTIVE_SNAPSHOT_RETRY_MS');
   });
 });

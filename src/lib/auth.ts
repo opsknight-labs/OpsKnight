@@ -438,27 +438,23 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     return null;
                   }
 
-                  const { checkRateLimit } = await import('@/lib/rate-limit');
-                  const distributedAttempt = await checkRateLimit(
-                    `auth:credentials:${email}:${ip}`,
-                    20,
-                    15 * 60 * 1000
-                  );
-                  const accountAttempt = await checkRateLimit(
-                    `auth:credentials:account:${email}`,
-                    10,
-                    15 * 60 * 1000
-                  );
-                  if (!distributedAttempt.allowed || !accountAttempt.allowed) {
+                  const { checkRateLimit, releaseRateLimit } = await import('@/lib/rate-limit');
+                  const ACCOUNT_WINDOW_MS = 15 * 60 * 1000;
+                  const accountKey = `auth:credentials:account:${email}`;
+                  // Reserve the attempt atomically before the password check, so a parallel burst
+                  // across replicas cannot all slip under the limit. Only failed attempts keep their
+                  // slot: a correct password refunds it, so responders switching devices never lock
+                  // the account.
+                  const accountReservation = await checkRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
+                  const refundAccountAttempt = () =>
+                    releaseRateLimit(accountKey, ACCOUNT_WINDOW_MS, accountReservation.resetAt);
+                  if (!accountReservation.allowed) {
                     await logLoginBlocked(
                       email,
                       ip,
                       userAgent,
                       'RATE_LIMITED',
-                      Math.max(
-                        0,
-                        Math.max(distributedAttempt.resetAt, accountAttempt.resetAt) - Date.now()
-                      )
+                      Math.max(0, accountReservation.resetAt - Date.now())
                     );
                     return null;
                   }
@@ -526,6 +522,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     });
                     return null;
                   }
+
+                  await refundAccountAttempt();
 
                   if (user.status === 'DISABLED') {
                     // Only after the password proved who is asking, say why sign-in stopped.
@@ -599,6 +597,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             sub: token.sub,
             trigger: trigger || 'none',
           });
+
+          // Decode could not reach the session registry: keep the token as-is (still
+          // flagged, so unauthorized) rather than letting a later DB lookup clear the flag.
+          if (!user && (token as AugmentedJWT).error === 'SECURITY_LOOKUP_UNAVAILABLE') {
+            return token;
+          }
 
           if (user) {
             try {

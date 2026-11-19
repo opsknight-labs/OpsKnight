@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { testPrisma } from '../helpers/test-db';
+import {
+  createTestIncident,
+  createTestService,
+  resetDatabase,
+  testPrisma,
+} from '../helpers/test-db';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/rbac', () => ({
@@ -66,6 +71,42 @@ describeIfRealDB('SLA scheduler mode PostgreSQL integration', () => {
       mode: 'SHADOW',
       consecutiveCleanChecks: 1,
       lastShadowMismatchCount: 0,
+    });
+  });
+
+  it('enables INDEXED when the only NULL hints belong to already-breached incidents', async () => {
+    await resetDatabase();
+    await testPrisma.$executeRawUnsafe(
+      'CREATE INDEX IF NOT EXISTS "idx_incident_next_sla_transition" ON "Incident" ("status", "nextSlaTransitionAt")'
+    );
+    const service = await createTestService('Indexed readiness', null, {
+      serviceNotifyOnSlaBreach: true,
+    });
+    const createdAt = new Date(Date.now() - 5 * 60 * 60_000);
+    // Open past both default targets: nothing left to schedule, so its hint is legitimately NULL.
+    await createTestIncident('Breached but open', service.id, {
+      status: 'OPEN',
+      createdAt,
+      slaAckTargetMs: 15 * 60_000,
+      slaResolveTargetMs: 120 * 60_000,
+      slaTargetSource: 'SERVICE',
+      slaTargetCapturedAt: createdAt,
+      nextSlaTransitionAt: null,
+    });
+    await testPrisma.systemConfig.upsert({
+      where: { key: 'incident_sla_scheduler' },
+      create: {
+        key: 'incident_sla_scheduler',
+        value: { mode: 'SHADOW', consecutiveCleanChecks: 3, lastShadowMismatchCount: 0 },
+      },
+      update: {
+        value: { mode: 'SHADOW', consecutiveCleanChecks: 3, lastShadowMismatchCount: 0 },
+      },
+    });
+
+    await expect(saveSlaSchedulerModeAction('INDEXED')).resolves.toEqual({
+      ok: true,
+      mode: 'INDEXED',
     });
   });
 });

@@ -22,6 +22,8 @@ import {
   MIN_CLEAN_SHADOW_CHECKS,
 } from '@/lib/incident-sla/scheduler-control';
 import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
+import { incidentSlaSelect } from '@/lib/incident-sla/select';
+import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
 
 export type IncidentResponsePolicySaveResult =
   | { ok: true; version: number }
@@ -153,20 +155,26 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
           return 'Resolve Shadow mismatches before enabling Indexed mode.';
         if (Number(currentValue.consecutiveCleanChecks ?? 0) < MIN_CLEAN_SHADOW_CHECKS)
           return `Wait for ${MIN_CLEAN_SHADOW_CHECKS} consecutive clean Shadow checks before enabling Indexed mode.`;
-        const rows = await tx.$queryRaw<Array<{ ready: boolean; missing_hints: bigint }>>`
+        const rows = await tx.$queryRaw<Array<{ ready: boolean }>>`
         SELECT EXISTS (
           SELECT 1 FROM pg_class c
           JOIN pg_index i ON i.indexrelid = c.oid
           WHERE c.relname = 'idx_incident_next_sla_transition' AND i.indisvalid
-        ) AS ready,
-        (SELECT COUNT(*) FROM "Incident" i
-          JOIN "Service" s ON s."id" = i."serviceId"
-          WHERE i."status" IN ('OPEN', 'ACKNOWLEDGED')
-            AND s."serviceNotifyOnSlaBreach" = true
-            AND i."nextSlaTransitionAt" IS NULL)::bigint AS missing_hints
+        ) AS ready
       `;
         if (!rows[0]?.ready) return 'Install the SLA scheduler index before enabling Indexed mode.';
-        if (Number(rows[0]?.missing_hints ?? 0) > 0)
+        // A NULL hint is correct when nothing is left to schedule (already breached, or paused),
+        // so only incidents the canonical projector would schedule count as missing.
+        const unhinted = await tx.incident.findMany({
+          where: {
+            status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+            service: { serviceNotifyOnSlaBreach: true },
+            nextSlaTransitionAt: null,
+          },
+          select: incidentSlaSelect,
+        });
+        const now = new Date();
+        if (unhinted.some(incident => deriveNextSlaTransition(incident, now) !== null))
           return 'Run Shadow mode until all active incidents have scheduling hints.';
       }
       const nextValue =

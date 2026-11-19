@@ -5,7 +5,7 @@ import { getAppUrl } from '@/lib/app-url';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { logger, withRequestContext } from '@/lib/logger';
-import { assertAdmin } from '@/lib/rbac';
+import { assertAdmin, assertPermanentAdminForAdminTargets } from '@/lib/rbac';
 import { getClientIp } from '@/lib/client-ip';
 import { emitAuditEvent } from '@/lib/audit';
 import { checkRateLimit, issuePasswordResetToken } from '@/lib/password-reset';
@@ -57,6 +57,9 @@ async function postGenerateResetLink(req: NextRequest) {
         })
       );
     }
+
+    // A takeover-capable link for an administrator needs an assigned admin, not a JIT grant.
+    await assertPermanentAdminForAdminTargets(sessionUser, [user.id]);
 
     if (user.status === 'DISABLED') {
       return jsonError(

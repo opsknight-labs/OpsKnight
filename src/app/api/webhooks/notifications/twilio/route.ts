@@ -153,7 +153,14 @@ export async function POST(request: NextRequest) {
         addressHash: notification.recipientHash,
         delivered,
         errorCode: failed ? errorCode || messageStatus : undefined,
-        terminalStatus: failed && errorCode === '21211' ? 'INVALID' : undefined,
+        // 21211 = invalid number; 21610 = recipient replied STOP (unsubscribed).
+        terminalStatus: !failed
+          ? undefined
+          : errorCode === '21211'
+            ? 'INVALID'
+            : errorCode === '21610'
+              ? 'OPTED_OUT'
+              : undefined,
         occurredAt: new Date(),
       });
     }

@@ -10,8 +10,14 @@ import {
   getCurrentUser,
 } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
+import { emitAuditEvent } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 import type { IdempotencyContext } from '@/lib/idempotency';
-import type { IncidentLifecycleInput, IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
+import type {
+  IncidentLifecycleInput,
+  IncidentLifecycleResult,
+  IncidentLifecycleSource,
+} from '@/lib/incidents/lifecycle';
 import {
   executeIdempotentIncidentLifecycleCommand,
   transitionIncidentToStatusIdempotent,
@@ -28,6 +34,29 @@ function revalidateIncident(incidentId: string): void {
   revalidatePath(`/incidents/${incidentId}`);
   revalidatePath('/incidents');
   revalidatePath('/');
+}
+
+/** Operator lifecycle changes are compliance-relevant: record who made them. */
+async function auditOperatorChange(
+  result: IncidentLifecycleResult,
+  user: { id: string; name?: string | null; email?: string | null }
+): Promise<void> {
+  // Past tense, matching the REST routes' incident.acknowledged / incident.resolved.
+  const command = (result.command ?? 'status_change').toLowerCase();
+  await emitAuditEvent({
+    action: `incident.${command}${command.endsWith('e') ? 'd' : 'ed'}`,
+    source: 'UI',
+    target: { type: 'INCIDENT', id: result.incidentId },
+    actor: { type: 'USER', id: user.id, name: user.name ?? null, email: user.email ?? null },
+    oldValue: { status: result.previousStatus },
+    newValue: { status: result.status },
+    metadata: { channel: result.source },
+  }).catch(error => {
+    logger.error('incident.lifecycle.audit_failed', {
+      incidentId: result.incidentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 /**
@@ -63,6 +92,7 @@ export async function updateIncidentStatus(
   if (status === 'ACKNOWLEDGED') await assertCanAcknowledgeIncident(id);
   else await assertResponderOrAbove();
 
+  const user = await getCurrentUser();
   const result = await transitionIncidentToStatusIdempotent(
     {
       incidentId: id,
@@ -70,13 +100,17 @@ export async function updateIncidentStatus(
       expectedStatus,
       source,
       ...(status === 'ACKNOWLEDGED' && ackedNotification ? { ackedNotification } : {}),
+      actor: { id: user.id, name: user.name ?? undefined },
     },
     idempotency,
     hooks?.inTx,
     hooks?.beforeTx
   );
 
-  if (result.value.changed && !result.replayed) revalidateIncident(id);
+  if (result.value.changed && !result.replayed) {
+    await auditOperatorChange(result.value, user);
+    revalidateIncident(id);
+  }
   return { replayed: result.replayed };
 }
 
@@ -135,6 +169,9 @@ export async function resolveIncidentWithNote(
     hooks?.beforeTx
   );
 
-  if (result.value.changed && !result.replayed) revalidateIncident(id);
+  if (result.value.changed && !result.replayed) {
+    await auditOperatorChange(result.value, user);
+    revalidateIncident(id);
+  }
   return { replayed: result.replayed };
 }

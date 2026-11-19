@@ -10,7 +10,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     incident: {
       findMany: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     incidentEvent: {
       create: vi.fn(),
@@ -45,6 +45,8 @@ vi.mock('@/lib/in-app-notifications', () => ({
 describe('oncall-handoff', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    const { default: prisma } = await import('@/lib/prisma');
+    vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
   });
 
   describe('processShiftRotations', () => {
@@ -94,8 +96,13 @@ describe('oncall-handoff', () => {
 
       expect(result.rotationsProcessed).toBe(1);
       expect(result.incidentsReassigned).toBe(1);
-      expect(prisma.incident.update).toHaveBeenCalledWith({
-        where: { id: 'inc-1' },
+      expect(prisma.incident.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { serviceId: { in: ['svc-1'] }, status: 'OPEN' },
+        })
+      );
+      expect(prisma.incident.updateMany).toHaveBeenCalledWith({
+        where: { id: 'inc-1', status: 'OPEN', assigneeId: 'user-a' },
         data: { assigneeId: 'user-b' },
       });
       expect(prisma.incidentEvent.create).toHaveBeenCalledTimes(1);
@@ -148,7 +155,7 @@ describe('oncall-handoff', () => {
 
       expect(result.rotationsProcessed).toBe(1);
       expect(result.incidentsReassigned).toBe(0);
-      expect(prisma.incident.update).not.toHaveBeenCalled();
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
       expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
 
@@ -183,11 +190,41 @@ describe('oncall-handoff', () => {
 
       expect(result.rotationsProcessed).toBe(1);
       expect(result.incidentsReassigned).toBe(1);
-      expect(prisma.incident.update).toHaveBeenCalledTimes(1);
-      expect(prisma.incident.update).toHaveBeenCalledWith({
-        where: { id: 'inc-outgoing' },
+      expect(prisma.incident.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.incident.updateMany).toHaveBeenCalledWith({
+        where: { id: 'inc-outgoing', status: 'OPEN', assigneeId: 'outgoing-primary' },
         data: { assigneeId: 'incoming-primary' },
       });
+    });
+
+    it('skips an incident acknowledged or reassigned between the read and the write', async () => {
+      const { default: prisma } = await import('@/lib/prisma');
+      const { getActiveOnCallShifts } = await import('@/lib/oncall-shifts');
+      const now = new Date('2026-08-26T06:31:00Z');
+      const shift = (userId: string): DynamicOnCallShift => ({
+        id: `shift-${userId}`,
+        scheduleId: 'sched-1',
+        userId,
+        schedule: { id: 'sched-1', name: 'Devops Schedule' },
+        user: { id: userId, name: userId },
+        start: now,
+        end: now,
+      });
+      vi.mocked(getActiveOnCallShifts).mockImplementation(async time =>
+        (time ?? new Date()).getTime() < now.getTime() ? [shift('user-a')] : [shift('user-b')]
+      );
+      vi.mocked(prisma.escalationPolicy.findMany).mockResolvedValue([
+        { id: 'ep-1', services: [{ id: 'svc-1' }] },
+      ] as unknown as Awaited<ReturnType<typeof prisma.escalationPolicy.findMany>>);
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([
+        { id: 'inc-1', title: 'Raced', status: 'OPEN', assigneeId: 'user-a' },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 0 });
+
+      const result = await processShiftRotations(now);
+
+      expect(result.incidentsReassigned).toBe(0);
+      expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
   });
 });

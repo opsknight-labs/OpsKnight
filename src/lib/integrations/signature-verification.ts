@@ -290,6 +290,9 @@ export function verifyWebhookSignature(
     default: {
       // Generic HMAC verification using x-signature header
       const sig = headers['x-signature'] || headers['x-webhook-signature'];
+      // Bitbucket Cloud signs with X-Hub-Signature: sha256=<hex HMAC-SHA256>.
+      const hubSig = headers['x-hub-signature'];
+      if (!sig && hubSig) return { valid: verifyGitHubSignature(payload, hubSig, secret) };
       if (!sig) return { valid: false, error: 'MISSING_SIGNATURE' };
       return { valid: verifyHmacSignature(payload, sig, secret) };
     }

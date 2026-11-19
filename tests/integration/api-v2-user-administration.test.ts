@@ -3,7 +3,7 @@ const identity = vi.hoisted(() => ({ id: '' }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/rbac', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/rbac')>()),
-  assertAdmin: async () => ({ id: identity.id, role: 'ADMIN' }),
+  assertAdmin: async () => ({ id: identity.id, role: 'ADMIN', baseRole: 'ADMIN' }),
 }));
 import { GET, PATCH } from '@/app/api/v2/users/[id]/administration/route';
 import { GET as getDependencies } from '@/app/api/v2/users/[id]/dependencies/route';

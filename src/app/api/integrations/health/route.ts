@@ -56,19 +56,20 @@ export async function GET(req: NextRequest) {
       }
 
       const metrics = getMetricsByIntegration(integrationId);
+      // Only recent, integration-scoped inbound failures count: one old failure
+      // (or an unrelated outbound chat/Jira failure) must not degrade it forever.
+      const failureWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const [deliveries, terminalFailures, providerAdmission] = await Promise.all([
         prisma.inboundDelivery.aggregate({
-          where: { integrationId, status: { in: ['PROCESSING', 'FAILED'] } },
+          where: { integrationId, status: 'PROCESSING' },
           _count: { id: true },
           _min: { createdAt: true },
         }),
-        prisma.$queryRaw<Array<{ count: bigint }>>`
-          SELECT COUNT(*)::bigint AS count FROM "ExternalOperation" operation
-          JOIN "Incident" incident ON incident."id" = operation."incidentId"
-          WHERE operation."status" = 'FAILED' AND incident."serviceId" = ${integration.service.id}
-        `.then(rows => Number(rows[0]?.count ?? 0)),
+        prisma.inboundDelivery.count({
+          where: { integrationId, status: 'FAILED', updatedAt: { gte: failureWindowStart } },
+        }),
         prisma.providerAdmission.findMany({
-          where: { key: { startsWith: integration.type.toLowerCase() } },
+          where: { key: { startsWith: `${integration.type.toLowerCase()}:` } },
           take: 20,
         }),
       ]);

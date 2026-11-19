@@ -344,3 +344,24 @@ export async function patchTeamMembership(
   invalidateSessionSecurityProjection(result.userId);
   return result;
 }
+
+/**
+ * Deleting a team nulls incident.teamId and escalationRule.targetTeamId (FK SET NULL),
+ * which orphans live incidents and makes escalation steps page nobody. Returns a
+ * user-facing reason when the team is still referenced, otherwise null.
+ */
+export async function findTeamDeletionBlocker(
+  teamId: string,
+  client: Prisma.TransactionClient = prisma
+): Promise<string | null> {
+  const [openIncidents, escalationSteps] = await Promise.all([
+    client.incident.count({ where: { teamId, status: { not: 'RESOLVED' } } }),
+    client.escalationRule.count({ where: { targetTeamId: teamId } }),
+  ]);
+  const reasons: string[] = [];
+  if (openIncidents > 0) reasons.push(`${openIncidents} unresolved incident(s) are assigned to it`);
+  if (escalationSteps > 0) reasons.push(`${escalationSteps} escalation policy step(s) target it`);
+  return reasons.length
+    ? `Cannot delete this team because ${reasons.join(' and ')}. Reassign them first.`
+    : null;
+}

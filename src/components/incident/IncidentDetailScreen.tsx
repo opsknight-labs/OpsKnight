@@ -73,6 +73,16 @@ import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { getIncidentCollaborationView } from '@/lib/incident-collaboration/get-incident-collaboration';
 
+// Only the user fields client components render; full rows carry passwordHash,
+// phone numbers and token state that must never reach the RSC payload.
+const CLIENT_USER_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  avatarUrl: true,
+  gender: true,
+} as const;
+
 export type IncidentDetailScreenProps = {
   id: string;
   backHref: string;
@@ -123,11 +133,11 @@ export default async function IncidentDetailScreen({
           },
         },
       },
-      assignee: true,
-      team: true,
+      assignee: { select: CLIENT_USER_SELECT },
+      team: { select: { id: true, name: true } },
       events: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 200 },
       notes: {
-        include: { user: true },
+        include: { user: { select: CLIENT_USER_SELECT } },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 100,
       },
@@ -147,7 +157,10 @@ export default async function IncidentDetailScreen({
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 50,
       },
-      watchers: { include: { user: true }, orderBy: { createdAt: 'asc' } },
+      watchers: {
+        include: { user: { select: CLIENT_USER_SELECT } },
+        orderBy: { createdAt: 'asc' },
+      },
       tags: { include: { tag: true }, orderBy: { createdAt: 'asc' } },
       customFieldValues: { include: { customField: true } },
       maintenanceWindow: { select: { id: true, title: true, endsAt: true } },
@@ -188,6 +201,8 @@ export default async function IncidentDetailScreen({
       : storedIncident.service.policy;
   const incident = {
     ...visibleIncidentSource(storedIncident, sensitive),
+    // The incident is serialized to client components: never ship webhook secrets.
+    service: { ...storedIncident.service, slackWebhookUrl: null, webhookUrl: null },
     incidentPolicy,
     noEscalation: decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION',
   };
@@ -220,7 +235,9 @@ export default async function IncidentDetailScreen({
             orderBy: { name: 'asc' },
           })
         : Promise.resolve([]),
-      canManageIncident ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
+      canManageIncident
+        ? prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
+        : Promise.resolve([]),
       prisma.customField.findMany({ orderBy: { order: 'asc' } }),
       prisma.incidentEvent.count({ where: { incidentId: id } }),
       prisma.incidentNote.count({ where: { incidentId: id } }),
@@ -262,7 +279,7 @@ export default async function IncidentDetailScreen({
 
   const handleAddNote = addIncidentDetailNote.bind(null, id);
   const handleAcknowledge = acknowledgeIncidentDetail.bind(null, id);
-  const handleReopen = reopenIncidentDetail.bind(null, id);
+  const handleReopen = reopenIncidentDetail.bind(null, id, incident.status);
   const handleSuppress = suppressIncidentDetail.bind(null, id);
   const handleAddWatcher = addIncidentDetailWatcher.bind(null, id);
   const handleRemoveWatcher = removeIncidentDetailWatcher.bind(null, id);

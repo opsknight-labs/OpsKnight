@@ -137,6 +137,31 @@ export function hashIdentityChallenge(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+/** Read-only view of a pending link so the confirm page can show whose Teams account it is. */
+export async function describeMicrosoftTeamsIdentityChallenge(
+  token: string
+): Promise<{ displayName: string | null; tenantId: string } | null> {
+  if (!token) return null;
+  const challenge = await prisma.chatIdentityChallenge.findUnique({
+    where: { tokenHash: hashIdentityChallenge(token) },
+    select: {
+      provider: true,
+      providerTenantId: true,
+      displayName: true,
+      consumedAt: true,
+      expiresAt: true,
+    },
+  });
+  if (
+    !challenge ||
+    challenge.provider !== 'MICROSOFT_TEAMS' ||
+    challenge.consumedAt ||
+    challenge.expiresAt <= new Date()
+  )
+    return null;
+  return { displayName: challenge.displayName, tenantId: challenge.providerTenantId };
+}
+
 export async function consumeMicrosoftTeamsIdentityChallenge(token: string, userId: string) {
   const tokenHash = hashIdentityChallenge(token);
   return prisma.$transaction(async tx => {

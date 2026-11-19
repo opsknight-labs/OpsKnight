@@ -24,18 +24,19 @@ function serviceSettingsRedirect(serviceId: string, tab = 'settings') {
   return `/services/${serviceId}?tab=${tab}&saved=1`;
 }
 
-export async function createIntegration(formData: FormData) {
+// Expected failures are returned, not thrown: production sanitises thrown server-action messages.
+export async function createIntegration(formData: FormData): Promise<{ error?: string }> {
   const serviceId = formData.get('serviceId') as string;
   const name = formData.get('name') as string;
   const type = (formData.get('type') as string) || 'EVENTS_API_V2';
   const rawSnsTopicArn = formData.get('snsTopicArn');
   const snsTopicArn = typeof rawSnsTopicArn === 'string' ? rawSnsTopicArn.trim() : '';
-  if (!serviceId || !name) throw new Error('Missing required fields');
+  if (!serviceId || !name) return { error: 'Missing required fields' };
   if (type === 'CLOUDWATCH') {
     if (
       !/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(snsTopicArn)
     ) {
-      throw new Error('A valid, exact AWS SNS Topic ARN is required for CloudWatch.');
+      return { error: 'A valid, exact AWS SNS Topic ARN is required for CloudWatch.' };
     }
   }
 
@@ -43,7 +44,7 @@ export async function createIntegration(formData: FormData) {
   try {
     currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : 'Unauthorized');
+    return { error: error instanceof Error ? error.message : 'Unauthorized' };
   }
   // Generate a random 32-char hex key
   const key = randomBytes(16).toString('hex');
@@ -68,26 +69,41 @@ export async function createIntegration(formData: FormData) {
   });
 
   revalidatePath(`/services/${serviceId}/integrations`);
+  return {};
 }
 
 export async function deleteIntegration(
   integrationId: string,
   serviceId: string,
   _formData?: FormData
-) {
+): Promise<{ error?: string }> {
   let currentUser: { id: string } | null = null;
   try {
     currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : 'Unauthorized');
+    // Returned, not thrown: production sanitises thrown server-action messages.
+    return { error: error instanceof Error ? error.message : 'Unauthorized' };
   }
 
-  const integration = await prisma.integration.findFirst({
-    where: { id: integrationId, serviceId },
-    select: { id: true },
+  // Same guard as the v2 DELETE: never orphan in-flight deliveries, and purge
+  // the delivery history (there is no foreign key to cascade it).
+  const blocked = await prisma.$transaction(async tx => {
+    const integration = await tx.integration.findFirst({
+      where: { id: integrationId, serviceId },
+      select: { id: true },
+    });
+    if (!integration) return 'Integration not found for this service.';
+    const inFlight = await tx.inboundDelivery.count({
+      where: { integrationId: integration.id, status: 'PROCESSING' },
+    });
+    if (inFlight > 0) {
+      return 'Integration has inbound deliveries in progress. Retry after they finish.';
+    }
+    await tx.inboundDelivery.deleteMany({ where: { integrationId: integration.id } });
+    await tx.integration.delete({ where: { id: integration.id } });
+    return null;
   });
-  if (!integration) throw new Error('Integration not found for this service.');
-  await prisma.integration.delete({ where: { id: integration.id } });
+  if (blocked) return { error: blocked };
 
   await logAudit({
     action: 'integration.deleted',
@@ -99,6 +115,7 @@ export async function deleteIntegration(
 
   revalidatePath(`/services/${serviceId}/integrations`);
   revalidatePath(`/services/${serviceId}`);
+  return {};
 }
 
 export async function updateService(serviceId: string, formData: FormData) {
@@ -170,6 +187,21 @@ export async function updateService(serviceId: string, formData: FormData) {
   }
 }
 
+// Same host rule sendSlackNotification enforces at delivery, so a typo fails at save, not silently later.
+function isSlackWebhookUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      ['hooks.slack.com', 'hooks.slack-gov.com'].includes(url.hostname.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function updateServiceNotificationSettings(serviceId: string, formData: FormData) {
   const currentUser = await assertCanModifyService(serviceId);
   const channels = parseServiceNotificationChannels(formData);
@@ -184,6 +216,9 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
       ? String(formData.get('slackWebhookUrl') ?? '').trim() || null
       : undefined
     : null;
+  if (slackWebhookUrl && !isSlackWebhookUrl(slackWebhookUrl)) {
+    return redirect(`/services/${serviceId}?tab=notifications&error=invalid-slack-webhook`);
+  }
 
   await prisma.service.update({
     where: { id: serviceId },
@@ -540,7 +575,7 @@ export async function toggleIntegrationStatus(
   revalidatePath(`/services/${serviceId}/integrations`);
 }
 
-export async function deleteService(serviceId: string) {
+export async function deleteService(serviceId: string): Promise<{ error?: string } | void> {
   let currentUser: { id: string } | null = null;
   try {
     currentUser = await assertAdmin();
@@ -554,17 +589,18 @@ export async function deleteService(serviceId: string) {
   // Incident history is an audit record and must never be erased as a side effect of
   // deleting a service. Require explicit archival/reassignment before deletion.
   const incidentCount = await prisma.incident.count({ where: { serviceId } });
+  // Returned, not thrown: production sanitises thrown server-action messages.
   if (incidentCount > 0) {
-    throw new Error(
-      `Cannot delete this service while it has ${incidentCount} incident(s). Preserve or reassign the incident history first.`
-    );
+    return {
+      error: `Cannot delete this service while it has ${incidentCount} incident(s). Preserve or reassign the incident history first.`,
+    };
   }
 
   const objectiveCount = await prisma.serviceObjective.count({ where: { serviceId } });
   if (objectiveCount > 0) {
-    throw new Error(
-      `Cannot delete this service while it has ${objectiveCount} service objective revision(s). Reliability history must retain its original service scope.`
-    );
+    return {
+      error: `Cannot delete this service while it has ${objectiveCount} service objective revision(s). Reliability history must retain its original service scope.`,
+    };
   }
 
   // Now delete the service

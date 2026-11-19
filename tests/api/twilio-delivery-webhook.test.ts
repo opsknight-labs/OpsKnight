@@ -2,18 +2,31 @@ import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { findFirst, updateMany, updateAttemptMany, endpointUpsert } = vi.hoisted(() => ({
+const {
+  findFirst,
+  updateMany,
+  updateAttemptMany,
+  endpointUpsert,
+  endpointFindUnique,
+  endpointCreate,
+} = vi.hoisted(() => ({
   findFirst: vi.fn(),
   updateMany: vi.fn(),
   updateAttemptMany: vi.fn(),
   endpointUpsert: vi.fn(),
+  endpointFindUnique: vi.fn(),
+  endpointCreate: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
   default: {
     notification: { findFirst, updateMany },
     notificationDeliveryAttempt: { updateMany: updateAttemptMany },
-    userNotificationEndpoint: { upsert: endpointUpsert },
+    userNotificationEndpoint: {
+      upsert: endpointUpsert,
+      findUnique: endpointFindUnique,
+      create: endpointCreate,
+    },
   },
 }));
 
@@ -127,6 +140,28 @@ describe('Twilio delivery receipt webhook', () => {
         data: expect.objectContaining({ outcome: 'UNDELIVERED', errorCode: '30003' }),
       })
     );
+  });
+
+  it('marks the phone endpoint OPTED_OUT when Twilio reports the recipient replied STOP', async () => {
+    findFirst.mockResolvedValue({
+      id: 'notif-1',
+      status: 'SENT',
+      providerMessageId: 'SM123',
+      userId: 'user-1',
+      channel: 'SMS',
+      recipientHash: 'hash-1',
+    });
+    endpointFindUnique.mockResolvedValue(null);
+    endpointCreate.mockResolvedValue({});
+
+    const response = await POST(
+      signedRequest('MessageSid=SM123&MessageStatus=undelivered&ErrorCode=21610')
+    );
+
+    expect(response.status).toBe(204);
+    expect(endpointCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'user-1', channel: 'SMS', status: 'OPTED_OUT' }),
+    });
   });
 
   it('does not regress a delivered notification when a late failure receipt arrives', async () => {

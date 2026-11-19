@@ -82,7 +82,8 @@ export async function POST(req: NextRequest) {
       await tx.statusPageSubscription.update({
         where: { id: subscription.id },
         data: {
-          preferences: cleanPrefs as unknown as Prisma.InputJsonValue,
+          // Prisma rejects a plain null for a Json? column; null means "all services".
+          preferences: cleanPrefs === null ? Prisma.DbNull : (cleanPrefs as Prisma.InputJsonValue),
           verificationToken: null,
           verificationTokenExpiresAt: null,
         },

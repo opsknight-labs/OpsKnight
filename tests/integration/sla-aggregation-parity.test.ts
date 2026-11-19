@@ -61,6 +61,52 @@ describeIfRealDB('SLA aggregation threshold parity', { timeout: 60_000 }, () => 
     expect(Math.max(...buckets.map(point => point.count))).toBeLessThanOrEqual(perDay * 2);
   });
 
+  it('buckets escalation and SLA compliance from the whole window, not the sampled rows', async () => {
+    const service = await testPrisma.service.create({
+      data: { name: `Trend rates ${crypto.randomUUID()}` },
+    });
+    const dayMs = 24 * 60 * 60_000;
+    const now = Date.now();
+    const perDay = 12;
+    const days = 60;
+    const rows = Array.from({ length: perDay * days }, (_, index) => {
+      const createdAt = new Date(now - (Math.floor(index / perDay) + 0.5) * dayMs);
+      return {
+        id: `trend-rate-${index}-${crypto.randomUUID()}`,
+        title: 'Trend rate',
+        serviceId: service.id,
+        status: 'RESOLVED' as const,
+        priority: 'P3' as const,
+        createdAt,
+        resolvedAt: new Date(createdAt.getTime() + 10 * 60_000),
+      };
+    });
+    await testPrisma.incident.createMany({ data: rows });
+    // Every incident escalated once, far outside the newest ~100 hydrated rows too.
+    await testPrisma.incidentEvent.createMany({
+      data: rows.map(row => ({
+        incidentId: row.id,
+        type: 'ESCALATED' as const,
+        message: 'Escalated to level 2',
+        createdAt: new Date(row.createdAt.getTime() + 60_000),
+      })),
+    });
+
+    const metrics = await calculateSLAMetrics({
+      serviceId: service.id,
+      startDate: new Date(now - 90 * dayMs),
+      endDate: new Date(now),
+      userTimeZone: 'UTC',
+    });
+
+    const populated = (metrics.trendSeries ?? []).filter(point => point.count > 0);
+    expect(populated.length).toBeGreaterThanOrEqual(days - 1);
+    for (const point of populated) {
+      expect(point.escalationRate).toBe(100);
+      expect(point.resolveCompliance).toBe(100);
+    }
+  });
+
   it('returns identical pause-aware MTTA below and above the SQL threshold', async () => {
     const service = await testPrisma.service.create({
       data: { name: `SLA parity ${crypto.randomUUID()}` },

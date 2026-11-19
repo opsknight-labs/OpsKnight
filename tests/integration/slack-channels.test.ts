@@ -81,9 +81,7 @@ describe('Slack Channels API', () => {
   });
 
   it('returns 401 when an administrator is not authenticated', async () => {
-    vi.mocked(assertAdmin).mockRejectedValueOnce(
-      new AppError({ code: 'AUTHENTICATION_REQUIRED' })
-    );
+    vi.mocked(assertAdmin).mockRejectedValueOnce(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
 
     const req = new NextRequest('http://localhost:3000/api/slack/channels');
     const response = await GET(req);
@@ -140,6 +138,24 @@ describe('Slack Channels API', () => {
     expect(body.channels).toHaveLength(2);
     expect(body.channels.find((ch: { id: string }) => ch.id === 'C1')?.isMember).toBe(false);
     expect(body.channels.find((ch: { id: string }) => ch.id === 'C2')?.isMember).toBe(true);
+  });
+
+  it('follows next_cursor so channels beyond the first page are listed', async () => {
+    const page = (channels: unknown[], next: string) =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, channels, response_metadata: { next_cursor: next } }),
+      }) as unknown as Response;
+    vi.mocked(retryFetch)
+      .mockResolvedValueOnce(page([{ id: 'C1', name: 'alerts', is_channel: true }], 'cur-2'))
+      .mockResolvedValueOnce(page([{ id: 'C9', name: 'payments-alerts', is_channel: true }], ''));
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/slack/channels'));
+    const body = await response.json();
+
+    expect(body.channels.map((ch: { id: string }) => ch.id)).toEqual(['C1', 'C9']);
+    expect(String(vi.mocked(retryFetch).mock.calls[1][0])).toContain('cursor=cur-2');
   });
 
   it('joins a public channel when requested', async () => {

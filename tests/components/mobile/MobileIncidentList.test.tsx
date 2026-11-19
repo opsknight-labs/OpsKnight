@@ -9,18 +9,23 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+const snooze = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/app/(app)/incidents/snooze-actions', () => ({ snoozeIncidentWithDuration: snooze }));
+
 type MockIncident = { id: string; title: string };
 type SwipeableIncidentCardProps = {
   incident: MockIncident;
   onAcknowledge?: (id: string) => void;
+  onSnooze?: (id: string) => void;
 };
 
 // Mock the child component to isolate status-transport logic from animation libraries.
 vi.mock('@/components/mobile/SwipeableIncidentCard', () => ({
-  default: ({ incident, onAcknowledge }: SwipeableIncidentCardProps) => (
+  default: ({ incident, onAcknowledge, onSnooze }: SwipeableIncidentCardProps) => (
     <div data-testid={`incident-card-${incident.id}`}>
       <span>{incident.title}</span>
       {onAcknowledge && <button onClick={() => onAcknowledge(incident.id)}>Acknowledge</button>}
+      {onSnooze && <button onClick={() => onSnooze(incident.id)}>Snooze</button>}
     </div>
   ),
 }));
@@ -80,5 +85,32 @@ describe('MobileIncidentList', () => {
         })
       );
     });
+  });
+
+  it('snoozes for a finite duration only after confirmation', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const incident = {
+      id: 'inc-2',
+      title: 'Disk full',
+      status: 'OPEN' as const,
+      urgency: 'HIGH',
+      createdAt: new Date().toISOString(),
+      service: { name: 'Storage' },
+    };
+    render(<MobileIncidentList incidents={[incident]} filter="all" />);
+
+    await act(async () => {
+      fireEvent.click(await screen.findByText('Snooze'));
+    });
+    expect(snooze).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Snooze'));
+    });
+    await waitFor(() => expect(snooze).toHaveBeenCalledWith('inc-2', 60));
+    expect(fetchMock).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });

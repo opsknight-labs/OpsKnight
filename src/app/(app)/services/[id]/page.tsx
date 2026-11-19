@@ -96,6 +96,7 @@ import AddIntegrationGrid from '@/components/service/AddIntegrationGrid';
 import CopyButton from '@/components/service/CopyButton';
 import IntegrationStatusToggle from '@/components/service/IntegrationStatusToggle';
 import IntegrationSecretControl from '@/components/service/IntegrationSecretControl';
+import { UNSIGNABLE_INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 import DeleteIntegrationButton from '@/components/service/DeleteIntegrationButton';
 import ServiceGeneralSettings from '@/components/service/ServiceGeneralSettings';
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
@@ -576,7 +577,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const boundUpdateService = updateService.bind(null, service.id);
   const boundDeleteService = async () => {
     'use server';
-    await deleteService(service.id);
+    return deleteService(service.id);
   };
 
   // --- TAB 1: INCIDENTS CONTENT ---
@@ -810,7 +811,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                         <DeleteIntegrationButton
                           action={async () => {
                             'use server';
-                            await deleteIntegration(integration.id, id);
+                            return deleteIntegration(integration.id, id);
                           }}
                           integrationName={integration.name}
                           variant="icon"
@@ -921,14 +922,18 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           />
                         </div>
 
-                        <div className="pt-1.5 border-t border-dashed border-border/80">
-                          <IntegrationSecretControl
-                            integrationId={integration.id}
-                            serviceId={id}
-                            hasSecret={Boolean(integration.signatureSecret)}
-                            className="w-full"
-                          />
-                        </div>
+                        {(!UNSIGNABLE_INTEGRATION_TYPES.has(integration.type) ||
+                          integration.signatureSecret) && (
+                          <div className="pt-1.5 border-t border-dashed border-border/80">
+                            <IntegrationSecretControl
+                              integrationId={integration.id}
+                              serviceId={id}
+                              hasSecret={Boolean(integration.signatureSecret)}
+                              signingSupported={!UNSIGNABLE_INTEGRATION_TYPES.has(integration.type)}
+                              className="w-full"
+                            />
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -1019,6 +1024,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const notificationsContent = (
     <div className="space-y-3.5">
       {isSaved && <ServiceSettingsFlashToast serviceId={id} />}
+      {errorCode === 'invalid-slack-webhook' && (
+        <InlineNotice tone="error" title="Invalid Slack webhook URL">
+          Use an incoming-webhook URL from Slack (https://hooks.slack.com/...). Nothing was saved.
+        </InlineNotice>
+      )}
 
       {canManageService ? (
         <ServiceNotificationSettings

@@ -346,14 +346,24 @@ async function sendWithSingleProvider(
       };
       if (value.code === 'MODULE_NOT_FOUND' || value.code === 'ERR_MODULE_NOT_FOUND')
         return { success: false, error: 'Nodemailer package not installed' };
+      // responseCode is an SMTP reply code, not HTTP. Any reply means the server
+      // definitively refused the message: 4xx is transient (retry later), 5xx is a
+      // rejection. Map onto the HTTP semantics the delivery engine classifies by.
+      const smtpCode = value.responseCode;
+      const statusCode =
+        typeof smtpCode === 'number' && smtpCode >= 400 && smtpCode < 500
+          ? 429
+          : typeof smtpCode === 'number' && smtpCode >= 500 && smtpCode < 600
+            ? 422
+            : undefined;
       return {
         success: false,
         error: [value.message || 'SMTP send error', value.code, value.command, value.response]
           .filter(Boolean)
           .join(' | '),
-        statusCode: value.responseCode,
+        statusCode,
         errorCode: value.code,
-        retryAfterMs: value.responseCode === 429 ? 60_000 : undefined,
+        retryAfterMs: statusCode === 429 ? 60_000 : undefined,
       };
     }
   }

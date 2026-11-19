@@ -100,3 +100,26 @@ it('supports controlled tab switching back and forth without dropping click even
   fireEvent.click(runbooksTab);
   await waitFor(() => expect(runbooksTab).toHaveAttribute('aria-selected', 'true'));
 });
+
+it('keeps a keepMounted tab mounted with its local state while another tab is shown', () => {
+  function Draft() {
+    const [value, setValue] = React.useState('');
+    return <input aria-label="draft" value={value} onChange={e => setValue(e.target.value)} />;
+  }
+  render(
+    <DetailTabs
+      tabs={[
+        { id: 'overview', label: 'Overview', content: <Draft />, keepMounted: true },
+        { id: 'runbooks', label: 'Runbooks', content: <p>other</p> },
+      ]}
+    />
+  );
+  fireEvent.change(screen.getByLabelText('draft'), { target: { value: 'unsaved edit' } });
+  selectRunbooks();
+  expect(screen.getByText('other')).toBeTruthy();
+  const hidden = screen.getByLabelText('draft') as HTMLInputElement;
+  expect(hidden.closest('[role="tabpanel"]')?.getAttribute('data-state')).toBe('inactive');
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Overview' }), { button: 0 });
+  fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+  expect((screen.getByLabelText('draft') as HTMLInputElement).value).toBe('unsaved edit');
+});

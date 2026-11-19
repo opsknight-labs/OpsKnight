@@ -428,6 +428,18 @@ function CreateIncidentModalContent({
     name: ['title', 'serviceId', 'urgency', 'priority', 'assigneeId', 'visibility'],
   });
 
+  // Reset paths must re-derive the service default: the sync effect below only
+  // reruns when the default changes, so a hard-coded PUBLIC would stick and
+  // publish a PRIVATE-default service's incident to the status page.
+  // A ref keeps resetForm/applyTemplate stable for the context-loading effect.
+  const contextServicesRef = useRef<Service[]>([]);
+  const serviceDefaultVisibility = useCallback(
+    (serviceId: string) =>
+      contextServicesRef.current.find(s => s.id === serviceId)?.defaultIncidentVisibility ??
+      'PUBLIC',
+    []
+  );
+
   const resetForm = useCallback(() => {
     userOverrodeVisibility.current = false;
     form.reset({
@@ -437,10 +449,10 @@ function CreateIncidentModalContent({
       urgency: 'HIGH',
       priority: '',
       assigneeId: 'unassigned',
-      visibility: 'PUBLIC',
+      visibility: serviceDefaultVisibility(openOptions?.serviceId || ''),
       dedupKey: '',
     });
-  }, [form, openOptions?.serviceId]);
+  }, [form, openOptions?.serviceId, serviceDefaultVisibility]);
 
   const applyTemplate = useCallback(
     (template: Template) => {
@@ -452,11 +464,11 @@ function CreateIncidentModalContent({
         urgency: template.defaultUrgency,
         priority: template.defaultPriority || '',
         assigneeId: 'unassigned',
-        visibility: 'PUBLIC',
+        visibility: serviceDefaultVisibility(template.defaultService?.id || ''),
         dedupKey: '',
       });
     },
-    [form]
+    [form, serviceDefaultVisibility]
   );
 
   useEffect(() => {
@@ -466,6 +478,7 @@ function CreateIncidentModalContent({
       .then(data => {
         if (cancelled) return;
         const ctx = data as ContextData;
+        contextServicesRef.current = ctx.services;
         setContextData(ctx);
         setLoading(false);
 

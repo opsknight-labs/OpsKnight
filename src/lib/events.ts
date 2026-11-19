@@ -86,6 +86,11 @@ function maxUrgency(current: IncidentUrgency, incoming: IncidentUrgency): Incide
 
 // Maximum description length to prevent DB insert failures
 const MAX_DESCRIPTION_LENGTH = 10000;
+const OUT_OF_ORDER_RESOLVE_WINDOW_MS = 5 * 60 * 1000;
+// A provider recovery can lag a manual resolve by far more than the buffer
+// window; a late recovery for a closed episode must not pre-resolve the next.
+// CI/CD success is a new run's state, never a late recovery of a pending failure.
+const CI_INTEGRATION_TYPES = new Set(['GITHUB', 'GITLAB', 'BITBUCKET', 'VERCEL']);
 
 /**
  * Normalize externally supplied text for safe canonical storage.
@@ -285,17 +290,10 @@ async function applyEvent(
 
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
+    // An incident keyed with the raw (legacy or manually supplied) key is matched
+    // through the legacy candidate; its key is left as-is so manual reports that
+    // reuse the same key keep deduplicating into it.
     const existingIncident = await findOpenEventIncident(tx, serviceId, candidateDedupKeys);
-
-    // Rolling-upgrade compatibility: move an open incident created with an
-    // older, unscoped key to the integration-scoped key on first contact.
-    if (existingIncident && existingIncident.dedupKey !== dedupKeys.primary) {
-      await tx.incident.update({
-        where: { id: existingIncident.id },
-        data: { dedupKey: dedupKeys.primary },
-      });
-      existingIncident.dedupKey = dedupKeys.primary;
-    }
 
     // Run this after the advisory lock so a queued event observes alert
     // history committed by earlier events for the same dedup key. Passing the
@@ -331,6 +329,21 @@ async function applyEvent(
         dedupKey: dedup_key,
       };
     }
+    // CI parsers emit acknowledge for informational states (queued, running,
+    // skipped, canceled). No human acknowledged anything, so an open failure
+    // must keep escalating.
+    if (event_action === 'acknowledge' && CI_INTEGRATION_TYPES.has(envelope.integrationType)) {
+      logger.info('event.ci_informational_ignored', {
+        dedupKey: dedup_key,
+        serviceId,
+        source: normalizedSource,
+      });
+      return {
+        action: 'ignored',
+        reason: 'CI status updates do not acknowledge incidents',
+        dedupKey: dedup_key,
+      };
+    }
 
     // Persist the final link on insertion instead of rewriting every alert.
     // New incidents are created first so the foreign key remains immediate;
@@ -353,7 +366,57 @@ async function applyEvent(
       });
     if (existingIncident) await persistAlert(existingIncident.id);
 
+    // Out-of-order resolve buffering covers a resolve that precedes its trigger.
+    const outOfOrderWindow = processingLease
+      ? {
+          gte: new Date(envelope.receivedAt.getTime() - OUT_OF_ORDER_RESOLVE_WINDOW_MS),
+          lte: envelope.receivedAt,
+        }
+      : { gte: new Date(Date.now() - OUT_OF_ORDER_RESOLVE_WINDOW_MS) };
+
     if (event_action === 'resolve' && !existingIncident) {
+      // A CI success with no open failure is a routine pass, not an early copy of
+      // a pending trigger; buffering it would pre-resolve the next real failure.
+      if (CI_INTEGRATION_TYPES.has(envelope.integrationType)) {
+        logger.info('event.resolve_no_match', {
+          dedupKey: dedup_key,
+          serviceId,
+          source: normalizedSource,
+        });
+        return {
+          action: 'ignored',
+          reason: 'No matching incident to resolve',
+          dedupKey: dedup_key,
+        };
+      }
+      // With no open incident, a resolve for a key that already had a resolved
+      // incident belongs to that closed episode: a late recovery after a manual
+      // resolve, or a repeated recovery. Buffering it would let the next real
+      // trigger open as already-RESOLVED and page nobody. A genuine early resolve
+      // for a new episode then leaves that incident open, which still pages.
+      const recentlyResolved = await tx.incident.findFirst({
+        where: {
+          serviceId,
+          dedupKey: { in: candidateDedupKeys },
+          status: 'RESOLVED',
+          resolvedAt: { not: null },
+        },
+        orderBy: [{ resolvedAt: 'desc' }, { id: 'desc' }],
+        select: { id: true },
+      });
+      if (recentlyResolved) {
+        await persistAlert(recentlyResolved.id);
+        logger.info('event.resolve_late_for_resolved_incident', {
+          dedupKey: dedup_key,
+          serviceId,
+          incidentId: recentlyResolved.id,
+        });
+        return {
+          action: 'ignored',
+          reason: 'Incident already resolved',
+          dedupKey: dedup_key,
+        };
+      }
       const alert = await persistAlert();
       logger.info('event.resolve_buffered_for_out_of_order', {
         dedupKey: dedup_key,
@@ -397,14 +460,45 @@ async function applyEvent(
           ).released;
         }
 
-        // Log an event instead of note (no userId needed)
-        const safeSummary = truncateString(normalizeText(eventData.summary.trim()), 500);
-        await tx.incidentEvent.create({
-          data: {
-            incidentId: existingIncident.id,
-            message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}${releaseSupportHoursDeferral ? ' Support-hours engagement deferral released.' : ''}`,
-          },
-        });
+        // A flapping hold has no timer of its own: the next trigger after the
+        // signal stabilises releases it, so a flapped-then-steady alert still pages.
+        let releasedFlappingHold = false;
+        if (existingIncident.status === 'SUPPRESSED') {
+          const flappingHold = await tx.incidentSlaPause.findFirst({
+            where: {
+              incidentId: existingIncident.id,
+              endedAt: null,
+              reason: 'flapping-suppression',
+            },
+            select: { id: true },
+          });
+          if (
+            flappingHold &&
+            !(await checkAlertFlapping(dedup_key, serviceId, undefined, tx)).isFlapping
+          ) {
+            releasedFlappingHold = (
+              await applyIncidentLifecycleCommand(tx, {
+                incidentId: existingIncident.id,
+                command: 'UNSUPPRESS',
+                source: 'EVENT',
+                expectedStatus: 'SUPPRESSED',
+                eventMessage: `Alert from ${normalizedSource} stopped flapping and is still firing; incident released for paging.`,
+              })
+            ).changed;
+          }
+        }
+
+        // The alert row already records every repeat; only a change earns a
+        // timeline entry, so a monitor firing every minute cannot flood it.
+        if (urgencyRaised || releaseSupportHoursDeferral) {
+          const safeSummary = truncateString(normalizeText(eventData.summary.trim()), 500);
+          await tx.incidentEvent.create({
+            data: {
+              incidentId: existingIncident.id,
+              message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}${releaseSupportHoursDeferral ? ' Support-hours engagement deferral released.' : ''}`,
+            },
+          });
+        }
 
         logger.info('event.deduplicated', {
           incidentId: existingIncident.id,
@@ -414,9 +508,15 @@ async function applyEvent(
           incomingUrgency,
           effectiveUrgency,
           urgencyRaised,
+          releasedFlappingHold,
         });
 
-        return { action: 'deduplicated', incident: existingIncident };
+        return {
+          action: 'deduplicated',
+          incident: releasedFlappingHold
+            ? await reloadIncident(tx, existingIncident.id)
+            : existingIncident,
+        };
       }
 
       const noiseReceivedAt = processingLease ? envelope.receivedAt : new Date();
@@ -427,12 +527,7 @@ async function applyEvent(
           serviceId,
           status: 'RESOLVED',
           incidentId: null,
-          createdAt: processingLease
-            ? {
-                gte: new Date(envelope.receivedAt.getTime() - 5 * 60 * 1000),
-                lte: envelope.receivedAt,
-              }
-            : { gte: new Date(Date.now() - 5 * 60 * 1000) },
+          createdAt: outOfOrderWindow,
         },
         orderBy: { createdAt: 'desc' },
       });

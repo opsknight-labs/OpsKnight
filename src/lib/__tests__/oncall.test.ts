@@ -142,6 +142,41 @@ describe('buildScheduleBlocks', () => {
     expect(final[0].userId).toBe('primary-cover');
   });
 
+  it('does not let a replacement on a lower layer outrank a higher layer', () => {
+    const primary = { ...layer, id: 'primary', users: [layer.users[0]] };
+    const secondary = { ...layer, id: 'secondary', users: [layer.users[1]] };
+    const blocks = buildScheduleBlocks(
+      [primary, secondary],
+      [
+        {
+          id: 'cover-b',
+          userId: 'user-c',
+          user: { name: 'Charlie' },
+          start: hoursFromBase(0),
+          end: hoursFromBase(24),
+          replacesUserId: 'user-b',
+        },
+      ],
+      hoursFromBase(0),
+      hoursFromBase(24)
+    );
+
+    const final = getFinalScheduleBlocks(
+      blocks,
+      new Map([
+        ['primary', 2],
+        ['secondary', 1],
+      ])
+    );
+    expect(final.map(b => b.userId)).toEqual(['user-a']);
+  });
+
+  it('falls back to UTC instead of throwing on an invalid stored time zone', () => {
+    expect(() =>
+      buildScheduleBlocks([layer], [], hoursFromBase(0), hoursFromBase(48), 'America/NewYork')
+    ).not.toThrow();
+  });
+
   it('creates gaps when shiftLengthHours is less than rotationLengthHours', () => {
     const layerWithShiftRestriction = {
       ...layer,

@@ -343,6 +343,7 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
     {
       global: CAPABILITIES.INCIDENT_CREATE_ALL,
+      scoped: CAPABILITIES.INCIDENT_CREATE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
@@ -410,7 +411,9 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
   [
     AUTHORIZATION_ACTIONS.SERVICE_UPDATE,
     {
-      global: CAPABILITIES.OPERATIONS_MANAGE,
+      // Matches assertCanModifyService: operators may change only their own teams' services.
+      global: CAPABILITIES.ADMIN_MANAGE,
+      scoped: CAPABILITIES.OPERATIONS_MANAGE,
       apiScope: API_SCOPES.SERVICES_WRITE,
     },
   ],

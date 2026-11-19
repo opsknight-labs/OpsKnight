@@ -172,8 +172,8 @@ export async function GET(request: NextRequest) {
               userId: actor.id,
               error: error instanceof Error ? error.message : String(error),
             });
-            // Fail closed: terminate stream on authorization recheck failure
-            send({ type: 'authorization_revoked' });
+            // Fail closed: terminate the stream, but a failed recheck (e.g. a database blip) is
+            // not a revocation, so the client reconnects instead of being signed out.
             cleanup();
             return;
           }

@@ -234,6 +234,51 @@ describe('Dashboards API CRUD Contract', () => {
       expect(mocks.prisma.dashboard.update).toHaveBeenCalled();
     });
 
+    it('shares a private dashboard to the owner team when no team is named', async () => {
+      mocks.prisma.dashboard.findUnique.mockResolvedValue({
+        id: 'd-1',
+        userId: mockUser.id,
+        visibility: 'PRIVATE',
+        teamId: null,
+      });
+      mocks.prisma.dashboard.update.mockResolvedValue({ id: 'd-1', widgets: [] });
+
+      const req = new NextRequest('http://localhost/api/dashboards/d-1', {
+        method: 'PUT',
+        body: JSON.stringify({ visibility: 'TEAM' }),
+      });
+
+      const res = await updateDashboard(req, { params: Promise.resolve({ id: 'd-1' }) });
+      expect(res.status).toBe(200);
+      expect(mocks.prisma.dashboard.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ visibility: 'TEAM', teamId: 'team-1' }),
+        })
+      );
+    });
+
+    it('asks a multi-team owner which team to share with', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        teamMemberships: [{ teamId: 'team-1' }, { teamId: 'team-2' }],
+      });
+      mocks.prisma.dashboard.findUnique.mockResolvedValue({
+        id: 'd-1',
+        userId: mockUser.id,
+        visibility: 'PUBLIC',
+        teamId: null,
+      });
+
+      const req = new NextRequest('http://localhost/api/dashboards/d-1', {
+        method: 'PUT',
+        body: JSON.stringify({ visibility: 'TEAM' }),
+      });
+
+      const res = await updateDashboard(req, { params: Promise.resolve({ id: 'd-1' }) });
+      expect(res.status).toBe(400);
+      expect(mocks.prisma.dashboard.update).not.toHaveBeenCalled();
+    });
+
     it('rejects PUT from non-owner with 403', async () => {
       mocks.prisma.dashboard.findUnique.mockResolvedValue({
         id: 'd-1',

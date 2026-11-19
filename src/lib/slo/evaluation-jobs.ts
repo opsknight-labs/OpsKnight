@@ -12,6 +12,8 @@ import {
   AUTHORIZATION_ACTIONS,
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
+import { resolveMcpGrant } from '@/lib/mcp/auth/principal';
+import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import { serviceObjectiveReadWhere } from './authorization';
 import { evaluateServiceObjective, objectiveWindowDays } from './evaluator';
 import type { ServiceObjectiveEvaluation } from './types';
@@ -144,7 +146,26 @@ export async function requestObjectiveEvaluation(
   return project(job);
 }
 
+async function currentMcpActor(db: Prisma.TransactionClient, payload: Payload) {
+  // MCP principals carry `mcp:<grantId>` as their key id; there is no ApiKey row for them.
+  const auth = await resolveMcpGrant(payload.apiClientId.slice(4), undefined, db).catch(
+    error => {
+      if (error instanceof McpBoundaryError) return null;
+      throw error;
+    }
+  );
+  return auth && auth.actor.id === payload.actorId ? auth.actor : null;
+}
+
 async function currentActor(db: Prisma.TransactionClient, payload: Payload) {
+  if (payload.apiClientId.startsWith('mcp:')) {
+    const actor = await currentMcpActor(db, payload);
+    return actor &&
+      authorizationContext(actor) === payload.authorizationContext &&
+      authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_EVALUATE }).allowed
+      ? actor
+      : null;
+  }
   const key = await db.apiKey.findFirst({
     where: {
       id: payload.apiClientId,

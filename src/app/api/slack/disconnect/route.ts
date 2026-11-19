@@ -96,8 +96,10 @@ export async function DELETE(request: NextRequest) {
 
       return NextResponse.json({ success: true });
     } else {
-      // Disconnect global integration (no serviceId)
+      // Disconnect the global integration (not tied to any service) — the same row
+      // the Slack settings page shows, never a service-bound workspace.
       const globalIntegration = await prisma.slackIntegration.findFirst({
+        where: { services: { none: {} } },
         orderBy: { updatedAt: 'desc' },
       });
 
@@ -120,7 +122,8 @@ export async function DELETE(request: NextRequest) {
 
       return NextResponse.json({ error: 'No integration found to disconnect' }, { status: 404 });
     }
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as Error;
     logger.error('[Slack] Disconnect error', {
       error: error.message,
       stack: error.stack,

@@ -6,7 +6,7 @@ import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
-import { mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
+import { digestMcpSecret, mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
 import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
@@ -55,6 +55,27 @@ export function POST(request: Request) {
 }
 export const OPTIONS = browserPreflight;
 
+/** One indexed lookup: an attacker without an issued code or refresh token cannot pass it. */
+async function presentsIssuedCredential(body: z.infer<typeof schema>): Promise<boolean> {
+  if (body.grant_type === 'refresh_token' && body.refresh_token) {
+    return Boolean(
+      await prisma.mcpToken.findUnique({
+        where: { refreshHash: digestMcpSecret(body.refresh_token) },
+        select: { id: true },
+      })
+    );
+  }
+  if (body.grant_type === 'authorization_code' && body.code) {
+    return Boolean(
+      await prisma.mcpAuthorizationCode.findUnique({
+        where: { hash: digestMcpSecret(body.code) },
+        select: { hash: true },
+      })
+    );
+  }
+  return false;
+}
+
 async function handlePost(request: Request, browserOrigin: string | null) {
   let reused: string | undefined;
   let release: (() => void) | undefined;
@@ -63,7 +84,9 @@ async function handlePost(request: Request, browserOrigin: string | null) {
     release = await acquireMcpOAuthSlot('token');
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
     requireMcp(mcpPolicyInForce(policy), 'MCP_DISABLED', 503);
-    await admitMcpOAuthRequest(request, 'token');
+    await admitMcpOAuthRequest(request, 'token', { chargeGlobal: false });
+    // Validate the request shape before charging the installation-wide ceiling, so malformed
+    // junk is refused without spending the budget real clients depend on.
     requireMcp(
       request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ===
         'application/x-www-form-urlencoded',
@@ -79,6 +102,9 @@ async function handlePost(request: Request, browserOrigin: string | null) {
       'invalid_request'
     );
     requireMcp(body.grant_type !== 'refresh_token' || body.refresh_token, 'invalid_request');
+    if (!(await presentsIssuedCredential(body))) {
+      await admitMcpOAuthRequest(request, 'token', { chargePeer: false });
+    }
     if (body.grant_type === MCP_DEVICE_CODE_GRANT) {
       // Not offered while the administrator has the device flow off, as metadata says.
       requireMcp(policy?.deviceFlowEnabled, 'unsupported_grant_type');

@@ -149,6 +149,27 @@ export async function assertAdmin() {
   return assertCapability(CAPABILITIES.ADMIN_MANAGE, 'Unauthorized. Admin access required.');
 }
 
+/**
+ * Acting on an ADMIN account (or granting ADMIN) is account-takeover grade, so it needs an
+ * assigned administrator: a time-boxed grant must not be able to outlive itself.
+ */
+export async function assertPermanentAdminForAdminTargets(
+  actor: { baseRole: string },
+  targetUserIds: readonly string[],
+  newRole?: unknown
+) {
+  if (actor.baseRole === 'ADMIN') return;
+  const touchesAdmin =
+    newRole === 'ADMIN' ||
+    (await prisma.user.count({ where: { id: { in: [...targetUserIds] }, role: 'ADMIN' } })) > 0;
+  if (touchesAdmin) {
+    throw new AuthorizationError(
+      'Only an assigned administrator can grant the Admin role or change administrator accounts. Temporary admin access cannot do this.',
+      CAPABILITIES.ADMIN_MANAGE
+    );
+  }
+}
+
 export async function assertAdminOrResponder() {
   return assertCapability(
     CAPABILITIES.OPERATIONS_MANAGE,
@@ -370,15 +391,37 @@ export async function assertCanReadServiceMetrics(opts: {
 }
 
 export async function assertCanCreateIncidentForService(serviceId: string) {
-  const user = await assertCapability(
-    CAPABILITIES.INCIDENT_CREATE_ALL,
-    'Unauthorized. Incident creation requires Responder or Admin access.'
-  );
+  const user = await getCurrentUser();
+  const actor = await resolveUserActor(user.id);
+  const roleMessage = 'Unauthorized. Incident creation requires Responder or Admin access.';
+  if (!actor) throw new AuthorizationError(roleMessage, CAPABILITIES.INCIDENT_CREATE_ALL);
+  // Capability check first so people with no create permission cannot probe services.
+  const preliminary = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE });
+  if (!preliminary.allowed) {
+    void recordActionDenial(user.id, [preliminary.requiredCapability], preliminary.reason);
+    throw new AuthorizationError(roleMessage, preliminary.requiredCapability);
+  }
   const service = await prisma.service.findUnique({
     where: { id: serviceId },
-    select: { id: true },
+    select: { id: true, teamId: true },
   });
   if (!service) throw appError('SERVICE_NOT_FOUND', 'Service not found', { serviceId });
+  const decision = authorize({
+    actor,
+    action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+    resource: { type: 'service', teamId: service.teamId },
+  });
+  if (!decision.allowed) {
+    void recordActionDenial(user.id, [decision.requiredCapability], decision.reason, {
+      type: 'service',
+      id: serviceId,
+    });
+    throw appError(
+      'INCIDENT_CREATE_SERVICE_ACCESS_DENIED',
+      'Unauthorized. You can only create incidents on services owned by your teams.',
+      { serviceId, userId: user.id }
+    );
+  }
   return user;
 }
 

@@ -108,27 +108,49 @@ function jitteredDelayMs(baseMs: number): number {
   return Math.max(1_000, Math.round(baseMs * jitter));
 }
 
-function operationRetryDelayMs(error: unknown): number {
+const MAX_TEAMS_RETRY_DELAY_MS = 30 * 60_000;
+
+export function operationRetryDelayMs(error: unknown, attempts = 1): number {
   if (error instanceof AppError && typeof error.details?.providerRetryAfterMs === 'number') {
     return jitteredDelayMs(
       Math.max(1_000, Math.trunc(error.details.providerRetryAfterMs as number))
     );
   }
   if (error instanceof Error && /rate.?limit/i.test(error.message)) return jitteredDelayMs(60_000);
-  return jitteredDelayMs(30_000);
+  // Exponential (30s, 1m, 2m, ... capped at 30m) so 8 attempts span a ~1h outage, not ~4 minutes.
+  const exponent = Math.min(Math.max(attempts, 1) - 1, 10);
+  return jitteredDelayMs(Math.min(30_000 * 2 ** exponent, MAX_TEAMS_RETRY_DELAY_MS));
 }
 
-function classifyTeamsError(error: unknown): {
+// Structured failure codes that no retry can fix.
+const TERMINAL_TEAMS_FAILURE_CODES = new Set([
+  'NOT_CONFIGURED',
+  'TENANT_REQUIRED',
+  'DESTINATION_NOT_FOUND',
+  'CHANNEL_NOT_FOUND',
+  'APP_NOT_INSTALLED',
+  'CONSENT_REQUIRED',
+]);
+
+export function classifyTeamsError(error: unknown): {
   terminal: boolean;
   ambiguous: boolean;
   message: string;
 } {
   const msg = error instanceof Error ? error.message : String(error);
   const lower = msg.toLowerCase();
+  // Prefer the structured failure code: AppError messages are human text
+  // ("Teams channel not found") that the code-name regex below never matches.
+  const failureCode =
+    error instanceof AppError && typeof error.details?.failureCode === 'string'
+      ? error.details.failureCode
+      : null;
   const terminal =
-    /not configured|tenant_required|destination_not_found|channel_not_found|app_not_installed|consent_required|invalid/i.test(
-      lower
-    ) && !/rate.?limit|timeout|temporar/i.test(lower);
+    failureCode && failureCode !== 'UNKNOWN'
+      ? TERMINAL_TEAMS_FAILURE_CODES.has(failureCode)
+      : /not configured|tenant_required|destination_not_found|channel_not_found|app_not_installed|consent_required|payload is invalid/i.test(
+          lower
+        ) && !/rate.?limit|timeout|temporar/i.test(lower);
   const ambiguous =
     /timeout|timed out|ambiguous|econn|enotfound|socket|fetch failed|temporar|service unavailable|429|rate.?limit/i.test(
       lower
@@ -178,7 +200,7 @@ async function releaseFailedOperation(
   } else {
     try {
       await prisma.$transaction(async tx => {
-        const nextAttempt = new Date(Date.now() + operationRetryDelayMs(error));
+        const nextAttempt = new Date(Date.now() + operationRetryDelayMs(error, attempts));
         const updated = await tx.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
@@ -366,6 +388,21 @@ async function syncTeamsNotificationFailure(
         errorMsg: errorMsg.slice(0, 1000),
         attempts: { increment: 1 },
       },
+    })
+    .catch(() => undefined);
+}
+
+/** A superseded delivery is a normal outcome, not a failure: record it as SKIPPED. */
+async function syncTeamsNotificationSkipped(
+  idempotencyKey: string | null | undefined,
+  reason: string,
+  tx: Prisma.TransactionClient
+) {
+  if (!idempotencyKey) return;
+  await tx.notification
+    .updateMany({
+      where: { deliveryKey: idempotencyKey, status: { not: 'DELIVERED' } },
+      data: { status: 'SKIPPED', errorMsg: reason.slice(0, 1000) },
     })
     .catch(() => undefined);
 }
@@ -813,7 +850,11 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       payloadInstant instanceof Date && !Number.isNaN(payloadInstant.getTime());
     let staleReason: string | null = null;
     if (eventType === 'triggered') {
-      if (incident.status !== 'OPEN') staleReason = `Incident is now ${incident.status}`;
+      // An acknowledged incident still needs its card: the card renders current
+      // state, and the ack event may be fenced (notify-on-ack off), which would
+      // otherwise leave the channel with no card at all.
+      if (incident.status !== 'OPEN' && incident.status !== 'ACKNOWLEDGED')
+        staleReason = `Incident is now ${incident.status}`;
       else if (payloadGeneration !== null && incident.escalationGeneration !== payloadGeneration)
         staleReason = 'Escalation generation was superseded';
     } else if (eventType === 'acknowledged') {
@@ -872,12 +913,31 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       const reason = staleReason;
       await prisma
         .$transaction(async tx => {
+          // A superseded service card is expected (e.g. a fast ack): complete it as
+          // skipped instead of a spurious FAILED. An automation card was asked for
+          // explicitly, so it still fails visibly with the reason.
+          if (payload?.origin === 'AUTOMATION') {
+            const updated = await tx.externalOperation.updateMany({
+              where: { id, status: 'PROCESSING', leaseToken },
+              data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
+            });
+            if (updated.count > 0) {
+              await syncTeamsNotificationFailure(operation.idempotencyKey, reason, tx);
+            }
+            return;
+          }
           const updated = await tx.externalOperation.updateMany({
             where: { id, status: 'PROCESSING', leaseToken },
-            data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
+            data: {
+              status: 'COMPLETED',
+              lastError: null,
+              resultPayload: { superseded: true, reason } as Prisma.InputJsonObject,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
           });
           if (updated.count > 0) {
-            await syncTeamsNotificationFailure(operation.idempotencyKey, reason, tx);
+            await syncTeamsNotificationSkipped(operation.idempotencyKey, reason, tx);
           }
         })
         .catch(() => undefined);
@@ -1599,9 +1659,12 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       // An explicit non-5xx HTTP response proves the create was rejected. Clear
       // both reservation and uncertainty so a known-safe retry cannot become a
       // false AMBIGUOUS operation on its next wake-up.
+      // A connect-phase network failure likewise proves the POST never left.
       if (
         (!createAttemptStarted && reservedByUs) ||
-        (createAttemptStarted && statusCode != null && statusCode < 500)
+        (createAttemptStarted &&
+          ((statusCode != null && statusCode < 500) ||
+            result.errorCode === 'PRE_SEND_NETWORK_ERROR'))
       ) {
         if (reservedByUs) {
           await prisma.microsoftTeamsIncidentMessage.deleteMany({
@@ -1736,7 +1799,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         } catch {}
         throw err;
       }
-      const nextAttemptAt = new Date(Date.now() + operationRetryDelayMs(err));
+      const nextAttemptAt = new Date(Date.now() + operationRetryDelayMs(err, operation.attempts));
       const st = retryStatus(operation.attempts);
       const errMessage = err.message.slice(0, 1000);
       await prisma.$transaction(async tx => {

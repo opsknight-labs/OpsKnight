@@ -94,9 +94,9 @@ export async function getRequestSessionJti(req: NextRequest): Promise<string | n
  * membership, role, account status, token version, and individual session revocation
  * can all change while a browser keeps an EventSource connection alive.
  *
- * Security property: Fails closed. If the session has been revoked, expired,
- * lacks a valid JTI, or the database cannot be contacted, returns null, immediately
- * severing the stream.
+ * Security property: Fails closed. If the session has been revoked, expired or
+ * lacks a valid JTI, returns null. If the database cannot be contacted it throws
+ * StreamAuthorizationUnavailableError; callers sever the stream either way.
  */
 export async function resolveStreamAuthorization(
   userId: string,
@@ -139,7 +139,7 @@ export async function resolveStreamAuthorization(
     }
 
     // Enforce individual session revocation and expiry for this connection
-    const active = await isSessionActive(user.id, sessionJti);
+    const active = await isSessionActive(user.id, sessionJti, { throwOnError: true });
     if (!active) {
       return null;
     }
@@ -152,8 +152,17 @@ export async function resolveStreamAuthorization(
       tokenVersion: user.tokenVersion ?? 0,
       sessionJti,
     };
-  } catch {
-    return null; // Fail closed if database unreachable
+  } catch (error) {
+    // Infrastructure failures are not revocations: callers must close the stream (fail closed)
+    // without telling the client its session ended, so it reconnects instead of logging out.
+    throw new StreamAuthorizationUnavailableError(error);
+  }
+}
+
+export class StreamAuthorizationUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = 'StreamAuthorizationUnavailableError';
   }
 }
 

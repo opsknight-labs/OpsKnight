@@ -29,19 +29,15 @@ import { saveSlaSchedulerModeAction } from '@/app/(app)/settings/incident-sla/ac
 function configureTransaction(config?: {
   current?: Record<string, unknown> | null;
   ready?: boolean;
-  missingHints?: number;
+  unhinted?: Array<Record<string, unknown>>;
   fail?: Error;
 }) {
   const upsert = vi.fn().mockResolvedValue({});
   mocks.transaction.mockImplementation(async callback => {
     if (config?.fail) throw config.fail;
     return callback({
-      $queryRaw: vi
-        .fn()
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { ready: config?.ready ?? false, missing_hints: BigInt(config?.missingHints ?? 0) },
-        ]),
+      $queryRaw: vi.fn().mockResolvedValue([{ ready: config?.ready ?? false }]),
+      incident: { findMany: vi.fn().mockResolvedValue(config?.unhinted ?? []) },
       systemConfig: {
         findUnique: vi.fn().mockResolvedValue(
           config?.current === null
@@ -71,7 +67,7 @@ describe('SLA scheduler mode action', () => {
     ['LEGACY to SHADOW', { mode: 'LEGACY' }],
     ['missing config to SHADOW', null],
   ])('allows %s without checking index readiness', async (_label, current) => {
-    const { upsert } = configureTransaction({ current, ready: false, missingHints: 384 });
+    const { upsert } = configureTransaction({ current, ready: false });
     await expect(saveSlaSchedulerModeAction('SHADOW')).resolves.toEqual({
       ok: true,
       mode: 'SHADOW',
@@ -85,11 +81,56 @@ describe('SLA scheduler mode action', () => {
     configureTransaction({
       current: { mode: 'SHADOW', lastShadowMismatchCount: 0, consecutiveCleanChecks: 3 },
       ready: false,
-      missingHints: 0,
     });
     await expect(saveSlaSchedulerModeAction('INDEXED')).resolves.toEqual({
       ok: false,
       message: 'Install the SLA scheduler index before enabling Indexed mode.',
+    });
+  });
+
+  const slaIncident = (createdAt: Date, extra: Record<string, unknown> = {}) => ({
+    status: 'OPEN',
+    createdAt,
+    acknowledgedAt: null,
+    slaFirstAcknowledgedAt: null,
+    resolvedAt: null,
+    slaAckTargetMs: 15 * 60_000,
+    slaResolveTargetMs: 120 * 60_000,
+    slaTargetSource: 'SERVICE',
+    slaTargetCapturedAt: createdAt,
+    slaPausedMs: 0,
+    slaPauseStartedAt: null,
+    slaAckElapsedMs: null,
+    slaResolveElapsedMs: null,
+    ...extra,
+  });
+  const readyShadow = { mode: 'SHADOW', lastShadowMismatchCount: 0, consecutiveCleanChecks: 3 };
+
+  it('enables INDEXED when the only NULL hints belong to breached or paused incidents', async () => {
+    const { upsert } = configureTransaction({
+      current: readyShadow,
+      ready: true,
+      unhinted: [
+        slaIncident(new Date(Date.now() - 5 * 60 * 60_000)),
+        slaIncident(new Date(Date.now() - 60_000), { slaPauseStartedAt: new Date() }),
+      ],
+    });
+    await expect(saveSlaSchedulerModeAction('INDEXED')).resolves.toEqual({
+      ok: true,
+      mode: 'INDEXED',
+    });
+    expect(upsert).toHaveBeenCalled();
+  });
+
+  it('rejects INDEXED while a schedulable incident still lacks a hint', async () => {
+    configureTransaction({
+      current: readyShadow,
+      ready: true,
+      unhinted: [slaIncident(new Date(Date.now() - 60_000))],
+    });
+    await expect(saveSlaSchedulerModeAction('INDEXED')).resolves.toEqual({
+      ok: false,
+      message: 'Run Shadow mode until all active incidents have scheduling hints.',
     });
   });
 

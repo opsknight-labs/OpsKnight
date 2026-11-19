@@ -10,6 +10,7 @@ import {
   getPostmortemActionItems,
   replacePostmortemActionItems,
 } from '@/lib/postmortems/action-item-commands';
+import { assertPostmortemAccess, postmortemEditWhere } from '@/lib/postmortems/authorization';
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
 
@@ -60,6 +61,8 @@ export const PUT = defineV2Route({
       select: { id: true, incidentId: true },
     });
     if (!parent) throw new AppError({ code: 'POSTMORTEM_NOT_FOUND' });
+    // Replacing the whole list is an editor operation in the UI, so it needs edit rights.
+    await assertPostmortemAccess(tx!, parent.id, postmortemEditWhere(actor));
     const result = await replacePostmortemActionItems(
       tx!,
       parent.id,

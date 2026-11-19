@@ -357,38 +357,47 @@ async function notifyBreachWarning(
     // Do not create a synthetic Slack recipient. A service target is preferred,
     // with a configured global webhook as the deliberate fallback.
     if (hasSlackEnabled && (slackChannel || slackWebhookUrl)) {
-      await enqueueCentralNotification({
-        category: 'SLA',
-        channel: 'SLACK',
-        recipientType: slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
-        recipientId: warning.serviceId,
-        recipientAddress: slackChannel || slackWebhookUrl!,
-        incidentId: warning.incidentId,
-        templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
-        sourceType: 'INCIDENT_SLA',
-        sourceId: warning.incidentId,
-        eventKey,
-        displayMessage: plainText,
-        priority: isBreached ? 0 : 1,
-        payload: slackChannel
-          ? {
-              kind: 'SLACK_CHANNEL',
-              channel: slackChannel,
-              incident: incidentPresentation,
-              eventType: 'triggered',
-              includeInteractiveButtons: true,
-              serviceId: warning.serviceId,
-              additionalMessage: message,
-            }
-          : {
-              kind: 'SLACK_WEBHOOK',
-              incident: incidentPresentation,
-              eventType: 'triggered',
-              webhookUrl: slackWebhookUrl,
-              additionalMessage: message,
-            },
-      });
-      durableIntentCount++;
+      // One incident's enqueue failure must not abort the whole check (and the scheduler cycle).
+      try {
+        await enqueueCentralNotification({
+          category: 'SLA',
+          channel: 'SLACK',
+          recipientType: slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
+          recipientId: warning.serviceId,
+          recipientAddress: slackChannel || slackWebhookUrl!,
+          incidentId: warning.incidentId,
+          templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
+          sourceType: 'INCIDENT_SLA',
+          sourceId: warning.incidentId,
+          eventKey,
+          displayMessage: plainText,
+          priority: isBreached ? 0 : 1,
+          payload: slackChannel
+            ? {
+                kind: 'SLACK_CHANNEL',
+                channel: slackChannel,
+                incident: incidentPresentation,
+                eventType: 'triggered',
+                includeInteractiveButtons: true,
+                serviceId: warning.serviceId,
+                additionalMessage: message,
+              }
+            : {
+                kind: 'SLACK_WEBHOOK',
+                incident: incidentPresentation,
+                eventType: 'triggered',
+                webhookUrl: slackWebhookUrl,
+                additionalMessage: message,
+              },
+        });
+        durableIntentCount++;
+      } catch (error) {
+        materialized = false;
+        logger.error('[SLA Breach Monitor] Error enqueueing Slack notification', {
+          incidentId: warning.incidentId,
+          error,
+        });
+      }
     }
   }
 
@@ -410,7 +419,9 @@ async function notifyBreachWarning(
             templateKey: `sla-webhook-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
             sourceType: 'WEBHOOK_INTEGRATION',
             sourceId: webhook.id,
-            eventKey,
+            // sourceId is the webhook, so the incident must be in the key or a
+            // later incident's breach collides with an earlier one's delivery.
+            eventKey: `${eventKey}:${warning.incidentId}`,
             displayMessage: plainText,
             priority: isBreached ? 0 : 1,
             payload: {
@@ -426,7 +437,7 @@ async function notifyBreachWarning(
                   service: { id: warning.serviceId, name: warning.serviceName },
                   createdAt: warning.createdAt,
                 },
-                isBreached ? 'triggered' : 'warning',
+                isBreached ? 'breached' : 'warning',
                 getBaseUrl(),
                 webhook.channel || undefined
               ),
@@ -511,7 +522,15 @@ async function notifyBreachWarning(
     }
   }
 
-  return materialized && durableIntentCount > 0;
+  if (durableIntentCount === 0) {
+    logger.debug('[SLA Breach Monitor] No deliverable SLA channel configured', {
+      incidentId: warning.incidentId,
+      serviceId: warning.serviceId,
+    });
+  }
+  // With no deliverable channel there is nothing to retry: record the transition anyway so the
+  // timeline shows it and the next tick neither re-detects it nor keeps a stale scheduling hint.
+  return materialized;
 }
 
 /**

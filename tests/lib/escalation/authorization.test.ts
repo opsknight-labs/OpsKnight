@@ -188,7 +188,10 @@ describe('requestIncidentEscalation', () => {
     );
     // The engine is asked to advance the incident's current escalation, never a
     // caller-supplied generation.
-    expect(mocks.executeEscalation).toHaveBeenCalledWith('inc-1', 0, { generation: 0 });
+    expect(mocks.executeEscalation).toHaveBeenCalledWith('inc-1', 0, {
+      generation: 0,
+      immediate: true,
+    });
   });
 
   it('fences retry after an escalation effect at the original generation and step', async () => {
@@ -237,8 +240,14 @@ describe('requestIncidentEscalation', () => {
 
     expect(prisma.incidentEvent.create).toHaveBeenCalledTimes(1);
     expect(mocks.emitAuditEvent).toHaveBeenCalledTimes(1);
-    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(1, 'inc-1', 2, { generation: 4 });
-    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(2, 'inc-1', 2, { generation: 4 });
+    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(1, 'inc-1', 2, {
+      generation: 4,
+      immediate: true,
+    });
+    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(2, 'inc-1', 2, {
+      generation: 4,
+      immediate: true,
+    });
   });
 
   it('rejects a key reused for another incident with a typed conflict, paging nobody', async () => {

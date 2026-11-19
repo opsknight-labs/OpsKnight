@@ -1,6 +1,7 @@
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import prisma from '@/lib/prisma';
+import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -30,7 +31,7 @@ export const revalidate = 0;
 
 async function createService(formData: FormData) {
   'use server';
-  let currentUser: { id: string };
+  let currentUser: Awaited<ReturnType<typeof assertAdminOrResponder>>;
   try {
     currentUser = await assertAdminOrResponder();
   } catch (error) {
@@ -43,6 +44,21 @@ async function createService(formData: FormData) {
   const teamId = formData.get('teamId') as string;
   const escalationPolicyId = formData.get('escalationPolicyId') as string;
   const name = typeof rawName === 'string' ? rawName : '';
+
+  // Same rule as moving a service: non-admins may only use a team they belong to.
+  // This also turns an unknown teamId into a message instead of an FK 500.
+  if (teamId) {
+    const team = await prisma.team.findFirst({
+      where: {
+        id: teamId,
+        ...(capabilitiesOf(currentUser).includes(CAPABILITIES.ADMIN_MANAGE)
+          ? {}
+          : { members: { some: { userId: currentUser.id } } }),
+      },
+      select: { id: true },
+    });
+    if (!team) redirect('/services?error=invalid-team');
+  }
 
   try {
     const normalizedName = await assertServiceNameAvailable(name);
@@ -357,8 +373,15 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const inMaintenance = await findServicesInMaintenance(services.map(s => s.id));
   const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
-    const dynamicStatus = (slaData?.dynamicStatus || service.status || 'OPERATIONAL') as
-      'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
+    // Without SLA data, a status filter already proved each row's live status from
+    // incidents; Service.status is a rarely written column and only a last resort.
+    const filteredStatus = ['OPERATIONAL', 'DEGRADED', 'CRITICAL'].includes(statusFilter)
+      ? statusFilter
+      : null;
+    const dynamicStatus = (slaData?.dynamicStatus ||
+      filteredStatus ||
+      service.status ||
+      'OPERATIONAL') as 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
     const openIncidentCount = slaData?.activeCount ?? 0;
     const hasCritical = (slaData?.criticalCount ?? 0) > 0;
     const incidentCount = slaData?.count ?? 0;
@@ -453,6 +476,16 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
               A service with this name already exists. Please choose a unique name.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {errorCode === 'invalid-team' && (
+          <Alert variant="destructive">
+            <XCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              You can only create services in a team you belong to.
             </AlertDescription>
           </Alert>
         )}

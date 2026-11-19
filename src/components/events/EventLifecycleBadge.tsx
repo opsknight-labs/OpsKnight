@@ -4,14 +4,33 @@ import { Eye, CheckCircle2, ArrowRightCircle, MessageSquare, Activity, Flame } f
 
 export type EventLifecycleBadgeProps = {
   message: string;
+  /** The typed IncidentEvent.type column; authoritative whenever it is set. */
+  type?: string | null;
   className?: string;
 };
 
 export type EventCategory =
   'triggered' | 'acknowledged' | 'resolved' | 'escalated' | 'note' | 'general';
 
-export function getEventCategory(message: string): EventCategory {
+const TYPED_CATEGORIES = new Map<string, EventCategory>([
+  ['ACKNOWLEDGED', 'acknowledged'],
+  ['ESCALATED', 'escalated'],
+  ['ASSIGNMENT', 'escalated'],
+  ['REOPENED', 'triggered'],
+  ['AUTO_RESOLVED', 'resolved'],
+  ['MANUAL_RESOLVED', 'resolved'],
+  ['COMMENT', 'note'],
+  ['STATUS_CHANGE', 'general'],
+]);
+
+export function getEventCategory(message: string, type?: string | null): EventCategory {
+  if (type && type !== 'LEGACY_OTHER') return TYPED_CATEGORIES.get(type) ?? 'general';
   const lower = message.toLowerCase();
+
+  // Held incidents (flapping, maintenance) did not page anyone.
+  if (lower.includes('suppressed')) return 'general';
+  // Checked before 'assigned' below, which would otherwise claim "reassigned".
+  if (lower.includes('reassigned')) return 'escalated';
 
   if (
     lower.includes('triggered') ||
@@ -60,8 +79,8 @@ export function getEventCategory(message: string): EventCategory {
   return 'general';
 }
 
-function EventLifecycleBadge({ message, className }: EventLifecycleBadgeProps) {
-  const category = getEventCategory(message);
+function EventLifecycleBadge({ message, type, className }: EventLifecycleBadgeProps) {
+  const category = getEventCategory(message, type);
 
   switch (category) {
     case 'triggered':

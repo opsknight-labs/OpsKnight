@@ -14,6 +14,7 @@ import {
 import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { assertServicePolicyAssignableForApi } from '@/lib/automation/service-policy';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
 export const GET = withV2Observability(async function GET(
@@ -119,6 +120,11 @@ export const PATCH = withV2Observability(async function PATCH(
           userMessage: `Team with id '${validated.teamId}' not found.`,
         });
       }
+      // Non-admins may only move a service into a team they belong to.
+      enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SERVICE_UPDATE, {
+        type: 'service',
+        teamId: validated.teamId,
+      });
     }
 
     if (validated.escalationPolicyId) {
@@ -138,8 +144,10 @@ export const PATCH = withV2Observability(async function PATCH(
 
     const updated = await withIfMatch(expected, () =>
       runV2AuditedMutation(
-        tx =>
-          tx.service.update({
+        async tx => {
+          if (validated.escalationPolicyId)
+            await assertServicePolicyAssignableForApi(tx, id, validated.escalationPolicyId);
+          return tx.service.update({
             where: { id, ...ifMatchWhere(expected) },
             data: {
               name: validated.name,
@@ -161,7 +169,8 @@ export const PATCH = withV2Observability(async function PATCH(
               team: { select: { id: true, name: true } },
               policy: { select: { id: true, name: true } },
             },
-          }),
+          });
+        },
         () => ({
           action: 'service.updated',
           entityType: 'SERVICE',

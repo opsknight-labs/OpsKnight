@@ -81,48 +81,54 @@ export type CloudWatchAlarmMessage = z.infer<typeof CloudWatchAlarmSchema>;
 // Azure Monitor
 // ============================================
 
-export const AzureAlertSchema = z.object({
-  schemaId: z.string().optional(),
-  data: z
-    .object({
-      essentials: z
-        .object({
-          alertId: z.string().optional(),
-          alertRule: z.string().optional(),
-          severity: z.string().optional(),
-          signalType: z.string().optional(),
-          monitorCondition: z.string().optional(),
-          monitorService: z.string().optional(),
-          firedDateTime: z.string().optional(),
-          description: z.string().optional(),
-        })
-        .optional(),
-      alertContext: z.unknown().optional(),
-      context: z
-        .object({
-          id: z.string().optional(),
-          name: z.string().optional(),
-          description: z.string().optional(),
-          conditionType: z.string().optional(),
-          condition: z
-            .object({
-              windowSize: z.string().optional(),
-              allOf: z
-                .array(
-                  z.object({
-                    metricName: z.string().optional(),
-                    threshold: z.number().optional(),
-                  })
-                )
-                .optional(),
-            })
-            .optional(),
-        })
-        .optional(),
-      properties: z.unknown().optional(),
-    })
-    .optional(),
-});
+export const AzureAlertSchema = z
+  .object({
+    schemaId: z.string().optional(),
+    data: z
+      .object({
+        essentials: z
+          .object({
+            alertId: z.string().optional(),
+            alertRule: z.string().optional(),
+            severity: z.string().optional(),
+            signalType: z.string().optional(),
+            monitorCondition: z.string().optional(),
+            monitorService: z.string().optional(),
+            firedDateTime: z.string().optional(),
+            description: z.string().optional(),
+          })
+          .optional(),
+        alertContext: z.unknown().optional(),
+        context: z
+          .object({
+            id: z.string().optional(),
+            name: z.string().optional(),
+            description: z.string().optional(),
+            conditionType: z.string().optional(),
+            condition: z
+              .object({
+                windowSize: z.string().optional(),
+                allOf: z
+                  .array(
+                    z.object({
+                      metricName: z.string().optional(),
+                      threshold: z.number().optional(),
+                    })
+                  )
+                  .optional(),
+              })
+              .optional(),
+          })
+          .optional(),
+        properties: z.unknown().optional(),
+      })
+      .optional(),
+  })
+  // Without an alert id every malformed delivery would fold into one 'azure-unknown' incident.
+  .refine(value => Boolean(value.data?.essentials?.alertId || value.data?.context?.id), {
+    message: 'Azure alert must include data.essentials.alertId',
+    path: ['data', 'essentials', 'alertId'],
+  });
 
 export type AzureAlertData = z.infer<typeof AzureAlertSchema>;
 
@@ -206,6 +212,10 @@ export const GitHubEventSchema = z.object({
     .object({
       id: z.number(),
       name: z.string(),
+      check_suite: z
+        .object({ head_branch: z.string().nullable().optional() })
+        .passthrough()
+        .optional(),
       status: z.enum(['queued', 'in_progress', 'completed']),
       conclusion: z
         .enum([
@@ -246,13 +256,17 @@ export const GitHubEventSchema = z.object({
       html_url: z.string().optional(),
     })
     .optional(),
+  // `deployment` events carry no state; deployment_status events put it on
+  // deployment_status (error, failure, inactive, in_progress, queued, pending, success).
   deployment: z
     .object({
       id: z.number(),
       environment: z.string(),
-      state: z.enum(['pending', 'success', 'failure', 'error']),
+      state: z.string().optional(),
     })
+    .passthrough()
     .optional(),
+  deployment_status: z.object({ state: z.string() }).passthrough().optional(),
   // GitLab format
   object_kind: z.string().optional(),
   project: z
@@ -307,6 +321,7 @@ export const GrafanaAlertSchema = z.object({
         annotations: z.record(z.string()).optional(),
         startsAt: z.string(),
         endsAt: z.string().optional(),
+        fingerprint: z.string().optional(),
       })
     )
     .optional(),
@@ -352,41 +367,45 @@ export type PrometheusAlert = z.infer<typeof PrometheusAlertSchema>;
 // New Relic
 // ============================================
 
-export const NewRelicEventSchema = z.object({
-  account_id: z.number().optional(),
-  account_name: z.string().optional(),
-  event_type: z.string().optional(),
-  incident: z
-    .object({
-      id: z.string(),
-      title: z.string(),
-      state: z.string().optional(),
-      severity: z.string().optional(),
-      created_at: z.string().optional(),
-      updated_at: z.string().optional(),
-      condition_name: z.string().optional(),
-      condition_id: z.number().optional(),
-      policy_name: z.string().optional(),
-      policy_id: z.number().optional(),
-    })
-    .optional(),
-  alert: z
-    .object({
-      id: z.string(),
-      alert_policy_name: z.string(),
-      alert_condition_name: z.string(),
-      severity: z.string(),
-      timestamp: z.number(),
-      state: z.string().optional(),
-      message: z.string().optional(),
-    })
-    .optional(),
-  alertType: z.string().optional(),
-  alertSeverity: z.string().optional(),
-  alertTitle: z.string().optional(),
-  alertMessage: z.string().optional(),
-  alertTimestamp: z.number().optional(),
-});
+export const NewRelicEventSchema = z
+  .object({
+    account_id: z.number().optional(),
+    account_name: z.string().optional(),
+    event_type: z.string().optional(),
+    incident: z
+      .object({
+        id: z.string(),
+        title: z.string(),
+        state: z.string().optional(),
+        severity: z.string().optional(),
+        created_at: z.string().optional(),
+        updated_at: z.string().optional(),
+        condition_name: z.string().optional(),
+        condition_id: z.number().optional(),
+        policy_name: z.string().optional(),
+        policy_id: z.number().optional(),
+      })
+      .optional(),
+    alert: z
+      .object({
+        id: z.string(),
+        alert_policy_name: z.string(),
+        alert_condition_name: z.string(),
+        severity: z.string(),
+        timestamp: z.number(),
+        state: z.string().optional(),
+        message: z.string().optional(),
+      })
+      .optional(),
+    alertType: z.string().optional(),
+    alertSeverity: z.string().optional(),
+    alertTitle: z.string().optional(),
+    alertMessage: z.string().optional(),
+    alertTimestamp: z.number().optional(),
+  })
+  // Workflow ({issueId, state, title, priority}) and legacy channel ({incident_id, current_state})
+  // payloads carry their own keys; keep them for the transformer.
+  .passthrough();
 
 export type NewRelicEvent = z.infer<typeof NewRelicEventSchema>;
 
@@ -394,54 +413,73 @@ export type NewRelicEvent = z.infer<typeof NewRelicEventSchema>;
 // Sentry
 // ============================================
 
-export const SentryEventSchema = z.object({
-  action: z.string().optional(),
-  issue: z
-    .object({
-      id: z.string().optional(),
-      shortId: z.string().nullable().optional(),
-      title: z.string().optional(),
-      culprit: z.string().nullable().optional(),
-      level: z.enum(['fatal', 'error', 'warning', 'info', 'debug']).optional(),
-      status: z.enum(['unresolved', 'resolved', 'ignored']).optional(),
-      assignedTo: z
-        .object({
-          name: z.string().optional(),
-          email: z.string().optional(),
-        })
-        .nullable()
-        .optional(),
-      metadata: z
-        .object({
-          type: z.string().optional(),
-          value: z.string().optional(),
-        })
-        .nullable()
-        .optional(),
-      permalink: z.string().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
-  event: z
-    .object({
-      event_id: z.string().optional(),
-      message: z.string().optional(),
-      level: z.string().optional(),
-      timestamp: z.union([z.number(), z.string()]).optional(),
-      platform: z.string().optional(),
-      tags: z.record(z.string()).optional(),
-      contexts: z.record(z.unknown()).optional(),
-    })
-    .nullable()
-    .optional(),
-  project: z
-    .object({
-      name: z.string().optional(),
-      slug: z.string().optional(),
-    })
-    .nullable()
-    .optional(),
-});
+export const SentryEventSchema = z
+  .object({
+    action: z.string().optional(),
+    issue: z
+      .object({
+        id: z.union([z.string(), z.number()]).optional(),
+        shortId: z.string().nullable().optional(),
+        title: z.string().optional(),
+        culprit: z.string().nullable().optional(),
+        level: z.string().optional(),
+        status: z.string().optional(),
+        assignedTo: z
+          .object({
+            name: z.string().optional(),
+            email: z.string().optional(),
+          })
+          .passthrough()
+          .nullable()
+          .optional(),
+        metadata: z
+          .object({
+            type: z.string().optional(),
+            value: z.string().optional(),
+          })
+          .passthrough()
+          .nullable()
+          .optional(),
+        permalink: z.string().nullable().optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    event: z
+      .object({
+        event_id: z.string().optional(),
+        issue_id: z.union([z.string(), z.number()]).optional(),
+        group_id: z.union([z.string(), z.number()]).optional(),
+        fingerprint: z.array(z.string()).optional(),
+        title: z.string().optional(),
+        message: z.string().optional(),
+        level: z.string().optional(),
+        timestamp: z.union([z.number(), z.string()]).optional(),
+        platform: z.string().optional(),
+        // Legacy plugin sends tags as [key, value] pairs.
+        tags: z.union([z.record(z.string()), z.array(z.array(z.string()))]).optional(),
+        contexts: z.record(z.unknown()).optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    // Integration-platform webhooks wrap the resource in data (issue, event or metric_alert).
+    data: z.record(z.unknown()).nullable().optional(),
+    // Legacy plugin sends the project slug as a string.
+    project: z
+      .union([
+        z.string(),
+        z
+          .object({
+            name: z.string().optional(),
+            slug: z.string().optional(),
+          })
+          .passthrough(),
+      ])
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
 
 export type SentryEvent = z.infer<typeof SentryEventSchema>;
 
@@ -478,7 +516,12 @@ export const GoogleCloudMonitoringSchema = z
     state: z.string().optional(),
     severity: z.string().optional(),
   })
-  .passthrough();
+  .passthrough()
+  // An empty or undecodable body would otherwise become one bogus 'GCP Monitoring Alert' incident.
+  .refine(value => Boolean(value.incident || value.summary || value.policy_name), {
+    message: 'Expected a Cloud Monitoring incident payload',
+    path: ['incident'],
+  });
 
 export type GoogleCloudMonitoringEvent = z.infer<typeof GoogleCloudMonitoringSchema>;
 
@@ -540,6 +583,7 @@ export const DynatraceSchema = z
     ProblemDetailsText: z.string().optional(),
     State: z.string().optional(),
     SeverityLevel: z.string().optional(),
+    ProblemSeverity: z.string().optional(),
     ProblemImpact: z.string().optional(),
     ProblemURL: z.string().optional(),
   })
@@ -696,6 +740,9 @@ export const PingdomSchema = z
     check_id: z.union([z.string(), z.number()]).optional(),
     check_name: z.string().optional(),
     state: z.string().optional(),
+    current_state: z.string().optional(),
+    previous_state: z.string().optional(),
+    importance_level: z.string().optional(),
     message: z.string().optional(),
     description: z.string().optional(),
     last_error: z.string().optional(),
@@ -709,19 +756,29 @@ export type PingdomEvent = z.infer<typeof PingdomSchema>;
 // Better Uptime
 // ============================================
 
+const BetterUptimeIncidentSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).optional(),
+    name: z.string().optional(),
+    status: z.string().optional(),
+    severity: z.string().optional(),
+    cause: z.string().optional(),
+    started_at: z.string().nullish(),
+    resolved_at: z.string().nullish(),
+    acknowledged_at: z.string().nullish(),
+    url: z.string().optional(),
+  })
+  .passthrough();
+
 export const BetterUptimeSchema = z
   .object({
-    incident: z
+    incident: z.union([BetterUptimeIncidentSchema, z.string(), z.number()]).optional(),
+    data: z
       .object({
         id: z.union([z.string(), z.number()]).optional(),
-        name: z.string().optional(),
-        status: z.string().optional(),
-        severity: z.string().optional(),
-        cause: z.string().optional(),
-        started_at: z.string().optional(),
-        resolved_at: z.string().optional(),
-        url: z.string().optional(),
+        attributes: BetterUptimeIncidentSchema.optional(),
       })
+      .passthrough()
       .optional(),
     name: z.string().optional(),
     status: z.string().optional(),
@@ -1020,6 +1077,8 @@ export const GitLabPayloadSchema = z
         iid: z.number().optional(),
         source_branch: z.string().optional(),
         target_branch: z.string().optional(),
+        ref: z.string().optional(),
+        issue_type: z.string().optional(),
       })
       .passthrough()
       .optional(),
@@ -1082,7 +1141,7 @@ export const VercelPayloadSchema = z
           })
           .passthrough()
           .optional(),
-        target: z.string().optional(),
+        target: z.string().nullish(),
         plan: z.string().optional(),
         user: z.object({ id: z.string().optional(), username: z.string().optional() }).optional(),
         team: z.object({ id: z.string().optional(), slug: z.string().optional() }).optional(),

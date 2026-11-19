@@ -106,14 +106,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve workspace ID from service integration or global integration
-    let workspaceId = service.slackIntegration?.workspaceId;
-    let integrationId = service.slackIntegration?.id ?? null;
+    // Resolve the workspace exactly like getSlackBotToken picks the delivery token:
+    // enabled service integration, then the global (service-less) one, then env.
+    let workspaceId = service.slackIntegration?.enabled
+      ? service.slackIntegration.workspaceId
+      : undefined;
+    let integrationId = workspaceId ? service.slackIntegration!.id : null;
 
     if (!workspaceId) {
       const globalIntegration = await prisma.slackIntegration.findFirst({
-        where: { enabled: true },
-        orderBy: { createdAt: 'asc' },
+        where: { enabled: true, services: { none: {} } },
       });
       if (globalIntegration) {
         workspaceId = globalIntegration.workspaceId;

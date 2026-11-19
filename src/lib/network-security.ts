@@ -64,7 +64,10 @@ export async function validateWebhookUrl(urlString: string): Promise<boolean> {
 
     // Only allow http/https
     if (!['http:', 'https:'].includes(url.protocol)) {
-      logger.warn('Webhook blocked: invalid protocol', { url: urlString, protocol: url.protocol });
+      logger.warn('Webhook blocked: invalid protocol', {
+        hostname: url.hostname,
+        protocol: url.protocol,
+      });
       return false;
     }
 
@@ -81,7 +84,6 @@ export async function validateWebhookUrl(urlString: string): Promise<boolean> {
     const blockedAddress = addresses.find(({ address }) => isPrivateIp(address));
     if (blockedAddress) {
       logger.warn('Webhook blocked: resolved to private IP', {
-        url: urlString,
         hostname: url.hostname,
         resolvedIp: blockedAddress.address,
       });
@@ -90,7 +92,10 @@ export async function validateWebhookUrl(urlString: string): Promise<boolean> {
 
     return true;
   } catch (error) {
-    logger.warn('Webhook blocked: validation failed', { url: urlString, error });
+    // Never log the URL itself: paths and queries carry tokens (Telegram, Discord, Slack).
+    logger.warn('Webhook blocked: validation failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }

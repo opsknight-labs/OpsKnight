@@ -330,7 +330,7 @@ export async function GET(req: NextRequest) {
                   return;
                 }
 
-                const active = await isSessionActive(user.id, sessionJti);
+                const active = await isSessionActive(user.id, sessionJti, { throwOnError: true });
                 if (!active) {
                   send(JSON.stringify({ type: 'authorization_revoked' }));
                   cleanup();
@@ -341,8 +341,8 @@ export async function GET(req: NextRequest) {
                   userId: user.id,
                   error: authError instanceof Error ? authError.message : String(authError),
                 });
-                // Fail closed: terminate stream on authorization recheck failure
-                send(JSON.stringify({ type: 'authorization_revoked' }));
+                // Fail closed: terminate the stream, but a failed recheck (e.g. a database blip)
+                // is not a revocation, so the client reconnects instead of being signed out.
                 cleanup();
                 return;
               }

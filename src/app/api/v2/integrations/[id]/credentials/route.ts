@@ -124,6 +124,8 @@ export const POST = defineV2Route({
                   ? integrationKeyFingerprint(await decryptStoredSecret(current.key))
                   : null,
               previousKeyExpiresAt: overlapUntil && current.key ? overlapUntil : null,
+              // The new key's ciphertext was never shown to anyone; only plaintext authenticates.
+              legacyStoredKeyAccepted: false,
             }
           : {
               signatureSecret: await encrypt(secret),

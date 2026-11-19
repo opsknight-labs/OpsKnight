@@ -8,6 +8,11 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
+import {
+  assertPostmortemAccess,
+  postmortemDeleteWhere,
+  postmortemEditWhere,
+} from '@/lib/postmortems/authorization';
 import { etagHeaders, ifMatchWhere, parseIfMatch } from '@/lib/api-v2/concurrency';
 
 export const GET = defineV2Route<{ id: string }>({
@@ -105,6 +110,7 @@ export const PATCH = defineV2Route<{ id: string }>({
         userMessage: `Postmortem with id '${id}' not found.`,
       });
     }
+    await assertPostmortemAccess(db, existing.id, postmortemEditWhere(actor));
     if (body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED') {
       if (existing.status === 'ARCHIVED' || existing.incident.status !== 'RESOLVED') {
         throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'Only postmortems for resolved incidents can be published.' });
@@ -215,6 +221,7 @@ export const DELETE = defineV2Route<{ id: string }>({
         userMessage: `Postmortem with id '${id}' not found.`,
       });
     }
+    await assertPostmortemAccess(prisma, existing.id, postmortemDeleteWhere(actor));
 
     await prisma.$transaction(async tx => {
       // MCP approval recheck inside the deletion's own transaction; a no-op for REST callers.

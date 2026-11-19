@@ -172,6 +172,11 @@ export function buildWidgetActivityIncidentWhere(
   filters: SLAMetricsFilter
 ): Prisma.IncidentWhereInput | undefined {
   const activityScope: Prisma.IncidentWhereInput[] = [];
+  if (filters.authorizationScope) {
+    activityScope.push(
+      compileIncidentMetricFilter({ authorizationScope: filters.authorizationScope }).prisma
+    );
+  }
   if (filters.serviceId) {
     activityScope.push({
       serviceId: Array.isArray(filters.serviceId) ? { in: filters.serviceId } : filters.serviceId,

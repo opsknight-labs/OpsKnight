@@ -3,6 +3,7 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { executeIdempotentOperation, type IdempotencyContext } from '@/lib/idempotency';
 import { getBaseUrl } from '@/lib/env-validation';
 import { authorizeChatOpsIncidentInTransaction } from './chatops-lifecycle';
+import { createDraftActionItemRows } from '@/lib/postmortems/action-item-commands';
 
 export async function executeChatOpsPostmortemCommand(input: {
   incidentId: string;
@@ -84,6 +85,7 @@ export async function executeChatOpsPostmortemCommand(input: {
             status: 'DRAFT',
           },
         });
+        await createDraftActionItemRows(tx, postmortem, actionItems);
         await tx.incidentEvent.create({
           data: {
             incidentId: input.incidentId,

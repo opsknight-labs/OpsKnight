@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { AlertTriangle, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/toast';
 
 export type DeleteConfirmDialogProps = {
   title?: string;
@@ -26,7 +27,8 @@ export type DeleteConfirmDialogProps = {
   trigger?: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onConfirm: () => Promise<void> | void;
+  /** Return `{ error }` to keep the dialog open and show why the delete was refused. */
+  onConfirm: () => Promise<{ error?: string } | void> | { error?: string } | void;
   className?: string;
   disabled?: boolean;
 };
@@ -72,7 +74,11 @@ export default function DeleteConfirmDialog({
   const handleConfirm = () => {
     if (!isMatchValid || isPending) return;
     startTransition(async () => {
-      await onConfirm();
+      const result = await onConfirm();
+      if (result?.error) {
+        notify.error(result.error);
+        return;
+      }
       setOpen(false);
     });
   };

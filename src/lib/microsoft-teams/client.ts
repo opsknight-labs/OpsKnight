@@ -23,6 +23,33 @@ type GraphToken = { access_token: string; expires_in: number };
 // Separate tenant-scoped caches for Graph vs Bot Connector.
 // Must not reuse Graph tokens for serviceUrl calls — different `scope` / audience.
 type TokenCache = Map<string, { token: string; expiresAt: number }>;
+// Connect-phase failures (DNS, refused/unreachable, TLS handshake) prove no HTTP
+// request reached Teams, so a create that failed this way is safe to retry.
+const PRE_SEND_NETWORK_CODES = new Set([
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'CERT_HAS_EXPIRED',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+]);
+
+type NetworkErrorCause = { code?: unknown; errors?: Array<{ code?: unknown }> };
+
+export function preSendNetworkErrorCode(error: unknown): string | null {
+  const cause = (error as { cause?: NetworkErrorCause } | null)?.cause;
+  // undici reports multi-address connect failures as an AggregateError.
+  const codes = cause?.errors?.length ? cause.errors.map(e => e?.code) : [cause?.code];
+  if (!codes.every(code => typeof code === 'string' && PRE_SEND_NETWORK_CODES.has(code)))
+    return null;
+  return codes[0] as string;
+}
+
 const graphTokenCache: TokenCache = new Map();
 const botTokenCache: TokenCache = new Map();
 const TOKEN_CACHE_MAX = 50;
@@ -310,6 +337,14 @@ async function sendBotActivity(args: {
       signal: AbortSignal.timeout(30_000),
     });
   } catch (error) {
+    const preSend = preSendNetworkErrorCode(error);
+    if (preSend) {
+      return {
+        success: false,
+        error: `Teams create was not sent (${preSend})`,
+        errorCode: 'PRE_SEND_NETWORK_ERROR',
+      };
+    }
     return {
       success: false,
       error: `Teams create outcome is ambiguous: ${error instanceof Error ? error.message : String(error)}`,

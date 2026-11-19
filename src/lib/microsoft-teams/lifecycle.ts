@@ -13,56 +13,80 @@ type TeamsRevocationScope = {
  * side-effect into a known failure. Callers own the surrounding transaction so
  * routing disablement and delivery fencing commit atomically.
  */
+/**
+ * Revocation can settle a large backlog (e.g. during an outage), so callers run
+ * it in a transaction with this longer timeout instead of Prisma's 5s default.
+ */
+export const TEAMS_REVOCATION_TX_OPTIONS = { timeout: 30_000, maxWait: 10_000 } as const;
+
 export async function revokeMicrosoftTeamsOperations(
   tx: Prisma.TransactionClient,
   scope: TeamsRevocationScope
 ): Promise<{ operationIds: string[]; jobsCancelled: number }> {
-  const destinationSet = scope.destinationIds ? new Set(scope.destinationIds) : null;
-  const candidates = await tx.externalOperation.findMany({
-    where: { provider: 'MICROSOFT_TEAMS', status: { in: ['PENDING', 'PROCESSING', 'AMBIGUOUS'] } },
-    select: { id: true, status: true, requestPayload: true, resultPayload: true },
-  });
-  const operations = candidates.filter(operation => {
-    if (!destinationSet) return true;
-    const destinationId = (operation.requestPayload as Record<string, unknown> | null)
-      ?.destinationId;
-    return typeof destinationId === 'string' && destinationSet.has(destinationId);
+  if (scope.destinationIds && scope.destinationIds.length === 0)
+    return { operationIds: [], jobsCancelled: 0 };
+  // Filter by destination in the database rather than loading every Teams operation.
+  const operations = await tx.externalOperation.findMany({
+    where: {
+      provider: 'MICROSOFT_TEAMS',
+      status: { in: ['PENDING', 'PROCESSING', 'AMBIGUOUS'] },
+      ...(scope.destinationIds
+        ? {
+            OR: scope.destinationIds.map(destinationId => ({
+              requestPayload: { path: ['destinationId'], equals: destinationId },
+            })),
+          }
+        : {}),
+    },
+    select: { id: true, status: true, resultPayload: true },
   });
 
+  const ambiguousIds: string[] = [];
+  const safeIds: string[] = [];
   for (const operation of operations) {
-    const request = operation.requestPayload as Record<string, unknown> | null;
-    const destinationId = typeof request?.destinationId === 'string' ? request.destinationId : '';
     const result = operation.resultPayload as Record<string, unknown> | null;
     const remainsAmbiguous =
       operation.status === 'AMBIGUOUS' ||
       (operation.status === 'PROCESSING' && result?.createAttempted === true);
-    if (remainsAmbiguous) {
-      await tx.microsoftTeamsIncidentMessage.updateMany({
-        where: { destinationId, createOperationId: operation.id },
-        data: { createState: 'AMBIGUOUS', mutationLeaseToken: null, mutationLeaseExpiresAt: null },
-      });
-    } else {
-      await tx.microsoftTeamsIncidentMessage.deleteMany({
-        where: { destinationId, messageId: `__reserved__:${operation.id}` },
-      });
-      await tx.microsoftTeamsIncidentMessage.updateMany({
-        where: { destinationId, createOperationId: operation.id },
-        data: {
-          createState: 'NONE',
-          createOperationId: null,
-          mutationLeaseToken: null,
-          mutationLeaseExpiresAt: null,
-        },
-      });
-    }
-    await tx.externalOperation.update({
-      where: { id: operation.id },
+    (remainsAmbiguous ? ambiguousIds : safeIds).push(operation.id);
+  }
+
+  // Set-based updates: a constant number of statements regardless of backlog size.
+  if (ambiguousIds.length > 0) {
+    await tx.microsoftTeamsIncidentMessage.updateMany({
+      where: { createOperationId: { in: ambiguousIds } },
+      data: { createState: 'AMBIGUOUS', mutationLeaseToken: null, mutationLeaseExpiresAt: null },
+    });
+    await tx.externalOperation.updateMany({
+      where: { id: { in: ambiguousIds } },
       data: {
-        status: remainsAmbiguous ? 'AMBIGUOUS' : 'FAILED',
-        nextAttemptAt: remainsAmbiguous ? new Date('9999-12-31T23:59:59.999Z') : new Date(),
-        lastError: remainsAmbiguous
-          ? `${scope.reason}; the create may have completed and requires manual reconciliation.`
-          : `${scope.reason}; queued delivery revoked.`,
+        status: 'AMBIGUOUS',
+        nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+        lastError: `${scope.reason}; the create may have completed and requires manual reconciliation.`,
+        leaseToken: null,
+        leaseExpiresAt: null,
+      },
+    });
+  }
+  if (safeIds.length > 0) {
+    await tx.microsoftTeamsIncidentMessage.deleteMany({
+      where: { messageId: { in: safeIds.map(id => `__reserved__:${id}`) } },
+    });
+    await tx.microsoftTeamsIncidentMessage.updateMany({
+      where: { createOperationId: { in: safeIds } },
+      data: {
+        createState: 'NONE',
+        createOperationId: null,
+        mutationLeaseToken: null,
+        mutationLeaseExpiresAt: null,
+      },
+    });
+    await tx.externalOperation.updateMany({
+      where: { id: { in: safeIds } },
+      data: {
+        status: 'FAILED',
+        nextAttemptAt: new Date(),
+        lastError: `${scope.reason}; queued delivery revoked.`,
         leaseToken: null,
         leaseExpiresAt: null,
       },
@@ -106,14 +130,17 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
   tx: Prisma.TransactionClient,
   scope: TeamsRevocationScope
 ): Promise<{ warRoomIds: string[]; jobsCancelled: number }> {
-  const destinationSet = scope.destinationIds ? new Set(scope.destinationIds) : null;
-  const rooms = await tx.incidentWarRoom.findMany({
-    where: { provider: 'MICROSOFT_TEAMS', state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+  const destinationFilter = scope.destinationIds
+    ? { destinationId: { in: scope.destinationIds } }
+    : {};
+  const candidates = await tx.incidentWarRoom.findMany({
+    where: {
+      provider: 'MICROSOFT_TEAMS',
+      state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
+      ...destinationFilter,
+    },
     select: { id: true, destinationId: true, createAttemptedAt: true },
   });
-  const candidates = rooms.filter(
-    room => !destinationSet || (room.destinationId && destinationSet.has(room.destinationId))
-  );
   const attemptedIds = candidates.filter(room => room.createAttemptedAt).map(room => room.id);
   const safeIds = candidates.filter(room => !room.createAttemptedAt).map(room => room.id);
   const now = new Date();
@@ -143,13 +170,14 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
 
   // Collaboration surface: READY/CLOSING rooms that were routing through the
   // revoked destination must not keep projecting cards or syncing members.
-  const collaborationRooms = await tx.incidentWarRoom.findMany({
-    where: { provider: 'MICROSOFT_TEAMS', state: { in: ['READY', 'CLOSING'] } },
+  const collaborationCandidates = await tx.incidentWarRoom.findMany({
+    where: {
+      provider: 'MICROSOFT_TEAMS',
+      state: { in: ['READY', 'CLOSING'] },
+      ...destinationFilter,
+    },
     select: { id: true, destinationId: true },
   });
-  const collaborationCandidates = collaborationRooms.filter(
-    room => !destinationSet || (room.destinationId && destinationSet.has(room.destinationId))
-  );
   if (collaborationCandidates.length > 0) {
     await tx.incidentWarRoom.updateMany({
       where: { id: { in: collaborationCandidates.map(room => room.id) } },
@@ -257,6 +285,6 @@ export async function disconnectMicrosoftTeamsIntegration(
       },
       tx
     );
-  });
+  }, TEAMS_REVOCATION_TX_OPTIONS);
   clearMicrosoftTeamsTokenCaches();
 }

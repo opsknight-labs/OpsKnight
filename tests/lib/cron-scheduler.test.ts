@@ -19,6 +19,7 @@ const tasks = vi.hoisted(() => ({
   processUpcomingShiftReminders: vi.fn(),
   schedulerQueryRaw: vi.fn(),
   processEndedMaintenanceWindows: vi.fn().mockResolvedValue({ windows: 0, released: 0 }),
+  releaseStableFlappingHolds: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('@/lib/ingestion/maintenance', () => ({
@@ -43,6 +44,9 @@ vi.mock('@/lib/notification-control-plane', () => ({
 }));
 vi.mock('@/lib/service-maintenance/windows', () => ({
   processEndedMaintenanceWindows: tasks.processEndedMaintenanceWindows,
+}));
+vi.mock('@/lib/flapping', () => ({
+  releaseStableFlappingHolds: tasks.releaseStableFlappingHolds,
 }));
 vi.mock('@/lib/service-maintenance/schedules', () => ({
   materializeMaintenanceSchedules: vi.fn().mockResolvedValue({ created: 0, failed: 0 }),
@@ -193,6 +197,7 @@ describe('cron-scheduler lifecycle', () => {
     expect(tasks.runQueueMaintenance).toHaveBeenCalledTimes(1);
     // Held-alert release runs at the start of every tick.
     expect(tasks.processEndedMaintenanceWindows).toHaveBeenCalledTimes(1);
+    expect(tasks.releaseStableFlappingHolds).toHaveBeenCalledTimes(1);
   });
 
   it('runs maintenance work without claiming dedicated worker lanes', async () => {

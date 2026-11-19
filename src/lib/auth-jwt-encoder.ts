@@ -70,8 +70,8 @@ export async function customJwtEncode(params: JWTEncodeParams): Promise<string> 
  *
  * Security & fault-tolerance model:
  *   'denied'      → session is explicitly revoked or invalid  → reject (null)
- *   'unavailable' → registry DB unreachable                   → fail-closed, reject (null)
- *                   for immediate revocation safety
+ *   'unavailable' → registry DB unreachable                   → fail-closed: payload flagged
+ *                   SECURITY_LOOKUP_UNAVAILABLE (no session.user) but the cookie is kept
  *   'allowed'     → session is active                         → continue
  *
  * Activity touch is fire-and-forget — an activity write failure never aborts the request.
@@ -124,9 +124,21 @@ export async function customJwtDecode(params: JWTDecodeParams): Promise<JWT | nu
         // first authenticated HTTP request via touchSessionActivity instead.
       });
 
+      if (result === 'unavailable') {
+        // Fail closed without destroying the cookie: Auth.js clears the session cookie
+        // whenever decode returns null, so a DB blip would log every responder out.
+        // The error flag makes the session callback drop session.user (no authorization)
+        // and the encoder strips it, so the session resumes once the registry is reachable.
+        logger.warn('auth.session_registry.unavailable', {
+          component: 'auth-jwt-encoder',
+          userId: payload.sub,
+          sessionId: payload.jti,
+        });
+        return { ...payload, error: 'SECURITY_LOOKUP_UNAVAILABLE' } as JWT;
+      }
+
       if (result !== 'allowed') {
-        // Enforce fail-closed security: if the session is explicitly revoked ('denied')
-        // or the registry database cannot be reached ('unavailable'), reject the session.
+        // Explicitly revoked or invalid ('denied'): reject the session.
         logger.warn('auth.session_registry.rejected', {
           component: 'auth-jwt-encoder',
           userId: payload.sub,

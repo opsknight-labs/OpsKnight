@@ -868,6 +868,9 @@ model Integration {
   previousKeyExpiresAt DateTime?
   previousSignatureSecret String?
   previousSignatureSecretExpiresAt DateTime?
+  /// True only for integrations that existed before routing keys were shown in plaintext: /api/events
+  /// then also accepts the exact stored (encrypted) key value the old UI displayed. Cleared on rotation.
+  legacyStoredKeyAccepted Boolean @default(false)
 }
 
 // No cascading foreign keys: deleting a service must never discard accepted work.
@@ -2949,6 +2952,8 @@ model SystemSettings {
   accessSelfApprovalAllowed        Boolean   @default(false)
   accessReviewIntervalDays         Int?
   accessReviewLastStartedAt        DateTime?
+  /// When true, admins allow outgoing service webhooks to use plain http:// URLs.
+  allowInsecureWebhookUrls         Boolean   @default(false)
 }
 
 model IncidentMetricRollup {
