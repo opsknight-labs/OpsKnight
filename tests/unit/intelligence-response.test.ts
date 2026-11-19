@@ -74,7 +74,13 @@ describe('scoreCause', () => {
     expect(scoreCause({ ...base, leadSeconds: 0 }).confidence).toBeLessThanOrEqual(
       RESPONSE_LIMITS.maxCauseConfidence
     );
-    expect(scoreCause({ ...base, leadSeconds: -1 }).confidence).toBe(0);
+    // Up to five minutes after onset still counts (rollouts in progress, clock skew); beyond that, no.
+    expect(scoreCause({ ...base, leadSeconds: -1 }).confidence).toBeGreaterThan(0);
+    // ...but below a comparable change that preceded onset.
+    expect(scoreCause({ ...base, leadSeconds: -300 }).confidence).toBeLessThan(
+      scoreCause({ ...base, leadSeconds: 30 * 60 }).confidence
+    );
+    expect(scoreCause({ ...base, leadSeconds: -301 }).confidence).toBe(0);
     expect(
       scoreCause({ ...base, leadSeconds: RESPONSE_LIMITS.causeLookbackMinutes * 60 + 1 }).confidence
     ).toBe(0);

@@ -115,12 +115,14 @@ export interface ServiceBurn {
 /**
  * Burn for every active availability/uptime objective of a service. Returns null when the service has
  * no such objective, so callers can tell "no SLO" from "not burning". Bounded: at most MAX_INCIDENTS
- * incidents overlapping the six-hour window are read.
+ * incidents overlapping the six-hour window are read. `excludeIncidentId` leaves one incident out, so a
+ * caller judging that incident does not count its own downtime as evidence about it.
  */
 export async function getSloBurn(
   serviceId: string,
   now: Date = new Date(),
-  client: typeof prisma = prisma
+  client: typeof prisma = prisma,
+  excludeIncidentId?: string
 ): Promise<ServiceBurn | null> {
   const objectives = await client.serviceObjective.findMany({
     where: {
@@ -140,6 +142,7 @@ export async function getSloBurn(
   const incidents = await client.incident.findMany({
     where: {
       serviceId,
+      ...(excludeIncidentId ? { id: { not: excludeIncidentId } } : {}),
       createdAt: { lte: now },
       OR: [{ resolvedAt: null }, { resolvedAt: { gte: new Date(slowStart) } }],
       status: { not: 'SUPPRESSED' },

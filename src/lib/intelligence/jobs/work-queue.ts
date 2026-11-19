@@ -48,7 +48,7 @@ export const WORK_KINDS = {
   OPS_INSIGHTS: 'OPS_INSIGHTS',
   /** One coalesced item: one keyset batch of the 90-day escalation-attempt backfill (J2), re-queued until done. */
   BACKFILL_ESCALATION_ATTEMPTS: 'BACKFILL_ESCALATION_ATTEMPTS',
-  /** The daily runbook-ranking weight fit, one coalesced item (subject `global`); see learning/runbook-weights.ts. */
+  /** The daily weight fit (runbook ranking, similarity, cause), one coalesced item (subject `global`); see learning/runbook-weights.ts. */
   FIT_RUNBOOK_WEIGHTS: 'FIT_RUNBOOK_WEIGHTS',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];

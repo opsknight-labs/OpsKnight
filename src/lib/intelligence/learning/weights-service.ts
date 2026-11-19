@@ -6,6 +6,8 @@ import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { combinedContent } from '../similarity/scoring';
 import { fitScoringWeights, type ScoringExample } from './weights';
+import { readWeightProposal, storeWeightProposal } from './proposal-store';
+import { scoringWeightsSchema } from '../contract';
 import {
   parseOrThrow,
   publishPolicyVersion,
@@ -57,6 +59,19 @@ export async function suggestScoringWeights() {
   };
 }
 
+type ScoringWeightsProposal = NonNullable<Awaited<ReturnType<typeof suggestScoringWeights>>>;
+
+/** Fits now and stores the result for the settings page (null when there is no supported improvement). */
+export async function refreshScoringWeightProposal() {
+  const proposal = await suggestScoringWeights();
+  await storeWeightProposal('SCORING_WEIGHTS_PROPOSAL', proposal);
+  return proposal;
+}
+
+/** The proposal the daily fit stored: one indexed read, no fit. */
+export const readScoringWeightProposal = () =>
+  readWeightProposal<ScoringWeightsProposal>('SCORING_WEIGHTS_PROPOSAL', scoringWeightsSchema);
+
 /** Recompute before publishing: the browser cannot supply arbitrary coefficients or stale evidence. */
 export async function adoptScoringWeights(input: unknown, actor: IntelligenceActor) {
   const parsed = parseOrThrow(
@@ -68,7 +83,8 @@ export async function adoptScoringWeights(input: unknown, actor: IntelligenceAct
       .strict(),
     input
   );
-  const suggestion = await suggestScoringWeights();
+  // The recomputed proposal replaces the stored one, so a refresh after a conflict shows the current one.
+  const suggestion = await refreshScoringWeightProposal();
   if (!suggestion || suggestion.id !== parsed.suggestionId)
     throw new AppError({
       code: 'RESOURCE_CONFLICT',

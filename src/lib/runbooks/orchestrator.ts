@@ -225,6 +225,10 @@ export async function previewRunbookExecution(
 }
 
 export const INCIDENT_NOT_OPEN = 'INCIDENT_NOT_OPEN';
+export const BINDING_RATE_LIMITED = 'BINDING_RATE_LIMITED';
+/** A storm can open many incidents at once; one automatic rule starts at most this many runs per window. */
+const AUTOMATIC_RULE_RATE_LIMIT = 5;
+const AUTOMATIC_RULE_RATE_WINDOW_MS = 10 * 60_000;
 
 /**
  * Takes the same row lock the lifecycle UPDATE takes (FOR NO KEY UPDATE), so automatic
@@ -660,6 +664,22 @@ async function prepareRunbookExecution(
         throw new RunbookDefinitionError(
           'TRIGGER_ALREADY_HANDLED: this incident already started an automatic execution for the binding.'
         );
+      if (mode === 'AUTOMATIC' && binding) {
+        // Serialized per rule so concurrent incidents cannot both take the last slot.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-binding-rate:${binding.id}`}))`;
+        const recentRuns = await tx.runbookExecution.count({
+          where: {
+            serviceId: binding.serviceId,
+            bindingId: binding.id,
+            triggeredByUserId: null,
+            createdAt: { gte: new Date(Date.now() - AUTOMATIC_RULE_RATE_WINDOW_MS) },
+          },
+        });
+        if (recentRuns >= AUTOMATIC_RULE_RATE_LIMIT)
+          throw new RunbookDefinitionError(
+            `${BINDING_RATE_LIMITED}: ${recentRuns} automatic runs of this rule in the last 10 minutes.`
+          );
+      }
     }
     if (!input.triggeredByUserId && hasWriteAction) {
       if (!resolvedServiceId) {

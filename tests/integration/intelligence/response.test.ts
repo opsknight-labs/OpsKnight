@@ -365,7 +365,8 @@ describe('response analysis', () => {
         source: 'ci',
         kind: 'DEPLOY',
         summary: 'after onset',
-        occurredAt: new Date(onset.getTime() + MIN),
+        // Beyond the five minutes a rollout or clock skew may trail onset.
+        occurredAt: new Date(onset.getTime() + 6 * MIN),
       },
     });
     const upstreamIncident = await createTestIncident('API latency', api.id, { createdAt: at(15) });
@@ -398,6 +399,52 @@ describe('response analysis', () => {
       where: { incidentId: s.incident.id, kind: 'PROBABLE_CAUSE', status: 'ACTIVE' },
     });
     expect(causes.map(f => f.subjectRef)).toEqual([s.upstreamIncident.id]);
+  });
+
+  it('measures lead from the first alert and the change start, allowing up to five minutes after onset', async () => {
+    await setup('SUGGEST');
+    const web = await createTestService('Web');
+    const created = new Date(Date.now() - 5 * MIN);
+    const incident = await createTestIncident('Web 5xx spike', web.id, { createdAt: created });
+    // The first alert fired 20 minutes before the incident row was created.
+    const firstAlert = new Date(created.getTime() - 20 * MIN);
+    await db.alert.create({
+      data: { serviceId: web.id, incidentId: incident.id, payload: {}, createdAt: firstAlert },
+    });
+    const change = (minutesFromAlert: number, summary: string, startedMinutesFromAlert?: number) =>
+      db.changeEvent.create({
+        data: {
+          serviceId: web.id,
+          source: summary,
+          kind: 'DEPLOY',
+          summary,
+          occurredAt: new Date(firstAlert.getTime() + minutesFromAlert * MIN),
+          labels:
+            startedMinutesFromAlert === undefined
+              ? {}
+              : {
+                  startedAt: new Date(
+                    firstAlert.getTime() + startedMinutesFromAlert * MIN
+                  ).toISOString(),
+                },
+        },
+      });
+    const before = await change(-2, 'before');
+    const rolling = await change(3, 'rolling', -10);
+    const skewed = await change(4, 'skewed');
+    await change(7, 'too-late');
+
+    expect(await analyzeResponse({ subjectKey: incident.id, generation: 1 }, settings)).toBe(
+      'analyzed'
+    );
+    const findings = await db.intelligenceFinding.findMany({
+      where: { incidentId: incident.id, kind: 'CHANGE_CORRELATION', status: 'ACTIVE' },
+      select: { subjectRef: true, evidence: true },
+    });
+    const lead = Object.fromEntries(
+      findings.map(f => [f.subjectRef, (f.evidence as { leadSeconds: number }).leadSeconds])
+    );
+    expect(lead).toEqual({ [before.id]: 120, [rolling.id]: 600, [skewed.id]: -240 });
   });
 
   it('is idempotent, supersedes on re-analysis and drops stale generations', async () => {

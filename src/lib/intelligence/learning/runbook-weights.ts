@@ -8,6 +8,9 @@ import { DEFAULT_RUNBOOK_WEIGHTS, runbookWeightsSchema, type RunbookWeights } fr
 import { stableAnalysisHash } from '../jobs/input-hash';
 import { enqueueWorkItems, WORK_KINDS, type ClaimedWorkItem } from '../jobs/work-queue';
 import { scoreRunbook, type RunbookScoreFeatures } from '../recommendations/wilson';
+import { STORED_PROPOSAL_KINDS } from './proposal-store';
+import { refreshResponseWeightProposal } from './response-weights';
+import { refreshScoringWeightProposal } from './weights-service';
 import {
   parseOrThrow,
   publishPolicyVersion,
@@ -304,6 +307,9 @@ export async function runRunbookWeightFit(
   item: Pick<ClaimedWorkItem, 'generation' | 'force'>,
   client: typeof prisma = prisma
 ): Promise<RunbookWeightFitOutcome> {
+  // The same daily job refits the similarity and cause proposals the settings page shows.
+  await refreshScoringWeightProposal();
+  await refreshResponseWeightProposal();
   const examples = await loadRunbookExamples(client);
   const inputHash = stableAnalysisHash(['runbook-weights:v1', RUNBOOK_FIT_LIMITS, examples]);
   const stored = await client.intelligencePattern.findUnique({
@@ -368,11 +374,16 @@ export async function scheduleRunbookWeightFit(
 ): Promise<boolean> {
   if (now - fitSchedule.checkedAt < RUNBOOK_FIT_SCHEDULE.checkIntervalMs) return false;
   fitSchedule.checkedAt = now;
-  const row = await client.intelligencePattern.findUnique({
-    where: proposalWhere,
+  const kinds = [PROPOSAL_ROW.kind, ...STORED_PROPOSAL_KINDS];
+  const rows = await client.intelligencePattern.findMany({
+    where: { scopeKey: PROPOSAL_ROW.scopeKey, key: PROPOSAL_ROW.key, kind: { in: kinds } },
     select: { lastSeenAt: true },
   });
-  if (row && now - row.lastSeenAt.getTime() < RUNBOOK_FIT_SCHEDULE.refitAfterMs) return false;
+  if (
+    rows.length === kinds.length &&
+    rows.every(row => now - row.lastSeenAt.getTime() < RUNBOOK_FIT_SCHEDULE.refitAfterMs)
+  )
+    return false;
   await enqueueWorkItems([{ kind: WORK_KINDS.FIT_RUNBOOK_WEIGHTS, subjectKey: 'global' }], client);
   return true;
 }
