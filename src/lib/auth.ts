@@ -441,17 +441,13 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   const { checkRateLimit, isUnderRateLimit } = await import('@/lib/rate-limit');
                   const ACCOUNT_WINDOW_MS = 15 * 60 * 1000;
                   const accountKey = `auth:credentials:account:${email}`;
-                  const distributedAttempt = await checkRateLimit(
-                    `auth:credentials:${email}:${ip}`,
-                    20,
-                    ACCOUNT_WINDOW_MS
-                  );
-                  // The cluster-wide account bucket only counts failed attempts, so successful
-                  // sign-ins (a responder switching devices) never lock the account.
+                  // Only failed attempts count, so successful sign-ins (a responder switching
+                  // devices) never lock the account. The former per-email:ip bucket also counted
+                  // successes, and without a trusted proxy every client shares one ip.
                   const accountAllowed = await isUnderRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
                   const recordAccountFailure = () =>
                     checkRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
-                  if (!distributedAttempt.allowed || !accountAllowed) {
+                  if (!accountAllowed) {
                     const accountResetAt =
                       (Math.floor(Date.now() / ACCOUNT_WINDOW_MS) + 1) * ACCOUNT_WINDOW_MS;
                     await logLoginBlocked(
@@ -459,10 +455,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                       ip,
                       userAgent,
                       'RATE_LIMITED',
-                      Math.max(
-                        0,
-                        (accountAllowed ? distributedAttempt.resetAt : accountResetAt) - Date.now()
-                      )
+                      Math.max(0, accountResetAt - Date.now())
                     );
                     return null;
                   }
