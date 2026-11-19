@@ -7,6 +7,7 @@ import {
   CAPTURE_LIMITS,
   captureSlackChannelMessage,
   clipBytes,
+  purgePrivateChannelCaptures,
   resetCaptureSwitchCache,
 } from '@/lib/chatops/war-room-capture';
 import {
@@ -117,6 +118,13 @@ describe('war-room channel capture', () => {
     expect(await captureSlackChannelMessage(message('x', { channel_type: 'group' }))).toBe(
       'CAPTURED'
     );
+    expect(await captureSlackChannelMessage(message('from a public room'))).toBe('CAPTURED');
+
+    // Making the incident PUBLIC removes what came from the private channel, and only that.
+    expect(await db.$transaction(tx => purgePrivateChannelCaptures(tx, w.incident.id))).toBe(1);
+    expect((await chatRows(w.incident.id)).map(row => row.message)).toEqual([
+      'Slack user U1: from a public room',
+    ]);
   });
 
   it('stops at the per-incident cap and clips long messages to the byte budget', async () => {

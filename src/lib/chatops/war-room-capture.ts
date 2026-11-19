@@ -1,4 +1,5 @@
 import 'server-only';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
 import { redactSecrets } from '@/lib/intelligence/ai/redact';
@@ -9,7 +10,8 @@ import { findSlackIncidentForChannel } from '@/lib/chatops/squire/slack';
  * timeline entries, so the time axis and the postmortem draft include the discussion (not only pins).
  * Off unless an administrator turns it on. Bounded per incident and per message; secrets are redacted before
  * anything is stored. A private channel is captured only into a private incident, so a restricted
- * conversation never becomes readable to everyone who can see a public incident.
+ * conversation never becomes readable to everyone who can see a public incident; those captures are marked
+ * and removed if the incident is later made PUBLIC.
  */
 
 export const CAPTURE_LIMITS = { perIncident: 2_000, messageBytes: 4_096 } as const;
@@ -46,6 +48,23 @@ async function captureEnabled(client: typeof prisma): Promise<boolean> {
 /** Tests flip the switch between cases. */
 export function resetCaptureSwitchCache() {
   captureSwitch = null;
+}
+
+/** `IncidentEvent.channel` of a message captured from a private Slack channel (into a PRIVATE incident). */
+const PRIVATE_CHANNEL_CAPTURE = 'slack:private-channel';
+
+/**
+ * Called when an incident becomes PUBLIC: its private-channel captures would become readable to everyone who
+ * can see the incident, people who were never in that channel. Returns how many were removed.
+ */
+export async function purgePrivateChannelCaptures(
+  tx: Prisma.TransactionClient,
+  incidentId: string
+): Promise<number> {
+  const { count } = await tx.incidentEvent.deleteMany({
+    where: { incidentId, type: 'CHAT_MESSAGE', channel: PRIVATE_CHANNEL_CAPTURE },
+  });
+  return count;
 }
 
 const str = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
@@ -110,6 +129,7 @@ export async function captureSlackChannelMessage(
     data: {
       incidentId: incident.id,
       type: 'CHAT_MESSAGE',
+      ...(channelType === 'group' ? { channel: PRIVATE_CHANNEL_CAPTURE } : {}),
       message: clipBytes(redactSecrets(`Slack user ${user}: ${text}`), CAPTURE_LIMITS.messageBytes),
       createdAt: new Date(ts * 1000),
     },
