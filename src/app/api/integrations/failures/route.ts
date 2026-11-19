@@ -318,8 +318,17 @@ export async function POST(request: NextRequest) {
         tx
       );
     } else {
-      const intent = await tx.chatOpsIntent.update({
+      const existing = await tx.chatOpsIntent.findUnique({
         where: { id: body.id },
+        select: { status: true, kind: true, workspaceId: true },
+      });
+      if (!existing) throw new Error('ChatOps intent not found');
+      // Retrying a COMPLETED/PENDING intent would repost it to chat.
+      if (existing.status !== 'FAILED') {
+        throw new Error(`Only FAILED ChatOps intents can be retried (current state: ${existing.status})`);
+      }
+      const intent = await tx.chatOpsIntent.update({
+        where: { id: body.id, status: 'FAILED' },
         data: {
           status: 'PENDING',
           attempt: 0,
@@ -337,6 +346,18 @@ export async function POST(request: NextRequest) {
           payload: { intentId: intent.id },
         },
       });
+      await emitAuditEvent(
+        {
+          action: 'chatOpsIntent.manual_retry',
+          source: 'UI',
+          target: { type: 'SYSTEM_CONFIG', id: intent.id },
+          actor: { type: 'USER', id: admin.user.id },
+          oldValue: { status: 'FAILED' },
+          newValue: { status: 'PENDING' },
+          metadata: { intentId: intent.id, kind: existing.kind, workspaceId: existing.workspaceId },
+        },
+        tx
+      );
     }
   });
   return jsonOk({ retried: true });
