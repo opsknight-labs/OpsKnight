@@ -192,7 +192,7 @@ test.describe.serial('AIOps overview', () => {
   }, testInfo) => {
     const page = await signIn(browser, adminEmail);
     await page.goto('/');
-    await page.getByRole('link', { name: 'AIOps Overview' }).first().click();
+    await page.getByRole('link', { name: 'Intelligence', exact: true }).first().click();
     await expect(page).toHaveURL(/\/intelligence$/);
     await expect(page.getByRole('heading', { level: 1, name: 'AIOps overview' })).toBeVisible();
     const windows = page.getByRole('navigation', { name: 'Time window' });
