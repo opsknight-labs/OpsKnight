@@ -88,6 +88,8 @@ const MAX_EVENT_MESSAGE_LENGTH = 2000;
 const MAX_SNOOZE_REASON_LENGTH = 1000;
 const MIN_RESOLUTION_NOTE_LENGTH = 10;
 const MAX_RESOLUTION_NOTE_LENGTH = 1000;
+/** Matches the Slack snooze button default. */
+const DEFAULT_SNOOZE_MINUTES = 60;
 
 function invalidArgument(userMessage: string, details?: Record<string, unknown>): AppError {
   return new AppError({
@@ -582,6 +584,17 @@ export async function applyIncidentLifecycleCommand(
   assertSnoozeInput(input, now);
   const resolutionNote = normalizeResolutionNote(input.resolutionNote);
   const incident = await loadSnapshot(tx, input.incidentId);
+  if (input.command === 'SNOOZE' && input.snoozedUntil == null) {
+    // A snooze always ends: callers without an end time (list row, mobile swipe,
+    // bulk, REST status) keep an existing end or get the default, so escalation resumes.
+    input = {
+      ...input,
+      snoozedUntil:
+        incident.status === 'SNOOZED' && incident.snoozedUntil
+          ? incident.snoozedUntil
+          : new Date(now.getTime() + DEFAULT_SNOOZE_MINUTES * 60_000),
+    };
+  }
   const targetStatus = targetStatusFor(input.command);
 
   if (isAlreadyApplied(incident, input, targetStatus)) {

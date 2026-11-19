@@ -477,6 +477,41 @@ describe('incident lifecycle command engine', () => {
     );
   });
 
+  it('gives a snooze without an end time the default end so it auto-unsnoozes', async () => {
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'OPEN' }));
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-snooze-open',
+      command: 'SNOOZE',
+      source: 'MOBILE',
+      now: NOW,
+    });
+
+    const defaultEnd = new Date(NOW.getTime() + 60 * 60_000);
+    expect(tx.incident.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ snoozedUntil: defaultEnd }) })
+    );
+    expect(mocks.enqueueLifecycleSideEffects).toHaveBeenCalledWith(
+      asTransactionClient(tx),
+      expect.objectContaining({ command: 'SNOOZE', snoozedUntil: defaultEnd })
+    );
+  });
+
+  it('keeps an existing snooze end when re-snoozed without one', async () => {
+    const end = new Date('2026-08-27T13:00:00.000Z');
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'SNOOZED', snoozedUntil: end }));
+
+    const result = await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-snooze-again',
+      command: 'SNOOZE',
+      source: 'BULK',
+      now: NOW,
+    });
+
+    expect(result.changed).toBe(false);
+    expect(tx.incident.update).not.toHaveBeenCalled();
+  });
+
   it('rolls back the logical batch when one transition is invalid', async () => {
     const committed: string[] = [];
 
