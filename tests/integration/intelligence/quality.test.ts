@@ -13,8 +13,10 @@ import { getInsights } from '@/lib/intelligence/insights/service';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import {
   adoptScoringWeights,
+  readScoringWeightProposal,
   suggestScoringWeights,
 } from '@/lib/intelligence/learning/weights-service';
+import { runRunbookWeightFit } from '@/lib/intelligence/learning/runbook-weights';
 import {
   resetDatabase,
   testPrisma as db,
@@ -322,8 +324,16 @@ describe('scoring policy proposals', () => {
         },
       });
     }
+    // The settings page reads what the daily fit stored; reading never fits.
+    expect(await readScoringWeightProposal()).toBeNull();
+    await runRunbookWeightFit({ generation: 1, force: false });
     const suggestion = await suggestScoringWeights();
     expect(suggestion).not.toBeNull();
+    // Same proposal (jsonb may round the last float digit; the page shows three decimals).
+    const stored = await readScoringWeightProposal();
+    expect(stored).toMatchObject({ id: suggestion!.id, support: suggestion!.support });
+    expect(stored!.baselineLoss).toBeCloseTo(suggestion!.baselineLoss, 9);
+    expect(stored!.heldOutLoss).toBeCloseTo(suggestion!.heldOutLoss, 9);
     expect((await resolveEffectivePolicy(null)).definition.similarity.weights).toBeUndefined();
     const published = await adoptScoringWeights(
       { suggestionId: suggestion!.id, expectedHeadVersion: 1 },

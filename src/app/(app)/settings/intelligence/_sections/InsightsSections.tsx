@@ -22,8 +22,8 @@ import {
 } from '@/lib/intelligence/insights/service';
 import { listPolicyVersions, resolveEffectivePolicy } from '@/lib/intelligence/settings/service';
 import { getDigestSettings, getLatestDigestRun } from '@/lib/intelligence/digest/service';
-import { suggestScoringWeights } from '@/lib/intelligence/learning/weights-service';
-import { suggestResponseWeights } from '@/lib/intelligence/learning/response-weights';
+import { readScoringWeightProposal } from '@/lib/intelligence/learning/weights-service';
+import { readResponseWeightProposal } from '@/lib/intelligence/learning/response-weights';
 import {
   RUNBOOK_FIT_LIMITS,
   readRunbookWeightProposal,
@@ -41,8 +41,9 @@ async function load() {
         getDigestSettings(),
         getLatestDigestRun(),
         resolveEffectivePolicy(null),
-        canManage ? suggestScoringWeights() : Promise.resolve(null),
-        canManage ? suggestResponseWeights().catch(() => null) : Promise.resolve(null),
+        // Fitted by the daily lane job (learning/runbook-weights.ts); the page only reads the stored proposals.
+        canManage ? readScoringWeightProposal() : Promise.resolve(null),
+        canManage ? readResponseWeightProposal().catch(() => null) : Promise.resolve(null),
         canManage
           ? readRunbookWeightProposal()
               .then(stored => stored?.proposal ?? null)

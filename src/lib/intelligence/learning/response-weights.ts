@@ -21,6 +21,7 @@ import {
   logLoss,
   sigmoid,
 } from './bounded-fit';
+import { readWeightProposal, storeWeightProposal } from './proposal-store';
 
 /**
  * Offline fitting of probable-cause ranking weights from responder feedback on cause findings. Each
@@ -148,6 +149,22 @@ export async function suggestResponseWeights() {
   };
 }
 
+type StoredResponseWeightsProposal = ResponseWeightsProposal & { id: string };
+
+/** Fits now and stores the result for the settings page (null when there is no supported improvement). */
+export async function refreshResponseWeightProposal() {
+  const proposal = await suggestResponseWeights();
+  await storeWeightProposal('RESPONSE_WEIGHTS_PROPOSAL', proposal);
+  return proposal;
+}
+
+/** The proposal the daily fit stored: one indexed read, no fit. */
+export const readResponseWeightProposal = () =>
+  readWeightProposal<StoredResponseWeightsProposal>(
+    'RESPONSE_WEIGHTS_PROPOSAL',
+    responseWeightsSchema
+  );
+
 /** Recompute before publishing: the browser cannot supply arbitrary coefficients or stale evidence. */
 export async function adoptResponseWeights(input: unknown, actor: IntelligenceActor) {
   const parsed = parseOrThrow(
@@ -159,7 +176,8 @@ export async function adoptResponseWeights(input: unknown, actor: IntelligenceAc
       .strict(),
     input
   );
-  const suggestion = await suggestResponseWeights();
+  // The recomputed proposal replaces the stored one, so a refresh after a conflict shows the current one.
+  const suggestion = await refreshResponseWeightProposal();
   if (!suggestion || suggestion.id !== parsed.suggestionId)
     throw new AppError({
       code: 'RESOURCE_CONFLICT',
