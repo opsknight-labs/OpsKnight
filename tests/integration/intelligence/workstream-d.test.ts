@@ -61,6 +61,7 @@ describe('triage suggestions', () => {
     const admin = await enable();
     const team = await createTestTeam('Payments');
     const responder = await createTestUser({ role: 'RESPONDER' });
+    await db.teamMember.create({ data: { teamId: team.id, userId: responder.id } });
     const service = await createTestService('Checkout', team.id);
     // Five resolved precedents, all HIGH urgency, owned by the responder, resolved in about an hour.
     for (let i = 0; i < 5; i += 1) {
@@ -164,6 +165,86 @@ describe('triage suggestions', () => {
       'HELPFUL'
     );
   });
+
+  async function triageWithPrecedents(
+    service: { id: string },
+    precedent: { urgency: 'LOW' | 'HIGH'; assigneeId?: string },
+    incidentOverrides: { urgency: 'LOW' | 'HIGH'; createdAt?: Date },
+    afterPrecedents?: () => Promise<unknown>
+  ) {
+    for (let i = 0; i < 5; i += 1) {
+      const createdAt = new Date(Date.now() - (i + 2) * 86_400_000);
+      const row = await createTestIncident('Ledger sync stalled on shard-' + i, service.id, {
+        status: 'RESOLVED',
+        ...precedent,
+        createdAt,
+        resolvedAt: new Date(createdAt.getTime() + 60 * MIN),
+      });
+      await db.$transaction(tx => indexIncident(row.id, tx));
+    }
+    await afterPrecedents?.();
+    const incident = await createTestIncident(
+      'Ledger sync stalled on shard-9',
+      service.id,
+      incidentOverrides
+    );
+    await db.$transaction(tx => indexIncident(incident.id, tx));
+    await analyzeIncident({ subjectKey: incident.id, generation: 1 }, settings);
+    expect(await predictTriage({ subjectKey: incident.id, generation: 1 }, settings)).toBe(
+      'analyzed'
+    );
+    return db.intelligenceFinding.findMany({
+      where: { incidentId: incident.id, status: 'ACTIVE' },
+      select: { kind: true, subjectRef: true },
+    });
+  }
+
+  it('does not count the incident being triaged as SLO burn evidence about itself', async () => {
+    await enable();
+    const service = await createTestService('Ledger');
+    await db.serviceObjective.create({
+      data: {
+        lineageId: 'ledger-availability',
+        serviceId: service.id,
+        name: 'Availability',
+        metricType: 'AVAILABILITY',
+        target: 99.9,
+        comparator: 'GREATER_THAN_OR_EQUAL',
+        windowType: 'THIRTY_DAYS',
+      },
+    });
+    // Only the subject incident is open: without it nothing burns, so LOW precedents keep LOW.
+    const findings = await triageWithPrecedents(
+      service,
+      { urgency: 'LOW' },
+      { urgency: 'LOW', createdAt: new Date(Date.now() - 20 * MIN) }
+    );
+    expect(findings.filter(f => f.kind === 'TRIAGE_URGENCY')).toEqual([]);
+  });
+
+  it.each([
+    ['disabled', { status: 'DISABLED' as const }, true],
+    ['no longer on the owning team', {}, false],
+  ])(
+    'suggests the owning team instead of a precedent assignee who is %s',
+    async (_label, userOverrides, member) => {
+      await enable();
+      const team = await createTestTeam('Ledger');
+      const formerOwner = await createTestUser({ role: 'RESPONDER' });
+      if (member) await db.teamMember.create({ data: { teamId: team.id, userId: formerOwner.id } });
+      const service = await createTestService('Ledger', team.id);
+      const findings = await triageWithPrecedents(
+        service,
+        { urgency: 'HIGH', assigneeId: formerOwner.id },
+        { urgency: 'HIGH' },
+        // Assigned incidents require an active user, so the owner leaves after resolving them.
+        () => db.user.update({ where: { id: formerOwner.id }, data: userOverrides })
+      );
+      expect(findings.filter(f => f.kind === 'TRIAGE_ASSIGNMENT')).toEqual([
+        { kind: 'TRIAGE_ASSIGNMENT', subjectRef: `team:${team.id}` },
+      ]);
+    }
+  );
 
   it('writes nothing while triage is off in the policy', async () => {
     await enable(false);
@@ -272,6 +353,29 @@ describe('change risk', () => {
     // Three of four earlier changes were followed by an incident; the small sample is shrunk towards the prior.
     expect(direct?.score.components.history).toBeGreaterThan(0.35);
     expect(admin.id).toBeTruthy();
+  });
+});
+
+describe('change risk timing', () => {
+  it('reads off-hours and weekends on the org business-hours clock, not UTC', async () => {
+    const service = await createTestService('Clock');
+    // Saturday 01:00 UTC is Friday 17:00 in Los Angeles: a working-hours weekday there.
+    const change = await db.changeEvent.create({
+      data: {
+        serviceId: service.id,
+        source: 'ci',
+        kind: 'DEPLOY',
+        summary: 'friday deploy',
+        occurredAt: new Date('2026-11-21T01:00:00Z'),
+      },
+    });
+    const utc = await db.$transaction(tx => computeChangeRisk(tx, change.id));
+    expect(utc?.score.components.timing).toBe(1);
+    await db.systemSettings.create({
+      data: { id: 'default', businessHoursTimeZone: 'America/Los_Angeles' },
+    });
+    const local = await db.$transaction(tx => computeChangeRisk(tx, change.id));
+    expect(local?.score.components.timing).toBe(0.3);
   });
 });
 

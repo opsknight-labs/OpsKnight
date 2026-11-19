@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { RESPONSE_LIMITS } from '../contract';
 import { loadActiveEdges } from '../dependencies/service';
 import { upstreamDistances } from '../dependencies/graph';
+import { localHour } from '@/lib/oncall-load/metrics';
+import { weekdayInTimeZone } from '../noise-controls/builders';
 
 /**
  * Change risk: how likely a change is to be followed by an incident, as a 0..1 ranking signal. It is
@@ -158,12 +160,20 @@ export async function computeChangeRisk(
       ).size
     : 0;
 
+  // Services carry no time zone; the org's business-hours zone is the wall clock "off-hours" means.
+  const timeZone =
+    (
+      await tx.systemSettings.findUnique({
+        where: { id: 'default' },
+        select: { businessHoursTimeZone: true },
+      })
+    )?.businessHoursTimeZone ?? 'UTC';
   const score = scoreChangeRisk({
     historicalFollowRate,
     historicalSample,
     blastRadius: dependants,
-    hour: change.occurredAt.getUTCHours(),
-    weekday: change.occurredAt.getUTCDay(),
+    hour: localHour(change.occurredAt, timeZone),
+    weekday: weekdayInTimeZone(change.occurredAt, timeZone),
     size: sizeFromLabels(change.labels),
     kind: change.kind,
   });
