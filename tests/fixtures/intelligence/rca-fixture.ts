@@ -88,7 +88,7 @@ export const RCA_SCENARIOS: readonly RcaScenario[] = [
       { label: 'web deploy after onset', service: 'web', minutesBefore: -2 },
     ],
     expectedTopCause: 'web pool config',
-    why: 'A change after onset cannot have caused it.',
+    why: 'A change just after onset stays a candidate but ranks below one that preceded it.',
   },
   {
     id: 'global-flag-only',

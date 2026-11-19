@@ -76,8 +76,9 @@ describe('scoreCause', () => {
     );
     // Up to five minutes after onset still counts (rollouts in progress, clock skew); beyond that, no.
     expect(scoreCause({ ...base, leadSeconds: -1 }).confidence).toBeGreaterThan(0);
-    expect(scoreCause({ ...base, leadSeconds: -300 }).confidence).toBe(
-      scoreCause({ ...base, leadSeconds: 300 }).confidence
+    // ...but below a comparable change that preceded onset.
+    expect(scoreCause({ ...base, leadSeconds: -300 }).confidence).toBeLessThan(
+      scoreCause({ ...base, leadSeconds: 30 * 60 }).confidence
     );
     expect(scoreCause({ ...base, leadSeconds: -301 }).confidence).toBe(0);
     expect(
