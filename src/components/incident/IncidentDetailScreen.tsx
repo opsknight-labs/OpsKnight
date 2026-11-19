@@ -13,6 +13,7 @@ import { visibleIncidentSource } from '@/lib/automation/presentation/source-visi
 import { CAPABILITIES } from '@/lib/authorization';
 import { resolveEffectivePolicyForRequest } from '@/lib/intelligence/settings/service';
 import { getAiSettings } from '@/lib/intelligence/ai/settings';
+import { loadIncidentStatusUpdate } from '@/lib/intelligence/helpers/status-draft-loader';
 import { draftIncidentSummaryNoteAction } from '@/app/(app)/incidents/[id]/intelligence-actions';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -215,7 +216,7 @@ export default async function IncidentDetailScreen({
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.
-  const [jiraLinks, collaboration, escalationHealth] = await Promise.all([
+  const [jiraLinks, collaboration, escalationHealth, statusUpdate] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
@@ -223,6 +224,10 @@ export default async function IncidentDetailScreen({
     getIncidentCollaborationView({ incidentId: id, userId: user.id }),
     // A health read failure must not block the incident page.
     getEscalationExecutionHealth(id).catch(() => null),
+    // "Post status update": the status-page publish permission (admin), like the announcement API.
+    permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)
+      ? loadIncidentStatusUpdate(storedIncident).catch(() => null)
+      : null,
   ]);
 
   // The access check above already ran; the viewer's capabilities drive lane redaction.
@@ -580,6 +585,13 @@ export default async function IncidentDetailScreen({
           color: tagLink.tag.color,
         }))}
         jiraCapability={incidentJiraCapability}
+        statusUpdate={
+          statusUpdate && {
+            href: `/settings/status-pages/${statusUpdate.statusPageId}?announce=${encodeURIComponent(id)}`,
+            statusPageName: statusUpdate.statusPageName,
+            nextDueAt: statusUpdate.nextDueAt?.toISOString() ?? null,
+          }
+        }
       />
 
       {/* Intelligence: one row of chips, and the inspector they open. Silent when there is nothing to say. */}

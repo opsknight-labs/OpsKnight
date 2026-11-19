@@ -7,9 +7,14 @@ import {
   testPrisma as db,
 } from '../helpers/test-db';
 
-vi.mock('@/lib/rbac', () => ({ assertAdmin: vi.fn().mockResolvedValue({ id: 'admin' }) }));
+vi.mock('@/lib/rbac', () => ({
+  assertAdmin: vi.fn().mockResolvedValue({ id: 'admin' }),
+  getCurrentAuthorizationActor: vi.fn(),
+}));
 
 const { POST } = await import('@/app/api/settings/status-page/announcements/route');
+const { saveUpdateCadenceAction } =
+  await import('@/app/(app)/settings/status-pages/helper-actions');
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) {
@@ -52,5 +57,29 @@ describe('announcements filled from an incident', () => {
 
     expect((await post({ statusPageId: page.id })).status).toBeLessThan(300);
     expect(await db.statusPageAnnouncement.count({ where: { incidentId: null } })).toBe(1);
+  });
+
+  it('saves the update cadence without moving the settings revision', async () => {
+    const page = await db.statusPage.create({ data: { name: 'Public', slug: 'public' } });
+
+    expect(await saveUpdateCadenceAction({ statusPageId: page.id, minutes: 15 })).toEqual({
+      ok: true,
+    });
+    const saved = await db.statusPage.findUniqueOrThrow({ where: { id: page.id } });
+    expect(saved).toMatchObject({ updateCadenceMinutes: 15, updatedAt: page.updatedAt });
+
+    expect(await saveUpdateCadenceAction({ statusPageId: page.id, minutes: null })).toEqual({
+      ok: true,
+    });
+    expect(
+      (await db.statusPage.findUniqueOrThrow({ where: { id: page.id } })).updateCadenceMinutes
+    ).toBeNull();
+    for (const minutes of [0, 2000, 7.5])
+      expect(await saveUpdateCadenceAction({ statusPageId: page.id, minutes })).toMatchObject({
+        ok: false,
+      });
+    expect(await saveUpdateCadenceAction({ statusPageId: 'nope', minutes: 30 })).toMatchObject({
+      ok: false,
+    });
   });
 });

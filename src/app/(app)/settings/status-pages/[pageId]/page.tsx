@@ -27,8 +27,10 @@ function normalizeAnnouncementType(value: string): StatusAnnouncementType {
 
 export default async function StatusPageWorkspacePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ pageId: string }>;
+  searchParams: Promise<{ announce?: string | string[] }>;
 }) {
   const session = await getServerSession(await getAuthOptions());
   if (!session) redirect('/login');
@@ -39,6 +41,10 @@ export default async function StatusPageWorkspacePage({
   }
 
   const { pageId } = await params;
+  // From an incident's "Post status update"; the draft loader re-checks the incident.
+  const { announce } = await searchParams;
+  const draftIncidentId =
+    typeof announce === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(announce) ? announce : undefined;
   const [statusPage, allServices, liveSnapshotResult] = await Promise.all([
     prisma.statusPage.findUnique({
       where: { id: pageId },
@@ -186,6 +192,7 @@ export default async function StatusPageWorkspacePage({
           statusPage={formattedStatusPage}
           allServices={allServices}
           liveSnapshot={liveSnapshot}
+          draftIncidentId={draftIncidentId}
         />
       </div>
     </div>

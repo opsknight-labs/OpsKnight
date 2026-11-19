@@ -29,6 +29,7 @@ import type { IncidentCollaborationView } from '@/lib/incident-collaboration/typ
 import ResolveIncidentModal, { type ResolvingIncidentData } from '../ResolveIncidentModal';
 import SnoozeDurationDialog from './SnoozeDurationDialog';
 import IncidentTags from './IncidentTags';
+import StatusUpdateAction, { type IncidentStatusUpdateView } from './StatusUpdateAction';
 import { snoozeIncidentWithDuration } from '@/app/(app)/incidents/snooze-actions';
 import {
   createJiraIssueFromIncident,
@@ -105,6 +106,8 @@ type IncidentCommandBarProps = {
   tags?: Array<{ id: string; name: string; color?: string | null }>;
   /** Mandatory source of truth for all operational Jira UI. */
   jiraCapability: JiraCapability;
+  /** Null unless the viewer may publish and the incident has a status page to post on. */
+  statusUpdate?: IncidentStatusUpdateView | null;
 };
 
 function formatResumeIn(snoozedUntil: Date | null): string | null {
@@ -136,6 +139,7 @@ export default function IncidentCommandBar({
   jira,
   tags = [],
   jiraCapability,
+  statusUpdate,
 }: IncidentCommandBarProps) {
   const router = useRouter();
   const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
@@ -417,6 +421,7 @@ export default function IncidentCommandBar({
           )}
 
           <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
+          <StatusUpdateAction statusUpdate={statusUpdate} />
         </div>
 
         {canAct && (
@@ -570,6 +575,11 @@ export default function IncidentCommandBar({
               </Button>
             )}
 
+            <StatusUpdateAction
+              statusUpdate={statusUpdate}
+              presentation="mobile"
+              onNavigate={() => setShowMobileMore(false)}
+            />
             {showUnsnooze && (
               <form action={onUnsnooze}>
                 <Button

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { loadStatusDraftsAction } from '@/app/(app)/settings/status-pages/helper-actions';
 import { Button } from '@/components/ui/shadcn/button';
 import type { StatusDraft } from '@/lib/intelligence/helpers/status-draft';
@@ -12,25 +12,41 @@ import type { StatusDraft } from '@/lib/intelligence/helpers/status-draft';
  */
 export default function StatusDraftSuggestions({
   statusPageId,
+  incidentId,
   onApply,
 }: {
   statusPageId: string;
+  /** Opened from an incident's "Post status update": offer only its draft and fill the form with it. */
+  incidentId?: string;
   onApply: (draft: StatusDraft) => void;
 }) {
   const [drafts, setDrafts] = useState<StatusDraft[]>([]);
   const [applied, setApplied] = useState<string | null>(null);
+  // The parent passes a fresh callback each render; the load must not re-run for it.
+  const onApplyRef = useRef(onApply);
+  useEffect(() => {
+    onApplyRef.current = onApply;
+  });
 
   useEffect(() => {
     let current = true;
-    loadStatusDraftsAction(statusPageId)
+    loadStatusDraftsAction(statusPageId, incidentId)
       .then(result => {
-        if (current) setDrafts(result);
+        if (!current) return;
+        setDrafts(result);
+        const named = incidentId
+          ? result.find(draft => draft.incidentId === incidentId)
+          : undefined;
+        if (named) {
+          setApplied(named.incidentId);
+          onApplyRef.current(named);
+        }
       })
       .catch(() => undefined);
     return () => {
       current = false;
     };
-  }, [statusPageId]);
+  }, [statusPageId, incidentId]);
 
   if (drafts.length === 0) return null;
   const appliedDraft = drafts.find(draft => draft.incidentId === applied);
