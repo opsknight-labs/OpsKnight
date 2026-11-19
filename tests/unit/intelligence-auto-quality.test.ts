@@ -3,6 +3,8 @@ import {
   measureQuality,
   assessAutoQuality,
   assessRuleCoverage,
+  assessWithPool,
+  correlationRuleSignature,
 } from '@/lib/intelligence/evaluation/quality-metrics';
 
 const perfect = () => [
@@ -77,5 +79,65 @@ describe('per-rule certification coverage', () => {
         [{ ruleId: rule.id, metrics, crossService: metrics }]
       ).allowed
     ).toBe(false);
+  });
+});
+
+describe('pooled certification evidence', () => {
+  const rule = {
+    id: 'template',
+    kind: 'CONTENT_TEMPLATE' as const,
+    enabled: true,
+    keys: [],
+    windowSeconds: 300,
+    maxWindowSeconds: 900,
+    minScore: 0.8,
+  };
+  const rules = [rule];
+  const good = measureQuality(perfect());
+  const thin = measureQuality(perfect().slice(0, 50));
+  const perRule = (metrics: typeof good) => [
+    { ruleId: 'template', metrics, crossService: metrics },
+  ];
+  it('signs a rule by behaviour, not by id, enablement or key order', () => {
+    expect(correlationRuleSignature({ ...rule, id: 'renamed', enabled: false })).toBe(
+      correlationRuleSignature(rule)
+    );
+    expect(correlationRuleSignature({ ...rule, kind: 'LABEL_SET', keys: ['b', 'a'] })).toBe(
+      correlationRuleSignature({ ...rule, kind: 'LABEL_SET', keys: ['a', 'b'] })
+    );
+    expect(correlationRuleSignature({ ...rule, minScore: 0.9 })).not.toBe(
+      correlationRuleSignature(rule)
+    );
+  });
+  it('certifies a thin service from pooled evidence with unchanged thresholds, and labels it', () => {
+    expect(assessWithPool(rules, thin, perRule(thin))).toMatchObject({ allowed: false });
+    const gate = assessWithPool(rules, thin, perRule(thin), {
+      ...good,
+      perRule: perRule(good),
+      services: 4,
+    });
+    expect(gate).toMatchObject({ allowed: true, pooled: true });
+    expect(gate.reason).toMatch(/pooled/i);
+    // Thresholds are not relaxed: thin pooled evidence still fails.
+    expect(
+      assessWithPool(rules, thin, perRule(thin), { ...thin, perRule: perRule(thin), services: 4 })
+        .allowed
+    ).toBe(false);
+  });
+  it('never pools over a local critical false merge', () => {
+    const bad = measureQuality([
+      ...perfect().slice(0, 50),
+      { predicted: true, linked: false, critical: true, score: 1 },
+    ]);
+    expect(
+      assessWithPool(rules, bad, perRule(bad), { ...good, perRule: perRule(good), services: 4 })
+        .allowed
+    ).toBe(false);
+  });
+  it('prefers local evidence when it passes on its own', () => {
+    expect(assessWithPool(rules, good, perRule(good))).toMatchObject({
+      allowed: true,
+      pooled: false,
+    });
   });
 });

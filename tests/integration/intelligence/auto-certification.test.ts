@@ -311,3 +311,123 @@ it('opens a fresh AUTO group when delayed processing crosses a bucket boundary',
     vi.useRealTimers();
   }
 });
+
+describe('reachable AUTO: pooled and edit-stable evidence', () => {
+  it('keeps evidence across edits that leave the rule unchanged', async () => {
+    const { actor, admin, service } = await setup();
+    await reviewedFixture(service.id, admin.id);
+    // Unrelated similarity edit plus a rule rename: same behaviour, new policy version.
+    const edited = {
+      ...definition,
+      similarity: { ...definition.similarity, minScore: 0.9 },
+      correlation: {
+        ...definition.correlation,
+        rules: [{ ...definition.correlation.rules[0], id: 'renamed' }],
+      },
+    };
+    await publishPolicyVersion(
+      {},
+      { mode: 'SHADOW', definition: edited, expectedHeadVersion: 1 },
+      actor
+    );
+    const result = await evaluateServiceQuality(
+      service.id,
+      await resolveEffectivePolicy(service.id),
+      actor,
+      true
+    );
+    expect(result).toMatchObject({ allowed: true, pooled: false, metrics: { predictions: 220 } });
+    // A behaviour change is new evidence: none of the old members count.
+    await publishPolicyVersion(
+      {},
+      {
+        mode: 'SHADOW',
+        definition: {
+          ...edited,
+          correlation: {
+            ...edited.correlation,
+            rules: [{ ...edited.correlation.rules[0], minScore: 0.95 }],
+          },
+        },
+        expectedHeadVersion: 2,
+      },
+      actor
+    );
+    expect(
+      await evaluateServiceQuality(
+        service.id,
+        await resolveEffectivePolicy(service.id),
+        actor,
+        true
+      )
+    ).toMatchObject({ allowed: false, metrics: { predictions: 0 } });
+  });
+
+  it('certifies a thin service from pooled same-rule evidence and labels the gate', async () => {
+    const { actor, admin, service } = await setup();
+    const policy = await reviewedFixture(service.id, admin.id);
+    const thin = await createTestService('Payments');
+    const createdAt = new Date(Date.now() - 3600000);
+    await db.incident.createMany({
+      data: Array.from({ length: 4 }, (_, i) => ({
+        id: `thin-${i}`,
+        title: 'Thin reviewed incident',
+        serviceId: thin.id,
+        urgency: 'LOW' as const,
+        createdAt,
+      })),
+    });
+    const group = await db.correlationGroup.findFirstOrThrow();
+    await db.correlationMember.createMany({
+      data: Array.from({ length: 4 }, (_, i) => ({
+        incidentId: `thin-${i}`,
+        groupId: group.id,
+        score: 1,
+        evidence: {},
+        policyVersion: policy.version,
+        engineVersion: INTELLIGENCE_ENGINE_VERSION,
+        createdAt,
+      })),
+    });
+    await db.incidentRelationship.createMany({
+      data: [0, 1].map(i => ({
+        id: `thin-review-${i}`,
+        sourceIncidentId: `thin-${2 * i}`,
+        targetIncidentId: `thin-${2 * i + 1}`,
+        type: 'RELATED' as const,
+        origin: 'HUMAN' as const,
+        decision: 'ACCEPTED' as const,
+        evidence: {},
+        engineVersion: INTELLIGENCE_ENGINE_VERSION,
+      })),
+    });
+    await db.incidentRelationshipEvent.createMany({
+      data: [0, 1].map(i => ({
+        relationshipId: `thin-review-${i}`,
+        toDecision: 'ACCEPTED' as const,
+        actorType: 'USER' as const,
+        actorId: admin.id,
+        reasonCode: 'HUMAN_REVIEW',
+        createdAt: new Date(Date.now() - 10000),
+      })),
+    });
+    const result = await evaluateServiceQuality(thin.id, policy, actor, true);
+    expect(result).toMatchObject({
+      allowed: true,
+      pooled: true,
+      metrics: { predictions: 2, pooled: { predictions: 222, services: 2 } },
+    });
+    expect(await getAutoGate(thin.id, definition)).toMatchObject({ allowed: true, pooled: true });
+    // A new human decision anywhere in the pool voids the pooled certification.
+    await db.incidentRelationshipEvent.create({
+      data: {
+        relationshipId: 'review-0',
+        toDecision: 'REVERTED',
+        actorType: 'USER',
+        actorId: admin.id,
+        reasonCode: 'HUMAN_REVERTED',
+      },
+    });
+    expect((await getAutoGate(thin.id, definition)).allowed).toBe(false);
+  });
+});

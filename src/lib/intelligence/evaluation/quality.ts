@@ -10,8 +10,9 @@ import type { DependencyEdge } from '../dependencies/graph';
 import { withDbBudget } from '../jobs/db-budget';
 import type { EffectivePolicy, IntelligenceActor } from '../settings/service';
 import {
-  assessAutoQuality,
-  assessRuleCoverage,
+  assessWithPool,
+  correlationRuleSignature,
+  type PooledQuality,
   type RuleQuality,
   measureQuality,
   type QualityMetrics,
@@ -91,25 +92,45 @@ const metricSchema = z.object({
     .max(10),
 });
 
+const perRuleSchema = z.array(
+  z.object({ ruleId: z.string(), metrics: metricSchema, crossService: metricSchema })
+);
 const storedSchema = metricSchema.extend({
   reviewedOnly: z.literal(true),
   serviceId: z.string(),
   policyHash: z.string(),
   engineVersion: z.string(),
-  perRule: z.array(
-    z.object({ ruleId: z.string(), metrics: metricSchema, crossService: metricSchema })
-  ),
+  perRule: perRuleSchema,
+  /** Same-signature evidence from every service; absent on runs before pooling existed. */
+  pooled: metricSchema
+    .extend({ perRule: perRuleSchema, services: z.number().int().nonnegative() })
+    .optional(),
 });
-function assess(definition: PolicyDefinition, metrics: QualityMetrics, perRule: RuleQuality[]) {
-  const aggregate = assessAutoQuality(metrics);
-  return aggregate.allowed ? assessRuleCoverage(definition.correlation.rules, perRule) : aggregate;
+function assess(
+  definition: PolicyDefinition,
+  metrics: QualityMetrics,
+  perRule: RuleQuality[],
+  pooled?: PooledQuality
+) {
+  return assessWithPool(definition.correlation.rules, metrics, perRule, pooled);
 }
+const signedRuleSchema = z.object({
+  kind: z.string(),
+  keys: z.array(z.string()).default([]),
+  windowSeconds: z.number(),
+  maxWindowSeconds: z.number(),
+  minScore: z.number().optional(),
+  linkType: z.string().optional(),
+  allowHighUrgency: z.boolean().optional(),
+});
 
 export interface AutoGate {
   allowed: boolean;
   reason: string;
   runId: string | null;
   metrics: QualityMetrics | null;
+  /** True when the gate opened on evidence pooled across services rather than this service alone. */
+  pooled?: boolean;
 }
 
 /** Only a recent, completed certification of this exact definition/engine/topology opens AUTO. */
@@ -166,6 +187,16 @@ export async function getAutoGates(
       AND affected.service_id = ANY(${ids}) GROUP BY affected.service_id`)
     : [];
   const latest = new Map(reviews.map(row => [row.serviceId, row.latest]));
+  // Pooled certifications depend on every service's reviews, so any newer human decision voids them.
+  const globalLatest = [...byService.values()].some(entry => entry.metrics.pooled)
+    ? (
+        await client.$queryRaw<Array<{ latest: Date | null }>>(Prisma.sql`
+          SELECT max(e."createdAt") AS latest FROM "IncidentRelationshipEvent" e
+          JOIN "IncidentRelationship" r ON r."id" = e."relationshipId"
+          WHERE e."actorType" = 'USER' AND e."createdAt" > ${since}
+            AND e."toDecision" IN ('ACCEPTED', 'REJECTED', 'REVERTED') AND r."type" IN ('RELATED', 'DUPLICATE_OF')`)
+      )[0]?.latest
+    : null;
   return new Map<string, AutoGate>(
     requests.map(({ serviceId, definition }): [string, AutoGate] => {
       const entry = byService.get(serviceId);
@@ -196,7 +227,11 @@ export async function getAutoGates(
           },
         ];
       }
-      if (+(latest.get(serviceId) ?? 0) > +run.windowEnd)
+      const gate = assess(definition, metrics, metrics.perRule, metrics.pooled);
+      if (
+        +(latest.get(serviceId) ?? 0) > +run.windowEnd ||
+        (gate.pooled && +(globalLatest ?? 0) > +run.windowEnd)
+      )
         return [
           serviceId,
           {
@@ -206,10 +241,7 @@ export async function getAutoGates(
             metrics,
           },
         ];
-      return [
-        serviceId,
-        { ...assess(definition, metrics, metrics.perRule), runId: run.id, metrics },
-      ];
+      return [serviceId, { ...gate, runId: run.id, metrics }];
     })
   );
 }
@@ -262,19 +294,26 @@ export async function evaluateServiceQuality(
           critical: boolean;
           reviewedAt: Date;
           crossService: boolean;
+          local: boolean;
+          sourceServiceId: string;
+          targetServiceId: string;
         }>
       >(Prisma.sql`
-        SELECT DISTINCT ON (LEAST(r."sourceIncidentId", r."targetIncidentId"), GREATEST(r."sourceIncidentId", r."targetIncidentId"))
-          r."sourceIncidentId" AS "sourceId", r."targetIncidentId" AS "targetId", e."toDecision" = 'ACCEPTED' AS linked,
-          (s."urgency" = 'HIGH' OR t."urgency" = 'HIGH') AS critical, (s."serviceId" <> t."serviceId") AS "crossService", e."createdAt" AS "reviewedAt"
-        FROM "IncidentRelationshipEvent" e JOIN "IncidentRelationship" r ON r."id" = e."relationshipId"
-        JOIN "Incident" s ON s."id" = r."sourceIncidentId" JOIN "Incident" t ON t."id" = r."targetIncidentId"
-        WHERE e."actorType" = 'USER' AND e."toDecision" IN ('ACCEPTED', 'REJECTED', 'REVERTED')
-          AND e."createdAt" >= ${since} AND e."createdAt" <= ${now}
-          AND (s."serviceId" = ${serviceId} OR t."serviceId" = ${serviceId})
-          AND r."type" IN ('RELATED', 'DUPLICATE_OF')
-        ORDER BY LEAST(r."sourceIncidentId", r."targetIncidentId"), GREATEST(r."sourceIncidentId", r."targetIncidentId"), e."createdAt" DESC
+        SELECT * FROM (
+          SELECT DISTINCT ON (LEAST(r."sourceIncidentId", r."targetIncidentId"), GREATEST(r."sourceIncidentId", r."targetIncidentId"))
+            r."sourceIncidentId" AS "sourceId", r."targetIncidentId" AS "targetId", e."toDecision" = 'ACCEPTED' AS linked,
+            (s."urgency" = 'HIGH' OR t."urgency" = 'HIGH') AS critical, (s."serviceId" <> t."serviceId") AS "crossService", e."createdAt" AS "reviewedAt",
+            (s."serviceId" = ${serviceId} OR t."serviceId" = ${serviceId}) AS local, s."serviceId" AS "sourceServiceId", t."serviceId" AS "targetServiceId"
+          FROM "IncidentRelationshipEvent" e JOIN "IncidentRelationship" r ON r."id" = e."relationshipId"
+          JOIN "Incident" s ON s."id" = r."sourceIncidentId" JOIN "Incident" t ON t."id" = r."targetIncidentId"
+          WHERE e."actorType" = 'USER' AND e."toDecision" IN ('ACCEPTED', 'REJECTED', 'REVERTED')
+            AND e."createdAt" >= ${since} AND e."createdAt" <= ${now}
+            AND r."type" IN ('RELATED', 'DUPLICATE_OF')
+          ORDER BY LEAST(r."sourceIncidentId", r."targetIncidentId"), GREATEST(r."sourceIncidentId", r."targetIncidentId"), e."createdAt" DESC
+        ) reviewed
+        ORDER BY local DESC, "reviewedAt" DESC
         LIMIT ${QUALITY_MAX_REVIEWED_PAIRS}`);
+      // This service's pairs sort first, so the pool always contains the local sample.
       const ids = [...new Set(pairs.flatMap(pair => [pair.sourceId, pair.targetId]))];
       const members = ids.length
         ? await tx.$queryRaw<
@@ -284,16 +323,29 @@ export async function evaluateServiceQuality(
               ruleId: string;
               score: number;
               createdAt: Date;
+              rule: Prisma.JsonValue;
             }>
           >(Prisma.sql`
-        SELECT m."incidentId", m."groupId", g."ruleId", m."score", m."createdAt"
+        SELECT m."incidentId", m."groupId", g."ruleId", m."score", m."createdAt",
+          (SELECT rule FROM jsonb_array_elements(v."definition"->'correlation'->'rules') rule
+            WHERE rule->>'id' = g."ruleId" LIMIT 1) AS rule
         FROM "CorrelationMember" m JOIN "CorrelationGroup" g ON g."id" = m."groupId"
         JOIN "IntelligencePolicyVersion" v ON v."policyId" = g."policyId" AND v."version" = g."policyVersion"
-        WHERE m."incidentId" = ANY(${ids}) AND m."engineVersion" = ${INTELLIGENCE_ENGINE_VERSION}
-          AND v."definition" = ${JSON.stringify(policy.definition)}::jsonb`)
+        WHERE m."incidentId" = ANY(${ids}) AND m."engineVersion" = ${INTELLIGENCE_ENGINE_VERSION}`)
         : [];
-      const byIncident = new Map<string, typeof members>();
-      for (const member of members) {
+      // Evidence follows what a rule does, so it survives unrelated policy edits and renames.
+      const enabledRules = policy.definition.correlation.rules.filter(rule => rule.enabled);
+      const bySignature = new Map(
+        [...enabledRules].reverse().map(rule => [correlationRuleSignature(rule), rule.id])
+      );
+      const byIncident = new Map<string, Array<(typeof members)[number]>>();
+      for (const raw of members) {
+        const signed = signedRuleSchema.safeParse(raw.rule);
+        const ruleId = signed.success
+          ? bySignature.get(correlationRuleSignature(signed.data))
+          : null;
+        if (!ruleId) continue;
+        const member = { ...raw, ruleId };
         const list = byIncident.get(member.incidentId) ?? [];
         list.push(member);
         byIncident.set(member.incidentId, list);
@@ -312,6 +364,8 @@ export async function evaluateServiceQuality(
         );
         return {
           matches,
+          local: pair.local,
+          services: [pair.sourceServiceId, pair.targetServiceId],
           crossService: pair.crossService,
           linked: pair.linked,
           critical: pair.critical,
@@ -319,11 +373,9 @@ export async function evaluateServiceQuality(
           score: matches.length ? Math.max(...matches.map(match => match.score)) : 0,
         };
       });
-      const result = measureQuality(judged);
-      const perRule = policy.definition.correlation.rules
-        .filter(rule => rule.enabled)
-        .map(rule => {
-          const rows = judged.map(row => {
+      const measurePerRule = (sample: typeof judged): RuleQuality[] =>
+        enabledRules.map(rule => {
+          const rows = sample.map(row => {
             const matches = row.matches.filter(match => match.ruleId === rule.id);
             return {
               ...row,
@@ -337,6 +389,18 @@ export async function evaluateServiceQuality(
             crossService: measureQuality(rows.filter(row => row.crossService)),
           };
         });
+      const localRows = judged.filter(row => row.local);
+      const result = measureQuality(localRows);
+      const perRule = measurePerRule(localRows);
+      const pooled: PooledQuality | undefined =
+        localRows.length < judged.length
+          ? {
+              ...measureQuality(judged),
+              perRule: measurePerRule(judged),
+              services: new Set(judged.flatMap(row => row.services)).size,
+            }
+          : undefined;
+      const verdict = assess(policy.definition, result, perRule, pooled);
       await tx.intelligenceEvaluationRun.update({
         where: { id: run.id },
         data: {
@@ -346,6 +410,14 @@ export async function evaluateServiceQuality(
             ...result,
             perRule,
             calibration: result.calibration.map(bin => ({ ...bin })),
+            ...(pooled
+              ? {
+                  pooled: {
+                    ...pooled,
+                    calibration: pooled.calibration.map(bin => ({ ...bin })),
+                  },
+                }
+              : {}),
             serviceId,
             policyHash,
             engineVersion: INTELLIGENCE_ENGINE_VERSION,
@@ -365,14 +437,19 @@ export async function evaluateServiceQuality(
             serviceId,
             policyHash,
             sampleCount: result.sampleCount,
-            allowed: certify && assess(policy.definition, result, perRule).allowed,
+            allowed: certify && verdict.allowed,
+            pooled: verdict.pooled,
           },
         },
         tx
       );
-      return { ...result, perRule };
+      return { ...result, perRule, pooled };
     });
-    return { runId: run.id, metrics, ...assess(policy.definition, metrics, metrics.perRule) };
+    return {
+      runId: run.id,
+      metrics,
+      ...assess(policy.definition, metrics, metrics.perRule, metrics.pooled),
+    };
   } catch (error) {
     await prisma.intelligenceEvaluationRun
       .update({

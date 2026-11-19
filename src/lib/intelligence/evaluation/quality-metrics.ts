@@ -99,11 +99,12 @@ export function assessAutoQuality(metrics: QualityMetrics): { allowed: boolean; 
   };
 }
 
-export interface RuleQuality {
+// Type aliases (not interfaces) so stored metrics stay assignable to Prisma JSON.
+export type RuleQuality = {
   ruleId: string;
   metrics: QualityMetrics;
   crossService: QualityMetrics;
-}
+};
 
 /** Every enabled rule needs its own evidence; topology additionally needs cross-service evidence. */
 export function assessRuleCoverage(
@@ -134,4 +135,61 @@ export function assessRuleCoverage(
   if (!rules.some(rule => rule.enabled))
     return { allowed: false, reason: 'No enabled correlation rules.' };
   return { allowed: true, reason: 'All enabled rules have passing reviewed evidence.' };
+}
+
+interface SignableRule {
+  kind: string;
+  keys: readonly string[];
+  windowSeconds: number;
+  maxWindowSeconds: number;
+  minScore?: number;
+  linkType?: string;
+  allowHighUrgency?: boolean;
+}
+
+/** What a rule does, without its id or switch: evidence for one signature is evidence for every copy. */
+export function correlationRuleSignature(
+  rule: SignableRule & { id?: string; enabled?: boolean }
+): string {
+  return JSON.stringify([
+    rule.kind,
+    [...rule.keys].sort(),
+    rule.windowSeconds,
+    rule.maxWindowSeconds,
+    rule.minScore ?? 0.8,
+    rule.linkType ?? 'RELATED',
+    rule.allowHighUrgency ?? false,
+  ]);
+}
+
+export type PooledQuality = QualityMetrics & {
+  perRule: RuleQuality[];
+  /** Distinct services contributing reviewed pairs to the pool. */
+  services: number;
+};
+
+/**
+ * Service evidence first; otherwise the same thresholds on reviewed pairs pooled across services for
+ * rules with identical signatures. A local critical false merge always blocks.
+ */
+export function assessWithPool(
+  rules: readonly (SignableRule & { id: string; enabled: boolean })[],
+  local: QualityMetrics,
+  localPerRule: readonly RuleQuality[],
+  pooled?: PooledQuality | null
+): { allowed: boolean; reason: string; pooled: boolean } {
+  const assess = (metrics: QualityMetrics, perRule: readonly RuleQuality[]) => {
+    const aggregate = assessAutoQuality(metrics);
+    return aggregate.allowed ? assessRuleCoverage(rules, perRule) : aggregate;
+  };
+  const own = assess(local, localPerRule);
+  if (own.allowed || !pooled || local.criticalFalseMerges > 0) return { ...own, pooled: false };
+  const shared = assess(pooled, pooled.perRule);
+  return shared.allowed
+    ? {
+        allowed: true,
+        pooled: true,
+        reason: `Thresholds met on reviewed evidence pooled across ${pooled.services} services for the same rules.`,
+      }
+    : { ...own, pooled: false };
 }
