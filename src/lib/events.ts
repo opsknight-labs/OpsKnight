@@ -50,7 +50,6 @@ import { resolveSupportHours } from './incidents/support-hours';
 import { resolveIncidentEngagement } from './incidents/engagement';
 import { reconcileIncidentEngagementAfterUrgencyChange } from './incidents/engagement-reconciliation';
 import { addOperationalMetric, observeOperationalHistogram } from './metrics/operational/registry';
-import { checkAlertFlapping } from './flapping';
 import { beginIngestionActivity } from './ingestion/activity';
 import { initializeEscalationExecution } from './escalation/repository';
 import { buildResponderRoutingFromAutomation } from './escalation/routing';
@@ -296,20 +295,6 @@ async function applyEvent(
       existingIncident.dedupKey = dedupKeys.primary;
     }
 
-    // Run this after the advisory lock so a queued event observes alert
-    // history committed by earlier events for the same dedup key. Passing the
-    // transaction client avoids opening a second pooled connection while this
-    // interactive transaction is active.
-    let isFlapping = false;
-    if (event_action === 'trigger' && !existingIncident) {
-      try {
-        const flappingResult = await checkAlertFlapping(dedup_key, serviceId, undefined, tx);
-        isFlapping = flappingResult.isFlapping;
-      } catch (_) {
-        // Non-critical: if flapping check fails, proceed with normal incident creation
-      }
-    }
-
     // 3. For acknowledge, skip alert creation if no matching incident
     if (event_action === 'acknowledge' && !existingIncident) {
       logger.info(`event.${event_action}_no_match`, {
@@ -432,19 +417,18 @@ async function applyEvent(
       // This event opens a new incident. Send the pre-paging lookups now (dedicated pool, own deadline) so
       // they overlap the reads below instead of holding this transaction's connection later. Nothing
       // happens when the service's policy is OFF; the hook further down decides what the answers mean. A
-      // buffered resolve or flapping skips the noise hook, so it skips the lookups too.
-      const noisePrefetch =
-        recentResolveAlert || isFlapping
-          ? null
-          : beginIngestNoiseLookups(
-              {
-                serviceId,
-                fingerprintHash: alertShape.fingerprintHash,
-                dedupKey: dedup_key,
-                receivedAt: noiseReceivedAt,
-              },
-              { integrationId }
-            );
+      // buffered resolve skips the noise hook, so it skips the lookups too.
+      const noisePrefetch = recentResolveAlert
+        ? null
+        : beginIngestNoiseLookups(
+            {
+              serviceId,
+              fingerprintHash: alertShape.fingerprintHash,
+              dedupKey: dedup_key,
+              receivedAt: noiseReceivedAt,
+            },
+            { integrationId }
+          );
 
       // Create New Incident with proper severity → urgency mapping
       const publishedPolicies = await readPublishedIncidentPolicies(tx, serviceId, integrationId);
@@ -472,8 +456,9 @@ async function applyEvent(
       });
       // One pipeline (J1.5, per service, default OFF): an in-process lookup. OFF keeps today's order with
       // no extra await; SHADOW/ON evaluate the noise decision first (it does not depend on automation).
-      const pipelineOrder =
-        recentResolveAlert || isFlapping ? 'OFF' : noisePipelineOrder(serviceId, integrationId);
+      const pipelineOrder = recentResolveAlert
+        ? 'OFF'
+        : noisePipelineOrder(serviceId, integrationId);
       let noise =
         pipelineOrder === 'OFF'
           ? null
@@ -600,12 +585,10 @@ async function applyEvent(
       // and ON make at most a few index-backed reads under one shared deadline and fail open on any
       // error, timeout or cold cache. Only ON decisions change what happens below.
       if (pipelineOrder === 'OFF')
-        noise = isFlapping
-          ? null
-          : await evaluateIngestNoiseControls(tx, noiseInput(), {
-              integrationId,
-              prefetch: noisePrefetch,
-            });
+        noise = await evaluateIngestNoiseControls(tx, noiseInput(), {
+          integrationId,
+          prefetch: noisePrefetch,
+        });
       let applied = noise?.apply ? noise : null;
       // SHADOW/ON: dropped and appended alerts get (or would get) no automation work.
       const skippedAutomation = (decision: IngestNoiseDecision) => {
@@ -716,7 +699,7 @@ async function applyEvent(
           ? applied.urgency
           : (applied?.transform?.urgency ?? urgency);
       const noiseSuppressed = applied?.action === 'SUPPRESS';
-      const suppressed = isFlapping || noiseSuppressed;
+      const suppressed = noiseSuppressed;
       const stormParent = applied?.action === 'GROUP_CHILD' ? noiseTarget : null;
       // Holds are bounded (≤ 60 s) and never delay HIGH urgency, whatever the policy says.
       const holdUntil =
@@ -829,13 +812,11 @@ async function applyEvent(
         holdUntil && holdUntil > engagement.earliestDeliveryAt
           ? holdUntil
           : engagement.earliestDeliveryAt;
-      const creationMessage = isFlapping
-        ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
-        : noiseSuppressed
-          ? `Incident created in SUPPRESSED state by noise control (${applied!.control}) from ${normalizedSource}: ${applied!.reason}. It does not page; reverse the decision under Settings → Intelligence → Noise controls to page it.`
-          : stormParent
-            ? `Incident triggered via API from ${normalizedSource} and grouped under storm parent "${truncateString(stormParent.title, 200)}" (${stormParent.id}) by noise control (STORM): ${applied!.reason}. Paging rolls up to the parent; reverse the decision to page it on its own.`
-            : `Incident triggered via API from ${normalizedSource}`;
+      const creationMessage = noiseSuppressed
+        ? `Incident created in SUPPRESSED state by noise control (${applied!.control}) from ${normalizedSource}: ${applied!.reason}. It does not page; reverse the decision under Settings → Intelligence → Noise controls to page it.`
+        : stormParent
+          ? `Incident triggered via API from ${normalizedSource} and grouped under storm parent "${truncateString(stormParent.title, 200)}" (${stormParent.id}) by noise control (STORM): ${applied!.reason}. Paging rolls up to the parent; reverse the decision to page it on its own.`
+          : `Incident triggered via API from ${normalizedSource}`;
       const creationMessages = [
         truncateString(creationMessage, 1_000),
         ...(applied
@@ -893,7 +874,7 @@ async function applyEvent(
                 slaPauseStartedAt: incidentCreatedAt,
                 slaPauses: {
                   create: {
-                    reason: isFlapping ? 'flapping-suppression' : 'noise-control-suppression',
+                    reason: 'noise-control-suppression',
                     startedAt: incidentCreatedAt,
                   },
                 },
@@ -906,20 +887,17 @@ async function applyEvent(
       });
 
       logger.info(
-        isFlapping
-          ? 'event.incident_created_suppressed_flapping'
-          : noiseSuppressed
-            ? 'event.incident_created_suppressed_noise_control'
-            : stormParent
-              ? 'event.incident_created_storm_child'
-              : 'event.incident_created',
+        noiseSuppressed
+          ? 'event.incident_created_suppressed_noise_control'
+          : stormParent
+            ? 'event.incident_created_storm_child'
+            : 'event.incident_created',
         {
           incidentId: newIncident.id,
           dedupKey: dedup_key,
           source: normalizedSource,
           severity: eventData.severity,
           urgency: effectiveUrgency,
-          isFlapping,
           ...(noise
             ? { noiseControl: noise.control, noiseAction: noise.action, noiseApplied: noise.apply }
             : {}),
