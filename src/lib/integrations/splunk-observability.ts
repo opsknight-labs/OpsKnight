@@ -26,14 +26,24 @@ export function transformSplunkObservabilityToEvent(data: SplunkObservabilityEve
   const summary =
     firstString(data.title, data.detectorName, data.description) || 'Splunk Observability Alert';
   const status = firstString(data.status, data.eventType);
-  const severity = normalizeSeverity(data.severity, 'warning');
+  // Splunk levels: Critical, Major, Minor, Warning, Info.
+  const severityText = data.severity?.toLowerCase();
+  const severity =
+    severityText === 'major'
+      ? 'error'
+      : severityText === 'minor'
+        ? 'warning'
+        : normalizeSeverity(data.severity, 'warning');
   // Use incidentId/detectorId or create stable key from detector name (avoids Date.now() which defeats dedup)
   const dedupKey =
     firstString(data.incidentId, data.detectorId) ||
     `splunk-observability-${(data.detectorName || data.title || 'unknown').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
-    event_action: normalizeEventAction(status, 'trigger'),
+    // A stopped detector will never send OK, so close it.
+    event_action: /^stopped$/i.test(status ?? '')
+      ? 'resolve'
+      : normalizeEventAction(status, 'trigger'),
     dedup_key: String(dedupKey),
     payload: {
       summary,

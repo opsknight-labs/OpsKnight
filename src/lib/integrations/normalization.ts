@@ -9,9 +9,27 @@ const INFO_KEYS = ['info', 'informational', 'p4', 'p5', 'low', 'ok', 'normal'];
 const RESOLVE_KEYS = ['resolve', 'resolved', 'close', 'closed', 'recover', 'recovered', 'ok', 'up'];
 const ACK_KEYS = ['ack', 'acknowledge', 'acknowledged'];
 
+const NEGATIONS = ['not', 'no', 'non', 'never'];
+
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .trim()
+    .split(/[\s_\-.:,;/|]+/);
+}
+
+// Lifecycle words must match a whole token: a substring match turns 'unresolved' into a
+// resolve and 'unacknowledged' into an ack. A preceding negation ('Not Recovered') cancels it.
+function matchesActionKeyword(text: string, keywords: string[]): boolean {
+  const tokens = tokenize(text);
+  return tokens.some(
+    (token, i) => keywords.includes(token) && !(i > 0 && NEGATIONS.includes(tokens[i - 1]))
+  );
+}
+
 function matchesKeyword(text: string, keywords: string[]): boolean {
   const normalized = text.toLowerCase().trim();
-  const tokens = normalized.split(/[\s_\-.:,;/|]+/);
+  const tokens = tokenize(text);
   return keywords.some(key => {
     // For short tokens (<= 3 chars like 'up', 'ok', 'ack', 'err'), require exact token match
     if (key.length <= 3) {
@@ -35,8 +53,8 @@ export function normalizeEventAction(
   fallback: EventAction = 'trigger'
 ): EventAction {
   if (!value) return fallback;
-  if (matchesKeyword(value, ACK_KEYS)) return 'acknowledge';
-  if (matchesKeyword(value, RESOLVE_KEYS)) return 'resolve';
+  if (matchesActionKeyword(value, ACK_KEYS)) return 'acknowledge';
+  if (matchesActionKeyword(value, RESOLVE_KEYS)) return 'resolve';
   return fallback;
 }
 

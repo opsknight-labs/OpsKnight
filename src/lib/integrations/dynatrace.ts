@@ -6,9 +6,20 @@ export type DynatraceEvent = {
   ProblemDetailsText?: string;
   State?: string;
   SeverityLevel?: string;
+  ProblemSeverity?: string;
   ProblemImpact?: string;
   ProblemURL?: string;
   [key: string]: unknown;
+};
+
+const DYNATRACE_SEVERITY: Record<string, 'critical' | 'error' | 'warning' | 'info'> = {
+  AVAILABILITY: 'critical',
+  ERROR: 'error',
+  PERFORMANCE: 'warning',
+  RESOURCE_CONTENTION: 'warning',
+  CUSTOM_ALERT: 'warning',
+  MONITORING_UNAVAILABLE: 'warning',
+  INFO: 'info',
 };
 
 export function transformDynatraceToEvent(data: DynatraceEvent): {
@@ -25,17 +36,20 @@ export function transformDynatraceToEvent(data: DynatraceEvent): {
   const summary =
     firstString(safeData.ProblemTitle, safeData.ProblemDetailsText) || 'Dynatrace Problem';
   const status = firstString(safeData.State);
-  const severity = normalizeSeverity(
-    firstString(safeData.SeverityLevel, safeData.ProblemImpact),
-    'warning'
-  );
+  // Dynatrace ProblemSeverity values are categories, not levels, so map them explicitly.
+  const problemSeverity = firstString(safeData.ProblemSeverity, safeData.SeverityLevel);
+  const severity =
+    DYNATRACE_SEVERITY[problemSeverity?.toUpperCase() ?? ''] ??
+    normalizeSeverity(firstString(problemSeverity, safeData.ProblemImpact), 'warning');
   // Use ProblemID or create stable key from ProblemTitle (avoids Date.now() which defeats dedup)
   const dedupKey =
     firstString(safeData.ProblemID) ||
     `dynatrace-${(safeData.ProblemTitle || 'unknown').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
-    event_action: normalizeEventAction(status, 'trigger'),
+    // A MERGED problem lives on in another problem, so this one is closed.
+    event_action:
+      status?.toUpperCase() === 'MERGED' ? 'resolve' : normalizeEventAction(status, 'trigger'),
     dedup_key: String(dedupKey),
     payload: {
       summary,

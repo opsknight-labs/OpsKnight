@@ -540,6 +540,7 @@ export const DynatraceSchema = z
     ProblemDetailsText: z.string().optional(),
     State: z.string().optional(),
     SeverityLevel: z.string().optional(),
+    ProblemSeverity: z.string().optional(),
     ProblemImpact: z.string().optional(),
     ProblemURL: z.string().optional(),
   })

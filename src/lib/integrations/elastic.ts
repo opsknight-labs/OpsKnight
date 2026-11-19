@@ -42,9 +42,11 @@ export function transformElasticToEvent(data: ElasticEvent): {
     firstString(data.alert?.severity, data.context?.severity, data.severity),
     'warning'
   );
-  // Use alert.id or rule.id, fallback to rule name for stable dedup
+  // alert.id is only unique within a rule (it is often the host), so scope it to the rule.
+  const alertId = firstString(data.alert?.id);
+  const ruleId = firstString(data.rule?.id);
   const dedupKey =
-    firstString(data.alert?.id, data.rule?.id) ||
+    (alertId && ruleId ? `${ruleId}:${alertId}` : alertId || ruleId) ||
     `elastic-${(data.rule?.name || summary).replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
