@@ -600,6 +600,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             trigger: trigger || 'none',
           });
 
+          // Decode could not reach the session registry: keep the token as-is (still
+          // flagged, so unauthorized) rather than letting a later DB lookup clear the flag.
+          if (!user && (token as AugmentedJWT).error === 'SECURITY_LOOKUP_UNAVAILABLE') {
+            return token;
+          }
+
           if (user) {
             try {
               (token as AugmentedJWT).issuedUnderPolicyVersion = (
