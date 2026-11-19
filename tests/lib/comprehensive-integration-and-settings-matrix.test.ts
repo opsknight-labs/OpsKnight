@@ -457,7 +457,7 @@ describe('🚀 Comprehensive 28-Integration & Settings Matrix Verification', () 
         entity_id: 'splunk-ent-1',
         state_message: 'Outage',
       } as any);
-      expect(splunkTrigger.event_action).toBe('trigger');
+      expect(splunkTrigger!.event_action).toBe('trigger');
 
       const sfxTrigger = transformSplunkObservabilityToEvent({
         incidentId: 'sfx-1',
@@ -535,8 +535,8 @@ describe('🚀 Comprehensive 28-Integration & Settings Matrix Verification', () 
         alertType: '2',
         monitorFriendlyName: 'API Endpoint',
       } as any);
-      expect(urDown.event_action).toBe('trigger');
-      expect(urUp.event_action).toBe('resolve');
+      expect(urDown!.event_action).toBe('trigger');
+      expect(urUp!.event_action).toBe('resolve');
 
       const pingdomDown = transformPingdomToEvent({
         state: 'DOWN',
@@ -563,8 +563,8 @@ describe('🚀 Comprehensive 28-Integration & Settings Matrix Verification', () 
         heartbeat: { status: 1, msg: '200 OK' },
         monitor: { name: 'Payment API' },
       } as any);
-      expect(kumaDown.event_action).toBe('trigger');
-      expect(kumaUp.event_action).toBe('resolve');
+      expect(kumaDown!.event_action).toBe('trigger');
+      expect(kumaUp!.event_action).toBe('resolve');
     });
   });
 

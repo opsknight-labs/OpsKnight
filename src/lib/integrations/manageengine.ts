@@ -121,6 +121,31 @@ function unwrapEnvelope(obj: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
+ * Parses a webhook body into every alarm it carries: a JSON array is a batch
+ * (one alarm per element); any other body is a single alarm.
+ */
+export function parseManageEngineAlarms(rawBody: string): ManageEnginePayload[] {
+  const trimmed = rawBody.trim();
+  if (trimmed.startsWith('[')) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      parsed = JSON.parse(repairMalformedManageEngineJson(trimmed));
+    }
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every(item => item && typeof item === 'object' && !Array.isArray(item))
+    ) {
+      return parsed.map(item => unwrapEnvelope(item as Record<string, unknown>) as ManageEnginePayload);
+    }
+    throw new Error('Invalid JSON array payload');
+  }
+  return [parseManageEnginePayload(rawBody)];
+}
+
+/**
  * Parses ManageEngine webhook payloads across all transport formats:
  * 1. Standard JSON objects or single-element arrays
  * 2. Raw OpManager JSON templates containing unescaped newlines/tabs in "$message" or trailing commas
@@ -427,15 +452,17 @@ export function resolveManageEngineSeverity(
 
 export function resolveManageEngineAction(data: ManageEnginePayload): EventAction {
   const ackFlag = data.acknowledged ?? data.isAcknowledged;
-  if (
+  const isAcknowledged =
     ackFlag === true ||
     ackFlag === 1 ||
     (typeof ackFlag === 'string' &&
-      ['true', 'yes', '1', 'acknowledged', 'ack'].includes(ackFlag.trim().toLowerCase()))
-  ) {
-    return 'acknowledge';
-  }
+      ['true', 'yes', '1', 'acknowledged', 'ack'].includes(ackFlag.trim().toLowerCase()));
+  const stateAction = resolveManageEngineStateAction(data);
+  // A cleared alarm keeps its acknowledged flag; the clear must still resolve.
+  return isAcknowledged && stateAction !== 'resolve' ? 'acknowledge' : stateAction;
+}
 
+function resolveManageEngineStateAction(data: ManageEnginePayload): EventAction {
   const explicitAction = firstManageEngineString(data.action, data.Action, data.operation);
   if (explicitAction) {
     const actionTokens = tokenize(explicitAction);
@@ -708,8 +735,8 @@ export function transformManageEngineToEvent(data: ManageEnginePayload): {
     data.Alert_ID,
     data.alert_id,
     data.alertId,
-    data.eventId,
-    data.event_id,
+    // Not eventId/event_id: they differ per event, so a clear would never
+    // correlate with its trigger. `id` is the stable ServiceDesk request id.
     data.id
   );
 

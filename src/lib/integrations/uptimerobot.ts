@@ -1,4 +1,4 @@
-import { normalizeEventAction, normalizeSeverity, firstString } from './normalization';
+import { firstString } from './normalization';
 
 export type UptimeRobotEvent = {
   alertType?: string | number;
@@ -10,13 +10,15 @@ export type UptimeRobotEvent = {
   [key: string]: unknown;
 };
 
-function toStatus(alertType?: string | number): string | undefined {
+// UptimeRobot alertType: 1 down, 2 up, 3 SSL expiry; anything else (paused,
+// started) is informational.
+function toStatus(alertType?: string | number): 'down' | 'up' | 'ssl' | undefined {
   if (alertType === undefined || alertType === null) return undefined;
   const normalized = String(alertType).toLowerCase();
-  if (normalized === '2' || normalized.includes('up')) return 'resolved';
-  if (normalized === '1' || normalized.includes('down')) return 'triggered';
-  if (normalized.includes('pause')) return 'paused';
-  return normalized;
+  if (normalized === '2' || normalized.includes('up')) return 'up';
+  if (normalized === '1' || normalized.includes('down')) return 'down';
+  if (normalized === '3' || normalized.includes('ssl')) return 'ssl';
+  return undefined;
 }
 
 export function transformUptimeRobotToEvent(data: UptimeRobotEvent): {
@@ -28,24 +30,29 @@ export function transformUptimeRobotToEvent(data: UptimeRobotEvent): {
     severity: 'critical' | 'error' | 'warning' | 'info';
     custom_details: Record<string, unknown>;
   };
-} {
+} | null {
   const status = toStatus(data.alertType);
-  const summary =
+  if (!status) return null;
+  const monitorName =
     firstString(data.monitorFriendlyName, data.alertTypeFriendlyName) || 'UptimeRobot Alert';
-  const severity =
-    status === 'resolved' ? normalizeSeverity('info', 'info') : normalizeSeverity('critical');
   // Use monitorID or create stable key from monitor name (avoids Date.now() which defeats dedup)
-  const dedupKey =
+  const monitorKey =
     firstString(data.monitorID) ||
     `uptimerobot-${(data.monitorFriendlyName || 'unknown').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
-    event_action: normalizeEventAction(status, 'trigger'),
-    dedup_key: String(dedupKey),
+    event_action: status === 'up' ? 'resolve' : 'trigger',
+    // An SSL notice is a separate problem; a monitor UP must not resolve it.
+    dedup_key: status === 'ssl' ? `${monitorKey}-ssl` : String(monitorKey),
     payload: {
-      summary,
+      summary:
+        status === 'ssl'
+          ? `SSL certificate expiring: ${monitorName}`
+          : status === 'down'
+            ? `Monitor down: ${monitorName}`
+            : monitorName,
       source: 'UptimeRobot',
-      severity,
+      severity: status === 'up' ? 'info' : status === 'ssl' ? 'warning' : 'critical',
       custom_details: {
         alertType: data.alertType,
         alertDetails: data.alertDetails,

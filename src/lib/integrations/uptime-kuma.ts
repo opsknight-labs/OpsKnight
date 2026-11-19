@@ -5,29 +5,27 @@ export type UptimeKumaEvent = {
     status?: number | string | null;
     msg?: string | null;
     monitorID?: number | string | null;
-  };
+  } | null;
   monitor?: {
     id?: number | string | null;
     name?: string | null;
     url?: string | null;
-  };
+  } | null;
   status?: string | null;
   msg?: string | null;
   [key: string]: unknown;
 };
 
+// Kuma heartbeat status: 0 DOWN, 1 UP, 2 PENDING, 3 MAINTENANCE.
 function mapAction(
   status?: number | string | null,
   statusText?: string | null
-): 'trigger' | 'resolve' {
-  if (typeof status === 'number') {
-    return status === 1 ? 'resolve' : 'trigger';
-  }
-  if (typeof status === 'string') {
+): 'trigger' | 'resolve' | null {
+  if (status !== undefined && status !== null && status !== '' && !Number.isNaN(Number(status))) {
     const numeric = Number(status);
-    if (!Number.isNaN(numeric)) {
-      return numeric === 1 ? 'resolve' : 'trigger';
-    }
+    if (numeric === 0) return 'trigger';
+    if (numeric === 1) return 'resolve';
+    return null;
   }
   const normalized = statusText?.toLowerCase();
   if (normalized && (normalized.includes('up') || normalized.includes('resolved'))) {
@@ -45,10 +43,13 @@ export function transformUptimeKumaToEvent(data: UptimeKumaEvent): {
     severity: 'critical' | 'error' | 'warning' | 'info';
     custom_details: Record<string, unknown>;
   };
-} {
+} | null {
+  // Kuma's "Test" button sends heartbeat and monitor as null: nothing to page.
+  if (!data.heartbeat && !data.monitor) return null;
   const summary =
     firstString(data.monitor?.name, data.msg, data.heartbeat?.msg) || 'Uptime Kuma Alert';
   const action = mapAction(data.heartbeat?.status, data.status);
+  if (!action) return null;
   const severity =
     action === 'resolve' ? normalizeSeverity('info', 'info') : normalizeSeverity('critical');
   // Use monitor ID or create stable key from monitor name (avoids Date.now() which defeats dedup)
