@@ -2845,6 +2845,8 @@ model SystemSettings {
   accessSelfApprovalAllowed        Boolean   @default(false)
   accessReviewIntervalDays         Int?
   accessReviewLastStartedAt        DateTime?
+  /// When true, admins allow outgoing service webhooks to use plain http:// URLs.
+  allowInsecureWebhookUrls         Boolean   @default(false)
 }
 
 model IncidentMetricRollup {

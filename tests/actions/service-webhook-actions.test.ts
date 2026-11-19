@@ -30,6 +30,10 @@ vi.mock('@/lib/network-security', () => ({
   }),
 }));
 vi.mock('@/lib/encryption', () => ({ encrypt: vi.fn(async (v: string) => `enc:${v}`) }));
+const allowHttp = vi.hoisted(() => ({ value: false }));
+vi.mock('@/lib/webhook-url-policy', () => ({
+  allowsInsecureWebhookUrls: vi.fn(async () => allowHttp.value),
+}));
 
 import { createWebhookIntegration } from '@/app/(app)/services/[id]/webhooks/actions';
 
@@ -40,7 +44,33 @@ function form(values: Record<string, string>) {
 }
 
 describe('createWebhookIntegration', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    allowHttp.value = false;
+  });
+
+  it('rejects http:// webhook URLs by default', async () => {
+    tx.service.findUnique.mockResolvedValue({ serviceNotificationChannels: ['WEBHOOK'] });
+    await expect(
+      createWebhookIntegration(
+        'svc-1',
+        form({ name: 'Internal', type: 'GENERIC', url: 'http://tools.example.com/hook' })
+      )
+    ).rejects.toThrow("REDIRECT:/services/svc-1/webhooks/new?error=invalid-url");
+    expect(tx.webhookIntegration.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts http:// webhook URLs when an admin allows them', async () => {
+    allowHttp.value = true;
+    tx.service.findUnique.mockResolvedValue({ serviceNotificationChannels: ['WEBHOOK'] });
+    await expect(
+      createWebhookIntegration(
+        'svc-1',
+        form({ name: 'Internal', type: 'GENERIC', url: 'http://tools.example.com/hook' })
+      )
+    ).rejects.toThrow('REDIRECT:/services/svc-1?tab=notifications&saved=1');
+    expect(tx.webhookIntegration.create).toHaveBeenCalled();
+  });
 
   it('enables the service WEBHOOK channel so the new webhook actually fires', async () => {
     tx.service.findUnique.mockResolvedValue({ serviceNotificationChannels: ['EMAIL'] });

@@ -117,7 +117,7 @@ export default async function NewWebhookPage({
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
-              The webhook URL must be a valid HTTPS URL that does not point to a private or
+              The webhook URL must use HTTPS (unless an admin allows http in System Settings) and must not point to a private or
               internal network address.
             </AlertDescription>
           </Alert>

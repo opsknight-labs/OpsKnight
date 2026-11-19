@@ -8,12 +8,15 @@ import { redirect } from 'next/navigation';
 import { assertWebhookIntegrationNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { assertSafeOutboundUrl } from '@/lib/network-security';
 import { encrypt } from '@/lib/encryption';
+import { allowsInsecureWebhookUrls } from '@/lib/webhook-url-policy';
 
-// Returns false for malformed, plaintext or internal-network URLs so the form
-// can show a readable error instead of a masked server-action exception.
+// Returns false for malformed, internal-network or (unless an admin allows it)
+// plaintext URLs so the form can show a readable error instead of a masked
+// server-action exception.
 async function isAcceptableWebhookUrl(url: string): Promise<boolean> {
+  const requireHttps = !(await allowsInsecureWebhookUrls());
   try {
-    await assertSafeOutboundUrl(url, { requireHttps: true });
+    await assertSafeOutboundUrl(url, { requireHttps });
     return true;
   } catch {
     return false;
