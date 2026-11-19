@@ -144,7 +144,8 @@ function normalizeInput(input: IncidentCreationInput): IncidentCreationInput {
 
 async function validateCustomFields(
   tx: Prisma.TransactionClient,
-  supplied: readonly IncidentCreationCustomFieldInput[] | undefined
+  supplied: readonly IncidentCreationCustomFieldInput[] | undefined,
+  enforceRequired = true
 ): Promise<Array<{ fieldId: string; value: string }>> {
   const suppliedMap = new Map<string, string>();
   for (const entry of supplied ?? []) {
@@ -168,7 +169,10 @@ async function validateCustomFields(
 
   return fields.flatMap(field => {
     const value = suppliedMap.has(field.id) ? suppliedMap.get(field.id) : field.defaultValue;
-    const validation = validateCustomFieldValue(field, value);
+    const validation = validateCustomFieldValue(
+      enforceRequired ? field : { ...field, required: false },
+      value
+    );
     if (!validation.valid) {
       const userMessage = validation.error || `Invalid ${field.name}`;
       throw invalidArgument(userMessage, `customField_${field.id}`, { fieldId: field.id });
@@ -264,10 +268,16 @@ export async function applyIncidentCreation(
 
   // The current REST contract does not expose custom fields. Preserve that wire
   // behavior while web/mobile continue to validate required/default field values.
+  // Mobile has no custom-field inputs: apply defaults but do not demand
+  // required values it cannot collect (they are completed on the web later).
   const customFieldEntries =
     input.source === 'REST_API' && input.customFields === undefined
       ? []
-      : await validateCustomFields(tx, input.customFields);
+      : await validateCustomFields(
+          tx,
+          input.customFields,
+          !(input.source === 'MOBILE' && input.customFields === undefined)
+        );
 
   if (input.dedupKey) {
     const existing = await tx.incident.findFirst({

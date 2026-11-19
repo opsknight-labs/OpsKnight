@@ -311,7 +311,11 @@ describe('IncidentsListTable', () => {
 
   it('sends the displayed status as expectedStatus for row status changes', async () => {
     render(
-      <IncidentsListTable incidents={[makeIncident('inc-row', 'OPEN')]} users={[]} canManageIncidents />
+      <IncidentsListTable
+        incidents={[makeIncident('inc-row', 'OPEN')]}
+        users={[]}
+        canManageIncidents
+      />
     );
     fireEvent.click(screen.getByTitle('Acknowledge Incident'));
 
