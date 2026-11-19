@@ -89,6 +89,16 @@ export const askSquireInputSchema = z
   })
   .strict();
 
+/** `squire_get_investigation`: the id `squire_start_investigation` returned. */
+export const squireInvestigationIdSchema = z
+  .object({
+    investigationId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{32}$/)
+      .describe('The investigationId returned by squire_start_investigation.'),
+  })
+  .strict();
+
 /** Registration gate (synchronous): role capability and every required scope granted. */
 export function canAskSquire(actor: AuthorizationActor): boolean {
   if (actor.status !== 'ACTIVE') return false;

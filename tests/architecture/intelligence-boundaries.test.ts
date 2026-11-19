@@ -272,6 +272,18 @@ describe('intelligence architecture boundaries', () => {
     const mcp = read(join(root, 'src/lib/mcp/core/ask-squire.ts'));
     expect(mcp).not.toMatch(/actions\/execute|executeSquireAction/);
     expect(mcp).not.toMatch(/\.token\b/);
+    // The long-running form writes only its own handle rows, and is just as read-only.
+    const investigation = read(join(root, 'src/lib/mcp/core/squire-investigation.ts'));
+    expect(investigation).not.toMatch(
+      /actions\/execute|executeSquireAction|\.token\b|\$executeRaw/
+    );
+    expect([
+      ...new Set(
+        [
+          ...investigation.matchAll(/\b(?:tx|prisma)\.(\w+)\s*\.(?:create|update|delete)\w*\(/g),
+        ].map(match => match[1])
+      ),
+    ]).toEqual(['squireMcpInvestigation']);
   });
 
   it('lets assistant support modules write only dialogue state, check templates and feedback', () => {
