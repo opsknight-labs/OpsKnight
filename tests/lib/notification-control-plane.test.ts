@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   encrypt: vi.fn(async (value: string) => `encrypted:${value}`),
   decrypt: vi.fn(async (value: string) => value.replace(/^encrypted:/, '')),
   isBulkPaused: vi.fn().mockResolvedValue(false),
+  allowsInsecureWebhookUrls: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -74,6 +75,9 @@ vi.mock('@/lib/email', () => ({
   sendIncidentEmail: mocks.sendIncidentEmail,
 }));
 vi.mock('@/lib/webhooks', () => ({ sendWebhook: mocks.sendWebhook }));
+vi.mock('@/lib/webhook-url-policy', () => ({
+  allowsInsecureWebhookUrls: mocks.allowsInsecureWebhookUrls,
+}));
 vi.mock('@/lib/slack', () => ({
   sendSlackMessageToChannel: mocks.sendSlackMessageToChannel,
   sendSlackNotification: vi.fn(),
@@ -420,7 +424,15 @@ describe('central notification control plane', () => {
 
     await deliverCentralNotification('webhook-rotated');
     expect(mocks.sendWebhook).toHaveBeenCalledWith(
-      expect.objectContaining({ secret: 'new-secret' })
+      expect.objectContaining({ secret: 'new-secret', requireHttps: true })
+    );
+
+    // An admin allowing http:// relaxes the send-time check for service webhooks.
+    mocks.sendWebhook.mockClear();
+    mocks.allowsInsecureWebhookUrls.mockResolvedValueOnce(true);
+    await deliverCentralNotification('webhook-rotated');
+    expect(mocks.sendWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ requireHttps: false })
     );
     expect(vi.mocked(prisma.webhookIntegration.findFirst).mock.calls[0]?.[0]?.where).toMatchObject({
       type: 'GENERIC',

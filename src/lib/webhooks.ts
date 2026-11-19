@@ -28,6 +28,8 @@ export type WebhookOptions = {
   circuitBreaker?: boolean;
   /** Stable across retries so receivers can safely deduplicate delivery. */
   deliveryId?: string;
+  /** Refuse plain http:// targets (service webhooks unless an admin allows http). */
+  requireHttps?: boolean;
 };
 
 export type WebhookResult = {
@@ -107,6 +109,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
       maxAttempts = 3,
       circuitBreaker = true,
       deliveryId,
+      requireHttps = false,
     } = options;
 
     if (!url) {
@@ -116,9 +119,14 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
     // SSRF Protection: Validate URL
     const { assertSafeOutboundUrl, safeOutboundFetch } = await import('./network-security');
     try {
-      await assertSafeOutboundUrl(url);
+      await assertSafeOutboundUrl(url, { requireHttps });
     } catch {
-      return { success: false, error: 'Invalid or restricted Webhook URL' };
+      return {
+        success: false,
+        error: requireHttps
+          ? 'Invalid or restricted Webhook URL (HTTPS required; an admin can allow http:// in System Settings)'
+          : 'Invalid or restricted Webhook URL',
+      };
     }
 
     // Stringify payload
@@ -152,7 +160,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
           attempts++;
           // Resolve again immediately before every attempt. This limits DNS
           // rebinding exposure and prevents a retry from using a newly-private answer.
-          await assertSafeOutboundUrl(url);
+          await assertSafeOutboundUrl(url, { requireHttps });
           const attemptController = new AbortController();
           const attemptTimeoutId = setTimeout(() => attemptController.abort(), timeout);
           try {

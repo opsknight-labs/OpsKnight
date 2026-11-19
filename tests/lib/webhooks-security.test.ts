@@ -47,4 +47,24 @@ describe('webhook delivery boundary', () => {
       })
     );
   });
+
+  it('passes requireHttps to every URL check and does not send when it fails', async () => {
+    vi.mocked(assertSafeOutboundUrl).mockImplementation(async (url, options) => {
+      if (options?.requireHttps && url.startsWith('http://')) throw new Error('HTTPS is required');
+      return new URL(url);
+    });
+    const result = await sendWebhook({
+      url: 'http://tools.internal.example.com/hook',
+      payload: { ok: true },
+      requireHttps: true,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/HTTPS required/);
+    expect(safeOutboundFetch).not.toHaveBeenCalled();
+
+    await sendWebhook({ url: 'https://hooks.example.com', payload: {}, requireHttps: true });
+    for (const call of vi.mocked(assertSafeOutboundUrl).mock.calls.slice(1)) {
+      expect(call[1]).toEqual({ requireHttps: true });
+    }
+  });
 });

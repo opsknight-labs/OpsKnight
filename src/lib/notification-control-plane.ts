@@ -1415,8 +1415,14 @@ async function dispatchPayload(
           secret = integration.secret ? await decryptStoredSecret(integration.secret) : undefined;
         }
       }
+      // Service webhooks follow the admin HTTPS setting at send time too, so turning it
+      // off stops existing http:// targets, not just new ones.
+      const requireHttps =
+        policy?.targetKind === 'WEBHOOK_INTEGRATION' &&
+        !(await (await import('./webhook-url-policy')).allowsInsecureWebhookUrls());
       return executeProvider(CircuitBreakers.webhook(payload.url), () =>
         sendWebhook({
+          requireHttps,
           url: payload.url,
           payload: payload.payload,
           headers: payload.headers,
