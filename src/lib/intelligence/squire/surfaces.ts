@@ -47,7 +47,13 @@ const MAX_PROPOSALS = 2;
 export async function collectSquireTurn(
   actor: AuthorizationActor,
   input: SquireSurfaceInput,
-  options: { timeoutMs?: number; signal?: AbortSignal; scope?: SquireTurnScope } = {}
+  options: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    scope?: SquireTurnScope;
+    /** Sees every event as it arrives, for a caller that reports progress (investigation steps). */
+    onEvent?: (event: SquireEvent) => void;
+  } = {}
 ): Promise<SquireSurfaceAnswer> {
   const answer: SquireSurfaceAnswer = {
     name: 'Squire',
@@ -72,6 +78,7 @@ export async function collectSquireTurn(
   try {
     for await (const event of events) {
       if (controller.signal.aborted) break;
+      options.onEvent?.(event);
       switch (event.type) {
         case 'meta':
           answer.name = event.name;
