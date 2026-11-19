@@ -107,6 +107,8 @@ type LifecycleDeliveryPolicy = {
     | 'LEGACY_SERVICE_WEBHOOK';
   targetId?: string;
   targetAddress?: string;
+  /** Webhook integration type the payload was formatted for. */
+  targetType?: string;
 };
 
 export type CentralNotificationPayload =
@@ -1386,12 +1388,26 @@ async function dispatchPayload(
     }
     case 'WEBHOOK': {
       const { sendWebhook } = await import('./webhooks');
+      let secret = payload.secret;
+      const policy = payload.lifecyclePolicy;
+      if (policy?.targetKind === 'WEBHOOK_INTEGRATION' && policy.targetId) {
+        // Sign with the integration's current secret so a rotation applies to
+        // queued and retrying deliveries instead of the one frozen at enqueue.
+        const integration = await prisma.webhookIntegration.findUnique({
+          where: { id: policy.targetId },
+          select: { secret: true },
+        });
+        if (integration) {
+          const { decryptStoredSecret } = await import('./encryption');
+          secret = integration.secret ? await decryptStoredSecret(integration.secret) : undefined;
+        }
+      }
       return executeProvider(CircuitBreakers.webhook(payload.url), () =>
         sendWebhook({
           url: payload.url,
           payload: payload.payload,
           headers: payload.headers,
-          secret: payload.secret,
+          secret,
           method: payload.method,
           timeout: payload.timeout,
           deliveryId: notificationId,
@@ -1662,6 +1678,8 @@ async function serviceTargetDeliveryRevoked(
         serviceId: policy.serviceId,
         enabled: true,
         ...(policy.targetAddress ? { url: policy.targetAddress } : {}),
+        // The payload body is pre-formatted for one type (Discord, Google Chat...).
+        ...(policy.targetType ? { type: policy.targetType } : {}),
         service: { serviceNotificationChannels: { has: 'WEBHOOK' } },
       },
       select: { id: true },

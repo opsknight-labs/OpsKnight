@@ -44,6 +44,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     incident: { findUnique: vi.fn() },
     service: { findUnique: vi.fn() },
+    webhookIntegration: { findFirst: vi.fn(), findUnique: vi.fn() },
     systemConfig: { findUnique: vi.fn() },
     notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
     userNotificationEndpoint: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -64,6 +65,7 @@ vi.mock('@/lib/notification-dispatch-recovery', () => ({
 vi.mock('@/lib/encryption', () => ({
   encrypt: mocks.encrypt,
   decrypt: mocks.decrypt,
+  decryptStoredSecret: mocks.decrypt,
   getEncryptionKey: vi.fn(() => '11'.repeat(32)),
 }));
 vi.mock('@/lib/email', () => ({
@@ -363,6 +365,60 @@ describe('central notification control plane', () => {
       .mock.calls.map(([args]) => args?.data as { status?: string; attempts?: number })
       .find(data => data?.status === 'FAILED');
     expect(failed?.attempts).toBe(expectedAttempts);
+  });
+
+  it('signs queued integration webhooks with the current secret and revokes on type change', async () => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = {
+      kind: 'WEBHOOK',
+      url: 'https://example.com/events',
+      payload: {},
+      secret: 'old-secret',
+      lifecyclePolicy: {
+        incidentId: 'inc-1',
+        eventType: 'triggered',
+        serviceId: 'svc-1',
+        targetKind: 'WEBHOOK_INTEGRATION',
+        targetId: 'wh-1',
+        targetAddress: 'https://example.com/events',
+        targetType: 'GENERIC',
+      },
+    };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'webhook-rotated',
+      status: 'PENDING',
+      category: 'INCIDENT',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    } as never);
+    vi.mocked(prisma.notificationDeliveryAttempt.create).mockResolvedValue({} as never);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      status: 'OPEN',
+      escalationGeneration: null,
+    } as never);
+    vi.mocked(prisma.webhookIntegration.findFirst).mockResolvedValue({ id: 'wh-1' } as never);
+    vi.mocked(prisma.webhookIntegration.findUnique).mockResolvedValue({
+      secret: 'encrypted:new-secret',
+    } as never);
+    mocks.sendWebhook.mockResolvedValue({ success: true });
+
+    await deliverCentralNotification('webhook-rotated');
+    expect(mocks.sendWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ secret: 'new-secret' })
+    );
+    expect(vi.mocked(prisma.webhookIntegration.findFirst).mock.calls[0]?.[0]?.where).toMatchObject(
+      { type: 'GENERIC' }
+    );
+
+    mocks.sendWebhook.mockClear();
+    vi.mocked(prisma.webhookIntegration.findFirst).mockResolvedValue(null);
+    await deliverCentralNotification('webhook-rotated');
+    expect(mocks.sendWebhook).not.toHaveBeenCalled();
   });
 
   it('uses one atomic claim when two workers race for the same delivery', async () => {

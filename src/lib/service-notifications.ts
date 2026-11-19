@@ -356,6 +356,7 @@ export async function sendServiceNotifications(
                     targetKind: 'WEBHOOK_INTEGRATION',
                     targetId: webhook.id,
                     targetAddress: webhook.url,
+                    targetType: webhook.type,
                   },
                 },
               },
