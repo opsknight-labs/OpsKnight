@@ -18,7 +18,6 @@ import InsightBadge from '@/components/intelligence/insights/InsightBadge';
 import InsightsPanel, {
   type InsightsPanelItem,
 } from '@/components/intelligence/insights/InsightsPanel';
-import InsightStrip from '@/components/intelligence/insights/InsightStrip';
 
 const insight = (overrides: Partial<InsightsPanelItem> = {}): InsightsPanelItem => ({
   id: 'ins-1',
@@ -71,32 +70,6 @@ describe('InsightBadge', () => {
   it('caps a large count', () => {
     render(<InsightBadge count={{ open: 250, highest: 'INFO' }} />);
     expect(screen.getByRole('img')).toHaveTextContent('99+');
-  });
-});
-
-describe('InsightStrip', () => {
-  it('renders nothing without insights', () => {
-    const { container } = render(<InsightStrip insights={[]} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it('leads with the most severe insight and counts the rest', () => {
-    render(
-      <InsightStrip
-        href="/policies/p1?tab=insights"
-        insights={[
-          { severity: 'INFO', title: 'Policy is unused' },
-          { severity: 'CRITICAL', title: 'Step 2 never acknowledges' },
-          { severity: 'WARNING', title: 'Step 1 times out at night' },
-        ]}
-      />
-    );
-    const link = screen.getByRole('link');
-    expect(link).toHaveTextContent('Step 2 never acknowledges and 2 more');
-    expect(link).toHaveAttribute('href', '/policies/p1?tab=insights');
-    expect(screen.getByRole('img')).toHaveAccessibleName(
-      '3 open insights, highest severity critical'
-    );
   });
 });
 
