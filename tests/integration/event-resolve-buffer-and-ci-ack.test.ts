@@ -45,7 +45,8 @@ describeIfRealDB('out-of-order resolve buffer and CI acknowledge', { timeout: 30
     await ingest(service.id, 'UPTIMEROBOT', 'trigger', 'k2');
     await testPrisma.incident.updateMany({
       where: { serviceId: service.id },
-      data: { status: 'RESOLVED', resolvedAt: new Date() },
+      // Closed by hand well before the buffer window, while the site still flaps.
+      data: { status: 'RESOLVED', resolvedAt: new Date(Date.now() - 20 * 60 * 1000) },
     });
     // The provider's late UP belongs to the episode that was closed by hand.
     await ingest(service.id, 'UPTIMEROBOT', 'resolve', 'k2');
@@ -65,7 +66,9 @@ describeIfRealDB('out-of-order resolve buffer and CI acknowledge', { timeout: 30
     await ingest(service.id, 'GITHUB', 'trigger', 'k4');
     const ack = await ingest(service.id, 'GITHUB', 'acknowledge', 'k4');
     expect(ack.action).toBe('ignored');
-    const incident = await testPrisma.incident.findFirstOrThrow({ where: { serviceId: service.id } });
+    const incident = await testPrisma.incident.findFirstOrThrow({
+      where: { serviceId: service.id },
+    });
     expect(incident.status).toBe('OPEN');
 
     // Non-CI acknowledgements still acknowledge.

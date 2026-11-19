@@ -67,6 +67,9 @@ function maxUrgency(current: IncidentUrgency, incoming: IncidentUrgency): Incide
 // Maximum description length to prevent DB insert failures
 const MAX_DESCRIPTION_LENGTH = 10000;
 const OUT_OF_ORDER_RESOLVE_WINDOW_MS = 5 * 60 * 1000;
+// A provider recovery can lag a manual resolve by far more than the buffer
+// window; a late recovery for a closed episode must not pre-resolve the next.
+const CLOSED_EPISODE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 // CI/CD success is a new run's state, never a late recovery of a pending failure.
 const CI_INTEGRATION_TYPES = new Set(['GITHUB', 'GITLAB', 'BITBUCKET', 'VERCEL']);
 
@@ -299,7 +302,7 @@ export async function processEvent(
           dedupKey: { in: candidateDedupKeys },
           status: 'RESOLVED',
           resolvedAt: {
-            gte: new Date(receivedAt.getTime() - OUT_OF_ORDER_RESOLVE_WINDOW_MS),
+            gte: new Date(receivedAt.getTime() - CLOSED_EPISODE_LOOKBACK_MS),
             lte: receivedAt,
           },
         },
