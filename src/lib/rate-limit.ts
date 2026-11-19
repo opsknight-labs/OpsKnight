@@ -58,23 +58,23 @@ export async function checkRateLimit(
 }
 
 /**
- * Read-only check of a checkRateLimit bucket: true while fewer than `limit` hits were
- * recorded in the current window. Fails closed on database error, like checkRateLimit.
+ * Give back one hit reserved with checkRateLimit in the window that ended at `resetAt`, so
+ * callers can reserve atomically up front and refund only the attempts that turned out fine.
+ * Best effort: a failed refund leaves the hit counted (fail closed).
  */
-export async function isUnderRateLimit(
+export async function releaseRateLimit(
   key: string,
-  limit: number,
-  windowMs: number
-): Promise<boolean> {
+  windowMs: number,
+  resetAt: number
+): Promise<void> {
+  const windowStart = Math.round(resetAt / windowMs) - 1;
   try {
-    const row = await prisma.rateLimit.findUnique({
-      where: { key: `${key}:${Math.floor(Date.now() / windowMs)}` },
-      select: { count: true },
+    await prisma.rateLimit.updateMany({
+      where: { key: `${key}:${windowStart}`, count: { gt: 0 } },
+      data: { count: { decrement: 1 } },
     });
-    return (row?.count ?? 0) < limit;
   } catch (error) {
-    logger.error('Rate limit DB peek failed, blocking request for safety', { error });
-    return false;
+    logger.warn('Rate limit refund failed; the reserved hit stays counted', { error });
   }
 }
 

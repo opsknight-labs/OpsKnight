@@ -438,24 +438,23 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     return null;
                   }
 
-                  const { checkRateLimit, isUnderRateLimit } = await import('@/lib/rate-limit');
+                  const { checkRateLimit, releaseRateLimit } = await import('@/lib/rate-limit');
                   const ACCOUNT_WINDOW_MS = 15 * 60 * 1000;
                   const accountKey = `auth:credentials:account:${email}`;
-                  // Only failed attempts count, so successful sign-ins (a responder switching
-                  // devices) never lock the account. The former per-email:ip bucket also counted
-                  // successes, and without a trusted proxy every client shares one ip.
-                  const accountAllowed = await isUnderRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
-                  const recordAccountFailure = () =>
-                    checkRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
-                  if (!accountAllowed) {
-                    const accountResetAt =
-                      (Math.floor(Date.now() / ACCOUNT_WINDOW_MS) + 1) * ACCOUNT_WINDOW_MS;
+                  // Reserve the attempt atomically before the password check, so a parallel burst
+                  // across replicas cannot all slip under the limit. Only failed attempts keep their
+                  // slot: a correct password refunds it, so responders switching devices never lock
+                  // the account.
+                  const accountReservation = await checkRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
+                  const refundAccountAttempt = () =>
+                    releaseRateLimit(accountKey, ACCOUNT_WINDOW_MS, accountReservation.resetAt);
+                  if (!accountReservation.allowed) {
                     await logLoginBlocked(
                       email,
                       ip,
                       userAgent,
                       'RATE_LIMITED',
-                      Math.max(0, accountResetAt - Date.now())
+                      Math.max(0, accountReservation.resetAt - Date.now())
                     );
                     return null;
                   }
@@ -485,7 +484,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   }
                   if (!user || !user.passwordHash) {
                     recordFailedAttempt(email, ip);
-                    await recordAccountFailure();
                     await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
                     logger.debug('[Auth-Debug] User not found or no password hash', {
                       component: 'auth:credentials',
@@ -503,7 +501,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   const isValid = await bcrypt.compare(password, user.passwordHash);
                   if (!isValid) {
                     const result = recordFailedAttempt(email, ip);
-                    await recordAccountFailure();
                     await logLoginFailed(
                       email,
                       ip,
@@ -525,6 +522,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     });
                     return null;
                   }
+
+                  await refundAccountAttempt();
 
                   if (user.status === 'DISABLED') {
                     // Only after the password proved who is asking, say why sign-in stopped.
