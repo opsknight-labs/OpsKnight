@@ -75,3 +75,69 @@ test('upgrades refuse the implicit old chart appVersion image', () => {
     /explicit tested image/
   );
 });
+
+function renderUpgrade(extraArgs) {
+  return parseAllDocuments(
+    execFileSync('helm', ['template', 'sso', chart, '--is-upgrade', ...extraArgs], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    })
+  )
+    .map(doc => doc.toJSON())
+    .filter(Boolean);
+}
+const hasGate = docs => docs.some(doc => doc.metadata?.name?.endsWith('auth-cutover'));
+
+test('auto mode fails safe and runs the gate when live Deployments cannot be read', () => {
+  // helm template has no cluster, so lookup returns nothing: the gate must stay.
+  assert.equal(hasGate(renderUpgrade(['--set', 'image.tag=2.1.0'])), true);
+  assert.equal(
+    hasGate(
+      renderUpgrade([
+        '--set',
+        'image.tag=2.1.0',
+        '--set',
+        'upgradeGates.authenticationCutover.mode=auto',
+      ])
+    ),
+    true
+  );
+});
+
+test('always mode keeps the gate on every upgrade', () => {
+  const docs = renderUpgrade([
+    '--set',
+    'image.tag=2.1.0',
+    '--set',
+    'upgradeGates.authenticationCutover.mode=always',
+  ]);
+  assert.equal(hasGate(docs), true);
+});
+
+test('never mode omits the gate but keeps the migration owner', () => {
+  const docs = renderUpgrade([
+    '--set',
+    'image.tag=2.1.0',
+    '--set',
+    'upgradeGates.authenticationCutover.mode=never',
+  ]);
+  assert.equal(hasGate(docs), false);
+  assert.ok(docs.some(doc => doc.kind === 'Job' && doc.metadata.name.endsWith('migration')));
+});
+
+test('never mode does not demand a pinned image for the skipped gate', () => {
+  assert.doesNotThrow(() =>
+    renderUpgrade(['--set', 'upgradeGates.authenticationCutover.mode=never'])
+  );
+});
+
+test('an unknown gate mode is rejected', () => {
+  assert.throws(() =>
+    renderUpgrade([
+      '--set',
+      'image.tag=2.1.0',
+      '--set',
+      'upgradeGates.authenticationCutover.mode=sometimes',
+    ])
+  );
+});

@@ -8,6 +8,9 @@ import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { decryptProviderConfig, encryptProviderConfig } from '@/lib/encrypted-provider-config';
 import { notificationProviderKeySchema } from '@/lib/notifications/provider-schema';
 import { saveNotificationProvider } from '@/lib/notifications/providers';
+import { AppError } from '@/lib/errors';
+import { SettingsChangedMutationError } from '@/lib/settings-result';
+import { settingsActionFailure, type SettingsActionFailure } from '@/lib/settings-action-errors';
 
 const SUPPORTED_PROVIDERS = new Set([
   'twilio',
@@ -19,20 +22,23 @@ const SUPPORTED_PROVIDERS = new Set([
   'web-push',
 ]);
 
-class SettingsChangedError extends Error {
-  readonly code = 'SETTINGS_CHANGED';
+export type UpdateNotificationProviderResult =
+  | { success: true; error: null; updatedAt: string }
+  | SettingsActionFailure;
 
-  constructor() {
-    super('Settings changed elsewhere. Reload before saving.');
-    this.name = 'SettingsChangedError';
-  }
+export type GenerateVapidKeysResult =
+  | { success: true; error: null; publicKey: string; subject: string; updatedAt: string }
+  | SettingsActionFailure;
+
+function invalidRequest(userMessage: string): AppError {
+  return new AppError({ code: 'VALIDATION_FAILED', userMessage });
 }
 
 function parseExpectedUpdatedAt(value: string | null | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    throw new Error('Invalid settings revision. Reload the page and try again.');
+    throw invalidRequest('Invalid settings revision. Reload the page and try again.');
   }
   return parsed;
 }
@@ -65,6 +71,9 @@ async function recoverableExistingConfig(provider: string, config: Record<string
  * Existing records require the revision returned by getNotificationProviders().
  * The conditional update prevents a stale administrator from silently replacing
  * a newer provider configuration. Mutation and audit are committed together.
+ *
+ * Failures are returned, never thrown: Next.js redacts thrown server-action
+ * errors in production (React error #441), which hid the real message.
  */
 export async function updateNotificationProvider(
   providerId: string | null,
@@ -72,33 +81,59 @@ export async function updateNotificationProvider(
   enabled: boolean,
   config: Record<string, unknown>,
   expectedUpdatedAt?: string | null
-): Promise<{ success: true; updatedAt: string }> {
+): Promise<UpdateNotificationProviderResult> {
+  try {
+    const updatedAt = await persistNotificationProvider(
+      providerId,
+      provider,
+      enabled,
+      config,
+      expectedUpdatedAt
+    );
+    return { success: true, error: null, updatedAt };
+  } catch (error) {
+    return settingsActionFailure(error, {
+      operation: 'notification_provider.save',
+      fallback: 'Failed to save the provider configuration.',
+    });
+  }
+}
+
+async function persistNotificationProvider(
+  providerId: string | null,
+  provider: string,
+  enabled: boolean,
+  config: Record<string, unknown>,
+  expectedUpdatedAt: string | null | undefined
+): Promise<string> {
   await assertAdmin();
   const normalizedProvider = provider.trim().toLowerCase();
   const parsedProvider = notificationProviderKeySchema.safeParse(normalizedProvider);
   if (!parsedProvider.success || !SUPPORTED_PROVIDERS.has(normalizedProvider)) {
-    throw new Error(`Unsupported notification provider '${provider}'.`);
+    throw invalidRequest(`Unsupported notification provider '${provider}'.`);
   }
   const user = await getCurrentUser();
   const existingProvider = providerId
     ? await prisma.notificationProvider.findUnique({ where: { id: providerId } })
     : await prisma.notificationProvider.findUnique({ where: { provider: normalizedProvider } });
   if (providerId && !existingProvider) {
-    throw new SettingsChangedError();
+    throw new SettingsChangedMutationError();
   }
   if (existingProvider && existingProvider.provider !== normalizedProvider) {
-    throw new Error('Provider identity does not match the stored configuration. Reload the page.');
+    throw invalidRequest(
+      'Provider identity does not match the stored configuration. Reload the page.'
+    );
   }
 
   const expectedTimestamp = parseExpectedUpdatedAt(expectedUpdatedAt);
   if (existingProvider && !expectedTimestamp) {
-    throw new Error('Settings revision is required. Reload the page and try again.');
+    throw invalidRequest('Settings revision is required. Reload the page and try again.');
   }
   if (!existingProvider && expectedTimestamp) {
-    throw new SettingsChangedError();
+    throw new SettingsChangedMutationError();
   }
   if (existingProvider && expectedTimestamp?.getTime() !== existingProvider.updatedAt.getTime()) {
-    throw new SettingsChangedError();
+    throw new SettingsChangedMutationError();
   }
   const result = await saveNotificationProvider({
     provider: parsedProvider.data,
@@ -109,7 +144,7 @@ export async function updateNotificationProvider(
   });
   revalidatePath('/settings/system');
   revalidatePath('/settings/notifications');
-  return { success: true, updatedAt: result.updatedAt };
+  return result.updatedAt;
 }
 
 export async function generateVapidKeys(options?: {
@@ -117,11 +152,24 @@ export async function generateVapidKeys(options?: {
   rotate?: boolean;
   keepPrevious?: boolean;
   expectedUpdatedAt?: string | null;
-}): Promise<{
-  publicKey: string;
-  subject: string;
-  updatedAt: string;
-}> {
+}): Promise<GenerateVapidKeysResult> {
+  try {
+    const generated = await rotateVapidKeys(options);
+    return { success: true, error: null, ...generated };
+  } catch (error) {
+    return settingsActionFailure(error, {
+      operation: 'notification_provider.vapid_keys',
+      fallback: 'Failed to generate VAPID keys.',
+    });
+  }
+}
+
+async function rotateVapidKeys(options?: {
+  subject?: string;
+  rotate?: boolean;
+  keepPrevious?: boolean;
+  expectedUpdatedAt?: string | null;
+}): Promise<{ publicKey: string; subject: string; updatedAt: string }> {
   await assertAdmin();
 
   const user = await getCurrentUser();
@@ -130,10 +178,10 @@ export async function generateVapidKeys(options?: {
   });
   const expectedRevision = parseExpectedUpdatedAt(options?.expectedUpdatedAt);
   if (existing && !expectedRevision) {
-    throw new Error('Settings revision is required. Reload the page and try again.');
+    throw invalidRequest('Settings revision is required. Reload the page and try again.');
   }
   if (!existing && expectedRevision) {
-    throw new SettingsChangedError();
+    throw new SettingsChangedMutationError();
   }
 
   const recovered = await recoverableExistingConfig(
@@ -186,7 +234,7 @@ export async function generateVapidKeys(options?: {
           updatedBy: user.id,
         },
       });
-      if (updateResult.count !== 1) throw new SettingsChangedError();
+      if (updateResult.count !== 1) throw new SettingsChangedMutationError();
       id = existing.id;
     } else {
       const created = await tx.notificationProvider.create({

@@ -10,6 +10,7 @@ import {
   SECRET_MASK,
   mergeSensitiveProviderFields,
   getProviderSensitiveFields,
+  stripMaskedPresenceFlags,
 } from '@/lib/encrypted-provider-config';
 import { logAudit } from '@/lib/audit';
 import { runSerializableTransaction } from '@/lib/db-utils';
@@ -138,7 +139,11 @@ export async function saveNotificationProvider(input: {
   expectedRevision: number | null;
   client?: Prisma.TransactionClient;
 }) {
-  const suppliedConfig = parseConfig(input.provider, input.config);
+  // The settings form sends back the masked view it was given; drop its read-only markers.
+  const suppliedConfig = parseConfig(
+    input.provider,
+    stripMaskedPresenceFlags(input.provider, input.config)
+  );
   const existing = await prisma.notificationProvider.findUnique({
     where: { provider: input.provider },
   });

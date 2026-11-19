@@ -49,6 +49,16 @@ describe('Slack app manifest', () => {
     expect(required).toContain('channels:history'); // read the pinned message
   });
 
+  it('requests the commands scope for the slash command it declares', () => {
+    // Slack rejects a manifest that defines slash_commands without `commands`,
+    // and an OAuth install without it cannot receive /incident.
+    const m = buildSlackAppManifest({ baseUrl: BASE });
+    expect(m.features.slash_commands.length).toBeGreaterThan(0);
+    expect(m.oauth_config.scopes.bot).toContain('commands');
+    expect([...SLACK_REQUIRED_BOT_SCOPES]).toContain('commands');
+    expect(SLACK_BOT_SCOPES).toContain('commands');
+  });
+
   it('advertises only slash subcommands that exist', () => {
     const hint = buildSlackAppManifest({ baseUrl: BASE }).features.slash_commands[0].usage_hint;
     for (const real of ['ack', 'resolve', 'note', 'who', 'postmortem', 'help']) {
@@ -84,7 +94,11 @@ describe('Slack app manifest', () => {
         'groups:write',
         'users:read.email',
       ];
-      expect(findMissingRequiredScopes(granted)).toEqual(['channels:history', 'reactions:read']);
+      expect(findMissingRequiredScopes(granted)).toEqual([
+        'channels:history',
+        'reactions:read',
+        'commands',
+      ]);
     });
 
     it('treats a missing scope list as everything missing', () => {

@@ -314,6 +314,18 @@ migrations:
   job:
     enabled: true
 
+# Pre-upgrade gate that requires every application Deployment at zero replicas
+# (and no remaining pods) before migrations run, so an older runtime never
+# overlaps a newer schema.
+#   auto   - run only when the upgrade changes the application image. Values-only
+#            upgrades skip it. If the live Deployments cannot be read (helm
+#            template, --dry-run) the gate runs.
+#   always - run on every upgrade (behaviour up to 2.1.2).
+#   never  - never run; you guarantee the runtime is stopped for image upgrades.
+upgradeGates:
+  authenticationCutover:
+    mode: auto
+
 networkPolicy:
   enabled: false
   ingressNamespaceLabels:

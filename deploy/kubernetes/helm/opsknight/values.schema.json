@@ -322,6 +322,19 @@
         }
       }
     },
+    "upgradeGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "authenticationCutover": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "type": "string", "enum": ["auto", "always", "never"] }
+          }
+        }
+      }
+    },
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,

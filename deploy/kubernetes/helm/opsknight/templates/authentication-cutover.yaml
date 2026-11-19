@@ -1,10 +1,52 @@
 {{- if .Release.IsUpgrade }}
+{{- $base := include "opsknight.fullname" . }}
+{{- $deployments := list $base (printf "%s-web" $base) (printf "%s-scheduler" $base) (printf "%s-general-worker" $base) (printf "%s-critical-worker" $base) (printf "%s-bulk-worker" $base) (printf "%s-runbook-worker" $base) (printf "%s-status-projector" $base) }}
+{{- /*
+  The stopped-runtime gate protects migrations from overlapping with pods of an
+  older application version. It is only needed when the upgrade changes the
+  application image; a values-only upgrade (same image) runs no new migrations,
+  so requiring every Deployment at zero replicas there forces needless downtime
+  and makes GitOps controllers loop between upgrade and rollback.
+
+  mode=auto   (default) run only when a live Deployment's app container image
+              differs from the target image. Fails safe: if no Deployment can
+              be read (helm template, --dry-run, RBAC) the gate runs.
+  mode=always run on every upgrade (behaviour up to 2.1.2).
+  mode=never  never run; the operator guarantees no overlap.
+*/}}
+{{- $gateValues := (.Values.upgradeGates | default dict).authenticationCutover | default dict }}
+{{- $mode := $gateValues.mode | default "auto" }}
+{{- if not (has $mode (list "auto" "always" "never")) }}
+{{- fail (printf "upgradeGates.authenticationCutover.mode must be auto, always or never (got %q)" $mode) }}
+{{- end }}
+{{- $runGate := eq $mode "always" }}
+{{- if eq $mode "auto" }}
+{{- $targetImage := include "opsknight.image" . }}
+{{- $foundDeployment := false }}
+{{- range $deployments }}
+{{- $live := lookup "apps/v1" "Deployment" $.Release.Namespace . }}
+{{- if $live }}
+{{- $foundDeployment = true }}
+{{- $liveImage := "" }}
+{{- range $live.spec.template.spec.containers }}
+{{- if eq .name $.Chart.Name }}
+{{- $liveImage = .image }}
+{{- end }}
+{{- end }}
+{{- if ne $liveImage $targetImage }}
+{{- $runGate = true }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if not $foundDeployment }}
+{{- $runGate = true }}
+{{- end }}
+{{- end }}
+{{- if $runGate }}
 {{- if and (not .Values.image.tag) (not .Values.image.digest) }}
 {{- fail "Authentication cutover upgrades require an explicit tested image.tag or image.digest containing the cutover gate script" }}
 {{- end }}
 {{- $name := printf "%s-auth-cutover" (include "opsknight.fullname" .) | trunc 63 | trimSuffix "-" }}
-{{- $base := include "opsknight.fullname" . }}
-{{- $deployments := list $base (printf "%s-web" $base) (printf "%s-scheduler" $base) (printf "%s-general-worker" $base) (printf "%s-critical-worker" $base) (printf "%s-bulk-worker" $base) (printf "%s-runbook-worker" $base) (printf "%s-status-projector" $base) }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -87,4 +129,5 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 200m, memory: 128Mi }
+{{- end }}
 {{- end }}
