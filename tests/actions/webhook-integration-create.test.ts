@@ -16,6 +16,7 @@ vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 vi.mock('@/lib/network-security', () => ({ assertSafeOutboundUrl: vi.fn() }));
+vi.mock('@/lib/webhook-url-policy', () => ({ allowsInsecureWebhookUrls: vi.fn(async () => false) }));
 vi.mock('@/lib/unique-names', () => ({
   assertWebhookIntegrationNameAvailable: vi.fn(async (name: string) => name),
   UniqueNameConflictError: class extends Error {},
@@ -39,7 +40,7 @@ describe('createWebhookIntegration', () => {
     await createWebhookIntegration('svc-1', form());
     expect(mocks.tx.service.update).toHaveBeenCalledWith({
       where: { id: 'svc-1' },
-      data: { serviceNotificationChannels: ['SLACK', 'WEBHOOK'] },
+      data: { serviceNotificationChannels: { push: 'WEBHOOK' } },
     });
   });
 
