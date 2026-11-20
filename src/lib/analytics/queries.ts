@@ -304,35 +304,49 @@ export async function queryNoise(
   scope: AnalyticsScope,
   window: AnalyticsWindow
 ): Promise<NoiseSection> {
-  const cte = metricRowsCte(scope, window);
-  const [totals, services, titles] = await Promise.all([
-    run<Array<{ incidents: number; resolved: number; auto_resolved: number; alerts: number }>>(
-      Prisma.sql`
-        WITH ${cte}
-        SELECT COUNT(*)::int AS incidents,
-          COUNT(*) FILTER (WHERE status = 'RESOLVED'::"IncidentStatus")::int AS resolved,
-          COUNT(*) FILTER (WHERE auto_resolved)::int AS auto_resolved,
-          (SELECT COUNT(*) FROM "Alert" a WHERE a."incidentId" IN (SELECT id FROM metric_rows))::int AS alerts
-        FROM metric_rows`
+  // One statement: the per-incident rows are built once, alerts are counted per
+  // incident (no COUNT DISTINCT over the alert fan-out), lists come back as JSON.
+  const [row] = await run<
+    Array<{
+      incidents: number;
+      resolved: number;
+      auto_resolved: number;
+      alerts: number;
+      services: Array<{ id: string; name: string; alerts: number; incidents: number }>;
+      titles: Array<{ title: string; count: number; last_seen: string }>;
+    }>
+  >(Prisma.sql`
+    WITH ${metricRowsCte(scope, window)},
+    alert_counts AS (
+      SELECT a."incidentId" AS id, COUNT(*)::int AS n
+      FROM "Alert" a WHERE a."incidentId" IN (SELECT id FROM metric_rows)
+      GROUP BY 1
     ),
-    run<Array<{ id: string; name: string; alerts: number; incidents: number }>>(Prisma.sql`
-      WITH ${cte}
-      SELECT m."serviceId" AS id, s.name, COUNT(DISTINCT m.id)::int AS incidents, COUNT(a.id)::int AS alerts
-      FROM metric_rows m
-      JOIN "Service" s ON s.id = m."serviceId"
-      LEFT JOIN "Alert" a ON a."incidentId" = m.id
-      GROUP BY 1, 2 ORDER BY alerts DESC, incidents DESC LIMIT 5`),
-    run<Array<{ title: string; count: number; last_seen: Date }>>(Prisma.sql`
-      WITH ${cte}
-      SELECT MIN(title) AS title, COUNT(*)::int AS count, MAX("createdAt") AS last_seen
-      FROM metric_rows GROUP BY lower(btrim(title))
-      HAVING COUNT(*) > 1 ORDER BY count DESC, last_seen DESC LIMIT 8`),
-  ]);
-  const t = totals[0];
-  const incidents = n(t?.incidents);
-  const resolved = n(t?.resolved);
-  const autoResolved = n(t?.auto_resolved);
-  const alerts = n(t?.alerts);
+    per_incident AS (
+      SELECT m."serviceId", m.status, m.auto_resolved, COALESCE(ac.n, 0) AS alerts
+      FROM metric_rows m LEFT JOIN alert_counts ac ON ac.id = m.id
+    ),
+    by_service AS (
+      SELECT "serviceId", COUNT(*)::int AS incidents, SUM(alerts)::int AS alerts
+      FROM per_incident GROUP BY 1
+    )
+    SELECT
+      (SELECT COUNT(*) FROM per_incident)::int AS incidents,
+      (SELECT COUNT(*) FROM per_incident WHERE status = 'RESOLVED'::"IncidentStatus")::int AS resolved,
+      (SELECT COUNT(*) FROM per_incident WHERE auto_resolved)::int AS auto_resolved,
+      (SELECT COALESCE(SUM(alerts), 0) FROM per_incident)::int AS alerts,
+      (SELECT COALESCE(json_agg(t), '[]'::json) FROM (
+        SELECT b."serviceId" AS id, s.name, b.alerts, b.incidents
+        FROM by_service b JOIN "Service" s ON s.id = b."serviceId"
+        WHERE b.alerts > 0 ORDER BY b.alerts DESC, b.incidents DESC LIMIT 5) t) AS services,
+      (SELECT COALESCE(json_agg(t), '[]'::json) FROM (
+        SELECT MIN(title) AS title, COUNT(*)::int AS count, MAX("createdAt") AS last_seen
+        FROM metric_rows GROUP BY lower(btrim(title))
+        HAVING COUNT(*) > 1 ORDER BY count DESC, last_seen DESC LIMIT 8) t) AS titles`);
+  const incidents = n(row?.incidents);
+  const resolved = n(row?.resolved);
+  const autoResolved = n(row?.auto_resolved);
+  const alerts = n(row?.alerts);
   return {
     alerts,
     incidents,
@@ -340,13 +354,17 @@ export async function queryNoise(
     resolved,
     autoResolved,
     autoResolvedRate: resolved > 0 ? (autoResolved / resolved) * 100 : null,
-    noisyServices: services
-      .filter(row => n(row.alerts) > 0)
-      .map(row => ({ id: row.id, name: row.name, alerts: n(row.alerts), incidents: n(row.incidents) })),
-    recurringTitles: titles.map(row => ({
-      title: row.title,
-      count: n(row.count),
-      lastSeen: new Date(row.last_seen).toISOString(),
+    noisyServices: (row?.services ?? []).map(service => ({
+      id: service.id,
+      name: service.name,
+      alerts: n(service.alerts),
+      incidents: n(service.incidents),
+    })),
+    recurringTitles: (row?.titles ?? []).map(title => ({
+      title: title.title,
+      count: n(title.count),
+      // json_agg renders the zone-less UTC timestamp without an offset.
+      lastSeen: new Date(`${title.last_seen}Z`).toISOString(),
     })),
   };
 }
