@@ -42,6 +42,10 @@ export const OPS_INSIGHT_AREAS = {
   postmortems: { setting: 'opsInsightsPostmortemsEnabled', label: 'Postmortems' },
   runbooks: { setting: 'opsInsightsRunbooksEnabled', label: 'Runbooks' },
   notifications: { setting: 'opsInsightsNotificationsEnabled', label: 'Notifications' },
+  intelligence: {
+    setting: 'opsInsightsIntelligenceEnabled',
+    label: 'Metric early warnings and suggestion acceptance',
+  },
 } as const;
 export type OpsInsightArea = keyof typeof OPS_INSIGHT_AREAS;
 export const OPS_INSIGHT_AREA_KEYS = Object.keys(OPS_INSIGHT_AREAS) as OpsInsightArea[];

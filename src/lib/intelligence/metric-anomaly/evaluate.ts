@@ -10,6 +10,7 @@ import type { RawSeries, TimeWindow } from '../connectors/normalize';
 import { contextFor, loadConnectionForLane } from '../connectors/service';
 import { reanalyzeAfterLateChange } from '../changes/service';
 import { withDbBudget } from '../jobs/db-budget';
+import { enqueueOpsInsights } from '../ops-insights/handlers';
 import type { ClaimedWorkItem } from '../jobs/work-queue';
 import {
   METRIC_EVALUATION_CONCURRENCY,
@@ -352,6 +353,10 @@ async function evaluate(
     judged === 0 ? METRIC_EVALUATION_STATUS.THIN_BASELINE : METRIC_EVALUATION_STATUS.OK;
   const written = await record(item, template, settings, now, status, strongest);
   if (written === null) return { outcome: 'stale', status, anomalies: 0, created: 0 };
+  // A new deviation refreshes the service's early-warning insight now rather than at its daily recompute.
+  // Queued only while operations insights are on; the insight itself never pages.
+  if (written.created > 0)
+    await enqueueOpsInsights({ type: 'SERVICE', id: template.serviceId }).catch(() => 0);
   return { outcome: 'evaluated', status, anomalies: strongest.length, created: written.created };
 }
 

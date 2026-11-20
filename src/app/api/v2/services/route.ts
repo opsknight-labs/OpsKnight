@@ -21,6 +21,7 @@ import { AppError } from '@/lib/errors';
 import { assertServicePolicyAssignableForApi } from '@/lib/automation/service-policy';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { seedShadowServicePolicy } from '@/lib/intelligence/settings/service-defaults';
 
 export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
@@ -183,6 +184,11 @@ export const POST = withV2Observability(async function POST(req: NextRequest) {
     );
 
     const created = execution.value;
+    await seedShadowServicePolicy(created.id, {
+      actorId: actor.id,
+      source: 'API',
+      apiClientId: apiKey.id,
+    });
 
     const dto = {
       id: created.id,

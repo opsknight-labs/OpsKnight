@@ -5184,6 +5184,7 @@ model IntelligenceSettings {
   opsInsightsPostmortemsEnabled   Boolean  @default(false)
   opsInsightsRunbooksEnabled      Boolean  @default(false)
   opsInsightsNotificationsEnabled Boolean  @default(false)
+  opsInsightsIntelligenceEnabled  Boolean  @default(false)
   /// A run fixed its incident when the incident resolved within this many minutes after the run finished.
   runbookFixWindowMinutes     Int      @default(120)
   /// Small deterministic helpers (create-form suggestions, status-update drafts, knowledge search in the

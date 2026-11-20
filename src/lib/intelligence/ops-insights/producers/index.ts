@@ -9,6 +9,8 @@ import { repeatCauseProducer } from './postmortem-repeat-cause';
 import { missingRunbookProducer } from './missing-runbook';
 import { runbookHealthProducer } from './runbook-health';
 import { serviceNoiseProducer, userNoiseProducer } from './notification-noise';
+import { acceptanceDriftProducer } from './acceptance-drift';
+import { metricEarlyWarningProducer } from './metric-early-warning';
 
 /**
  * The kinds registry. To add a kind: add one file in this directory that exports an OpsInsightProducer,
@@ -26,4 +28,6 @@ export const OPS_INSIGHT_PRODUCERS: readonly AnyOpsInsightProducer[] = [
   missingRunbookProducer,
   userNoiseProducer,
   serviceNoiseProducer,
+  acceptanceDriftProducer,
+  metricEarlyWarningProducer,
 ];
