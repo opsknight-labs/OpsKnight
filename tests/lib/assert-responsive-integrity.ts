@@ -202,8 +202,12 @@ export async function checkResponsiveIntegrity(
           const isChromeNavLink =
             el.tagName === 'A' && Boolean(el.closest('.mobile-header, .mobile-nav'));
           const isExcluded = opts.exclusions.some(sel => el.matches(sel));
+          // Radix Select renders a visually hidden native <select aria-hidden tabindex=-1> for form
+          // submission; nobody can tap or focus it, so it is not a touch target (its visible trigger is).
+          const isInert =
+            el.getAttribute('aria-hidden') === 'true' && el.getAttribute('tabindex') === '-1';
 
-          if ((isButton || isInput || isChromeNavLink) && !isExcluded) {
+          if ((isButton || isInput || isChromeNavLink) && !isExcluded && !isInert) {
             // Check computed or bounding dimensions
             if (rect.height < 44 - opts.tolerance || rect.width < 44 - opts.tolerance) {
               // Only report if it's within viewport bounds
