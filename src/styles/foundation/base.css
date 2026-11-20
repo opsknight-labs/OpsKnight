@@ -422,7 +422,7 @@ select option {
         --ui-secondary-foreground: 222.2 47.4% 11.2%;
         --ui-accent: 210 40% 96.1%;
         --ui-accent-foreground: 222.2 47.4% 11.2%;
-        --ui-destructive: 346.8 77.2% 49.8%;
+        --ui-destructive: 346.8 77.2% 48%;
         --ui-destructive-foreground: 210 40% 98%;
         --ui-ring: 215.3 25% 26.7%;
         --ink-50: 248 250 252;

@@ -1082,30 +1082,7 @@
   padding: 0.75rem 0.875rem;
 }
 
-/* Compact table cells - exclude login */
-table:not(.login-card table) th,
-table:not(.login-card table) td {
-  padding: 0.5rem 0.625rem;
-  font-size: 0.875rem;
-}
-
-/* Compact form inputs - exclude login */
-input[type="text"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
-input[type="email"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
-input[type="password"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
-input[type="number"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
-select:not(.login-card select),
-textarea:not(.login-card textarea) {
-  padding: 0.5rem 0.625rem;
-  font-size: 0.875rem;
-}
-
-/* Compact buttons - exclude login, toasts and icon-only buttons ([data-icon-button]),
-   whose fixed square size this padding would collapse to zero */
-button:not(.login-btn):not(.login-btn-primary):not(.login-btn-sso):not(.login-password-toggle):not(.login-card button):not([data-sonner-toaster] *):not([data-icon-button]) {
-  padding: 0.375rem 0.875rem;
-  font-size: 0.875rem;
-}
+/* Buttons, table cells and form inputs size themselves; no element-wide overrides here. */
 
 /* Compact cards and panels - exclude login */
 .panel:not(.login-card *),
@@ -1115,7 +1092,6 @@ button:not(.login-btn):not(.login-btn-primary):not(.login-btn-sso):not(.login-pa
 }
 
 /* Compact section gaps - exclude login */
-section:not(.login-brand):not(.login-form):not(.login-card section),
 .section:not(.login-card .section) {
   gap: 0.75rem;
   margin-bottom: 0.75rem;
@@ -1181,43 +1157,9 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
     padding: 0.75rem 0.875rem !important;
   }
 
-  /* Compact table cells - exclude login */
-  table:not(.login-card table) th,
-  table:not(.login-card table) td {
-    padding: 0.5rem 0.625rem !important;
-    font-size: 0.875rem !important;
-  }
-
-  /* Compact form inputs - exclude login */
-  input[type="text"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
-  input[type="email"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
-  input[type="password"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
-  input[type="number"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
-  select:not(.login-card select),
-  textarea:not(.login-card textarea) {
-    padding: 0.5rem 0.625rem !important;
-    font-size: 0.875rem !important;
-  }
-
-  /* Compact buttons - exclude login, toasts and icon-only buttons ([data-icon-button]),
-   whose fixed square size this padding would collapse to zero */
-  button:not(.login-btn):not(.login-btn-primary):not(.login-btn-sso):not(.login-password-toggle):not(.login-card button):not([data-sonner-toaster] *):not([data-icon-button]) {
-    padding: 0.375rem 0.875rem !important;
-    font-size: 0.875rem !important;
-  }
-
-  /* Reduce heading sizes slightly - exclude login */
-  h1:not(.login-brand-title):not(.login-title):not(.login-card h1) {
-    font-size: clamp(1.5rem, 2vw, 2rem) !important;
-  }
-
-  h2:not(.login-title):not(.login-card h2):not([class*="text-xs"]):not([class*="text-sm"]):not([class*="text-base"]):not([class*="text-lg"]):not([class*="text-xl"]) {
-    font-size: clamp(1.25rem, 1.75vw, 1.75rem) !important;
-  }
-
-  h3:not(.login-card h3):not([class*="text-xs"]):not([class*="text-sm"]):not([class*="text-base"]):not([class*="text-lg"]):not([class*="text-xl"]) {
-    font-size: clamp(1rem, 1.5vw, 1.5rem) !important;
-  }
+  /* No element-wide overrides here (buttons, table cells, inputs, headings, list items, inline
+     grids): they forced one size on every component at laptop widths. Components own their sizing;
+     only the named shell classes below are compacted. */
 
   /* Compact cards and panels - exclude login */
   .panel:not(.login-card *),
@@ -1227,21 +1169,9 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
   }
 
   /* Compact section gaps - exclude login */
-  section:not(.login-brand):not(.login-form):not(.login-card section),
   .section:not(.login-card .section) {
     gap: 0.75rem !important;
     margin-bottom: 0.75rem !important;
-  }
-
-  /* Compact grid gaps - exclude login */
-  [style*="grid"]:not(.login-card):not(.login-features):not(.login-card [style*="grid"]) {
-    gap: 0.75rem !important;
-  }
-
-  /* Compact unstyled list items - preserve component padding and list cards */
-  li:not(.login-card li):not([data-sonner-toaster] *):not([class*="px-"]):not([class*="p-"]):not([class*="pl-"]):not([class*="pr-"]):not(ul.divide-y li):not(ol.divide-y li) {
-    padding-top: 0.375rem !important;
-    padding-bottom: 0.375rem !important;
   }
 
   /* Reduce hero section padding - exclude login */

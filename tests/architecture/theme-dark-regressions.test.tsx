@@ -65,9 +65,8 @@ describe('destructive token contrast (WCAG AA, 4.5:1)', () => {
     expect(contrast(dark, 'destructive-foreground', 'destructive')).toBeGreaterThanOrEqual(4.5);
   });
 
-  // Known gap: light --ui-destructive (346.8 77.2% 49.8%) on --ui-background is 4.48:1.
-  // `it.fails` flips to a failure once the token is darkened; then make it a plain `it`.
-  it.fails('light destructive reads on the light background', () => {
+  // Light --ui-destructive darkened to 48% lightness so it clears 4.5:1 on --ui-background.
+  it('light destructive reads on the light background', () => {
     expect(contrast(light, 'destructive', 'background')).toBeGreaterThanOrEqual(4.5);
   });
 });
