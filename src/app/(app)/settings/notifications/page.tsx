@@ -4,6 +4,8 @@ import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHea
 import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import { cn } from '@/lib/utils';
 import SystemNotificationSettings from '@/components/settings/SystemNotificationSettings';
+import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
+import { isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import { getNotificationProviders } from '@/app/(app)/settings/system/actions';
 import {
   ShieldCheck,
@@ -330,6 +332,9 @@ export default async function NotificationProviderSettingsPage() {
 
       {/* 3. Categorized Provider Gateway Cards */}
       <SystemNotificationSettings providers={providers} />
+
+      {/* 4. Workspace-wide scheduled emails */}
+      <WeeklyDigestToggle scope="workspace" enabled={await isWeeklyDigestEnabled()} />
     </div>
   );
 }

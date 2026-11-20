@@ -14,6 +14,7 @@ import {
   Spacer,
   Strong,
   Table,
+  TextLink,
   type InfoItem,
 } from '../components';
 import { FONT_BODY, FONT_DISPLAY, SURFACE, toneTokens } from '../tokens';
@@ -42,6 +43,10 @@ export type WeeklyService = {
 export type WeeklyResponder = { name: string; incidents: string; offHours: string; hours: string };
 
 export type AnalyticsWeeklyEmailProps = {
+  /** 'view': a saved view the user subscribed to. 'digest': the default summary everyone gets. */
+  kind?: 'view' | 'digest';
+  /** Where the recipient manages this email (digest: profile notifications). */
+  manageUrl?: string;
   userName: string;
   viewName: string;
   viewUrl: string;
@@ -272,6 +277,8 @@ function DataTable({
 }
 
 export function AnalyticsWeeklyEmail({
+  kind = 'view',
+  manageUrl,
   userName,
   viewName,
   viewUrl,
@@ -286,22 +293,40 @@ export function AnalyticsWeeklyEmail({
   health,
 }: AnalyticsWeeklyEmailProps) {
   const incidents = kpis[0]?.value ?? '0';
+  const digest = kind === 'digest';
   return (
     <EmailLayout
       title={`Weekly analytics: ${viewName}`}
       preview={`${viewName}: ${incidents} incidents last week. ${highlights[0] ?? ''}`}
-      footer={<EmailFooter reason="You subscribed to this weekly analytics report in" />}
+      footer={
+        <EmailFooter
+          reason={
+            digest
+              ? 'You get this weekly summary because you have analytics access in'
+              : 'You subscribed to this weekly analytics report in'
+          }
+        />
+      }
     >
       <HeaderBand
         tone="neutral"
-        eyebrow="Weekly analytics report"
+        eyebrow={digest ? 'Weekly summary' : 'Weekly analytics report'}
         title={viewName}
         subtitle={`${periodLabel} · ${timeZone}`}
       />
       <Content>
         <Paragraph>
-          Hi {userName}, here is last week for <Strong>{viewName}</Strong>, compared with the week
-          before.
+          {digest ? (
+            <>
+              Hi {userName}, here is last week across the services and teams you can see, compared
+              with the week before.
+            </>
+          ) : (
+            <>
+              Hi {userName}, here is last week for <Strong>{viewName}</Strong>, compared with the
+              week before.
+            </>
+          )}
         </Paragraph>
 
         <Callout tone={attention ? 'elevated' : 'ok'} title={attention ? 'Needs attention' : 'All clear'}>
@@ -367,8 +392,16 @@ export function AnalyticsWeeklyEmail({
         <LinkFallback href={viewUrl} />
         <Paragraph muted small>
           Off-hours counts incidents that reached each responder in their evening or overnight
-          (their own timezone). To stop this email, open the view and turn off Weekly email in the
-          Views menu.
+          (their own timezone).{' '}
+          {digest ? (
+            <>
+              To stop this summary, turn off Weekly analytics summary in{' '}
+              {manageUrl ? <TextLink href={manageUrl}>your notification settings</TextLink> : 'your notification settings'}, or
+              use your mail app&apos;s Unsubscribe.
+            </>
+          ) : (
+            'To stop this email, open the view and turn off Weekly email in the Views menu.'
+          )}
         </Paragraph>
       </Content>
     </EmailLayout>

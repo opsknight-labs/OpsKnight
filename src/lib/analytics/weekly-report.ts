@@ -8,7 +8,11 @@ import {
 } from '@/emails/templates/analytics-weekly';
 import { renderEmail } from '@/emails/render';
 import { resolveUserActor } from '@/lib/authorization-actors';
-import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import {
+  AUTHORIZATION_ACTIONS,
+  authorize,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
@@ -206,6 +210,64 @@ export function buildWeeklyReportProps(input: {
 }
 
 /**
+ * The one way to produce a weekly email: section data for `query` over last calendar week,
+ * read as `actor` (their access, their numbers), rendered with the shared template.
+ * `empty` is true when there is nothing to report (no incidents this or last week, none open).
+ */
+export async function composeWeeklyEmail(input: {
+  actor: AuthorizationActor;
+  userName: string;
+  timeZone: string | null | undefined;
+  query: string;
+  name: string;
+  now: Date;
+  kind: 'view' | 'digest';
+  manageUrl?: string;
+}): Promise<{ html: string; text: string; incidents: number; empty: boolean }> {
+  const timeZone = normalizeContractTimeZone(input.timeZone);
+  const params = weeklyReportParams(input.query, input.now, timeZone);
+  const context = await createAnalyticsContext(input.actor, params, timeZone);
+  const [kpis, services, trend, responders, noise, followThrough] = await Promise.all([
+    getAnalyticsSection(context, 'kpis'),
+    getAnalyticsSection(context, 'services'),
+    getAnalyticsSection(context, 'trend'),
+    getAnalyticsSection(context, 'responders'),
+    getAnalyticsSection(context, 'noise'),
+    getAnalyticsSection(context, 'followThrough'),
+  ]);
+  // Calendar-day keys at UTC midnight: format in UTC so the dates don't shift.
+  const day = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  const lastDay = new Date(params.to!.getTime() - DAY_MS);
+  const periodLabel = `${day.format(params.from!)} – ${day.format(lastDay)}, ${lastDay.getUTCFullYear()}`;
+  const viewUrl = `${getBaseUrl()}/analytics?${toAnalyticsSearchParams(params).toString()}`;
+  const { html, text } = await renderEmail(
+    AnalyticsWeeklyEmail({
+      ...buildWeeklyReportProps({
+        userName: input.userName,
+        viewName: input.name,
+        viewUrl,
+        periodLabel,
+        timeZone,
+        sections: { kpis, services, trend, responders, noise, followThrough },
+      }),
+      kind: input.kind,
+      manageUrl: input.manageUrl,
+    })
+  );
+  return {
+    html,
+    text,
+    incidents: kpis.current.incidents,
+    empty: kpis.current.incidents === 0 && kpis.previous.incidents === 0 && kpis.openNow === 0,
+  };
+}
+
+/**
  * Sends each subscribed view's weekly report once per week (Monday 00:00 UTC
  * onward). Numbers come only from getAnalyticsSection with the recipient as
  * actor, so they match the page and respect the recipient's access. The
@@ -253,40 +315,16 @@ export async function sendWeeklyAnalyticsReports(now = new Date(), limit = 25) {
         continue;
       }
 
-      const timeZone = normalizeContractTimeZone(user.timeZone);
-      const params = weeklyReportParams(view.query, now, timeZone);
-      const context = await createAnalyticsContext(actor, params, timeZone);
-      const [kpis, services, trend, responders, noise, followThrough] = await Promise.all([
-        getAnalyticsSection(context, 'kpis'),
-        getAnalyticsSection(context, 'services'),
-        getAnalyticsSection(context, 'trend'),
-        getAnalyticsSection(context, 'responders'),
-        getAnalyticsSection(context, 'noise'),
-        getAnalyticsSection(context, 'followThrough'),
-      ]);
-      // Calendar-day keys at UTC midnight: format in UTC so the dates don't shift.
-      const day = new Intl.DateTimeFormat('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        timeZone: 'UTC',
+      const email = await composeWeeklyEmail({
+        actor,
+        userName: user.name || 'there',
+        timeZone: user.timeZone,
+        query: view.query,
+        name: view.name,
+        now,
+        kind: 'view',
       });
-      const lastDay = new Date(params.to!.getTime() - DAY_MS);
-      const periodLabel = `${day.format(params.from!)} – ${day.format(lastDay)}, ${lastDay.getUTCFullYear()}`;
-      const viewUrl = `${getBaseUrl()}/analytics?${toAnalyticsSearchParams(params).toString()}`;
-
-      const { html, text } = await renderEmail(
-        AnalyticsWeeklyEmail(
-          buildWeeklyReportProps({
-            userName: user.name || 'there',
-            viewName: view.name,
-            viewUrl,
-            periodLabel,
-            timeZone,
-            sections: { kpis, services, trend, responders, noise, followThrough },
-          })
-        )
-      );
+      const { html, text } = email;
 
       await enqueueCentralNotification({
         category: 'SYSTEM',
@@ -304,7 +342,7 @@ export async function sendWeeklyAnalyticsReports(now = new Date(), limit = 25) {
         payload: {
           kind: 'EMAIL',
           to: user.email,
-          subject: `Weekly analytics: ${view.name} · ${kpis.current.incidents} incidents last week`,
+          subject: `Weekly analytics: ${view.name} · ${email.incidents} incidents last week`,
           html,
           text,
         },

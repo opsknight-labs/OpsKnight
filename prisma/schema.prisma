@@ -588,6 +588,7 @@ model User {
   dashboards                  Dashboard[]
   savedReports                SavedReport[]
   analyticsViews              AnalyticsView[]
+  analyticsDigest             AnalyticsDigestSubscription?
   reportExports               ReportExport[]
   auditExports                AuditExport[]
   assignedActionItems         ActionItem[]
@@ -3192,6 +3193,17 @@ model AnalyticsView {
   @@index([userId, createdAt, id])
   @@index([teamId, createdAt, id])
   @@index([emailWeekly, lastSentAt])
+}
+
+/// Default weekly analytics summary (sent to everyone with analytics access, PagerDuty-style).
+/// One row per user, created on first send. token backs the RFC 8058 one-click unsubscribe.
+model AnalyticsDigestSubscription {
+  userId     String    @id
+  optedOut   Boolean   @default(false)
+  token      String    @unique
+  lastSentAt DateTime?
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ReportExport {
