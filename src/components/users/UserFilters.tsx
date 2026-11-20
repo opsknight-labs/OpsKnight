@@ -2,8 +2,6 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
-import { Input } from '@/components/ui/shadcn/input';
-import { Label } from '@/components/ui/shadcn/label';
 import {
   Select,
   SelectContent,
@@ -11,26 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
-import {
-  Filter,
-  X,
-  UserCheck,
-  UserPlus,
-  UserX,
-  Users,
-  Shield,
-  Activity,
-  Briefcase,
-} from 'lucide-react';
+import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
+import { UserCheck, UserPlus, UserX, Users } from 'lucide-react';
 
 type Team = {
   id: string;
@@ -44,7 +24,7 @@ type UserFiltersProps = {
 export default function UserFilters({ teams }: UserFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const query = searchParams.get('q') || '';
   const status = searchParams.get('status') || '';
@@ -83,182 +63,113 @@ export default function UserFilters({ teams }: UserFiltersProps) {
   const hasFilters = !!query || !!status || !!role || !!teamId;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-4 w-4" /> Filter Users
-            </CardTitle>
-            <CardDescription>Search and filter your team members</CardDescription>
-          </div>
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-muted-foreground hover:text-foreground"
-              onClick={clearFilters}
-              disabled={isPending}
-            >
-              <X className="mr-1 h-3 w-3" /> Clear All
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Quick Filters */}
-        <div className="flex flex-wrap gap-2">
-          <Badge
-            variant={!status && !role && !teamId && !query ? 'default' : 'outline'}
-            size="sm"
-            className="cursor-pointer rounded-md hover:bg-primary/90 hover:text-primary-foreground transition-colors"
-            onClick={() => clearFilters()}
-          >
-            All Users
-          </Badge>
-          <Badge
-            variant={status === 'ACTIVE' ? 'success' : 'outline'}
-            size="sm"
-            className="cursor-pointer rounded-md hover:bg-emerald-100 hover:text-emerald-800 transition-colors dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300"
+    <FilterBar
+      chips={
+        <>
+          <FilterChip active={!hasFilters} onClick={clearFilters}>
+            All users
+          </FilterChip>
+          <FilterChip
+            tone="ok"
+            icon={<UserCheck />}
+            active={status === 'ACTIVE'}
             onClick={() => handleFilterChange('status', status === 'ACTIVE' ? '' : 'ACTIVE')}
           >
-            <UserCheck className="mr-1 h-3 w-3" /> Active
-          </Badge>
-          <Badge
-            variant={status === 'INVITED' ? 'warning' : 'outline'}
-            size="sm"
-            className="cursor-pointer rounded-md hover:bg-yellow-100 hover:text-yellow-800 transition-colors dark:hover:bg-yellow-500/15 dark:hover:text-yellow-300"
+            Active
+          </FilterChip>
+          <FilterChip
+            tone="elevated"
+            icon={<UserPlus />}
+            active={status === 'INVITED'}
             onClick={() => handleFilterChange('status', status === 'INVITED' ? '' : 'INVITED')}
           >
-            <UserPlus className="mr-1 h-3 w-3" /> Invited
-          </Badge>
-          <Badge
-            variant={status === 'DISABLED' ? 'neutral' : 'outline'}
-            size="sm"
-            className="cursor-pointer rounded-md hover:bg-ink-100 hover:text-ink-800 transition-colors"
+            Invited
+          </FilterChip>
+          <FilterChip
+            icon={<UserX />}
+            active={status === 'DISABLED'}
             onClick={() => handleFilterChange('status', status === 'DISABLED' ? '' : 'DISABLED')}
           >
-            <UserX className="mr-1 h-3 w-3" /> Disabled
-          </Badge>
-          <Badge
-            variant={role === 'ADMIN' ? 'danger' : 'outline'}
-            size="sm"
-            className="cursor-pointer rounded-md hover:bg-rose-100 hover:text-rose-800 transition-colors dark:hover:bg-rose-500/15 dark:hover:text-rose-300"
+            Disabled
+          </FilterChip>
+          <FilterChip
+            icon={<Users />}
+            active={role === 'ADMIN'}
             onClick={() => handleFilterChange('role', role === 'ADMIN' ? '' : 'ADMIN')}
           >
-            <Users className="mr-1 h-3 w-3" /> Admins
-          </Badge>
-        </div>
-
-        {/* Filter Inputs grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="q" className="text-xs font-semibold uppercase text-muted-foreground">
-              Search
-            </Label>
-            <div className="relative">
-              <Input
-                id="q"
-                placeholder="Name or email..."
-                className="h-10 bg-muted/30 focus:bg-background transition-colors"
-                value={query}
-                onChange={e => handleFilterChange('q', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">Status</Label>
+            Admins
+          </FilterChip>
+        </>
+      }
+      search={{
+        value: query,
+        onChange: value => handleFilterChange('q', value),
+        placeholder: 'Search by name or email…',
+        label: 'Search users',
+        debounceMs: 300,
+      }}
+      hasActiveFilters={hasFilters}
+      onClearAll={clearFilters}
+      filters={
+        <>
+          <FilterField label="Status" htmlFor="users-filter-status">
             <Select
-              value={status}
+              value={status || 'all'}
               onValueChange={val => handleFilterChange('status', val === 'all' ? '' : val)}
             >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                  <SelectValue placeholder="All Statuses" />
-                </div>
+              <SelectTrigger id="users-filter-status" className="h-9 w-[150px] text-sm">
+                <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="ACTIVE">
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
                     <span>Active</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="INVITED">
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
                     <span>Invited</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="DISABLED">
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-gray-500" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-ink-400" aria-hidden="true" />
                     <span>Disabled</span>
                   </div>
                 </SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">Role</Label>
+          </FilterField>
+          <FilterField label="Role" htmlFor="users-filter-role">
             <Select
-              value={role}
+              value={role || 'all'}
               onValueChange={val => handleFilterChange('role', val === 'all' ? '' : val)}
             >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-muted-foreground" />
-                  <SelectValue placeholder="All Roles" />
-                </div>
+              <SelectTrigger id="users-filter-role" className="h-9 w-[150px] text-sm">
+                <SelectValue placeholder="All roles" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="ADMIN">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                    <span>Admin</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="RESPONDER">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-                    <span>Responder</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="AUDITOR">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    <span>Auditor</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="USER">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-                    <span>User</span>
-                  </div>
-                </SelectItem>
+                <SelectItem value="all">All roles</SelectItem>
+                <SelectItem value="ADMIN">Admin</SelectItem>
+                <SelectItem value="RESPONDER">Responder</SelectItem>
+                <SelectItem value="AUDITOR">Auditor</SelectItem>
+                <SelectItem value="USER">User</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase text-muted-foreground">Team</Label>
+          </FilterField>
+          <FilterField label="Team" htmlFor="users-filter-team">
             <Select
-              value={teamId}
+              value={teamId || 'all'}
               onValueChange={val => handleFilterChange('teamId', val === 'all' ? '' : val)}
             >
-              <SelectTrigger className="h-10 bg-muted/30 focus:bg-background transition-colors text-sm">
-                <div className="flex items-center gap-2">
-                  <Briefcase className="h-4 w-4 text-muted-foreground" />
-                  <SelectValue placeholder="All Teams" />
-                </div>
+              <SelectTrigger id="users-filter-team" className="h-9 w-[170px] text-sm">
+                <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Teams</SelectItem>
+                <SelectItem value="all">All teams</SelectItem>
                 {teams.map(team => (
                   <SelectItem key={team.id} value={team.id}>
                     {team.name}
@@ -266,9 +177,9 @@ export default function UserFilters({ teams }: UserFiltersProps) {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          </FilterField>
+        </>
+      }
+    />
   );
 }

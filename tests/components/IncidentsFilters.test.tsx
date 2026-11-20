@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import IncidentsFilters from '@/components/incident/IncidentsFilters';
 
 const push = vi.fn();
@@ -31,10 +31,21 @@ describe('IncidentsFilters', () => {
       />
     );
 
-    const searchInput = screen.getByLabelText('Search');
-    fireEvent.change(searchInput, { target: { value: 'database' } });
+    vi.useFakeTimers();
+    try {
+      const searchInput = screen.getByLabelText('Search incidents');
+      // "/" in IncidentsListTable focuses the input by this id.
+      expect(searchInput).toHaveAttribute('id', 'incident-search');
+      fireEvent.change(searchInput, { target: { value: 'database' } });
+      expect(push).not.toHaveBeenCalled();
 
-    expect(push).toHaveBeenCalledWith('/incidents?priority=P1&search=database');
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(push).toHaveBeenCalledWith('/incidents?priority=P1&search=database');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('clears all filters when Clear All is clicked', () => {
@@ -88,6 +99,7 @@ describe('IncidentsFilters', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /service & sort/i }));
     const trigger = screen.getByRole('combobox', { name: /filter by service/i });
     expect(trigger).toHaveTextContent('All services');
 
@@ -125,6 +137,7 @@ describe('IncidentsFilters', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /service & sort/i }));
     const trigger = screen.getByRole('combobox', { name: /filter by service/i });
     fireEvent.click(trigger);
 
