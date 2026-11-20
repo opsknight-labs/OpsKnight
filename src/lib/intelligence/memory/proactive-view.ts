@@ -149,7 +149,7 @@ export async function getProactiveNotesForActor(
             where: {
               id: { in: [...wanted.changes] },
               ...(Object.keys(services!).length
-                ? { OR: [{ serviceId: null }, { service: services! }] }
+                ? { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: services! }] }
                 : {}),
             },
             select: { id: true },

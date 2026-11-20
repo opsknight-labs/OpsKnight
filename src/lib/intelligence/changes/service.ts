@@ -122,7 +122,9 @@ export async function reanalyzeAfterLateChange(
  */
 export async function recordChange(
   input: ChangeInput,
-  now: Date = new Date()
+  now: Date = new Date(),
+  /** A multi-service integration whose change matched no service: stored unmapped, never global. */
+  options: { unmappedIntegrationId?: string } = {}
 ): Promise<RecordChangeResult> {
   const parsed = parseOrThrow(changeInputSchema, input);
   if (parsed.occurredAt.getTime() > now.getTime() + MAX_FUTURE_SKEW_MS) {
@@ -142,11 +144,13 @@ export async function recordChange(
     url: parsed.url ?? null,
     dedupKey: parsed.dedupKey ?? null,
     occurredAt: parsed.occurredAt,
+    unmappedIntegrationId: parsed.serviceId ? null : (options.unmappedIntegrationId ?? null),
   };
   try {
     const row = await prisma.$transaction(async tx => {
       const created = await tx.changeEvent.create({ data, select: { id: true } });
-      if ((await getIntelligenceSettings(tx)).enabled) {
+      // An unmapped change explains nothing until it is mapped; mapping enqueues it then.
+      if (!data.unmappedIntegrationId && (await getIntelligenceSettings(tx)).enabled) {
         await enqueueWorkItems([{ kind: WORK_KINDS.LATE_CHANGE, subjectKey: created.id }], tx);
       }
       return created;

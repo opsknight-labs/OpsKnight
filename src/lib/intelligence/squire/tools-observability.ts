@@ -363,7 +363,7 @@ export function buildObservabilityTools(
         where: {
           id: parsed.data.changeId,
           ...(Object.keys(readable).length
-            ? { OR: [{ serviceId: null }, { service: readable }] }
+            ? { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: readable }] }
             : {}),
         },
         select: { id: true, url: true },

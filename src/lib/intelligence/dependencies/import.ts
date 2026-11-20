@@ -5,6 +5,7 @@ import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import type { IntelligenceActor } from '../settings/service';
 import { MAX_DEPENDENCIES } from './service';
+import { changeMappingKey } from '../changes/service-mapping';
 
 /**
  * Backstage catalog import. Entities of kind Component/Resource/System with `spec.dependsOn` become
@@ -138,14 +139,25 @@ export async function applyCatalogImport(
   const byName = new Map(services.map(service => [service.name.trim().toLowerCase(), service.id]));
   const resolved = new Map<string, string>();
   const unmatched: string[] = [];
+  const aliases = new Map<string, string>();
   for (const entity of entities) {
     const serviceId =
       entity.serviceId && byId.has(entity.serviceId)
         ? entity.serviceId
         : (byName.get(entity.name.toLowerCase()) ?? null);
     const ref = `${entity.kind}:${entity.namespace}/${entity.name.toLowerCase()}`;
-    if (serviceId) resolved.set(ref, serviceId);
-    else if (unmatched.length < 200) unmatched.push(entity.name);
+    if (serviceId) {
+      resolved.set(ref, serviceId);
+      aliases.set(changeMappingKey(entity.name), serviceId);
+    } else if (unmatched.length < 200) unmatched.push(entity.name);
+  }
+  // Entity names let a multi-service change webhook find a service by its Backstage name. shortcut: aliases of
+  // entities later removed from the catalog stay until a service is deleted; prune per source if that matters.
+  if (aliases.size > 0) {
+    await tx.catalogServiceAlias.deleteMany({ where: { name: { in: [...aliases.keys()] } } });
+    await tx.catalogServiceAlias.createMany({
+      data: [...aliases].map(([name, serviceId]) => ({ name, serviceId })),
+    });
   }
 
   const edges = new Map<string, { upstreamServiceId: string; downstreamServiceId: string }>();

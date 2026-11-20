@@ -11,7 +11,7 @@ export async function readChangeReference(actor: AuthorizationActor, id: string)
   return prisma.changeEvent.findFirst({
     where: {
       id,
-      ...(Object.keys(readable).length ? { OR: [{ serviceId: null }, { service: readable }] } : {}),
+      ...(Object.keys(readable).length ? { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: readable }] } : {}),
     },
     select: {
       id: true,

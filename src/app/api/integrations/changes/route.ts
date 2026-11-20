@@ -1,6 +1,6 @@
 import { z } from 'zod/v3';
 import { createIntegrationHandler } from '@/lib/integrations/handler';
-import { recordChange } from '@/lib/intelligence/changes/service';
+import { recordIntegrationChange } from '@/lib/intelligence/changes/service-mapping';
 
 /**
  * Change-event ingestion (deploys, config changes, feature flags, infrastructure changes).
@@ -8,7 +8,8 @@ import { recordChange } from '@/lib/intelligence/changes/service';
  *
  * Authenticated exactly like the generic webhook endpoint (integration key, optional HMAC, rate
  * limiting, delivery de-duplication) with a generic webhook integration. A change is scoped to that
- * integration's service; any serviceId in the body is ignored. It records evidence for probable-cause
+ * integration's service (or, once the integration has a change service mapping, to the service its
+ * component/app labels map to); any serviceId in the body is ignored. It records evidence for probable-cause
  * analysis only: it never creates an alert or incident and never enters the paging path.
  */
 const bodySchema = z
@@ -32,8 +33,7 @@ export const POST = createIntegrationHandler<z.infer<typeof bodySchema>>(
     schema: bodySchema,
   },
   async ({ payload, integration }) => {
-    const result = await recordChange({
-      serviceId: integration.serviceId,
+    const result = await recordIntegrationChange(integration, {
       source: payload.source ?? 'webhook',
       kind: (payload.kind ?? 'DEPLOY').toUpperCase() as 'DEPLOY',
       summary: payload.summary ?? '',

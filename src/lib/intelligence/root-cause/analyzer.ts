@@ -43,7 +43,7 @@ async function recentChangeCandidates(
   global: boolean
 ) {
   const scope = global
-    ? Prisma.sql`"serviceId" IS NULL`
+    ? Prisma.sql`"serviceId" IS NULL AND "unmappedIntegrationId" IS NULL`
     : Prisma.sql`"serviceId" IN (${Prisma.join(serviceIds)})`;
   return tx.$queryRaw<ChangeEvent[]>(Prisma.sql`
     WITH sources AS (

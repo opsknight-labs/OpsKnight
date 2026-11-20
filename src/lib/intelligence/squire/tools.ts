@@ -527,7 +527,7 @@ export function buildSquireTools(
             ...(parsed.data.serviceId
               ? { service: { AND: [{ id: parsed.data.serviceId }, readable] } }
               : Object.keys(readable).length
-                ? { OR: [{ serviceId: null }, { service: readable }] }
+                ? { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: readable }] }
                 : {}),
           },
           orderBy: { occurredAt: 'desc' },

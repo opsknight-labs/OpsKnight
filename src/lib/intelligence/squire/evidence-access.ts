@@ -111,7 +111,7 @@ export async function readSourceStates(
       where: {
         id: { in: ids('change') },
         ...(Object.keys(readable).length
-          ? { OR: [{ serviceId: null }, { service: readable }] }
+          ? { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: readable }] }
           : {}),
       },
       select: { id: true },

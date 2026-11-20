@@ -156,7 +156,7 @@ export async function getResponseIntelligenceForActor(
             // A global scope is an empty filter; say so explicitly rather than rely on `{ service: {} }`.
             ...(Object.keys(serviceReadable).length === 0
               ? {}
-              : { OR: [{ serviceId: null }, { service: serviceReadable }] }),
+              : { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: serviceReadable }] }),
           },
           select: {
             id: true,

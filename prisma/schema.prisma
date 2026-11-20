@@ -766,7 +766,8 @@ model Service {
   upstreamDependencies            ServiceDependency[]             @relation("DependencyDownstream")
   downstreamDependencies          ServiceDependency[]             @relation("DependencyUpstream")
   changeEvents                    ChangeEvent[]
-  maintenanceWindows              MaintenanceWindowService[]
+  catalogAliases                  CatalogServiceAlias[]
+  maintenanceWindows             MaintenanceWindowService[]
   maintenanceSchedules            MaintenanceScheduleService[]
 
   @@index([teamId])
@@ -877,6 +878,8 @@ model Integration {
   /// True only for integrations that existed before routing keys were shown in plaintext: /api/events
   /// then also accepts the exact stored (encrypted) key value the old UI displayed. Cleared on rotation.
   legacyStoredKeyAccepted Boolean @default(false)
+  changeServiceMapping   ChangeServiceMapping?
+  unmappedChanges        ChangeEvent[] @relation("ChangeEventUnmappedIntegration")
 }
 
 // No cascading foreign keys: deleting a service must never discard accepted work.
@@ -5855,11 +5858,39 @@ model ChangeEvent {
   riskScore      Float?
   riskEvidence   Json?
   riskComputedAt DateTime?
+  /// Set when a multi-service integration sent the change but no app/component label resolved to a service.
+  /// Such a change has no service yet, but unlike a global change (both null) it affects no service.
+  unmappedIntegrationId String?
+  unmappedIntegration   Integration? @relation("ChangeEventUnmappedIntegration", fields: [unmappedIntegrationId], references: [id], onDelete: Cascade)
 
   @@unique([source, dedupKey], map: "uq_change_event_source_dedup")
   @@index([serviceId, occurredAt(sort: Desc)], map: "idx_change_event_service_recent")
   @@index([occurredAt], map: "idx_change_event_retention")
   @@index([source, occurredAt], map: "idx_change_event_source_recent")
+  @@index([unmappedIntegrationId, occurredAt(sort: Desc)], map: "idx_change_event_unmapped_recent")
+}
+
+/// Per change integration: app/component label value -> service, for one webhook that carries changes of many
+/// services. Its presence makes the integration multi-service. `version` increases on every edit.
+model ChangeServiceMapping {
+  integrationId String      @id
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  /// { "<lower-cased label value>": "<serviceId>" }
+  mappings      Json        @default("{}")
+  version       Int         @default(1)
+  updatedById   String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+/// Backstage catalog entity name (lower-cased metadata.name) -> the service it resolved to on the last import.
+model CatalogServiceAlias {
+  name      String   @id
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+
+  @@index([serviceId])
 }
 
 // A declared-topology source (a Backstage catalog export) pulled on a schedule into DECLARED dependencies.
