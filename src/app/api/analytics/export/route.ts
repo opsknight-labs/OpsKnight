@@ -32,13 +32,29 @@ export async function GET(req: NextRequest) {
     const { window, scope } = context;
     const i = Prisma.raw(INCIDENT_ALIAS);
 
-    const [kpis, services, trend, responders, noise, followThrough, incidents] = await Promise.all([
+    const [
+      kpis,
+      services,
+      trend,
+      responders,
+      noise,
+      followThrough,
+      byTeam,
+      byPriority,
+      byUrgency,
+      availability,
+      incidents,
+    ] = await Promise.all([
       getAnalyticsSection(context, 'kpis'),
       getAnalyticsSection(context, 'services'),
       getAnalyticsSection(context, 'trend'),
       getAnalyticsSection(context, 'responders'),
       getAnalyticsSection(context, 'noise'),
       getAnalyticsSection(context, 'followThrough'),
+      getAnalyticsSection(context, 'breakdownTeam'),
+      getAnalyticsSection(context, 'breakdownPriority'),
+      getAnalyticsSection(context, 'breakdownUrgency'),
+      getAnalyticsSection(context, 'availability'),
       // Same window and actor scope as the sections; one extra row tells the CSV it was capped.
       prisma.$queryRaw<AnalyticsExportIncident[]>(Prisma.sql`
         SELECT ${i}.id, ${i}.title, ${i}.status::text AS status, ${i}.urgency::text AS urgency,
@@ -63,6 +79,12 @@ export async function GET(req: NextRequest) {
       responders,
       noise,
       followThrough,
+      breakdowns: [
+        { title: 'team', rows: byTeam },
+        { title: 'priority', rows: byPriority },
+        { title: 'urgency', rows: byUrgency },
+      ],
+      availability,
       incidents,
       incidentLimit: INCIDENT_LIMIT,
     });

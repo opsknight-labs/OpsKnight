@@ -111,6 +111,38 @@ describe('buildAnalyticsCsv', () => {
     expect(csv).toContain('Filters,range=7d; urgency=HIGH');
   });
 
+  it('includes breakdowns, availability and responder handling hours like the page', () => {
+    const row = { ...empty, key: 'P1', label: 'P1', incidents: 4, previousIncidents: 2, mttrP50: 600_000 };
+    const csv = buildAnalyticsCsv(
+      data({
+        breakdowns: [{ title: 'priority', rows: [row] }],
+        availability: [
+          { id: 's', name: 'api', uptime: 99.5, downtimeMs: 120_000, objective: { name: 'API SLO', target: 99.9 }, budgetRemaining: -400 },
+        ],
+        responders: [
+          {
+            id: 'u',
+            name: 'Ana',
+            avatarUrl: null,
+            incidents: 2,
+            working: 1,
+            evening: 1,
+            overnight: 0,
+            onCallHours: 40,
+            handlingHours: 3.25,
+            handlingEveningHours: 1,
+            handlingOvernightHours: 0.5,
+          } as AnalyticsExportData['responders'][number],
+        ],
+      })
+    );
+    expect(csv).toContain('\r\nBreakdown by priority\r\nPriority,');
+    expect(csv).toContain('\r\nP1,4,2,,10,');
+    expect(csv).toContain('\r\nAvailability\r\n');
+    expect(csv).toContain('\r\napi,99.5,2,API SLO,99.9,-400\r\n');
+    expect(csv).toContain('\r\nAna,2,1,1,0,40,3.3,1.5\r\n');
+  });
+
   it('escapes injected incident titles', () => {
     const csv = buildAnalyticsCsv(data({ incidents: [incident('a', '=cmd|calc')] }));
     expect(csv).toContain(",'=cmd|calc,");

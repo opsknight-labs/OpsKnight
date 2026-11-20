@@ -189,6 +189,30 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
     expect(current.resolveSla).toBe(100);
   });
 
+  it('counts concurrent incidents once in a responder’s handling hours', async () => {
+    const service = await testPrisma.service.create({ data: { name: 'overlap' } });
+    const user = await testPrisma.user.create({
+      data: { email: 'busy@example.com', name: 'Busy', status: 'ACTIVE', timeZone: 'Asia/Kolkata' },
+    });
+    // Two incidents worked side by side for the same 2 hours (local hours start at :30 UTC).
+    const ack = new Date('2026-01-14T10:00:00Z');
+    const resolved = new Date('2026-01-14T12:00:00Z');
+    await testPrisma.incident.createMany({
+      data: ['a', 'b'].map(title => ({
+        title,
+        serviceId: service.id,
+        assigneeId: user.id,
+        status: 'RESOLVED' as const,
+        createdAt: new Date(ack.getTime() - MIN),
+        acknowledgedAt: ack,
+        resolvedAt: resolved,
+      })),
+    });
+    const { scope, window } = context();
+    const [row] = await queryResponders(scope, window);
+    expect(row).toMatchObject({ id: user.id, incidents: 2, handlingHours: 2 });
+  });
+
   it('buckets in the viewer timezone and classifies after-hours in the business timezone', async () => {
     const service = await testPrisma.service.create({ data: { name: 'tz' } });
     // 2026-01-14 12:00 UTC is 07:00 in New York: before business hours there.

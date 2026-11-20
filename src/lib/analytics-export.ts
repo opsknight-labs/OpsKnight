@@ -1,6 +1,8 @@
 import type {
   AnalyticsParams,
   AnalyticsWindow,
+  AvailabilityRow,
+  BreakdownRow,
   FollowThroughSection,
   KpiSection,
   MetricId,
@@ -44,6 +46,10 @@ export type AnalyticsExportData = {
   responders: ResponderRow[];
   noise: NoiseSection;
   followThrough: FollowThroughSection;
+  /** Optional: same rows as the page's Breakdown tabs. */
+  breakdowns?: Array<{ title: string; rows: BreakdownRow[] }>;
+  /** Optional: same rows as the page's Availability section. */
+  availability?: AvailabilityRow[];
   incidents: AnalyticsExportIncident[];
   /** Max incident rows written; the file says so when it is reached. */
   incidentLimit: number;
@@ -138,6 +144,45 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
     ]);
   }
 
+  for (const breakdown of data.breakdowns ?? []) {
+    section(`Breakdown by ${breakdown.title}`, [
+      breakdown.title.charAt(0).toUpperCase() + breakdown.title.slice(1),
+      metricHeader('incidents'),
+      'Previous period incidents',
+      metricHeader('mttaP50'),
+      metricHeader('mttrP50'),
+      metricHeader('mttrP90'),
+      metricHeader('ackSla'),
+      metricHeader('resolveSla'),
+    ]);
+    for (const row of breakdown.rows) {
+      rows.push([
+        row.label,
+        row.incidents,
+        row.previousIncidents,
+        metricValue('mttaP50', row.mttaP50),
+        metricValue('mttrP50', row.mttrP50),
+        metricValue('mttrP90', row.mttrP90),
+        metricValue('ackSla', row.ackSla),
+        metricValue('resolveSla', row.resolveSla),
+      ]);
+    }
+  }
+
+  if (data.availability?.length) {
+    section('Availability', ['Service', 'Uptime (%)', 'Downtime (min)', 'Objective', 'Objective target (%)', 'Error budget left (%)']);
+    for (const a of data.availability) {
+      rows.push([
+        a.name,
+        round(a.uptime, 3),
+        round(a.downtimeMs / 60_000, 1),
+        a.objective?.name ?? '',
+        a.objective ? round(a.objective.target, 3) : null,
+        a.budgetRemaining === null ? null : round(a.budgetRemaining, 1),
+      ]);
+    }
+  }
+
   section('Trend', [
     `Bucket (${window.bucket}, ${tz})`,
     'High',
@@ -170,9 +215,20 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
     'Evening / weekend',
     'Overnight',
     metricHeader('onCallHours'),
+    metricHeader('handlingHours'),
+    'Handling off-hours (h)',
   ]);
   for (const r of data.responders) {
-    rows.push([r.name, r.incidents, r.working, r.evening, r.overnight, metricValue('onCallHours', r.onCallHours)]);
+    rows.push([
+      r.name,
+      r.incidents,
+      r.working,
+      r.evening,
+      r.overnight,
+      metricValue('onCallHours', r.onCallHours),
+      metricValue('handlingHours', r.handlingHours),
+      metricValue('handlingHours', r.handlingEveningHours + r.handlingOvernightHours),
+    ]);
   }
 
   const { noise, followThrough: ft } = data;

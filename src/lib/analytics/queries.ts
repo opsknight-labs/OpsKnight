@@ -264,11 +264,11 @@ function bandedCte(scope: AnalyticsScope, window: AnalyticsWindow) {
 }
 
 /**
- * Handling time per responder and band: each assigned incident's acknowledge→resolve span
- * (still open: up to window end), clipped to the window and cut into the responder's local
- * hours, minus SLA pause time inside each hour.
- * shortcut: one row per incident-hour; fine for normal volumes, pre-aggregate if tenants keep
- * thousands of month-long open incidents.
+ * Handling time per responder and band: wall-clock time the responder had at least one
+ * assigned incident between acknowledgement and resolution (still open: up to window end),
+ * clipped to the window, minus SLA pauses. Each incident's working time is a range minus its
+ * pauses; a responder's ranges are unioned (range_agg, PostgreSQL 14+) so concurrent incidents
+ * count once, then cut into the responder's local hours to band them.
  */
 function queryHandling(scope: AnalyticsScope, window: AnalyticsWindow) {
   const a = Prisma.raw(INCIDENT_ALIAS);
@@ -290,27 +290,34 @@ function queryHandling(scope: AnalyticsScope, window: AnalyticsWindow) {
         ${scope.incidentSql}
     ),
     ${responderTz('work')},
-    slices AS (
-      SELECT w.id, w."assigneeId", r.tz,
-        GREATEST(h, w.s) AS ss, LEAST(h + interval '1 hour', w.e) AS se
+    active AS (
+      SELECT w."assigneeId",
+        tstzmultirange(tstzrange(w.s, w.e)) - COALESCE((
+          SELECT range_agg(tstzrange(
+            GREATEST(w.s, timezone('UTC', p."startedAt")),
+            LEAST(w.e, COALESCE(timezone('UTC', p."endedAt"), w.e))))
+          FROM "IncidentSlaPause" p
+          WHERE p."incidentId" = w.id
+            AND timezone('UTC', p."startedAt") < w.e
+            AND COALESCE(timezone('UTC', p."endedAt"), w.e) > w.s
+        ), '{}'::tstzmultirange) AS busy
       FROM work w
-      JOIN responder_tz r ON r.id = w."assigneeId"
-      CROSS JOIN LATERAL generate_series(date_trunc('hour', w.s, r.tz), w.e, interval '1 hour') AS h
       WHERE w.e > w.s
+    ),
+    busy AS (
+      SELECT "assigneeId", unnest(range_agg(busy)) AS r FROM active GROUP BY 1
+    ),
+    slices AS (
+      SELECT b."assigneeId", rt.tz,
+        GREATEST(h, lower(b.r)) AS ss, LEAST(h + interval '1 hour', upper(b.r)) AS se
+      FROM busy b
+      JOIN responder_tz rt ON rt.id = b."assigneeId"
+      CROSS JOIN LATERAL generate_series(date_trunc('hour', lower(b.r), rt.tz), upper(b.r), interval '1 hour') AS h
     )
-    SELECT sl."assigneeId" AS id, ${band(Prisma.sql`timezone(sl.tz, sl.ss)`)} AS band,
-      SUM(GREATEST(0, EXTRACT(EPOCH FROM (sl.se - sl.ss)) * 1000 - COALESCE((
-        -- shortcut: overlapping pause rows would be subtracted twice (floored at 0); they are not written today.
-        SELECT SUM(EXTRACT(EPOCH FROM (
-          LEAST(sl.se, COALESCE(timezone('UTC', p."endedAt"), sl.se)) - GREATEST(sl.ss, timezone('UTC', p."startedAt"))
-        )) * 1000)
-        FROM "IncidentSlaPause" p
-        WHERE p."incidentId" = sl.id
-          AND timezone('UTC', p."startedAt") < sl.se
-          AND COALESCE(timezone('UTC', p."endedAt"), sl.se) > sl.ss
-      ), 0)))::float8 AS ms
-    FROM slices sl
-    WHERE sl.se > sl.ss
+    SELECT "assigneeId" AS id, ${band(Prisma.sql`timezone(tz, ss)`)} AS band,
+      SUM(EXTRACT(EPOCH FROM (se - ss)) * 1000)::float8 AS ms
+    FROM slices
+    WHERE se > ss
     GROUP BY 1, 2`);
 }
 
