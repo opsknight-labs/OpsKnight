@@ -13,8 +13,8 @@ verification:
   level: source
   verified_at: 2026-10-12
   evidence:
-    - src/components/settings/authentication/AuthenticationProviderForm.tsx
-    - src/app/(app)/settings/system/authentication-actions.ts
+    - src/components/settings/SsoSettingsForm.tsx
+    - src/app/(app)/settings/security/actions.ts
     - src/lib/oidc.ts
     - src/lib/oidc-validation.ts
     - src/lib/oidc/provider-policy.ts
