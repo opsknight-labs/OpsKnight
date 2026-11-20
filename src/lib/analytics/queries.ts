@@ -228,44 +228,109 @@ export type ResponderRow = {
   /** 22:00–08:00. */
   overnight: number;
   onCallHours: number;
+  /** Estimated acknowledge→resolve time on assigned incidents inside the window, SLA pauses excluded. */
+  handlingHours: number;
+  /** The part of handlingHours in the responder's evening/weekend and overnight bands. */
+  handlingEveningHours: number;
+  handlingOvernightHours: number;
 };
 
 const RESPONDER_LIMIT = 25;
+
+/** Same band rule for incident counts, the interruptions trend and handling time. `at` is local wall clock. */
+const band = (at: Prisma.Sql) => Prisma.sql`CASE
+  WHEN EXTRACT(HOUR FROM ${at}) >= 22 OR EXTRACT(HOUR FROM ${at}) < 8 THEN 'overnight'
+  WHEN EXTRACT(ISODOW FROM ${at}) IN (6, 7) OR EXTRACT(HOUR FROM ${at}) >= 18 THEN 'evening'
+  ELSE 'working'
+END`;
+
+// Each responder's own preferred timezone (unknown names fall back to UTC):
+// "overnight" means their night, wherever they are.
+const responderTz = (source: string) => Prisma.sql`responder_tz AS (
+  SELECT u.id, COALESCE(tz.name, 'UTC') AS tz
+  FROM "User" u LEFT JOIN pg_timezone_names tz ON tz.name = u."timeZone"
+  WHERE u.id IN (SELECT "assigneeId" FROM ${Prisma.raw(source)})
+)`;
+
+/** metric_rows plus `banded` (id, assigneeId, local_at, band): the one source for responder counts and trend. */
+function bandedCte(scope: AnalyticsScope, window: AnalyticsWindow) {
+  return Prisma.sql`${metricRowsCte(scope, window)},
+    ${responderTz('metric_rows')},
+    banded AS (
+      SELECT m.id, m."assigneeId", m.local_at,
+        ${band(Prisma.sql`timezone(r.tz, timezone('UTC', m."createdAt"))`)} AS band
+      FROM metric_rows m JOIN responder_tz r ON r.id = m."assigneeId"
+    )`;
+}
+
+/**
+ * Handling time per responder and band: each assigned incident's acknowledge→resolve span
+ * (still open: up to window end), clipped to the window and cut into the responder's local
+ * hours, minus SLA pause time inside each hour.
+ * shortcut: one row per incident-hour; fine for normal volumes, pre-aggregate if tenants keep
+ * thousands of month-long open incidents.
+ */
+function queryHandling(scope: AnalyticsScope, window: AnalyticsWindow) {
+  const a = Prisma.raw(INCIDENT_ALIAS);
+  return run<Array<{ id: string; band: string; ms: number }>>(Prisma.sql`
+    WITH work AS (
+      SELECT ${a}.id, ${a}."assigneeId",
+        GREATEST(timezone('UTC', ${a}."acknowledgedAt"), ${tz(window.start)}) AS s,
+        LEAST(
+          CASE WHEN ${a}.status = 'RESOLVED'::"IncidentStatus"
+            THEN timezone('UTC', COALESCE(${a}."resolvedAt", ${a}."updatedAt")) END,
+          ${tz(window.end)}
+        ) AS e
+      FROM "Incident" ${a}
+      WHERE ${a}."assigneeId" IS NOT NULL
+        AND ${a}."acknowledgedAt" IS NOT NULL
+        AND ${a}."acknowledgedAt" < ${window.end}
+        AND (${a}.status <> 'RESOLVED'::"IncidentStatus"
+          OR COALESCE(${a}."resolvedAt", ${a}."updatedAt") > ${window.start})
+        ${scope.incidentSql}
+    ),
+    ${responderTz('work')},
+    slices AS (
+      SELECT w.id, w."assigneeId", r.tz,
+        GREATEST(h, w.s) AS ss, LEAST(h + interval '1 hour', w.e) AS se
+      FROM work w
+      JOIN responder_tz r ON r.id = w."assigneeId"
+      CROSS JOIN LATERAL generate_series(date_trunc('hour', w.s, r.tz), w.e, interval '1 hour') AS h
+      WHERE w.e > w.s
+    )
+    SELECT sl."assigneeId" AS id, ${band(Prisma.sql`timezone(sl.tz, sl.ss)`)} AS band,
+      SUM(GREATEST(0, EXTRACT(EPOCH FROM (sl.se - sl.ss)) * 1000 - COALESCE((
+        -- shortcut: overlapping pause rows would be subtracted twice (floored at 0); they are not written today.
+        SELECT SUM(EXTRACT(EPOCH FROM (
+          LEAST(sl.se, COALESCE(timezone('UTC', p."endedAt"), sl.se)) - GREATEST(sl.ss, timezone('UTC', p."startedAt"))
+        )) * 1000)
+        FROM "IncidentSlaPause" p
+        WHERE p."incidentId" = sl.id
+          AND timezone('UTC', p."startedAt") < sl.se
+          AND COALESCE(timezone('UTC', p."endedAt"), sl.se) > sl.ss
+      ), 0)))::float8 AS ms
+    FROM slices sl
+    WHERE sl.se > sl.ss
+    GROUP BY 1, 2`);
+}
+
+const toHours = (ms: number) => Math.round((ms / HOUR_MS) * 10) / 10;
 
 export async function queryResponders(
   scope: AnalyticsScope,
   window: AnalyticsWindow
 ): Promise<ResponderRow[]> {
-  const [rows, shifts] = await Promise.all([
+  const [rows, handlingRows, shifts] = await Promise.all([
     run<
       Array<{ id: string; incidents: number; working: number; evening: number; overnight: number }>
     >(Prisma.sql`
-      WITH ${metricRowsCte(scope, window)},
-      -- Each responder's own preferred timezone (unknown names fall back to UTC):
-      -- "overnight" means their night, wherever they are.
-      responder_tz AS (
-        SELECT u.id, COALESCE(tz.name, 'UTC') AS tz
-        FROM "User" u LEFT JOIN pg_timezone_names tz ON tz.name = u."timeZone"
-        WHERE u.id IN (SELECT "assigneeId" FROM metric_rows)
-      ),
-      local AS (
-        SELECT m."assigneeId", timezone(r.tz, timezone('UTC', m."createdAt")) AS at
-        FROM metric_rows m JOIN responder_tz r ON r.id = m."assigneeId"
-      ),
-      banded AS (
-        SELECT "assigneeId",
-          CASE
-            WHEN EXTRACT(HOUR FROM at) >= 22 OR EXTRACT(HOUR FROM at) < 8 THEN 'overnight'
-            WHEN EXTRACT(ISODOW FROM at) IN (6, 7) OR EXTRACT(HOUR FROM at) >= 18 THEN 'evening'
-            ELSE 'working'
-          END AS band
-        FROM local
-      )
+      WITH ${bandedCte(scope, window)}
       SELECT "assigneeId" AS id, COUNT(*)::int AS incidents,
         COUNT(*) FILTER (WHERE band = 'working')::int AS working,
         COUNT(*) FILTER (WHERE band = 'evening')::int AS evening,
         COUNT(*) FILTER (WHERE band = 'overnight')::int AS overnight
       FROM banded GROUP BY 1 ORDER BY incidents DESC LIMIT ${RESPONDER_LIMIT}`),
+    queryHandling(scope, window),
     getWindowOnCallShifts(window.start, window.end, scope.scheduleWhere),
   ]);
 
@@ -276,7 +341,14 @@ export async function queryResponders(
     if (end > start) onCall.set(shift.userId, (onCall.get(shift.userId) ?? 0) + (end - start));
   }
 
-  const ids = [...new Set([...rows.map(row => row.id), ...onCall.keys()])];
+  const handling = new Map<string, { working: number; evening: number; overnight: number }>();
+  for (const row of handlingRows) {
+    const entry = handling.get(row.id) ?? { working: 0, evening: 0, overnight: 0 };
+    entry[row.band as keyof typeof entry] += n(row.ms);
+    handling.set(row.id, entry);
+  }
+
+  const ids = [...new Set([...rows.map(row => row.id), ...onCall.keys(), ...handling.keys()])];
   const users = ids.length
     ? await prisma.user.findMany({
         where: { id: { in: ids } },
@@ -290,6 +362,7 @@ export async function queryResponders(
     .map(id => {
       const row = byId.get(id);
       const user = userById.get(id);
+      const time = handling.get(id) ?? { working: 0, evening: 0, overnight: 0 };
       return {
         id,
         name: user?.name || user?.email || 'Unknown user',
@@ -298,11 +371,80 @@ export async function queryResponders(
         working: n(row?.working),
         evening: n(row?.evening),
         overnight: n(row?.overnight),
-        onCallHours: Math.round(((onCall.get(id) ?? 0) / HOUR_MS) * 10) / 10,
+        onCallHours: toHours(onCall.get(id) ?? 0),
+        handlingHours: toHours(time.working + time.evening + time.overnight),
+        handlingEveningHours: toHours(time.evening),
+        handlingOvernightHours: toHours(time.overnight),
       };
     })
-    .sort((a, b) => b.incidents - a.incidents || b.onCallHours - a.onCallHours)
+    .sort(
+      (a, b) => b.incidents - a.incidents || b.handlingHours - a.handlingHours || b.onCallHours - a.onCallHours
+    )
     .slice(0, RESPONDER_LIMIT);
+}
+
+export type InterruptionPoint = {
+  /** Viewer-local bucket start, same keys as TrendPoint. */
+  bucket: string;
+  evening: number;
+  overnight: number;
+};
+
+export type InterruptionsSection = {
+  points: InterruptionPoint[];
+  /** Off-hours (evening + overnight) count per bucket, aligned with `points`, per responder. */
+  byResponder: Record<string, number[]>;
+};
+
+/** Off-hours interruptions over time: the responders section's evening + overnight counts, bucketed. */
+export async function queryInterruptions(
+  scope: AnalyticsScope,
+  window: AnalyticsWindow
+): Promise<InterruptionsSection> {
+  const unit = window.bucket;
+  const localTs = (date: Date) => Prisma.sql`timezone(${window.timeZone}, ${tz(date)})`;
+  const rows = await run<
+    Array<{ bucket: string; id: string | null; evening: number; overnight: number }>
+  >(Prisma.sql`
+    WITH ${bandedCte(scope, window)},
+    buckets AS (
+      SELECT generate_series(
+        date_trunc(${unit}, ${localTs(window.start)}),
+        date_trunc(${unit}, ${localTs(new Date(window.end.getTime() - 1))}),
+        ${`1 ${unit}`}::interval
+      ) AS bucket
+    ),
+    grouped AS (
+      SELECT "assigneeId", date_trunc(${unit}, local_at) AS bucket,
+        COUNT(*) FILTER (WHERE band = 'evening')::int AS evening,
+        COUNT(*) FILTER (WHERE band = 'overnight')::int AS overnight
+      FROM banded WHERE band <> 'working' GROUP BY 1, 2
+    )
+    SELECT to_char(b.bucket, 'YYYY-MM-DD"T"HH24:MI:SS') AS bucket, g."assigneeId" AS id,
+      COALESCE(g.evening, 0) AS evening, COALESCE(g.overnight, 0) AS overnight
+    FROM buckets b LEFT JOIN grouped g ON g.bucket = b.bucket
+    ORDER BY b.bucket`);
+
+  const points: InterruptionPoint[] = [];
+  const index = new Map<string, number>();
+  const byResponder: Record<string, number[]> = {};
+  for (const row of rows) {
+    if (!index.has(row.bucket)) {
+      index.set(row.bucket, points.length);
+      points.push({ bucket: row.bucket, evening: 0, overnight: 0 });
+    }
+    const i = index.get(row.bucket)!;
+    points[i].evening += n(row.evening);
+    points[i].overnight += n(row.overnight);
+    if (row.id) {
+      byResponder[row.id] ??= [];
+      byResponder[row.id][i] = n(row.evening) + n(row.overnight);
+    }
+  }
+  for (const series of Object.values(byResponder)) {
+    for (let i = 0; i < points.length; i += 1) series[i] ??= 0;
+  }
+  return { points, byResponder };
 }
 
 // ---------------------------------------------------------------- Timing heatmap

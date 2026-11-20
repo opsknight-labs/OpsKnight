@@ -1,6 +1,10 @@
 import type { Prisma } from '@prisma/client';
-import { actorMetricReadScope } from '@/lib/authorization-filters';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { actorMetricReadScope, serviceReadWhere } from '@/lib/authorization-filters';
+import {
+  authorize,
+  AUTHORIZATION_ACTIONS,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 import { actorScheduleScope } from '@/lib/actor-metrics';
 import { compileIncidentMetricFilter, type IncidentMetricFilter } from '@/lib/metrics/domain/filter';
 import { UNASSIGNED, type AnalyticsParams } from './params';
@@ -16,6 +20,10 @@ export type AnalyticsScope = {
   /** `AND ...` fragment over alias `i` (filters + authorization), or empty. */
   incidentSql: Prisma.Sql;
   scheduleWhere: Prisma.OnCallScheduleWhereInput;
+  /** Services the actor may read, narrowed by the service/team filters. */
+  serviceWhere: Prisma.ServiceWhereInput;
+  /** For actor-first helpers (uptime, objectives) that take the actor itself. */
+  actor: AuthorizationActor;
   /** Identity of authorization + filters, for cache keys. */
   key: string;
 };
@@ -42,9 +50,20 @@ export function buildAnalyticsScope(
     INCIDENT_ALIAS
   );
   const scheduleWhere = actorScheduleScope(actor);
+  const serviceWhere: Prisma.ServiceWhereInput = {
+    AND: [
+      authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ }).allowed
+        ? serviceReadWhere(actor)
+        : { id: { in: [] } },
+      params.services.length ? { id: { in: params.services } } : {},
+      params.teams.length ? { teamId: { in: params.teams } } : {},
+    ],
+  };
   return {
     incidentSql: compiled.sql,
     scheduleWhere,
-    key: JSON.stringify({ filter: compiled.identity, schedules: scheduleWhere }),
+    serviceWhere,
+    actor,
+    key: JSON.stringify({ filter: compiled.identity, schedules: scheduleWhere, services: serviceWhere }),
   };
 }

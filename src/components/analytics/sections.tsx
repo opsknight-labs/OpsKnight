@@ -20,7 +20,7 @@ import ChartFrame from './ChartFrame';
 import DeltaBadge from './DeltaBadge';
 import IncidentDrillSheet from './IncidentDrillSheet';
 import { describeDelta, formatBucket, formatDuration, formatMetric } from './format';
-import { DurationChart, VolumeChart } from './LazyTrendCharts';
+import { DurationChart, InterruptionsChart, VolumeChart } from './LazyTrendCharts';
 import MetricInfo from './MetricInfo';
 import { SectionCard } from './SectionCard';
 import SectionError from './SectionError';
@@ -357,13 +357,16 @@ const BANDS = [
 ] as const;
 
 export async function RespondersSection({ context }: { context: AnalyticsContext }) {
-  const result = await load(context, 'responders');
+  const [result, interruptions] = await Promise.all([
+    load(context, 'responders'),
+    load(context, 'interruptions'),
+  ]);
   return (
     <SectionCard
       id="analytics-responders"
       title="Responder load"
-      description="Assigned incidents by time of day in each responder's own timezone, plus scheduled on-call time"
-      info={<MetricInfo metrics={['afterHoursRate', 'onCallHours']} />}
+      description="Assigned incidents by time of day in each responder's own timezone, time spent handling them, plus scheduled on-call time"
+      info={<MetricInfo metrics={['afterHoursRate', 'handlingHours', 'offHoursInterruptions', 'onCallHours']} />}
       className="xl:col-span-7"
     >
       {'error' in result ? (
@@ -376,16 +379,55 @@ export async function RespondersSection({ context }: { context: AnalyticsContext
           description="Responders appear here once incidents are assigned or schedules have shifts in this period."
         />
       ) : (
-        <ResponderList rows={result.data} />
+        <>
+          <ResponderList
+            rows={result.data}
+            trends={'error' in interruptions ? {} : interruptions.data.byResponder}
+          />
+          <OffHoursTrend result={interruptions} bucket={context.window.bucket} />
+        </>
       )}
     </SectionCard>
   );
 }
 
-function ResponderList({ rows }: { rows: AnalyticsSectionData<'responders'> }) {
+const HOUR_MS = 3_600_000;
+
+/** Tiny off-hours trend per responder; decorative, the counts sit next to it as text. */
+function Sparkline({ values }: { values: number[] }) {
+  const max = Math.max(1, ...values);
+  const step = 48 / Math.max(1, values.length - 1);
+  const points = values.map((value, index) => `${index * step},${15 - (value / max) * 14}`).join(' ');
+  return (
+    <svg viewBox="0 0 48 16" className="h-4 w-12 shrink-0 text-muted-foreground" aria-hidden>
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ResponderList({
+  rows,
+  trends,
+}: {
+  rows: AnalyticsSectionData<'responders'>;
+  trends: Record<string, number[]>;
+}) {
   const max = Math.max(1, ...rows.map(row => row.incidents));
+  const offHours = (row: (typeof rows)[number]) => row.handlingEveningHours + row.handlingOvernightHours;
+  const totalHandling = rows.reduce((sum, row) => sum + row.handlingHours, 0);
+  const totalOffHours = rows.reduce((sum, row) => sum + offHours(row), 0);
   return (
     <div>
+      {totalHandling > 0 && (
+        <p className="mb-3 text-xs text-muted-foreground">
+          Hours handling across listed responders:{' '}
+          <span className="font-medium tabular-nums text-foreground">
+            {formatDuration(totalHandling * HOUR_MS)}
+          </span>
+          , <span className="tabular-nums">{formatDuration(totalOffHours * HOUR_MS)}</span> of it off-hours (
+          <span className="tabular-nums">{Math.round((totalOffHours / totalHandling) * 100)}%</span>)
+        </p>
+      )}
       <ul className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
         {BANDS.map(band => (
           <li key={band.key} className="flex items-center gap-1.5">
@@ -395,34 +437,103 @@ function ResponderList({ rows }: { rows: AnalyticsSectionData<'responders'> }) {
         ))}
       </ul>
       <ul className="space-y-3">
-        {rows.slice(0, 10).map(row => (
-          <li key={row.id} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3 text-sm">
-            <span className="truncate font-medium" title={row.name}>
-              {row.name}
-            </span>
-            <div
-              className="flex h-2.5 overflow-hidden rounded-full bg-muted"
-              role="img"
-              aria-label={`${row.name}: ${row.working} in business hours, ${row.evening} evenings and weekends, ${row.overnight} overnight`}
-              style={{ width: `${Math.max(4, (row.incidents / max) * 100)}%` }}
+        {rows.slice(0, 10).map(row => {
+          const trend = trends[row.id];
+          return (
+            <li
+              key={row.id}
+              className="grid grid-cols-[minmax(0,7rem)_1fr] items-center gap-x-3 gap-y-1 text-sm sm:grid-cols-[minmax(0,9rem)_1fr_auto]"
             >
-              {BANDS.map(band =>
-                row[band.key] > 0 ? (
-                  <span
-                    key={band.key}
-                    className="h-full border-r-2 border-card last:border-r-0"
-                    style={{ width: `${(row[band.key] / row.incidents) * 100}%`, background: band.color }}
-                  />
-                ) : null
-              )}
-            </div>
-            <span className="whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
-              <span className="font-medium text-foreground">{row.incidents}</span> inc
-              {row.onCallHours > 0 && <> · {formatMetric(row.onCallHours, 'hours')} on call</>}
-            </span>
-          </li>
-        ))}
+              <span className="truncate font-medium" title={row.name}>
+                {row.name}
+              </span>
+              <div
+                className="flex h-2.5 overflow-hidden rounded-full bg-muted"
+                role="img"
+                aria-label={`${row.name}: ${row.working} in business hours, ${row.evening} evenings and weekends, ${row.overnight} overnight`}
+                style={{ width: `${Math.max(4, (row.incidents / max) * 100)}%` }}
+              >
+                {BANDS.map(band =>
+                  row[band.key] > 0 ? (
+                    <span
+                      key={band.key}
+                      className="h-full border-r-2 border-card last:border-r-0"
+                      style={{ width: `${(row[band.key] / row.incidents) * 100}%`, background: band.color }}
+                    />
+                  ) : null
+                )}
+              </div>
+              <span className="col-span-2 flex items-center justify-end gap-2 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground sm:col-span-1">
+                {trend && trend.length > 1 && trend.some(Boolean) && <Sparkline values={trend} />}
+                <span>
+                  <span className="font-medium text-foreground">{row.incidents}</span> inc
+                  {row.handlingHours > 0 && (
+                    <>
+                      {' · '}
+                      <span title={`${formatDuration(offHours(row) * HOUR_MS)} off-hours`}>
+                        {formatDuration(row.handlingHours * HOUR_MS)} handling
+                      </span>
+                    </>
+                  )}
+                  {row.onCallHours > 0 && <> · {formatMetric(row.onCallHours, 'hours')} on call</>}
+                </span>
+              </span>
+            </li>
+          );
+        })}
       </ul>
+    </div>
+  );
+}
+
+function OffHoursTrend({
+  result,
+  bucket,
+}: {
+  result: Awaited<ReturnType<typeof load<'interruptions'>>>;
+  bucket: AnalyticsContext['window']['bucket'];
+}) {
+  return (
+    <div className="mt-5 border-t pt-4">
+      <h3 className="text-sm font-semibold">Off-hours interruptions</h3>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Incidents landing in each responder&apos;s evenings, weekends or nights, per {bucket}
+      </p>
+      {'error' in result ? (
+        <SectionError title="Off-hours interruptions" errorCode={result.error} />
+      ) : !result.data.points.some(point => point.evening + point.overnight > 0) ? (
+        <p className="text-xs text-muted-foreground">No off-hours interruptions in this period.</p>
+      ) : (
+        <ChartFrame
+          label="Off-hours interruptions"
+          chart={<InterruptionsChart data={result.data.points} bucket={bucket} />}
+          table={
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card">
+                <tr className="border-b text-muted-foreground">
+                  <th scope="col" className="py-1.5 text-left font-medium">
+                    {bucket === 'hour' ? 'Hour' : bucket === 'week' ? 'Week of' : bucket === 'month' ? 'Month' : 'Day'}
+                  </th>
+                  <th scope="col" className="py-1.5 text-right font-medium">Evenings & weekends</th>
+                  <th scope="col" className="py-1.5 text-right font-medium">Overnight</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.data.points.map(point => (
+                  <tr key={point.bucket} className="border-b last:border-0">
+                    <th scope="row" className="py-1.5 text-left font-normal">
+                      {formatBucket(point.bucket, bucket === 'month' ? 'month' : 'day')}
+                      {bucket === 'hour' ? ` ${formatBucket(point.bucket, 'hour')}` : ''}
+                    </th>
+                    <td className="py-1.5 text-right tabular-nums">{point.evening}</td>
+                    <td className="py-1.5 text-right tabular-nums">{point.overnight}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          }
+        />
+      )}
     </div>
   );
 }

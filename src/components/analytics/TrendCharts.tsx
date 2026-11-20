@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { TrendPoint } from '@/lib/analytics/queries';
+import type { InterruptionPoint, TrendPoint } from '@/lib/analytics/queries';
 import { formatBucket, formatDuration } from './format';
 
 type Bucket = 'hour' | 'day' | 'week' | 'month';
@@ -240,6 +240,59 @@ export function DurationChart({
         </ResponsiveContainer>
       </div>
       <Legend series={previous ? [...series, previous] : series} />
+    </div>
+  );
+}
+
+// Same hues as the responder band legend, so evening/overnight read the same everywhere.
+const INTERRUPTION_SERIES: Series[] = [
+  { key: 'evening', label: 'Evenings & weekends', color: 'var(--chart-ordinal-2)' },
+  { key: 'overnight', label: 'Overnight', color: 'var(--chart-ordinal-3)' },
+];
+
+export function InterruptionsChart({ data, bucket }: { data: InterruptionPoint[]; bucket: Bucket }) {
+  return (
+    <div>
+      <div style={{ height: 180 }} aria-hidden>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+            <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+            <XAxis
+              dataKey="bucket"
+              tickFormatter={value => formatBucket(value, bucket)}
+              tick={AXIS}
+              tickLine={false}
+              axisLine={false}
+              minTickGap={24}
+            />
+            <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={40} />
+            <Tooltip
+              cursor={{ stroke: 'hsl(var(--ui-muted-foreground))', strokeDasharray: '3 3' }}
+              content={props => (
+                <ChartTooltip
+                  {...props}
+                  series={INTERRUPTION_SERIES}
+                  bucket={bucket}
+                  format={value => String(value ?? 0)}
+                />
+              )}
+            />
+            {INTERRUPTION_SERIES.map(item => (
+              <Line
+                key={item.key}
+                type="monotone"
+                dataKey={item.key}
+                stroke={item.color}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--ui-card))' }}
+                isAnimationActive={false}
+              />
+            ))}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <Legend series={INTERRUPTION_SERIES} />
     </div>
   );
 }

@@ -15,3 +15,8 @@ export const DurationChart = dynamic(() => import('./TrendCharts').then(m => m.D
   ssr: false,
   loading: placeholder,
 });
+
+export const InterruptionsChart = dynamic(
+  () => import('./TrendCharts').then(m => m.InterruptionsChart),
+  { ssr: false, loading: () => <Skeleton className="h-[204px] w-full" /> }
+);

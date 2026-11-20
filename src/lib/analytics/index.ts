@@ -4,8 +4,10 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getRetentionPolicy } from '@/lib/retention-policy';
 import { cachedWithTime, invalidateCached, type Cached } from './cache';
 import { analyticsParamsKey, type AnalyticsParams } from './params';
+import { queryAvailability } from './queries-availability';
 import {
   queryFollowThrough,
+  queryInterruptions,
   queryKpis,
   queryNoise,
   queryResponders,
@@ -21,6 +23,7 @@ export * from './params';
 export * from './definitions';
 export type { AnalyticsWindow } from './window';
 export type * from './queries';
+export type * from './queries-availability';
 export type * from './queries-breakdown';
 
 const SECTIONS = {
@@ -28,6 +31,8 @@ const SECTIONS = {
   trend: queryTrend,
   services: queryServices,
   responders: queryResponders,
+  interruptions: queryInterruptions,
+  availability: queryAvailability,
   timing: queryTiming,
   noise: queryNoise,
   followThrough: queryFollowThrough,

@@ -121,6 +121,34 @@ export const METRICS = {
     better: 'neutral',
     description: 'Scheduled on-call time in the period, from schedule layers and overrides.',
   },
+  handlingHours: {
+    label: 'Hours handling',
+    unit: 'hours',
+    better: 'neutral',
+    description:
+      'An estimate of time spent on incidents: for each incident assigned to the responder, the time from acknowledgement to resolution (or to the end of the period if still open), counted only inside the period and excluding SLA pauses. Off-hours is the part in their evenings, weekends and nights, in their own timezone. Overlapping incidents each count.',
+  },
+  offHoursInterruptions: {
+    label: 'Off-hours interruptions',
+    unit: 'count',
+    better: 'down',
+    description:
+      "Assigned incidents created in the responder's evening, weekend or overnight hours, in their own timezone. Totals match the evening and overnight counts in Responder load.",
+  },
+  uptime: {
+    label: 'Uptime',
+    unit: 'percent',
+    better: 'up',
+    description:
+      'Share of the period with no open incident on the service. Suppressed and snoozed incidents do not count as downtime.',
+  },
+  errorBudgetRemaining: {
+    label: 'Error budget left',
+    unit: 'percent',
+    better: 'up',
+    description:
+      "Share of the downtime the service's uptime objective allows in this period that is still unused. Allowed downtime is (100% − target) of the selected period, not the objective's own window.",
+  },
 } as const satisfies Record<string, MetricDefinition>;
 
 export type MetricId = keyof typeof METRICS;
