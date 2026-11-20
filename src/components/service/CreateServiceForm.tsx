@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
+import { CreateTrigger } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import {
@@ -21,7 +22,7 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
-import { Plus, X, Lightbulb, Zap } from 'lucide-react';
+import { X, Lightbulb, Zap } from 'lucide-react';
 import EscalationPolicyCombobox from '@/components/service/EscalationPolicyCombobox';
 
 type CreateServiceFormProps = {
@@ -42,21 +43,11 @@ export default function CreateServiceForm({
 
   if (!isOpen) {
     return (
-      <Button
-        variant="outline"
-        className="w-full h-auto py-8 border-dashed border-2 hover:border-primary hover:bg-primary/5 flex flex-col gap-2 group transition-all"
+      <CreateTrigger
+        title="Create New Service"
+        description="Add a new service to monitor and manage incidents"
         onClick={() => setIsOpen(true)}
-      >
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-          <Plus className="h-6 w-6" />
-        </div>
-        <div className="text-center">
-          <h3 className="font-semibold text-lg">Create New Service</h3>
-          <p className="text-muted-foreground text-sm">
-            Add a new service to monitor and manage incidents
-          </p>
-        </div>
-      </Button>
+      />
     );
   }
 

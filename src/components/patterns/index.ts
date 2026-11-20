@@ -22,6 +22,7 @@ export {
   type FilterChipTone,
 } from './FilterBar';
 export { default as EmptyState, type EmptyStateProps } from './EmptyState';
+export { default as CreateTrigger, type CreateTriggerProps } from './CreateTrigger';
 export { default as ErrorState, type ErrorStateProps } from './ErrorState';
 export { TableRowsSkeleton, CardGridSkeleton, DetailPageSkeleton } from './Skeletons';
 export { toneClasses, type ToneKey } from './status-tone';

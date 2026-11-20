@@ -5,6 +5,7 @@ import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
 import { Button } from '@/components/ui/shadcn/button';
+import { CreateTrigger } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -81,21 +82,11 @@ export default function PolicyCreateForm({ action, canCreate = true }: PolicyCre
 
   if (!isOpen) {
     return (
-      <Button
-        variant="outline"
-        className="w-full h-auto py-8 border-dashed border-2 hover:border-primary hover:bg-primary/5 flex flex-col items-center justify-center gap-2 group transition-all rounded-lg"
+      <CreateTrigger
+        title="Create New Escalation Policy"
+        description="Define multi-tier responder routing, escalation delays, and notification rules"
         onClick={() => setIsOpen(true)}
-      >
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-          <Plus className="h-6 w-6" />
-        </div>
-        <div className="text-center">
-          <h3 className="font-semibold text-base text-foreground">Create New Escalation Policy</h3>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Define multi-tier responder routing, escalation delays, and notification rules
-          </p>
-        </div>
-      </Button>
+      />
     );
   }
 

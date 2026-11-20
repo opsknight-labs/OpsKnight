@@ -3,12 +3,13 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import IncidentsFilters from '@/components/incident/IncidentsFilters';
 
 const push = vi.fn();
+const replace = vi.fn();
 const searchParams = new URLSearchParams('priority=P1');
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push,
-    replace: vi.fn(),
+    replace,
     prefetch: vi.fn(),
     back: vi.fn(),
   }),
@@ -18,6 +19,7 @@ vi.mock('next/navigation', () => ({
 describe('IncidentsFilters', () => {
   beforeEach(() => {
     push.mockClear();
+    replace.mockClear();
   });
 
   it('updates search params when search input changes', () => {
@@ -37,12 +39,27 @@ describe('IncidentsFilters', () => {
       // "/" in IncidentsListTable focuses the input by this id.
       expect(searchInput).toHaveAttribute('id', 'incident-search');
       fireEvent.change(searchInput, { target: { value: 'database' } });
-      expect(push).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(399);
+      });
+      expect(replace).not.toHaveBeenCalled();
 
       act(() => {
-        vi.advanceTimersByTime(300);
+        vi.advanceTimersByTime(1);
       });
-      expect(push).toHaveBeenCalledWith('/incidents?priority=P1&search=database');
+      // Search replaces history (no entry per keystroke) and keeps the scroll position.
+      expect(replace).toHaveBeenCalledWith('/incidents?priority=P1&search=database', {
+        scroll: false,
+      });
+      expect(push).not.toHaveBeenCalled();
+
+      // A single character waits for more input.
+      replace.mockClear();
+      fireEvent.change(searchInput, { target: { value: 'd' } });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(replace).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -62,7 +79,7 @@ describe('IncidentsFilters', () => {
     const clearButton = screen.getByRole('button', { name: /clear all/i });
     fireEvent.click(clearButton);
 
-    expect(push).toHaveBeenCalledWith('/incidents');
+    expect(push).toHaveBeenCalledWith('/incidents', { scroll: false });
   });
 
   it('navigates to active incidents when Active chip is clicked', () => {
@@ -79,7 +96,9 @@ describe('IncidentsFilters', () => {
     const activeChip = screen.getByRole('button', { name: 'Active' });
     fireEvent.click(activeChip);
 
-    expect(push).toHaveBeenCalledWith('/incidents?priority=P1&filter=all_open');
+    expect(push).toHaveBeenCalledWith('/incidents?priority=P1&filter=all_open', {
+      scroll: false,
+    });
   });
 
   it('renders service combobox with selected service or All services', () => {
@@ -144,6 +163,8 @@ describe('IncidentsFilters', () => {
     const option = screen.getByText('Auth Service');
     fireEvent.click(option);
 
-    expect(push).toHaveBeenCalledWith('/incidents?priority=P1&serviceId=svc-1');
+    expect(push).toHaveBeenCalledWith('/incidents?priority=P1&serviceId=svc-1', {
+      scroll: false,
+    });
   });
 });

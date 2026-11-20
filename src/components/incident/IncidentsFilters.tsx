@@ -61,7 +61,7 @@ export default function IncidentsFilters({
   const [serviceOpen, setServiceOpen] = useState(false);
 
   const updateParams = useCallback(
-    (updates: Record<string, string>) => {
+    (updates: Record<string, string>, { replace = false }: { replace?: boolean } = {}) => {
       const currentQuery = searchParams.toString();
       const params = new URLSearchParams(currentQuery);
       params.delete('page');
@@ -85,20 +85,27 @@ export default function IncidentsFilters({
       if (nextQuery === currentQuery) return;
       startTransition(() => {
         const nextUrl = nextQuery ? `/incidents?${nextQuery}` : '/incidents';
-        router.push(nextUrl);
+        // Keep scroll position; search replaces history so Back isn't one entry per keystroke.
+        if (replace) router.replace(nextUrl, { scroll: false });
+        else router.push(nextUrl, { scroll: false });
       });
     },
     [router, searchParams, startTransition]
   );
 
   const onSearchChange = useCallback(
-    (value: string) => updateParams({ search: value.trim() }),
+    (value: string) => {
+      const term = value.trim();
+      // A single character matches nearly everything; wait for a second one.
+      if (term.length === 1) return;
+      updateParams({ search: term }, { replace: true });
+    },
     [updateParams]
   );
 
   const clearFilters = () => {
     startTransition(() => {
-      router.push('/incidents');
+      router.push('/incidents', { scroll: false });
     });
   };
 
@@ -458,7 +465,7 @@ export default function IncidentsFilters({
           label: 'Search incidents',
           // IncidentsListTable focuses #incident-search on "/".
           id: 'incident-search',
-          debounceMs: 300,
+          debounceMs: 400,
         }}
         chips={chips}
         filters={filters}
