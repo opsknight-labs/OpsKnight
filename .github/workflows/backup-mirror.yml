@@ -1,0 +1,64 @@
+name: Backup mirror
+
+# Mirrors main and release tags to the backup repo OpsKnightLabs/OpsKnight, where only
+# backup-test-image.yml runs (it publishes ghcr.io/opsknightlabs/opsknight-test). Every
+# other workflow there is kept disabled, so the backup adds no CI load of its own.
+# Needs the BACKUP_TOKEN secret: a fine-grained PAT for OpsKnightLabs/OpsKnight with
+# Contents, Workflows and Actions set to read and write.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-mirror
+  cancel-in-progress: false
+
+env:
+  BACKUP_REPO: OpsKnightLabs/OpsKnight
+  KEEP_ENABLED: backup-test-image.yml
+
+jobs:
+  mirror:
+    if: github.repository == 'opsknight-labs/OpsKnight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          lfs: true
+      - name: Push main, tags and LFS objects to the backup
+        env:
+          BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
+          GH_TOKEN: ${{ secrets.BACKUP_TOKEN }}
+        run: |
+          if [ -z "$BACKUP_TOKEN" ]; then
+            echo "::warning::BACKUP_TOKEN is not set; skipping the backup mirror."
+            exit 0
+          fi
+          # Keep only the image build enabled in the backup, before and after the push:
+          # before covers existing workflows, after covers any added by this push.
+          only_image_build() {
+            gh api "repos/${BACKUP_REPO}/actions/workflows?per_page=100" \
+              --jq '.workflows[] | select(.path | startswith(".github/")) | [.id, .path, .state] | @tsv' |
+              while IFS=$'\t' read -r id path state; do
+                if [ "${path##*/}" = "$KEEP_ENABLED" ]; then
+                  [ "$state" = active ] || gh api -X PUT "repos/${BACKUP_REPO}/actions/workflows/${id}/enable"
+                elif [ "$state" = active ]; then
+                  gh api -X PUT "repos/${BACKUP_REPO}/actions/workflows/${id}/disable"
+                  echo "disabled ${path}"
+                fi
+              done
+          }
+          only_image_build
+          remote="https://x-access-token:${BACKUP_TOKEN}@github.com/${BACKUP_REPO}.git"
+          git lfs push "$remote" "${GITHUB_SHA}"
+          # The backup mirrors this repo exactly, so main and tags are force-updated.
+          git push --force "$remote" "${GITHUB_SHA}:refs/heads/main" 'refs/tags/*:refs/tags/*'
+          only_image_build
+          echo "Mirrored ${GITHUB_SHA::12} to ${BACKUP_REPO}" >> "$GITHUB_STEP_SUMMARY"
