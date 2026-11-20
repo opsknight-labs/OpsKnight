@@ -4,13 +4,13 @@ import {
   embedMany,
   generateText,
   jsonSchema,
-  stepCountIs,
   streamText,
   tool,
   zodSchema,
   type EmbeddingModel,
   type LanguageModel,
   type ModelMessage,
+  type StopCondition,
   type ToolSet,
 } from 'ai';
 import { logAudit } from '@/lib/audit';
@@ -481,29 +481,35 @@ class GatewayPort implements LanguageModelPort {
     }
   }
 
+  /** Per-step options for a tool loop: the rolling cache breakpoint. */
+  private stepper(provider: GatewayProvider) {
+    return ({ messages }: { messages: ModelMessage[] }) => ({
+      messages: withRollingCacheBreakpoint(messages, provider.kind),
+    });
+  }
+
   /**
-   * Per-step options for a tool loop: the rolling cache breakpoint, and from the second step a top-up of the
-   * hold. A refused top-up ends the loop gracefully: the model must answer from what it has read so far.
+   * When a tool loop stops: at the step cap, or when the hold cannot be topped up for one more step. The
+   * top-up runs only when the loop would otherwise continue; a refusal ends it with the answer so far, so no
+   * model call is ever made unfunded.
    */
-  private stepper(
+  private stopper(
     request: AiGenerateRequest,
     provider: GatewayProvider,
     reservation: AiReservation
-  ) {
-    return async ({ stepNumber, messages }: { stepNumber: number; messages: ModelMessage[] }) => {
-      const funded =
-        stepNumber === 0 ||
-        (await this.hold(
-          request,
-          provider,
-          estimateTokens(JSON.stringify(messages)),
-          false,
-          reservation
-        ).catch(() => null));
-      return {
-        messages: withRollingCacheBreakpoint(messages, provider.kind),
-        ...(funded ? {} : { toolChoice: 'none' as const }),
-      };
+  ): StopCondition<ToolSet> {
+    const maxSteps = clampSteps(request.maxSteps);
+    return async ({ steps }) => {
+      if (steps.length >= maxSteps) return true;
+      const sent = JSON.stringify([request.messages, steps.at(-1)?.response.messages ?? []]);
+      const funded = await this.hold(
+        request,
+        provider,
+        estimateTokens(sent),
+        false,
+        reservation
+      ).catch(() => null);
+      return !funded;
     };
   }
 
@@ -727,8 +733,8 @@ class GatewayPort implements LanguageModelPort {
               model: await buildModel(provider),
               messages: toMessages(request, provider.kind),
               tools: toToolSet(request.tools),
-              stopWhen: stepCountIs(clampSteps(request.maxSteps)),
-              prepareStep: this.stepper(request, provider, reservation),
+              stopWhen: this.stopper(request, provider, reservation),
+              prepareStep: this.stepper(provider),
               maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
               abortSignal: this.signalFor(request),
               maxRetries: 1,
@@ -824,8 +830,8 @@ class GatewayPort implements LanguageModelPort {
           model: await buildModel(provider),
           messages: toMessages(request, provider.kind),
           tools: toToolSet(request.tools),
-          stopWhen: stepCountIs(clampSteps(request.maxSteps)),
-          prepareStep: this.stepper(request, provider, reservation),
+          stopWhen: this.stopper(request, provider, reservation),
+          prepareStep: this.stepper(provider),
           maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
           abortSignal: this.signalFor(request),
           maxRetries: 0,
