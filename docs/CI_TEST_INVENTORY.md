@@ -18,7 +18,7 @@ This document establishes the machine-readable inventory and classification of O
 
 ## 2. CI Workflow & Job Inventory
 
-Pull requests run a light required gate. Heavy suites run on `main` (and tags or `workflow_dispatch`), and on a pull request only when it carries the **`ci:full`** label. "PR (`ci:full`)" below means the job is skipped on unlabelled pull requests. Path filters still apply when the label is present.
+Pull requests run a light required gate. Heavy suites run on `main` (and tags or `workflow_dispatch`), and on a pull request only when it carries the **`ci:full`** label. "PR (`ci:full`)" below means the job is skipped on unlabelled pull requests. Path filters still apply when the label is present. The label is one-shot: the suites run on the `labeled` event only, not on later pushes, so remove and re-add it to run them again.
 
 ```
 +------------------------------------------------------------------------------------------------------------------------------------------+
