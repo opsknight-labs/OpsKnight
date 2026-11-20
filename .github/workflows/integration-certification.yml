@@ -42,7 +42,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   multi-replica-failover-load:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

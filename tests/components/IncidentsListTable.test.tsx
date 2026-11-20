@@ -139,8 +139,10 @@ describe('IncidentsListTable', () => {
     const ackBtn = screen.getByTitle('Acknowledge Incident');
     expect(ackBtn).toBeDefined();
 
-    // Relative timestamp is rendered
-    expect(screen.getByText(/minutes ago/i)).toBeDefined();
+    // Relative timestamp is rendered with the absolute time on hover
+    const created = screen.getByText('5m ago');
+    expect(created.tagName).toBe('TIME');
+    expect(created.getAttribute('title')).toMatch(/UTC/);
 
     // Keyboard shortcuts guide is rendered
     expect(screen.getByText('Shortcuts:')).toBeDefined();

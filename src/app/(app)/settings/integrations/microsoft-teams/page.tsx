@@ -1,9 +1,10 @@
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { ServiceIntegrationsLink } from '@/components/settings/integrations/ServiceIntegrationsLink';
+import { IntegrationStatusBadge } from '@/components/settings/integrations/IntegrationStatus';
 import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
-import { Shield, Globe, KeyRound, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Globe, KeyRound, RefreshCw } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import MicrosoftTeamsIntegrationPage from '@/components/settings/microsoft-teams/MicrosoftTeamsIntegrationPage';
 import { getBaseUrl } from '@/lib/env-validation';
@@ -175,40 +176,17 @@ export default async function MicrosoftTeamsIntegrationRoute() {
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="COLLABORATION ENGINE"
+      <SettingsPageHeader
+        eyebrow="Collaboration Engine"
+        icon={MicrosoftTeamsLogo}
         title="Microsoft Teams Integration"
-        subtitle="Deliver incident cards, lifecycle updates, and controlled collaboration workflows to Microsoft Teams."
+        description="Deliver incident cards, lifecycle updates, and controlled collaboration workflows to Microsoft Teams."
         badges={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
-            >
-              <Shield className="h-3 w-3 mr-1" />
-              Admin Only
-            </Badge>
-            <Badge
-              variant="outline"
-              className={`text-[10px] font-semibold ${
-                isConnected
-                  ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-100'
-                  : 'border-amber-400/60 bg-amber-400/15 text-amber-100'
-              }`}
-            >
-              {isConnected ? (
-                <>
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  App Configured
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  Setup Required
-                </>
-              )}
-            </Badge>
-          </div>
+          <IntegrationStatusBadge
+            onDark
+            state={isConnected ? 'connected' : 'not_connected'}
+            label={isConnected ? 'Connected' : 'Setup required'}
+          />
         }
         statsPlacement="bottom"
         stats={[
@@ -296,6 +274,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         rscState={rscState}
         warRoomDiagnosticsError={warRoomDiagnosticsError}
       />
+      <ServiceIntegrationsLink description="Each service can have its own Teams channel and war room. Set it on the service's Notifications tab." />
     </div>
   );
 }

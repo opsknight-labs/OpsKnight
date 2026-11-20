@@ -842,39 +842,6 @@
 
 
 
-/* UI: per-page accents for sub-pages */
-.settings-page-v2[data-settings-page="profile"],
-.settings-page-v2[data-settings-page="preferences"],
-.settings-page-v2[data-settings-page="security"] {
-    --settings-accent: #2563eb;
-    --settings-accent-2: #1d4ed8;
-    --settings-accent-soft: rgba(37, 99, 235, 0.12);
-}
-
-.settings-page-v2[data-settings-page="workspace"],
-.settings-page-v2[data-settings-page="custom-fields"],
-.settings-page-v2[data-settings-page="status-page"],
-.settings-page-v2[data-settings-page="system"],
-.settings-page-v2[data-settings-page="notifications-admin"],
-.settings-page-v2[data-settings-page="audit-logs"] {
-    --settings-accent: #0ea5e9;
-    --settings-accent-2: #0284c7;
-    --settings-accent-soft: rgba(14, 165, 233, 0.12);
-}
-
-.settings-page-v2[data-settings-page="notification-history"] {
-    --settings-accent: #f59e0b;
-    --settings-accent-2: #d97706;
-    --settings-accent-soft: rgba(245, 158, 11, 0.16);
-}
-
-.settings-page-v2[data-settings-page="integrations"],
-.settings-page-v2[data-settings-page="slack"] {
-    --settings-accent: #7c3aed;
-    --settings-accent-2: #6d28d9;
-    --settings-accent-soft: rgba(124, 58, 237, 0.14);
-}
-
 .settings-search {
     position: relative;
 }
@@ -992,81 +959,6 @@
     gap: var(--spacing-6);
     width: 100%;
     /* UI: content stretches freely without width caps */
-}
-
-.settings-page-v2 {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-6);
-    padding: clamp(1rem, 2vw, 2rem);
-    /* UI: full-width, free-flowing layout with responsive breathing room */
-    --settings-accent: var(--primary-color);
-    --settings-accent-2: var(--primary-hover);
-    --settings-accent-soft: rgba(37, 99, 235, 0.12);
-}
-
-.settings-page-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-6);
-}
-
-.settings-page-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--spacing-3);
-    padding: clamp(1.25rem, 2vw, 1.75rem);
-    background: linear-gradient(180deg, hsl(var(--ui-card)) 0%, rgb(var(--ink-50)) 100%);
-    border: 1px solid var(--border);
-    border-radius: calc(var(--radius-lg) + 2px);
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-    position: relative;
-    overflow: visible;
-    z-index: 2;
-    /* UI: clearer hierarchy with soft surface separation */
-}
-
-.settings-page-header::before {
-    display: block;
-    opacity: 0.5;
-    /* UI: subtle accent line for hierarchy */
-}
-
-.settings-page-header h1 {
-    font-size: clamp(1.35rem, 2.6vw, 2.1rem);
-    font-weight: var(--font-weight-bold);
-    letter-spacing: -0.02em;
-    margin: 0;
-    line-height: 1.1;
-    /* UI: stronger heading presence */
-}
-
-.settings-page-header p {
-    margin-top: var(--spacing-2);
-    color: var(--text-muted);
-    line-height: 1.6;
-    font-size: clamp(0.9rem, 1.2vw, 1rem);
-    /* UI: readable description spacing */
-}
-
-.settings-learn-more {
-    font-size: clamp(0.8rem, 1.1vw, 0.875rem);
-    color: var(--primary-color);
-    font-weight: var(--font-weight-semibold);
-    text-decoration: none;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-full);
-    padding: 0.45rem 1rem;
-    background: hsl(var(--card));
-    transition: var(--transition-base) var(--ease-out);
-    /* UI: refined secondary action chip */
-}
-
-.settings-learn-more:hover {
-    border-color: var(--border-hover);
-    box-shadow: var(--shadow-sm);
 }
 
 .settings-section-card {
@@ -1189,10 +1081,6 @@
 }
 
 @media (max-width: 900px) {
-    .settings-page-v2 {
-        width: 100%;
-    }
-
     .settings-row-v2 {
         grid-template-columns: 1fr;
     }
@@ -1211,15 +1099,6 @@
 
     .settings-sidebar-v2 {
         padding: var(--spacing-3);
-    }
-
-    .settings-page-v2 {
-        padding: clamp(0.8rem, 1.3vw, 1.25rem);
-        gap: var(--spacing-4);
-    }
-
-    .settings-page-header {
-        padding: clamp(0.8rem, 1.2vw, 1.1rem);
     }
 
     .settings-section-card {
@@ -1273,24 +1152,6 @@
     .settings-layout-v2 {
         grid-template-columns: 1fr;
         gap: var(--spacing-4);
-    }
-
-    .settings-page-v2 {
-        padding: clamp(0.75rem, 1.6vw, 1.5rem);
-        gap: var(--spacing-4);
-    }
-
-    .settings-page-content {
-        gap: var(--spacing-4);
-    }
-
-    .settings-page-header {
-        padding: clamp(1rem, 1.6vw, 1.35rem);
-        gap: var(--spacing-2);
-    }
-
-    .settings-page-header p {
-        font-size: 0.9rem;
     }
 
     .settings-section-card {

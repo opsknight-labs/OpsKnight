@@ -4,6 +4,7 @@ import ComplianceClientTabs from '@/components/settings/compliance/ComplianceCli
 import type { ComplianceControl } from '@/lib/compliance/types';
 
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/settings/security-compliance',
   useRouter: () => ({
     refresh: vi.fn(),
     push: vi.fn(),
@@ -101,14 +102,12 @@ describe('ComplianceClientTabs', () => {
     render(<ComplianceClientTabs {...defaultProps} />);
 
     // Banner Tag & Title
-    expect(screen.getByText('Security Posture & Compliance Frameworks')).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 1, name: 'Security & Compliance' })
     ).toBeInTheDocument();
 
     // Badges (adhering to readiness percentage without "compliant" or "score")
     expect(screen.getByText(/Repository Baseline:\s*15\s*\/\s*20/i)).toBeInTheDocument();
-    expect(screen.getByText('Enterprise Governance')).toBeInTheDocument();
 
     // 4 Stats capsules
     expect(screen.getByText('Baseline Implemented')).toBeInTheDocument();
@@ -133,10 +132,8 @@ describe('ComplianceClientTabs', () => {
 
     // Action links
     expect(screen.getByRole('link', { name: /Audit Log/i })).toHaveAttribute('href', '/audit');
-    expect(screen.getByRole('link', { name: /Settings Hub/i })).toHaveAttribute(
-      'href',
-      '/settings'
-    );
+    // The settings breadcrumb replaces the old "Settings Hub" header button.
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
   });
 
   it('allows navigating between sub-tabs', () => {

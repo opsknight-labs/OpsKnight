@@ -15,7 +15,7 @@ export function ingestionDeliveryKey(headers: Headers, provider: string): string
   if (explicit) return `explicit:${explicit}`;
   if (provider === 'GITHUB')
     return headers.get('x-github-delivery') ?? headers.get('x-gitlab-event-uuid') ?? undefined;
-  if (provider === 'GRAFANA')
+  if (provider === 'GRAFANA' || provider === 'BASE14')
     return headers.get('x-request-id') ?? headers.get('x-grafana-delivery') ?? undefined;
   // SNS keeps the same MessageId across its delivery retries.
   if (provider === 'CLOUDWATCH') return headers.get('x-amz-sns-message-id') ?? undefined;

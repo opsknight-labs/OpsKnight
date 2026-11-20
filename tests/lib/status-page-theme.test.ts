@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isDarkHex,
+  mixHex,
   resolveStatusPageFontFamily,
   computeStatusPageTheme,
   STATUS_PAGE_FONTS,
@@ -8,6 +9,12 @@ import {
 } from '@/lib/status-page-theme';
 
 describe('status-page-theme utility', () => {
+  it('mixHex matches color-mix(in srgb) for hex inputs', () => {
+    expect(mixHex('#000000', '#ffffff', 0.5)).toBe('#808080');
+    expect(mixHex('#fff', '#000', 1)).toBe('#ffffff');
+    expect(mixHex('#0f172a', '#ffffff', 0.84)).toBe('#353c4c');
+  });
+
   describe('isDarkHex', () => {
     it('correctly identifies dark colors', () => {
       expect(isDarkHex('#000000')).toBe(true);
@@ -89,7 +96,8 @@ describe('status-page-theme utility', () => {
       // Safeguard automatically switches text to readable light
       expect(theme.textColor).toBe('#f8fafc');
       expect(theme.cssVariables['--status-text']).toBe('#f8fafc');
-      expect(theme.cssVariables['--status-panel-bg']).toContain('color-mix');
+      // Precomputed hex (not color-mix) so panels survive Safari < 16.2
+      expect(theme.cssVariables['--status-panel-bg']).toBe('#353c4c');
     });
 
     it('automatically prevents dark-on-dark collision when light bg paired with light text', () => {

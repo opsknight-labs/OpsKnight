@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { formatDateTime } from '@/lib/timezone';
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -12,7 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/shadcn/table';
-import { Card } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Select,
@@ -21,12 +20,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import SearchFilterBar from '@/components/ui/SearchFilterBar';
-import LivePulseBadge from '@/components/ui/LivePulseBadge';
-import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
-import EmptyState from '@/components/ui/EmptyState';
+import { EmptyState, FilterBar, FilterField } from '@/components/patterns';
+import {
+  LogPagination,
+  LogTableCard,
+  LogTableScroll,
+  LogTimestamp,
+  MonoId,
+  logCellClass,
+  logHeadClass,
+  logRowClass,
+} from '@/components/audit/LogTable';
 import { exportToCsv } from '@/lib/export-csv';
-import { Activity, Download, Copy, Check } from 'lucide-react';
+import { Activity, Download } from 'lucide-react';
 import EventLifecycleBadge from './EventLifecycleBadge';
 
 export type EventItem = {
@@ -67,7 +73,6 @@ export default function EventsListTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -83,17 +88,6 @@ export default function EventsListTable({
     const params = new URLSearchParams(searchParams.toString());
     params.set('page', String(targetPage));
     return `/events?${params.toString()}`;
-  };
-
-  const handleCopyId = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(id);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      // ignore
-    }
   };
 
   const handleExportCsv = () => {
@@ -119,166 +113,141 @@ export default function EventsListTable({
 
   return (
     <div className="space-y-4">
-      {/* Search & Filter Toolbar */}
-      <SearchFilterBar
-        searchValue={currentSearch}
-        onSearchChange={val => updateParam('search', val)}
-        searchPlaceholder="Search event messages, incidents, services..."
-        searchDebounceMs={300}
+      <FilterBar
+        search={{
+          value: currentSearch,
+          onChange: val => updateParam('search', val),
+          placeholder: 'Search messages, incidents or services…',
+          label: 'Search event logs',
+          debounceMs: 300,
+        }}
         hasActiveFilters={hasActiveFilters}
-        onResetFilters={handleResetFilters}
+        onClearAll={handleResetFilters}
         filters={
           serviceNames.length > 0 ? (
-            <Select
-              value={currentService || 'ALL'}
-              onValueChange={val => updateParam('service', val)}
-            >
-              <SelectTrigger className="h-9 w-[160px] bg-ink-50/60 text-xs">
-                <SelectValue placeholder="All Services" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Services</SelectItem>
-                {serviceNames.map(svc => (
-                  <SelectItem key={svc} value={svc}>
-                    {svc}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FilterField label="Service" htmlFor="events-filter-service">
+              <Select
+                value={currentService || 'ALL'}
+                onValueChange={val => updateParam('service', val)}
+              >
+                <SelectTrigger id="events-filter-service" className="h-9 w-[200px] text-sm">
+                  <SelectValue placeholder="All services" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All services</SelectItem>
+                  {serviceNames.map(svc => (
+                    <SelectItem key={svc} value={svc}>
+                      {svc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
           ) : undefined
         }
         actions={
-          <div className="flex items-center gap-2">
-            <LivePulseBadge isLive={true} label="Live Stream" />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportCsv}
-              disabled={initialEvents.length === 0}
-              className="h-9 gap-1.5 text-xs shadow-sm hover:bg-ink-100"
-            >
-              <Download className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>Export CSV</span>
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCsv}
+            disabled={initialEvents.length === 0}
+            className="h-9 gap-1.5"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Export page as CSV
+          </Button>
         }
       />
 
-      {/* Events Card & Table */}
-      <Card className="bg-card overflow-hidden shadow-sm">
-        {initialEvents.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              icon={<Activity className="h-6 w-6 text-muted-foreground/60" />}
-              title={hasActiveFilters ? 'No matching events found' : 'No events logged yet'}
-              description={
-                hasActiveFilters
-                  ? 'Try adjusting or clearing your search filters.'
-                  : 'Events will appear here in real-time when incidents are triggered, acknowledged, or resolved.'
-              }
-              action={
-                hasActiveFilters ? (
-                  <Button variant="outline" size="sm" onClick={handleResetFilters}>
-                    Clear Filters
-                  </Button>
-                ) : (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/events/test">Trigger test event</Link>
-                  </Button>
-                )
-              }
-            />
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-              <Table className="min-w-[750px]">
-                <TableHeader className="bg-ink-50 border-b border-border">
-                  <TableRow>
-                    <TableHead className="text-left p-4 font-semibold text-muted-foreground w-[170px]">
-                      Timestamp
-                    </TableHead>
-                    <TableHead className="text-left p-4 font-semibold text-muted-foreground w-[130px]">
-                      Type
-                    </TableHead>
-                    <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                      Incident & Service
-                    </TableHead>
-                    <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                      Event Message
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {initialEvents.map(event => (
-                    <TableRow
-                      key={event.id}
-                      className="border-b border-ink-100 hover:bg-ink-50/70 transition-colors group"
-                    >
-                      <TableCell className="p-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                        <div>
-                          {formatDateTime(event.createdAt, userTimeZone, { format: 'datetime' })}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={e => handleCopyId(event.id, e)}
-                          className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 hover:text-foreground mt-0.5"
-                          title="Copy Event ID"
-                        >
-                          {copiedId === event.id ? (
-                            <>
-                              <Check className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
-                              <span className="text-emerald-600 dark:text-emerald-400">Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="h-2.5 w-2.5" />
-                              <span>{event.id.slice(0, 8)}...</span>
-                            </>
-                          )}
-                        </button>
-                      </TableCell>
-                      <TableCell className="p-4">
-                        <EventLifecycleBadge message={event.message} type={event.type} />
-                      </TableCell>
-                      <TableCell className="p-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Link
-                            href={`/incidents/${event.incident.id}`}
-                            className="text-primary font-semibold text-xs hover:underline font-mono"
-                          >
-                            #{event.incident.id.slice(-5).toUpperCase()}
-                          </Link>
-                          <span className="inline-flex items-center rounded bg-ink-100 px-1.5 py-0.5 text-[11px] font-medium text-ink-700">
-                            {event.incident.service.name}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                          {event.incident.title}
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-4">
-                        <span className="text-xs text-foreground leading-relaxed">
-                          {event.message}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Pagination Footer */}
-            <TablePaginationFooter
+      <LogTableCard
+        footer={
+          initialEvents.length > 0 ? (
+            <LogPagination
+              label="Event log pages"
               page={page}
               pageSize={pageSize}
               totalCount={totalCount}
               prevHref={page > 1 ? pageHref(page - 1) : undefined}
               nextHref={page < totalPages ? pageHref(page + 1) : undefined}
             />
-          </>
+          ) : undefined
+        }
+      >
+        {initialEvents.length === 0 ? (
+          <EmptyState
+            variant="simple"
+            icon={<Activity />}
+            title={hasActiveFilters ? 'No events match these filters' : 'No events yet'}
+            description={
+              hasActiveFilters
+                ? 'Change the search or service, or clear the filters to see every event.'
+                : 'Events appear here when incidents are triggered, acknowledged, escalated or resolved.'
+            }
+            action={
+              hasActiveFilters ? (
+                <Button variant="outline" size="sm" onClick={handleResetFilters}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/events/test">Send a test event</Link>
+                </Button>
+              )
+            }
+          />
+        ) : (
+          <LogTableScroll label="Event log entries">
+            <Table className="min-w-[860px]">
+              <TableHeader className="bg-muted/40">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className={cn(logHeadClass, 'w-[180px]')}>Time</TableHead>
+                  <TableHead className={cn(logHeadClass, 'w-[140px]')}>Type</TableHead>
+                  <TableHead className={logHeadClass}>Incident</TableHead>
+                  <TableHead className={logHeadClass}>Message</TableHead>
+                  <TableHead className={cn(logHeadClass, 'w-[150px]')}>Event ID</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {initialEvents.map(event => (
+                  <TableRow key={event.id} className={logRowClass}>
+                    <TableCell className={logCellClass}>
+                      <LogTimestamp date={event.createdAt} timeZone={userTimeZone} />
+                    </TableCell>
+                    <TableCell className={logCellClass}>
+                      <EventLifecycleBadge message={event.message} type={event.type} />
+                    </TableCell>
+                    <TableCell className={cn(logCellClass, 'max-w-[320px]')}>
+                      <Link
+                        href={`/incidents/${event.incident.id}`}
+                        className="block truncate rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {event.incident.title}
+                      </Link>
+                      <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        <code className="font-mono">
+                          #{event.incident.id.slice(-5).toUpperCase()}
+                        </code>
+                        <span aria-hidden="true">·</span>
+                        <span className="truncate">{event.incident.service.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className={cn(logCellClass, 'max-w-md')}>
+                      <span className="line-clamp-2 text-foreground">{event.message}</span>
+                    </TableCell>
+                    <TableCell className={logCellClass}>
+                      <MonoId
+                        value={event.id}
+                        display={`${event.id.slice(0, 10)}…`}
+                        label="event ID"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </LogTableScroll>
         )}
-      </Card>
+      </LogTableCard>
     </div>
   );
 }

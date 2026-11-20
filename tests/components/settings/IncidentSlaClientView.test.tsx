@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import IncidentSlaClientView from '@/components/settings/incident-sla/IncidentSlaClientView';
 
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/settings/incident-sla',
   useRouter: () => ({
     refresh: vi.fn(),
     push: vi.fn(),
@@ -78,14 +79,12 @@ describe('IncidentSlaClientView', () => {
     render(<IncidentSlaClientView {...defaultProps} />);
 
     // Banner Tag & Title
-    expect(screen.getByText('Governance & SLA Architecture')).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 1, name: 'Incident SLAs & Response Policies' })
     ).toBeInTheDocument();
 
     // Badges
     expect(screen.getByText('Active · SLA v3')).toBeInTheDocument();
-    expect(screen.getByText('Workspace Scope')).toBeInTheDocument();
 
     // Stats capsules
     expect(screen.getByText('Fallback SLA')).toBeInTheDocument();
@@ -102,10 +101,8 @@ describe('IncidentSlaClientView', () => {
 
     // Action links
     expect(screen.getByRole('link', { name: /Services/i })).toHaveAttribute('href', '/services');
-    expect(screen.getByRole('link', { name: /Settings Hub/i })).toHaveAttribute(
-      'href',
-      '/settings'
-    );
+    // The settings breadcrumb replaces the old "Settings Hub" header button.
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
   });
 
   it('allows navigating between sub-tabs', () => {

@@ -1,6 +1,5 @@
 import React from 'react';
 import { CommandPalette } from '@/components/settings/layout/CommandPalette';
-import SettingsSubpageNav from '@/components/settings/SettingsSubpageNav';
 
 type Props = {
   isAdmin?: boolean;
@@ -9,12 +8,16 @@ type Props = {
   children: React.ReactNode;
 };
 
+/** Page frame for every settings route; each page renders its own `SettingsPageHeader`. */
 export default function SettingsShell({ children, isAdmin, isResponderOrAbove, isAuditor }: Props) {
   return (
-    <div className="w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 min-h-[calc(100vh-4rem)]">
-      <CommandPalette isAdmin={isAdmin} isResponderOrAbove={isResponderOrAbove} isAuditor={isAuditor} />
-      <SettingsSubpageNav />
-      <main className="w-full">{children}</main>
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 md:px-6 md:py-8">
+      <CommandPalette
+        isAdmin={isAdmin}
+        isResponderOrAbove={isResponderOrAbove}
+        isAuditor={isAuditor}
+      />
+      {children}
     </div>
   );
 }

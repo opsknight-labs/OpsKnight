@@ -8,6 +8,7 @@ export type IntegrationType =
   | 'DATADOG'
   | 'WEBHOOK'
   | 'GRAFANA'
+  | 'BASE14'
   | 'PROMETHEUS'
   | 'NEWRELIC'
   | 'SENTRY'
@@ -64,6 +65,39 @@ const BrandIcon = ({
       : (paths || (path ? [path] : [])).map((d, index) => (
           <path key={`${title}-path-${index}`} d={d} fill="currentColor" />
         ))}
+  </svg>
+);
+
+// base14 mark, traced from base14.io/favicon/favicon.svg (ink #0F0E0B, paper #FBFAF7).
+const BASE14_FACETS = [
+  '0.953,-0.550 0.000,0.000 0.000,-1.950 0.953,-2.500',
+  '-0.953,-0.550 0.000,0.000 0.000,-1.950 -0.953,-2.500',
+  '0.000,-3.050 0.953,-2.500 0.000,-1.950 -0.953,-2.500',
+  '0.953,0.550 0.000,0.000 1.689,-0.975 2.641,-0.425',
+  '-0.000,-1.100 0.000,0.000 1.689,-0.975 1.689,-2.075',
+  '2.641,-1.525 2.641,-0.425 1.689,-0.975 1.689,-2.075',
+  '0.000,1.100 -0.000,0.000 1.689,0.975 1.689,2.075',
+  '0.953,-0.550 -0.000,0.000 1.689,0.975 2.641,0.425',
+  '2.641,1.525 1.689,2.075 1.689,0.975 2.641,0.425',
+  '-0.953,0.550 -0.000,0.000 0.000,1.950 -0.953,2.500',
+  '0.953,0.550 -0.000,0.000 0.000,1.950 0.953,2.500',
+  '0.000,3.050 -0.953,2.500 0.000,1.950 0.953,2.500',
+  '-0.953,-0.550 0.000,-0.000 -1.689,0.975 -2.641,0.425',
+  '0.000,1.100 0.000,-0.000 -1.689,0.975 -1.689,2.075',
+  '-2.641,1.525 -2.641,0.425 -1.689,0.975 -1.689,2.075',
+  '0.000,-1.100 0.000,0.000 -1.689,-0.975 -1.689,-2.075',
+  '-0.953,0.550 0.000,0.000 -1.689,-0.975 -2.641,-0.425',
+  '-2.641,-1.525 -1.689,-2.075 -1.689,-0.975 -2.641,-0.425',
+] as const;
+
+const Base14Icon = () => (
+  <svg viewBox="-3.4 -3.4 6.8 6.8" role="img" aria-label="base14 logo" className="h-6 w-6">
+    <title>base14</title>
+    <g fill="#FBFAF7" stroke="#0F0E0B" strokeWidth={0.2} strokeLinejoin="round">
+      {BASE14_FACETS.map(points => (
+        <polygon key={points} points={points} />
+      ))}
+    </g>
   </svg>
 );
 
@@ -289,6 +323,14 @@ export const INTEGRATION_TYPES: Array<{
     description: 'Receive alerts from Grafana alerting rules',
     icon: <BrandIcon {...BRAND_PATHS.grafana} color="#ffffff" />,
     iconBg: BRAND_PATHS.grafana.color,
+    category: 'Monitoring & APM',
+  },
+  {
+    value: 'BASE14',
+    label: 'base14 Scout',
+    description: 'Receive alerts from base14 Scout (Grafana alerting)',
+    icon: <Base14Icon />,
+    iconBg: '#0F0E0B',
     category: 'Monitoring & APM',
   },
   {

@@ -26,6 +26,8 @@ export function getWebhookUrl(
       return `${baseUrl}/api/integrations/datadog?integrationId=${integrationId}${keyParam}`;
     case 'GRAFANA':
       return `${baseUrl}/api/integrations/grafana?integrationId=${integrationId}${keyParam}`;
+    case 'BASE14':
+      return `${baseUrl}/api/integrations/base14?integrationId=${integrationId}${keyParam}`;
     case 'PROMETHEUS':
       return `${baseUrl}/api/integrations/prometheus?integrationId=${integrationId}${keyParam}`;
     case 'NEWRELIC':

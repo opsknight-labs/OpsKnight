@@ -182,13 +182,12 @@ type StatusPageConfigProps = {
   liveSnapshot?: any;
 };
 
-const ANNOUNCEMENT_TYPES = [
-  { value: 'INCIDENT', label: 'Incident', color: '#ef4444', background: '#fee2e2' },
-  { value: 'MAINTENANCE', label: 'Maintenance', color: '#2563eb', background: '#dbeafe' },
-  { value: 'UPDATE', label: 'Update', color: '#10b981', background: '#dcfce7' },
-  { value: 'WARNING', label: 'Warning', color: '#f59e0b', background: '#fef3c7' },
-  { value: 'INFO', label: 'Information', color: '#64748b', background: '#f1f5f9' },
-];
+const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(id => id.trim()).filter(Boolean);
+};
 
 export default function StatusPageConfig({
   statusPage,
@@ -334,13 +333,6 @@ export default function StatusPageConfig({
 
   const serviceLookup = new Map(allServices.map(service => [service.id, service] as const));
 
-  const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-    return value.map(id => id.trim()).filter(Boolean);
-  };
-
   const buildAnnouncementAffectedServices = (value?: string[] | null) => {
     const ids = normalizeAnnouncementServiceIds(value);
     return ids
@@ -351,19 +343,6 @@ export default function StatusPageConfig({
         name: service!.name,
         region: service!.region ?? null,
       }));
-  };
-
-  const getAnnouncementRegions = (services: Array<{ region?: string | null }>) => {
-    const regionSet = new Set<string>();
-    services.forEach(service => {
-      if (!service.region) return;
-      service.region
-        .split(',')
-        .map(entry => entry.trim())
-        .filter(Boolean)
-        .forEach(region => regionSet.add(region));
-    });
-    return Array.from(regionSet.values());
   };
 
   // Privacy settings - with defaults if not in statusPage
@@ -838,7 +817,8 @@ export default function StatusPageConfig({
     return statusPage.slug ? `status-${statusPage.slug}.opsknight.com` : 'status.opsknight.com';
   }, [formData.customDomain, formData.subdomain, formData.slug, statusPage.slug]);
 
-  const previewData = useMemo(() => {
+  // Inputs (branding, services, privacy) are rebuilt each render, so a memo here never cached.
+  const previewData = (() => {
     if (!showPreview) return null;
     return {
       statusPage: {
@@ -901,20 +881,7 @@ export default function StatusPageConfig({
       uptimeExcellentThreshold: formData.uptimeExcellentThreshold,
       uptimeGoodThreshold: formData.uptimeGoodThreshold,
     };
-  }, [
-    showPreview,
-    formData,
-    previewBranding,
-    previewServices,
-    previewStatusPageServices,
-    previewAnnouncements,
-    previewUptime90,
-    previewPrivacySettings,
-    statusPage.slug,
-    statusPage.subdomain,
-    statusPage.customDomain,
-    liveSnapshot,
-  ]);
+  })();
 
   return (
     <div className="status-page-config-root w-full">
@@ -1010,7 +977,7 @@ export default function StatusPageConfig({
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              background: '#f9fafb',
+              background: 'hsl(var(--ui-muted))',
               transition: 'flex 0.3s ease',
             }}
           >
@@ -1713,9 +1680,9 @@ export default function StatusPageConfig({
                                   style={{
                                     marginTop: 'var(--spacing-4)',
                                     padding: 'var(--spacing-4)',
-                                    background: '#f9fafb',
+                                    background: 'hsl(var(--ui-muted))',
                                     borderRadius: 'var(--radius-md)',
-                                    border: '1px solid #e5e7eb',
+                                    border: '1px solid hsl(var(--ui-border))',
                                   }}
                                 >
                                   <h4
@@ -1723,7 +1690,7 @@ export default function StatusPageConfig({
                                       fontSize: 'var(--font-size-sm)',
                                       fontWeight: '600',
                                       marginBottom: 'var(--spacing-3)',
-                                      color: '#374151',
+                                      color: 'hsl(var(--ui-foreground))',
                                     }}
                                   >
                                     Uptime Thresholds
@@ -1731,7 +1698,7 @@ export default function StatusPageConfig({
                                   <p
                                     style={{
                                       fontSize: 'var(--font-size-xs)',
-                                      color: '#6b7280',
+                                      color: 'hsl(var(--ui-muted-foreground))',
                                       marginBottom: 'var(--spacing-3)',
                                     }}
                                   >
@@ -1880,7 +1847,7 @@ export default function StatusPageConfig({
                               )}
                               <div
                                 style={{
-                                  borderTop: '1px solid #e5e7eb',
+                                  borderTop: '1px solid hsl(var(--ui-border))',
                                   paddingTop: 'var(--spacing-3)',
                                   display: 'flex',
                                   flexDirection: 'column',
@@ -1980,7 +1947,7 @@ export default function StatusPageConfig({
                               )}
                               <div
                                 style={{
-                                  borderTop: '1px solid #e5e7eb',
+                                  borderTop: '1px solid hsl(var(--ui-border))',
                                   paddingTop: 'var(--spacing-4)',
                                 }}
                               >
@@ -2086,8 +2053,8 @@ export default function StatusPageConfig({
                                         style={{
                                           padding: 'var(--spacing-3)',
                                           borderRadius: 'var(--radius-md)',
-                                          border: '1px solid #e5e7eb',
-                                          background: '#f9fafb',
+                                          border: '1px solid hsl(var(--ui-border))',
+                                          background: 'hsl(var(--ui-muted))',
                                           display: 'flex',
                                           alignItems: 'center',
                                           justifyContent: 'space-between',
@@ -2158,8 +2125,8 @@ export default function StatusPageConfig({
                                   marginTop: 'var(--spacing-4)',
                                   padding: 'var(--spacing-3)',
                                   borderRadius: 'var(--radius-md)',
-                                  border: '1px solid #e5e7eb',
-                                  background: '#f9fafb',
+                                  border: '1px solid hsl(var(--ui-border))',
+                                  background: 'hsl(var(--ui-muted))',
                                   display: 'flex',
                                   flexDirection: 'column',
                                   gap: 'var(--spacing-3)',
@@ -2201,7 +2168,7 @@ export default function StatusPageConfig({
                             <div
                               style={{
                                 marginTop: 'var(--spacing-5)',
-                                borderTop: '1px solid #e5e7eb',
+                                borderTop: '1px solid hsl(var(--ui-border))',
                                 paddingTop: 'var(--spacing-4)',
                               }}
                             >
@@ -2224,8 +2191,8 @@ export default function StatusPageConfig({
                                 <div
                                   style={{
                                     padding: 'var(--spacing-3)',
-                                    background: '#f9fafb',
-                                    border: '1px solid #e5e7eb',
+                                    background: 'hsl(var(--ui-muted))',
+                                    border: '1px solid hsl(var(--ui-border))',
                                     borderRadius: 'var(--radius-md)',
                                   }}
                                 >
@@ -2251,8 +2218,8 @@ export default function StatusPageConfig({
                                 <div
                                   style={{
                                     padding: 'var(--spacing-3)',
-                                    background: '#f9fafb',
-                                    border: '1px solid #e5e7eb',
+                                    background: 'hsl(var(--ui-muted))',
+                                    border: '1px solid hsl(var(--ui-border))',
                                     borderRadius: 'var(--radius-md)',
                                   }}
                                 >

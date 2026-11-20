@@ -27,9 +27,14 @@ on:
       - 'prisma/**'
       - 'tests/**/scim*'
       - '.github/workflows/scim-certification.yml'
+# A newer push to the same PR supersedes the running one; main and scheduled runs finish.
+concurrency:
+  group: scim-certification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   certify:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     services:

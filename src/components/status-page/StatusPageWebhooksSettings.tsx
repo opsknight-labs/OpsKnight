@@ -6,6 +6,9 @@ import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCar
 import { Webhook as WebhookIcon } from 'lucide-react';
 import { errorFromResponse } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
+import { notify } from '@/lib/toast';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
+import { Skeleton } from '@/components/ui/shadcn/skeleton';
 
 interface Webhook {
   id: string;
@@ -70,6 +73,7 @@ export default function StatusPageWebhooksSettings({
 
   useEffect(() => {
     const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetches from the server; state is set after the response.
     void loadWebhooks(controller.signal);
     return () => controller.abort();
   }, [loadWebhooks]);
@@ -105,31 +109,21 @@ export default function StatusPageWebhooksSettings({
     });
   };
 
-  const handleDelete = (id: string) => {
-    if (deleteCandidate !== id) {
-      setDeleteCandidate(id);
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const response = await fetch(
-          `/api/status-page/webhooks?id=${id}&statusPageId=${encodeURIComponent(statusPageId)}`,
-          {
-            method: 'DELETE',
-          }
-        );
-
-        if (!response.ok) {
-          throw await errorFromResponse(response, 'Failed to delete webhook');
-        }
-
-        setDeleteCandidate(null);
-        await loadWebhooks();
-      } catch (err) {
-        setError(displayError(err, 'Failed to delete webhook'));
+  const handleDelete = async (id: string) => {
+    try {
+      const response = await fetch(
+        `/api/status-page/webhooks?id=${encodeURIComponent(id)}&statusPageId=${encodeURIComponent(statusPageId)}`,
+        { method: 'DELETE' }
+      );
+      if (!response.ok) {
+        throw await errorFromResponse(response, 'Failed to delete webhook');
       }
-    });
+      setDeleteCandidate(null);
+      notify.success('Webhook deleted');
+      await loadWebhooks();
+    } catch (err) {
+      setError(displayError(err, 'Failed to delete webhook'));
+    }
   };
 
   const toggleEvent = (event: string) => {
@@ -142,11 +136,32 @@ export default function StatusPageWebhooksSettings({
   };
 
   if (isLoading) {
-    return <div>Loading webhooks...</div>;
+    return (
+      <div role="status" aria-busy="true" className="space-y-3">
+        <span className="sr-only">Loading webhooks</span>
+        <Skeleton className="h-6 w-40" aria-hidden="true" />
+        <Skeleton className="h-16 w-full" aria-hidden="true" />
+        <Skeleton className="h-16 w-full" aria-hidden="true" />
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-6">
+      <DeleteConfirmDialog
+        open={deleteCandidate !== null}
+        onOpenChange={open => {
+          if (!open) setDeleteCandidate(null);
+        }}
+        title="Delete this webhook?"
+        description={`${
+          webhooks.find(webhook => webhook.id === deleteCandidate)?.url ?? 'This endpoint'
+        } stops receiving status page events immediately.`}
+        confirmText="Delete webhook"
+        onConfirm={async () => {
+          if (deleteCandidate) await handleDelete(deleteCandidate);
+        }}
+      />
       <StatusPageSectionCard
         title="Webhooks"
         description="Receive real-time notifications when incidents occur or status changes."
@@ -283,10 +298,10 @@ export default function StatusPageWebhooksSettings({
                       <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => handleDelete(webhook.id)}
-                        isLoading={isPending}
+                        onClick={() => setDeleteCandidate(webhook.id)}
+                        aria-label={`Delete webhook ${webhook.url}`}
                       >
-                        {deleteCandidate === webhook.id ? 'Confirm delete' : 'Delete'}
+                        Delete
                       </Button>
                     </div>
                   </div>
