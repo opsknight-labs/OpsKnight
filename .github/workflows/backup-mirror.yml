@@ -1,10 +1,10 @@
 name: Backup mirror
 
-# Mirrors main and release tags to the backup repo OpsKnightLabs/OpsKnight, where only
+# Mirrors main and release tags to the backup repo OpsKnightLabs/OpsKnight-backup, where only
 # backup-test-image.yml runs (it publishes ghcr.io/opsknightlabs/opsknight-test). Every
 # other workflow there is kept disabled, so the backup adds no CI load of its own.
-# Needs the BACKUP_TOKEN secret: a fine-grained PAT for OpsKnightLabs/OpsKnight with
-# Contents, Workflows and Actions set to read and write.
+# Needs the BACKUP_TOKEN secret: a classic PAT with the repo and workflow scopes
+# (fine-grained PATs are rejected by GitHub's LFS API).
 on:
   push:
     branches: [main]
@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BACKUP_REPO: OpsKnightLabs/OpsKnight
+  BACKUP_REPO: OpsKnightLabs/OpsKnight-backup
   KEEP_ENABLED: backup-test-image.yml
 
 jobs:

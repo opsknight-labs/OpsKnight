@@ -1,6 +1,6 @@
 name: Backup test image
 
-# Runs only in the backup repo OpsKnightLabs/OpsKnight, which backup-mirror.yml keeps in
+# Runs only in the backup repo OpsKnightLabs/OpsKnight-backup, which backup-mirror.yml keeps in
 # sync with main. It only builds and publishes the test-channel image the staging
 # server pulls (ghcr.io/opsknightlabs/opsknight-test). The main repo's docker-image.yml
 # already validates every merge, so nothing is re-tested here.
@@ -19,7 +19,8 @@ concurrency:
 
 jobs:
   publish:
-    if: github.repository == 'OpsKnightLabs/OpsKnight'
+    # The owner, not the full name, so a repo rename cannot silently stop the image.
+    if: github.repository_owner == 'OpsKnightLabs'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
@@ -41,7 +42,7 @@ jobs:
             ghcr.io/opsknightlabs/opsknight-test:latest
             ghcr.io/opsknightlabs/opsknight-test:sha-${{ github.sha }}
           labels: |
-            org.opencontainers.image.source=https://github.com/OpsKnightLabs/OpsKnight
+            org.opencontainers.image.source=https://github.com/OpsKnightLabs/OpsKnight-backup
             org.opencontainers.image.revision=${{ github.sha }}
           build-args: |
             SOURCE_CODE_URL=https://github.com/opsknight-labs/OpsKnight/tree/${{ github.sha }}
