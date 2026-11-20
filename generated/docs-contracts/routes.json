@@ -18,7 +18,7 @@
       "taskDocumentationRequired": false
     },
     {
-      "route": "/analytics",
+      "route": "/insights",
       "file": "src/app/(app)/analytics/page.tsx",
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",

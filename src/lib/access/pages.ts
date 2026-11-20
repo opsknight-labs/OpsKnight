@@ -45,7 +45,7 @@ const ADMIN = [C.ADMIN_MANAGE] as const;
 export const PAGE_ACCESS: readonly PageAccessRule[] = [
   { pattern: '/', label: 'Dashboard' },
   { pattern: '/action-items', label: 'Action items' },
-  { pattern: '/analytics', label: 'Analytics', anyOf: [C.REPORT_READ] },
+  { pattern: '/insights', label: 'Analytics', anyOf: [C.REPORT_READ] },
   { pattern: '/audit', label: 'Audit log', anyOf: [C.AUDIT_READ] },
   { pattern: '/events', label: 'Event ingestion', anyOf: ADMIN },
   { pattern: '/help', label: 'Help' },

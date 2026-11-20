@@ -58,7 +58,7 @@ export default async function AnalyticsPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requirePageAccess('/analytics');
+  await requirePageAccess('/insights');
   const [actor, session, raw] = await Promise.all([
     getCurrentAuthorizationActor(),
     getAuthOptions().then(options => getServerSession(options)),
@@ -66,7 +66,7 @@ export default async function AnalyticsPage({
   ]);
   if (Object.keys(raw ?? {}).length === 0) {
     const defaultQuery = await getDefaultAnalyticsViewQuery(actor.id);
-    if (defaultQuery) redirect(`/analytics?${defaultQuery}`);
+    if (defaultQuery) redirect(`/insights?${defaultQuery}`);
   }
   const params = parseAnalyticsParams(raw);
   const email = session?.user?.email ?? null;
@@ -112,7 +112,7 @@ export default async function AnalyticsPage({
         primaryAction={
           canExport ? (
             <a
-              href={`/api/analytics/export${exportQuery ? `?${exportQuery}` : ''}`}
+              href={`/api/insights/export${exportQuery ? `?${exportQuery}` : ''}`}
               className={cn(
                 'inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors',
                 pageHeaderActionClass

@@ -75,6 +75,8 @@ type SidebarProps = {
   initialIsStatusPageAdmin?: boolean;
 };
 
+const NAV_SCROLL_KEY = 'opsknight:sidebar-scroll';
+
 export default function Sidebar({
   userName = null,
   userEmail = null,
@@ -121,6 +123,24 @@ export default function Sidebar({
       closeMobile();
     }
   }, [pathname, closeMobile]);
+
+  // Keep the nav scroll position across full page loads (deploys, session refresh).
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    try {
+      const saved = Number(sessionStorage.getItem(NAV_SCROLL_KEY));
+      if (navRef.current && saved > 0) navRef.current.scrollTop = saved;
+    } catch {
+      // Storage can be blocked (private mode); the nav just starts at the top.
+    }
+  }, []);
+  const saveNavScroll = (event: React.UIEvent<HTMLElement>) => {
+    try {
+      sessionStorage.setItem(NAV_SCROLL_KEY, String(Math.round(event.currentTarget.scrollTop)));
+    } catch {
+      // Ignore: persistence is a convenience.
+    }
+  };
 
   const isActive = (path: string) => {
     if (path === '/' && pathname === '/') return true;
@@ -628,6 +648,8 @@ export default function Sidebar({
 
         {/* Scrollable Navigation Area */}
         <nav
+          ref={navRef}
+          onScroll={saveNavScroll}
           id="navigation"
           aria-label="Main navigation"
           tabIndex={-1}

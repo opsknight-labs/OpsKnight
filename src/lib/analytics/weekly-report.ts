@@ -244,7 +244,7 @@ export async function composeWeeklyEmail(input: {
   });
   const lastDay = new Date(params.to!.getTime() - DAY_MS);
   const periodLabel = `${day.format(params.from!)} – ${day.format(lastDay)}, ${lastDay.getUTCFullYear()}`;
-  const viewUrl = `${getBaseUrl()}/analytics?${toAnalyticsSearchParams(params).toString()}`;
+  const viewUrl = `${getBaseUrl()}/insights?${toAnalyticsSearchParams(params).toString()}`;
   const { html, text } = await renderEmail(
     AnalyticsWeeklyEmail({
       ...buildWeeklyReportProps({

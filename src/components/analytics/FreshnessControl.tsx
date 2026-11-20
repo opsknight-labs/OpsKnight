@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RotateCw } from 'lucide-react';
-import { refreshAnalytics } from '@/app/(app)/analytics/actions';
+import { refreshAnalytics } from '@/app/(app)/insights/actions';
 import { RelativeTime } from '@/components/patterns';
 import { cn } from '@/lib/utils';
 

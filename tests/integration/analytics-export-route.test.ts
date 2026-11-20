@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { createAnalyticsContext, getAnalyticsSection, parseAnalyticsParams } from '@/lib/analytics';
 import { resetAnalyticsCacheForTests } from '@/lib/analytics/cache';
 import { METRICS } from '@/lib/analytics/definitions';
-import { GET } from '@/app/api/analytics/export/route';
+import { GET } from '@/app/api/insights/export/route';
 import { createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';
 
 vi.mock('next-auth', () => ({ getServerSession: vi.fn() }));
@@ -25,7 +25,7 @@ async function signIn(role: 'ADMIN' | 'USER') {
   return user;
 }
 
-describeIfRealDB('GET /api/analytics/export', { timeout: 60_000 }, () => {
+describeIfRealDB('GET /api/insights/export', { timeout: 60_000 }, () => {
   beforeEach(async () => {
     await resetDatabase();
     resetAnalyticsCacheForTests();

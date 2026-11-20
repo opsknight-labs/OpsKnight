@@ -8,7 +8,7 @@ import {
 } from '@/lib/analytics/digest';
 import { analyticsReportWeekStart } from '@/lib/analytics/weekly-report';
 import { decrypt } from '@/lib/encryption';
-import { POST as oneClickUnsubscribe } from '@/app/api/analytics/digest/unsubscribe/[token]/route';
+import { POST as oneClickUnsubscribe } from '@/app/api/insights/digest/unsubscribe/[token]/route';
 import {
   createTestNotificationProvider,
   createTestTeam,

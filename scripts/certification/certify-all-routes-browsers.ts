@@ -58,7 +58,7 @@ const DESKTOP_ROUTES = [
   { path: '/users', label: 'User Directory' },
   { path: '/runbooks', label: 'Runbooks Catalog' },
   { path: '/runbooks/executions', label: 'Runbook Executions' },
-  { path: '/analytics', label: 'Analytics & SLA' },
+  { path: '/insights', label: 'Analytics & SLA' },
   { path: '/reports', label: 'Operational Reports' },
   { path: '/postmortems', label: 'Postmortems Workspace' },
   { path: '/audit', label: 'Audit Logs' },

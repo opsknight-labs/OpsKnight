@@ -6,7 +6,7 @@ describe('dashboard authorization contract', () => {
     const page = readFileSync('src/app/(app)/page.tsx', 'utf8');
     const live = readFileSync('src/lib/dashboard/live-incidents.ts', 'utf8');
     const liveRoute = readFileSync('src/app/api/dashboard/live/route.ts', 'utf8');
-    const analyticsRoute = readFileSync('src/app/api/dashboard/analytics/route.ts', 'utf8');
+    const analyticsRoute = readFileSync('src/app/api/dashboard/insights/route.ts', 'utf8');
     const dataRoute = readFileSync('src/app/api/widgets/data/route.ts', 'utf8');
     const streamRoute = readFileSync('src/app/api/widgets/stream/route.ts', 'utf8');
 

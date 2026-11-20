@@ -430,7 +430,7 @@ const GUIDE_LINKS = [
   },
   {
     label: 'Analytics',
-    href: '/analytics',
+    href: '/insights',
     icon: <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />,
   },
 ];

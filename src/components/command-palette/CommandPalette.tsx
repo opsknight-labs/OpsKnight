@@ -147,7 +147,7 @@ const NAVIGATE: Entry[] = [
     BookOpen,
     ['runbook', 'automation', 'playbooks', 'procedures']
   ),
-  nav('nav-analytics', 'Analytics', 'MTTA, MTTR & SLA compliance trends', '/analytics', PieChart, [
+  nav('nav-analytics', 'Analytics', 'MTTA, MTTR & SLA compliance trends', '/insights', PieChart, [
     'metrics',
     'mtta',
     'mttr',

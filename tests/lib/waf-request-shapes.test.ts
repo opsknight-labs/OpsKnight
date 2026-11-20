@@ -171,7 +171,7 @@ describe('analytics URLs', () => {
         )
       )
     ).toString();
-    assertWafFriendly(`/analytics?${query}`);
+    assertWafFriendly(`/insights?${query}`);
     expect(decodeURIComponent(query)).not.toMatch(/['"<>`;]/);
     expect(query.length).toBeLessThan(512);
   });

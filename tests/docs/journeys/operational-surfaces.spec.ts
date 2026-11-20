@@ -60,7 +60,7 @@ test.describe.serial('operational documentation surfaces', () => {
     await expect(page.locator('#main-content')).toBeVisible();
     await captureEvidence(page, testInfo, 'response', 'action-items');
 
-    await page.goto('/analytics');
+    await page.goto('/insights');
     await expect(page.getByText('Incidents', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Open now', { exact: true }).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'analytics', 'overview');

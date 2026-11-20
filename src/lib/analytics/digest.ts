@@ -171,7 +171,7 @@ export async function sendWeeklyDigests(now = new Date(), limit = 25) {
           subject: `Your weekly summary · ${email.incidents} incidents last week`,
           html: email.html,
           text: email.text,
-          listUnsubscribeUrl: `${base}/api/analytics/digest/unsubscribe/${token}`,
+          listUnsubscribeUrl: `${base}/api/insights/digest/unsubscribe/${token}`,
         },
       });
       await markDone();

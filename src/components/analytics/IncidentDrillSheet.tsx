@@ -62,7 +62,7 @@ export default function IncidentDrillSheet({
     params.delete('cursor');
     if (serviceId) params.set('serviceId', serviceId);
     if (cursor) params.set('cursor', cursor);
-    const response = await fetch(`/api/analytics/incidents?${params.toString()}`, {
+    const response = await fetch(`/api/insights/incidents?${params.toString()}`, {
       cache: 'no-store',
     });
     const body = await response.json().catch(() => null);
