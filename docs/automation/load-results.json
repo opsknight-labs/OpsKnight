@@ -1,68 +1,68 @@
 {
   "kind": "Local PostgreSQL full transaction ingestion; 8 concurrent clients; not HTTP capacity certification",
-  "generatedAt": "2026-10-08T12:59:43.075Z",
+  "generatedAt": "2026-11-20T21:28:55.512Z",
   "results": [
     {
       "profile": "global-off",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 3700.476208,
-      "p50Ms": 248.9081669999996,
-      "p95Ms": 514.9697499999993,
-      "p99Ms": 528.2175829999996
+      "elapsedMs": 353.84062500000005,
+      "p50Ms": 19.534708000000137,
+      "p95Ms": 86.76970899999992,
+      "p99Ms": 91.08399999999983
     },
     {
       "profile": "service-disabled",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 3289.1873749999995,
-      "p50Ms": 245.54391700000087,
-      "p95Ms": 292.7247090000001,
-      "p99Ms": 319.6663750000007
+      "elapsedMs": 251.54337499999997,
+      "p50Ms": 18.62433299999998,
+      "p95Ms": 20.943250000000035,
+      "p99Ms": 21.446333000000095
     },
     {
       "profile": "shadow-small",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 3503.055457999999,
-      "p50Ms": 265.0670829999981,
-      "p95Ms": 334.74887500000114,
-      "p99Ms": 361.2483339999999
+      "elapsedMs": 346.49583399999983,
+      "p50Ms": 25.242125000000215,
+      "p95Ms": 35.24654200000032,
+      "p99Ms": 40.580708000000186
     },
     {
       "profile": "live-small",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 4365.4936659999985,
-      "p50Ms": 329.6899999999987,
-      "p95Ms": 746.6606670000001,
-      "p99Ms": 790.9582499999997
+      "elapsedMs": 335.94399999999996,
+      "p50Ms": 23.077584000000115,
+      "p95Ms": 45.43633299999965,
+      "p99Ms": 46.56054099999983
     },
     {
       "profile": "live-medium",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 951.539249999998,
-      "p50Ms": 62.31566699999894,
-      "p95Ms": 121.33674999999857,
-      "p99Ms": 122.00320799999827
+      "elapsedMs": 304.2531249999997,
+      "p50Ms": 23.041208000000097,
+      "p95Ms": 25.728375000000142,
+      "p99Ms": 28.184332999999697
     },
     {
       "profile": "live-worst",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 1061.2540420000005,
-      "p50Ms": 78.67391700000007,
-      "p95Ms": 119.24033299999792,
-      "p99Ms": 123.84745900000053
+      "elapsedMs": 604.7105420000003,
+      "p50Ms": 38.8755000000001,
+      "p95Ms": 59.46037500000011,
+      "p99Ms": 72.71737500000017
     }
   ],
   "postgres": [
     {
-      "numbackends": 9,
-      "xact_commit": "8890",
-      "xact_rollback": "100",
-      "deadlocks": "6",
+      "numbackends": 11,
+      "xact_commit": "126314",
+      "xact_rollback": "718",
+      "deadlocks": "0",
       "temp_bytes": "0"
     }
   ],

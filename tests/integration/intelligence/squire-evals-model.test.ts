@@ -62,6 +62,11 @@ async function startObservabilityBackend(): Promise<{ url: string; close: () => 
       }),
     ],
     [
+      /^\/api\/v1\/label\/__name__\/values/,
+      () => ({ status: 'success', data: ['pool_in_use', 'pool_wait_seconds'] }),
+    ],
+    [/^\/api\/v1\/label\/[^/]+\/values/, () => ({ status: 'success', data: ['checkout-primary'] })],
+    [
       /^\/api\/v1\/query_range/,
       () => ({
         status: 'success',

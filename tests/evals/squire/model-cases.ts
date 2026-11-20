@@ -191,6 +191,26 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     },
   },
   {
+    id: 'rca-metric-discovery',
+    category: 'rca',
+    question: 'Which pool metrics do we have, and is there a saved query for this service?',
+    script: [
+      { tool: 'list_metrics', input: { prefix: 'pool_' } },
+      { tool: 'label_values', input: { metric: 'pool_in_use', label: 'pool' } },
+      { tool: 'list_metric_templates', input: { incidentId: '$incident' } },
+      {
+        say: 'pool_in_use and pool_wait_seconds exist; the checkout-primary pool is the one to query.',
+      },
+    ],
+    // Discovery before a query: metric names, one label's values, then the service's saved queries.
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Listing metric names', 'Listing label values', 'Reading saved metric queries'],
+      toolSaw: ['pool_wait_seconds', 'checkout-primary'],
+      noProposal: true,
+    },
+  },
+  {
     id: 'rca-problem-outcomes',
     category: 'rca',
     question: 'What worked for this kind of problem before?',

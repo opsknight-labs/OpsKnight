@@ -269,12 +269,20 @@ export class SquireEvidenceRegistry {
       case 'get_error_events':
       case 'get_change_diff':
       case 'get_k8s_state':
+      case 'list_metrics':
+      case 'label_values':
         add('observability', {
           id: object.connectionId,
           name: object.connectionName,
           snapshot: result,
         });
         if (name === 'get_change_diff') add('change', { id: object.changeId, title: object.title });
+        break;
+      // Saved metric queries are read from the services they belong to.
+      case 'list_metric_templates':
+        rows(object.templates).forEach(data =>
+          add('service', { id: data.serviceId, name: data.serviceName })
+        );
         break;
       // Automation (tools-automation.ts): a decision is about the incident (and the service it ran on);
       // a rule explanation is read from the service's live automation version.
