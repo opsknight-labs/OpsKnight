@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-27
+  verified_at: 2026-11-20
   evidence:
     - generated/docs-discovery/current.json
     - src/
@@ -187,6 +187,34 @@ to prevent copied values from silently drifting.
 - Source expression: `1`
 - Source: `src/components/settings/AutomationSettings.tsx`
 
+## `MAX_NOTIFIED_APPROVERS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `25`
+- Source expression: `25`
+- Source: `src/lib/access/requests.ts`
+
+## `MAX_OPEN_REQUESTS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `5`
+- Source expression: `5`
+- Source: `src/lib/access/requests.ts`
+
+## `MAX_REQUESTS_PER_DAY`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `10`
+- Source expression: `10`
+- Source: `src/lib/access/requests.ts`
+
+## `PENDING_TTL_MS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `1209600000`
+- Source expression: `14 * 24 * 60 * 60 * 1000`
+- Source: `src/lib/access/requests.ts`
+
 ## `MAX_TOKEN_LENGTH`
 
 - Classification: `SECURITY_OR_PUBLIC_BOUND`
@@ -250,6 +278,13 @@ to prevent copied values from silently drifting.
 - Source expression: `32`
 - Source: `src/lib/api-v2/request-body.ts`
 
+## `AUDIT_LOG_MIN_RETENTION_DAYS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `365`
+- Source expression: `365`
+- Source: `src/lib/data-cleanup.ts`
+
 ## `MAX_STORED_ALERT_PAYLOAD_BYTES`
 
 - Classification: `SECURITY_OR_PUBLIC_BOUND`
@@ -270,6 +305,62 @@ to prevent copied values from silently drifting.
 - Value: `8000`
 - Source expression: `8_000`
 - Source: `src/lib/jira.ts`
+
+## `BAD_TOKEN_PEERS_MAX`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `10000`
+- Source expression: `10000`
+- Source: `src/lib/mcp/auth/admission.ts`
+
+## `MCP_BAD_TOKEN_LIMIT`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `30`
+- Source expression: `30`
+- Source: `src/lib/mcp/auth/admission.ts`
+
+## `MCP_PAT_PER_USER_LIMIT`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `20`
+- Source expression: `20`
+- Source: `src/lib/mcp/auth/personal-tokens.ts`
+
+## `MCP_APPROVAL_RETENTION_MS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `7776000000`
+- Source expression: `90 * 86_400_000`
+- Source: `src/lib/mcp/auth/retention.ts`
+
+## `MCP_CALL_LOG_PURGE_BATCHES`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `20`
+- Source expression: `20`
+- Source: `src/lib/mcp/auth/retention.ts`
+
+## `MCP_CLEANUP_BATCH`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `500`
+- Source expression: `500`
+- Source: `src/lib/mcp/auth/retention.ts`
+
+## `UNUSED_REGISTRATION_TTL_MS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `2592000000`
+- Source expression: `30 * 86_400_000`
+- Source: `src/lib/mcp/auth/retention.ts`
+
+## `MCP_CALL_LOG_DEFAULT_RETENTION_DAYS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `30`
+- Source expression: `30`
+- Source: `src/lib/mcp/core/call-log.ts`
 
 ## `TOKEN_CACHE_MAX`
 
@@ -312,6 +403,13 @@ to prevent copied values from silently drifting.
 - Value: `86400000`
 - Source expression: `24 * 60 * 60 * 1000`
 - Source: `src/lib/offline-queue.ts`
+
+## `MAX_NOTIFIED_ADMINISTRATORS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `100`
+- Source expression: `100`
+- Source: `src/lib/oidc-linking-requests.ts`
 
 ## `COMPLETION_WINDOW_MS`
 

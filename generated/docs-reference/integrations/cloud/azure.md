@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Azure Monitor webhook", "connect Azure Monitor", "Azure Monitor alerts", "Azure Monitor integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/azure.ts
     - src/app/api/integrations/azure/route.ts

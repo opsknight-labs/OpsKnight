@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["PagerDuty Events API webhook", "connect PagerDuty Events API", "PagerDuty Events API alerts", "PagerDuty Events API integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/pagerduty.ts
     - src/app/api/integrations/pagerduty/route.ts

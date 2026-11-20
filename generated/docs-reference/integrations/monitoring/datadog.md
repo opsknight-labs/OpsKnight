@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Datadog webhook", "connect Datadog", "Datadog alerts", "Datadog integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/datadog.ts
     - src/app/api/integrations/datadog/route.ts

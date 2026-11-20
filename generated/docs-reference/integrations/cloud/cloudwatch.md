@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Amazon CloudWatch webhook", "connect Amazon CloudWatch", "Amazon CloudWatch alerts", "Amazon CloudWatch integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/cloudwatch.ts
     - src/app/api/integrations/cloudwatch/route.ts

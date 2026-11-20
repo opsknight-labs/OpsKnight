@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["New Relic webhook", "connect New Relic", "New Relic alerts", "New Relic integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/newrelic.ts
     - src/app/api/integrations/newrelic/route.ts

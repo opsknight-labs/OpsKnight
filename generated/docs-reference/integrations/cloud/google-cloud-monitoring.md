@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Google Cloud Monitoring webhook", "connect Google Cloud Monitoring", "Google Cloud Monitoring alerts", "Google Cloud Monitoring integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/google-cloud-monitoring.ts
     - src/app/api/integrations/google-cloud-monitoring/route.ts

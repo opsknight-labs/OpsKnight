@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Splunk Observability webhook", "connect Splunk Observability", "Splunk Observability alerts", "Splunk Observability integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/splunk-observability.ts
     - src/app/api/integrations/splunk-observability/route.ts

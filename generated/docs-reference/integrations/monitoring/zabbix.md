@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Zabbix webhook", "connect Zabbix", "Zabbix alerts", "Zabbix integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/zabbix.ts
     - src/app/api/integrations/zabbix/route.ts

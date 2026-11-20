@@ -34,7 +34,10 @@ for (const discovered of inspectIntegrations()) {
     const route = `src/app/api/integrations/${id}/route.ts`;
     if (!exists(source) || !exists(route)) throw new Error(`Provider ${id} is missing source or route evidence`);
     const adapterSource = readRepositoryFile(source);
-    const routeSource = readRepositoryFile(route);
+    const routeFile = readRepositoryFile(route);
+    // A thin route can delegate to a shared webhook module (Grafana-compatible senders); read both.
+    const delegate = routeFile.match(/from '@\/lib\/integrations\/([a-z0-9-]+-webhook)'/)?.[1];
+    const routeSource = delegate ? `${routeFile}\n${readRepositoryFile(`src/lib/integrations/${delegate}.ts`)}` : routeFile;
     const sharedHandler = routeSource.includes('createIntegrationHandler') || routeSource.includes('createIntegrationRoute');
     const actions = ['trigger', 'acknowledge', 'resolve'].filter(action =>
       new RegExp(`['"]${action}['"]`, 'i').test(adapterSource)

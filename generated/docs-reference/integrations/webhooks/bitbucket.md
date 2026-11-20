@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Bitbucket webhook", "connect Bitbucket", "Bitbucket alerts", "Bitbucket integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/bitbucket.ts
     - src/app/api/integrations/bitbucket/route.ts
@@ -61,6 +61,7 @@ The exact payload schema is defined by `src/app/api/integrations/bitbucket/route
 
 The adapter emits the lifecycle actions found in its current source:
 - `trigger`
+- `acknowledge`
 - `resolve`
 Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 

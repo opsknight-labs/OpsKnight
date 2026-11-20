@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Uptime Kuma webhook", "connect Uptime Kuma", "Uptime Kuma alerts", "Uptime Kuma integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/uptime-kuma.ts
     - src/app/api/integrations/uptime-kuma/route.ts

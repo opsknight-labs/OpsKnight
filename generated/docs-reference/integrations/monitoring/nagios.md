@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Nagios webhook", "connect Nagios", "Nagios alerts", "Nagios integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/nagios.ts
     - src/app/api/integrations/nagios/route.ts

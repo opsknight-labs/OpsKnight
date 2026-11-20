@@ -6,7 +6,7 @@ product_area: api
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-27
+  verified_at: 2026-11-20
   evidence:
     - src/app/api/
 ---
@@ -41,10 +41,13 @@ public route has a full success/authorization/validation/concurrency matrix.
 
 > These routes support the OpsKnight UI and are not a supported external API contract. Do not build external automation against them unless a dedicated contract page says otherwise.
 
+- `GET /api/access/explain` — `src/app/api/access/explain/route.ts`
+- `GET /api/access/reviews/[id]/export` — `src/app/api/access/reviews/[id]/export/route.ts`
 - `GET /api/action-items/owners` — `src/app/api/action-items/owners/route.ts`
 - `POST /api/admin/generate-reset-link` — `src/app/api/admin/generate-reset-link/route.ts`
 - `POST /api/admin/incident-collaboration/meetings/[meetingId]/retry-cleanup` — `src/app/api/admin/incident-collaboration/meetings/[meetingId]/retry-cleanup/route.ts`
 - `GET, POST /api/admin/incident-collaboration` — `src/app/api/admin/incident-collaboration/route.ts`
+- `GET, POST /api/admin/ingestion` — `src/app/api/admin/ingestion/route.ts`
 - `GET, PATCH /api/admin/notifications/capacity` — `src/app/api/admin/notifications/capacity/route.ts`
 - `POST /api/admin/notifications/operations/[id]/retry` — `src/app/api/admin/notifications/operations/[id]/retry/route.ts`
 - `GET /api/admin/notifications/operations` — `src/app/api/admin/notifications/operations/route.ts`
@@ -110,6 +113,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/dashboard/metrics` — `src/app/api/dashboard/metrics/route.ts`
 - `GET, PUT, DELETE /api/dashboards/[id]` — `src/app/api/dashboards/[id]/route.ts`
 - `GET, POST /api/dashboards` — `src/app/api/dashboards/route.ts`
+- `GET /api/events/receipts/[id]` — `src/app/api/events/receipts/[id]/route.ts`
 - `POST /api/events` — `src/app/api/events/route.ts`
 - `GET /api/events/stream` — `src/app/api/events/stream/route.ts`
 - `GET /api/incidents/[id]/collaboration` — `src/app/api/incidents/[id]/collaboration/route.ts`
@@ -217,6 +221,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/status` — `src/app/api/status/route.ts`
 - `GET /api/status/rss` — `src/app/api/status/rss/route.ts`
 - `POST /api/status/subscribe` — `src/app/api/status/subscribe/route.ts`
+- `POST /api/status/subscriptions/unsubscribe/one-click/[token]` — `src/app/api/status/subscriptions/unsubscribe/one-click/[token]/route.ts`
 - `POST /api/status/subscriptions/unsubscribe` — `src/app/api/status/subscriptions/unsubscribe/route.ts`
 - `POST /api/status/subscriptions/verify` — `src/app/api/status/subscriptions/verify/route.ts`
 - `GET /api/status/uptime-export` — `src/app/api/status/uptime-export/route.ts`
@@ -242,6 +247,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/v1/service-objectives/[id]/versions` — `src/app/api/v1/service-objectives/[id]/versions/route.ts`
 - `GET, POST /api/v1/service-objectives` — `src/app/api/v1/service-objectives/route.ts`
 - `GET, PUT /api/v1/services/[id]/response-policy` — `src/app/api/v1/services/[id]/response-policy/route.ts`
+- `GET /api/v2/action-items` — `src/app/api/v2/action-items/route.ts`
 - `GET /api/v2/audit-exports/[id]/download` — `src/app/api/v2/audit-exports/[id]/download/route.ts`
 - `GET /api/v2/audit-exports/[id]` — `src/app/api/v2/audit-exports/[id]/route.ts`
 - `POST /api/v2/audit-exports` — `src/app/api/v2/audit-exports/route.ts`
@@ -265,6 +271,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/v2/incidents/[id]/available-actions` — `src/app/api/v2/incidents/[id]/available-actions/route.ts`
 - `GET, PUT /api/v2/incidents/[id]/custom-fields/[fieldId]` — `src/app/api/v2/incidents/[id]/custom-fields/[fieldId]/route.ts`
 - `GET /api/v2/incidents/[id]/custom-fields` — `src/app/api/v2/incidents/[id]/custom-fields/route.ts`
+- `POST /api/v2/incidents/[id]/escalate` — `src/app/api/v2/incidents/[id]/escalate/route.ts`
 - `GET, POST /api/v2/incidents/[id]/notes` — `src/app/api/v2/incidents/[id]/notes/route.ts`
 - `GET /api/v2/incidents/[id]/notification-attempts` — `src/app/api/v2/incidents/[id]/notification-attempts/route.ts`
 - `GET /api/v2/incidents/[id]/related-incidents` — `src/app/api/v2/incidents/[id]/related-incidents/route.ts`
@@ -274,6 +281,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET, PATCH /api/v2/incidents/[id]` — `src/app/api/v2/incidents/[id]/route.ts`
 - `GET /api/v2/incidents/[id]/routing-decision` — `src/app/api/v2/incidents/[id]/routing-decision/route.ts`
 - `GET /api/v2/incidents/[id]/runbook-executions` — `src/app/api/v2/incidents/[id]/runbook-executions/route.ts`
+- `GET /api/v2/incidents/[id]/similar` — `src/app/api/v2/incidents/[id]/similar/route.ts`
 - `POST /api/v2/incidents/[id]/snooze` — `src/app/api/v2/incidents/[id]/snooze/route.ts`
 - `POST /api/v2/incidents/[id]/suppress` — `src/app/api/v2/incidents/[id]/suppress/route.ts`
 - `DELETE /api/v2/incidents/[id]/tags/[tagId]` — `src/app/api/v2/incidents/[id]/tags/[tagId]/route.ts`
@@ -283,7 +291,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `POST /api/v2/incidents/[id]/unsnooze` — `src/app/api/v2/incidents/[id]/unsnooze/route.ts`
 - `POST /api/v2/incidents/[id]/unsuppress` — `src/app/api/v2/incidents/[id]/unsuppress/route.ts`
 - `GET /api/v2/incidents/[id]/war-rooms` — `src/app/api/v2/incidents/[id]/war-rooms/route.ts`
-- `DELETE /api/v2/incidents/[id]/watchers/[watcherId]` — `src/app/api/v2/incidents/[id]/watchers/[watcherId]/route.ts`
+- `GET, DELETE /api/v2/incidents/[id]/watchers/[watcherId]` — `src/app/api/v2/incidents/[id]/watchers/[watcherId]/route.ts`
 - `GET, POST /api/v2/incidents/[id]/watchers` — `src/app/api/v2/incidents/[id]/watchers/route.ts`
 - `GET, POST /api/v2/incidents` — `src/app/api/v2/incidents/route.ts`
 - `GET, PATCH, DELETE /api/v2/incidents/templates/[templateId]` — `src/app/api/v2/incidents/templates/[templateId]/route.ts`
@@ -296,6 +304,11 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `POST /api/v2/integrations/[id]/validate` — `src/app/api/v2/integrations/[id]/validate/route.ts`
 - `GET /api/v2/integrations` — `src/app/api/v2/integrations/route.ts`
 - `GET /api/v2/integrations/types` — `src/app/api/v2/integrations/types/route.ts`
+- `GET, PATCH, DELETE /api/v2/maintenance-schedules/[id]` — `src/app/api/v2/maintenance-schedules/[id]/route.ts`
+- `GET, POST /api/v2/maintenance-schedules` — `src/app/api/v2/maintenance-schedules/route.ts`
+- `POST /api/v2/maintenance-windows/[id]/end` — `src/app/api/v2/maintenance-windows/[id]/end/route.ts`
+- `GET, PATCH, DELETE /api/v2/maintenance-windows/[id]` — `src/app/api/v2/maintenance-windows/[id]/route.ts`
+- `GET, POST /api/v2/maintenance-windows` — `src/app/api/v2/maintenance-windows/route.ts`
 - `GET /api/v2/notification-providers/[provider]/diagnostics` — `src/app/api/v2/notification-providers/[provider]/diagnostics/route.ts`
 - `GET, PUT /api/v2/notification-providers/[provider]` — `src/app/api/v2/notification-providers/[provider]/route.ts`
 - `POST /api/v2/notification-providers/[provider]/test` — `src/app/api/v2/notification-providers/[provider]/test/route.ts`
@@ -307,7 +320,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/v2/notifications` — `src/app/api/v2/notifications/route.ts`
 - `GET /api/v2/openapi.json` — `src/app/api/v2/openapi.json/route.ts`
 - `GET /api/v2/operational-events` — `src/app/api/v2/operational-events/route.ts`
-- `PATCH, DELETE /api/v2/postmortems/[id]/action-items/[itemId]` — `src/app/api/v2/postmortems/[id]/action-items/[itemId]/route.ts`
+- `GET, PATCH, DELETE /api/v2/postmortems/[id]/action-items/[itemId]` — `src/app/api/v2/postmortems/[id]/action-items/[itemId]/route.ts`
 - `GET, PUT /api/v2/postmortems/[id]/action-items` — `src/app/api/v2/postmortems/[id]/action-items/route.ts`
 - `GET, PUT /api/v2/postmortems/[id]/contributors` — `src/app/api/v2/postmortems/[id]/contributors/route.ts`
 - `POST /api/v2/postmortems/[id]/publish` — `src/app/api/v2/postmortems/[id]/publish/route.ts`
@@ -374,15 +387,16 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `POST /api/v2/schedules/[id]/coverage/preview` — `src/app/api/v2/schedules/[id]/coverage/preview/route.ts`
 - `GET /api/v2/schedules/[id]/coverage` — `src/app/api/v2/schedules/[id]/coverage/route.ts`
 - `GET /api/v2/schedules/[id]/dependencies` — `src/app/api/v2/schedules/[id]/dependencies/route.ts`
-- `PATCH, DELETE /api/v2/schedules/[id]/layers/[layerId]/participants/[userId]` — `src/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route.ts`
+- `GET, PATCH, DELETE /api/v2/schedules/[id]/layers/[layerId]/participants/[userId]` — `src/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route.ts`
 - `POST /api/v2/schedules/[id]/layers/[layerId]/participants` — `src/app/api/v2/schedules/[id]/layers/[layerId]/participants/route.ts`
 - `GET, PATCH, DELETE /api/v2/schedules/[id]/layers/[layerId]` — `src/app/api/v2/schedules/[id]/layers/[layerId]/route.ts`
 - `PUT /api/v2/schedules/[id]/layers/order` — `src/app/api/v2/schedules/[id]/layers/order/route.ts`
 - `GET, POST /api/v2/schedules/[id]/layers` — `src/app/api/v2/schedules/[id]/layers/route.ts`
 - `GET /api/v2/schedules/[id]/on-call` — `src/app/api/v2/schedules/[id]/on-call/route.ts`
-- `DELETE /api/v2/schedules/[id]/overrides/[overrideId]` — `src/app/api/v2/schedules/[id]/overrides/[overrideId]/route.ts`
+- `GET, DELETE /api/v2/schedules/[id]/overrides/[overrideId]` — `src/app/api/v2/schedules/[id]/overrides/[overrideId]/route.ts`
 - `GET, POST /api/v2/schedules/[id]/overrides` — `src/app/api/v2/schedules/[id]/overrides/route.ts`
 - `GET, PATCH, DELETE /api/v2/schedules/[id]` — `src/app/api/v2/schedules/[id]/route.ts`
+- `GET /api/v2/schedules/on-call-now` — `src/app/api/v2/schedules/on-call-now/route.ts`
 - `GET, POST /api/v2/schedules` — `src/app/api/v2/schedules/route.ts`
 - `GET, DELETE /api/v2/service-accounts/[id]` — `src/app/api/v2/service-accounts/[id]/route.ts`
 - `DELETE /api/v2/service-accounts/[id]/tokens/[tokenId]` — `src/app/api/v2/service-accounts/[id]/tokens/[tokenId]/route.ts`
@@ -433,7 +447,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET, PATCH /api/v2/settings/runbooks` — `src/app/api/v2/settings/runbooks/route.ts`
 - `GET, POST /api/v2/status-pages/[id]/announcements` — `src/app/api/v2/status-pages/[id]/announcements/route.ts`
 - `GET, PATCH /api/v2/status-pages/[id]/appearance` — `src/app/api/v2/status-pages/[id]/appearance/route.ts`
-- `DELETE /api/v2/status-pages/[id]/assets/[assetId]` — `src/app/api/v2/status-pages/[id]/assets/[assetId]/route.ts`
+- `GET, DELETE /api/v2/status-pages/[id]/assets/[assetId]` — `src/app/api/v2/status-pages/[id]/assets/[assetId]/route.ts`
 - `GET, POST /api/v2/status-pages/[id]/assets` — `src/app/api/v2/status-pages/[id]/assets/route.ts`
 - `GET, PATCH /api/v2/status-pages/[id]/content` — `src/app/api/v2/status-pages/[id]/content/route.ts`
 - `GET /api/v2/status-pages/[id]/preview` — `src/app/api/v2/status-pages/[id]/preview/route.ts`
@@ -452,7 +466,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET, POST /api/v2/status-pages` — `src/app/api/v2/status-pages/route.ts`
 - `GET /api/v2/teams/[id]/activity` — `src/app/api/v2/teams/[id]/activity/route.ts`
 - `GET, PUT /api/v2/teams/[id]/lead` — `src/app/api/v2/teams/[id]/lead/route.ts`
-- `PUT, DELETE /api/v2/teams/[id]/members/[userId]` — `src/app/api/v2/teams/[id]/members/[userId]/route.ts`
+- `GET, PUT, DELETE /api/v2/teams/[id]/members/[userId]` — `src/app/api/v2/teams/[id]/members/[userId]/route.ts`
 - `GET /api/v2/teams/[id]/members` — `src/app/api/v2/teams/[id]/members/route.ts`
 - `GET, PATCH, DELETE /api/v2/teams/[id]` — `src/app/api/v2/teams/[id]/route.ts`
 - `PUT /api/v2/teams/[id]/services/[serviceId]` — `src/app/api/v2/teams/[id]/services/[serviceId]/route.ts`
@@ -464,7 +478,9 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/v2/users/[id]` — `src/app/api/v2/users/[id]/route.ts`
 - `GET /api/v2/users/invitation-policy` — `src/app/api/v2/users/invitation-policy/route.ts`
 - `POST /api/v2/users/invitations` — `src/app/api/v2/users/invitations/route.ts`
+- `GET /api/v2/users/me/catch-up` — `src/app/api/v2/users/me/catch-up/route.ts`
 - `GET, PATCH /api/v2/users/me/notification-preferences` — `src/app/api/v2/users/me/notification-preferences/route.ts`
+- `GET /api/v2/users/me/on-call-shifts` — `src/app/api/v2/users/me/on-call-shifts/route.ts`
 - `GET /api/v2/users` — `src/app/api/v2/users/route.ts`
 - `GET /api/widgets/data` — `src/app/api/widgets/data/route.ts`
 - `GET /api/widgets/stream` — `src/app/api/widgets/stream/route.ts`
@@ -479,6 +495,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 
 - `POST /api/integrations/appdynamics` — `src/app/api/integrations/appdynamics/route.ts`
 - `POST /api/integrations/azure` — `src/app/api/integrations/azure/route.ts`
+- `POST /api/integrations/base14` — `src/app/api/integrations/base14/route.ts`
 - `POST /api/integrations/better-uptime` — `src/app/api/integrations/better-uptime/route.ts`
 - `POST /api/integrations/bitbucket` — `src/app/api/integrations/bitbucket/route.ts`
 - `POST /api/integrations/cloudwatch` — `src/app/api/integrations/cloudwatch/route.ts`
