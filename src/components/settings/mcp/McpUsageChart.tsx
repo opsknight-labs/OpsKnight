@@ -1,4 +1,4 @@
-import LineChart from '@/components/analytics/LineChart';
+import LineChart from '@/components/charts/LineChart';
 import { STATUS_PALETTE } from '@/lib/design/status-palette';
 import type { McpUsage } from '@/app/(app)/settings/integrations/mcp/usage';
 
@@ -57,7 +57,7 @@ export default function McpUsageChart({ series, bucket }: Pick<McpUsage, 'series
       <p className="sr-only">{summary}</p>
       <div
         aria-hidden="true"
-        className="text-muted-foreground [&_.analytics-line-chart-axis]:mt-1 [&_.analytics-line-chart-axis]:flex [&_.analytics-line-chart-axis]:justify-between [&_.analytics-line-chart-axis]:text-[11px] [&_.analytics-line-chart-surface]:rounded-lg [&_.analytics-line-chart-surface]:border [&_.analytics-line-chart-surface]:border-border [&_.analytics-line-chart-surface]:bg-muted/30 [&_.analytics-line-chart-surface]:px-3 [&_.analytics-line-chart-surface]:pb-6 [&_.analytics-line-chart-surface]:pt-2 [&_.analytics-line-chart-surface]:relative [&_.analytics-line-chart-axis]:absolute [&_.analytics-line-chart-axis]:inset-x-3 [&_.analytics-line-chart-axis]:bottom-1"
+        className="text-muted-foreground [&_.analytics-line-chart-axis]:mt-1 [&_.analytics-line-chart-axis]:flex [&_.analytics-line-chart-axis]:justify-between [&_.analytics-line-chart-axis]:text-2xs [&_.analytics-line-chart-surface]:rounded-lg [&_.analytics-line-chart-surface]:border [&_.analytics-line-chart-surface]:border-border [&_.analytics-line-chart-surface]:bg-muted/30 [&_.analytics-line-chart-surface]:px-3 [&_.analytics-line-chart-surface]:pb-6 [&_.analytics-line-chart-surface]:pt-2 [&_.analytics-line-chart-surface]:relative [&_.analytics-line-chart-axis]:absolute [&_.analytics-line-chart-axis]:inset-x-3 [&_.analytics-line-chart-axis]:bottom-1"
       >
         <LineChart
           height={180}

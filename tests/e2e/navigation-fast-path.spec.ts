@@ -165,7 +165,7 @@ test.describe.serial('authenticated navigation fast path', () => {
     await sidebarLink(page, 'Incidents').click({ noWaitAfter: true });
     await sidebarLink(page, 'Services').click({ noWaitAfter: true });
     await sidebarLink(page, 'Analytics').click();
-    await expect(page).toHaveURL(/\/analytics/);
+    await expect(page).toHaveURL(/\/insights/);
     await expect(page.getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Services' })).not.toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).not.toBeVisible();

@@ -173,7 +173,33 @@ export default async function IncidentsPage({
   const snoozedCount = statusCountMap.get('SNOOZED') || 0;
   const suppressedCount = statusCountMap.get('SUPPRESSED') || 0;
 
-  const totalCount = await prisma.incident.count({ where: effectiveWhere });
+  // Count, page of incidents and the assignee list are independent, so fetch them in
+  // parallel (this runs on every search/filter change). The page is fetched for the
+  // requested page up front and refetched only when it turns out to be out of range.
+  const listQuery = (skip: number, take: number) =>
+    prisma.incident.findMany({
+      where: effectiveWhere,
+      select: incidentListSelect,
+      orderBy,
+      skip,
+      take,
+    });
+  const requested = calculatePaginationBounds({
+    totalItems: Number.MAX_SAFE_INTEGER,
+    page: requestedPage,
+    pageSize: ITEMS_PER_PAGE,
+  });
+  const [totalCount, requestedIncidents, users] = await Promise.all([
+    prisma.incident.count({ where: effectiveWhere }),
+    listQuery(requested.skip, requested.take),
+    canCreateIncident
+      ? prisma.user.findMany({
+          where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+  ]);
   const pagination = calculatePaginationBounds({
     totalItems: totalCount,
     page: requestedPage,
@@ -182,13 +208,10 @@ export default async function IncidentsPage({
   const currentPage = pagination.page;
   const totalPages = pagination.totalPages;
 
-  const storedIncidents = await prisma.incident.findMany({
-    where: effectiveWhere,
-    select: incidentListSelect,
-    orderBy,
-    skip: pagination.skip,
-    take: pagination.take,
-  });
+  const storedIncidents =
+    pagination.skip === requested.skip
+      ? requestedIncidents
+      : await listQuery(pagination.skip, pagination.take);
 
   const intelligenceBadges = canReadIntelligence
     ? await getIncidentListBadges(
@@ -200,14 +223,6 @@ export default async function IncidentsPage({
   const incidents = storedIncidents.map(incident =>
     visibleIncidentSource(incident, permissions.capabilities.includes('incident.sensitive.read'))
   );
-
-  const users = canCreateIncident
-    ? await prisma.user.findMany({
-        where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
-        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-        orderBy: { name: 'asc' },
-      })
-    : [];
 
   const isMineActive = currentFilter === 'mine';
   const isActiveActive =

@@ -1,9 +1,8 @@
 import Link from 'next/link';
-import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
-import { Users, ArrowRight, Shield } from 'lucide-react';
-import TeamLeadBadge from './TeamLeadBadge';
-import TeamAvatarStack from './TeamAvatarStack';
-import TeamOwnedServicesGrid from './TeamOwnedServicesGrid';
+import { AlertTriangle, Users } from 'lucide-react';
+import UserAvatar from '@/components/UserAvatar';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
 
 type TeamDirectoryCardProps = {
   team: {
@@ -37,69 +36,139 @@ type TeamDirectoryCardProps = {
   };
 };
 
-export default function TeamDirectoryCard({ team }: TeamDirectoryCardProps) {
+const MAX_AVATARS = 4;
+
+export function plural(count: number, word: string) {
+  return `${count} ${word}${count === 1 ? '' : 's'}`;
+}
+
+type TeamLeadInfo = TeamDirectoryCardProps['team']['teamLead'];
+
+/** Lead as avatar + name, or an amber "No lead" warning badge. Shared by the card and table views. */
+export function TeamLead({
+  lead,
+  id,
+  className,
+}: {
+  lead: TeamLeadInfo;
+  id?: string;
+  className?: string;
+}) {
+  if (!lead) {
+    return (
+      <span
+        id={id}
+        className={cn(
+          'inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold',
+          toneClasses('elevated').soft,
+          className
+        )}
+      >
+        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+        No lead
+      </span>
+    );
+  }
   return (
-    <Card className="group flex flex-col justify-between overflow-hidden border-border/70 shadow-2xs hover:border-primary/50 hover:shadow-xs transition-all">
-      <div>
-        {/* Card Header with Icon, Name & Team Lead */}
-        <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
-                <Users className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={`/teams/${team.id}`}
-                  className="font-bold text-sm text-foreground hover:text-primary transition-colors truncate block"
-                >
-                  {team.name}
-                </Link>
-                <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                  {team.description || 'No mission defined.'}
-                </p>
-              </div>
-            </div>
+    <span id={id} className={cn('flex min-w-0 items-center gap-1.5 text-xs', className)}>
+      <span aria-hidden="true" className="inline-flex">
+        <UserAvatar
+          userId={lead.id || lead.name}
+          avatarUrl={lead.avatarUrl}
+          gender={lead.gender}
+          name={lead.name}
+          size="xs"
+          className="h-5 w-5"
+          aria-hidden
+        />
+      </span>
+      <span className="truncate font-medium text-foreground">{lead.name}</span>
+      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Lead
+      </span>
+    </span>
+  );
+}
 
-            <TeamLeadBadge lead={team.teamLead} size="sm" className="shrink-0" />
-          </div>
-        </CardHeader>
+export default function TeamDirectoryCard({ team }: TeamDirectoryCardProps) {
+  const nameId = `team-card-${team.id}-name`;
+  const detailsId = `team-card-${team.id}-details`;
+  const leadId = `team-card-${team.id}-lead`;
+  const lead = team.teamLead;
+  const visibleMembers = team.members.slice(0, MAX_AVATARS);
+  const hiddenMembers = team._count.members - visibleMembers.length;
+  const [firstService] = team.services;
+  const otherServices = team._count.services - (firstService ? 1 : 0);
 
-        {/* Card Body: Avatars & Services Preview */}
-        <CardContent className="p-4 space-y-2.5">
-          {/* Members Stack & Count */}
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-1.5 text-muted-foreground font-medium shrink-0">
-              <Users className="h-3.5 w-3.5 text-muted-foreground/70" />
-              <span>Members ({team._count.members}):</span>
-            </div>
-            <TeamAvatarStack members={team.members} maxVisible={4} size="sm" />
-          </div>
-
-          {/* Owned Services Preview */}
-          <div className="flex items-center justify-between gap-2 text-xs pt-2 border-t border-border/50">
-            <div className="flex items-center gap-1.5 text-muted-foreground font-medium shrink-0">
-              <Shield className="h-3.5 w-3.5 text-muted-foreground/70" />
-              <span>Services ({team._count.services}):</span>
-            </div>
-            <TeamOwnedServicesGrid services={team.services} compact />
-          </div>
-        </CardContent>
-      </div>
-
-      {/* Card Footer: Action Link */}
-      <div className="border-t bg-muted/10 px-4 py-2.5 sm:px-5 flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground font-medium">
-          {team._count.members > 0 ? 'Active roster' : 'Needs setup'}
-        </span>
-        <Link
-          href={`/teams/${team.id}`}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline underline-offset-2"
+  return (
+    <Link
+      href={`/teams/${team.id}`}
+      aria-labelledby={nameId}
+      aria-describedby={`${leadId} ${detailsId}`}
+      className="group flex flex-col gap-3 rounded-lg border border-border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      {/* Row 1: identity + lead */}
+      <div className="flex items-start gap-2.5">
+        <span
+          aria-hidden="true"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20"
         >
-          <span>Manage Team</span>
-          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-        </Link>
+          <Users className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p
+              id={nameId}
+              className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground group-hover:text-primary"
+            >
+              {team.name}
+            </p>
+            <TeamLead lead={lead} id={leadId} className="max-w-[45%]" />
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            {team.description || 'No description'}
+          </p>
+        </div>
       </div>
-    </Card>
+
+      {/* Row 2: roster + coverage */}
+      <div id={detailsId} className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        {visibleMembers.length > 0 && (
+          <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
+            {visibleMembers.map(member => (
+              <UserAvatar
+                key={member.userId}
+                userId={member.user.id || member.userId}
+                avatarUrl={member.user.avatarUrl}
+                gender={member.user.gender}
+                name={member.user.name}
+                size="xs"
+                className="h-5 w-5 rounded-full ring-2 ring-card"
+              />
+            ))}
+            {hiddenMembers > 0 && (
+              <span className="relative inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1 text-2xs font-semibold text-muted-foreground ring-2 ring-card">
+                +{hiddenMembers}
+              </span>
+            )}
+          </span>
+        )}
+        <span className="shrink-0">{plural(team._count.members, 'member')}</span>
+        <span aria-hidden="true">·</span>
+        <span
+          className="flex min-w-0 items-center gap-1"
+          title={team.services.map(service => service.name).join(', ') || undefined}
+        >
+          <span className="shrink-0">
+            {plural(team._count.services, 'service')}
+            {firstService && ':'}
+          </span>
+          {firstService && (
+            <span className="min-w-0 truncate text-foreground">{firstService.name}</span>
+          )}
+          {otherServices > 0 && <span className="shrink-0">+{otherServices}</span>}
+        </span>
+      </div>
+    </Link>
   );
 }

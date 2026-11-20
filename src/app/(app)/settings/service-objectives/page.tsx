@@ -1,12 +1,19 @@
-import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import { SERVICE_OBJECTIVE_CONTRACT } from '@/lib/slo/contract';
-import { ServiceObjectiveForm } from '@/components/settings/ServiceObjectiveForm';
 import { requirePageAccess } from '@/lib/access/server';
+import { AlertTriangle, CheckCircle2, Target, XCircle } from 'lucide-react';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import {
+  ServiceObjectiveCreate,
+  ServiceObjectivesDirectory,
+  type ServiceObjectiveItem,
+} from '@/components/settings/ServiceObjectivesDirectory';
+import { summarizeObjective } from '@/components/settings/serviceObjectiveSummary';
 
 export const revalidate = 0;
 export default async function ServiceObjectivesPage({
@@ -24,102 +31,130 @@ export default async function ServiceObjectivesPage({
         .optional(),
     })
     .parse(await searchParams);
+  const canReadHistory = hasCapability(actor.role, CAPABILITIES.METRICS_READ_ALL);
   const rows = await prisma.serviceObjective.findMany({
     where: {
       ...serviceObjectiveReadWhere(actor),
       activeTo: null,
       ...(query.after ? { id: { gt: query.after } } : {}),
     },
-    include: { service: { select: { name: true } } },
+    include: {
+      service: { select: { name: true } },
+      // Latest scheduled snapshot; shared history needs global metric visibility (as in the API).
+      snapshots: {
+        orderBy: { periodEnd: 'desc' },
+        take: canReadHistory ? 1 : 0,
+        select: { value: true, breached: true, dataState: true, periodEnd: true },
+      },
+    },
     orderBy: { id: 'asc' },
     take: 26,
   });
   const admin = hasCapability(actor.role, CAPABILITIES.ADMIN_MANAGE);
+  const items: ServiceObjectiveItem[] = rows.slice(0, 25).map(row => ({
+    id: row.id,
+    lineageId: row.lineageId,
+    version: row.version,
+    name: row.name,
+    description: row.description,
+    serviceName: row.service?.name ?? null,
+    metricType: row.metricType,
+    target: row.target,
+    comparator: row.comparator,
+    windowType: row.windowType,
+    windowValue: row.windowValue,
+    ...summarizeObjective({
+      metricType: row.metricType,
+      target: row.target,
+      comparator: row.comparator,
+      snapshot: row.snapshots?.[0] ?? null,
+      canReadHistory,
+    }),
+  }));
+  const total = rows.length > 25 ? '25+' : String(rows.length);
+  const count = (health: ServiceObjectiveItem['health']) =>
+    items.filter(item => item.health === health).length;
+  const healthStat = (
+    label: string,
+    health: ServiceObjectiveItem['health'],
+    icon: ReactNode,
+    activeClass: string
+  ) => {
+    const value = count(health);
+    return {
+      label,
+      value: canReadHistory ? value : '—',
+      icon,
+      valueClassName: canReadHistory && value > 0 ? activeClass : undefined,
+      subtext: canReadHistory
+        ? rows.length > 25
+          ? 'Of the first 25'
+          : 'Latest snapshot'
+        : 'Needs global metrics',
+    };
+  };
+
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Service objectives</h1>
-        <p>Manage versioned service targets separately from incident response policies.</p>
-      </header>
-      <div className="space-y-2 rounded-lg border border-border p-4">
+      <SettingsPageHeader
+        title="Service objectives"
+        icon={Target}
+        description="Versioned uptime and response-time targets for services, kept separate from incident response policies."
+        statsPlacement="bottom"
+        stats={[
+          {
+            label: 'Active objectives',
+            value: total,
+            icon: <Target className="h-4 w-4" aria-hidden="true" />,
+          },
+          healthStat(
+            'Meeting target',
+            'MEETING',
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
+            'text-emerald-300'
+          ),
+          healthStat(
+            'At risk',
+            'AT_RISK',
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />,
+            'text-amber-300'
+          ),
+          healthStat(
+            'Breached',
+            'BREACHED',
+            <XCircle className="h-4 w-4" aria-hidden="true" />,
+            'text-rose-300'
+          ),
+        ]}
+      />
+
+      {admin && <ServiceObjectiveCreate />}
+
+      <ServiceObjectivesDirectory
+        items={items}
+        admin={admin}
+        total={total}
+        nextHref={
+          rows.length > 25
+            ? `/settings/service-objectives?after=${encodeURIComponent(rows[24].id)}`
+            : null
+        }
+      />
+
+      <section
+        aria-labelledby="objective-measurement-heading"
+        className="space-y-1 rounded-lg border border-border bg-card px-4 py-3 shadow-sm [&_p]:text-xs [&_p]:text-muted-foreground"
+      >
+        <h2 id="objective-measurement-heading" className="text-sm font-semibold text-foreground">
+          How objectives are measured
+        </h2>
         <p>{SERVICE_OBJECTIVE_CONTRACT.windowSemantics}</p>
         <p>
           Availability measures uptime, rather than request success. MTTA and MTTR targets use
           minutes.
         </p>
         <p>{SERVICE_OBJECTIVE_CONTRACT.noData}</p>
-      </div>
-      {admin && (
-        <details className="rounded-lg border border-border p-4">
-          <summary className="cursor-pointer font-medium">Create objective</summary>
-          <ServiceObjectiveForm />
-        </details>
-      )}
-      {!rows.length && <p>No active objectives in your accessible services.</p>}
-      {rows.slice(0, 25).map(row => (
-        <article key={row.id} className="space-y-3 rounded-lg border border-border p-4">
-          <h2 className="text-lg font-medium">{row.name}</h2>
-          <p>
-            {row.service?.name ?? 'Workspace'} · {row.metricType} · Version {row.version}
-          </p>
-          <p>
-            {row.comparator === 'GREATER_THAN_OR_EQUAL' ? 'At least' : 'At most'} {row.target}{' '}
-            {['UPTIME', 'AVAILABILITY'].includes(row.metricType)
-              ? '%'
-              : ['MTTA', 'MTTR'].includes(row.metricType)
-                ? 'minutes'
-                : '(legacy target; evaluation unavailable)'}{' '}
-            · {row.windowType.replaceAll('_', ' ')}
-          </p>
-          {row.description && <p>{row.description}</p>}
-          {admin && (
-            <>
-              {SERVICE_OBJECTIVE_CONTRACT.metrics.some(metric => metric.id === row.metricType) && (
-                <details>
-                  <summary className="cursor-pointer">Edit objective</summary>
-                  <ServiceObjectiveForm
-                    objective={{
-                      id: row.lineageId,
-                      version: row.version,
-                      name: row.name,
-                      description: row.description,
-                      target: row.target,
-                      comparator: row.comparator,
-                      windowType: row.windowType,
-                      windowValue: row.windowValue,
-                    }}
-                  />
-                </details>
-              )}
-              <details>
-                <summary className="cursor-pointer">Archive objective</summary>
-                <p>
-                  Retires the active definition. Existing versions and measurements remain available
-                  through the API.
-                </p>
-                <ServiceObjectiveForm
-                  archive
-                  objective={{
-                    id: row.lineageId,
-                    version: row.version,
-                    name: row.name,
-                    description: row.description,
-                    target: row.target,
-                    comparator: row.comparator,
-                    windowType: row.windowType,
-                    windowValue: row.windowValue,
-                  }}
-                />
-              </details>
-            </>
-          )}
-        </article>
-      ))}
-      {rows.length > 25 && (
-        <Link href={`/settings/service-objectives?after=${encodeURIComponent(rows[24].id)}`}>
-          Next objectives
-        </Link>
-      )}
+      </section>
     </div>
   );
 }

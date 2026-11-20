@@ -12,7 +12,6 @@ export { default as InsightsWidget } from './InsightsWidget';
 export { default as ChartWidget } from './ChartWidget';
 
 import type { SerializedSLAMetrics } from '@/lib/sla';
-import type { WidgetType } from '@/lib/reports/widget-registry';
 
 /**
  * Get the data for a specific metric key from the metrics object
@@ -110,49 +109,4 @@ export function getPreviousPeriodValue(
   })();
 
   return typeof value === 'number' ? value : null;
-}
-
-/**
- * Determine the appropriate widget type for auto-detection
- */
-export function getWidgetTypeForMetric(metricKey: string): WidgetType {
-  // Percentage/compliance metrics → gauge
-  if (
-    metricKey.includes('Compliance') ||
-    metricKey.includes('Rate') ||
-    metricKey.includes('Percent')
-  ) {
-    return 'gauge';
-  }
-
-  // Array data → table or chart
-  if (
-    metricKey === 'trendSeries' ||
-    metricKey === 'heatmapData' ||
-    metricKey === 'urgencyMix' ||
-    metricKey === 'statusMix'
-  ) {
-    return 'chart';
-  }
-
-  if (
-    metricKey === 'topServices' ||
-    metricKey === 'assigneeLoad' ||
-    metricKey === 'serviceMetrics' ||
-    metricKey === 'onCallLoad' ||
-    metricKey === 'recurringTitles' ||
-    metricKey === 'serviceSlaTable' ||
-    metricKey === 'currentShifts' ||
-    metricKey === 'activeIncidentSummaries' ||
-    metricKey === 'activeIncidentsList'
-  ) {
-    return 'table';
-  }
-
-  if (metricKey === 'insights') {
-    return 'insights';
-  }
-
-  // Default to metric card
-  return 'metric';
 }

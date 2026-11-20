@@ -170,7 +170,7 @@ function SummaryStrip({
             </span>
             <Badge
               variant="outline"
-              className={`text-[10px] font-bold uppercase tracking-wider ${
+              className={`text-2xs font-bold uppercase tracking-wider ${
                 queueHealth.state === 'PAUSED'
                   ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
                   : queueHealth.hasCapacity
@@ -203,7 +203,7 @@ function SummaryStrip({
               size="sm"
               disabled={saving}
               onClick={() => void togglePause()}
-              className={`h-7 text-[10px] font-bold gap-1 ${
+              className={`h-7 text-2xs font-bold gap-1 ${
                 paused
                   ? 'border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                   : 'border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-300'
@@ -230,9 +230,7 @@ function SummaryStrip({
 
       {/* Right: auto-refresh */}
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[11px] text-muted-foreground hidden sm:inline">
-          Auto-refresh (15s)
-        </span>
+        <span className="text-2xs text-muted-foreground hidden sm:inline">Auto-refresh (15s)</span>
         <Switch checked={autoRefresh} onCheckedChange={onAutoRefreshChange} />
       </div>
     </div>
@@ -351,7 +349,7 @@ export default function NotificationOperationsPage({
                       {item.state.toLowerCase()}
                     </p>
                     <p className="text-2xl font-bold">{item._count._all}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Subscription state</p>
+                    <p className="text-2xs text-muted-foreground mt-0.5">Subscription state</p>
                   </div>
                 ))}
                 {feedbackTypes.map(item => (
@@ -360,7 +358,7 @@ export default function NotificationOperationsPage({
                       24h {item.eventType.toLowerCase()}
                     </p>
                     <p className="text-2xl font-bold">{item.count}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Provider feedback</p>
+                    <p className="text-2xs text-muted-foreground mt-0.5">Provider feedback</p>
                   </div>
                 ))}
               </div>
@@ -505,7 +503,7 @@ export default function NotificationOperationsPage({
                   Active Worker Leases
                 </p>
                 <p className="text-2xl font-bold">{workerCount}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
+                <p className="text-2xs text-muted-foreground mt-0.5">
                   Distributed reservations · TTL-based
                 </p>
               </div>
@@ -516,7 +514,7 @@ export default function NotificationOperationsPage({
                       Queue Depth
                     </p>
                     <p className="text-2xl font-bold">{queueHealth.depth.toLocaleString()}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                    <p className="text-2xs text-muted-foreground mt-0.5">
                       Low: {queueHealth.low.toLocaleString()} · High:{' '}
                       {queueHealth.high.toLocaleString()}
                     </p>
@@ -540,7 +538,7 @@ export default function NotificationOperationsPage({
                           ? 'Healthy'
                           : 'Throttled'}
                     </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                    <p className="text-2xs text-muted-foreground mt-0.5">
                       Source: {queueHealth.source} · Rev {queueHealth.revision ?? '—'}
                     </p>
                   </div>
@@ -563,7 +561,7 @@ export default function NotificationOperationsPage({
                       {item.eventType.toLowerCase().replaceAll('_', ' ')}
                     </p>
                     <p className="text-2xl font-bold">{item.count}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                    <p className="text-2xs text-muted-foreground mt-0.5">
                       Provider feedback events
                     </p>
                   </div>
@@ -601,13 +599,13 @@ export default function NotificationOperationsPage({
                       className={`border-b border-border/40 ${idx % 2 === 0 ? 'bg-card' : 'bg-muted/10'}`}
                     >
                       <td className="px-4 py-2.5 font-medium">{item.channel}</td>
-                      <td className="px-4 py-2.5 font-mono text-[11px]">
+                      <td className="px-4 py-2.5 font-mono text-2xs">
                         {item.provider ?? 'default'}
                       </td>
                       <td className="px-4 py-2.5">
                         <Badge
                           variant="outline"
-                          className={`text-[10px] font-bold uppercase tracking-wider ${
+                          className={`text-2xs font-bold uppercase tracking-wider ${
                             item.source === 'DATABASE'
                               ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                               : item.source === 'ENV'

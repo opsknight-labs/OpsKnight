@@ -21,9 +21,10 @@ import {
 import MobileThemeToggle from '@/components/mobile/MobileThemeToggle';
 import PushNotificationToggle from '@/components/mobile/PushNotificationToggle';
 import MobileBiometricToggle from '@/components/mobile/MobileBiometricToggle';
-import { MobileAvatar } from '@/components/mobile/MobileUtils';
+import UserAvatar from '@/components/UserAvatar';
 import { useUserAvatarContextSafe } from '@/contexts/UserAvatarContext';
 import PwaInstallCard from '@/components/mobile/PwaInstallCard';
+import { appRoutes } from '@/lib/app-routes';
 import MobileSignOutButton from '@/components/mobile/MobileSignOutButton';
 import { Card } from '@/components/ui/shadcn/card';
 import { APP_VERSION } from '@/lib/constants';
@@ -79,9 +80,9 @@ const operations: NavigationItem[] = [
   },
   { href: '/m/status', label: 'System health', description: 'Operational status', icon: Signal },
   {
-    href: '/m/analytics',
+    href: appRoutes.analytics(),
     label: 'Analytics',
-    description: 'Responder performance and trends',
+    description: 'Response times, SLA, load and noise',
     icon: BarChart3,
   },
   {
@@ -173,7 +174,14 @@ export default function MobileMoreContent({
     <div className="responsive-page space-y-5">
       <section className="flex min-w-0 items-center gap-3 px-0.5 py-1">
         <div className="shrink-0">
-          <MobileAvatar name={name} src={avatarUrl || undefined} size="lg" />
+          <UserAvatar
+            userId={userId ?? name}
+            avatarUrl={avatarUrl}
+            name={name}
+            gender={gender}
+            size="lg"
+            aria-hidden
+          />
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-sm font-bold text-foreground">{name}</h1>

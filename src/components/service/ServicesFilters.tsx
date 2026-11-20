@@ -2,8 +2,6 @@
 
 import { useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Input } from '@/components/ui/shadcn/input';
-import { Label } from '@/components/ui/shadcn/label';
 import {
   Select,
   SelectContent,
@@ -11,16 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
-import { Filter, X, Activity, Users, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
+import { AlertTriangle, ArrowUpDown, CheckCircle2, XCircle } from 'lucide-react';
 
 type ServicesFiltersProps = {
   currentSearch?: string;
@@ -30,16 +20,10 @@ type ServicesFiltersProps = {
   teams: Array<{ id: string; name: string }>;
 };
 
-export default function ServicesFilters({
-  currentSearch = '',
-  currentStatus = 'all',
-  currentTeam = 'all',
-  currentSort = 'name_asc',
-  teams,
-}: ServicesFiltersProps) {
+export function useServicesParams() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const updateParams = useCallback(
     (updates: Record<string, string>) => {
@@ -64,6 +48,17 @@ export default function ServicesFilters({
     },
     [router, searchParams]
   );
+  return { updateParams, startTransition, router };
+}
+
+export default function ServicesFilters({
+  currentSearch = '',
+  currentStatus = 'all',
+  currentTeam = 'all',
+  currentSort = 'name_asc',
+  teams,
+}: ServicesFiltersProps) {
+  const { updateParams, startTransition, router } = useServicesParams();
 
   const clearFilters = () => {
     startTransition(() => {
@@ -74,101 +69,69 @@ export default function ServicesFilters({
   const hasActiveFilters =
     currentSearch !== '' ||
     currentStatus !== 'all' ||
-    currentTeam !== 'all' ||
+    (currentTeam || 'all') !== 'all' ||
     currentSort !== 'name_asc';
 
+  const toggleStatus = (value: string) =>
+    updateParams({ status: currentStatus === value ? 'all' : value });
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-4 w-4" /> Filter Services
-            </CardTitle>
-            <CardDescription>Find services by name, team, status, or tier</CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                onClick={clearFilters}
-                disabled={isPending}
-              >
-                <X className="mr-1 h-3 w-3" /> Clear All
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Quick Filters */}
-        <div className="flex flex-wrap gap-2">
-          <Badge
-            variant={currentStatus === 'all' ? 'default' : 'outline'}
-            size="sm"
-            className="cursor-pointer hover:bg-primary/90 hover:text-primary-foreground transition-colors"
+    <FilterBar
+      chips={
+        <>
+          <FilterChip
+            active={currentStatus === 'all'}
             onClick={() => updateParams({ status: 'all' })}
           >
             All services
-          </Badge>
-          <Badge
-            variant={currentStatus === 'OPERATIONAL' ? 'success' : 'outline'}
-            size="sm"
-            className="cursor-pointer hover:bg-emerald-100 hover:text-emerald-800 transition-colors dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300"
-            onClick={() =>
-              updateParams({ status: currentStatus === 'OPERATIONAL' ? 'all' : 'OPERATIONAL' })
-            }
+          </FilterChip>
+          <FilterChip
+            tone="ok"
+            icon={<CheckCircle2 />}
+            active={currentStatus === 'OPERATIONAL'}
+            onClick={() => toggleStatus('OPERATIONAL')}
           >
-            <CheckCircle2 className="mr-1 h-3 w-3" /> Operational
-          </Badge>
-          <Badge
-            variant={currentStatus === 'DEGRADED' ? 'warning' : 'outline'}
-            size="sm"
-            className="cursor-pointer hover:bg-yellow-100 hover:text-yellow-800 transition-colors dark:hover:bg-yellow-500/15 dark:hover:text-yellow-300"
-            onClick={() =>
-              updateParams({ status: currentStatus === 'DEGRADED' ? 'all' : 'DEGRADED' })
-            }
+            Operational
+          </FilterChip>
+          <FilterChip
+            tone="elevated"
+            icon={<AlertTriangle />}
+            active={currentStatus === 'DEGRADED'}
+            onClick={() => toggleStatus('DEGRADED')}
           >
-            <AlertTriangle className="mr-1 h-3 w-3" /> Degraded
-          </Badge>
-          <Badge
-            variant={currentStatus === 'CRITICAL' ? 'danger' : 'outline'}
-            size="sm"
-            className="cursor-pointer hover:bg-red-100 hover:text-red-800 transition-colors dark:hover:bg-red-500/15 dark:hover:text-red-300"
-            onClick={() =>
-              updateParams({ status: currentStatus === 'CRITICAL' ? 'all' : 'CRITICAL' })
-            }
+            Degraded
+          </FilterChip>
+          <FilterChip
+            tone="critical"
+            icon={<XCircle />}
+            active={currentStatus === 'CRITICAL'}
+            onClick={() => toggleStatus('CRITICAL')}
           >
-            <XCircle className="mr-1 h-3 w-3" /> Critical
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Search */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase">Search</Label>
-            <div className="relative">
-              <Input
-                placeholder="Search by name..."
-                value={currentSearch}
-                onChange={e => updateParams({ search: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Team Filter */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
-              <Users className="h-3 w-3" /> Team
-            </Label>
-            <Select value={currentTeam} onValueChange={value => updateParams({ team: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Teams" />
+            Critical
+          </FilterChip>
+        </>
+      }
+      search={{
+        value: currentSearch,
+        onChange: value => updateParams({ search: value }),
+        placeholder: 'Search services by name…',
+        label: 'Search services',
+        debounceMs: 300,
+      }}
+      hasActiveFilters={hasActiveFilters}
+      onClearAll={clearFilters}
+      filters={
+        <>
+          <FilterField label="Team" htmlFor="services-filter-team">
+            <Select
+              value={currentTeam || 'all'}
+              onValueChange={value => updateParams({ team: value })}
+            >
+              <SelectTrigger id="services-filter-team" className="h-9 w-[170px] text-sm">
+                <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Teams</SelectItem>
+                <SelectItem value="all">All teams</SelectItem>
                 {teams.map(team => (
                   <SelectItem key={team.id} value={team.id}>
                     {team.name}
@@ -176,59 +139,65 @@ export default function ServicesFilters({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Status Filter (Dropdown backup) */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
-              <Activity className="h-3 w-3" /> Status
-            </Label>
+          </FilterField>
+          <FilterField label="Status" htmlFor="services-filter-status">
             <Select value={currentStatus} onValueChange={value => updateParams({ status: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Statuses" />
+              <SelectTrigger id="services-filter-status" className="h-9 w-[160px] text-sm">
+                <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="OPERATIONAL">
                   <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
                     Operational
                   </div>
                 </SelectItem>
                 <SelectItem value="DEGRADED">
                   <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-yellow-500" />
+                    <div className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
                     Degraded
                   </div>
                 </SelectItem>
                 <SelectItem value="CRITICAL">
                   <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-red-500" />
+                    <div className="h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" />
                     Critical
                   </div>
                 </SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FilterField>
+        </>
+      }
+    />
+  );
+}
 
-          {/* Sort */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase">Sort By</Label>
-            <Select value={currentSort} onValueChange={value => updateParams({ sort: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sort order" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name_asc">Name (A-Z)</SelectItem>
-                <SelectItem value="name_desc">Name (Z-A)</SelectItem>
-                <SelectItem value="status">Status Health</SelectItem>
-                <SelectItem value="incidents_desc">Most Incidents</SelectItem>
-                <SelectItem value="incidents_asc">Least Incidents</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+const SORT_OPTIONS = [
+  ['name_asc', 'Name (A-Z)'],
+  ['name_desc', 'Name (Z-A)'],
+  ['status', 'Status health'],
+  ['incidents_desc', 'Most incidents'],
+  ['incidents_asc', 'Least incidents'],
+] as const;
+
+/** Sort control for the service directory header. */
+export function ServicesSortSelect({ currentSort = 'name_asc' }: { currentSort?: string }) {
+  const { updateParams } = useServicesParams();
+  return (
+    <Select value={currentSort} onValueChange={value => updateParams({ sort: value })}>
+      <SelectTrigger aria-label="Sort services" className="h-8 w-auto gap-1.5 text-xs">
+        <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <SelectValue placeholder="Sort order" />
+      </SelectTrigger>
+      <SelectContent>
+        {SORT_OPTIONS.map(([value, label]) => (
+          <SelectItem key={value} value={value}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

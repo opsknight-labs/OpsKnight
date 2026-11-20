@@ -354,7 +354,7 @@ export default function AuthenticationPolicyWorkspace() {
                               <dd className="text-lg font-semibold text-foreground">
                                 {item.value}
                               </dd>
-                              <dd className="text-[11px] text-muted-foreground">{item.note}</dd>
+                              <dd className="text-2xs text-muted-foreground">{item.note}</dd>
                             </div>
                           ))}
                           <div className="rounded-lg border bg-background/70 p-2.5">

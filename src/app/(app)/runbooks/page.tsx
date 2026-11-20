@@ -251,17 +251,23 @@ export default async function RunbooksPage({
       <RunbookModuleNav summary={navigation} />
 
       <div className="space-y-3.5 md:space-y-4">
-        {/* Search text is excluded from the key so typing keeps focus */}
         <LibraryFilterBar
-          key={JSON.stringify({ ...query, q: undefined })}
           query={query}
           teams={teams}
           popularTags={popularTags}
+          counts={{
+            all: totalLibraryCount,
+            published: publishedCount,
+            draft: draftCount,
+            archived: archivedCount,
+          }}
         />
 
-        {/* Library Operational Cards */}
         <RunbookLibrary
           total={total}
+          page={page}
+          pageSize={RUNBOOK_PAGE_SIZE}
+          footer={<RunbookPagination page={page} total={total} query={query} />}
           canManage={canManage}
           userTimeZone={userTimeZone}
           teams={teams}
@@ -293,9 +299,6 @@ export default async function RunbooksPage({
             insights: insightCounts.get(item.id) ?? null,
           }))}
         />
-
-        {/* Bounded Server Pagination */}
-        <RunbookPagination page={page} total={total} query={query} />
 
         {/* Enterprise Execution Guarantee Callout */}
         <div className="relative overflow-hidden rounded-xl border border-zinc-200/90 dark:border-zinc-800/80 bg-gradient-to-r from-zinc-50/90 via-white to-zinc-50/70 dark:from-zinc-900/60 dark:via-zinc-900/40 dark:to-zinc-900/60 p-4 sm:p-5 shadow-xs transition-colors">

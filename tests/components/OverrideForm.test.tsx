@@ -2,9 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import OverrideForm from '@/components/OverrideForm';
 
-const showToast = vi.fn();
-vi.mock('@/hooks/use-product-notification', () => ({
-  useToast: () => ({ showToast }),
+vi.mock('@/lib/toast', () => ({
+  notify: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn() }),

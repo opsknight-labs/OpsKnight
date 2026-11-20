@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
+import { EmptyState } from '@/components/patterns';
 import { MoreHorizontal, ShieldCheck, LayoutList, Clock, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -39,17 +40,22 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
 
   if (policies.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-ink-200 bg-gradient-to-br from-ink-50 to-card p-10 text-center">
-        <div className="text-4xl opacity-30 mb-3">
-          <LayoutList className="mx-auto h-12 w-12" />
-        </div>
-        <p className="text-base font-bold text-ink-700 mb-1">No escalation policies yet</p>
-        <p className="text-sm text-ink-500 m-0">
-          {canManagePolicies
-            ? 'Click "Create Policy" above to define who gets notified when incidents occur.'
-            : 'No escalation policies have been created yet.'}
-        </p>
-      </div>
+      <EmptyState
+        icon={<LayoutList />}
+        title="No escalation policies yet"
+        description={
+          canManagePolicies
+            ? 'Create a policy to define who gets notified when incidents occur.'
+            : 'An admin or responder can create one to define who gets notified when incidents occur.'
+        }
+        action={
+          canManagePolicies ? (
+            <Button asChild>
+              <Link href="/policies/create">Create policy</Link>
+            </Button>
+          ) : undefined
+        }
+      />
     );
   }
 
@@ -147,17 +153,18 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
                       size="sm"
                       className="h-8 w-8 p-0 rounded-full bg-ink-50 hover:bg-ink-100 border border-ink-200"
                       onClick={e => e.stopPropagation()}
+                      aria-label={`Actions for ${policy.name}`}
                     >
-                      <MoreHorizontal className="h-4 w-4 text-ink-600" />
+                      <MoreHorizontal className="h-4 w-4 text-ink-600" aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild>
                       <Link
                         href={`/policies/${policy.id}`}
                         className="flex items-center gap-2 cursor-pointer"
                       >
-                        <LayoutList className="h-4 w-4 text-ink-500" />
+                        <LayoutList />
                         View Details
                       </Link>
                     </DropdownMenuItem>

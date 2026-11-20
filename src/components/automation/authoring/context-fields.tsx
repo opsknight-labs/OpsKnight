@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { cn } from '@/lib/utils';
-import { builtinFields, LIMITS, type Field, type Rule } from '@/lib/automation/contract';
+import { LIMITS, type Field, type Rule } from '@/lib/automation/contract';
 import { CanonicalValuesEditor } from '../CanonicalValuesEditor';
 import { AliasEditor } from '../AliasEditor';
 import { FIELD_TYPE_LABELS } from './rule-language';
@@ -176,8 +176,10 @@ export const FieldDetail = memo(function FieldDetail({
                 aria-label={`Copy automation.${field.key}`}
                 className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/60 px-1.5 py-px text-[9.5px] font-sans font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
                 onClick={() => {
-                  navigator.clipboard.writeText(`automation.${field.key}`);
-                  notify.success(`Copied automation.${field.key} to clipboard`);
+                  navigator.clipboard.writeText(`automation.${field.key}`).then(
+                    () => notify.success(`Copied automation.${field.key} to clipboard`),
+                    () => notify.error("Couldn't copy; select the field name and copy it manually.")
+                  );
                 }}
               >
                 <Copy className="h-2.5 w-2.5" aria-hidden="true" />
@@ -353,9 +355,6 @@ export const FieldDetail = memo(function FieldDetail({
     </section>
   );
 });
-
-export const builtinFieldKeys = new Set(builtinFields.map(field => field.key));
-
 export function deriveFieldKey(label: string) {
   return label
     .trim()

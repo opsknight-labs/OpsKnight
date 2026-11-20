@@ -27,6 +27,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
+import ErrorState from '@/components/patterns/ErrorState';
+import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { isComparablePriorPeriod } from '@/lib/dashboard/period-comparison';
 import {
   DashboardAnalyticsProvider,
@@ -54,11 +57,6 @@ export function useHistoryQuery(): HistoryContextValue {
   if (!value) throw new Error('useHistoryQuery must be used within DashboardHistoryProvider');
   return value;
 }
-
-export function useOptionalHistoryQuery(): HistoryContextValue | null {
-  return useContext(HistoryContext);
-}
-
 /**
  * Owns the dashboard reporting period. It lives in client state and the URL (replaceState), so a
  * change refetches the single analytics projection without re-rendering the server page or
@@ -112,7 +110,10 @@ function useNearViewport<T extends Element>(rootMargin = '400px') {
   return { ref, visible };
 }
 
-const card = 'rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]';
+/** The one dashboard card chrome (same as the shadcn Card and FilterBar). */
+const card = 'rounded-lg border border-border bg-card shadow-sm';
+/** Card title row: the shared section-header style used across the dashboard. */
+const cardHeader = 'mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2';
 
 function formatMinutes(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
@@ -132,20 +133,18 @@ function TimeDelta({
   range: string;
 }) {
   if (current === null || previous === null || previous <= 0) {
-    return <p className="text-[11px] text-muted-foreground">No prior baseline</p>;
+    return <p className="text-xs text-muted-foreground">No prior baseline</p>;
   }
   const diff = current - previous;
   if (Math.abs(diff) < 1) {
-    return <p className="text-[11px] text-muted-foreground">No change vs prior {range}d</p>;
+    return <p className="text-xs text-muted-foreground">No change vs prior {range}d</p>;
   }
   const better = diff < 0;
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums border shadow-2xs',
-        better
-          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+        'inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-2xs font-semibold tabular-nums',
+        toneClasses(better ? 'ok' : 'critical').soft
       )}
     >
       <span>{better ? '▼' : '▲'}</span>
@@ -161,51 +160,29 @@ function Kpi({
   footer,
   testId,
   icon,
-  tone = 'primary',
 }: {
   label: string;
   value: string;
   footer: ReactNode;
   testId: string;
   icon?: ReactNode;
-  tone?: 'amber' | 'violet' | 'emerald' | 'blue' | 'primary';
 }) {
-  const toneBg =
-    tone === 'amber'
-      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-      : tone === 'violet'
-        ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20'
-        : tone === 'emerald'
-          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-          : tone === 'blue'
-            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
-            : 'bg-primary/10 text-primary border-primary/20';
-
   return (
-    <div
-      className={cn(
-        card,
-        'group flex flex-col justify-between p-3.5 transition-all hover:border-slate-300 dark:hover:border-zinc-700 hover:shadow-xs'
-      )}
-      data-testid={testId}
-    >
+    <div className={cn(card, 'flex flex-col justify-between p-4')} data-testid={testId}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
         {icon && (
           <span
-            className={cn(
-              'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border shadow-2xs',
-              toneBg
-            )}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
             aria-hidden
           >
             {icon}
           </span>
         )}
       </div>
-      <p className="my-1 font-display text-2xl sm:text-3xl font-extrabold tabular-nums tracking-tight text-foreground">
+      <p className="my-1 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
         {value}
       </p>
       <div>{footer}</div>
@@ -220,12 +197,8 @@ function ComplianceBar({ value }: { value: number | null }) {
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
         <div
           className={cn(
-            'h-full rounded-full transition-all duration-500',
-            pct >= 95
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-              : pct >= 80
-                ? 'bg-gradient-to-r from-amber-500 to-amber-400'
-                : 'bg-gradient-to-r from-rose-500 to-rose-400'
+            'h-full rounded-full transition-[width] duration-200',
+            toneClasses(pct >= 95 ? 'ok' : pct >= 80 ? 'elevated' : 'critical').solid
           )}
           style={{ width: `${pct}%` }}
         />
@@ -249,6 +222,9 @@ export function formatTrendBucket(key: string | undefined, fallback = ''): strin
   });
 }
 
+const CREATED_TEXT = 'text-status-critical';
+const RESOLVED_TEXT = 'text-status-ok';
+
 /** Created vs resolved area chart in plain SVG (no chart runtime on the dashboard). */
 function FlowChart({
   series,
@@ -257,9 +233,12 @@ function FlowChart({
 }) {
   if (series.length < 2) {
     return (
-      <p className="flex h-40 items-center justify-center text-xs text-muted-foreground">
-        Not enough data in this period yet
-      </p>
+      <div className="flex h-40 flex-col items-center justify-center gap-1 text-center">
+        <p className="text-sm font-medium text-foreground">Not enough data in this period yet</p>
+        <p className="text-xs text-muted-foreground">
+          Pick a longer reporting period, or open full analytics.
+        </p>
+      </div>
     );
   }
   const width = 600;
@@ -289,15 +268,14 @@ function FlowChart({
         aria-label={`${totalCreated} incidents created and ${totalResolved} resolved in this period`}
       >
         <defs>
-          <linearGradient id="flow-created" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.36" />
-            <stop offset="60%" stopColor="#f43f5e" stopOpacity="0.10" />
-            <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
+          {/* Series colours are the status tokens, applied through currentColor. */}
+          <linearGradient id="flow-created" x1="0" y1="0" x2="0" y2="1" className={CREATED_TEXT}>
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.24" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
-          <linearGradient id="flow-resolved" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#10b981" stopOpacity="0.30" />
-            <stop offset="60%" stopColor="#10b981" stopOpacity="0.08" />
-            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+          <linearGradient id="flow-resolved" x1="0" y1="0" x2="0" y2="1" className={RESOLVED_TEXT}>
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
         </defs>
         {/* Reference guide gridlines */}
@@ -308,7 +286,7 @@ function FlowChart({
           y2={height * 0.25}
           stroke="currentColor"
           strokeDasharray="3 3"
-          className="text-border/40"
+          className="text-border"
         />
         <line
           x1="0"
@@ -317,7 +295,7 @@ function FlowChart({
           y2={height * 0.5}
           stroke="currentColor"
           strokeDasharray="3 3"
-          className="text-border/40"
+          className="text-border"
         />
         <line
           x1="0"
@@ -326,15 +304,16 @@ function FlowChart({
           y2={height * 0.75}
           stroke="currentColor"
           strokeDasharray="3 3"
-          className="text-border/40"
+          className="text-border"
         />
 
         <path d={area('count')} fill="url(#flow-created)" />
         <path
           d={line('count')}
           fill="none"
-          stroke="#f43f5e"
-          strokeWidth="2.25"
+          stroke="currentColor"
+          className={CREATED_TEXT}
+          strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
@@ -343,8 +322,9 @@ function FlowChart({
         <path
           d={line('resolveCount')}
           fill="none"
-          stroke="#10b981"
-          strokeWidth="2.25"
+          stroke="currentColor"
+          className={RESOLVED_TEXT}
+          strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
@@ -371,20 +351,20 @@ function FlowChart({
               cx={x(series.length - 1)}
               cy={y(series.at(-1)?.count ?? 0)}
               r="3.5"
-              fill="#f43f5e"
-              className="stroke-card stroke-2"
+              fill="currentColor"
+              className={cn(CREATED_TEXT, 'stroke-card stroke-2')}
             />
             <circle
               cx={x(series.length - 1)}
               cy={y(series.at(-1)?.resolveCount ?? 0)}
               r="3.5"
-              fill="#10b981"
-              className="stroke-card stroke-2"
+              fill="currentColor"
+              className={cn(RESOLVED_TEXT, 'stroke-card stroke-2')}
             />
           </>
         )}
       </svg>
-      <figcaption className="mt-1 flex justify-between gap-2 text-[10px] text-muted-foreground">
+      <figcaption className="mt-1 flex justify-between gap-2 text-2xs tabular-nums text-muted-foreground">
         <span>{formatTrendBucket(series[0]?.key, series[0]?.label)}</span>
         <span className="tabular-nums">
           Peak {max} per {hourly ? 'hour' : 'day'}
@@ -403,45 +383,25 @@ const ACTIVITY_FILTERS = [
   { key: 'resolved', label: 'Resolved', types: ['AUTO_RESOLVED', 'MANUAL_RESOLVED'] },
 ] as const;
 
+/** Status-bearing events take their status tone; everything else stays neutral. */
 function activityIcon(type: string | null): { icon: LucideIcon; tone: string } {
   switch (type) {
     case 'ACKNOWLEDGED':
-      return {
-        icon: CheckCheck,
-        tone: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
-      };
+      return { icon: CheckCheck, tone: toneClasses('elevated').soft };
     case 'ESCALATED':
-      return {
-        icon: ArrowUpRight,
-        tone: 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
-      };
+      return { icon: ArrowUpRight, tone: toneClasses(null).soft };
     case 'SLA_WARNING':
     case 'SLA_BREACHED':
-      return {
-        icon: Clock3,
-        tone: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
-      };
+      return { icon: Clock3, tone: toneClasses('critical').soft };
     case 'AUTO_RESOLVED':
     case 'MANUAL_RESOLVED':
-      return {
-        icon: CheckCircle2,
-        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
-      };
+      return { icon: CheckCircle2, tone: toneClasses('ok').soft };
     case 'ASSIGNMENT':
-      return {
-        icon: UserPlus,
-        tone: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
-      };
+      return { icon: UserPlus, tone: toneClasses(null).soft };
     case 'COMMENT':
-      return {
-        icon: MessageSquare,
-        tone: 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300',
-      };
+      return { icon: MessageSquare, tone: toneClasses(null).soft };
     default:
-      return {
-        icon: AlertTriangle,
-        tone: 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300',
-      };
+      return { icon: AlertTriangle, tone: toneClasses(null).soft };
   }
 }
 
@@ -458,8 +418,8 @@ function ActivityTimeline() {
     )
     .slice(0, 10);
   return (
-    <div className={cn(card, 'flex flex-col h-[395px] p-4')} data-testid="rail-activity">
-      <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+    <div className={cn(card, 'flex h-[395px] flex-col p-4')} data-testid="rail-activity">
+      <div className={cardHeader}>
         <h3 className="dash-heading-sm">Recent activity</h3>
         <div role="radiogroup" aria-label="Activity type" className="flex flex-wrap gap-1">
           {ACTIVITY_FILTERS.map(option => (
@@ -470,10 +430,10 @@ function ActivityTimeline() {
               aria-checked={filter === option.key}
               onClick={() => setFilter(option.key)}
               className={cn(
-                'rounded-full px-2 py-0.5 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                'rounded-full border px-2.5 py-0.5 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
                 filter === option.key
-                  ? 'bg-foreground text-background'
-                  : 'border border-border text-muted-foreground hover:text-foreground'
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
               {option.label}
@@ -483,11 +443,32 @@ function ActivityTimeline() {
       </div>
       {visible.length === 0 ? (
         <div
-          className="flex h-full min-h-[140px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 p-4 text-center"
+          className="flex h-full min-h-[140px] flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-muted/30 p-4 text-center"
           role="status"
           aria-label="No matching activity"
         >
-          <div className="text-xs font-medium text-muted-foreground">No matching activity</div>
+          <div className="text-sm font-medium text-foreground">No matching activity</div>
+          <p className="text-xs text-muted-foreground">
+            {filter === 'all'
+              ? 'Acks, escalations, SLA events and resolutions will show up here.'
+              : 'Nothing of this type happened recently.'}
+          </p>
+          {filter === 'all' ? (
+            <Link
+              href="/incidents"
+              className="mt-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              View incidents
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setFilter('all')}
+              className="mt-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Show all activity
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto overscroll-contain pr-1">
@@ -498,11 +479,11 @@ function ActivityTimeline() {
                 <li key={item.id} role="listitem">
                   <Link
                     href={`/incidents/${item.incidentId}`}
-                    className="group flex items-center gap-2.5 rounded-lg border border-border bg-card px-2.5 py-1.5 shadow-2xs transition-all hover:border-slate-300 dark:bg-[#121216] dark:hover:border-zinc-700 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className="group flex items-center gap-2.5 rounded-md border border-border bg-card px-2.5 py-1.5 outline-none transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span
                       className={cn(
-                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-2xs',
+                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border',
                         tone
                       )}
                       aria-hidden
@@ -512,17 +493,17 @@ function ActivityTimeline() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <p
-                          className="truncate text-xs font-semibold text-foreground transition-colors group-hover:text-primary"
+                          className="truncate text-xs font-medium text-foreground"
                           title={item.message}
                         >
                           {item.message}
                         </p>
-                        <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
+                        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
                           {formatIncidentAge(item.createdAt, now)} ago
                         </span>
                       </div>
-                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                        <span className="font-medium text-foreground/80">{item.incidentTitle}</span>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {item.incidentTitle}
                       </p>
                     </div>
                   </Link>
@@ -536,14 +517,58 @@ function ActivityTimeline() {
   );
 }
 
+/** Loading shape of the trends section: flow chart + four KPIs, then the two list cards. */
+function InsightsSkeleton() {
+  return (
+    <div role="status" aria-busy="true" aria-live="polite" data-testid="insights-loading">
+      <span className="sr-only">Loading trends…</span>
+      <div aria-hidden="true" className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className={cn(card, 'space-y-3 p-4 lg:col-span-2')}>
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-48" />
+            <Skeleton className="h-36 w-full" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[0, 1, 2, 3].map(key => (
+              <div key={key} className={cn(card, 'space-y-2 p-4')}>
+                <Skeleton className="h-3 w-12" />
+                <Skeleton className="h-7 w-16" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {[0, 1].map(key => (
+            <div key={key} className={cn(card, 'space-y-2 p-4')}>
+              <Skeleton className="mb-3 h-4 w-28" />
+              {[0, 1, 2, 3, 4].map(row => (
+                <Skeleton key={row} className="h-10 w-full" />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InsightsContent() {
   const { data, state } = useDashboardAnalytics();
   const { query } = useHistoryQuery();
   if (!data) {
-    return (
-      <p className={cn(card, 'p-6 text-center text-sm text-muted-foreground')} role="status">
-        {state === 'loading' ? 'Loading trends…' : 'Trends are temporarily unavailable.'}
-      </p>
+    return state === 'loading' ? (
+      <InsightsSkeleton />
+    ) : (
+      <ErrorState
+        variant="inline"
+        title="Trends are temporarily unavailable"
+        message="They retry on their own. The live feed above is unaffected."
+        backHref={`/insights?range=${query.range}`}
+        backLabel="Open full analytics"
+        className={card}
+      />
     );
   }
   const priorAvailable = data.previousPeriod?.available ? data.previousPeriod : null;
@@ -555,10 +580,10 @@ function InsightsContent() {
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className={cn(card, 'p-4 lg:col-span-2')} data-testid="insight-flow">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className={cardHeader}>
             <div>
               <h3 className="dash-heading-sm">Incident flow</h3>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs tabular-nums text-muted-foreground">
                 {data.totalIncidents} created in the last {query.range} days
                 {previous
                   ? ` · ${previous.totalIncidents} in the prior period`
@@ -567,13 +592,13 @@ function InsightsContent() {
                     : ''}
               </p>
             </div>
-            <span className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-sm bg-rose-400" aria-hidden />
+                <span className="h-2 w-2 rounded-full bg-status-critical" aria-hidden />
                 Created
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-sm bg-emerald-400" aria-hidden />
+                <span className="h-2 w-2 rounded-full bg-status-ok" aria-hidden />
                 Resolved
               </span>
             </span>
@@ -586,7 +611,6 @@ function InsightsContent() {
             label="MTTA"
             value={formatMinutes(data.mtta)}
             icon={<Timer className="h-3.5 w-3.5" />}
-            tone="amber"
             footer={
               <TimeDelta
                 current={data.mtta}
@@ -600,7 +624,6 @@ function InsightsContent() {
             label="MTTR"
             value={formatMinutes(data.mttr)}
             icon={<RotateCcw className="h-3.5 w-3.5" />}
-            tone="violet"
             footer={
               <TimeDelta
                 current={data.mttr}
@@ -614,7 +637,6 @@ function InsightsContent() {
             label="Ack SLA"
             value={data.ackCompliance === null ? '—' : `${Math.round(data.ackCompliance)}%`}
             icon={<CheckCheck className="h-3.5 w-3.5" />}
-            tone="emerald"
             footer={<ComplianceBar value={data.ackCompliance} />}
           />
           <Kpi
@@ -622,18 +644,17 @@ function InsightsContent() {
             label="Resolve SLA"
             value={data.resolveCompliance === null ? '—' : `${Math.round(data.resolveCompliance)}%`}
             icon={<Target className="h-3.5 w-3.5" />}
-            tone="blue"
             footer={<ComplianceBar value={data.resolveCompliance} />}
           />
         </div>
       </div>
       <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
         <ActivityTimeline />
-        <div className={cn(card, 'flex flex-col h-[395px] p-4')} data-testid="insight-team-load">
-          <div className="mb-3 flex shrink-0 items-center justify-between">
+        <div className={cn(card, 'flex h-[395px] flex-col p-4')} data-testid="insight-team-load">
+          <div className={cardHeader}>
             <h3 className="dash-heading-sm">Team load</h3>
             {data.assigneeLoad && data.assigneeLoad.length > 0 && (
-              <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+              <span className="text-xs tabular-nums text-muted-foreground">
                 {data.assigneeLoad.filter(a => a.count > 0).length} active responder
                 {data.assigneeLoad.filter(a => a.count > 0).length === 1 ? '' : 's'}
               </span>
@@ -657,18 +678,18 @@ export default function DashboardHistorySection() {
     <section
       aria-labelledby="dashboard-history-heading"
       data-testid="dashboard-history"
-      className="space-y-3 pt-1"
+      className="space-y-3 pt-2"
     >
-      <div className="flex flex-wrap items-end justify-between gap-3 px-1">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2
             id="dashboard-history-heading"
-            className="dash-heading flex items-center gap-2 font-display text-[15px] font-semibold text-foreground"
+            className="dash-heading flex items-center gap-2 text-foreground"
           >
-            <TrendingUp className="h-4 w-4 text-primary" aria-hidden />
+            <TrendingUp className="h-4 w-4 text-muted-foreground" aria-hidden />
             Trends &amp; insights
           </h2>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             The reporting period applies to this section only; everything above is live.
           </p>
         </div>
@@ -677,7 +698,7 @@ export default function DashboardHistorySection() {
             role="radiogroup"
             aria-label="Reporting period"
             data-testid="command-period"
-            className="inline-flex h-8 items-center rounded-lg border border-border bg-card p-0.5 text-xs font-semibold shadow-2xs"
+            className="inline-flex h-8 items-center rounded-md border border-border bg-muted/60 p-0.5 text-xs font-medium"
           >
             {HISTORY_RANGES.map(range => (
               <button
@@ -688,9 +709,9 @@ export default function DashboardHistorySection() {
                 data-testid={`period-${range}`}
                 onClick={() => setQuery({ range })}
                 className={cn(
-                  'h-full rounded-md px-3 outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  'h-full rounded-sm px-3 tabular-nums outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
                   query.range === range
-                    ? 'bg-foreground text-background'
+                    ? 'bg-card text-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -699,8 +720,8 @@ export default function DashboardHistorySection() {
             ))}
           </div>
           <Link
-            href={`/analytics?range=${query.range}`}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
+            href={`/insights?range=${query.range}d`}
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             Full analytics
             <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
@@ -708,11 +729,7 @@ export default function DashboardHistorySection() {
         </div>
       </div>
       <div ref={ref} className="min-h-[22rem]">
-        {visible ? (
-          <InsightsContent />
-        ) : (
-          <div className={cn(card, 'h-[22rem] border-dashed')} aria-hidden />
-        )}
+        {visible ? <InsightsContent /> : <InsightsSkeleton />}
       </div>
     </section>
   );

@@ -29,8 +29,8 @@ export function OperationsView({
   return (
     <div className="space-y-6">
       {/* Scope Disclaimer */}
-      <div className="p-4 rounded-xl border border-border/80 bg-muted/20 flex items-start gap-3 text-xs text-muted-foreground">
-        <Lock className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
+      <div className="p-4 rounded-lg border border-border/80 bg-muted/20 flex items-start gap-3 text-xs text-muted-foreground">
+        <Lock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
         <div className="space-y-1">
           <p className="font-semibold text-foreground">Operational Lifecycle Controls</p>
           <p className="leading-relaxed">
@@ -46,7 +46,7 @@ export function OperationsView({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-              <Key className="h-4 w-4 text-amber-500" />
+              <Key className="h-4 w-4 text-muted-foreground" />
               <span>Cryptographic Envelope &amp; Secret Lifecycle</span>
             </h3>
             <p className="text-xs text-muted-foreground">
@@ -73,7 +73,7 @@ export function OperationsView({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-              <Users className="h-4 w-4 text-purple-500" />
+              <Users className="h-4 w-4 text-muted-foreground" />
               <span>Data Subject Rights &amp; Privacy Operations</span>
             </h3>
             <p className="text-xs text-muted-foreground">
@@ -121,7 +121,7 @@ export function OperationsView({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-              <Clock className="h-4 w-4 text-emerald-500" />
+              <Clock className="h-4 w-4 text-muted-foreground" />
               <span>Data Retention &amp; Disposal Schedules</span>
             </h3>
             <p className="text-xs text-muted-foreground">
@@ -141,11 +141,11 @@ export function OperationsView({
           <Card className="border-border/80 p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-foreground">Audit &amp; Event Logs</span>
-              <Badge variant="outline" className="text-[10px] font-mono">
+              <Badge variant="outline" className="text-2xs font-mono">
                 {retentionPolicy?.logRetentionDays ?? 365} Days
               </Badge>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-2xs text-muted-foreground leading-relaxed">
               Audit events, authentication logs, and privilege transitions retained according to the
               active deployment schedule.
             </p>
@@ -154,11 +154,11 @@ export function OperationsView({
           <Card className="border-border/80 p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-foreground">Incident Records</span>
-              <Badge variant="outline" className="text-[10px] font-mono">
+              <Badge variant="outline" className="text-2xs font-mono">
                 {retentionPolicy?.incidentRetentionDays ?? 730} Days
               </Badge>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-2xs text-muted-foreground leading-relaxed">
               Operational incident histories, response timelines, and postmortem documentation
               retention window.
             </p>
@@ -167,11 +167,11 @@ export function OperationsView({
           <Card className="border-border/80 p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-foreground">Alert Telemetry</span>
-              <Badge variant="outline" className="text-[10px] font-mono">
+              <Badge variant="outline" className="text-2xs font-mono">
                 {retentionPolicy?.alertRetentionDays ?? 365} Days
               </Badge>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-2xs text-muted-foreground leading-relaxed">
               Raw alert signals, metric rollups, and monitoring telemetry lifecycle retention
               schedule.
             </p>
@@ -180,11 +180,11 @@ export function OperationsView({
           <Card className="border-border/80 p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-foreground">Privacy DSR Records</span>
-              <Badge variant="outline" className="text-[10px] font-mono">
+              <Badge variant="outline" className="text-2xs font-mono">
                 {retentionPolicy?.privacyRequestRetentionDays ?? 730} Days
               </Badge>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-2xs text-muted-foreground leading-relaxed">
               Completed data subject erasure and export request lifecycle receipts and fulfillment
               records.
             </p>

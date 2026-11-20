@@ -1,43 +1,39 @@
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
+import { RelativeTime } from '@/components/patterns';
 import { Clock, Layers, Users, Calendar } from 'lucide-react';
 import InsightBadge from '@/components/intelligence/insights/InsightBadge';
 import type { OpsInsightCount } from '@/lib/intelligence/ops-insights/contract';
+import type { ScheduleOnCallSummary } from '@/components/schedules/schedule-oncall-summary';
 
-type ScheduleCardProps = {
-  schedule: {
-    id: string;
-    name: string;
-    timeZone: string;
-    layers: Array<{
-      users: Array<{
-        userId: string;
-        user?: {
-          name: string;
-          avatarUrl?: string | null;
-          gender?: string | null;
-        } | null;
-      }>;
+type ScheduleCardSchedule = {
+  id: string;
+  name: string;
+  timeZone: string;
+  layers: Array<{
+    users: Array<{
+      userId: string;
+      user?: {
+        name: string;
+        avatarUrl?: string | null;
+        gender?: string | null;
+      } | null;
     }>;
-  };
-  index?: number;
-  /** Open operations insights on this schedule, for the list badge. */
-  insights?: OpsInsightCount | null;
-};
+  }>;
+} & Partial<ScheduleOnCallSummary>;
 
-export default function ScheduleCard({ schedule, insights }: ScheduleCardProps) {
-  const uniqueUsersMap = new Map<
+/** Unique responders across all layers, in layer order. */
+export function scheduleResponders(schedule: Pick<ScheduleCardSchedule, 'layers'>) {
+  const unique = new Map<
     string,
-    { name: string; avatarUrl?: string | null; gender?: string | null }
+    { userId: string; name: string; avatarUrl?: string | null; gender?: string | null }
   >();
-
   schedule.layers.forEach(layer => {
     layer.users.forEach(u => {
-      if (!uniqueUsersMap.has(u.userId)) {
-        uniqueUsersMap.set(u.userId, {
+      if (!unique.has(u.userId)) {
+        unique.set(u.userId, {
+          userId: u.userId,
           name: u.user?.name || 'Responder',
           avatarUrl: u.user?.avatarUrl,
           gender: u.user?.gender,
@@ -45,90 +41,134 @@ export default function ScheduleCard({ schedule, insights }: ScheduleCardProps) 
       }
     });
   });
+  return Array.from(unique.values());
+}
 
-  const uniqueUsers = Array.from(uniqueUsersMap.entries()).map(([userId, user]) => ({
-    userId,
-    ...user,
-  }));
+/** Up to three responder avatars and a "+N" overflow; full names on hover. */
+export function ScheduleResponderStack({
+  schedule,
+}: {
+  schedule: Pick<ScheduleCardSchedule, 'layers'>;
+}) {
+  const responders = scheduleResponders(schedule);
+  if (responders.length === 0) return null;
+  return (
+    <span
+      className="flex items-center -space-x-1.5 overflow-hidden"
+      title={responders.map(r => r.name).join(', ')}
+    >
+      {responders.slice(0, 3).map(r => (
+        <UserAvatar
+          key={r.userId}
+          userId={r.userId}
+          avatarUrl={r.avatarUrl}
+          name={r.name}
+          gender={r.gender}
+          size="xs"
+          className="h-5 w-5 ring-1.5 ring-background"
+        />
+      ))}
+      {responders.length > 3 && (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-2xs font-bold text-muted-foreground ring-1.5 ring-background">
+          +{responders.length - 3}
+        </span>
+      )}
+    </span>
+  );
+}
 
-  const hasLayers = schedule.layers.length > 0;
-  const hasResponders = uniqueUsers.length > 0;
+export default function ScheduleCard({
+  schedule,
+  insights,
+}: {
+  schedule: ScheduleCardSchedule;
+  /** Open operations insights on this schedule, for the list badge. */
+  insights?: OpsInsightCount | null;
+}) {
+  const uniqueUsers = scheduleResponders(schedule);
 
   return (
-    <Link href={`/schedules/${schedule.id}`} className="group block focus-visible:outline-none">
-      <Card className="h-full border-border/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15 transition-colors">
-                <Calendar className="h-4 w-4" />
-              </div>
-              <CardTitle className="truncate text-base font-semibold transition-colors group-hover:text-primary">
-                {schedule.name}
-              </CardTitle>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <InsightBadge count={insights} />
-              <Badge variant="outline" size="xs" className="gap-1.5">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                {schedule.timeZone}
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
+    <Link
+      href={`/schedules/${schedule.id}`}
+      className="group block rounded-lg border border-border bg-card p-3 transition-colors duration-150 hover:border-primary/30 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Calendar className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span
+            className="truncate text-sm font-semibold text-foreground group-hover:text-primary"
+            title={schedule.name}
+          >
+            {schedule.name}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <InsightBadge count={insights} />
+          <Badge variant="outline" size="xs" className="gap-1.5">
+            <Clock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+            {schedule.timeZone}
+          </Badge>
+        </div>
+      </div>
 
-        <CardContent>
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5 text-xs">
-                <Layers className="h-3.5 w-3.5" />
-                <span>
-                  {schedule.layers.length} {schedule.layers.length === 1 ? 'layer' : 'layers'}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <Users className="h-3.5 w-3.5" />
-                <span>
-                  {uniqueUsers.length} {uniqueUsers.length === 1 ? 'responder' : 'responders'}
-                </span>
-              </div>
-            </div>
-
-            {/* Responder avatar stack or status */}
-            {uniqueUsers.length > 0 ? (
-              <div className="flex items-center -space-x-1.5 overflow-hidden">
-                {uniqueUsers.slice(0, 3).map(u => (
-                  <DirectUserAvatar
-                    key={u.userId}
-                    avatarUrl={u.avatarUrl || getDefaultAvatar(u.gender, u.userId || u.name)}
-                    name={u.name}
-                    size="xs"
-                    className="h-5 w-5 ring-1.5 ring-background"
-                  />
-                ))}
-                {uniqueUsers.length > 3 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground ring-1.5 ring-background">
-                    +{uniqueUsers.length - 3}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <Badge variant="warning" size="xs">
-                Needs setup
-              </Badge>
-            )}
-          </div>
-
-          {/* Status indicator for incomplete schedules */}
-          {(!hasLayers || !hasResponders) && hasResponders && (
-            <div className="mt-3 border-t pt-3">
-              <Badge variant="warning" size="xs">
-                Needs configuration
-              </Badge>
-            </div>
+      <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0">On call now:</span>
+          {schedule.onCallNow && (
+            <UserAvatar
+              userId={schedule.onCallNow.userId}
+              avatarUrl={schedule.onCallNow.avatarUrl}
+              name={schedule.onCallNow.name}
+              gender={schedule.onCallNow.gender}
+              size="xs"
+              aria-hidden
+            />
           )}
-        </CardContent>
-      </Card>
+          <span className="truncate font-medium text-foreground">
+            {schedule.onCallNow?.name ?? (uniqueUsers.length ? 'No one' : '—')}
+          </span>
+        </div>
+        {schedule.next && (
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="shrink-0">Next:</span>
+            <UserAvatar
+              userId={schedule.next.userId}
+              avatarUrl={schedule.next.avatarUrl}
+              name={schedule.next.name}
+              gender={schedule.next.gender}
+              size="xs"
+              aria-hidden
+            />
+            <span className="truncate">
+              <span className="font-medium text-foreground">{schedule.next.name}</span>{' '}
+              <RelativeTime date={schedule.next.start} format="long" />
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5">
+            <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+            {schedule.layers.length} {schedule.layers.length === 1 ? 'layer' : 'layers'}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" aria-hidden="true" />
+            {uniqueUsers.length} {uniqueUsers.length === 1 ? 'responder' : 'responders'}
+          </span>
+        </div>
+
+        {uniqueUsers.length > 0 ? (
+          <ScheduleResponderStack schedule={schedule} />
+        ) : (
+          <Badge variant="warning" size="xs">
+            Needs setup
+          </Badge>
+        )}
+      </div>
     </Link>
   );
 }

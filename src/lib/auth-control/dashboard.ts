@@ -419,6 +419,8 @@ export async function searchAuthenticationUsers(
       id: true,
       name: true,
       email: true,
+      avatarUrl: true,
+      gender: true,
       role: true,
       roleSource: true,
       status: true,
@@ -530,7 +532,11 @@ export async function identityClaimsPreview(
   const resolved = user
     ? resolveSignInRole(
         role,
-        { role: user.role, roleSource: user.roleSource },
+        {
+          role: user.role,
+          roleSource: user.roleSource,
+          scimRoleMappingAdopted: user.scimRoleMappingAdopted,
+        },
         { firstLink: !identity }
       )
     : // New accounts start with the default role; incomplete claims leave it unchanged.

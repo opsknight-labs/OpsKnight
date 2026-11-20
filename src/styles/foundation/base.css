@@ -18,41 +18,13 @@
     caret-color: hsl(var(--ui-foreground));
 }
 
+/* Root font size is the density root, set in ./tokens.css (DESIGN.md "Density"). */
 html {
     color-scheme: light;
     filter: none !important;
     -webkit-filter: none !important;
-    /* Default / Mobile: 16px standard to avoid iOS Safari input auto-zoom */
-    font-size: 16px;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-}
-
-/* 13"-14" Laptops & standard compact desktop viewports:
-   width: 769px to 1536px, OR any desktop screen with viewport height <= 860px.
-   90% scaling factor (14.4px root) proportionally scales every REM unit to exactly 90%,
-   reproducing your preferred 90% browser zoom density natively in CSS. */
-@media (min-width: 769px) and (max-width: 1536px),
-       (min-width: 769px) and (max-height: 860px) {
-    html {
-        font-size: 14.4px;
-    }
-}
-
-/* Very compact laptops & lower resolutions (1366x768, 1280x800, or height <= 740px) */
-@media (min-width: 769px) and (max-width: 1280px),
-       (min-width: 769px) and (max-height: 740px) {
-    html {
-        font-size: 14px;
-    }
-}
-
-/* Large external displays (27"-32" desktop monitors > 1536px width AND > 860px height):
-   Full comfortable 16px standard scale for effortless readability from desktop viewing distances */
-@media (min-width: 1537px) and (min-height: 861px) {
-    html {
-        font-size: 16px;
-    }
 }
 
 body {
@@ -60,8 +32,8 @@ body {
     filter: none !important;
     -webkit-filter: none !important;
     font-family: var(--font-family-sans);
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--body-font-size);
+    font-weight: var(--font-weight-normal);
     background-color: var(--bg-primary) !important;
     color: var(--text-primary) !important;
     line-height: var(--line-height-relaxed);
@@ -190,13 +162,8 @@ html[data-theme='dark'] body {
     cursor: pointer;
 }
 
-.dark input[type='date']::-webkit-calendar-picker-indicator,
-.dark input[type='time']::-webkit-calendar-picker-indicator,
-.dark input[type='datetime-local']::-webkit-calendar-picker-indicator,
-.dark input[type='month']::-webkit-calendar-picker-indicator,
-.dark input[type='week']::-webkit-calendar-picker-indicator {
-    filter: invert(0.85);
-}
+/* Native picker icons follow `color-scheme`; no filter needed (an invert here made Chromium's
+   already-light dark-mode icon dark-on-dark). */
 
 select option,
 select optgroup {
@@ -252,7 +219,7 @@ select option {
     min-width: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    height: calc(100dvh - var(--header-height, 56px));
+    height: calc(100dvh - var(--header-height, 56px) - var(--status-bar-height, 0px));
     background-color: var(--bg-primary);
     /* Position content to start exactly where sidebar ends */
     margin-left: var(--sidebar-width);
@@ -274,10 +241,31 @@ select option {
     }
 }
 
+/* Desktop status bar (StatusBar.tsx, `h-7`, shown from lg). Everything pinned to the bottom of
+   the content column reserves its height: the scroll area ends above it, so no page content,
+   sticky footer or toast is ever underneath it. */
+@media (min-width: 1024px) {
+    :root:has(#status-bar) {
+        --status-bar-height: 1.75rem;
+    }
+}
+
+/* The bar starts where the sidebar ends (the sidebar runs the full height) and follows its
+   collapse with the same transition as the sidebar's width, so there is no overlap or gap. */
+.status-bar {
+    left: var(--sidebar-width, 240px);
+    transition: left var(--transition-base);
+}
+
+.app-shell:has(.sidebar-collapsed) .status-bar,
+.app-shell:has(.sidebar[data-collapsed='true']) .status-bar {
+    left: var(--sidebar-width-collapsed, 64px);
+}
+
 /* Dashboard Editing Bottom Bar - Stays above content and respects sidebar width */
 .dashboard-edit-footer {
     position: fixed;
-    bottom: 0;
+    bottom: var(--status-bar-height, 0px);
     right: 0;
     left: var(--sidebar-width, 240px);
     transition: left var(--transition-base, 200ms ease-in-out);
@@ -354,6 +342,95 @@ select option {
     @page {
         size: landscape;
         margin: 12mm 15mm;
+    }
+
+    /* Paper is white: print the light palette even when the screen is dark,
+       otherwise token-coloured text comes out near-white on the forced white page. */
+    html.dark,
+    html[data-theme='dark'] {
+        color-scheme: light;
+        /* legacy variables (variables.css :root) */
+        --primary: #1e293b;
+        --primary-hover: #0f172a;
+        --primary-light: #334155;
+        --primary-dark: #020617;
+        --secondary: #475569;
+        --accent: #2563eb;
+        --bg-primary: #e2e8f0;
+        --bg-secondary: #ffffff;
+        --bg-dark: #111827;
+        --bg-surface: #ffffff;
+        --bg-overlay: rgba(0, 0, 0, 0.5);
+        --glass-bg: rgba(255, 255, 255, 0.45);
+        --glass-border: rgba(17, 24, 39, 0.08);
+        --glass-blur: blur(12px);
+        --text-primary: #111827;
+        --text-secondary: #4b5563;
+        --text-muted: #9ca3af;
+        --text-inverse: #ffffff;
+        --text-tertiary: #94a3b8;
+        --text-disabled: #9ca3af;
+        --border: #cbd5e1;
+        --border-hover: #94a3b8;
+        --border-focus: rgba(15, 23, 42, 0.2);
+        /* light shadows: see the print block in ./tokens.css */
+        --color-neutral-50: #f9fafb;
+        --color-neutral-100: #f3f4f6;
+        --color-neutral-200: #e5e7eb;
+        --color-neutral-300: #d1d5db;
+        --color-neutral-400: #9ca3af;
+        --color-neutral-500: #6b7280;
+        --color-neutral-600: #4b5563;
+        --color-neutral-700: #374151;
+        --color-neutral-800: #1f2937;
+        --color-neutral-900: #111827;
+        --gradient-primary: linear-gradient(135deg, #334155 0%, #1e293b 55%, #0f172a 100%);
+        --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        --gradient-glass: linear-gradient(145deg, rgba(255, 255, 255, 0.6) 0%, rgba(248, 250, 252, 0.4) 100%);
+        --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        --badge-success-bg: #d1fae5;
+        --badge-success-text: #047857;
+        --badge-warning-bg: #fef3c7;
+        --badge-warning-text: #92400e;
+        --badge-info-bg: #dbeafe;
+        --badge-info-text: #1e3a8a;
+        --badge-error-bg: #ffe4e6;
+        --badge-error-text: #be123c;
+        --badge-snoozed-bg: #e0e7ff;
+        --badge-snoozed-text: #4f46e5;
+        --badge-neutral-bg: #e2e8f0;
+        --badge-neutral-text: #334155;
+        /* design tokens (index.css :root) */
+        --ui-background: 210 40% 98%;
+        --ui-foreground: 222.2 47.4% 11.2%;
+        --ui-muted: 210 40% 96.1%;
+        --ui-muted-foreground: 215.4 16.3% 46.9%;
+        --ui-popover: 0 0% 100%;
+        --ui-popover-foreground: 222.2 47.4% 11.2%;
+        --ui-card: 0 0% 100%;
+        --ui-card-foreground: 222.2 47.4% 11.2%;
+        --ui-border: 214.3 31.8% 91.4%;
+        --ui-input: 214.3 31.8% 91.4%;
+        --ui-primary: 215.3 25% 26.7%;
+        --ui-primary-foreground: 210 40% 98%;
+        --ui-secondary: 210 40% 96.1%;
+        --ui-secondary-foreground: 222.2 47.4% 11.2%;
+        --ui-accent: 210 40% 96.1%;
+        --ui-accent-foreground: 222.2 47.4% 11.2%;
+        --ui-destructive: 346.8 77.2% 48%;
+        --ui-destructive-foreground: 210 40% 98%;
+        --ui-ring: 215.3 25% 26.7%;
+        --ink-50: 248 250 252;
+        --ink-100: 241 245 249;
+        --ink-200: 226 232 240;
+        --ink-300: 203 213 225;
+        --ink-400: 148 163 184;
+        --ink-500: 100 116 139;
+        --ink-600: 71 85 105;
+        --ink-700: 51 65 85;
+        --ink-800: 30 41 59;
+        --ink-900: 15 23 42;
+        --ink-950: 2 6 23;
     }
 
     /* Hide chrome, navigation, headers, footers, interactive filters and modals */

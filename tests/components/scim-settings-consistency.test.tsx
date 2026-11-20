@@ -1,3 +1,8 @@
+vi.mock('@/app/(app)/settings/system/scim-role-actions', () => ({
+  getScimRoleMappingAction: vi.fn(),
+  previewScimRoleMappingAction: vi.fn(),
+  saveScimRoleMappingAction: vi.fn(),
+}));
 import { beforeEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
@@ -110,7 +115,7 @@ it('keeps legacy exposure visible across connections and labels disabled credent
   await screen.findByRole('option', { name: 'Disabled directory (GENERIC)' });
   fireEvent.change(screen.getByLabelText('SCIM connection'), { target: { value: 'other' } });
   expect(screen.getByText(/Legacy environment authentication is active/)).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Security' }), { button: 0 });
   expect(await screen.findByText('Blocked · connection disabled')).toBeVisible();
   fireEvent.change(screen.getByLabelText('SCIM connection'), { target: { value: 'legacy' } });
   const create = screen.getByRole('button', { name: 'Create replacement credential' });
@@ -121,7 +126,7 @@ it('keeps legacy exposure visible across connections and labels disabled credent
 it('requires a refreshed preview after legacy membership selections change', async () => {
   render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
   await screen.findByRole('option', { name: 'Legacy (GENERIC)' });
-  fireEvent.click(screen.getByRole('button', { name: 'Users & Groups' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Users & Groups' }), { button: 0 });
   fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'groups' } });
   fireEvent.click(await screen.findByRole('button', { name: 'Review team binding' }));
   await screen.findByRole('option', { name: 'Operational team' });
@@ -153,7 +158,7 @@ it('keeps connection inputs disabled until their initial defaults are loaded', a
       })
   );
   render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Connections' }), { button: 0 });
   expect(screen.getByLabelText('Connection name')).toBeDisabled();
   expect(screen.getByLabelText('Save as a new connection')).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Save connection' })).toBeDisabled();
@@ -172,9 +177,9 @@ it('does not keep connection editing blocked by a cancelled directory request', 
   actions.scimDirectoryAction.mockImplementationOnce(() => new Promise(() => {}));
   render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
   await screen.findByRole('option', { name: 'Legacy (GENERIC)' });
-  fireEvent.click(screen.getByRole('button', { name: 'Users & Groups' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Users & Groups' }), { button: 0 });
   await waitFor(() => expect(actions.scimDirectoryAction).toHaveBeenCalled());
-  fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Connections' }), { button: 0 });
   expect(screen.getByLabelText('Connection name')).toBeEnabled();
   expect(screen.queryByText('Loading provisioning data…')).not.toBeInTheDocument();
 });
@@ -198,7 +203,7 @@ it('finds connection 101 and keeps its loaded selection when browsing another pa
   fireEvent.change(screen.getByLabelText('SCIM connection'), {
     target: { value: 'connection-101' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Connections' }), { button: 0 });
   await waitFor(() =>
     expect(screen.getByLabelText('Connection name')).toHaveValue('Connection 101')
   );
@@ -237,7 +242,7 @@ it('pages to and revokes an older active credential', async () => {
   const confirm = vi.spyOn(window, 'confirm');
   try {
     render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Security' }), { button: 0 });
     await screen.findByText(/Newer credential/);
     fireEvent.click(screen.getByRole('button', { name: 'Next credentials' }));
     await screen.findByText(/Oldest active credential/);
@@ -293,7 +298,7 @@ it('pages drift diagnostics and retains a repair team outside the first team pag
     selected: selectedId === 'later-team' ? { id: 'later-team', name: 'Later team' } : null,
   }));
   render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Diagnostics' }), { button: 0 });
   fireEvent.click(screen.getByRole('button', { name: 'Compare local memberships' }));
   await screen.findByText('Drift page 1');
   fireEvent.click(screen.getByRole('button', { name: 'Next drift' }));
@@ -308,7 +313,7 @@ it('pages drift diagnostics and retains a repair team outside the first team pag
 
 it('tells admins to map the email attribute, not userPrincipalName, to userName', async () => {
   render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Connections' }), { button: 0 });
   const setup = screen.getByRole('heading', { name: 'Provider setup' }).parentElement!;
   const text = setup.textContent ?? '';
   expect(text).toContain('mail → userName');

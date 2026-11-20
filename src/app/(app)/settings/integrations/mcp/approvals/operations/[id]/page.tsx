@@ -128,7 +128,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           <h2 className="font-display text-lg font-semibold">Query parameters</h2>
           <dl className="space-y-2 break-words">
             {summary.query.map(([name, value]) => (
-              <div key={name} className="rounded border p-3">
+              <div key={name} className="rounded-lg border border-border p-3">
                 <dt className="font-medium [overflow-wrap:anywhere]">{name}</dt>
                 <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
               </div>
@@ -145,7 +145,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           </p>
           <DiffTable rows={changed} caption="Changed fields, before and after" />
           {unchanged.length > 0 && (
-            <details className="rounded border p-3">
+            <details className="rounded-lg border border-border p-3">
               <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
                 {unchanged.length} unchanged {unchanged.length === 1 ? 'field' : 'fields'}
               </summary>
@@ -161,7 +161,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           {summary.changes.length ? (
             <dl className="space-y-2 break-words">
               {summary.changes.map(([field, value]) => (
-                <div key={field} className="rounded border p-3">
+                <div key={field} className="rounded-lg border border-border p-3">
                   <dt className="font-medium [overflow-wrap:anywhere]">{field}</dt>
                   <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
                 </div>
@@ -179,7 +179,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
             This is a destructive change. The commit is refused if the target changes after your
             review, and the result is verified afterwards.
           </p>
-          <details className="rounded border p-3">
+          <details className="rounded-lg border border-border p-3">
             <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
               Full current state
             </summary>
@@ -189,7 +189,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           </details>
         </>
       )}
-      <details className="rounded border p-3">
+      <details className="rounded-lg border border-border p-3">
         <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
           Verification details
         </summary>
@@ -214,20 +214,19 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
             : ''}
         </p>
       )}
-      {!decided && !expired && (
-        <ReviewForm
-          action={reviewPreparedOperation}
-          hidden={{ id: approval.id, operationDigest: approval.operationDigest }}
-          noun="change"
-          approveLabel="Approve frozen change"
-          rejectLabel="Reject change"
-          freshSignInRequired={freshSignInRequired}
-          reviewPath={reviewPath}
-          selfReview={selfReview}
-        >
-          {selfReview && <SelfApprovalConfirm />}
-        </ReviewForm>
-      )}
+      <ReviewForm
+        closed={decided || expired}
+        action={reviewPreparedOperation}
+        hidden={{ id: approval.id, operationDigest: approval.operationDigest }}
+        noun="change"
+        approveLabel="Approve frozen change"
+        rejectLabel="Reject change"
+        freshSignInRequired={freshSignInRequired}
+        reviewPath={reviewPath}
+        selfReview={selfReview}
+      >
+        {selfReview && <SelfApprovalConfirm />}
+      </ReviewForm>
     </div>
   );
 }

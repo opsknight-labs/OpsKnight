@@ -231,14 +231,14 @@ export default function MicrosoftTeamsIntegrationPage({
       badge: isConfigured ? (
         <Badge
           variant="outline"
-          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]"
+          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-2xs"
         >
           Configured
         </Badge>
       ) : (
         <Badge
           variant="outline"
-          className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]"
+          className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-2xs"
         >
           Required
         </Badge>
@@ -259,7 +259,7 @@ export default function MicrosoftTeamsIntegrationPage({
         warRoomCleanupPending > 0 ? (
           <Badge
             variant="outline"
-            className="border-amber-300 text-amber-700 bg-amber-50 text-[10px] dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
+            className="border-amber-300 text-amber-700 bg-amber-50 text-2xs dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
           >
             {warRoomCleanupPending} pending
           </Badge>
@@ -272,7 +272,7 @@ export default function MicrosoftTeamsIntegrationPage({
       badge: (
         <Badge
           variant="outline"
-          className={`text-[10px] ${
+          className={`text-2xs ${
             integrationReadiness === 'HEALTHY'
               ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
               : integrationReadiness === 'UNKNOWN'
@@ -292,7 +292,7 @@ export default function MicrosoftTeamsIntegrationPage({
       <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5">
-            <div className="h-12 w-12 rounded-xl bg-[#5B5BD6]/10 border border-[#5B5BD6]/20 flex items-center justify-center shrink-0">
+            <div className="h-12 w-12 rounded-xl bg-muted border border-border flex items-center justify-center shrink-0">
               <MicrosoftTeamsLogo className="h-6 w-6" />
             </div>
             <div>
@@ -302,12 +302,12 @@ export default function MicrosoftTeamsIntegrationPage({
                   variant="outline"
                   className={
                     isReady
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px]'
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-2xs'
                       : isInstalled
-                        ? 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px]'
+                        ? 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-2xs'
                         : isConfigured
-                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px]'
-                          : 'border-muted text-muted-foreground text-[11px]'
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-2xs'
+                          : 'border-muted text-muted-foreground text-2xs'
                   }
                 >
                   {isReady
@@ -358,13 +358,13 @@ export default function MicrosoftTeamsIntegrationPage({
         {/* Quick telemetry strip */}
         <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t text-xs">
           <div>
-            <span className="text-muted-foreground block text-[11px]">Tenant Mode</span>
+            <span className="text-muted-foreground block text-2xs">Tenant Mode</span>
             <span className="font-semibold text-foreground">
               {config?.tenantMode ?? 'SINGLE'} Tenant
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground block text-[11px]">Bot Delivery</span>
+            <span className="text-muted-foreground block text-2xs">Bot Delivery</span>
             <span className="font-semibold text-foreground">
               {health?.botHealthy ? (
                 <span className="text-emerald-600 dark:text-emerald-400">● Healthy</span>
@@ -376,13 +376,13 @@ export default function MicrosoftTeamsIntegrationPage({
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground block text-[11px]">Channel Routing</span>
+            <span className="text-muted-foreground block text-2xs">Channel Routing</span>
             <span className="font-semibold text-foreground">
               {destinations.length > 0 ? `${destinations.length} Mapped` : '0 Destinations'}
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground block text-[11px]">Credentials</span>
+            <span className="text-muted-foreground block text-2xs">Credentials</span>
             <span className="font-semibold text-foreground flex items-center gap-1">
               <Shield className="h-3 w-3 text-emerald-500" />
               AES-256 Encrypted
@@ -419,13 +419,14 @@ export default function MicrosoftTeamsIntegrationPage({
               <div className="flex items-center gap-2">
                 <div className="relative w-full sm:w-56">
                   <Input
+                    aria-label="Filter destinations"
                     placeholder="Filter destinations…"
                     value={destinationSearch}
                     onChange={e => setDestinationSearch(e.target.value)}
                     className="h-8 px-3 text-xs"
                   />
                 </div>
-                <Badge variant="outline" className="text-[10px] shrink-0">
+                <Badge variant="outline" className="text-2xs shrink-0">
                   {destinations.length} mapped
                 </Badge>
               </div>
@@ -464,7 +465,7 @@ export default function MicrosoftTeamsIntegrationPage({
                         </span>
                         <Badge
                           variant="secondary"
-                          className="text-[10px] font-normal border bg-background"
+                          className="text-2xs font-normal border bg-background"
                         >
                           {d.teamName ?? 'Team'}
                         </Badge>
@@ -562,10 +563,10 @@ export default function MicrosoftTeamsIntegrationPage({
                 <ShieldCheck className="h-4 w-4 text-primary" /> Integration Health Overview
               </h3>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground font-medium">Readiness:</span>
+                <span className="text-2xs text-muted-foreground font-medium">Readiness:</span>
                 <Badge
                   variant="outline"
-                  className={`text-[10px] font-semibold ${
+                  className={`text-2xs font-semibold ${
                     integrationReadiness === 'HEALTHY'
                       ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
                       : integrationReadiness === 'UNKNOWN'
@@ -575,10 +576,10 @@ export default function MicrosoftTeamsIntegrationPage({
                 >
                   {integrationReadiness}
                 </Badge>
-                <span className="text-[11px] text-muted-foreground font-medium">Fleet:</span>
+                <span className="text-2xs text-muted-foreground font-medium">Fleet:</span>
                 <Badge
                   variant="outline"
-                  className={`text-[10px] font-semibold ${
+                  className={`text-2xs font-semibold ${
                     operationalFleetHealth === 'HEALTHY'
                       ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
                       : operationalFleetHealth === 'DRIFTED'
@@ -593,7 +594,7 @@ export default function MicrosoftTeamsIntegrationPage({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
-                <span className="text-[11px] text-muted-foreground">Bot Connector</span>
+                <span className="text-2xs text-muted-foreground">Bot Connector</span>
                 <div className="font-semibold flex items-center gap-1.5">
                   <span
                     className={`h-2 w-2 rounded-full ${health?.botHealthy ? 'bg-emerald-500' : 'bg-amber-500'}`}
@@ -607,14 +608,14 @@ export default function MicrosoftTeamsIntegrationPage({
               </div>
 
               <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
-                <span className="text-[11px] text-muted-foreground">Installations</span>
+                <span className="text-2xs text-muted-foreground">Installations</span>
                 <div className="font-semibold text-foreground">
                   {installationCount} Active Team(s)
                 </div>
               </div>
 
               <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
-                <span className="text-[11px] text-muted-foreground">War Rooms</span>
+                <span className="text-2xs text-muted-foreground">War Rooms</span>
                 <div className="font-semibold text-foreground">
                   {totalWarRooms} Total
                   {warRoomCleanupPending > 0 ? ` (${warRoomCleanupPending} cleanup)` : ''}
@@ -622,7 +623,7 @@ export default function MicrosoftTeamsIntegrationPage({
               </div>
 
               <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
-                <span className="text-[11px] text-muted-foreground">RSC Permissions</span>
+                <span className="text-2xs text-muted-foreground">RSC Permissions</span>
                 <div className="font-semibold text-foreground">
                   {rscState?.unknown
                     ? 'Unknown'
@@ -650,7 +651,7 @@ export default function MicrosoftTeamsIntegrationPage({
                 <div className="text-muted-foreground break-words">
                   {health.lastErrorMessage ?? 'No details available.'}
                 </div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-2xs text-muted-foreground">
                   {new Date(health.lastErrorAt).toLocaleString()}
                 </div>
               </div>
@@ -661,7 +662,7 @@ export default function MicrosoftTeamsIntegrationPage({
           <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Installed Teams & Graph RSC Permissions</h3>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-2xs">
                 {installationPermissions.length} team(s)
               </Badge>
             </div>
@@ -687,10 +688,10 @@ export default function MicrosoftTeamsIntegrationPage({
                     >
                       <div className="min-w-0">
                         <div className="truncate font-semibold">{row.teamName ?? row.teamId}</div>
-                        <div className="truncate text-[11px] text-muted-foreground font-mono">
+                        <div className="truncate text-2xs text-muted-foreground font-mono">
                           {row.teamId}
                         </div>
-                        <div className="mt-1 text-[11px] text-muted-foreground">
+                        <div className="mt-1 text-2xs text-muted-foreground">
                           {row.unknown
                             ? (row.error ?? 'Permission state unavailable')
                             : row.missing.length === 0
@@ -698,7 +699,7 @@ export default function MicrosoftTeamsIntegrationPage({
                               : `Missing consent for: ${row.missing.join(', ')}`}
                         </div>
                         {delivery && (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
+                          <div className="mt-1 text-2xs text-muted-foreground">
                             {delivery.enabled
                               ? `${delivery.destinationCount} destination(s)`
                               : 'Bot removed'}{' '}
@@ -712,8 +713,8 @@ export default function MicrosoftTeamsIntegrationPage({
                         variant="outline"
                         className={
                           healthyInst
-                            ? 'border-emerald-300 text-emerald-700 bg-emerald-50 text-[10px] dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
-                            : 'border-amber-300 text-amber-700 bg-amber-50 text-[10px] dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
+                            ? 'border-emerald-300 text-emerald-700 bg-emerald-50 text-2xs dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
+                            : 'border-amber-300 text-amber-700 bg-amber-50 text-2xs dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
                         }
                       >
                         {healthyInst ? 'Healthy' : row.unknown ? 'Unknown' : 'Consent required'}
@@ -730,7 +731,7 @@ export default function MicrosoftTeamsIntegrationPage({
             <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
               Drill down — raw diagnostic state (tokens redacted)
             </summary>
-            <div className="mt-3 space-y-1.5 font-mono text-[11px] bg-muted/40 p-3 rounded-lg break-all">
+            <div className="mt-3 space-y-1.5 font-mono text-2xs bg-muted/40 p-3 rounded-lg break-all">
               <div>
                 clientId: {config?.clientId ? `${config.clientId.slice(0, 12)}…` : '—'} · tenantId:{' '}
                 {config?.tenantId ?? '—'} · enabled: {String(config?.enabled ?? false)} ·

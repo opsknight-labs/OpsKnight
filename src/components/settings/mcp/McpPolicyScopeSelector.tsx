@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { describeMcpScope } from '@/lib/mcp/auth/scope-labels';
 import {
   MCP_WRITE_SCOPE_GROUP_DESCRIPTION,
@@ -100,7 +101,7 @@ function McpPolicyScopeSelector({
   return (
     <div className="space-y-6">
       {/* Global master bulk action bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 bg-muted/20 p-3 sm:px-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/20 p-3 sm:px-4">
         <label
           htmlFor={`${idPrefix}-global-select-all`}
           className="flex cursor-pointer items-center gap-2.5 text-xs font-semibold text-foreground select-none"
@@ -117,9 +118,9 @@ function McpPolicyScopeSelector({
           <Badge
             variant="outline"
             className={cn(
-              'ml-1 text-[11px] font-medium tabular-nums',
+              'ml-1 text-2xs font-medium tabular-nums',
               allSelected
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                ? 'border-border bg-muted text-foreground'
                 : noneSelected
                   ? 'border-border text-muted-foreground'
                   : 'border-primary/40 bg-primary/10 text-primary'
@@ -167,7 +168,7 @@ function McpPolicyScopeSelector({
         describeScope={describeScope}
         onToggleScope={toggleScope}
         onToggleCategory={toggleCategory}
-        badgeColor="border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-200"
+        badgeColor={toneClasses('info').soft}
         badgeLabel="READ"
       />
 
@@ -183,7 +184,7 @@ function McpPolicyScopeSelector({
           describeScope={describeScope}
           onToggleScope={toggleScope}
           onToggleCategory={toggleCategory}
-          badgeColor="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200"
+          badgeColor={toneClasses('elevated').soft}
           badgeLabel="ACTION"
         />
       )}
@@ -256,7 +257,7 @@ function ScopeGroup({
           </label>
           <Badge
             variant="secondary"
-            className="h-5 px-1.5 text-[10px] font-semibold tabular-nums leading-none"
+            className="h-5 px-1.5 text-2xs font-semibold tabular-nums leading-none"
           >
             {selectedCount} of {scopes.length} selected
           </Badge>
@@ -267,18 +268,18 @@ function ScopeGroup({
             type="button"
             onClick={() => onToggleCategory(scopes, true)}
             disabled={isAllSelected}
-            className="text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+            className="text-2xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
           >
             Select all
           </button>
-          <span className="text-muted-foreground/40 text-[10px]" aria-hidden="true">
+          <span className="text-muted-foreground/40 text-2xs" aria-hidden="true">
             /
           </span>
           <button
             type="button"
             onClick={() => onToggleCategory(scopes, false)}
             disabled={isNoneSelected}
-            className="text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+            className="text-2xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
           >
             Uncheck all
           </button>
@@ -301,7 +302,7 @@ function ScopeGroup({
                 'group relative flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-xs transition-all select-none',
                 isChecked
                   ? 'border-primary/50 bg-primary/[0.03] shadow-2xs ring-1 ring-primary/20'
-                  : 'border-border/70 bg-card/60 hover:border-border hover:bg-muted/30'
+                  : 'border-border/70 bg-card hover:border-border hover:bg-muted/30'
               )}
             >
               <input
@@ -326,14 +327,14 @@ function ScopeGroup({
                   </span>
                   <span
                     className={cn(
-                      'inline-flex shrink-0 items-center rounded px-1 py-0.5 text-[9px] font-semibold leading-none uppercase tracking-wide border',
+                      'inline-flex shrink-0 items-center rounded px-1 py-0.5 text-2xs font-semibold leading-none uppercase tracking-wide border',
                       badgeColor
                     )}
                   >
                     {badgeLabel}
                   </span>
                 </span>
-                <span className="block font-mono text-[11px] text-muted-foreground truncate">
+                <span className="block font-mono text-2xs text-muted-foreground truncate">
                   {scope}
                 </span>
               </span>

@@ -82,7 +82,7 @@ export default async function PostmortemPage({
 
   const users = await prisma.user.findMany({
     where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
     orderBy: { name: 'asc' },
   });
 

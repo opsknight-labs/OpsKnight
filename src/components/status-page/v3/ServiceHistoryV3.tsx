@@ -201,7 +201,8 @@ function ServiceHistoryV3Inner({
             onKeyDown={event => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                setSelected(prev => (prev === null ? 0 : prev));
+                // Open on the most recent day: that is what a visitor checking status wants first.
+                setSelected(prev => (prev === null ? days.length - 1 : prev));
               } else if (event.key === 'ArrowLeft') {
                 event.preventDefault();
                 navigateDay(-1);

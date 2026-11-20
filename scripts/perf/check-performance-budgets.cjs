@@ -24,7 +24,6 @@ const serviceNotifications = read('src/lib/service-notifications.ts');
 for (const stylesheet of [
   'mobile.css',
   'schedule.css',
-  'analytics.css',
   'status-page.css',
   'settings.css',
   'users.css',

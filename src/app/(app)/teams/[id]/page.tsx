@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
+import UserAvatar from '@/components/UserAvatar';
 import { listTeamActivity } from '@/lib/teams/activity';
 import { assertCanViewTeam, getUserPermissions } from '@/lib/rbac';
 import {
@@ -485,7 +486,16 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
         tag="Team Workspace"
         badges={
           team.teamLead ? (
-            <span className="rounded-full bg-primary-foreground/20 px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/20 py-0.5 pl-0.5 pr-2 text-2xs font-bold text-primary-foreground">
+              <UserAvatar
+                userId={team.teamLead.id}
+                avatarUrl={team.teamLead.avatarUrl}
+                name={team.teamLead.name}
+                gender={team.teamLead.gender}
+                size="xs"
+                className="h-5 w-5"
+                aria-hidden
+              />
               Lead: {team.teamLead.name}
             </span>
           ) : undefined

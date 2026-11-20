@@ -188,11 +188,6 @@
   margin-right: var(--spacing-6);
 }
 
-.mx-8 {
-  margin-left: var(--spacing-8);
-  margin-right: var(--spacing-8);
-}
-
 .mx-auto {
   margin-left: auto;
   margin-right: auto;

@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/timezone';
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
+import { isDarkHex } from '@/lib/status-page-theme';
 import {
+  DEFAULT_STATUS_PAGE_THEME_ID,
   compileStatusPageThemeCss,
   resolveStatusPageTheme,
   resolveStatusPageThemeDensity,
@@ -57,6 +59,12 @@ export default function StatusPageV3({
   const selectedTheme = resolveStatusPageTheme(themeBranding.themeId);
   const themeDensity = resolveStatusPageThemeDensity(themeBranding.themeDensity);
   const builtInThemeCss = compileStatusPageThemeCss(selectedTheme.id, themeDensity);
+  // Dark widget styling follows the page's own theme, never the visitor's OS or the console theme.
+  const surfaceTheme =
+    selectedTheme.mode === 'dark' ||
+    (selectedTheme.id === DEFAULT_STATUS_PAGE_THEME_ID && isDarkHex(branding.backgroundColor))
+      ? 'dark'
+      : 'light';
 
   useEffect(() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -150,6 +158,7 @@ export default function StatusPageV3({
       data-sp-theme={selectedTheme.id}
       data-sp-theme-version={selectedTheme.version}
       data-sp-density={themeDensity}
+      data-surface-theme={surfaceTheme}
     >
       {styleMode === 'inline' && <style>{STATUS_PAGE_PUBLIC_CSS}</style>}
       {builtInThemeCss && <style data-status-page-theme-runtime>{builtInThemeCss}</style>}
@@ -172,7 +181,7 @@ export default function StatusPageV3({
       )}
 
       {stale && (
-        <p role="note" className="status-muted">
+        <p role="note" className="status-muted status-stale-note">
           Showing the last verified status update.
         </p>
       )}

@@ -4,13 +4,14 @@ import { describe, expect, it } from 'vitest';
 const pages = {
   incidents: readFileSync('src/app/(app)/incidents/page.tsx', 'utf8'),
   services: readFileSync('src/app/(app)/services/page.tsx', 'utf8'),
-  analytics: readFileSync('src/app/(app)/analytics/page.tsx', 'utf8'),
+  analytics: readFileSync('src/app/(app)/insights/page.tsx', 'utf8'),
   schedules: readFileSync('src/app/(app)/schedules/page.tsx', 'utf8'),
   actionItems: readFileSync('src/app/(app)/action-items/page.tsx', 'utf8'),
   postmortems: readFileSync('src/app/(app)/postmortems/page.tsx', 'utf8'),
-  analyticsContent: readFileSync('src/components/analytics/AnalyticsContent.tsx', 'utf8'),
+  analyticsModule: readFileSync('src/lib/analytics/index.ts', 'utf8'),
+  analyticsScope: readFileSync('src/lib/analytics/scope.ts', 'utf8'),
+  analyticsExport: readFileSync('src/app/api/insights/export/route.ts', 'utf8'),
   dashboard: readFileSync('src/app/(app)/page.tsx', 'utf8'),
-  mobileAnalytics: readFileSync('src/app/(mobile)/m/analytics/page.tsx', 'utf8'),
   mobileDashboard: readFileSync('src/app/(mobile)/m/page.tsx', 'utf8'),
   mobileIncidents: readFileSync('src/app/(mobile)/m/incidents/page.tsx', 'utf8'),
   mobileIncidentDetail: readFileSync('src/app/(mobile)/m/incidents/[id]/page.tsx', 'utf8'),
@@ -21,10 +22,6 @@ const pages = {
   serviceDetail: readFileSync('src/app/(app)/services/[id]/page.tsx', 'utf8'),
   executiveReport: readFileSync('src/app/(app)/reports/executive/page.tsx', 'utf8'),
   responderSnapshot: readFileSync('src/lib/dashboard/responder-dashboard-snapshot.ts', 'utf8'),
-  responderAnalyticsSnapshot: readFileSync(
-    'src/lib/dashboard/responder-analytics-snapshot.ts',
-    'utf8'
-  ),
   appShellContext: readFileSync('src/lib/app-shell-context.ts', 'utf8'),
 };
 
@@ -42,13 +39,14 @@ describe('actor-scoped page read contract', () => {
   });
 
   it('routes user-facing analytics through actor-first metric read models', () => {
-    for (const page of [pages.analyticsContent, pages.executiveReport]) {
-      expect(page).toContain('calculateActorSLAMetrics(');
-    }
+    expect(pages.executiveReport).toContain('calculateActorSLAMetrics(');
 
-    // Mobile analytics consumes the cached responder analytics snapshot
-    expect(pages.mobileAnalytics).toContain('getResponderAnalyticsSnapshot(context.actor');
-    expect(pages.responderAnalyticsSnapshot).toContain('calculateActorSLAMetrics(actor');
+    // The analytics page and CSV export build every query from an actor-derived scope.
+    for (const page of [pages.analytics, pages.analyticsExport]) {
+      expect(page).toContain('createAnalyticsContext(actor');
+    }
+    expect(pages.analyticsModule).toContain('buildAnalyticsScope(actor, params)');
+    expect(pages.analyticsScope).toContain('actorMetricReadScope(actor)');
 
     // The responder dashboard deliberately consumes the centralized bounded
     // snapshot rather than invoking the expensive actor metrics projection itself.

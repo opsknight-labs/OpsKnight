@@ -1,8 +1,6 @@
 name: Enterprise SSO certification
 
 on:
-  push:
-    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     paths:
@@ -42,7 +40,7 @@ env:
 
 jobs:
   authentication:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -94,7 +92,7 @@ jobs:
           if-no-files-found: ignore
 
   published-release-upgrade:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -132,7 +130,7 @@ jobs:
 
   browser:
     name: Emergency recovery browser certification
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

@@ -14,26 +14,7 @@
     transition: all var(--transition-base) var(--ease-out);
 }
 
-.glass-panel-hover:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-xl);
-    border-color: rgba(30, 41, 59, 0.2);
-}
-
 /* Premium Hover Effects */
-.hover-lift {
-    transition: transform var(--transition-base) var(--ease-out), box-shadow var(--transition-base) var(--ease-out);
-}
-
-.hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-}
-
-.hover-lift-lg:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-xl);
-}
 
 /* Enhanced glass panel for dashboard widgets */
 .dashboard-sidebar .glass-panel,

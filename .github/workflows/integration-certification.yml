@@ -1,21 +1,6 @@
 name: Integration control-plane certification
 on:
   workflow_call:
-  push:
-    branches:
-      - main
-    paths:
-      - 'src/lib/integrations/**'
-      - 'src/lib/chatops/**'
-      - 'src/lib/external-operations.ts'
-      - 'src/app/api/integrations/**'
-      - 'src/app/api/slack/**'
-      - 'tests/certification/**'
-      - 'scripts/load/integration-control-plane.js'
-      - '.github/workflows/integration-certification.yml'
-      - 'deploy/kubernetes/helm/opsknight/**'
-      - 'deploy/kubernetes/kustomize/**'
-      - 'docker-entrypoint.sh'
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     branches:
@@ -45,7 +30,7 @@ env:
 
 jobs:
   multi-replica-failover-load:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

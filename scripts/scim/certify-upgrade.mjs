@@ -28,6 +28,8 @@ try {
     '20261022100000_scim_grant_revocation_policy',
     '20261022150000_scim_case_insensitive_lookup',
     '20261023010000_user_canonical_email_reservation',
+    '20261120000100_scim_group_system_roles',
+    '20261120000200_scim_role_mapping_provenance',
   ]
     // This legacy state-invariant rehearsal owns its outer rollback transaction.
     // certify-migration-deploy.mjs separately exercises unmodified SQL via Prisma.
@@ -39,6 +41,7 @@ try {
     .join('\n');
   const sql = `BEGIN; CREATE SCHEMA scim_upgrade_cert; SET LOCAL search_path TO scim_upgrade_cert;\n${ddl}\n
 INSERT INTO "User" (id,name,email,role,"roleSource",status,"scimExternalId","updatedAt") VALUES ('owner','Owner','owner@upgrade.example.test','ADMIN','MANUAL','ACTIVE',NULL,CURRENT_TIMESTAMP),('directory-user','Directory user','directory@upgrade.example.test','ADMIN','SCIM','ACTIVE','directory-object',CURRENT_TIMESTAMP);
+INSERT INTO "User" (id,name,email,role,"roleSource",status,"scimExternalId","updatedAt") VALUES ('legacy-scim-role','Legacy SCIM administrator','legacy-scim@upgrade.example.test','ADMIN','SCIM','ACTIVE','legacy-scim-object',CURRENT_TIMESTAMP);
 INSERT INTO "OidcIdentity" (id,issuer,subject,"userId","updatedAt") VALUES ('oidc','https://trusted.example.test','subject','directory-user',CURRENT_TIMESTAMP);
 INSERT INTO "Team" (id,name,"scimExternalId","updatedAt") VALUES ('legacy-team','Legacy team','directory-group',CURRENT_TIMESTAMP),('manual-team','Operational team',NULL,CURRENT_TIMESTAMP);
 INSERT INTO "TeamMember" (id,"userId","teamId",role) VALUES ('owner-membership','owner','legacy-team','OWNER'),('directory-membership','directory-user','legacy-team','MEMBER');
@@ -46,6 +49,9 @@ INSERT INTO "Service" (id,name,"teamId","updatedAt") VALUES ('service','Producti
 INSERT INTO "User" (id,name,email,"updatedAt") VALUES ('historical-upper','Historical upper','Historical@upgrade.example.test',CURRENT_TIMESTAMP),('historical-lower','Historical lower','historical@upgrade.example.test',CURRENT_TIMESTAMP);
 ${migrations}
 DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM "User" WHERE "scimRoleMappingAdopted") THEN RAISE EXCEPTION 'Upgrade silently adopted legacy roles'; END IF;
+ IF EXISTS (SELECT 1 FROM "ScimGroup" WHERE "systemRole" IS NOT NULL) THEN RAISE EXCEPTION 'Upgrade silently created role mappings'; END IF;
+ IF NOT EXISTS (SELECT 1 FROM "User" WHERE id='legacy-scim-role' AND role='ADMIN' AND "roleSource"='SCIM') THEN RAISE EXCEPTION 'Legacy SCIM administrator changed'; END IF;
  IF (SELECT count(*) FROM "User" WHERE lower(email)='historical@upgrade.example.test') <> 2 OR (SELECT "holders" FROM "UserEmailReservation" WHERE "canonicalEmail"='historical@upgrade.example.test') <> 2 THEN RAISE EXCEPTION 'Historical canonical identities changed'; END IF;
  UPDATE "User" SET email='HISTORICAL@upgrade.example.test' WHERE id='historical-upper';
  BEGIN

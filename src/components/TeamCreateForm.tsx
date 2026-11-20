@@ -4,8 +4,9 @@ import { useState, useRef, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
+import { CreateTrigger } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
@@ -51,17 +52,16 @@ export default function TeamCreateForm({ action, canCreate = true }: TeamCreateF
   const [isOpen, setIsOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
-  const { showToast } = useToast();
 
   const handleAction = async (prevState: FormState, formData: FormData) => {
     const res = await action(prevState, formData);
     if (res?.success) {
-      showToast('Team created successfully', 'success');
+      notify.success('Team created successfully');
       formRef.current?.reset();
       setIsOpen(false);
       router.refresh();
     } else if (res?.error) {
-      showToast(getUserFacingErrorMessage(res.error), 'error');
+      notify.error(getUserFacingErrorMessage(res.error));
     }
     return res;
   };
@@ -81,21 +81,11 @@ export default function TeamCreateForm({ action, canCreate = true }: TeamCreateF
 
   if (!isOpen) {
     return (
-      <Button
-        variant="outline"
-        className="w-full h-auto py-8 border-dashed border-2 hover:border-primary hover:bg-primary/5 flex flex-col items-center justify-center gap-2 group transition-all rounded-lg"
+      <CreateTrigger
+        title="Create New Team"
+        description="Add a new team to manage ownership, responders, and service coverage"
         onClick={() => setIsOpen(true)}
-      >
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-          <Plus className="h-6 w-6" />
-        </div>
-        <div className="text-center">
-          <h3 className="font-semibold text-base text-foreground">Create New Team</h3>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Add a new team to manage ownership, responders, and service coverage
-          </p>
-        </div>
-      </Button>
+      />
     );
   }
 

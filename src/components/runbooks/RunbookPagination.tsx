@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
-import { Input } from '@/components/ui/shadcn/input';
-import { FormSelect } from './RunbookControls';
 import { z } from 'zod/v3';
 
 export const RUNBOOK_PAGE_SIZE = 20;
@@ -33,60 +31,6 @@ export function runbookPageQuery(params: Record<string, string | string[] | unde
     page: Number.isInteger(candidate) && candidate > 0 && candidate <= 10000 ? candidate : 1,
   };
 }
-
-export function RunbookFilters({
-  query,
-  fields,
-  statusOptions = [],
-  allStatusLabel = 'All statuses',
-}: {
-  query: Record<string, string>;
-  fields: { name: string; label: string; type?: string }[];
-  statusOptions?: { value: string; label: string }[];
-  allStatusLabel?: string;
-}) {
-  const options = statusOptions.some(opt => opt.value === 'all')
-    ? statusOptions
-    : [{ value: 'all', label: allStatusLabel }, ...statusOptions];
-
-  return (
-    <form
-      method="get"
-      className="flex flex-wrap items-end gap-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 shadow-xs"
-    >
-      {fields.map(field => (
-        <label
-          key={field.name}
-          className="min-w-[10rem] flex-1 space-y-1.5 text-xs font-medium text-muted-foreground"
-        >
-          <span className="block">{field.label}</span>
-          <Input
-            name={field.name}
-            aria-label={field.label}
-            type={field.type ?? 'text'}
-            defaultValue={Object.entries(query).find(([name]) => name === field.name)?.[1] ?? ''}
-            maxLength={200}
-            className="h-9 rounded-xl text-xs text-foreground"
-          />
-        </label>
-      ))}
-      {options.length > 0 && (
-        <div className="w-full sm:w-44">
-          <FormSelect
-            name="status"
-            label="Status filter"
-            defaultValue={query.status || 'all'}
-            options={options}
-          />
-        </div>
-      )}
-      <Button type="submit" size="sm" className="h-9 rounded-xl text-xs font-medium shadow-2xs">
-        Apply filters
-      </Button>
-    </form>
-  );
-}
-
 export function RunbookPagination({
   page,
   total,

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/lib/toast';
 import DashboardGrid from '@/components/reports/DashboardGrid';
@@ -28,7 +27,6 @@ import {
   Share2,
   Copy,
   Save,
-  ChevronLeft,
   Clock,
   Filter,
   Sparkles,
@@ -43,11 +41,13 @@ import {
   Tv,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import type { SerializedSLAMetrics } from '@/lib/sla';
 import type { DashboardTemplate } from '@/lib/reports/dashboard-templates';
 import type { WidgetDefinition } from '@/lib/reports/widget-registry';
 import WidgetLibrary from '@/components/reports/WidgetLibrary';
 import DashboardShareModal from '@/components/reports/DashboardShareModal';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import WidgetConfigModal, { ConfigurableWidget } from '@/components/reports/WidgetConfigModal';
 
 type Widget = {
@@ -120,6 +120,7 @@ export default function DashboardViewer({
   const [savedBaseline, setSavedBaseline] = useState(widgets);
   const [localWidgets, setLocalWidgets] = useState(widgets);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   // Share modal state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -716,67 +717,69 @@ export default function DashboardViewer({
           portalHost
         )}
 
-      {/* Header */}
-      <div
-        className={cn(
-          'relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6 transition-all print:hidden',
-          isKioskMode && 'py-3'
-        )}
-      >
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <Link
-              href="/reports"
-              className="mt-1 p-2 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700/80 transition-colors"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Link>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                {isTemplate && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-800/90 text-amber-400 border border-zinc-700/80">
-                    <Sparkles className="h-3 w-3" />
-                    Template
-                  </span>
-                )}
-              </div>
-              {isEditing && dashboardId ? (
-                <div className="space-y-2 mt-1 max-w-lg">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={dashboardTitle}
-                      onChange={e => setDashboardTitle(e.target.value)}
-                      className="text-xl md:text-2xl font-bold bg-black/40 border border-white/20 rounded-lg px-3 py-1.5 text-white w-full focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder-white/40 transition-all shadow-inner"
-                      placeholder="Dashboard title"
-                    />
-                    <Pencil className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 pointer-events-none" />
-                  </div>
-                  <input
-                    type="text"
-                    value={dashboardDesc}
-                    onChange={e => setDashboardDesc(e.target.value)}
-                    className="text-xs md:text-sm text-zinc-200 bg-black/40 border border-white/20 rounded-lg px-3 py-1.5 w-full focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder-white/40 transition-all shadow-inner"
-                    placeholder="Dashboard description"
-                  />
-                </div>
-              ) : (
-                <>
-                  <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                    {dashboardTitle}
-                  </h1>
-                  <p className="text-xs md:text-sm text-zinc-300 mt-1">{dashboardDesc}</p>
-                </>
-              )}
-            </div>
+      <DetailHeroBanner
+        className="print:hidden"
+        breadcrumb={{ label: 'Reports', href: '/reports', current: 'Dashboard' }}
+        tag="Executive Dashboard"
+        title={dashboardTitle}
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <LayoutDashboard className="h-6 w-6" aria-hidden="true" />
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+        }
+        badges={
+          isTemplate && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-0.5 text-xs font-medium text-amber-200">
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              Template
+            </span>
+          )
+        }
+        subtitle={
+          isEditing && dashboardId ? (
+            <div className="mt-1 max-w-lg space-y-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  aria-label="Dashboard title"
+                  value={dashboardTitle}
+                  onChange={e => setDashboardTitle(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/50 text-lg font-bold"
+                  placeholder="Dashboard title"
+                />
+                <Pencil className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              </div>
+              <input
+                type="text"
+                aria-label="Dashboard description"
+                value={dashboardDesc}
+                onChange={e => setDashboardDesc(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/50 text-xs md:text-sm"
+                placeholder="Dashboard description"
+              />
+            </div>
+          ) : (
+            dashboardDesc
+          )
+        }
+        stats={[
+          {
+            label: 'Updated',
+            value: lastUpdated,
+            icon: <Clock className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Widgets',
+            value: localWidgets.length,
+            icon: <LayoutDashboard className="h-3.5 w-3.5" />,
+          },
+        ]}
+        actions={
+          <>
             {isTemplate && (
               <Button
                 variant="secondary"
-                className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white font-semibold gap-2 shadow-xs transition-all"
+                className="gap-2 font-semibold"
                 onClick={handleCloneDashboard}
                 disabled={isCloning}
               >
@@ -792,9 +795,8 @@ export default function DashboardViewer({
                   variant="secondary"
                   size="sm"
                   className={cn(
-                    'bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9',
-                    autoRefreshInterval > 0 &&
-                      'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
+                    'gap-1.5 text-xs font-medium h-9',
+                    autoRefreshInterval > 0 && 'text-emerald-200'
                   )}
                   title={
                     autoRefreshInterval > 0
@@ -840,10 +842,7 @@ export default function DashboardViewer({
             <Button
               variant="secondary"
               size="icon"
-              className={cn(
-                'bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white h-9 w-9',
-                isKioskMode && 'border-primary text-primary'
-              )}
+              className={cn('h-9 w-9', isKioskMode && 'border-primary text-primary')}
               onClick={toggleKioskMode}
               title={isKioskMode ? 'Exit Presentation Mode (Esc)' : 'Presentation Mode (Press F)'}
             >
@@ -854,7 +853,7 @@ export default function DashboardViewer({
             <Button
               variant="secondary"
               size="sm"
-              className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9"
+              className="gap-1.5 text-xs font-medium h-9"
               onClick={handleExportPdf}
               title="Print or Save as PDF"
             >
@@ -866,7 +865,7 @@ export default function DashboardViewer({
             <Button
               variant="secondary"
               size="sm"
-              className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9"
+              className="gap-1.5 text-xs font-medium h-9"
               onClick={() => setIsShareModalOpen(true)}
               title="Share dashboard link"
             >
@@ -880,7 +879,7 @@ export default function DashboardViewer({
                   variant="secondary"
                   size="icon"
                   aria-label="Dashboard settings"
-                  className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white h-9 w-9"
+                  className="h-9 w-9"
                 >
                   <Settings className="h-4 w-4" />
                 </Button>
@@ -908,31 +907,7 @@ export default function DashboardViewer({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
-                      onClick={async () => {
-                        if (
-                          // eslint-disable-next-line no-alert
-                          !confirm(
-                            'Are you sure you want to delete this dashboard? This action cannot be undone.'
-                          )
-                        ) {
-                          return;
-                        }
-                        setIsDeleting(true);
-                        try {
-                          const response = await fetch(`/api/dashboards/${dashboardId}`, {
-                            method: 'DELETE',
-                          });
-                          if (!response.ok) {
-                            throw new Error('Failed to delete dashboard');
-                          }
-                          router.push('/reports');
-                        } catch (error) {
-                          console.error('Failed to delete dashboard:', error);
-                          notify.error('Failed to delete dashboard. Please try again.');
-                        } finally {
-                          setIsDeleting(false);
-                        }
-                      }}
+                      onClick={() => setIsDeleteOpen(true)}
                       disabled={isDeleting}
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
@@ -942,19 +917,9 @@ export default function DashboardViewer({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-        </div>
-
-        {/* Status Bar */}
-        <div className="flex items-center gap-4 mt-4 text-sm opacity-80">
-          <span className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            Updated: {lastUpdated}
-          </span>
-          <span>•</span>
-          <span>{localWidgets.length} widgets</span>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Filters Bar */}
       <div className="flex flex-wrap items-center gap-3 p-4 bg-card rounded-lg border print:hidden">
@@ -1227,6 +1192,31 @@ export default function DashboardViewer({
         onClose={() => setIsWidgetLibraryOpen(false)}
         onAddWidget={handleAddWidget}
         existingWidgetDefIds={existingWidgetDefIds}
+      />
+
+      <DeleteConfirmDialog
+        open={isDeleteOpen}
+        onOpenChange={setIsDeleteOpen}
+        title="Delete dashboard?"
+        description="The dashboard and its widget layout are removed for everyone it is shared with. This cannot be undone."
+        confirmText="Delete dashboard"
+        onConfirm={async () => {
+          setIsDeleting(true);
+          try {
+            const response = await fetch(`/api/dashboards/${dashboardId}`, {
+              method: 'DELETE',
+            });
+            if (!response.ok) {
+              throw new Error('Failed to delete dashboard');
+            }
+            router.push('/reports');
+          } catch (error) {
+            console.error('Failed to delete dashboard:', error);
+            notify.error('Failed to delete dashboard. Please try again.');
+          } finally {
+            setIsDeleting(false);
+          }
+        }}
       />
 
       {/* Share Modal */}

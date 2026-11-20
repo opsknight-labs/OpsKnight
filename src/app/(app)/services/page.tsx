@@ -516,6 +516,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         <ServicesListTable
           services={paginatedServices}
           canManageServices={canCreateService}
+          currentSort={sortBy}
           emptyState={
             accessContext.mode === 'NONE'
               ? {

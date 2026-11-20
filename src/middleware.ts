@@ -45,6 +45,8 @@ const PUBLIC_PATH_PREFIXES = [
   '/set-password',
   '/api/auth',
   '/api/health',
+  // RFC 8058 one-click unsubscribe: mail providers POST without cookies (token-authenticated).
+  '/api/insights/digest/unsubscribe',
   '/api/events',
   '/api/logs/ingest',
   '/api/status',

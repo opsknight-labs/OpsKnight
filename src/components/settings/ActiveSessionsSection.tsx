@@ -152,6 +152,7 @@ export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
     void fetchSessions(null, false);
     return () => abortRef.current?.abort();
   }, [fetchSessions]);
@@ -270,12 +271,12 @@ export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
                       {session.isCurrent && !revoked ? (
                         <Badge
                           variant="outline"
-                          className="border-emerald-500/20 bg-emerald-500/10 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"
+                          className="border-emerald-500/20 bg-emerald-500/10 text-2xs font-semibold text-emerald-700 dark:text-emerald-300"
                         >
                           This session
                         </Badge>
                       ) : null}
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-2xs">
                         {session.policy === 'TRUSTED_PWA'
                           ? 'Trusted PWA'
                           : session.policy === 'OIDC'
@@ -283,7 +284,7 @@ export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
                             : 'Password'}
                       </Badge>
                       {revoked ? (
-                        <Badge variant="destructive" className="text-[10px]">
+                        <Badge variant="destructive" className="text-2xs">
                           Revoked
                         </Badge>
                       ) : null}
@@ -292,7 +293,7 @@ export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
                       {formatRelativeTime(session.lastActive)} · {formatExpiry(session.expiresAt)} ·
                       Issuing policy {session.issuedUnderPolicyVersion ?? 'legacy unknown'}
                     </p>
-                    <p className="mt-0.5 text-[10px] text-muted-foreground font-mono">
+                    <p className="mt-0.5 text-2xs text-muted-foreground font-mono">
                       Session •••• {session.displayId} · token v{tokenVersion}
                     </p>
                   </div>

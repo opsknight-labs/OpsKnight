@@ -341,7 +341,7 @@ export async function getPostmortem(incidentId: string) {
     },
     include: {
       createdBy: {
-        select: { id: true, name: true, email: true },
+        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
       },
       incident: {
         select: {
@@ -453,12 +453,15 @@ export async function getAllPostmortems(
           id: true,
           title: true,
           status: true,
+          urgency: true,
+          priority: true,
           service: {
             select: { id: true, name: true },
           },
           resolvedAt: true,
         },
       },
+      _count: { select: { actionItemRecords: true } },
     },
     orderBy: { createdAt: 'desc' },
     skip: paginationBounds.skip,

@@ -9,22 +9,14 @@ import MyOnCallLoadCard from '@/components/schedules/MyOnCallLoadCard';
 import { createSchedule } from './actions';
 import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import { Button } from '@/components/ui/shadcn/button';
-import {
-  Calendar,
-  Layers3,
-  Users,
-  CheckCircle2,
-  Sparkles,
-  Network,
-  ArrowUpRight,
-} from 'lucide-react';
-import Link from 'next/link';
+import { Calendar, Layers3, Users, CheckCircle2 } from 'lucide-react';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 
 import { Prisma } from '@prisma/client';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import { requirePageAccess } from '@/lib/access/server';
+import { summarizeScheduleOnCall } from '@/components/schedules/schedule-oncall-summary';
+import type { LayerRestrictions } from '@/lib/oncall';
 
 export default async function SchedulesPage({
   searchParams,
@@ -152,6 +144,43 @@ export default async function SchedulesPage({
     ).catch(() => new Map())
   );
 
+  // On call now / next handoff, from the same block engine as the detail page.
+  const now = new Date();
+  const summaryWindowEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const overrides = schedules.length
+    ? await prisma.onCallOverride.findMany({
+        where: {
+          scheduleId: { in: schedules.map(s => s.id) },
+          start: { lt: summaryWindowEnd },
+          end: { gt: now },
+          user: { status: 'ACTIVE' },
+        },
+        select: {
+          id: true,
+          scheduleId: true,
+          start: true,
+          end: true,
+          userId: true,
+          replacesUserId: true,
+          user: { select: { name: true, avatarUrl: true, gender: true } },
+        },
+      })
+    : [];
+  const schedulesWithOnCall = schedules.map(schedule => ({
+    ...schedule,
+    ...summarizeScheduleOnCall(
+      {
+        timeZone: schedule.timeZone,
+        layers: schedule.layers.map(layer => ({
+          ...layer,
+          restrictions: layer.restrictions as LayerRestrictions | null,
+        })),
+      },
+      overrides.filter(o => o.scheduleId === schedule.id),
+      now
+    ),
+  }));
+
   const totalLayers = totalLayersCount;
   const totalUniqueResponders = responderAgg.length;
   const hasConfiguredResponders = totalUniqueResponders > 0;
@@ -160,186 +189,64 @@ export default async function SchedulesPage({
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      {/* Header with Glassmorphic Stats Capsule */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
-              <Calendar className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                On-call schedules
-              </p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-                Schedules
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-300">
-                Manage rotation layers, shifts, on-call responders, and coverage calendars.
-              </p>
-            </div>
+      <DetailHeroBanner
+        tag="On-call schedules"
+        title="Schedules"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Calendar className="h-6 w-6" aria-hidden="true" />
           </div>
-
-          {/* Frosted Glassmorphism 3-column stats capsule */}
-          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs lg:min-w-[340px]">
-            <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Responders
-              </p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
-                <Users className="h-3.5 w-3.5" /> {totalUniqueResponders}
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg border-x border-zinc-800/80 px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Layers
-              </p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
-                <Layers3 className="h-3.5 w-3.5" /> {totalLayers}
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Status
-              </p>
-              <p
-                className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-bold ${
-                  hasConfiguredResponders ? 'text-emerald-400' : 'text-amber-400'
-                }`}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {hasConfiguredResponders ? 'Configured' : 'Needs setup'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Manage rotation layers, shifts, on-call responders, and coverage calendars.
+          </p>
+        }
+        stats={[
+          {
+            label: 'Responders',
+            value: totalUniqueResponders,
+            icon: <Users className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Layers',
+            value: totalLayers,
+            icon: <Layers3 className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Status',
+            value: hasConfiguredResponders ? 'Configured' : 'Needs setup',
+            icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+            valueClassName: hasConfiguredResponders ? 'text-emerald-200' : 'text-amber-200',
+          },
+        ]}
+      />
 
       {/* Top Action: Create Schedule Dashed Expander */}
       <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
-        {/* Schedules List with Live Search & Filters */}
-        <div className="xl:col-span-3 space-y-4">
-          <ScheduleDirectoryList
-            schedules={schedules}
-            pagination={{
-              currentPage: pagination.page,
-              totalPages: pagination.totalPages,
-              totalItems: pagination.totalItems,
-              itemsPerPage: pagination.pageSize,
-            }}
-            filterCounts={{
-              total: allSchedulesCount,
-              configured: configuredSchedulesCount,
-              needsSetup: needsSetupSchedulesCount,
-            }}
-            currentSearch={searchQuery}
-            currentStatus={statusFilter}
-            insightCounts={insightCounts}
-          />
-        </div>
-
-        {/* Sidebar: Step Guide & Quick Links */}
-        <aside className="space-y-4">
-          {onCallInsightsOn && (
-            <Suspense fallback={null}>
-              <MyOnCallLoadCard userId={actor.id} />
-            </Suspense>
-          )}
-          {/* Clean Guidance Card */}
-          <Card className="overflow-hidden border-border/70 shadow-xs">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
-                  <Sparkles className="h-3 w-3" />
-                </div>
-                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Schedule Lifecycle
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  1
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Rotation Layers</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Configure shift lengths (12h, 24h, weekly) and rotation start times.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  2
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Assign Responders</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Add team members in rotation sequence with easy reordering.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  3
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Link Escalation Policies</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Attach schedules to policy levels to route alerts to active on-call engineers.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Links */}
-          <Card className="overflow-hidden border-border/70 shadow-xs">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Quick Links
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 space-y-1">
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between h-8 text-xs font-medium"
-              >
-                <Link href="/policies">
-                  <span className="flex items-center gap-2">
-                    <Network className="h-3.5 w-3.5 text-muted-foreground" />
-                    Escalation Policies
-                  </span>
-                  <ArrowUpRight className="h-3 w-3 opacity-60" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between h-8 text-xs font-medium"
-              >
-                <Link href="/teams">
-                  <span className="flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                    Team Directory
-                  </span>
-                  <ArrowUpRight className="h-3 w-3 opacity-60" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
+      {onCallInsightsOn && (
+        <Suspense fallback={null}>
+          <MyOnCallLoadCard userId={actor.id} />
+        </Suspense>
+      )}
+      <ScheduleDirectoryList
+        schedules={schedulesWithOnCall}
+        pagination={{
+          currentPage: pagination.page,
+          totalPages: pagination.totalPages,
+          totalItems: pagination.totalItems,
+          itemsPerPage: pagination.pageSize,
+        }}
+        filterCounts={{
+          total: allSchedulesCount,
+          configured: configuredSchedulesCount,
+          needsSetup: needsSetupSchedulesCount,
+        }}
+        currentSearch={searchQuery}
+        currentStatus={statusFilter}
+        insightCounts={insightCounts}
+      />
     </main>
   );
 }

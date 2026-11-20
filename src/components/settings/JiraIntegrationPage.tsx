@@ -14,6 +14,9 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Switch } from '@/components/ui/shadcn/switch';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
+import McpUnsavedChangesGuard from '@/components/settings/mcp/McpUnsavedChangesGuard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -213,8 +216,14 @@ export default function JiraIntegrationPage({
 
   return (
     <form action={formAction} className="space-y-6">
+      <McpUnsavedChangesGuard dirty={isDirty} />
       {state?.code === 'SETTINGS_CHANGED' && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-100 flex items-start justify-between gap-4">
+        <div
+          className={cn(
+            'rounded-lg border p-4 text-sm flex items-start justify-between gap-4',
+            toneClasses('elevated').soft
+          )}
+        >
           <div className="flex gap-2 min-w-0">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
@@ -238,7 +247,7 @@ export default function JiraIntegrationPage({
         </div>
       )}
       {state?.error && state.code !== 'SETTINGS_CHANGED' && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive flex gap-2">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive flex gap-2">
           <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
             <p className="font-semibold">Configuration Error</p>
@@ -247,8 +256,7 @@ export default function JiraIntegrationPage({
         </div>
       )}
 
-
-      <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-lg border bg-muted/30 p-2">
@@ -322,7 +330,7 @@ export default function JiraIntegrationPage({
                         This permanently removes Jira credentials, service mappings, OpsKnight Jira
                         links, queued Jira operations, and Jira provider circuit state.
                       </p>
-                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-amber-900 dark:text-amber-100">
+                      <div className={cn('rounded-md border p-3', toneClasses('elevated').soft)}>
                         Jira issues in Atlassian are <strong>not deleted</strong>. Incident timeline
                         entries and audit records are retained as operational history.
                       </div>
@@ -338,7 +346,11 @@ export default function JiraIntegrationPage({
                           disabled={isRemoving}
                         />
                       </div>
-                      {removeError && <p className="text-destructive">{removeError}</p>}
+                      {removeError && (
+                        <p role="alert" className="text-xs text-destructive">
+                          {removeError}
+                        </p>
+                      )}
                     </div>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -366,7 +378,7 @@ export default function JiraIntegrationPage({
         )}
       </section>
 
-      <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
+      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-6">
         <div className="flex items-center justify-between gap-3 border-b pb-4">
           <div className="flex items-center gap-3">
             <JiraLogo className="h-6 w-6" />
@@ -388,6 +400,10 @@ export default function JiraIntegrationPage({
             <Label htmlFor="baseUrl" className="flex items-center gap-1.5">
               <Globe className="h-3.5 w-3.5" />
               Jira Site URL
+              <span className="text-destructive" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only">(required)</span>
             </Label>
             <Input
               id="baseUrl"
@@ -403,6 +419,10 @@ export default function JiraIntegrationPage({
             <Label htmlFor="userEmail" className="flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5" />
               Service Account Email
+              <span className="text-destructive" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only">(required)</span>
             </Label>
             <Input
               id="userEmail"
@@ -419,6 +439,14 @@ export default function JiraIntegrationPage({
             <Label htmlFor="apiToken" className="flex items-center gap-1.5">
               <KeyRound className="h-3.5 w-3.5" />
               Atlassian API Token
+              {!config && (
+                <>
+                  <span className="text-destructive" aria-hidden="true">
+                    *
+                  </span>
+                  <span className="sr-only">(required)</span>
+                </>
+              )}
             </Label>
             <div className="relative">
               <Input
@@ -444,7 +472,7 @@ export default function JiraIntegrationPage({
         </div>
       </section>
 
-      <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
         <div>
           <h3 className="text-base font-semibold">Inbound Webhook Sync</h3>
           <p className="text-xs text-muted-foreground">
@@ -452,9 +480,14 @@ export default function JiraIntegrationPage({
           </p>
         </div>
         <div className="space-y-2">
-          <Label>Jira Cloud Webhook URL</Label>
+          <Label htmlFor="jiraCloudWebhookUrl">Jira Cloud Webhook URL</Label>
           <div className="flex gap-2">
-            <Input value={cloudWebhookUrl} readOnly className="font-mono text-xs" />
+            <Input
+              id="jiraCloudWebhookUrl"
+              value={cloudWebhookUrl}
+              readOnly
+              className="font-mono text-xs"
+            />
             <Button
               type="button"
               variant="outline"
@@ -466,9 +499,14 @@ export default function JiraIntegrationPage({
           </div>
         </div>
         <div className="space-y-2">
-          <Label>OpsKnight Webhook Endpoint</Label>
+          <Label htmlFor="jiraWebhookEndpoint">OpsKnight Webhook Endpoint</Label>
           <div className="flex gap-2">
-            <Input value={webhookUrl} readOnly className="font-mono text-xs" />
+            <Input
+              id="jiraWebhookEndpoint"
+              value={webhookUrl}
+              readOnly
+              className="font-mono text-xs"
+            />
             <Button type="button" variant="outline" onClick={() => copyValue(webhookUrl, 'base')}>
               <Copy className="h-4 w-4" />
               {copied === 'base' ? 'Copied' : 'Copy URL'}
@@ -502,6 +540,7 @@ export default function JiraIntegrationPage({
               onChange={e => setWebhookSecret(e.target.value)}
               disabled={!isAdmin}
               className="pr-10 font-mono"
+              aria-describedby="webhookSecret-help"
             />
             <button
               type="button"
@@ -512,7 +551,7 @@ export default function JiraIntegrationPage({
               {showWebhookSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p id="webhookSecret-help" className="text-xs text-muted-foreground">
             Required for Jira status sync: webhooks without this secret are rejected. Generated
             secrets use the browser cryptographic random-number generator. Save before using the
             generated URL in Jira.
@@ -520,7 +559,7 @@ export default function JiraIntegrationPage({
         </div>
       </section>
 
-      <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold flex items-center gap-2">
@@ -549,7 +588,11 @@ export default function JiraIntegrationPage({
         </div>
         {testResult && (
           <div
-            className={`rounded-lg border p-4 text-sm flex gap-2 ${testResult.ok ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-destructive/30 bg-destructive/10'}`}
+            className={cn(
+              'rounded-lg border p-4 text-sm flex gap-2',
+              testResult.ok ? toneClasses('ok').soft : toneClasses('critical').soft
+            )}
+            role={testResult.ok ? 'status' : 'alert'}
           >
             {testResult.ok ? (
               <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -567,7 +610,7 @@ export default function JiraIntegrationPage({
         )}
       </section>
 
-      <div className="sticky bottom-4 z-10 bg-card/95 backdrop-blur-md shadow-lg border rounded-xl p-4 flex items-center justify-between gap-3">
+      <div className="sticky bottom-4 z-10 rounded-lg border border-border bg-card p-4 shadow-md flex items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
           {isDirty && (
             <Badge variant="outline" className="mr-2">

@@ -10,7 +10,9 @@ import {
   useSyncExternalStore,
 } from 'react';
 import Link from 'next/link';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { toneClasses } from '@/components/patterns/status-tone';
 import DetailTabs from '@/components/ui/DetailTabs';
 import EmptyState from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/shadcn/button';
@@ -85,43 +87,43 @@ const STATUS_CONFIG: Record<
 > = {
   healthy: {
     label: 'Healthy',
-    badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
-    cardBorder: 'hover:border-emerald-500/40 focus-within:border-emerald-500/40',
+    badgeClass: toneClasses('ok').soft,
+    cardBorder: toneClasses('ok').hoverBorder,
     icon: CheckCircle2,
-    iconBg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-    iconText: 'text-emerald-600 dark:text-emerald-400',
+    iconBg: toneClasses('ok').soft,
+    iconText: toneClasses('ok').text,
   },
   degraded: {
     label: 'Needs Attention',
-    badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
-    cardBorder: 'border-amber-500/40 ring-1 ring-amber-500/20 shadow-xs',
+    badgeClass: toneClasses('elevated').soft,
+    cardBorder: 'border-status-elevated-border/40',
     icon: AlertTriangle,
-    iconBg: 'bg-amber-500/10 dark:bg-amber-500/20',
-    iconText: 'text-amber-600 dark:text-amber-400',
+    iconBg: toneClasses('elevated').soft,
+    iconText: toneClasses('elevated').text,
   },
   unhealthy: {
     label: 'Action Required',
-    badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30',
-    cardBorder: 'border-rose-500/40 ring-1 ring-rose-500/20 shadow-xs',
+    badgeClass: toneClasses('critical').soft,
+    cardBorder: 'border-status-critical-border/40',
     icon: XCircle,
-    iconBg: 'bg-rose-500/10 dark:bg-rose-500/20',
-    iconText: 'text-rose-600 dark:text-rose-400',
+    iconBg: toneClasses('critical').soft,
+    iconText: toneClasses('critical').text,
   },
   unknown: {
     label: 'Not Reported',
-    badgeClass: 'bg-muted text-muted-foreground border-border',
-    cardBorder: 'hover:border-border',
+    badgeClass: toneClasses(null).soft,
+    cardBorder: 'hover:border-ink-300',
     icon: CircleHelp,
     iconBg: 'bg-muted',
     iconText: 'text-muted-foreground',
   },
   informational: {
     label: 'Informational',
-    badgeClass: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30',
-    cardBorder: 'hover:border-sky-500/30 focus-within:border-sky-500/30',
+    badgeClass: toneClasses('info').soft,
+    cardBorder: toneClasses('info').hoverBorder,
     icon: Info,
-    iconBg: 'bg-sky-500/10 dark:bg-sky-500/20',
-    iconText: 'text-sky-600 dark:text-sky-400',
+    iconBg: toneClasses('info').soft,
+    iconText: toneClasses('info').text,
   },
 };
 
@@ -340,49 +342,34 @@ export default function SystemHealthCenter({ initialReport }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Centralized DetailHeroBanner */}
-      <DetailHeroBanner
-        tag="DIAGNOSTICS & TELEMETRY"
+      <SettingsPageHeader
+        eyebrow="Diagnostics & Telemetry"
         title="System Health Center"
-        icon={
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-foreground/15 ring-2 ring-primary-foreground/20 backdrop-blur-sm">
-            <Activity className="h-6 w-6 text-primary-foreground" />
-          </div>
-        }
+        icon={Activity}
         badges={
           <>
-            <Badge
-              variant="outline"
-              size="xs"
+            <span
               className={cn(
-                'font-bold text-[10px] uppercase tracking-wide',
-                report.overall === 'healthy'
-                  ? 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30'
-                  : report.overall === 'degraded'
-                    ? 'bg-amber-500/20 text-amber-100 border-amber-400/30'
-                    : report.overall === 'unhealthy'
-                      ? 'bg-rose-500/20 text-rose-100 border-rose-400/30'
-                      : 'bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20'
+                pageHeaderBadgeClass,
+                report.overall === 'healthy' && 'border-emerald-500/40 text-emerald-300',
+                report.overall === 'degraded' && 'border-amber-500/40 text-amber-300',
+                report.overall === 'unhealthy' && 'border-rose-500/40 text-rose-300'
               )}
             >
               {overallConfig.label}
-            </Badge>
-            <Badge
-              variant="outline"
-              size="xs"
-              className="bg-primary-foreground/10 text-primary-foreground/90 border-primary-foreground/20 text-[10px]"
-            >
+            </span>
+            <span className={pageHeaderBadgeClass}>
               {report.overall === 'healthy'
-                ? 'All Core Systems Operational'
+                ? 'All core systems operational'
                 : report.overall === 'degraded'
-                  ? 'Operational with Warnings'
+                  ? 'Operational with warnings'
                   : report.overall === 'unhealthy'
-                    ? 'Critical Attention Required'
-                    : 'Insufficient Diagnostic Evidence'}
-            </Badge>
+                    ? 'Needs attention now'
+                    : 'Not enough evidence yet'}
+            </span>
           </>
         }
-        subtitle={
+        description={
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-primary-foreground/80">
             <span>
               Real-time operational diagnostic signals across PostgreSQL, queues, schedulers, and
@@ -425,10 +412,10 @@ export default function SystemHealthCenter({ initialReport }: Props) {
             subtext: 'Failures / missing evidence',
           },
         ]}
-        actions={
+        primaryAction={
           <div className="flex flex-wrap items-center gap-2">
             {/* Live Auto-Refresh Toggle + Countdown Badge */}
-            <div className="flex items-center gap-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1">
               <Radio
                 className={cn(
                   'h-3.5 w-3.5 transition-colors',
@@ -441,7 +428,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
               {autoRefresh && (
                 <span
                   aria-label="Refresh countdown"
-                  className="text-[10px] font-mono font-bold text-emerald-200 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-400/30"
+                  className="text-2xs font-mono font-semibold tabular-nums text-primary-foreground bg-primary-foreground/10 px-1.5 py-0.5 rounded border border-primary-foreground/20"
                 >
                   {countdown}s
                 </span>
@@ -460,7 +447,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
               size="sm"
               onClick={handleRefresh}
               disabled={isPending}
-              className="text-xs font-bold h-8 gap-1.5 shadow-sm"
+              className="text-xs font-semibold h-8 gap-1.5 shadow-sm"
             >
               <RefreshCw className={cn('h-3.5 w-3.5', isPending && 'animate-spin')} />
               {isPending ? 'Running...' : 'Re-run Diagnostics'}
@@ -477,7 +464,10 @@ export default function SystemHealthCenter({ initialReport }: Props) {
       {refreshError && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200"
+          className={cn(
+            'flex items-start gap-2 rounded-lg border p-3 text-xs',
+            toneClasses('elevated').soft
+          )}
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
@@ -502,18 +492,24 @@ export default function SystemHealthCenter({ initialReport }: Props) {
             {/* Needs Attention Filter */}
             <button
               type="button"
+              aria-pressed={onlyAttention}
               onClick={() => setOnlyAttention(prev => !prev)}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all border shrink-0',
+                'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors border shrink-0',
                 onlyAttention
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/30 shadow-2xs'
-                  : 'bg-card border-border/80 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                  ? toneClasses('elevated').soft
+                  : 'bg-card border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
               )}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               Needs Attention Only
               {attentionCount > 0 && (
-                <span className="ml-1 rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] text-amber-700 dark:text-amber-300 font-bold">
+                <span
+                  className={cn(
+                    'ml-1 rounded-full border px-1.5 text-2xs font-semibold tabular-nums',
+                    toneClasses('elevated').soft
+                  )}
+                >
                   {attentionCount}
                 </span>
               )}
@@ -524,7 +520,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
         {/* Tab Content & Check Signal Cards Grid */}
         {filteredChecks.length === 0 ? (
           <EmptyState
-            icon={<CheckCircle2 className="h-6 w-6 text-emerald-500" />}
+            icon={<CheckCircle2 className={cn('h-6 w-6', toneClasses('ok').text)} />}
             title="No Signals Need Attention"
             description="No degraded, unhealthy, or unreported signals match this filter."
             action={
@@ -547,9 +543,9 @@ export default function SystemHealthCenter({ initialReport }: Props) {
           <div className="space-y-4">
             {/* Domain Group Header if a single category is selected */}
             {activeTab !== 'all' && CATEGORY_META[activeTab as HealthCategory] && (
-              <div className="flex items-center justify-between pb-1 border-b border-border/60">
+              <div className="flex items-center justify-between pb-1 border-b border-border">
                 <div className="space-y-0.5">
-                  <h2 className="text-sm font-bold text-foreground">
+                  <h2 className="text-sm font-semibold text-foreground">
                     {CATEGORY_META[activeTab as HealthCategory].label}
                   </h2>
                   <p className="text-xs text-muted-foreground">
@@ -610,10 +606,10 @@ function OperationalBrief({ checks }: { checks: AdminHealthCheck[] }) {
   if (attention.length === 0) return null;
 
   return (
-    <Card className="border-border/80 shadow-2xs">
+    <Card className="border-border">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertTriangle className={cn('h-4 w-4', toneClasses('elevated').text)} />
           Operational priorities
         </CardTitle>
         <CardDescription>
@@ -627,24 +623,24 @@ function OperationalBrief({ checks }: { checks: AdminHealthCheck[] }) {
           return (
             <div
               key={check.id}
-              className="flex flex-col gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 sm:flex-row sm:items-start sm:justify-between"
+              className="flex flex-col gap-2 rounded-lg border border-border bg-muted/15 p-3 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="flex min-w-0 items-start gap-2.5">
                 <StatusIcon className={cn('mt-0.5 h-4 w-4 shrink-0', config.iconText)} />
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-foreground">{check.label}</p>
+                  <p className="text-xs font-semibold text-foreground">{check.label}</p>
                   <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                     {check.summary}
                   </p>
                   {check.impact && (
-                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">
                       <span className="font-semibold text-foreground">Impact:</span> {check.impact}
                     </p>
                   )}
                 </div>
               </div>
               {check.action && (
-                <Button variant="outline" size="sm" asChild className="h-7 shrink-0 text-[11px]">
+                <Button variant="outline" size="sm" asChild className="h-7 shrink-0 text-2xs">
                   <Link
                     href={check.action.href}
                     target={check.action.href.startsWith('http') ? '_blank' : undefined}
@@ -681,10 +677,10 @@ function HealthHistoryRibbon({
 
   const percentColorClass =
     avgScore >= 98
-      ? 'text-emerald-600 dark:text-emerald-400'
+      ? toneClasses('ok').text
       : avgScore >= 80
-        ? 'text-amber-600 dark:text-amber-400'
-        : 'text-rose-600 dark:text-rose-400';
+        ? toneClasses('elevated').text
+        : toneClasses('critical').text;
 
   const statusMap: Record<HealthLevel, string> = {
     healthy: 'Operational',
@@ -695,26 +691,28 @@ function HealthHistoryRibbon({
   };
 
   return (
-    <div className="rounded-lg border border-border/80 bg-muted/20 p-3 shadow-2xs backdrop-blur-xs">
+    <div className="rounded-lg border border-border bg-muted/20 p-3">
       <div className="flex items-center justify-between pb-3 text-xs">
         <div className="flex items-center gap-2">
           <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-bold text-foreground text-xs tracking-tight">
+          <span className="font-semibold text-foreground text-xs tracking-tight">
             24-Hour Recorded Signal Trend
           </span>
-          <span className={cn('text-[11px] font-mono font-semibold', percentColorClass)}>
+          <span className={cn('text-2xs font-mono font-semibold', percentColorClass)}>
             • {uptimePercent}% Signal Score
           </span>
         </div>
-        <div className="hidden sm:flex items-center gap-2.5 text-[10px] text-muted-foreground font-mono">
+        <div className="hidden sm:flex items-center gap-2.5 text-2xs text-muted-foreground font-mono">
           <span className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Normal
+            <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('ok').solid)} /> Normal
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Degraded
+            <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('elevated').solid)} />{' '}
+            Degraded
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Action Required
+            <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('critical').solid)} />{' '}
+            Action Required
           </span>
         </div>
       </div>
@@ -727,11 +725,11 @@ function HealthHistoryRibbon({
           const isUnhealthy = sample.status === 'unhealthy';
 
           const colorClass = isHealthy
-            ? 'bg-emerald-500 hover:bg-emerald-400'
+            ? toneClasses('ok').solid
             : isDegraded
-              ? 'bg-amber-500 hover:bg-amber-400'
+              ? toneClasses('elevated').solid
               : isUnhealthy
-                ? 'bg-rose-500 hover:bg-rose-400'
+                ? toneClasses('critical').solid
                 : 'bg-muted-foreground/30';
 
           const isLeftEdge = idx < 3;
@@ -755,7 +753,7 @@ function HealthHistoryRibbon({
             <div key={idx} className="group relative flex-1 h-full min-w-0">
               <div
                 className={cn(
-                  'h-3.5 w-full rounded-[2px] transition-all cursor-pointer hover:opacity-75',
+                  'h-3.5 w-full rounded-sm transition-all cursor-pointer hover:opacity-75',
                   colorClass
                 )}
               />
@@ -766,34 +764,34 @@ function HealthHistoryRibbon({
                   tooltipAlignClass
                 )}
               >
-                <div className="rounded bg-neutral-900 dark:bg-neutral-800 px-2.5 py-1 text-[10px] font-mono font-medium text-white shadow-md border border-white/10 whitespace-nowrap">
+                <div className="rounded-md border border-border bg-popover px-2.5 py-1 text-2xs font-mono font-medium text-popover-foreground shadow-md whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
                     <span>{sample.hourLabel}</span>
-                    <span className="text-ink-400">•</span>
+                    <span className="text-muted-foreground">•</span>
                     <span
                       className={
                         isHealthy
-                          ? 'text-emerald-400'
+                          ? toneClasses('ok').text
                           : isDegraded
-                            ? 'text-amber-400'
+                            ? toneClasses('elevated').text
                             : isUnhealthy
-                              ? 'text-rose-400'
-                              : 'text-neutral-300'
+                              ? toneClasses('critical').text
+                              : 'text-muted-foreground'
                       }
                     >
                       {statusLabel}
                     </span>
-                    <span className="text-ink-400">({sample.scorePercent}%)</span>
+                    <span className="text-muted-foreground">({sample.scorePercent}%)</span>
                   </div>
                   {sample.reason && (
-                    <div className="text-[9px] text-neutral-300 dark:text-neutral-400 max-w-[220px] truncate pt-0.5 font-sans">
+                    <div className="text-2xs text-muted-foreground max-w-56 truncate pt-0.5 font-sans">
                       {sample.reason}
                     </div>
                   )}
                 </div>
                 <div
                   className={cn(
-                    'h-1 w-1.5 border-x-4 border-t-4 border-x-transparent border-t-neutral-900 dark:border-t-neutral-800',
+                    'h-1 w-1.5 border-x-4 border-t-4 border-x-transparent border-t-border',
                     arrowAlignClass
                   )}
                 />
@@ -804,12 +802,12 @@ function HealthHistoryRibbon({
       </div>
 
       {/* Axis markers */}
-      <div className="flex items-center justify-between pt-1.5 text-[10px] text-muted-foreground font-mono">
+      <div className="flex items-center justify-between pt-1.5 text-2xs text-muted-foreground font-mono">
         <span>24 hours ago</span>
         <span className="hidden sm:inline text-muted-foreground/60">12 hours ago</span>
         <span>Now</span>
       </div>
-      <p className="pt-2 text-[10px] leading-relaxed text-muted-foreground">
+      <p className="pt-2 text-2xs leading-relaxed text-muted-foreground">
         Derived from recorded incidents and durable delivery/job failures. This is diagnostic
         context, not an uptime SLO or proof that unobserved periods were available.
       </p>
@@ -849,21 +847,21 @@ function HealthCheckCard({
   return (
     <Card
       className={cn(
-        'group flex flex-col justify-between overflow-hidden border border-border/80 bg-card transition-all duration-150 shadow-2xs hover:shadow-xs',
+        'group flex flex-col justify-between overflow-hidden border border-border bg-card transition-all duration-150',
         config.cardBorder
       )}
     >
       <div>
         {/* Card Header: Category badge on left, Status badge on right */}
-        <CardHeader className="p-4 pb-3 border-b border-border/60 bg-muted/10">
+        <CardHeader className="p-4 pb-3 border-b border-border bg-muted/10">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-2xs font-semibold text-muted-foreground">
               <CategoryIcon className="h-3.5 w-3.5 text-muted-foreground/70" />
               <span>{categoryMeta?.label || check.category}</span>
             </div>
             <Badge
               variant="outline"
-              className={cn('text-[10px] font-semibold px-2 py-0.5 shadow-2xs', config.badgeClass)}
+              className={cn('text-2xs font-semibold px-2 py-0.5', config.badgeClass)}
             >
               <StatusIcon className="mr-1 h-3 w-3 shrink-0" />
               {config.label}
@@ -872,7 +870,7 @@ function HealthCheckCard({
 
           <div className="pt-2.5 space-y-1">
             <div className="flex items-start justify-between gap-2">
-              <CardTitle className="text-sm font-bold text-foreground tracking-tight leading-snug">
+              <CardTitle className="text-sm font-semibold text-foreground tracking-tight leading-snug">
                 {check.label}
               </CardTitle>
 
@@ -881,13 +879,13 @@ function HealthCheckCard({
                 <Badge
                   variant="outline"
                   className={cn(
-                    'text-[10px] font-mono shrink-0 px-1.5 py-0.5 font-semibold leading-none',
+                    'text-2xs font-mono shrink-0 px-1.5 py-0.5 font-semibold leading-none',
                     telemetry.latencyMs <= 500
-                      ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
-                      : 'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10'
+                      ? toneClasses('ok').soft
+                      : toneClasses('elevated').soft
                   )}
                 >
-                  <Zap className="h-2.5 w-2.5 mr-1 text-emerald-500 inline shrink-0" />
+                  <Zap className="h-2.5 w-2.5 mr-1 inline shrink-0" aria-hidden="true" />
                   {telemetry.latencyMs}ms
                 </Badge>
               )}
@@ -896,7 +894,7 @@ function HealthCheckCard({
                 telemetry.slaMetrics.p95Ms !== null && (
                   <Badge
                     variant="outline"
-                    className="text-[10px] font-mono shrink-0 px-1.5 py-0.5 font-semibold leading-none text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                    className="text-2xs font-mono shrink-0 px-1.5 py-0.5 font-semibold leading-none"
                   >
                     p95
                     {telemetry.slaMetrics.windowLabel ? ` ${telemetry.slaMetrics.windowLabel}` : ''}
@@ -915,17 +913,17 @@ function HealthCheckCard({
         <CardContent className="p-4 space-y-3">
           {/* Visual Telemetry Gauge 1: Database Connection Pool Utilization */}
           {telemetry?.poolUtilization && (
-            <div className="space-y-1.5 rounded-lg border border-border/70 bg-muted/20 p-2.5">
-              <div className="flex items-center justify-between text-[11px]">
+            <div className="space-y-1.5 rounded-lg border border-border bg-muted/20 p-2.5">
+              <div className="flex items-center justify-between text-2xs">
                 <span className="font-semibold text-foreground">Pool Utilization</span>
                 <span
                   className={cn(
-                    'font-mono font-bold',
+                    'font-mono font-semibold',
                     telemetry.poolUtilization.percent > 90
-                      ? 'text-rose-600 dark:text-rose-400'
+                      ? toneClasses('critical').text
                       : telemetry.poolUtilization.percent > 75
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-emerald-600 dark:text-emerald-400'
+                        ? toneClasses('elevated').text
+                        : toneClasses('ok').text
                   )}
                 >
                   {telemetry.poolUtilization.used} / {telemetry.poolUtilization.max} (
@@ -938,15 +936,15 @@ function HealthCheckCard({
                   className={cn(
                     'h-full transition-all duration-300',
                     telemetry.poolUtilization.percent > 90
-                      ? 'bg-rose-500'
+                      ? toneClasses('critical').solid
                       : telemetry.poolUtilization.percent > 75
-                        ? 'bg-amber-500'
-                        : 'bg-emerald-500'
+                        ? toneClasses('elevated').solid
+                        : toneClasses('ok').solid
                   )}
                   style={{ width: `${Math.min(100, telemetry.poolUtilization.percent)}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+              <div className="flex items-center justify-between text-2xs text-muted-foreground pt-0.5">
                 <span>Active: {telemetry.poolUtilization.active}</span>
                 <span>Size: {telemetry.poolUtilization.sizeFormatted}</span>
               </div>
@@ -955,10 +953,10 @@ function HealthCheckCard({
 
           {/* Visual Telemetry Gauge 2: Background Jobs Queue Distribution */}
           {telemetry?.queueDistribution && (
-            <div className="space-y-1.5 rounded-lg border border-border/70 bg-muted/20 p-2.5">
-              <div className="flex items-center justify-between text-[11px]">
+            <div className="space-y-1.5 rounded-lg border border-border bg-muted/20 p-2.5">
+              <div className="flex items-center justify-between text-2xs">
                 <span className="font-semibold text-foreground">Queue Distribution</span>
-                <span className="font-mono text-muted-foreground text-[10px]">
+                <span className="font-mono text-muted-foreground text-2xs">
                   {telemetry.queueDistribution.pending +
                     telemetry.queueDistribution.processing +
                     telemetry.queueDistribution.failed}{' '}
@@ -969,7 +967,7 @@ function HealthCheckCard({
               <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted gap-0.5">
                 {telemetry.queueDistribution.pending > 0 && (
                   <div
-                    className="h-full bg-blue-500 transition-all"
+                    className="h-full bg-ink-400 transition-all"
                     style={{
                       width: `${Math.max(
                         10,
@@ -987,7 +985,7 @@ function HealthCheckCard({
                 )}
                 {telemetry.queueDistribution.processing > 0 && (
                   <div
-                    className="h-full bg-amber-500 animate-pulse transition-all"
+                    className="h-full bg-status-info motion-safe:animate-pulse transition-all"
                     style={{
                       width: `${Math.max(
                         10,
@@ -1005,7 +1003,7 @@ function HealthCheckCard({
                 )}
                 {telemetry.queueDistribution.failed > 0 && (
                   <div
-                    className="h-full bg-rose-500 transition-all"
+                    className={cn('h-full transition-all', toneClasses('critical').solid)}
                     style={{
                       width: `${Math.max(
                         10,
@@ -1022,17 +1020,17 @@ function HealthCheckCard({
                   />
                 )}
               </div>
-              <div className="flex items-center justify-between text-[10px] font-mono pt-0.5">
-                <span className="text-blue-600 dark:text-blue-400">
+              <div className="flex items-center justify-between text-2xs font-mono pt-0.5">
+                <span className="text-muted-foreground">
                   Pending: {telemetry.queueDistribution.pending}
                 </span>
-                <span className="text-amber-600 dark:text-amber-400">
+                <span className={toneClasses('info').text}>
                   Processing: {telemetry.queueDistribution.processing}
                 </span>
                 <span
                   className={cn(
                     telemetry.queueDistribution.failed > 0
-                      ? 'text-rose-600 font-bold dark:text-rose-400'
+                      ? cn('font-semibold', toneClasses('critical').text)
                       : 'text-muted-foreground'
                   )}
                 >
@@ -1045,7 +1043,7 @@ function HealthCheckCard({
           {/* Details Bullet List */}
           <div className="space-y-1.5">
             {check.scope && (
-              <div className="flex items-center justify-between rounded-md bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
+              <div className="flex items-center justify-between rounded-md bg-muted/30 px-2 py-1 text-2xs text-muted-foreground">
                 <span>Evidence scope</span>
                 <span className="font-mono font-semibold uppercase">{check.scope}</span>
               </div>
@@ -1053,7 +1051,7 @@ function HealthCheckCard({
             {check.details.map((detail, idx) => (
               <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
-                <span className="leading-relaxed break-words font-mono text-[11px] text-muted-foreground/90">
+                <span className="leading-relaxed break-words font-mono text-2xs text-muted-foreground/90">
                   {detail}
                 </span>
               </div>
@@ -1061,7 +1059,7 @@ function HealthCheckCard({
           </div>
 
           {check.impact && (
-            <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+            <div className="rounded-md border border-border bg-muted/40 px-2.5 py-2 text-2xs leading-relaxed text-muted-foreground">
               <span className="font-semibold text-foreground">Operational impact: </span>
               {check.impact}
             </div>
@@ -1071,7 +1069,7 @@ function HealthCheckCard({
           {check.commandSnippet && (
             <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-2.5 space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                <div className="flex items-center gap-1.5 text-2xs font-semibold text-primary">
                   <Terminal className="h-3.5 w-3.5 shrink-0" />
                   <span>{check.commandSnippet.description || 'Terminal Command'}</span>
                 </div>
@@ -1089,14 +1087,14 @@ function HealthCheckCard({
                       </button>
                     </PopoverTrigger>
                     <PopoverContent align="end" className="w-80 p-3 space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                         <Terminal className="h-3.5 w-3.5 text-primary" />
                         <span>Migration Deployment Steps</span>
                       </div>
                       <div className="space-y-2 text-xs text-muted-foreground">
                         {check.commandSnippet.steps.map((step, sIdx) => (
                           <div key={sIdx} className="flex items-start gap-2">
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-2xs font-semibold text-primary">
                               {sIdx + 1}
                             </span>
                             <span className="leading-snug">{step}</span>
@@ -1109,7 +1107,7 @@ function HealthCheckCard({
               </div>
 
               {/* Command box with copy button */}
-              <div className="flex items-center justify-between rounded-md border border-border/80 bg-background px-2.5 py-1.5">
+              <div className="flex items-center justify-between rounded-md border border-border bg-background px-2.5 py-1.5">
                 <code className="text-xs font-mono font-semibold text-foreground select-all">
                   {check.commandSnippet.command}
                 </code>
@@ -1142,7 +1140,7 @@ function HealthCheckCard({
             size="sm"
             onClick={onInspect}
             aria-label={`Inspect ${check.label}`}
-            className="text-xs h-8 font-semibold border-border/80 hover:bg-accent/60 gap-1 px-2.5"
+            className="text-xs h-8 font-semibold border-border hover:bg-accent/60 gap-1 px-2.5"
           >
             <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
             Inspect
@@ -1155,7 +1153,7 @@ function HealthCheckCard({
             onClick={onRetest}
             disabled={isRetesting}
             aria-label={`Re-test ${check.label}`}
-            className="text-xs h-8 font-semibold border-border/80 hover:bg-accent/60 gap-1 px-2.5"
+            className="text-xs h-8 font-semibold border-border hover:bg-accent/60 gap-1 px-2.5"
           >
             <RefreshCw
               className={cn(
@@ -1171,7 +1169,7 @@ function HealthCheckCard({
             <Button
               variant="outline"
               size="sm"
-              className="flex-1 text-xs h-8 font-semibold justify-between border-border/80 hover:bg-accent/60 px-2.5"
+              className="flex-1 text-xs h-8 font-semibold justify-between border-border hover:bg-accent/60 px-2.5"
               asChild
             >
               <Link
@@ -1237,21 +1235,21 @@ function DiagnosticInspectorModal({
 
   return (
     <Dialog open={true} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-3xl lg:max-w-4xl p-0 gap-0 overflow-hidden border-border/80 shadow-2xl rounded-xl">
+      <DialogContent className="max-w-3xl lg:max-w-4xl p-0 gap-0 overflow-hidden">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-muted/30">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary">
               <CategoryIcon className="h-4 w-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <DialogTitle className="text-base font-bold text-foreground tracking-tight">
+                <DialogTitle className="text-base font-semibold text-foreground tracking-tight">
                   {check.label}
                 </DialogTitle>
                 <Badge
                   variant="outline"
-                  className={cn('text-[10px] font-semibold px-2 py-0.5', config.badgeClass)}
+                  className={cn('text-2xs font-semibold px-2 py-0.5', config.badgeClass)}
                 >
                   <StatusIcon className="mr-1 h-3 w-3 shrink-0" />
                   {config.label}
@@ -1271,20 +1269,20 @@ function DiagnosticInspectorModal({
           <div className="md:col-span-5 p-5 space-y-4 bg-card">
             {/* Status Summary */}
             <div className="space-y-1.5">
-              <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">
+              <span className="text-2xs font-semibold text-foreground uppercase tracking-wider">
                 Operational Summary
               </span>
-              <p className="text-xs text-muted-foreground leading-relaxed bg-muted/40 p-2.5 rounded-lg border border-border/60">
+              <p className="text-xs text-muted-foreground leading-relaxed bg-muted/40 p-2.5 rounded-lg border border-border">
                 {check.summary}
               </p>
             </div>
 
             {check.impact && (
               <div className="space-y-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-foreground">
                   Operational Impact
                 </span>
-                <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5 text-xs leading-relaxed text-muted-foreground">
+                <p className="rounded-lg border border-border bg-muted/40 p-2.5 text-xs leading-relaxed text-muted-foreground">
                   {check.impact}
                 </p>
               </div>
@@ -1292,7 +1290,7 @@ function DiagnosticInspectorModal({
 
             {/* Diagnostic Facts */}
             <div className="space-y-2">
-              <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">
+              <span className="text-2xs font-semibold text-foreground uppercase tracking-wider">
                 Diagnostic Facts ({check.details.length})
               </span>
               <div className="space-y-1.5">
@@ -1302,7 +1300,7 @@ function DiagnosticInspectorModal({
                     className="flex items-start gap-2 text-xs font-mono text-muted-foreground bg-muted/20 p-2 rounded border border-border/40"
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-primary/70 mt-1.5 shrink-0" />
-                    <span className="leading-snug break-words text-[11px] text-foreground/90">
+                    <span className="leading-snug break-words text-2xs text-foreground/90">
                       {fact}
                     </span>
                   </div>
@@ -1313,11 +1311,11 @@ function DiagnosticInspectorModal({
             {/* Command Snippet if available */}
             {check.commandSnippet && (
               <div className="space-y-1.5 pt-1">
-                <span className="text-[11px] font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5 text-primary">
+                <span className="text-2xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5 text-primary">
                   <Terminal className="h-3 w-3" />
                   Remediation Command
                 </span>
-                <code className="block text-[11px] font-mono font-semibold bg-primary/10 text-primary border border-primary/20 p-2 rounded">
+                <code className="block text-2xs font-mono font-semibold bg-primary/10 text-primary border border-primary/20 p-2 rounded">
                   {check.commandSnippet.command}
                 </code>
               </div>
@@ -1328,7 +1326,7 @@ function DiagnosticInspectorModal({
           <div className="md:col-span-7 p-5 space-y-3 bg-muted/10 flex flex-col justify-between">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Code2 className="h-3.5 w-3.5 text-primary" />
                   Live JSON Telemetry Payload
                 </span>
@@ -1348,20 +1346,20 @@ function DiagnosticInspectorModal({
               </div>
 
               {/* Code payload container */}
-              <pre className="p-3.5 rounded-lg border border-border/80 bg-neutral-950 dark:bg-neutral-950 text-emerald-400 dark:text-emerald-300 font-mono text-[11px] overflow-x-auto max-h-[380px] leading-relaxed select-all shadow-inner">
+              <pre className="p-3.5 rounded-lg border border-border bg-muted text-foreground font-mono text-2xs overflow-x-auto max-h-96 leading-relaxed select-all">
                 {rawJson}
               </pre>
             </div>
 
-            <p className="text-[10px] text-muted-foreground font-mono">
+            <p className="text-2xs text-muted-foreground font-mono">
               Live data queried in real-time from PostgreSQL, queues, and platform services.
             </p>
           </div>
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-3 border-t border-border/80 bg-muted/20">
-          <span className="text-[11px] text-muted-foreground font-mono">
+        <div className="flex items-center justify-between px-6 py-3 border-t border-border bg-muted/20">
+          <span className="text-2xs text-muted-foreground font-mono">
             Status: {check.status.toUpperCase()}
           </span>
           <div className="flex items-center gap-2">

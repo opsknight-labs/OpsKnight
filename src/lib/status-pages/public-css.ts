@@ -574,6 +574,9 @@ ${R} .status-subscribe__input:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 ${R} .status-subscribe__input:disabled { opacity: .6; cursor: not-allowed; }
+${R} .status-subscribe__input[aria-invalid="true"] { border-color: var(--status-major-outage); }
+${R} .status-subscribe__input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-major-outage) 20%, transparent); }
+${R} .status-subscribe__label { display: block; margin: 0 0 -.4rem; font-size: .8125rem; font-weight: 600; color: var(--status-text-strong); }
 ${R} .status-subscribe__button {
   display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
   flex: 0 0 auto; padding: .8rem 1.5rem; border: 1px solid var(--primary); border-radius: .625rem;
@@ -736,14 +739,16 @@ ${R} .status-subscribe-modal__close:hover {
 }
 ${R} .status-subscribe-modal__close:active { transform: scale(.94); }
 ${R} .status-subscribe-modal__close:focus-visible, ${R} .status-subscribe__button:focus-visible, ${R} .status-subscribe__picker-btn:focus-visible, ${R} .status-subscribe__segbtn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-${R} @keyframes status-subscribe-overlay-in { from { opacity: 0; } to { opacity: 1; } }
-${R} @keyframes status-subscribe-modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
-${R} @keyframes status-subscribe-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-${R} @keyframes status-subscribe-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes status-subscribe-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes status-subscribe-modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes status-subscribe-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes status-subscribe-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 @media (max-width: 480px) {
   ${R} .status-subscribe__controls { flex-direction: column; }
   ${R} .status-subscribe__button { width: 100%; }
+  ${R} .status-subscribe__segment { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  ${R} .status-subscribe__segbtn { padding-inline: .5rem; white-space: normal; text-align: center; }
 }
 
 ${R} .status-footer {
@@ -1001,7 +1006,8 @@ ${R} .status-v3-history__day {
 }
 ${R} svg.status-v3-history:hover .status-v3-history__day { opacity: .6; }
 ${R} svg.status-v3-history .status-v3-history__day:hover,
-${R} svg.status-v3-history .status-v3-history__day[aria-pressed="true"] {
+${R} svg.status-v3-history .status-v3-history__day[aria-pressed="true"],
+${R} svg.status-v3-history .status-v3-history__day[aria-selected="true"] {
   opacity: 1;
   transform: scaleY(1.25);
   stroke: var(--status-text-strong);
@@ -1011,6 +1017,9 @@ ${R} svg.status-v3-history .status-v3-history__day:hover:not([aria-pressed="true
   filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 65%, transparent));
 }
 ${R} .status-v3-history__day:focus-visible { outline: none; stroke: var(--primary); stroke-width: .2; }
+/* The strip is one focus stop (listbox + aria-activedescendant); show the ring on it and dim unselected days. */
+${R} svg.status-v3-history:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 2px; }
+${R} svg.status-v3-history:has([aria-selected="true"]) .status-v3-history__day:not([aria-selected="true"]):not(:hover) { opacity: .55; }
 
 /* Incident timeline */
 ${R} .status-v3-incident__updates { list-style: none; margin: .35rem 0 0; padding: 0 0 0 1rem; display: grid; gap: .5rem; border-inline-start: 2px solid var(--status-panel-border); }
@@ -1376,48 +1385,13 @@ ${R} .status-v3-inspector__close:focus-visible {
   outline: 2px solid var(--primary, #3b82f6);
   outline-offset: 2px;
 }
-@media (prefers-color-scheme: dark) {
-  ${R}:not([data-theme="light"]) .status-v3-inspector {
-    background: var(--status-panel-bg, #0f172a);
-    border-color: var(--status-panel-border, #334155);
-  }
-  ${R}:not([data-theme="light"]) .status-v3-inspector__nav,
-  ${R}:not([data-theme="light"]) .status-v3-inspector__close {
-    border-color: var(--status-panel-border, #334155);
-    background: var(--status-panel-muted-bg, #1e293b);
-    color: var(--status-text-strong, #f1f5f9);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  }
-  ${R}:not([data-theme="light"]) .status-v3-inspector__nav:hover:not(:disabled) {
-    color: #ffffff;
-    background: color-mix(in srgb, var(--primary, #38bdf8) 22%, #1e293b);
-    border-color: var(--primary, #38bdf8);
-  }
-  ${R}:not([data-theme="light"]) .status-v3-inspector__nav:disabled {
-    opacity: 0.3;
-    border-color: #334155;
-    background: #0f172a;
-    color: #64748b;
-  }
-  ${R}:not([data-theme="light"]) .status-v3-inspector__close:hover {
-    color: #f87171;
-    background: rgba(239, 68, 68, 0.18);
-    border-color: rgba(239, 68, 68, 0.5);
-  }
-}
-.dark ${R} .status-v3-inspector,
-[data-theme="dark"] ${R} .status-v3-inspector,
-[data-surface-theme="dark"] ${R} .status-v3-inspector,
+${R}[data-surface-theme="dark"] .status-v3-inspector,
 .status-page-container[data-theme="dark"] .status-v3-inspector {
   background: var(--status-panel-bg, #0f172a);
   border-color: var(--status-panel-border, #334155);
 }
-.dark ${R} .status-v3-inspector__nav,
-.dark ${R} .status-v3-inspector__close,
-[data-theme="dark"] ${R} .status-v3-inspector__nav,
-[data-theme="dark"] ${R} .status-v3-inspector__close,
-[data-surface-theme="dark"] ${R} .status-v3-inspector__nav,
-[data-surface-theme="dark"] ${R} .status-v3-inspector__close,
+${R}[data-surface-theme="dark"] .status-v3-inspector__nav,
+${R}[data-surface-theme="dark"] .status-v3-inspector__close,
 .status-page-container[data-theme="dark"] .status-v3-inspector__nav,
 .status-page-container[data-theme="dark"] .status-v3-inspector__close {
   border-color: var(--status-panel-border, #334155);
@@ -1425,26 +1399,20 @@ ${R} .status-v3-inspector__close:focus-visible {
   color: var(--status-text-strong, #f1f5f9);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
-.dark ${R} .status-v3-inspector__nav:hover:not(:disabled),
-[data-theme="dark"] ${R} .status-v3-inspector__nav:hover:not(:disabled),
-[data-surface-theme="dark"] ${R} .status-v3-inspector__nav:hover:not(:disabled),
+${R}[data-surface-theme="dark"] .status-v3-inspector__nav:hover:not(:disabled),
 .status-page-container[data-theme="dark"] .status-v3-inspector__nav:hover:not(:disabled) {
   color: #ffffff;
   background: color-mix(in srgb, var(--primary, #38bdf8) 22%, #1e293b);
   border-color: var(--primary, #38bdf8);
 }
-.dark ${R} .status-v3-inspector__nav:disabled,
-[data-theme="dark"] ${R} .status-v3-inspector__nav:disabled,
-[data-surface-theme="dark"] ${R} .status-v3-inspector__nav:disabled,
+${R}[data-surface-theme="dark"] .status-v3-inspector__nav:disabled,
 .status-page-container[data-theme="dark"] .status-v3-inspector__nav:disabled {
   opacity: 0.3;
   border-color: #334155;
   background: #0f172a;
   color: #64748b;
 }
-.dark ${R} .status-v3-inspector__close:hover,
-[data-theme="dark"] ${R} .status-v3-inspector__close:hover,
-[data-surface-theme="dark"] ${R} .status-v3-inspector__close:hover,
+${R}[data-surface-theme="dark"] .status-v3-inspector__close:hover,
 .status-page-container[data-theme="dark"] .status-v3-inspector__close:hover {
   color: #f87171;
   background: rgba(239, 68, 68, 0.18);
@@ -1541,11 +1509,13 @@ ${R} .status-topbar {
 ${R} .status-topbar__inner,
 ${R} .status-v3,
 ${R} .status-site-footer__inner,
-${R} .status-subscribe-block {
+${R} .status-subscribe-block,
+${R} .status-stale-note {
   max-inline-size: var(--status-content-width, 72rem);
   margin-inline: auto;
   padding-inline: clamp(1rem, 4vw, 1.75rem);
 }
+${R} .status-stale-note { margin-block: .75rem 0; font-size: .8125rem; }
 ${R} .status-topbar__inner {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   padding-block: .85rem; min-block-size: 4rem;
@@ -1705,6 +1675,11 @@ ${R} .status-v3-hero__stats .status-stat__hint { font-size: .72rem; color: var(-
   ${R} .status-v3-hero__stats .status-stat:last-child { padding-inline-end: 0; }
   ${R} .status-v3-hero__stats .status-stat + .status-stat { padding-inline-start: .75rem; }
   ${R} .status-v3-hero__stats .status-stat__label { white-space: normal; }
+  /* Four stats do not fit one 343px row ("Active maintenance" clipped): 2×2 grid instead. */
+  ${R} .status-v3-hero__stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: .75rem; }
+  ${R} .status-v3-hero__stats .status-stat:nth-child(odd) { border-inline-start: 0; padding-inline-start: 0; }
+  ${R} .status-v3-maintenance-inline__list > .status-v3-maintenance-pill { flex-basis: 100%; }
+  ${R} .status-v3-incident-pill__summary-meta { flex-shrink: 1; min-inline-size: 0; max-inline-size: 100%; margin-inline-start: 0; }
 }
 
 ${R} .status-v3-service, ${R} .status-v3-region, ${R} .status-v3-maintenance__item,
@@ -2407,22 +2382,12 @@ ${R} .status-v3-announcements-inline__dot {
 ${R} .status-v3-announcements-inline__tally-pill--changelog .status-v3-announcements-inline__dot {
   background-color: var(--status-text-subtle);
 }
-@media (prefers-color-scheme: dark) {
-  ${R} .status-v3-announcements-inline__tally-pill--changelog {
-    color: var(--status-text-muted, #94a3b8);
-    background: var(--status-panel-muted-bg, #1e293b);
-    border-color: var(--status-panel-border, #334155);
-  }
-  ${R} .status-v3-announcements-inline__tally-pill--changelog .status-v3-announcements-inline__dot {
-    background-color: var(--status-text-subtle, #64748b);
-  }
-}
-.dark ${R} .status-v3-announcements-inline__tally-pill--changelog {
+${R}[data-surface-theme="dark"] .status-v3-announcements-inline__tally-pill--changelog {
   color: var(--status-text-muted, #94a3b8);
   background: var(--status-panel-muted-bg, #1e293b);
   border-color: var(--status-panel-border, #334155);
 }
-.dark ${R} .status-v3-announcements-inline__tally-pill--changelog .status-v3-announcements-inline__dot {
+${R}[data-surface-theme="dark"] .status-v3-announcements-inline__tally-pill--changelog .status-v3-announcements-inline__dot {
   background-color: var(--status-text-subtle, #64748b);
 }
 ${R} .status-v3-announcements-inline__list {
@@ -3057,11 +3022,24 @@ ${R} .status-subscribe-block { padding-block: 1.5rem 0; }
 }
 
 @media (max-width: 36rem) {
+  /* Wrapping row, not a column: in a column the search's 10rem flex-basis became a 160px-tall box. */
   ${R} .status-v3-services__right-group {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
     gap: 0.5rem;
   }
+  ${R} .status-v3-services .status-v3-search,
+  ${R} .status-v3-services__legend-window { flex: 1 1 100%; }
+  ${R} .status-v3-services__legend-divider { display: none; }
+  /* 44px touch targets; 16px search text so iOS does not zoom on focus. */
+  ${R} .status-v3-services__group-btn,
+  ${R} .status-v3-filter-chip,
+  ${R} .status-v3-services__sort-wrap,
+  ${R} .status-v3-services .status-v3-search input { height: 2.75rem; }
+  ${R} .status-v3-services__sort-wrap .status-v3-services__sort-select { line-height: normal; }
+  ${R} .status-v3-services .status-v3-search input { font-size: 1rem; }
   ${R} .status-v3-filters {
     width: 100%;
     overflow-x: auto;

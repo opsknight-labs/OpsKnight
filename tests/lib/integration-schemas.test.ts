@@ -159,6 +159,7 @@ describe('Integration Schemas', () => {
         'DATADOG',
         'GITHUB',
         'GRAFANA',
+        'BASE14',
         'PROMETHEUS',
         'NEWRELIC',
         'SENTRY',

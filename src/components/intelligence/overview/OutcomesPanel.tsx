@@ -1,4 +1,4 @@
-import LineChart from '@/components/analytics/LineChart';
+import LineChart from '@/components/charts/LineChart';
 import type { OverviewOutcomes } from '@/lib/intelligence/overview/outcomes';
 import {
   formatCount,

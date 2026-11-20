@@ -107,8 +107,12 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
     });
   };
 
+  const clientIdLooksWrong = /^[TA]/.test(clientId.trim());
+  const secretsIdentical =
+    Boolean(clientSecret.trim()) && clientSecret.trim() === signingSecret.trim();
+
   return (
-    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+    <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -249,8 +253,18 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                   <li>Paste this URL and click &quot;Add&quot;:</li>
                 </ol>
                 <div className="flex gap-2">
-                  <Input value={redirectUri} readOnly className="font-mono text-sm" />
-                  <Button variant="outline" size="icon" onClick={handleCopyRedirectUri}>
+                  <Input
+                    value={redirectUri}
+                    readOnly
+                    aria-label="Slack redirect URL"
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyRedirectUri}
+                    aria-label="Copy redirect URL"
+                  >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
@@ -301,7 +315,12 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                 <p className="text-sm text-muted-foreground">
                   Open &quot;Event Subscriptions&quot;, turn it on, and set the Request URL:
                 </p>
-                <Input value={`${baseUrl}/api/slack/events`} readOnly className="font-mono" />
+                <Input
+                  value={`${baseUrl}/api/slack/events`}
+                  readOnly
+                  aria-label="Slack events request URL"
+                  className="font-mono"
+                />
                 <p className="text-sm text-muted-foreground">
                   Then under &quot;Subscribe to bot events&quot; add{' '}
                   <Badge variant="secondary" size="xs" className="font-mono">
@@ -327,7 +346,11 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="clientId">
-                      Client ID <span className="text-destructive">*</span>
+                      Client ID{' '}
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="sr-only">(required)</span>
                     </Label>
                     <Input
                       id="clientId"
@@ -336,20 +359,25 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                       onChange={e => setClientId(e.target.value)}
                       placeholder="e.g. 123456789012.345678901234"
                       className="font-mono"
+                      aria-required="true"
+                      aria-invalid={clientIdLooksWrong || undefined}
+                      aria-describedby={
+                        clientIdLooksWrong ? 'clientId-help clientId-error' : 'clientId-help'
+                      }
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p id="clientId-help" className="text-xs text-muted-foreground">
                       Found under Basic Information &gt; App Credentials in your Slack app. Format:{' '}
                       <code className="text-foreground">123456789.987654321</code>. Do not use your
                       Workspace ID (starts with T) or App ID (starts with A).
                     </p>
                     {clientId.trim().startsWith('T') && (
-                      <p className="text-xs text-destructive font-medium">
+                      <p id="clientId-error" className="text-xs text-destructive font-medium">
                         ⚠️ This looks like a Slack Workspace ID (starts with &apos;T&apos;). Please
                         enter the numeric Client ID from App Credentials.
                       </p>
                     )}
                     {clientId.trim().startsWith('A') && (
-                      <p className="text-xs text-destructive font-medium">
+                      <p id="clientId-error" className="text-xs text-destructive font-medium">
                         ⚠️ This looks like a Slack App ID (starts with &apos;A&apos;). Please enter
                         the numeric Client ID from App Credentials.
                       </p>
@@ -358,7 +386,11 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
 
                   <div className="space-y-2">
                     <Label htmlFor="clientSecret">
-                      Client Secret <span className="text-destructive">*</span>
+                      Client Secret{' '}
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="sr-only">(required)</span>
                     </Label>
                     <Input
                       id="clientSecret"
@@ -367,15 +399,21 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                       onChange={e => setClientSecret(e.target.value)}
                       placeholder="Paste Client Secret here"
                       className="font-mono"
+                      aria-required="true"
+                      aria-describedby="clientSecret-help"
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p id="clientSecret-help" className="text-xs text-muted-foreground">
                       Click &quot;Show&quot; next to Client Secret in Slack, then copy it here
                     </p>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="signingSecret">
-                      Signing Secret <span className="text-destructive">*</span>
+                      Signing Secret{' '}
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="sr-only">(required)</span>
                     </Label>
                     <Input
                       id="signingSecret"
@@ -384,23 +422,28 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                       onChange={e => setSigningSecret(e.target.value)}
                       placeholder="Paste Signing Secret here"
                       className="font-mono"
+                      aria-required="true"
+                      aria-invalid={secretsIdentical || undefined}
+                      aria-describedby={
+                        secretsIdentical
+                          ? 'signingSecret-help signingSecret-error'
+                          : 'signingSecret-help'
+                      }
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p id="signingSecret-help" className="text-xs text-muted-foreground">
                       Same page in Slack, just below Client Secret. Required to verify that slash
                       commands, buttons and events genuinely came from Slack — without it those
                       requests are rejected. Slack never sends this during OAuth, so reconnecting
                       will not fill it in.
                     </p>
-                    {clientSecret.trim() &&
-                      signingSecret.trim() &&
-                      clientSecret.trim() === signingSecret.trim() && (
-                        <p className="text-xs text-destructive font-medium">
-                          ⚠️ Client Secret and Signing Secret are identical. In Slack under Basic
-                          Information &gt; App Credentials, Client Secret and Signing Secret are two
-                          distinct keys. Click &quot;Show&quot; next to each to copy their separate
-                          values.
-                        </p>
-                      )}
+                    {secretsIdentical && (
+                      <p id="signingSecret-error" className="text-xs text-destructive font-medium">
+                        ⚠️ Client Secret and Signing Secret are identical. In Slack under Basic
+                        Information &gt; App Credentials, Client Secret and Signing Secret are two
+                        distinct keys. Click &quot;Show&quot; next to each to copy their separate
+                        values.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -434,8 +477,8 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
         {step === 3 && (
           <div className="space-y-6 text-center py-8">
             <div className="flex justify-center">
-              <div className="p-4 rounded-full bg-emerald-500/10">
-                <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+              <div className="p-4 rounded-full bg-status-ok-soft dark:bg-status-ok/15">
+                <CheckCircle2 className="h-12 w-12 text-status-ok" aria-hidden="true" />
               </div>
             </div>
 

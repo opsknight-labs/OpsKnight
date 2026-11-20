@@ -27,7 +27,7 @@ import {
 } from '@/lib/runbooks/distribution-contract';
 import { agentDeploymentIdentity, isAgentDeploymentName } from '@/lib/runbooks/agent-deployment';
 import { agentSetupCommands } from '@/lib/runbooks/agent-setup-commands';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import DetailTabs from '@/components/ui/DetailTabs';
 import { cn } from '@/lib/utils';
 
 function SetupBlock({ value, disabled = false }: { value: string; disabled?: boolean }) {
@@ -408,45 +408,40 @@ export default function AgentSetupInstructions({
         </CardHeader>
 
         <CardContent className="p-5 sm:p-6 space-y-4">
-          <Tabs defaultValue="compose" className="space-y-4">
-            <TabsList className="h-auto flex-wrap gap-1 rounded-xl bg-muted/60 p-1 border border-border/60">
-              <TabsTrigger value="compose">Compose</TabsTrigger>
-              <TabsTrigger value="docker">Docker</TabsTrigger>
-              <TabsTrigger value="podman">Podman</TabsTrigger>
-              <TabsTrigger value="swarm">Swarm</TabsTrigger>
-              <TabsTrigger value="helm">Helm</TabsTrigger>
-              <TabsTrigger value="kustomize">Kustomize</TabsTrigger>
-              <TabsTrigger value="linux">Linux</TabsTrigger>
-            </TabsList>
-            <TabsContent value="compose">
-              <SetupBlock disabled={copyBlocked} value={snippets.compose} />
-            </TabsContent>
-            <TabsContent value="docker">
-              <SetupBlock disabled={copyBlocked} value={snippets.docker} />
-            </TabsContent>
-            <TabsContent value="podman">
-              <SetupBlock disabled={copyBlocked} value={snippets.podman} />
-            </TabsContent>
-            <TabsContent value="swarm">
-              <SetupBlock disabled={copyBlocked} value={snippets.swarm} />
-            </TabsContent>
-            <TabsContent value="helm">
-              <SetupBlock disabled={copyBlocked} value={snippets.helm} />
-            </TabsContent>
-            <TabsContent value="kustomize">
-              <SetupBlock disabled={copyBlocked} value={snippets.kustomize} />
-            </TabsContent>
-            <TabsContent value="linux">
-              {distribution ? (
-                <SetupBlock disabled={copyBlocked} value={snippets.linux} />
-              ) : (
-                <p className="rounded-xl border border-dashed border-border/80 p-6 text-center text-xs text-muted-foreground">
-                  Native installation is unavailable until official installer assets are published
-                  and verified.
-                </p>
-              )}
-            </TabsContent>
-          </Tabs>
+          <DetailTabs
+            label="Deployment method"
+            layout="auto"
+            syncWithUrl={false}
+            className="space-y-4"
+            tabs={[
+              ...(
+                [
+                  ['compose', 'Compose', snippets.compose],
+                  ['docker', 'Docker', snippets.docker],
+                  ['podman', 'Podman', snippets.podman],
+                  ['swarm', 'Swarm', snippets.swarm],
+                  ['helm', 'Helm', snippets.helm],
+                  ['kustomize', 'Kustomize', snippets.kustomize],
+                ] as const
+              ).map(([id, label, value]) => ({
+                id,
+                label,
+                content: <SetupBlock disabled={copyBlocked} value={value} />,
+              })),
+              {
+                id: 'linux',
+                label: 'Linux',
+                content: distribution ? (
+                  <SetupBlock disabled={copyBlocked} value={snippets.linux} />
+                ) : (
+                  <p className="rounded-xl border border-dashed border-border/80 p-6 text-center text-xs text-muted-foreground">
+                    Native installation is unavailable until official installer assets are published
+                    and verified.
+                  </p>
+                ),
+              },
+            ]}
+          />
 
           <p className="text-xs text-muted-foreground leading-relaxed">
             These commands deploy only the Agent and require an existing OpsKnight installation. Run

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef, memo } from 'react';
-import { cn } from '@/lib/utils';
 
 type LiveClockProps = {
   timeZone?: string;
@@ -72,12 +71,12 @@ const LiveClock = memo(function LiveClock({ timeZone = 'UTC', variant = 'badge' 
   if (variant === 'plain') {
     return (
       <span
-        className="font-mono text-[13px] tabular-nums text-zinc-400"
+        className="font-mono text-sm tabular-nums text-muted-foreground"
         role="timer"
         aria-label={time ? `Current time: ${time}` : 'Loading clock'}
       >
         {time ?? '--:--:--'}
-        {timeZone === 'UTC' ? <span className="ml-1.5 text-zinc-600">UTC</span> : null}
+        {timeZone === 'UTC' ? <span className="ml-1.5 text-muted-foreground/70">UTC</span> : null}
       </span>
     );
   }
@@ -86,35 +85,27 @@ const LiveClock = memo(function LiveClock({ timeZone = 'UTC', variant = 'badge' 
   if (!isMounted || time === null) {
     return (
       <div
-        className="font-mono text-base bg-gradient-to-b from-[#18181b] to-[#121216] border border-zinc-700/60 text-zinc-400 px-3.5 py-1.5 rounded-lg flex items-center gap-2.5 shadow-md shadow-black/25 ring-1 ring-white/5 select-none"
+        className="ok-inverse-surface flex select-none items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 py-1.5 font-mono text-base text-muted-foreground shadow-sm"
         aria-label="Loading clock"
       >
         <div className="relative flex items-center justify-center">
-          <span className="h-2 w-2 rounded-full bg-zinc-600 shrink-0" aria-hidden="true" />
+          <span className="h-2 w-2 shrink-0 rounded-full bg-muted" aria-hidden="true" />
         </div>
-        <span className="tracking-[0.1em] font-semibold opacity-50">--:--:--</span>
+        <span className="font-semibold tabular-nums tracking-widest opacity-50">--:--:--</span>
       </div>
     );
   }
 
   return (
     <div
-      className={cn(
-        'font-mono text-base bg-gradient-to-b from-[#18181b] to-[#121216] border border-zinc-700/60 text-zinc-100 px-3.5 py-1.5 rounded-lg flex items-center gap-2.5 shadow-md shadow-black/25 ring-1 ring-white/5 select-none'
-      )}
+      className="ok-inverse-surface flex select-none items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 py-1.5 font-mono text-base text-foreground shadow-sm"
       role="timer"
       aria-label={`Current time: ${time}`}
     >
       <div className="relative flex items-center justify-center">
-        <span className="relative flex h-2 w-2">
-          <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50" />
-          <span
-            className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
-            aria-hidden="true"
-          />
-        </span>
+        <span className="h-2 w-2 shrink-0 rounded-full bg-status-ok" aria-hidden="true" />
       </div>
-      <span className="tracking-[0.1em] font-semibold text-white text-base">{time}</span>
+      <span className="font-semibold tabular-nums tracking-widest">{time}</span>
     </div>
   );
 });

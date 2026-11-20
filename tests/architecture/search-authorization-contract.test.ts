@@ -7,6 +7,8 @@ describe('global search authorization contract', () => {
 
     expect(source).toContain('incidentReadWhere(actor)');
     expect(source).toContain('serviceReadWhere(actor)');
+    expect(source).toContain('scheduleReadWhere(actor)');
+    expect(source).toContain('runbookReadWhere(actor)');
     expect(source).not.toMatch(/const incidentAccess\s*=\s*isPrivileged/);
   });
 });

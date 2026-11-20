@@ -27,9 +27,6 @@ import {
   Activity,
   CheckCircle2,
 } from 'lucide-react';
-
-export type ProfileDetailTab = 'profile' | 'notifications' | 'schedule' | 'teams';
-
 type TeamMembership = {
   id: string;
   role: string;
@@ -177,7 +174,7 @@ export default function ProfileDetailTabs({
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-primary" />
                   <span>SLA & Response Performance</span>
-                  <Badge variant="secondary" className="text-[10px] font-medium ml-1">
+                  <Badge variant="secondary" className="text-2xs font-medium ml-1">
                     Last 30 Days
                   </Badge>
                 </CardTitle>
@@ -188,7 +185,7 @@ export default function ProfileDetailTabs({
               </div>
               <Badge
                 variant="outline"
-                className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-semibold self-start sm:self-auto"
+                className="text-xs font-semibold tabular-nums self-start sm:self-auto"
               >
                 {complianceVal === null
                   ? 'No evaluable SLA data (30d)'
@@ -198,7 +195,7 @@ export default function ProfileDetailTabs({
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-              <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
+              <div className="p-3.5 rounded-lg border border-border bg-card space-y-1">
                 <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-primary/70" />
                   MTTA (Acknowledge)
@@ -206,10 +203,10 @@ export default function ProfileDetailTabs({
                 <p className="text-lg font-bold font-mono text-foreground">
                   {formatMinutes(slaMetrics?.mttaP50)}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Median response time (last 30d)</p>
+                <p className="text-2xs text-muted-foreground">Median response time (last 30d)</p>
               </div>
 
-              <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
+              <div className="p-3.5 rounded-lg border border-border bg-card space-y-1">
                 <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                   <Flame className="h-3.5 w-3.5 text-primary/70" />
                   MTTR (Resolution)
@@ -217,10 +214,10 @@ export default function ProfileDetailTabs({
                 <p className="text-lg font-bold font-mono text-foreground">
                   {formatMinutes(slaMetrics?.mttr ?? slaMetrics?.mttrP50)}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Mean resolution time (last 30d)</p>
+                <p className="text-2xs text-muted-foreground">Mean resolution time (last 30d)</p>
               </div>
 
-              <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
+              <div className="p-3.5 rounded-lg border border-border bg-card space-y-1">
                 <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                   <Activity className="h-3.5 w-3.5 text-primary/70" />
                   Active Incidents
@@ -228,10 +225,10 @@ export default function ProfileDetailTabs({
                 <p className="text-lg font-bold font-mono text-foreground">
                   {slaMetrics?.activeIncidents ?? 0}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Assigned in progress</p>
+                <p className="text-2xs text-muted-foreground">Assigned in progress</p>
               </div>
 
-              <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
+              <div className="p-3.5 rounded-lg border border-border bg-card space-y-1">
                 <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                   Total Resolved
@@ -239,7 +236,7 @@ export default function ProfileDetailTabs({
                 <p className="text-lg font-bold font-mono text-foreground">
                   {slaMetrics?.resolvedIncidents ?? 0}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Resolved in last 30d</p>
+                <p className="text-2xs text-muted-foreground">Resolved in last 30d</p>
               </div>
             </div>
           </CardContent>
@@ -285,15 +282,11 @@ export default function ProfileDetailTabs({
                             {m.team.name}
                           </h4>
                           {isLead ? (
-                            <Badge
-                              variant="outline"
-                              size="xs"
-                              className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] gap-1 shrink-0 dark:text-amber-400"
-                            >
+                            <Badge variant="outline" size="xs" className="text-2xs gap-1 shrink-0">
                               <Crown className="h-2.5 w-2.5" /> Lead
                             </Badge>
                           ) : (
-                            <Badge variant="secondary" size="xs" className="text-[10px] shrink-0">
+                            <Badge variant="secondary" size="xs" className="text-2xs shrink-0">
                               {m.role}
                             </Badge>
                           )}
@@ -356,12 +349,12 @@ export default function ProfileDetailTabs({
                         <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
                           {assignment.layer.schedule.name}
                         </h4>
-                        <Badge variant="outline" size="xs" className="text-[10px] gap-1">
+                        <Badge variant="outline" size="xs" className="text-2xs gap-1">
                           <Layers className="h-2.5 w-2.5" /> Layer
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">{assignment.layer.name}</p>
-                      <p className="mt-1.5 text-[11px] text-muted-foreground/80 font-mono">
+                      <p className="mt-1.5 text-2xs text-muted-foreground/80 font-mono">
                         TZ: {assignment.layer.schedule.timeZone}
                       </p>
                     </div>
@@ -409,7 +402,7 @@ export default function ProfileDetailTabs({
                         <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
                           {rule.policy.name}
                         </h4>
-                        <Badge variant="outline" size="xs" className="text-[10px]">
+                        <Badge variant="outline" size="xs" className="text-2xs">
                           Step {rule.stepOrder}
                         </Badge>
                       </div>
@@ -418,7 +411,7 @@ export default function ProfileDetailTabs({
                           {rule.policy.description}
                         </p>
                       )}
-                      <p className="mt-1.5 text-[11px] text-muted-foreground/80">
+                      <p className="mt-1.5 text-2xs text-muted-foreground/80">
                         Escalates after {rule.delayMinutes} minutes
                       </p>
                     </div>

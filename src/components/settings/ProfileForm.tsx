@@ -349,7 +349,7 @@ export default function ProfileForm({
               <span className="font-mono text-xs bg-muted px-2.5 py-1 rounded-md border border-border">
                 {email || 'No email attached'}
               </span>
-              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+              <Badge variant="outline" className="text-2xs text-muted-foreground">
                 Verified
               </Badge>
             </div>

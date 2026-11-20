@@ -34,23 +34,24 @@ export default function UserSortDropdown() {
     router.push(`/users?${params.toString()}`);
   }
 
-  const sortLabels: Record<string, string> = {
-    createdAt: 'Joined Date',
-    name: 'Name',
-    email: 'Email',
-    status: 'Status',
-    role: 'Role',
-  };
+  const sortLabels = new Map([
+    ['createdAt', 'Joined Date'],
+    ['name', 'Name'],
+    ['email', 'Email'],
+    ['status', 'Status'],
+    ['role', 'Role'],
+  ]);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 border-dashed">
-          <ArrowUpDown className="mr-2 h-4 w-4" />
-          Sort: {sortLabels[currentSort] || currentSort}
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 text-xs font-medium">
+          <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <span className="hidden text-muted-foreground sm:inline">Sort:</span>
+          {sortLabels.get(currentSort) ?? currentSort}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end">
+      <DropdownMenuContent align="end">
         <DropdownMenuLabel>Sort By</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={currentSort} onValueChange={handleSortChange}>
@@ -66,13 +67,13 @@ export default function UserSortDropdown() {
         <DropdownMenuRadioGroup value={currentOrder} onValueChange={handleOrderChange}>
           <DropdownMenuRadioItem value="asc">
             <div className="flex items-center">
-              <ArrowUp className="mr-2 h-4 w-4 text-muted-foreground" />
+              <ArrowUp />
               Ascending
             </div>
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="desc">
             <div className="flex items-center">
-              <ArrowDown className="mr-2 h-4 w-4 text-muted-foreground" />
+              <ArrowDown />
               Descending
             </div>
           </DropdownMenuRadioItem>

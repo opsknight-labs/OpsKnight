@@ -21,7 +21,7 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   await page.goto('/settings/system?section=scim');
   const section = page.getByRole('region', { name: 'SCIM Provisioning', exact: true });
   await expect(section.getByRole('heading', { name: 'SCIM Provisioning' })).toBeVisible();
-  await section.getByRole('button', { name: 'Connections', exact: true }).click();
+  await section.getByRole('tab', { name: 'Connections', exact: true }).click();
   await expect(section.getByLabel('Connection name', { exact: true })).toBeEnabled();
   const name = `Browser SCIM ${info.project.name} ${Date.now()}`;
   await section.getByLabel('Connection name', { exact: true }).fill(name);
@@ -29,7 +29,7 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   await section.getByLabel('Save as a new connection', { exact: true }).check();
   await section.getByRole('button', { name: 'Save connection', exact: true }).click();
   await expect(section.getByRole('status').filter({ hasText: 'Connection saved.' })).toBeVisible();
-  await section.getByRole('button', { name: 'Security', exact: true }).click();
+  await section.getByRole('tab', { name: 'Security', exact: true }).click();
   await section.getByLabel('Purpose', { exact: true }).fill('Browser verification');
   await section.getByRole('button', { name: 'Create replacement credential', exact: true }).click();
   const secretInput = section.getByLabel('One-time secret', { exact: true });
@@ -70,10 +70,33 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   const group = await createdGroup.json();
   await section.getByRole('button', { name: 'Hide secret permanently', exact: true }).click();
   await expect(secretInput).toBeHidden();
-  await section.getByRole('button', { name: 'Users & Groups', exact: true }).click();
+  await section.getByRole('tab', { name: 'Users & Groups', exact: true }).click();
   await section.getByLabel('Resource', { exact: true }).selectOption('groups');
   await section.getByLabel('Search', { exact: true }).fill(groupName);
   await expect(section.getByText(groupName, { exact: true })).toBeVisible();
+  await section.getByRole('button', { name: 'Map system role', exact: true }).click();
+  await section.getByLabel('OpsKnight system role', { exact: true }).selectOption('RESPONDER');
+  await section.getByRole('button', { name: 'Preview role mapping', exact: true }).click();
+  await expect(section.getByText(/1 group members; 1 accounts change/)).toBeVisible();
+  await section.getByRole('button', { name: 'Apply role mapping', exact: true }).click();
+  await expect(section.getByText('Role mapping saved. 1 accounts updated.')).toBeVisible();
+  await expect(section.getByRole('listitem').filter({ hasText: groupName })).toContainText(
+    'System role: RESPONDER'
+  );
+  expect(await db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
+    role: 'RESPONDER',
+    roleSource: 'SCIM',
+  });
+  // Return to User before the independent team-grant checks below: Responders
+  // already have broader team visibility, so team detachment alone cannot deny it.
+  await section.getByLabel('OpsKnight system role', { exact: true }).selectOption('');
+  await section.getByRole('button', { name: 'Preview role mapping', exact: true }).click();
+  await section.getByRole('button', { name: 'Apply role mapping', exact: true }).click();
+  await expect(section.getByText('Role mapping saved. 1 accounts updated.')).toBeVisible();
+  expect(await db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
+    role: 'USER',
+    roleSource: 'SCIM',
+  });
   await section.getByRole('button', { name: 'Review team binding', exact: true }).click();
   await section
     .getByLabel('Find an operational team', { exact: true })
@@ -133,7 +156,7 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   await expect(section.getByRole('status').filter({ hasText: 'Binding approved' })).toBeVisible();
   expect((await memberAccess()).status()).toBe(200);
 
-  await section.getByRole('button', { name: 'Activity', exact: true }).click();
+  await section.getByRole('tab', { name: 'Activity', exact: true }).click();
   // Activity reads as sentences; search works by the label shown and by the action name.
   const linked = section.getByText('Group linked to a team', { exact: true });
   await section.getByLabel('Search', { exact: true }).fill('linked to a team');
@@ -141,7 +164,7 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   await expect(linked.first()).toBeVisible();
   await section.getByLabel('Search', { exact: true }).fill('binding.approved');
   await expect(linked).toHaveCount(2);
-  await section.getByRole('button', { name: 'Diagnostics', exact: true }).click();
+  await section.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await expect(
     section.getByRole('heading', { name: 'Troubleshooting', exact: true })
   ).toBeVisible();
@@ -168,7 +191,9 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
     1
   );
   await db.apiKey.update({ where: { id: memberKey.id }, data: { revokedAt: new Date() } });
-  await section.getByRole('button', { name: 'Security', exact: true }).click();
+  // Still at phone width: sections switch through the section picker, not the tab row.
+  await section.getByRole('button', { name: 'SCIM sections: Diagnostics', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: 'Security', exact: true }).click();
   await section.getByRole('button', { name: 'Revoke credential', exact: true }).click();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect((await request.get('/api/scim/v2/Users', { headers })).status()).toBe(200);

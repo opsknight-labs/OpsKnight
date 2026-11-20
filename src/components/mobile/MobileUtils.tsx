@@ -1,7 +1,6 @@
 'use client';
 
-import Image from 'next/image';
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 // Status Badge component
@@ -84,77 +83,6 @@ export function MobileUrgencyBadge({
     >
       {urgency}
     </span>
-  );
-}
-
-// Avatar component
-export function MobileAvatar({
-  name,
-  src,
-  size = 'md',
-}: {
-  name: string;
-  src?: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
-}) {
-  const [hasError, setHasError] = useState(false);
-  const sizeClass = (() => {
-    switch (size) {
-      case 'sm':
-        return 'h-7 w-7 text-[11px]';
-      case 'md':
-        return 'h-9 w-9 text-[13px]';
-      case 'lg':
-        return 'h-12 w-12 text-base';
-      case 'xl':
-        return 'h-16 w-16 text-lg';
-    }
-  })();
-  const imageSize = (() => {
-    switch (size) {
-      case 'sm':
-        return 28;
-      case 'md':
-        return 36;
-      case 'lg':
-        return 48;
-      case 'xl':
-        return 64;
-    }
-  })();
-  const initials =
-    (name || 'U')
-      .trim()
-      .split(/\s+/)
-      .map(n => n[0] || '')
-      .join('')
-      .toUpperCase()
-      .slice(0, 2) || 'U';
-
-  if (src && !hasError) {
-    return (
-      <Image
-        src={src}
-        alt={name || 'User'}
-        width={imageSize}
-        height={imageSize}
-        className={cn('rounded-full object-cover', sizeClass)}
-        onError={() => setHasError(true)}
-        unoptimized
-      />
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        'flex items-center justify-center rounded-full font-bold text-white',
-        sizeClass,
-        'bg-gradient-to-br from-slate-200 to-slate-50 dark:from-zinc-700 dark:to-zinc-900 text-[color:var(--text-primary)]'
-      )}
-    >
-      {initials}
-    </div>
   );
 }
 
@@ -274,95 +202,4 @@ export function MobileEmptyState({
       {action && <div className="mt-2 flex flex-col gap-2">{action}</div>}
     </div>
   );
-}
-
-export function MobileEmptyIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6">
-      <path
-        d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M9.5 12.5h5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-// Skeleton Loader
-export function MobileSkeleton({
-  width = '100%',
-  height = '1rem',
-  variant = 'text',
-  className = '',
-}: {
-  width?: string;
-  height?: string;
-  variant?: 'text' | 'circular' | 'rectangular';
-  className?: string;
-}) {
-  const borderRadius = (() => {
-    switch (variant) {
-      case 'text':
-        return '4px';
-      case 'circular':
-        return '50%';
-      case 'rectangular':
-        return '8px';
-    }
-  })();
-
-  return (
-    <div
-      className={cn('animate-[shimmer_1.5s_infinite]', className)}
-      style={{
-        width: variant === 'circular' ? height : width,
-        height,
-        borderRadius,
-        background:
-          'linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-surface) 50%, var(--bg-secondary) 75%)',
-        backgroundSize: '200% 100%',
-        animation: 'shimmer 1.5s infinite',
-      }}
-    />
-  );
-}
-
-// Divider
-export function MobileDivider({
-  label,
-  spacing = 'md',
-}: {
-  label?: string;
-  spacing?: 'sm' | 'md' | 'lg';
-}) {
-  const spacingValue = (() => {
-    switch (spacing) {
-      case 'sm':
-        return '0.5rem';
-      case 'md':
-        return '1rem';
-      case 'lg':
-        return '1.5rem';
-    }
-  })();
-
-  if (label) {
-    return (
-      <div className="flex items-center gap-3" style={{ margin: `${spacingValue} 0` }}>
-        <div className="h-px flex-1 bg-[color:var(--border)]" />
-        <span className="text-[11px] font-semibold text-[color:var(--text-muted)]">{label}</span>
-        <div className="h-px flex-1 bg-[color:var(--border)]" />
-      </div>
-    );
-  }
-
-  return <div className="h-px bg-[color:var(--border)]" style={{ margin: `${spacingValue} 0` }} />;
 }

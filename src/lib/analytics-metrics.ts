@@ -35,8 +35,10 @@ export function calculatePercentile(values: number[], percentileValue: number): 
   const rank = (clampedP / 100) * (valid.length - 1);
   const lower = Math.floor(rank);
   const upper = Math.ceil(rank);
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   if (lower === upper) return valid[lower];
   const weight = rank - lower;
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   return valid[lower] * (1 - weight) + valid[upper] * weight;
 }
 
@@ -61,20 +63,6 @@ export function calculateMtbfMs(
   }
   const totalOperatingTimeMs = windowEnd.getTime() - windowStart.getTime() - downtimeMs;
   return Math.max(0, totalOperatingTimeMs) / failureCount;
-}
-
-export function smoothSeries(values: number[], windowSize: number): number[] {
-  if (!Number.isFinite(windowSize) || windowSize <= 1 || values.length <= 1) {
-    return values;
-  }
-
-  const window = Math.max(1, Math.floor(windowSize));
-  return values.map((_, index) => {
-    const start = Math.max(0, index - window + 1);
-    const slice = values.slice(start, index + 1);
-    const sum = slice.reduce((acc, val) => acc + val, 0);
-    return slice.length ? sum / slice.length : 0;
-  });
 }
 
 export function buildStatusAges(
@@ -139,6 +127,7 @@ export function buildOnCallLoad(
     const time = incident.createdAt.getTime();
 
     // Fast-forward shifts that ended before this incident
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     while (shiftIdx < sortedShifts.length && sortedShifts[shiftIdx].end.getTime() < time) {
       shiftIdx++;
     }
@@ -146,7 +135,9 @@ export function buildOnCallLoad(
     // Check current and subsequent shifts that might overlap with this incident time
     // Usually only one shift matches, but on-call rotations might have overlaps
     let currentIdx = shiftIdx;
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     while (currentIdx < sortedShifts.length && sortedShifts[currentIdx].start.getTime() <= time) {
+      // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
       const shift = sortedShifts[currentIdx];
       if (time <= shift.end.getTime()) {
         const entry = onCallLoadMap.get(shift.userId) || { hoursMs: 0, incidentCount: 0 };

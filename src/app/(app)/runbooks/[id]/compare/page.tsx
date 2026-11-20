@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
 import {
   VersionStepDiff,
@@ -162,7 +163,7 @@ export default async function VersionComparePage({
         ]}
         title={`${runbook.name} · Version comparison`}
         badge={
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+          <span className={pageHeaderBadgeClass}>
             v{impact.base.version} → v{impact.next.version}
           </span>
         }
@@ -170,9 +171,9 @@ export default async function VersionComparePage({
         actions={
           <Button
             asChild
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 rounded-xl border-border/80 text-xs font-medium shadow-2xs hover:bg-accent/60"
+            className={cn('gap-1.5', pageHeaderActionClass)}
           >
             <Link href={`/runbooks/${id}?tab=versions`}>
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -277,7 +278,7 @@ export default async function VersionComparePage({
               <Button
                 type="submit"
                 size="sm"
-                className="h-9 w-full sm:w-auto rounded-xl bg-foreground text-background hover:bg-foreground/90 text-xs font-medium shadow-xs gap-1.5 justify-center"
+                className="h-9 w-full sm:w-auto rounded-xl text-xs font-medium shadow-xs gap-1.5 justify-center"
               >
                 <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
                 Compare versions

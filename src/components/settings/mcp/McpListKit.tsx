@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { formatDistanceStrict } from 'date-fns';
 import { formatDateTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 
@@ -94,7 +95,7 @@ export function FilterChips({
                 {option.count !== undefined && (
                   <span
                     className={cn(
-                      'rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
+                      'rounded-full px-1.5 text-2xs font-semibold tabular-nums',
                       active ? 'bg-primary/10 text-primary' : 'bg-muted-foreground/10'
                     )}
                   >
@@ -314,7 +315,7 @@ export function ResponsiveTable({
               >
                 <span
                   className={cn(
-                    'inline-block whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground',
+                    'inline-block whitespace-nowrap text-2xs font-semibold uppercase tracking-wider text-muted-foreground',
                     column.srOnly && 'sr-only'
                   )}
                 >
@@ -372,7 +373,7 @@ export function ResponsiveCell({
         'min-w-0 align-middle md:border-b-0 md:px-4 md:py-3 md:first:*:ml-2 md:last:*:mr-2',
         primary
           ? 'col-span-2'
-          : 'before:mb-0.5 before:block before:text-[10px] before:font-semibold before:uppercase before:tracking-wider before:text-muted-foreground before:content-[attr(data-label)] md:before:hidden',
+          : 'before:mb-0.5 before:block before:text-2xs before:font-semibold before:uppercase before:tracking-wider before:text-muted-foreground before:content-[attr(data-label)] md:before:hidden',
         align === 'end' && 'md:text-right',
         className
       )}
@@ -395,7 +396,7 @@ export function ListEmpty({
 }) {
   return (
     <div className="flex flex-col items-center px-6 py-12 text-center">
-      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-muted/40 text-muted-foreground">
+      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground">
         {icon}
       </div>
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -406,16 +407,13 @@ export function ListEmpty({
 }
 
 const TONE_CLASSES = {
-  success:
-    'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300',
-  warning:
-    'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300',
-  danger:
-    'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300',
-  info: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300',
-  violet:
-    'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300',
-  neutral: 'border-border bg-muted/60 text-muted-foreground',
+  success: toneClasses('ok').soft,
+  warning: toneClasses('elevated').soft,
+  danger: toneClasses('critical').soft,
+  info: toneClasses('info').soft,
+  neutral: toneClasses('neutral').soft,
+  // Team/custom-role badges on the access pages.
+  violet: toneClasses('shift').soft,
 } as const;
 export type PillTone = keyof typeof TONE_CLASSES;
 const TONES = new Map(Object.entries(TONE_CLASSES) as [PillTone, string][]);
@@ -433,7 +431,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold leading-4',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-2xs font-semibold leading-4',
         TONES.get(tone)
       )}
     >

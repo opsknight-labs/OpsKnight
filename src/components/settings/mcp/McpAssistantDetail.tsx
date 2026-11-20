@@ -1,5 +1,8 @@
 import Link from 'next/link';
-import { ArrowLeft, Users } from 'lucide-react';
+import { Users } from 'lucide-react';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { getAssistantIcon } from '@/components/common/BrandLogos';
 import { McpRestoreClientButton } from '@/components/settings/mcp/McpClientForms';
@@ -39,7 +42,7 @@ export type McpAssistantUsageWindow = Pick<McpUsage, 'window' | 'totals' | 'rows
 function Fact({ term, children }: { term: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0 space-y-0.5">
-      <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <dt className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         {term}
       </dt>
       <dd className="break-words text-sm text-foreground">{children}</dd>
@@ -80,74 +83,76 @@ export default function McpAssistantDetail({
   const busiest = usage.find(entry => entry.window === '30d') ?? usage.at(-1);
   return (
     <div className="space-y-6">
-      <Link
-        href={mcpHref({ tab: 'assistants' })}
-        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        All assistants
-      </Link>
-
-      <header className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-2xs sm:flex-row sm:items-start sm:justify-between md:p-6">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-muted/40">
-            {getAssistantIcon(client.name, 'h-7 w-7', client.metadataHost)}
+      <SettingsPageHeader
+        title={client.name}
+        trail={[
+          { label: 'Assistants', href: mcpHref({ tab: 'assistants' }) },
+          { label: client.name },
+        ]}
+        icon={
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 ring-1 ring-inset ring-primary-foreground/20 sm:h-12 sm:w-12">
+            {getAssistantIcon(client.name, 'h-6 w-6', client.metadataHost)}
           </div>
-          <div className="min-w-0 space-y-1">
-            <h1 className="break-words font-display text-xl font-bold tracking-tight md:text-2xl">
-              {client.name}
-            </h1>
-            <p className="flex flex-wrap items-center gap-1.5">
-              {client.revokedAt ? (
-                <StatusPill tone="danger" dot>
-                  Revoked
-                </StatusPill>
-              ) : client.blockedReason ? (
-                <StatusPill tone="warning" dot>
-                  Blocked by policy
-                </StatusPill>
-              ) : (
-                <StatusPill tone="success" dot>
-                  Allowed
-                </StatusPill>
+        }
+        badges={
+          <>
+            <span
+              className={cn(
+                pageHeaderBadgeClass,
+                client.revokedAt
+                  ? 'border-rose-500/40 text-rose-300'
+                  : client.blockedReason
+                    ? 'border-amber-500/40 text-amber-300'
+                    : 'border-emerald-500/40 text-emerald-300'
               )}
-              <StatusPill tone="neutral">{CLIENT_TYPE_LABEL[client.type]}</StatusPill>
-            </p>
-            <p className="break-all font-mono text-xs text-muted-foreground">{client.id}</p>
-          </div>
-        </div>
-        <div className="shrink-0">
-          {client.revokedAt ? (
-            <McpRestoreClientButton action={restoreAction} id={client.id} name={client.name} />
-          ) : (
-            <McpConfirmAction
-              action={revokeAction}
-              fields={{ kind: 'client', id: client.id }}
-              label="Revoke assistant"
-              accessibleLabel={`Revoke ${client.name}`}
-              title={`Revoke ${client.name}?`}
-              confirmLabel="Revoke assistant"
-              successMessage="Assistant revoked"
-              className="min-h-11 w-full sm:w-auto"
-              description={
-                <>
-                  <p>
-                    This blocks the assistant and revokes{' '}
-                    {client.activeConnections === 1
-                      ? 'its 1 active connection'
-                      : `all ${client.activeConnections} of its active connections`}
-                    . It stops working on the next request.
-                  </p>
-                  <p>
-                    You can allow it again later. People then sign in and approve again; old
-                    connections stay revoked.
-                  </p>
-                </>
-              }
-            />
-          )}
-        </div>
-      </header>
+            >
+              {client.revokedAt
+                ? 'Revoked'
+                : client.blockedReason
+                  ? 'Blocked by policy'
+                  : 'Allowed'}
+            </span>
+            <span className={pageHeaderBadgeClass}>{CLIENT_TYPE_LABEL[client.type]}</span>
+          </>
+        }
+        description={<code className="break-all font-mono text-xs">{client.id}</code>}
+        primaryAction={
+          <>
+            {client.revokedAt ? (
+              <McpRestoreClientButton action={restoreAction} id={client.id} name={client.name} />
+            ) : (
+              <McpConfirmAction
+                action={revokeAction}
+                fields={{ kind: 'client', id: client.id }}
+                label="Revoke assistant"
+                accessibleLabel={`Revoke ${client.name}`}
+                title={`Revoke ${client.name}?`}
+                confirmLabel="Revoke assistant"
+                successMessage="Assistant revoked"
+                className={cn(
+                  pageHeaderActionClass,
+                  'min-h-11 w-full border-rose-500/40 text-rose-300 hover:text-rose-200 sm:w-auto'
+                )}
+                description={
+                  <>
+                    <p>
+                      This blocks the assistant and revokes{' '}
+                      {client.activeConnections === 1
+                        ? 'its 1 active connection'
+                        : `all ${client.activeConnections} of its active connections`}
+                      . It stops working on the next request.
+                    </p>
+                    <p>
+                      You can allow it again later. People then sign in and approve again; old
+                      connections stay revoked.
+                    </p>
+                  </>
+                }
+              />
+            )}
+          </>
+        }
+      />
 
       <SettingsSection title="Identity" description="Who this assistant is and how it registered.">
         <dl className="grid gap-4 py-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -315,7 +320,7 @@ export default function McpAssistantDetail({
                   <span className="flex shrink-0 flex-wrap items-center gap-1.5">
                     <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
                     {call.errorCode && (
-                      <code className="break-all font-mono text-[11px] text-muted-foreground">
+                      <code className="break-all font-mono text-2xs text-muted-foreground">
                         {call.errorCode}
                       </code>
                     )}

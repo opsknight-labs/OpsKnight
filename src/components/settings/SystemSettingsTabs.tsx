@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { cn } from '@/lib/utils';
 
 interface Props {
   overviewTab?: ReactNode;
@@ -50,9 +52,14 @@ export default function SystemSettingsTabs({
           {
             id: 'overview',
             label: 'Overview',
-            icon: <Activity className="h-3.5 w-3.5 text-emerald-500" />,
+            icon: <Activity className="h-3.5 w-3.5" />,
             badge: (
-              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span
+                className={cn(
+                  'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                  toneClasses('ok').soft
+                )}
+              >
                 Live
               </span>
             ),
@@ -75,7 +82,12 @@ export default function SystemSettingsTabs({
       label: 'App URL',
       icon: <Globe className="h-3.5 w-3.5" />,
       badge: !appUrlConfigured ? (
-        <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+        <span
+          className={cn(
+            'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+            toneClasses('elevated').soft
+          )}
+        >
           Fallback
         </span>
       ) : undefined,
@@ -86,7 +98,12 @@ export default function SystemSettingsTabs({
       label: 'SSO / Authentication',
       icon: <Shield className="h-3.5 w-3.5" />,
       badge: ssoEnabled ? (
-        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+        <span
+          className={cn(
+            'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+            toneClasses('ok').soft
+          )}
+        >
           Enabled
         </span>
       ) : undefined,
@@ -99,11 +116,21 @@ export default function SystemSettingsTabs({
             label: 'SCIM Provisioning',
             icon: <UserCheck className="h-3.5 w-3.5" />,
             badge: scimEnabled ? (
-              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span
+                className={cn(
+                  'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                  toneClasses('ok').soft
+                )}
+              >
                 Active
               </span>
             ) : (
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground">
+              <span
+                className={cn(
+                  'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                  toneClasses(null).soft
+                )}
+              >
                 SCIM 2.0
               </span>
             ),
@@ -122,7 +149,12 @@ export default function SystemSettingsTabs({
       label: 'Environment',
       icon: <Key className="h-3.5 w-3.5" />,
       badge: !allEnvOk ? (
-        <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-rose-600 dark:text-rose-400">
+        <span
+          className={cn(
+            'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+            toneClasses('critical').soft
+          )}
+        >
           {missingCount} missing
         </span>
       ) : undefined,
@@ -137,13 +169,13 @@ export default function SystemSettingsTabs({
       urlParamName="section"
       layout="auto"
       actions={
-        <Link href="/settings/system/health">
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
-            <HeartPulse className="h-3.5 w-3.5 text-emerald-500" />
+        <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+          <Link href="/settings/system/health">
+            <HeartPulse className="h-3.5 w-3.5" aria-hidden="true" />
             Health Center
-            <ArrowRight className="h-3 w-3" />
-          </Button>
-        </Link>
+            <ArrowRight className="h-3 w-3" aria-hidden="true" />
+          </Link>
+        </Button>
       }
     />
   );

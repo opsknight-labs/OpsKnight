@@ -36,31 +36,33 @@ const withPWA = withPWAInit({
         options: { cacheName: 'no-cache-apis' },
       },
       {
+        // API URLs (e.g. the CSV download link) never go through the worker, even as navigations.
         urlPattern: ({ request, url }: { request: Request; url: URL }) =>
-          request.mode === 'navigate' ||
-          request.destination === 'document' ||
-          url.pathname === '/' ||
-          url.pathname === '/m' ||
-          url.pathname.startsWith('/login') ||
-          url.pathname.startsWith('/auth') ||
-          url.pathname.startsWith('/m/') ||
-          url.pathname.startsWith('/incidents') ||
-          url.pathname.startsWith('/settings') ||
-          url.pathname.startsWith('/services') ||
-          url.pathname.startsWith('/teams') ||
-          url.pathname.startsWith('/users') ||
-          url.pathname.startsWith('/schedules') ||
-          url.pathname.startsWith('/policies') ||
-          url.pathname.startsWith('/analytics') ||
-          url.pathname.startsWith('/reports') ||
-          url.pathname.startsWith('/runbooks') ||
-          url.pathname.startsWith('/postmortems') ||
-          url.pathname.startsWith('/action-items') ||
-          url.pathname.startsWith('/events') ||
-          url.pathname.startsWith('/status') ||
-          url.pathname.startsWith('/system-logs') ||
-          url.pathname.startsWith('/help') ||
-          url.pathname.startsWith('/shortcuts'),
+          !url.pathname.startsWith('/api/') &&
+          (request.mode === 'navigate' ||
+            request.destination === 'document' ||
+            url.pathname === '/' ||
+            url.pathname === '/m' ||
+            url.pathname.startsWith('/login') ||
+            url.pathname.startsWith('/auth') ||
+            url.pathname.startsWith('/m/') ||
+            url.pathname.startsWith('/incidents') ||
+            url.pathname.startsWith('/settings') ||
+            url.pathname.startsWith('/services') ||
+            url.pathname.startsWith('/teams') ||
+            url.pathname.startsWith('/users') ||
+            url.pathname.startsWith('/schedules') ||
+            url.pathname.startsWith('/policies') ||
+            url.pathname.startsWith('/insights') ||
+            url.pathname.startsWith('/reports') ||
+            url.pathname.startsWith('/runbooks') ||
+            url.pathname.startsWith('/postmortems') ||
+            url.pathname.startsWith('/action-items') ||
+            url.pathname.startsWith('/events') ||
+            url.pathname.startsWith('/status') ||
+            url.pathname.startsWith('/system-logs') ||
+            url.pathname.startsWith('/help') ||
+            url.pathname.startsWith('/shortcuts')),
         handler: 'NetworkOnly',
         options: { cacheName: 'no-cache-pages' },
       },
@@ -173,6 +175,14 @@ const nextConfig: NextConfig = {
         hostname: 'api.dicebear.com',
       },
     ],
+  },
+  // Ad blockers drop "/analytics?…" URLs, so the page and its API live under
+  // /insights; old bookmarks and already-sent emails keep working.
+  async redirects() {
+    return [
+      { source: '/analytics', destination: '/insights', permanent: true },
+      { source: '/api/analytics/:path*', destination: '/api/insights/:path*', permanent: true },
+    ];
   },
   async headers() {
     const scriptSource =

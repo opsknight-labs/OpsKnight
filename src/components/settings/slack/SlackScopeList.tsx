@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -63,7 +64,7 @@ export function SlackScopeList({
   const isHealthy = missingRequired.length === 0;
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+    <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
       <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
         <CollapsibleTrigger asChild>
           <Button
@@ -72,11 +73,10 @@ export function SlackScopeList({
           >
             <div className="flex items-center gap-3">
               <div
-                className={`p-2 rounded-lg border shrink-0 ${
-                  isHealthy
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
-                }`}
+                className={cn(
+                  'p-2 rounded-lg border shrink-0',
+                  toneClasses(isHealthy ? 'ok' : 'elevated').soft
+                )}
               >
                 {isHealthy ? (
                   <ShieldCheck className="h-4 w-4" />
@@ -100,7 +100,7 @@ export function SlackScopeList({
             <div className="flex items-center gap-2 shrink-0">
               <Badge
                 variant={isHealthy ? 'success' : 'destructive'}
-                className="text-[10px] font-semibold gap-1"
+                className="text-2xs font-semibold gap-1"
               >
                 {isHealthy ? (
                   <>
@@ -138,29 +138,33 @@ export function SlackScopeList({
                     hasScope
                       ? 'border-border/60 bg-background/60 hover:bg-background'
                       : isRequired
-                        ? 'border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10'
+                        ? 'border-status-critical-border/30 bg-status-critical-soft/50 hover:bg-status-critical-soft dark:bg-status-critical/10 dark:hover:bg-status-critical/15'
                         : 'border-border/40 bg-muted/20 opacity-70'
                   }`}
                 >
                   <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     {hasScope ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                      <CheckCircle2
+                        className={cn('h-4 w-4 shrink-0 mt-0.5', toneClasses('ok').text)}
+                      />
                     ) : (
-                      <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                      <XCircle
+                        className={cn('h-4 w-4 shrink-0 mt-0.5', toneClasses('critical').text)}
+                      />
                     )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <code className="font-mono font-semibold text-foreground text-[11px]">
+                        <code className="font-mono font-semibold text-foreground text-2xs">
                           {scope}
                         </code>
                         <Badge
                           variant={hasScope ? 'outline' : isRequired ? 'destructive' : 'secondary'}
-                          className="text-[9px] px-1.5 py-0 h-4 font-medium"
+                          className="text-2xs px-1.5 py-0 h-4 font-medium"
                         >
                           {hasScope ? 'Granted' : isRequired ? 'Required' : 'Optional'}
                         </Badge>
                       </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{description}</p>
+                      <p className="text-2xs text-muted-foreground mt-0.5">{description}</p>
                     </div>
                   </div>
                 </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { explainMetricChangeAction } from '@/app/(app)/analytics/helper-actions';
+import { explainMetricChangeAction } from '@/app/(app)/insights/helper-actions';
 import type { ChangeMetric } from '@/lib/intelligence/helpers/metric-change';
 import type { MetricChangeDetail } from '@/lib/intelligence/helpers/metric-change-loader';
 

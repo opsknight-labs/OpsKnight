@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 import tailwindcssAnimate from 'tailwindcss-animate';
 import { STATUS_TAILWIND_COLORS } from './src/lib/design/status-palette';
+import { TAILWIND_FONT_SIZES } from './src/lib/design/type-scale';
 
 const config: Config = {
   darkMode: 'class',
@@ -22,23 +23,14 @@ const config: Config = {
       fontFamily: {
         // Brand typography (AGENTS.md "Typography"): Inter for UI/body,
         // Space Grotesk for titles, badges and brand marks. Stacks live in
-        // styles/foundation/variables.css so CSS and Tailwind never drift.
+        // styles/foundation/tokens.css so CSS and Tailwind never drift.
         sans: ['var(--font-family-sans)'],
         display: ['var(--font-family-display)'],
         mono: ['var(--font-family-mono)'],
       },
-      fontSize: {
-        '2xs': ['0.6875rem', { lineHeight: '1rem', letterSpacing: '0.02em' }],
-        xs: ['0.75rem', { lineHeight: '1.1rem', letterSpacing: '0.01em' }],
-        sm: ['0.8125rem', { lineHeight: '1.25rem', letterSpacing: '0' }],
-        base: ['0.9375rem', { lineHeight: '1.5rem', letterSpacing: '-0.003em' }],
-        lg: ['1.0625rem', { lineHeight: '1.625rem', letterSpacing: '-0.005em' }],
-        xl: ['1.125rem', { lineHeight: '1.75rem', letterSpacing: '-0.01em' }],
-        '2xl': ['1.375rem', { lineHeight: '1.875rem', letterSpacing: '-0.015em' }],
-        '3xl': ['1.75rem', { lineHeight: '2.125rem', letterSpacing: '-0.02em' }],
-        '4xl': ['2.25rem', { lineHeight: '2.5rem', letterSpacing: '-0.025em' }],
-        '5xl': ['3rem', { lineHeight: '3.25rem', letterSpacing: '-0.03em' }],
-      },
+      // One rem scale, defined in src/styles/foundation/tokens.css; `text-<step>`
+      // resolves the same CSS variables (DESIGN.md "Typography").
+      fontSize: TAILWIND_FONT_SIZES,
       fontWeight: {
         normal: '400',
         medium: '500',
@@ -47,13 +39,13 @@ const config: Config = {
         extrabold: '800',
       },
       letterSpacing: {
-        tighter: '-0.03em',
-        tight: '-0.02em',
-        snug: '-0.01em',
-        normal: '0',
-        wide: '0.01em',
-        wider: '0.02em',
-        widest: '0.08em',
+        tighter: 'var(--letter-spacing-tighter)',
+        tight: 'var(--letter-spacing-tight)',
+        snug: 'var(--letter-spacing-snug)',
+        normal: 'var(--letter-spacing-normal)',
+        wide: 'var(--letter-spacing-wide)',
+        wider: 'var(--letter-spacing-wider)',
+        widest: 'var(--letter-spacing-widest)',
       },
       lineHeight: {
         none: '1',

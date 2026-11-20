@@ -10,11 +10,12 @@ import {
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
 import { Button } from '@/components/ui/shadcn/button';
+import { EmptyState } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { INTEGRATION_TYPES, IntegrationType, IntegrationCategory } from './integration-types';
 import { createIntegration } from '@/app/(app)/services/actions';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Loader2, Plus, Info, Search } from 'lucide-react';
 
 interface AddIntegrationGridProps {
@@ -28,7 +29,6 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<IntegrationCategory | 'All'>('All');
-  const { showToast } = useToast();
 
   const handleTypeClick = (type: IntegrationType) => {
     setSelectedType(type);
@@ -63,16 +63,16 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
     try {
       const result = await createIntegration(formData);
       if (result.error) {
-        showToast(result.error, 'error');
+        notify.error(result.error);
         return;
       }
-      showToast('Integration created successfully', 'success');
+      notify.success('Integration created successfully');
       router.refresh();
       handleClose();
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : 'Failed to create integration';
-      showToast(message, 'error');
+      notify.error(message);
     } finally {
       setLoading(false);
     }
@@ -131,25 +131,29 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
       </div>
 
       {filteredIntegrations.length === 0 ? (
-        <div className="text-center py-8 border border-dashed border-ink-200 rounded-lg bg-ink-50/50">
-          <Search className="mx-auto h-6 w-6 text-slate-300 mb-2" />
-          <h3 className="text-xs font-semibold text-ink-800">No integrations found</h3>
-          <p className="text-[11px] text-ink-500 mt-0.5">
-            No providers match &ldquo;{searchQuery}&rdquo; in category &ldquo;{selectedCategory}
-            &rdquo;.
-          </p>
-          <Button
-            variant="link"
-            size="sm"
-            onClick={() => {
-              setSearchQuery('');
-              setSelectedCategory('All');
-            }}
-            className="mt-1 text-xs h-7"
-          >
-            Clear all filters
-          </Button>
-        </div>
+        <EmptyState
+          size="sm"
+          icon={<Search />}
+          title="No integrations found"
+          description={
+            <>
+              No providers match &ldquo;{searchQuery}&rdquo; in category &ldquo;{selectedCategory}
+              &rdquo;.
+            </>
+          }
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCategory('All');
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
           {filteredIntegrations.map(type => (

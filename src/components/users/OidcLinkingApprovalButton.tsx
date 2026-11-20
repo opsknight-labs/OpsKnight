@@ -250,102 +250,84 @@ export default function OidcLinkingApprovalButton({
       );
     }
 
+    // Menu rows: the action is the label; the current linking state is the muted description.
+    const menuText = (label: string, description: string) => (
+      <span className="flex min-w-0 flex-col">
+        <span>{label}</span>
+        <span className="text-xs text-muted-foreground">{description}</span>
+      </span>
+    );
+    const openAllow = (event: Event) => {
+      event.preventDefault();
+      setDialog('allow');
+    };
+
     if (state === 'loading') {
       return (
         <DropdownMenuItem disabled>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <Loader2 className="animate-spin" />
           <span>Checking OIDC linking…</span>
         </DropdownMenuItem>
       );
     }
     if (state === 'linked') {
       return (
-        <DropdownMenuItem disabled className="text-emerald-700 dark:text-emerald-300">
-          <CheckCircle2 className="mr-2 h-4 w-4" />
-          <span>Linked to current provider</span>
+        <DropdownMenuItem disabled>
+          <CheckCircle2 />
+          {menuText('OIDC linked', 'Linked to current provider')}
         </DropdownMenuItem>
       );
     }
     if (state === 'provider-changed') {
       return (
-        <DropdownMenuItem
-          onSelect={event => {
-            event.preventDefault();
-            setDialog('allow');
-          }}
-          className="text-blue-600 focus:text-blue-700 dark:text-blue-400 dark:focus:text-blue-300"
-        >
-          <Link2 className="mr-2 h-4 w-4" />
-          <span>Not linked to current provider — Approve</span>
+        <DropdownMenuItem onSelect={openAllow}>
+          <Link2 />
+          {menuText('Approve OIDC linking', 'Not linked to current provider')}
         </DropdownMenuItem>
       );
     }
     if (state === 'approved') {
       return (
         <DropdownMenuItem
+          variant="destructive"
           onSelect={event => {
             event.preventDefault();
             setDialog('revoke');
           }}
-          className="text-orange-600 focus:text-orange-700 dark:text-orange-400 dark:focus:text-orange-300"
         >
-          <Unlink2 className="mr-2 h-4 w-4" />
-          <span>Approved — Revoke OIDC linking</span>
+          <Unlink2 />
+          {menuText('Revoke OIDC linking', 'Approved')}
         </DropdownMenuItem>
       );
     }
     if (state === 'expired') {
       return (
-        <DropdownMenuItem
-          onSelect={event => {
-            event.preventDefault();
-            setDialog('allow');
-          }}
-          className="text-amber-700 focus:text-amber-800 dark:text-amber-300 dark:focus:text-amber-300"
-        >
-          <Clock3 className="mr-2 h-4 w-4" />
-          <span>Expired — Renew approval</span>
+        <DropdownMenuItem onSelect={openAllow}>
+          <Clock3 />
+          {menuText('Renew OIDC approval', 'Approval expired')}
         </DropdownMenuItem>
       );
     }
     if (state === 'stale') {
       return (
-        <DropdownMenuItem
-          onSelect={event => {
-            event.preventDefault();
-            setDialog('allow');
-          }}
-          className="text-amber-700 focus:text-amber-800 dark:text-amber-300 dark:focus:text-amber-300"
-        >
-          <RotateCcw className="mr-2 h-4 w-4" />
-          <span>Config changed — Renew approval</span>
+        <DropdownMenuItem onSelect={openAllow}>
+          <RotateCcw />
+          {menuText('Renew OIDC approval', 'Provider config changed')}
         </DropdownMenuItem>
       );
     }
     if (state === 'revoked') {
       return (
-        <DropdownMenuItem
-          onSelect={event => {
-            event.preventDefault();
-            setDialog('allow');
-          }}
-          className="text-blue-600 focus:text-blue-700 dark:text-blue-400 dark:focus:text-blue-300"
-        >
-          <RotateCcw className="mr-2 h-4 w-4" />
-          <span>Revoked — Reapprove OIDC linking</span>
+        <DropdownMenuItem onSelect={openAllow}>
+          <RotateCcw />
+          {menuText('Reapprove OIDC linking', 'Approval revoked')}
         </DropdownMenuItem>
       );
     }
     return (
-      <DropdownMenuItem
-        onSelect={event => {
-          event.preventDefault();
-          setDialog('allow');
-        }}
-        className="text-blue-600 focus:text-blue-700 dark:text-blue-400 dark:focus:text-blue-300"
-      >
-        <Link2 className="mr-2 h-4 w-4" />
-        <span>Not approved — Allow OIDC linking</span>
+      <DropdownMenuItem onSelect={openAllow}>
+        <Link2 />
+        {menuText('Allow OIDC linking', 'Not approved')}
       </DropdownMenuItem>
     );
   };

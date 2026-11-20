@@ -28,6 +28,8 @@ vi.mock('@/lib/prisma', () => ({
     user: { findUnique: mocks.userFindUnique, findMany: mocks.findMany },
     escalationPolicy: { findMany: mocks.findMany },
     postmortem: { findMany: mocks.findMany },
+    onCallSchedule: { findMany: mocks.findMany },
+    runbook: { findMany: mocks.findMany },
   },
 }));
 
@@ -132,5 +134,33 @@ describe('global search RBAC', () => {
       automationDecision: { is: null },
       automationTraces: { none: {} },
     });
+  });
+
+  it('returns limited, scoped schedule and runbook matches', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'admin-1',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+    mocks.findMany.mockImplementation(async (args?: { select?: Record<string, unknown> }) => {
+      if (args?.select?.timeZone) return [{ id: 'sch-1', name: 'Primary', timeZone: 'UTC' }];
+      if (JSON.stringify(args).includes('archivedAt'))
+        return [{ id: 'rb-1', name: 'Restart DB', description: '' }];
+      return [];
+    });
+
+    const response = await GET(new NextRequest('http://localhost/api/search?q=primary'));
+    const body = await response.json();
+    const results = body.data?.results ?? body.results;
+
+    expect(results).toEqual([
+      expect.objectContaining({ type: 'schedule', id: 'sch-1', href: '/schedules/sch-1' }),
+      expect.objectContaining({ type: 'runbook', id: 'rb-1', href: '/runbooks/rb-1' }),
+    ]);
+    for (const [args] of mocks.findMany.mock.calls) {
+      expect(args.take).toBeLessThanOrEqual(8);
+      expect(args.select).toBeDefined();
+    }
   });
 });

@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -53,7 +53,6 @@ export default function DeleteScheduleCard({
   deleteScheduleAction,
 }: DeleteScheduleCardProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [confirmName, setConfirmName] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -80,9 +79,9 @@ export default function DeleteScheduleCard({
         if (!res.success) {
           const msg = res.error || 'Failed to delete schedule.';
           setErrorMessage(msg);
-          showToast(msg, 'error');
+          notify.error(msg);
         } else {
-          showToast(`Schedule "${scheduleName}" deleted successfully`, 'success');
+          notify.success(`Schedule "${scheduleName}" deleted successfully`);
           setOpen(false);
           router.push('/schedules');
           router.refresh();
@@ -90,7 +89,7 @@ export default function DeleteScheduleCard({
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Failed to delete schedule.';
         setErrorMessage(msg);
-        showToast(msg, 'error');
+        notify.error(msg);
       }
     });
   };

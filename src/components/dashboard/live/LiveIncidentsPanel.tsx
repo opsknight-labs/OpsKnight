@@ -27,7 +27,9 @@ import {
 } from '@/components/ui/shadcn/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { useToast } from '@/hooks/use-product-notification';
+import { Skeleton } from '@/components/ui/shadcn/skeleton';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { notify } from '@/lib/toast';
 import { reassignIncident, updateIncidentStatus } from '@/app/(app)/incidents/actions';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import {
@@ -52,23 +54,54 @@ function healthCopy(health: LiveConnectionHealth): { label: string; dot: string;
     case 'live':
       return {
         label: 'Live',
-        dot: 'bg-emerald-500',
-        text: 'text-emerald-700 dark:text-emerald-400',
+        dot: toneClasses('ok').solid,
+        text: toneClasses('ok').text,
       };
     case 'stale':
-      return { label: 'Stale', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' };
+      return {
+        label: 'Stale',
+        dot: toneClasses('elevated').solid,
+        text: toneClasses('elevated').text,
+      };
     case 'offline':
-      return { label: 'Offline', dot: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' };
+      return {
+        label: 'Offline',
+        dot: toneClasses('critical').solid,
+        text: toneClasses('critical').text,
+      };
     case 'revoked':
       return {
         label: 'Session expired',
-        dot: 'bg-rose-500',
-        text: 'text-rose-700 dark:text-rose-400',
+        dot: toneClasses('critical').solid,
+        text: toneClasses('critical').text,
       };
     case 'connecting':
     default:
-      return { label: 'Connecting', dot: 'bg-slate-400', text: 'text-muted-foreground' };
+      return { label: 'Connecting', dot: 'bg-ink-400', text: 'text-muted-foreground' };
   }
+}
+
+/** Loading shape of the feed: status rail, two-line title block, badges and SLA. */
+function LiveRowsSkeleton() {
+  return (
+    <div role="status" aria-busy="true" aria-live="polite" data-testid="live-incidents-loading">
+      <span className="sr-only">Loading live incidents…</span>
+      <ul aria-hidden="true" className="divide-y divide-border">
+        {Array.from({ length: 6 }, (_, row) => (
+          <li key={row} className="flex items-center gap-3 py-3 pl-1 pr-4">
+            <Skeleton className="h-9 w-1 shrink-0 rounded-full" />
+            <Skeleton className="h-5 w-16 shrink-0 rounded-full" />
+            <span className="min-w-0 flex-1 space-y-1.5">
+              <Skeleton className={cn('h-3.5', row % 2 ? 'w-1/2' : 'w-2/3')} />
+              <Skeleton className="h-3 w-1/3" />
+            </span>
+            <Skeleton className="hidden h-5 w-20 shrink-0 rounded-full sm:block" />
+            <Skeleton className="hidden h-4 w-24 shrink-0 md:block" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 const SHORTCUTS: Array<[string, string]> = [
@@ -159,7 +192,6 @@ export default function LiveIncidentsPanel({
   currentUserName: string;
   variant?: 'default' | 'wallboard';
 }) {
-  const { showToast } = useToast();
   const live = useLiveDashboard();
   const { canAcknowledgeIncident } = live;
   const {
@@ -230,12 +262,12 @@ export default function LiveIncidentsPanel({
       const rollback = applyOptimistic(incident.id, { status: 'ACKNOWLEDGED' });
       try {
         await updateIncidentStatus(incident.id, 'ACKNOWLEDGED', 'OPEN');
-        showToast(`Acknowledged “${incident.title}”`, 'success');
+        notify.success(`Acknowledged “${incident.title}”`);
         refresh();
       } catch (error) {
         rollback();
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
-        showToast(getUserFacingErrorMessage(error) || 'Could not acknowledge incident', 'error');
+        notify.error(getUserFacingErrorMessage(error) || 'Could not acknowledge incident');
       } finally {
         setBusy(current => {
           const next = { ...current };
@@ -244,7 +276,7 @@ export default function LiveIncidentsPanel({
         });
       }
     },
-    [applyOptimistic, busy, refresh, showToast]
+    [applyOptimistic, busy, refresh]
   );
 
   const assignSelf = useCallback(
@@ -256,12 +288,12 @@ export default function LiveIncidentsPanel({
       });
       try {
         await reassignIncident(incident.id, currentUserId);
-        showToast(`Assigned “${incident.title}” to you`, 'success');
+        notify.success(`Assigned “${incident.title}” to you`);
         refresh();
       } catch (error) {
         rollback();
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
-        showToast(getUserFacingErrorMessage(error) || 'Could not assign incident', 'error');
+        notify.error(getUserFacingErrorMessage(error) || 'Could not assign incident');
       } finally {
         setBusy(current => {
           const next = { ...current };
@@ -270,7 +302,7 @@ export default function LiveIncidentsPanel({
         });
       }
     },
-    [applyOptimistic, busy, currentUserId, currentUserName, refresh, showToast]
+    [applyOptimistic, busy, currentUserId, currentUserName, refresh]
   );
 
   const focusRow = useCallback((index: number) => {
@@ -397,7 +429,7 @@ export default function LiveIncidentsPanel({
 
   const statusLine = (
     <p
-      className="flex min-w-0 items-center gap-x-2 truncate text-[11px] text-muted-foreground"
+      className="flex min-w-0 items-center gap-x-2 truncate text-2xs text-muted-foreground"
       aria-live="polite"
       data-testid="live-incidents-status"
     >
@@ -414,9 +446,7 @@ export default function LiveIncidentsPanel({
       </span>
       <span data-testid="live-incidents-synced">{formatSyncAge(syncedAt, now)}</span>
       {catchingUp && !syncError && <span data-testid="live-catching-up">Catching up…</span>}
-      {syncError && (
-        <span className="text-amber-700 dark:text-amber-400">Sync failed — retrying</span>
-      )}
+      {syncError && <span className={toneClasses('elevated').text}>Sync failed — retrying</span>}
       {health === 'offline' && <span>Showing last known state</span>}
       {snapshot?.truncated && (
         <span
@@ -443,7 +473,7 @@ export default function LiveIncidentsPanel({
       data-connection={health}
       data-paused={paused ? 'true' : 'false'}
       data-loading={loading ? 'true' : 'false'}
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)] [container-type:inline-size]"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm [container-type:inline-size]"
     >
       <header
         className={
@@ -461,9 +491,7 @@ export default function LiveIncidentsPanel({
                 aria-hidden
                 className={cn(
                   'h-2 w-2 shrink-0 rounded-full',
-                  health === 'live' && !paused
-                    ? 'bg-rose-500 motion-safe:animate-pulse'
-                    : 'bg-slate-400'
+                  health === 'live' && !paused ? 'bg-status-ok' : 'bg-ink-400'
                 )}
               />
               <h2 id="live-incidents-heading" className="dash-heading whitespace-nowrap">
@@ -487,16 +515,14 @@ export default function LiveIncidentsPanel({
                   <button
                     type="button"
                     data-testid="live-sort"
-                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-card px-2.5 text-xs font-medium shadow-2xs hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-card px-2.5 text-xs font-medium outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <ArrowDownWideNarrow className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     {query.sort === 'attention' ? 'Needs attention' : 'Newest'}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Sort
-                  </DropdownMenuLabel>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Sort</DropdownMenuLabel>
                   <DropdownMenuRadioGroup
                     value={query.sort}
                     onValueChange={value => setQuery({ sort: value as LiveSort })}
@@ -517,9 +543,9 @@ export default function LiveIncidentsPanel({
                 data-testid="live-pause-toggle"
                 title="Pause / resume live updates (p)"
                 className={cn(
-                  'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  'inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
                   paused
-                    ? 'border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                    ? toneClasses('elevated').soft
                     : 'border-border bg-card text-foreground hover:bg-muted'
                 )}
               >
@@ -528,14 +554,17 @@ export default function LiveIncidentsPanel({
                 ) : (
                   <span
                     aria-hidden
-                    className="h-1.5 w-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse"
+                    className="h-1.5 w-1.5 rounded-full bg-status-ok motion-safe:animate-pulse"
                   />
                 )}
                 {paused ? 'Paused' : 'Live'}
                 {paused && pendingCount > 0 && (
                   <span
                     data-testid="live-pending-count"
-                    className="rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white"
+                    className={cn(
+                      'rounded-full px-1.5 text-2xs font-semibold tabular-nums',
+                      toneClasses('elevated').filled
+                    )}
                   >
                     {pendingCount} pending
                   </span>
@@ -548,15 +577,13 @@ export default function LiveIncidentsPanel({
                     type="button"
                     data-testid="live-more-actions"
                     aria-label="More live incident actions"
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-card p-0 text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card p-0 text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <MoreHorizontal className="h-4 w-4 shrink-0" aria-hidden />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Row density
-                  </DropdownMenuLabel>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Row density</DropdownMenuLabel>
                   <DropdownMenuRadioGroup
                     value={density}
                     onValueChange={value => setDensity(value as LiveDensity)}
@@ -568,7 +595,7 @@ export default function LiveIncidentsPanel({
                   </DropdownMenuRadioGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={refresh} data-testid="live-refresh">
-                    <RefreshCw className="mr-2 h-3.5 w-3.5" aria-hidden />
+                    <RefreshCw aria-hidden />
                     Refresh now
                   </DropdownMenuItem>
                   <DropdownMenuCheckboxItem
@@ -584,7 +611,7 @@ export default function LiveIncidentsPanel({
                       disabled={incidents.length === 0}
                       data-testid="live-export"
                     >
-                      <Download className="mr-2 h-3.5 w-3.5" aria-hidden />
+                      <Download aria-hidden />
                       Export loaded incidents (CSV)
                     </DropdownMenuItem>
                   )}
@@ -597,22 +624,22 @@ export default function LiveIncidentsPanel({
                         }
                       }}
                     >
-                      <Monitor className="mr-2 h-3.5 w-3.5" aria-hidden />
+                      <Monitor aria-hidden />
                       Open Operations Console (TV mode)
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <DropdownMenuLabel className="flex items-center gap-1.5">
                     <Keyboard className="h-3 w-3" aria-hidden />
                     Shortcuts
                   </DropdownMenuLabel>
                   {SHORTCUTS.map(([keys, description]) => (
                     <div
                       key={keys}
-                      className="flex items-center justify-between gap-3 px-2 py-1 text-[11px] text-muted-foreground"
+                      className="flex items-center justify-between gap-3 px-2 py-1 text-xs text-muted-foreground"
                     >
                       <span>{description}</span>
-                      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+                      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-2xs">
                         {keys}
                       </kbd>
                     </div>
@@ -627,16 +654,16 @@ export default function LiveIncidentsPanel({
 
       {!wallboard && snapshot && snapshot.pinned.length > 0 && (
         <div
-          className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border/70 bg-muted/30 px-4 py-1.5 [scrollbar-width:none]"
+          className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-muted/30 px-4 py-1.5 [scrollbar-width:none]"
           data-testid="live-pinned"
         >
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
             Pinned {snapshot.pinned.length}/{LIVE_MAX_PINS}
           </span>
           {snapshot.pinned.map(item => (
             <span
               key={item.id}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card py-0.5 pl-2 pr-1 text-[11px] font-medium shadow-2xs"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card py-0.5 pl-2 pr-1 text-xs font-medium"
             >
               <Link
                 href={`/incidents/${item.id}`}
@@ -645,7 +672,7 @@ export default function LiveIncidentsPanel({
                 <span
                   className={cn(
                     'mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle',
-                    item.status === 'OPEN' ? 'bg-rose-500' : 'bg-amber-500'
+                    toneClasses(item.status === 'OPEN' ? 'critical' : 'elevated').solid
                   )}
                   aria-hidden
                 />
@@ -671,7 +698,7 @@ export default function LiveIncidentsPanel({
           'hidden shrink-0 border-b border-border bg-muted/40 py-1.5 pl-[17px] pr-3 font-semibold uppercase tracking-wider text-muted-foreground',
           wallboard
             ? 'gap-x-3 text-[0.7em] md:grid md:gap-x-4'
-            : 'gap-x-3 text-[10px] [@container(min-width:40rem)]:grid',
+            : 'gap-x-3 text-2xs [@container(min-width:40rem)]:grid',
           wallboard ? LIVE_ROW_GRID_TV : LIVE_ROW_GRID
         )}
       >
@@ -701,10 +728,7 @@ export default function LiveIncidentsPanel({
         data-testid="live-incidents-scroll"
       >
         {snapshot === null && loading ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-            <RefreshCw className="h-4 w-4 motion-safe:animate-spin" aria-hidden />
-            Loading live incidents…
-          </div>
+          <LiveRowsSkeleton />
         ) : snapshot === null ? (
           <div className="py-10 text-center text-xs text-muted-foreground" role="alert">
             Live incidents are unavailable. Retrying automatically.
@@ -714,8 +738,8 @@ export default function LiveIncidentsPanel({
             className="flex h-full min-h-[12rem] flex-col items-center justify-center py-10 text-center"
             data-testid="live-incidents-empty"
           >
-            <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
-              <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden />
+            <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+              <CheckCircle2 className="h-5 w-5 text-status-ok" aria-hidden />
             </span>
             <p className="text-sm font-semibold text-foreground">
               {query.view === 'active' && facetCount === 0
@@ -727,6 +751,33 @@ export default function LiveIncidentsPanel({
                 ? 'All clear. New incidents will appear here automatically.'
                 : `No active incidents match “${liveViewLabel(query.view)}”${facetCount ? ' with these filters' : ''}.`}
             </p>
+            {query.view === 'active' && facetCount === 0 ? (
+              <Link
+                href="/incidents?filter=resolved"
+                className="mt-3 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Review resolved incidents
+              </Link>
+            ) : (
+              <button
+                type="button"
+                data-testid="live-empty-clear"
+                onClick={() =>
+                  setQuery({
+                    view: 'active',
+                    serviceId: null,
+                    teamId: null,
+                    status: 'all',
+                    urgency: 'all',
+                    assignment: 'all',
+                    search: '',
+                  })
+                }
+                className="mt-3 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         ) : (
           <ul
@@ -765,9 +816,9 @@ export default function LiveIncidentsPanel({
       </div>
 
       {!wallboard && (
-        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4">
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border bg-muted/30 px-3 py-2 sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+            <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
               Showing {visible.length} of {total.toLocaleString()}
             </span>
             <span className="hidden sm:block">{statusLine}</span>
@@ -780,7 +831,7 @@ export default function LiveIncidentsPanel({
                 onClick={loadOlder}
                 disabled={loadingOlder}
                 data-testid="live-load-older"
-                className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-muted disabled:opacity-60 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted disabled:opacity-60 outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {loadingOlder
                   ? 'Loading…'
@@ -794,7 +845,7 @@ export default function LiveIncidentsPanel({
                 type="button"
                 onClick={() => setExpanded(value => !value)}
                 data-testid="live-show-more"
-                className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {expanded ? 'Show less' : `Show ${hiddenLoaded} more`}
               </button>
@@ -802,7 +853,7 @@ export default function LiveIncidentsPanel({
             <Link
               href={viewAllHref(query, currentUserId)}
               data-testid="live-view-all"
-              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-muted hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               View all incidents
               <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />

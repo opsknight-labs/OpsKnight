@@ -1,13 +1,29 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { X, Users, Loader2 } from 'lucide-react';
-import EmptyState from '@/components/ui/EmptyState';
+import { AlertTriangle, ArrowRight, CheckCircle2, SearchX, Server, Users } from 'lucide-react';
+import {
+  DirectoryCardGrid,
+  DirectoryGuide,
+  DirectoryGuideSteps,
+  DirectoryHeader,
+  DirectoryPrimaryCell,
+  DirectoryTable,
+  EmptyState,
+  FilterBar,
+  FilterChip,
+  toneClasses,
+  useDirectoryColumns,
+  useDirectoryView,
+  type DirectoryColumn,
+} from '@/components/patterns';
+import { cn } from '@/lib/utils';
 import Pagination from '@/components/service/Pagination';
-import TeamDirectoryCard from './TeamDirectoryCard';
+import TeamDirectoryCard, { TeamLead, plural } from './TeamDirectoryCard';
+import TeamAvatarStack from './TeamAvatarStack';
 
 type TeamItem = {
   id: string;
@@ -39,6 +55,137 @@ type TeamItem = {
   };
 };
 
+const GUIDE_STEPS = [
+  {
+    title: 'Assign Team Lead',
+    description: 'Designate an owner/lead to receive targeted escalation notifications.',
+  },
+  {
+    title: 'Build Responder Roster',
+    description:
+      'Add engineers with explicit roles (Owner, Admin, Member) and channel preferences.',
+  },
+  {
+    title: 'Connect Owned Services',
+    description: 'Link microservices and applications to automatically route incident alerts.',
+  },
+];
+
+const GUIDE_LINKS = [
+  {
+    label: 'All Responders',
+    href: '/users',
+    icon: <Users className="h-3.5 w-3.5" aria-hidden="true" />,
+  },
+  {
+    label: 'Service Catalog',
+    href: '/services',
+    icon: <Server className="h-3.5 w-3.5" aria-hidden="true" />,
+  },
+];
+
+function ServicesSummary({ team }: { team: TeamItem }) {
+  const [first, ...rest] = team.services;
+  if (!first) return <span className="text-xs text-muted-foreground">No services</span>;
+  return (
+    <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+      <span className="shrink-0">{plural(team._count.services, 'service')}:</span>
+      <Link
+        href={`/services/${first.id}`}
+        className="min-w-0 truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {first.name}
+      </Link>
+      {rest.length > 0 && (
+        <span className="shrink-0" title={rest.map(service => service.name).join(', ')}>
+          +{team._count.services - 1}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const columns: DirectoryColumn<TeamItem>[] = [
+  {
+    id: 'team',
+    header: 'Team',
+    className: 'w-[32%] max-w-0',
+    cell: team => (
+      <DirectoryPrimaryCell
+        href={`/teams/${team.id}`}
+        title={team.name}
+        subtitle={team.description || 'No description'}
+        leading={
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+            <Users className="h-4 w-4" aria-hidden="true" />
+          </span>
+        }
+      />
+    ),
+  },
+  {
+    id: 'lead',
+    hideable: true,
+    header: 'Lead',
+    className: 'w-[20%] max-w-0',
+    cell: team => <TeamLead lead={team.teamLead} />,
+  },
+  {
+    id: 'members',
+    hideable: true,
+    header: 'Members',
+    className: 'w-[18%]',
+    cell: team =>
+      team.members.length > 0 ? (
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <TeamAvatarStack members={team.members} maxVisible={4} size="sm" />
+          <span className="tabular-nums">{team._count.members}</span>
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground">No members</span>
+      ),
+  },
+  {
+    id: 'services',
+    hideable: true,
+    header: 'Services',
+    className: 'max-w-0',
+    cell: team => <ServicesSummary team={team} />,
+  },
+];
+
+function mobileRow(team: TeamItem) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <div className="flex items-center gap-2">
+        <Link
+          href={`/teams/${team.id}`}
+          className="min-w-0 flex-1 truncate text-sm font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {team.name}
+        </Link>
+        <TeamLead lead={team.teamLead} className="max-w-[45%]" />
+      </div>
+      <p className="truncate text-xs text-muted-foreground">
+        {plural(team._count.members, 'member')} · {plural(team._count.services, 'service')}
+        {team.services[0] && `: ${team.services[0].name}`}
+        {team._count.services > 1 && ` +${team._count.services - 1}`}
+      </p>
+    </div>
+  );
+}
+
+function manageAction(team: TeamItem) {
+  return (
+    <Button asChild variant="ghost" size="sm" className="h-8 gap-1 px-2 text-xs">
+      <Link href={`/teams/${team.id}`} aria-label={`Manage ${team.name}`}>
+        <span className="max-sm:sr-only">Manage</span>{' '}
+        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </Link>
+    </Button>
+  );
+}
+
 type TeamDirectoryListProps = {
   teams: TeamItem[];
   pagination?: {
@@ -65,18 +212,15 @@ export default function TeamDirectoryList({
 }: TeamDirectoryListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState(currentSearch);
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setSearchQuery(currentSearch);
-  }, [currentSearch]);
+  const [view, setView] = useDirectoryView('teams');
+  const columnVisibility = useDirectoryColumns('teams', columns);
 
   const updateFilters = (newParams: { q?: string; status?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
     if (newParams.q !== undefined) {
-      const trimmed = newParams.q.trim();
-      if (trimmed) params.set('q', trimmed);
+      // Keep the raw text so a trailing space survives the debounce; the page trims it.
+      if (newParams.q.trim()) params.set('q', newParams.q);
       else params.delete('q');
       params.delete('search');
     }
@@ -91,152 +235,174 @@ export default function TeamDirectoryList({
     });
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateFilters({ q: searchQuery });
-  };
+  const toggleStatus = (value: string) =>
+    updateFilters({ status: currentStatus === value ? 'all' : value });
+  const clearFilters = () => updateFilters({ q: '', status: 'all' });
 
   const totalCount = filterCounts?.total ?? pagination?.totalItems ?? teams.length;
   const configuredCount = filterCounts?.configured ?? 0;
   const needsLeadCount = filterCounts?.needsLead ?? 0;
   const hasActiveFilter = Boolean(currentSearch || (currentStatus && currentStatus !== 'all'));
+  const shownTotal = pagination?.totalItems ?? teams.length;
+  const from =
+    shownTotal === 0
+      ? 0
+      : pagination
+        ? (pagination.currentPage - 1) * pagination.itemsPerPage + 1
+        : 1;
+  const to = pagination
+    ? Math.min(pagination.currentPage * pagination.itemsPerPage, shownTotal)
+    : shownTotal;
 
   // Zero-teams total onboarding empty state (only when there are no teams at all across the tenant)
   if (totalCount === 0 && !hasActiveFilter) {
     return (
       <EmptyState
-        icon={<Users className="h-6 w-6 text-primary" />}
+        icon={<Users />}
         title="Welcome to Teams"
-        description="Teams group engineers, define incident escalation hierarchies, and attach service ownership. Create your first team above to get started."
+        description={
+          <div className="space-y-4">
+            <p>
+              Teams group engineers, define incident escalation hierarchies, and attach service
+              ownership. Create your first team above to get started.
+            </p>
+            <DirectoryGuideSteps steps={GUIDE_STEPS} className="mx-auto max-w-sm" />
+          </div>
+        }
         size="lg"
       />
     );
   }
 
   return (
-    <div className="space-y-3.5">
-      {/* Search & Filter Toolbar */}
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-        {/* Search input */}
-        <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md">
-          <Input
-            value={searchQuery}
-            onChange={e => {
-              const val = e.target.value;
-              setSearchQuery(val);
-              if (val === '') {
-                updateFilters({ q: '' });
-              }
-            }}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                updateFilters({ q: searchQuery });
-              }
-            }}
-            placeholder="Search teams by name, member, or service..."
-            className="pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
-            style={{ paddingRight: '2rem' }}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                updateFilters({ q: '' });
-              }}
-              aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+    <div className="space-y-3">
+      <FilterBar
+        search={{
+          value: searchParams.get('q') ?? currentSearch,
+          onChange: value => updateFilters({ q: value }),
+          placeholder: 'Search teams by name, member, or service…',
+          label: 'Search teams',
+          debounceMs: 300,
+        }}
+        chips={
+          <>
+            <FilterChip
+              active={currentStatus === 'all'}
+              onClick={() => updateFilters({ status: 'all' })}
+              count={totalCount}
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </form>
+              All
+            </FilterChip>
+            <FilterChip
+              tone="ok"
+              icon={<CheckCircle2 />}
+              active={currentStatus === 'configured'}
+              onClick={() => toggleStatus('configured')}
+              count={configuredCount}
+            >
+              Configured
+            </FilterChip>
+            <FilterChip
+              tone="elevated"
+              icon={<AlertTriangle />}
+              active={currentStatus === 'needs-lead'}
+              onClick={() => toggleStatus('needs-lead')}
+              count={needsLeadCount}
+            >
+              Needs lead
+            </FilterChip>
+          </>
+        }
+        hasActiveFilters={hasActiveFilter}
+        onClearAll={clearFilters}
+      />
 
-        {/* Status Filter Chips */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => updateFilters({ status: 'all' })}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-              currentStatus === 'all'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
-                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            All ({totalCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => updateFilters({ status: 'configured' })}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-              currentStatus === 'configured'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
-                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            Configured ({configuredCount})
-          </button>
-          {needsLeadCount > 0 && (
-            <button
-              type="button"
-              onClick={() => updateFilters({ status: 'needs-lead' })}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                currentStatus === 'needs-lead'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
-              }`}
-            >
-              Needs lead ({needsLeadCount})
-            </button>
+      {needsLeadCount > 0 && currentStatus !== 'needs-lead' && (
+        <div
+          role="status"
+          className={cn(
+            'flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2 text-sm',
+            toneClasses('elevated').soft
           )}
-          {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-1" />}
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <p className="min-w-[14rem] flex-1">
+            {needsLeadCount === 1 ? '1 team has' : `${needsLeadCount} teams have`} no lead, so
+            {needsLeadCount === 1 ? ' its' : ' their'} escalations can&apos;t reach an owner.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => updateFilters({ status: 'needs-lead' })}
+            className="h-7 px-2.5 text-xs"
+          >
+            Show teams without a lead
+          </Button>
         </div>
+      )}
+
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+        <DirectoryHeader
+          title="Team directory"
+          summary={`Showing ${from}–${to} of ${shownTotal}`}
+          columns={columnVisibility}
+          density
+          view={{ value: view, onChange: setView }}
+          guide={
+            <DirectoryGuide title="Team setup guide" steps={GUIDE_STEPS} links={GUIDE_LINKS} />
+          }
+        />
+        <div aria-busy={isPending} className={cn('transition-opacity', isPending && 'opacity-60')}>
+          {teams.length === 0 ? (
+            <EmptyState
+              variant="simple"
+              className="py-10"
+              icon={<SearchX />}
+              title="No matching teams"
+              description={
+                currentSearch
+                  ? `No teams matched "${currentSearch}". Try a different name, member, or service.`
+                  : 'No teams match the selected filter.'
+              }
+              action={
+                hasActiveFilter ? (
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : view === 'table' ? (
+            <DirectoryTable
+              rows={teams}
+              getRowId={team => team.id}
+              columns={columns}
+              hiddenColumns={columnVisibility.hidden}
+              label="Teams"
+              rowActions={manageAction}
+              mobileRow={mobileRow}
+            />
+          ) : (
+            <DirectoryCardGrid>
+              {teams.map(team => (
+                <TeamDirectoryCard key={team.id} team={team} />
+              ))}
+            </DirectoryCardGrid>
+          )}
+        </div>
+        {pagination && (
+          <div className="border-t border-border px-4">
+            <Pagination
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              itemsPerPage={pagination.itemsPerPage}
+              itemLabel="team"
+            />
+          </div>
+        )}
       </div>
-
-      {/* Grid or Filtered Empty State */}
-      {teams.length === 0 ? (
-        <EmptyState
-          icon={<Users className="h-6 w-6 text-muted-foreground/60" />}
-          title="No matching teams"
-          description={
-            currentSearch
-              ? `No teams matched "${currentSearch}". Try searching with a different term.`
-              : 'No teams match the selected filter.'
-          }
-          action={
-            currentSearch || currentStatus !== 'all' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  updateFilters({ q: '', status: 'all' });
-                }}
-                className="text-xs h-8"
-              >
-                Reset filters
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <div className="grid gap-3.5 sm:grid-cols-2">
-          {teams.map(team => (
-            <TeamDirectoryCard key={team.id} team={team} />
-          ))}
-        </div>
-      )}
-
-      {pagination && (
-        <Pagination
-          currentPage={pagination.currentPage}
-          totalPages={pagination.totalPages}
-          totalItems={pagination.totalItems}
-          itemsPerPage={pagination.itemsPerPage}
-          itemLabel="team"
-        />
-      )}
     </div>
   );
 }

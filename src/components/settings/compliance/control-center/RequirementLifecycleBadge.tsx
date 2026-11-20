@@ -17,19 +17,17 @@ const lifecycleConfig: Record<
   ACTIVE: {
     label: 'Active Requirement',
     className:
-      'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold',
+      'border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 text-status-ok-deep dark:text-emerald-300 font-semibold',
     icon: CheckCircle2,
   },
   FUTURE: {
     label: 'Future Staged',
-    className:
-      'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-semibold',
+    className: 'border-border bg-muted text-ink-600 font-semibold',
     icon: Clock,
   },
   SUPERSEDED: {
     label: 'Superseded',
-    className:
-      'border-zinc-500/30 bg-zinc-500/10 text-zinc-700 dark:text-zinc-400 font-medium line-through decoration-zinc-400',
+    className: 'border-border bg-muted text-ink-600 font-medium line-through',
     icon: CircleDashed,
   },
   REFERENCE_ONLY: {
@@ -64,12 +62,12 @@ export function RequirementLifecycleBadge({
   return (
     <Badge
       variant="outline"
-      className={cn('gap-1 text-[11px] py-0.5 px-2 shrink-0', config.className, className)}
+      className={cn('gap-1 text-2xs py-0.5 px-2 shrink-0', config.className, className)}
     >
       <Icon className="h-3 w-3 shrink-0" />
       <span>{config.label}</span>
       {effectiveDate && lifecycle === 'FUTURE' && (
-        <span className="text-[10px] opacity-80">({effectiveDate})</span>
+        <span className="text-2xs opacity-80">({effectiveDate})</span>
       )}
     </Badge>
   );

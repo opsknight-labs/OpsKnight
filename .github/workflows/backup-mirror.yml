@@ -1,0 +1,93 @@
+name: Backup mirror
+
+# Mirrors main and release tags to the backup repo OpsKnightLabs/OpsKnight-backup, where only
+# backup-test-image.yml runs (it publishes ghcr.io/opsknightlabs/opsknight-test). Every
+# other workflow there is kept disabled, so the backup adds no CI load of its own.
+# Needs the BACKUP_TOKEN secret: a classic PAT with the repo and workflow scopes
+# (fine-grained PATs are rejected by GitHub's LFS API).
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-mirror
+  cancel-in-progress: false
+
+env:
+  BACKUP_REPO: OpsKnightLabs/OpsKnight-backup
+  KEEP_ENABLED: backup-test-image.yml
+
+jobs:
+  mirror:
+    if: github.repository == 'opsknight-labs/OpsKnight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          lfs: true
+          # The persisted GITHUB_TOKEN auth header would override BACKUP_TOKEN for LFS
+          # uploads to the backup ("Resource not accessible by integration").
+          persist-credentials: false
+      - name: Push main, tags and LFS objects to the backup
+        env:
+          BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
+          GH_TOKEN: ${{ secrets.BACKUP_TOKEN }}
+        run: |
+          if [ -z "$BACKUP_TOKEN" ]; then
+            echo "::warning::BACKUP_TOKEN is not set; skipping the backup mirror."
+            exit 0
+          fi
+          # Keep only the image build enabled in the backup, before and after the push:
+          # before covers existing workflows, after covers any added by this push.
+          only_image_build() {
+            gh api "repos/${BACKUP_REPO}/actions/workflows?per_page=100" \
+              --jq '.workflows[] | select(.path | startswith(".github/")) | [.id, .path, .state] | @tsv' |
+              while IFS=$'\t' read -r id path state; do
+                if [ "${path##*/}" = "$KEEP_ENABLED" ]; then
+                  [ "$state" = active ] || gh api -X PUT "repos/${BACKUP_REPO}/actions/workflows/${id}/enable"
+                elif [ "$state" = active ]; then
+                  gh api -X PUT "repos/${BACKUP_REPO}/actions/workflows/${id}/disable"
+                  echo "disabled ${path}"
+                fi
+              done
+          }
+          only_image_build
+          remote="https://x-access-token:${BACKUP_TOKEN}@github.com/${BACKUP_REPO}.git"
+          # The LFS locks API returns 403 to fine-grained PATs even with push access, and
+          # this repo never uses LFS locks, so skip the verification.
+          git config lfs.locksverify false
+          # shortcut: GitHub's LFS API rejects fine-grained PATs (403), so LFS upload is best-effort; the
+          # only LFS file is public/demo.gif and the backup already has it. Use a classic PAT if that changes.
+          git lfs push "$remote" "${GITHUB_SHA}" ||
+            echo "::warning::LFS objects were not uploaded to the backup (token not accepted by LFS); code is still mirrored."
+          # The backup mirrors this repo exactly, so refs are force-updated. A tag run's
+          # GITHUB_SHA is the tagged commit, not main's tip, so it only syncs tags.
+          # LFS was handled above; stop the pre-push hook from retrying it.
+          export GIT_LFS_SKIP_PUSH=1
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            git push --force "$remote" 'refs/tags/*:refs/tags/*'
+          else
+            git push --force "$remote" "${GITHUB_SHA}:refs/heads/main" 'refs/tags/*:refs/tags/*'
+          fi
+          # GitHub registers workflows added by this push a few seconds later; disabling
+          # right away missed them, so wait first.
+          sleep 15
+          only_image_build
+          # Those workflows were already triggered by the push, and disabling does not
+          # cancel runs, so cancel everything but the image build.
+          gh api "repos/${BACKUP_REPO}/actions/runs?head_sha=${GITHUB_SHA}&per_page=100" \
+            --jq '.workflow_runs[] | select(.status != "completed") | [.id, .path] | @tsv' |
+            while IFS=$'\t' read -r id path; do
+              [ "${path##*/}" = "$KEEP_ENABLED" ] && continue
+              # A run that finished in the meantime cannot be cancelled; that is fine.
+              gh api -X POST "repos/${BACKUP_REPO}/actions/runs/${id}/cancel" >/dev/null 2>&1 &&
+                echo "cancelled ${path} run ${id}" || true
+            done
+          echo "Mirrored ${GITHUB_REF_NAME} (${GITHUB_SHA::12}) to ${BACKUP_REPO}" >> "$GITHUB_STEP_SUMMARY"

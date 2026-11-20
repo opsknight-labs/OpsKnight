@@ -38,9 +38,15 @@ export type RunbookCardProps = {
   runbook: RunbookCardData;
   userTimeZone: string;
   canManage?: boolean;
-  density?: 'grid' | 'list';
   updatedLabel?: string;
 };
+
+export function runbookLifecycle(
+  runbook: Pick<RunbookCardData, 'archivedAt' | 'publishedVersion'>
+): 'ARCHIVED' | 'PUBLISHED' | 'DRAFT' {
+  if (runbook.archivedAt) return 'ARCHIVED';
+  return runbook.publishedVersion !== null ? 'PUBLISHED' : 'DRAFT';
+}
 
 const MAX_VISIBLE_TAGS = 4;
 
@@ -48,17 +54,11 @@ function plural(count: number, word: string) {
   return `${new Intl.NumberFormat('en-US').format(count)} ${word}${count === 1 ? '' : 's'}`;
 }
 
-export function RunbookCard({
-  runbook,
-  userTimeZone,
-  density = 'grid',
-  updatedLabel,
-}: RunbookCardProps) {
-  const isArchived = Boolean(runbook.archivedAt);
-  const isPublished = !isArchived && runbook.publishedVersion !== null;
-  const statusLabel = isArchived ? 'ARCHIVED' : isPublished ? 'PUBLISHED' : 'DRAFT';
+export function RunbookCard({ runbook, userTimeZone, updatedLabel }: RunbookCardProps) {
+  const statusLabel = runbookLifecycle(runbook);
+  const isArchived = statusLabel === 'ARCHIVED';
+  const isPublished = statusLabel === 'PUBLISHED';
   const href = `/runbooks/${runbook.id}`;
-  const isList = density === 'list';
 
   const tags = runbook.tags ?? [];
   const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
@@ -69,12 +69,7 @@ export function RunbookCard({
   const lastExec = runbook.lastExecution;
 
   const meta = (
-    <div
-      className={cn(
-        'flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground',
-        isList && 'sm:justify-end'
-      )}
-    >
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
       <span
         className="inline-flex items-center gap-1.5"
         title={services.length ? services.join(', ') : undefined}
@@ -113,24 +108,18 @@ export function RunbookCard({
   return (
     <article
       className={cn(
-        'group relative flex rounded-2xl border border-border/80 dark:border-border/60 bg-card backdrop-blur-xs shadow-xs transition-all duration-200 focus-within:border-primary/50 focus-within:shadow-md hover:border-border hover:shadow-md hover:-translate-y-0.5',
-        isList
-          ? 'flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:gap-5'
-          : 'flex-col p-4 sm:p-4.5',
-        isPublished &&
-          'shadow-[0_0_24px_-12px_rgba(16,185,129,0.12)] hover:border-emerald-500/40 hover:shadow-[0_0_24px_-8px_rgba(16,185,129,0.2)]',
-        !isPublished &&
-          !isArchived &&
-          'shadow-[0_0_24px_-12px_rgba(245,158,11,0.12)] hover:border-amber-500/40 hover:shadow-[0_0_24px_-8px_rgba(245,158,11,0.2)]',
+        'group relative flex flex-col rounded-lg border border-border bg-card p-3.5 shadow-xs transition-colors duration-150 focus-within:border-primary/50 hover:border-ink-300',
+        isPublished && 'hover:border-emerald-500/40',
+        !isPublished && !isArchived && 'hover:border-amber-500/40',
         isArchived && 'bg-muted/30 opacity-75 hover:opacity-100'
       )}
     >
-      <div className={cn('min-w-0 flex-1', isList ? 'space-y-1' : 'space-y-2.5')}>
+      <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-2.5">
           <div className="flex items-center gap-2.5 min-w-0">
             <div
               className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-2xs group-hover:scale-105 transition-all',
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border',
                 isPublished
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                   : isArchived
@@ -140,10 +129,10 @@ export function RunbookCard({
             >
               <BookOpen className="h-4 w-4" aria-hidden="true" />
             </div>
-            <h2 className="min-w-0 text-sm sm:text-base !leading-snug font-bold tracking-tight">
+            <h2 className="min-w-0 text-sm !leading-snug font-semibold tracking-tight">
               <Link
                 href={href}
-                className="break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:underline group-hover:text-primary transition-colors"
+                className="break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:underline group-hover:text-primary transition-colors"
               >
                 {runbook.name}
               </Link>
@@ -173,12 +162,7 @@ export function RunbookCard({
           </div>
         </div>
 
-        <p
-          className={cn(
-            'text-sm leading-relaxed text-muted-foreground',
-            isList ? 'line-clamp-1' : 'line-clamp-2 min-h-[2lh]'
-          )}
-        >
+        <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
           {runbook.description || 'No description yet.'}
         </p>
 
@@ -218,14 +202,7 @@ export function RunbookCard({
         </div>
       </div>
 
-      <div
-        className={cn(
-          'relative z-10 flex flex-wrap items-center justify-between gap-3',
-          isList
-            ? 'sm:shrink-0 sm:flex-col sm:items-end sm:gap-1.5'
-            : 'mt-3 border-t border-border/60 pt-3'
-        )}
-      >
+      <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
         {meta}
         <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-3">
           <span className="text-xs text-muted-foreground">

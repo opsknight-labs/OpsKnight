@@ -125,43 +125,13 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
                 <SelectValue placeholder="Status" />
               </div>
             </SelectTrigger>
-            <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
-              <SelectItem
-                value="all"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                All active
-              </SelectItem>
-              <SelectItem
-                value="ONLINE"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                Online
-              </SelectItem>
-              <SelectItem
-                value="DEGRADED"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                Degraded
-              </SelectItem>
-              <SelectItem
-                value="OFFLINE"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                Offline
-              </SelectItem>
-              <SelectItem
-                value="ENROLLING"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                Enrolling
-              </SelectItem>
-              <SelectItem
-                value="REVOKED"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                Revoked
-              </SelectItem>
+            <SelectContent>
+              <SelectItem value="all">All active</SelectItem>
+              <SelectItem value="ONLINE">Online</SelectItem>
+              <SelectItem value="DEGRADED">Degraded</SelectItem>
+              <SelectItem value="OFFLINE">Offline</SelectItem>
+              <SelectItem value="ENROLLING">Enrolling</SelectItem>
+              <SelectItem value="REVOKED">Revoked</SelectItem>
             </SelectContent>
           </Select>
 
@@ -200,31 +170,11 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
                 <SelectValue placeholder="Platform" />
               </div>
             </SelectTrigger>
-            <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
-              <SelectItem
-                value="all"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                All platforms
-              </SelectItem>
-              <SelectItem
-                value="linux"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                Linux
-              </SelectItem>
-              <SelectItem
-                value="darwin"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                macOS (Darwin)
-              </SelectItem>
-              <SelectItem
-                value="win32"
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
-                Windows
-              </SelectItem>
+            <SelectContent>
+              <SelectItem value="all">All platforms</SelectItem>
+              <SelectItem value="linux">Linux</SelectItem>
+              <SelectItem value="darwin">macOS (Darwin)</SelectItem>
+              <SelectItem value="win32">Windows</SelectItem>
             </SelectContent>
           </Select>
 

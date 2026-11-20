@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 import UserAvatar from '@/components/UserAvatar';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import {
@@ -25,13 +26,19 @@ import { SlaChip } from './LiveIncidentRow';
 
 type RailAction = { label: string; href?: string; onClick?: () => void };
 
+/** One quiet text action for every rail/section header ("Show all", "Schedules →"…). */
+const railActionClass =
+  'shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring';
+/** Shared row chrome for incident/attention/service lines inside the rail. */
+const railRowClass =
+  'group rounded-md border border-border bg-card outline-none transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring';
+
 /** Compact, consistent card used across the rail, the cockpit and the wallboard. */
 function RailCard({
   title,
   count,
   subtitle,
   icon,
-  tone,
   action,
   grow = false,
   testId,
@@ -41,36 +48,23 @@ function RailCard({
   count?: number;
   subtitle?: string;
   icon: React.ReactNode;
-  tone: 'violet' | 'amber' | 'rose' | 'slate' | 'sky';
   action?: RailAction;
   grow?: boolean;
   testId?: string;
   children: React.ReactNode;
 }) {
-  const toneClass =
-    tone === 'violet'
-      ? 'bg-muted text-foreground'
-      : tone === 'amber'
-        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-        : tone === 'rose'
-          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
-          : tone === 'sky'
-            ? 'bg-muted text-foreground'
-            : 'bg-muted text-muted-foreground';
-  const actionClass =
-    'shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50';
   return (
     <section
       data-testid={testId}
       className={cn(
-        'flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]',
+        'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm',
         grow ? 'xl:min-h-[9rem] xl:flex-1' : 'shrink-0'
       )}
     >
-      <header className="flex shrink-0 items-center gap-2.5 border-b border-border/70 px-3 py-2">
+      <header className="flex shrink-0 items-center gap-2.5 border-b border-border px-3 py-2">
         <span
           aria-hidden
-          className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', toneClass)}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
         >
           {icon}
         </span>
@@ -78,20 +72,20 @@ function RailCard({
           <h3 className="dash-heading-sm flex items-center gap-1.5 truncate">
             {title}
             {count !== undefined && count > 0 && (
-              <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+              <span className="rounded-full bg-muted px-1.5 text-2xs font-semibold tabular-nums text-muted-foreground">
                 {count}
               </span>
             )}
           </h3>
-          {subtitle && <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>}
+          {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {action &&
           (action.href ? (
-            <Link href={action.href} className={actionClass}>
+            <Link href={action.href} className={railActionClass}>
               {action.label}
             </Link>
           ) : (
-            <button type="button" onClick={action.onClick} className={actionClass}>
+            <button type="button" onClick={action.onClick} className={railActionClass}>
               {action.label}
             </button>
           ))}
@@ -101,11 +95,24 @@ function RailCard({
   );
 }
 
-function EmptyLine({ icon, text }: { icon: React.ReactNode; text: string }) {
+function EmptyLine({
+  icon,
+  text,
+  action,
+}: {
+  icon: React.ReactNode;
+  text: string;
+  action?: { label: string; href: string };
+}) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
+    <div className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
       {icon}
-      {text}
+      <span className="min-w-0 flex-1">{text}</span>
+      {action && (
+        <Link href={action.href} className={railActionClass}>
+          {action.label}
+        </Link>
+      )}
     </div>
   );
 }
@@ -122,20 +129,18 @@ function IncidentLine({
   return (
     <Link
       href={`/incidents/${incident.id}`}
-      className="group flex items-center gap-2.5 rounded-lg border border-border/70 bg-muted/30 px-2.5 py-2 hover:border-border hover:bg-muted/60 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      className={cn(railRowClass, 'flex items-center gap-2.5 px-2.5 py-2')}
     >
       <span
         aria-hidden
         className={cn(
           'h-2 w-2 shrink-0 rounded-full',
-          isCriticalIncident(incident) ? 'bg-rose-500' : 'bg-amber-500'
+          toneClasses(isCriticalIncident(incident) ? 'critical' : 'elevated').solid
         )}
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-semibold text-foreground group-hover:text-primary">
-          {incident.title}
-        </span>
-        <span className="block truncate text-[10px] text-muted-foreground">
+        <span className="block truncate text-xs font-medium text-foreground">{incident.title}</span>
+        <span className="block truncate text-2xs tabular-nums text-muted-foreground">
           {incident.service.name} · {formatIncidentAge(incident.createdAt, now)}
         </span>
       </span>
@@ -157,7 +162,6 @@ export function SlaRiskCard({ grow = false }: { grow?: boolean } = {}) {
           ? `${summary.slaDueSoon} due <10m · ${summary.slaRecentlyBreached} breached <1h`
           : 'Acknowledge and resolve targets'
       }
-      tone="amber"
       icon={<Clock3 className="h-3.5 w-3.5" />}
       action={{ label: 'Show all', onClick: () => setQuery({ view: 'breaching' }) }}
       grow={grow}
@@ -166,7 +170,7 @@ export function SlaRiskCard({ grow = false }: { grow?: boolean } = {}) {
       <div className="space-y-1.5" data-testid="rail-sla-risk">
         {items.length === 0 ? (
           <EmptyLine
-            icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden />}
+            icon={<CheckCircle2 className="h-4 w-4 shrink-0 text-status-ok" aria-hidden />}
             text="Everything is within SLA"
           />
         ) : (
@@ -192,7 +196,6 @@ export function OnCallCard() {
       title="On-Call Now"
       count={shifts.length}
       subtitle={shifts.length ? 'Current responders' : undefined}
-      tone="sky"
       icon={<Users className="h-3.5 w-3.5" />}
       action={{ label: 'Schedules', href: '/schedules' }}
     >
@@ -200,8 +203,9 @@ export function OnCallCard() {
         {shifts.length === 0 ? (
           <li>
             <EmptyLine
-              icon={<AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden />}
+              icon={<AlertTriangle className="h-4 w-4 shrink-0 text-status-elevated" aria-hidden />}
               text="No active on-call shifts"
+              action={{ label: 'Set up', href: '/schedules' }}
             />
           </li>
         ) : (
@@ -209,7 +213,7 @@ export function OnCallCard() {
             <li key={shift.id}>
               <Link
                 href="/schedules"
-                className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 hover:bg-muted/60 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="flex items-center gap-2.5 rounded-md px-1.5 py-1 outline-none transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="relative shrink-0">
                   <UserAvatar
@@ -218,14 +222,15 @@ export function OnCallCard() {
                     avatarUrl={shift.user.avatarUrl}
                     gender={shift.user.gender}
                     size="xs"
+                    aria-hidden
                   />
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-status-shift ring-2 ring-card" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-semibold text-foreground">
+                  <span className="block truncate text-xs font-medium text-foreground">
                     {shift.user.name}
                   </span>
-                  <span className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
+                  <span className="flex items-center gap-1 truncate text-2xs text-muted-foreground">
                     <Calendar className="h-3 w-3 shrink-0" aria-hidden />
                     {shift.scheduleName}
                   </span>
@@ -238,46 +243,6 @@ export function OnCallCard() {
     </RailCard>
   );
 }
-
-export function ActivityCard() {
-  const { snapshot, now } = useLiveDashboard();
-  const items = snapshot?.rail.activity ?? [];
-  return (
-    <RailCard
-      title="Recent Activity"
-      subtitle="Acks, escalations and resolutions"
-      tone="slate"
-      icon={<Activity className="h-3.5 w-3.5" />}
-    >
-      <ol className="relative space-y-2 border-l border-border pl-3" data-testid="rail-activity">
-        {items.length === 0 ? (
-          <li className="text-xs text-muted-foreground">No recent activity</li>
-        ) : (
-          items.slice(0, 6).map(item => (
-            <li key={item.id} className="relative">
-              <span
-                aria-hidden
-                className="absolute -left-[17px] top-1.5 h-2 w-2 rounded-full border-2 border-card bg-primary/70"
-              />
-              <Link
-                href={`/incidents/${item.incidentId}`}
-                className="block rounded outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                <span className="block truncate text-[11px] text-foreground" title={item.message}>
-                  {item.message}
-                </span>
-                <span className="block truncate text-[10px] text-muted-foreground">
-                  {item.incidentTitle} · {formatIncidentAge(item.createdAt, now)}
-                </span>
-              </Link>
-            </li>
-          ))
-        )}
-      </ol>
-    </RailCard>
-  );
-}
-
 function formatUntil(iso: string | null, now: number): string {
   if (!iso) return '';
   const minutes = Math.round((Date.parse(iso) - now) / 60_000);
@@ -289,9 +254,9 @@ function formatUntil(iso: string | null, now: number): string {
 }
 
 const ATTENTION_TONE: Record<'rose' | 'amber' | 'violet', string> = {
-  rose: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 font-semibold',
-  amber: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 font-semibold',
-  violet: 'bg-muted text-foreground font-semibold',
+  rose: toneClasses('critical').soft,
+  amber: toneClasses('elevated').soft,
+  violet: toneClasses(null).soft,
 };
 
 /**
@@ -314,19 +279,15 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
     <section
       aria-labelledby="ops-pulse-heading"
       data-testid="ops-pulse"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm"
     >
-      <header className="flex shrink-0 items-center justify-between border-b border-border/80 px-4 py-2.5">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <span
             aria-hidden
-            className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
           >
             <Activity className="h-3.5 w-3.5" />
-            <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 ring-1 ring-card" />
-            </span>
           </span>
           <div className="min-w-0">
             <h2 id="ops-pulse-heading" className="dash-heading whitespace-nowrap">
@@ -335,34 +296,35 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
             <p className="truncate text-xs text-muted-foreground">What needs you next</p>
           </div>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          LIVE
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-2xs font-semibold',
+            toneClasses('ok').soft
+          )}
+        >
+          <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('ok').solid)} aria-hidden />
+          Live
         </span>
       </header>
-      <div className="min-h-0 flex-1 divide-y divide-border/70 overflow-y-auto overscroll-contain">
+      <div className="min-h-0 flex-1 divide-y divide-border overflow-y-auto overscroll-contain">
         <section className="px-4 py-3" data-testid="pulse-you">
           <div
             className={cn(
-              'rounded-xl p-3 border shadow-2xs transition-all',
-              coverage?.me.onCall
-                ? 'border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-950/30 dark:via-emerald-900/10'
-                : 'border-border/70 bg-muted/20'
+              'rounded-md border p-3',
+              coverage?.me.onCall ? toneClasses('shift').soft : 'border-border bg-muted/30'
             )}
           >
             <div className="flex items-center gap-2.5">
               <span
                 aria-hidden
                 className={cn(
-                  'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-2xs',
-                  coverage?.me.onCall
-                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/30'
-                    : 'bg-muted text-muted-foreground'
+                  'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                  coverage?.me.onCall ? 'bg-card' : 'bg-muted text-muted-foreground'
                 )}
               >
                 <UserRound className="h-4 w-4" />
                 {coverage?.me.onCall && (
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-card" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-status-shift ring-2 ring-card" />
                 )}
               </span>
               <div className="min-w-0 flex-1">
@@ -371,14 +333,14 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
                     ? `You're on call · ${coverage.me.schedules.join(', ')}`
                     : 'Not on call'}
                 </p>
-                <p className="truncate text-[11px] text-muted-foreground">
+                <p className="truncate text-xs text-muted-foreground">
                   {coverage?.me.onCall ? `${formatUntil(coverage.me.until, now)} · ` : ''}
                   {mine === 0 ? 'Your queue is clear' : `${mine} in your queue`}
                 </p>
               </div>
               <Link
                 href={queueHref}
-                className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+                className="shrink-0 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Queue →
               </Link>
@@ -398,7 +360,12 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
             <h3 className="dash-eyebrow flex items-center gap-1.5">
               Needs attention
               {attention.length > 0 && (
-                <span className="rounded-full bg-rose-500/15 px-1.5 text-[10px] font-bold text-rose-700 dark:text-rose-300 font-mono">
+                <span
+                  className={cn(
+                    'rounded-full border px-1.5 text-2xs font-semibold tabular-nums',
+                    toneClasses('critical').soft
+                  )}
+                >
                   {attention.length}
                 </span>
               )}
@@ -406,14 +373,14 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
             <button
               type="button"
               onClick={() => setQuery({ sort: 'attention', view: 'active' })}
-              className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className={railActionClass}
             >
               Sort feed
             </button>
           </div>
           {attention.length === 0 ? (
             <EmptyLine
-              icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden />}
+              icon={<CheckCircle2 className="h-4 w-4 shrink-0 text-status-ok" aria-hidden />}
               text="Nothing near breach or without an owner"
             />
           ) : (
@@ -424,20 +391,23 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
                     href={`/incidents/${item.incident.id}`}
                     data-testid="attention-item"
                     data-reason={item.reason}
-                    className="group flex items-center gap-2 rounded-lg border border-border/70 bg-card p-2 hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-muted/40 shadow-2xs outline-none transition-all focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className={cn(railRowClass, 'flex items-center gap-2 p-2')}
                   >
                     <span
                       className={cn(
-                        'shrink-0 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums shadow-2xs',
+                        'shrink-0 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-2xs font-semibold tabular-nums',
                         ATTENTION_TONE[item.tone]
                       )}
                     >
                       {item.label}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground group-hover:text-primary transition-colors">
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
                       {item.incident.title}
                     </span>
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ArrowUpRight
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+                      aria-hidden
+                    />
                   </Link>
                 </li>
               ))}
@@ -448,16 +418,13 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
         <section className="px-4 py-3" data-testid="services-at-risk">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="dash-eyebrow">Hotspots</h3>
-            <Link
-              href="/services"
-              className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
+            <Link href="/services" className={railActionClass}>
               Services →
             </Link>
           </div>
           {services.length === 0 ? (
             <EmptyLine
-              icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden />}
+              icon={<CheckCircle2 className="h-4 w-4 shrink-0 text-status-ok" aria-hidden />}
               text="No service has active incidents"
             />
           ) : (
@@ -473,19 +440,21 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
                       title="Filter the live feed by this service"
                       onClick={() => setQuery({ serviceId: selected ? null : service.id })}
                       className={cn(
-                        'group block w-full rounded-lg border p-2 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-primary/50 shadow-2xs',
-                        selected
-                          ? 'border-primary/50 bg-primary/10 shadow-xs'
-                          : 'border-border/60 bg-card hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-muted/30'
+                        railRowClass,
+                        'block w-full p-2 text-left',
+                        selected && 'border-foreground/40 bg-muted'
                       )}
                     >
-                      <div className="flex items-center justify-between gap-2 text-[12px]">
-                        <span className="truncate font-semibold text-foreground group-hover:text-primary transition-colors">
-                          {service.name}
-                        </span>
-                        <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground flex items-center gap-1.5">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate font-medium text-foreground">{service.name}</span>
+                        <span className="flex shrink-0 items-center gap-1.5 text-2xs tabular-nums text-muted-foreground">
                           {service.critical > 0 && (
-                            <span className="rounded bg-rose-500/15 px-1 py-0.2 text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                            <span
+                              className={cn(
+                                'rounded-sm border px-1 text-2xs font-semibold',
+                                toneClasses('critical').soft
+                              )}
+                            >
                               {service.critical} crit
                             </span>
                           )}
@@ -493,15 +462,13 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
                         </span>
                       </div>
                       <div
-                        className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted/80"
+                        className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
                         aria-hidden
                       >
                         <div
                           className={cn(
-                            'h-full rounded-full transition-all duration-300',
-                            service.critical > 0
-                              ? 'bg-gradient-to-r from-rose-500 to-rose-400'
-                              : 'bg-gradient-to-r from-amber-500 to-amber-400'
+                            'h-full rounded-full transition-[width] duration-200',
+                            toneClasses(service.critical > 0 ? 'critical' : 'elevated').solid
                           )}
                           style={{
                             width: `${Math.max(6, Math.round((service.count / max) * 100))}%`,
@@ -519,15 +486,16 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
         <section className="px-4 py-3" data-testid="pulse-coverage">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="dash-eyebrow">On call now</h3>
-            <Link
-              href="/schedules"
-              className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
+            <Link href="/schedules" className={railActionClass}>
               Schedules →
             </Link>
           </div>
           {shifts.length === 0 ? (
-            <p className="text-[12px] text-muted-foreground">No active on-call shifts</p>
+            <EmptyLine
+              icon={<AlertTriangle className="h-4 w-4 shrink-0 text-status-elevated" aria-hidden />}
+              text="No active on-call shifts"
+              action={{ label: 'Set up', href: '/schedules' }}
+            />
           ) : (
             <ul className="flex flex-wrap items-center gap-2" aria-label="Responders on call now">
               {shifts.slice(0, 8).map(shift => (
@@ -542,13 +510,13 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
                     avatarUrl={shift.user.avatarUrl}
                     gender={shift.user.gender}
                     size="sm"
-                    className="ring-2 ring-card shadow-2xs transition-transform group-hover:scale-105"
+                    className="ring-2 ring-card"
                   />
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-status-shift ring-2 ring-card" />
                 </li>
               ))}
               {shifts.length > 8 && (
-                <li className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground ring-2 ring-card shadow-2xs">
+                <li className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-2xs font-semibold tabular-nums text-muted-foreground ring-2 ring-card">
                   +{shifts.length - 8}
                 </li>
               )}
@@ -557,7 +525,10 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
           {coverage && coverage.gaps.length > 0 && (
             <p
               data-testid="coverage-gap"
-              className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-2 text-[11px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+              className={cn(
+                'mt-2.5 flex items-start gap-1.5 rounded-md border px-2.5 py-2 text-xs font-medium',
+                toneClasses('critical').soft
+              )}
             >
               <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>

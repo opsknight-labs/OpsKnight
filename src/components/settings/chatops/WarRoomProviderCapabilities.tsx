@@ -65,7 +65,7 @@ export function WarRoomProviderCapabilities() {
   };
 
   return (
-    <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+    <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
         <div>
           <h3 className="text-sm font-bold text-foreground">Provider Capabilities</h3>
@@ -99,27 +99,27 @@ export function WarRoomProviderCapabilities() {
               <tr key={row.key} className="hover:bg-muted/30 transition-colors">
                 <td className="py-2.5 pr-4">
                   <span className="font-semibold text-foreground block">{row.label}</span>
-                  <span className="text-[11px] text-muted-foreground">{row.desc}</span>
+                  <span className="text-2xs text-muted-foreground">{row.desc}</span>
                 </td>
                 <td className="text-center py-2.5 px-3">
                   {slackCaps[row.key] ? (
-                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto">
-                      <Check className="h-3.5 w-3.5" />
+                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-status-ok-soft text-status-ok-deep dark:bg-status-ok/15 dark:text-emerald-300 mx-auto">
+                      <Check className="h-3.5 w-3.5" aria-label="Supported" />
                     </span>
                   ) : (
                     <span className="inline-flex items-center justify-center text-muted-foreground/50 mx-auto">
-                      <Minus className="h-3.5 w-3.5" />
+                      <Minus className="h-3.5 w-3.5" aria-label="Not supported" />
                     </span>
                   )}
                 </td>
                 <td className="text-center py-2.5 px-3">
                   {teamsCaps[row.key] ? (
-                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto">
-                      <Check className="h-3.5 w-3.5" />
+                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-status-ok-soft text-status-ok-deep dark:bg-status-ok/15 dark:text-emerald-300 mx-auto">
+                      <Check className="h-3.5 w-3.5" aria-label="Supported" />
                     </span>
                   ) : (
                     <span className="inline-flex items-center justify-center text-muted-foreground/50 mx-auto">
-                      <Minus className="h-3.5 w-3.5" />
+                      <Minus className="h-3.5 w-3.5" aria-label="Not supported" />
                     </span>
                   )}
                 </td>

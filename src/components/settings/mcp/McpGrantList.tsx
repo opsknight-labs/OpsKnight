@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import UserAvatar from '@/components/UserAvatar';
 import { KeyRound } from 'lucide-react';
 import { getAssistantIcon } from '@/components/common/BrandLogos';
 import McpActivityDrawer from '@/components/settings/mcp/McpActivityDrawer';
@@ -74,14 +75,24 @@ export default function McpGrantList({
               {show === 'person' ? (
                 <Link
                   href={`/users/${row.user.id}`}
-                  className="block min-w-0 break-words font-medium text-foreground underline-offset-2 hover:underline"
+                  className="flex min-w-0 items-start gap-2 break-words font-medium text-foreground underline-offset-2 hover:underline"
                 >
-                  {who}
-                  {row.user.name && row.user.email && (
-                    <span className="block break-all text-xs font-normal text-muted-foreground">
-                      {row.user.email}
-                    </span>
-                  )}
+                  <UserAvatar
+                    userId={row.user.id}
+                    name={who}
+                    avatarUrl={row.user.avatarUrl}
+                    gender={row.user.gender}
+                    size="xs"
+                    aria-hidden
+                  />
+                  <span className="min-w-0">
+                    {who}
+                    {row.user.name && row.user.email && (
+                      <span className="block break-all text-xs font-normal text-muted-foreground">
+                        {row.user.email}
+                      </span>
+                    )}
+                  </span>
                 </Link>
               ) : (
                 <span className="flex min-w-0 items-center gap-2.5">
@@ -126,7 +137,7 @@ export default function McpGrantList({
                   empty="No calls yet"
                 />
                 {row.lastCallAt && row.lastTool && (
-                  <code className="break-all font-mono text-[11px] text-muted-foreground">
+                  <code className="break-all font-mono text-2xs text-muted-foreground">
                     {row.lastTool}
                   </code>
                 )}

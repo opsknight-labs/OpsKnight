@@ -1,11 +1,14 @@
 name: Enterprise MCP PR validation
-# Runs on main for MCP-related changes; on a pull request only when labelled `ci:full`.
+# Runs on main for MCP-related changes; on a pull request once each time `ci:full` is added.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Diff against this commit to pick affected checks (set by main-heavy.yml); empty runs everything
+        type: string
+        required: false
 permissions:
   contents: read
 concurrency:
@@ -17,7 +20,7 @@ env:
 jobs:
   detect-changes:
     name: Detect MCP-related changes
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     outputs:
       mcp: ${{ steps.detect.outputs.mcp }}
@@ -27,11 +30,12 @@ jobs:
           fetch-depth: 2
       - id: detect
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base_sha }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "push" ]; then
+          # Manual runs validate everything unless main-heavy.yml passed the batch base.
+          if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "push" ] && [ -z "$BASE_SHA" ]; then
             echo "mcp=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi

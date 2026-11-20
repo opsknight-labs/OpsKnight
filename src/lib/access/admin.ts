@@ -229,7 +229,7 @@ export async function whoHasCapability(capability: Capability) {
   const [byRole, byCustomRole, byGrant] = await Promise.all([
     prisma.user.findMany({
       where: { status: 'ACTIVE', role: { in: roles as Role[] } },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, avatarUrl: true, role: true },
       orderBy: { name: 'asc' },
       take: 500,
     }),
@@ -242,6 +242,7 @@ export async function whoHasCapability(capability: Capability) {
         id: true,
         name: true,
         email: true,
+        avatarUrl: true,
         role: true,
         customRole: { select: { name: true } },
       },
@@ -260,7 +261,7 @@ export async function whoHasCapability(capability: Capability) {
         expiresAt: true,
         role: true,
         source: true,
-        user: { select: { id: true, name: true, email: true, role: true } },
+        user: { select: { id: true, name: true, email: true, avatarUrl: true, role: true } },
       },
       take: 500,
     }),

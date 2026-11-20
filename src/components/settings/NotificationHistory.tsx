@@ -172,6 +172,7 @@ export default function NotificationHistory() {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
     fetchNotifications();
   }, [fetchNotifications]);
 
@@ -227,7 +228,10 @@ export default function NotificationHistory() {
       let hasMore = true;
 
       while (hasMore) {
-        const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(currentOffset) });
+        const params = new URLSearchParams({
+          limit: String(PAGE_LIMIT),
+          offset: String(currentOffset),
+        });
         if (filterChannel && filterChannel !== 'all') params.set('channel', filterChannel);
         if (filterStatus && filterStatus !== 'all') params.set('status', filterStatus);
         if (debouncedQuery) params.set('q', debouncedQuery);
@@ -297,7 +301,7 @@ export default function NotificationHistory() {
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1"
+            className="text-2xs font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             {status}
@@ -307,7 +311,7 @@ export default function NotificationHistory() {
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 inline-flex items-center gap-1"
+            className="text-2xs font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 inline-flex items-center gap-1"
           >
             <Clock3 className="h-3 w-3 animate-pulse" />
             {status}
@@ -317,7 +321,7 @@ export default function NotificationHistory() {
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
+            className="text-2xs font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
           >
             <AlertTriangle className="h-3 w-3" />
             {status}
@@ -327,7 +331,7 @@ export default function NotificationHistory() {
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80 inline-flex items-center gap-1"
+            className="text-2xs font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80 inline-flex items-center gap-1"
           >
             <MinusCircle className="h-3 w-3" />
             Skipped
@@ -337,7 +341,7 @@ export default function NotificationHistory() {
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
+            className="text-2xs font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
           >
             {status}
           </Badge>
@@ -392,7 +396,7 @@ export default function NotificationHistory() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="text-2xl font-bold text-foreground tracking-tight">{stats.total}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">All outbound attempts</p>
+          <p className="text-2xs text-muted-foreground mt-0.5">All outbound attempts</p>
         </button>
 
         <button
@@ -413,7 +417,7 @@ export default function NotificationHistory() {
           <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight">
             {stats.sent}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <p className="text-2xs text-muted-foreground mt-0.5">
             {stats.total > 0
               ? `${Math.round((stats.sent / stats.total) * 100)}% delivery rate`
               : 'Confirmed delivered'}
@@ -438,7 +442,7 @@ export default function NotificationHistory() {
           <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">
             {stats.pending}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Queued or retry backoff</p>
+          <p className="text-2xs text-muted-foreground mt-0.5">Queued or retry backoff</p>
         </button>
 
         <button
@@ -459,7 +463,7 @@ export default function NotificationHistory() {
           <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 tracking-tight">
             {stats.failed}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Delivery errors</p>
+          <p className="text-2xs text-muted-foreground mt-0.5">Delivery errors</p>
         </button>
 
         <button
@@ -476,7 +480,7 @@ export default function NotificationHistory() {
             <XCircle className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="text-2xl font-bold text-foreground tracking-tight">{stats.skipped}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Quiet hours or rate limits</p>
+          <p className="text-2xs text-muted-foreground mt-0.5">Quiet hours or rate limits</p>
         </button>
       </div>
 
@@ -562,7 +566,7 @@ export default function NotificationHistory() {
                 setOffset(0);
               }}
             >
-              <SelectTrigger className="h-8 text-xs bg-background">
+              <SelectTrigger aria-label="Filter by channel" className="h-8 text-xs bg-background">
                 <SelectValue placeholder="All Channels" />
               </SelectTrigger>
               <SelectContent>
@@ -585,7 +589,7 @@ export default function NotificationHistory() {
                 setOffset(0);
               }}
             >
-              <SelectTrigger className="h-8 text-xs bg-background">
+              <SelectTrigger aria-label="Filter by status" className="h-8 text-xs bg-background">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -608,7 +612,7 @@ export default function NotificationHistory() {
                     key={preset.id}
                     type="button"
                     onClick={() => applyDatePreset(preset.id as 'today' | '7d' | '30d')}
-                    className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                    className={`text-2xs font-semibold px-2 py-1 rounded-md border transition-all ${
                       datePreset === preset.id
                         ? 'bg-primary/10 border-primary/40 text-primary'
                         : 'bg-background border-border/80 text-muted-foreground hover:text-foreground hover:border-border'
@@ -741,7 +745,7 @@ export default function NotificationHistory() {
                         {entries.map(([ch, count]) => (
                           <span
                             key={ch}
-                            className="flex items-center gap-1 text-[10px] text-muted-foreground"
+                            className="flex items-center gap-1 text-2xs text-muted-foreground"
                           >
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${getChannelBarColor(ch)}`}
@@ -828,7 +832,7 @@ export default function NotificationHistory() {
                               {notification.attempts} attempt
                               {notification.attempts === 1 ? '' : 's'}
                             </div>
-                            <div className="text-[10px] text-muted-foreground font-mono">
+                            <div className="text-2xs text-muted-foreground font-mono">
                               {notification.latencyMs !== null
                                 ? `${formatDuration(notification.latencyMs)} latency`
                                 : notification.pendingForMs !== null
@@ -849,7 +853,7 @@ export default function NotificationHistory() {
                           <TableCell className="py-2.5 max-w-sm">
                             {notification.errorMsg ? (
                               <div
-                                className="truncate text-[11px] text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 flex items-center gap-1"
+                                className="truncate text-2xs text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 flex items-center gap-1"
                                 title={notification.errorMsg}
                               >
                                 <AlertTriangle className="h-3 w-3 shrink-0 text-rose-500" />
@@ -874,7 +878,7 @@ export default function NotificationHistory() {
                                     <p className="font-semibold text-rose-600 dark:text-rose-400 mb-1 flex items-center gap-1">
                                       <AlertTriangle className="h-3.5 w-3.5" /> Error Detail
                                     </p>
-                                    <p className="font-mono text-[11px] text-rose-700 dark:text-rose-300 break-all">
+                                    <p className="font-mono text-2xs text-rose-700 dark:text-rose-300 break-all">
                                       {notification.errorMsg}
                                     </p>
                                   </div>
@@ -884,12 +888,12 @@ export default function NotificationHistory() {
                                     <p className="font-semibold text-foreground mb-1">
                                       Message Preview
                                     </p>
-                                    <p className="text-muted-foreground break-all font-mono text-[11px]">
+                                    <p className="text-muted-foreground break-all font-mono text-2xs">
                                       {notification.message}
                                     </p>
                                   </div>
                                 )}
-                                <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground pt-1">
+                                <div className="flex flex-wrap gap-4 text-2xs text-muted-foreground pt-1">
                                   <span>
                                     Attempts:{' '}
                                     <strong className="text-foreground">

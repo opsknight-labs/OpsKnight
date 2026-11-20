@@ -17,6 +17,8 @@ import {
 import { bootstrapAdmin } from '@/app/setup/actions';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
 import Spinner from '@/components/ui/Spinner';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
 import { cn } from '@/lib/utils';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
@@ -32,15 +34,21 @@ type Props = {
   requiresSecret?: boolean;
 };
 
+const setupFieldClass =
+  'h-11 min-h-11 2xl:h-12 pl-12 rounded-xl bg-card text-base sm:text-sm 2xl:text-base shadow-xs hover:border-ring/50 transition-colors';
+const toggleClass =
+  'absolute right-3 z-10 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
 function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
       disabled={pending || !canSubmit}
+      aria-busy={pending || undefined}
       className={cn(
-        'group relative w-full h-11 2xl:h-12 px-4 rounded-lg font-semibold text-sm 2xl:text-base text-white transition-all duration-150 flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.995]',
-        'bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100 border border-slate-900 dark:border-white shadow-sm shadow-slate-950/15 hover:shadow'
+        'group relative w-full h-11 2xl:h-12 px-4 rounded-lg font-semibold text-sm 2xl:text-base transition-all duration-150 flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.995]',
+        'bg-primary hover:bg-primary/90 text-primary-foreground border border-primary shadow-sm hover:shadow'
       )}
     >
       {pending ? (
@@ -93,6 +101,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
   );
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const emailInvalid = emailTouched && !!email && !isEmailValid;
   const normalizedAppOrigin = (() => {
     try {
       const candidate = new URL(appUrl);
@@ -123,21 +132,19 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
     purgeBrowserAuthCaches();
     return (
       <div className="text-center py-4 space-y-4" role="status" aria-live="polite">
-        <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+        <div className="w-12 h-12 rounded-full bg-status-ok/15 text-status-ok flex items-center justify-center mx-auto">
           <CheckCircle2 className="w-6 h-6" />
         </div>
         <div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-            Administrator created
-          </h3>
-          <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1">
+          <h3 className="text-lg font-bold text-foreground">Administrator created</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             Your system is initialized. Sign in as{' '}
-            <span className="font-medium text-slate-900 dark:text-white">{state.email}</span>.
+            <span className="font-medium text-foreground">{state.email}</span>.
           </p>
         </div>
         <a
           href="/login"
-          className="inline-flex items-center justify-center w-full h-11 2xl:h-12 rounded-lg font-semibold text-sm bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition-colors"
+          className="inline-flex items-center justify-center w-full h-11 2xl:h-12 rounded-lg font-semibold text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Continue to sign in
         </a>
@@ -159,14 +166,14 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
         <div
           role="alert"
           aria-live="assertive"
-          className="flex items-start gap-2.5 p-3.5 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs animate-shake"
+          className="flex items-start gap-2.5 p-3.5 rounded-lg bg-destructive/5 border border-destructive/30 text-destructive text-xs animate-shake"
         >
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span className="flex-1 leading-relaxed">{state.error}</span>
           <button
             type="button"
             onClick={() => setDismissedError(state.error ?? null)}
-            className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 transition-colors cursor-pointer"
+            className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Dismiss error"
             title="Dismiss"
           >
@@ -177,17 +184,14 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
 
       {/* Name */}
       <div>
-        <label
-          htmlFor="setup-name"
-          className="block text-xs font-medium text-slate-700 dark:text-zinc-300 mb-1.5"
-        >
+        <Label htmlFor="setup-name" className="mb-1.5 block text-xs text-foreground">
           Full name
-        </label>
+        </Label>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
-            <User className="h-4 w-4" />
+          <div className="absolute left-4 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
+            <User className="h-4 w-4" aria-hidden="true" />
           </div>
-          <input
+          <Input
             id="setup-name"
             name="name"
             type="text"
@@ -200,29 +204,27 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               setName(event.target.value);
               setDismissedError(null);
             }}
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            className={cn(setupFieldClass, 'pr-4')}
           />
         </div>
       </div>
 
       {/* Email */}
       <div>
-        <label
+        <Label
           htmlFor="setup-email"
           className={cn(
-            'block text-xs font-medium mb-1.5 transition-colors',
-            emailTouched && email && !isEmailValid
-              ? 'text-red-600 dark:text-red-400'
-              : 'text-slate-700 dark:text-zinc-300'
+            'mb-1.5 block text-xs transition-colors',
+            emailInvalid ? 'text-destructive' : 'text-foreground'
           )}
         >
           Email address
-        </label>
+        </Label>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
-            <Mail className="h-4 w-4" />
+          <div className="absolute left-4 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
+            <Mail className="h-4 w-4" aria-hidden="true" />
           </div>
-          <input
+          <Input
             id="setup-email"
             name="email"
             type="email"
@@ -236,16 +238,18 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               setDismissedError(null);
             }}
             onBlur={() => setEmailTouched(true)}
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            aria-invalid={emailInvalid || undefined}
+            aria-describedby={emailInvalid ? 'setup-email-error' : undefined}
+            className={cn(setupFieldClass, 'pr-4', emailInvalid && 'border-destructive')}
           />
-          {emailTouched && email && !isEmailValid && (
-            <div className="absolute right-3 z-10 text-red-500">
+          {emailInvalid && (
+            <div className="absolute right-3 z-10 text-destructive" aria-hidden="true">
               <AlertCircle className="w-4 h-4" />
             </div>
           )}
         </div>
-        {emailTouched && email && !isEmailValid && (
-          <p className="text-[10px] text-red-500 dark:text-red-400 font-medium pl-1 mt-1">
+        {emailInvalid && (
+          <p id="setup-email-error" className="text-xs text-destructive font-medium mt-1">
             Please enter a valid email address
           </p>
         )}
@@ -254,21 +258,16 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
       {/* Application URL */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label
-            htmlFor="setup-app-url"
-            className="block text-xs font-medium text-slate-700 dark:text-zinc-300"
-          >
+          <Label htmlFor="setup-app-url" className="mb-1.5 block text-xs text-foreground">
             Application URL
-          </label>
-          <span className="text-[11px] text-slate-400 dark:text-zinc-500">
-            Detected from request
-          </span>
+          </Label>
+          <span className="text-2xs text-muted-foreground">Detected from request</span>
         </div>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
-            <Globe className="h-4 w-4" />
+          <div className="absolute left-4 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
+            <Globe className="h-4 w-4" aria-hidden="true" />
           </div>
-          <input
+          <Input
             id="setup-app-url"
             name="appUrl"
             type="url"
@@ -277,24 +276,23 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
             value={appUrl}
             onChange={event => setAppUrl(event.target.value)}
             placeholder="http://localhost:3000"
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            aria-describedby="setup-app-url-help"
+            className={cn(setupFieldClass, 'pr-4')}
           />
         </div>
-        <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed">
-          <p className="text-slate-500 dark:text-zinc-400">
+        <div id="setup-app-url-help" className="mt-1.5 space-y-1 text-xs leading-relaxed">
+          <p className="text-muted-foreground">
             Canonical public address used for application links, callbacks, and host authorization.
             Keep it aligned with your authentication URL in normal deployments.
           </p>
           {appUrlMatchesBrowser ? (
-            <p className="text-emerald-600 dark:text-emerald-400">
-              ✓ Matches the address currently open in your browser.
-            </p>
+            <p className="text-status-ok">✓ Matches the address currently open in your browser.</p>
           ) : (
-            <p className="text-amber-600 dark:text-amber-400">
+            <p className="text-status-elevated-deep">
               ⚠ This differs from the address currently open in your browser.
             </p>
           )}
-          <p className="text-amber-600/90 dark:text-amber-400/90">
+          <p className="text-status-elevated-deep">
             <span className="font-semibold">Important:</span> Enter the exact address (domain or IP)
             you will use. For security, accessing OpsKnight from any unlisted address will be
             blocked with a &quot;Misdirected Request&quot; error.
@@ -305,17 +303,14 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
       {/* One-time bootstrap capability, with environment secret compatibility. */}
       {requiresSecret && (
         <div>
-          <label
-            htmlFor="setup-secret"
-            className="block text-xs font-medium text-slate-700 dark:text-zinc-300 mb-1.5"
-          >
+          <Label htmlFor="setup-secret" className="mb-1.5 block text-xs text-foreground">
             Bootstrap code
-          </label>
+          </Label>
           <div className="group relative flex items-center">
-            <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
-              <KeyRound className="h-4 w-4" />
+            <div className="absolute left-4 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
+              <KeyRound className="h-4 w-4" aria-hidden="true" />
             </div>
-            <input
+            <Input
               id="setup-secret"
               name="setupSecret"
               type="password"
@@ -328,10 +323,11 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
                 setSetupSecret(event.target.value);
                 setDismissedError(null);
               }}
-              className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+              aria-describedby="setup-secret-help"
+              className={cn(setupFieldClass, 'pr-4')}
             />
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1">
+          <p id="setup-secret-help" className="text-xs text-muted-foreground mt-1">
             Generate a 30-minute, one-time code with `node scripts/create-bootstrap-code.mjs`. A
             configured SETUP_SECRET remains accepted for deployment compatibility.
           </p>
@@ -340,17 +336,14 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
 
       {/* Password */}
       <div>
-        <label
-          htmlFor="setup-password"
-          className="block text-xs font-medium text-slate-700 dark:text-zinc-300 mb-1.5"
-        >
+        <Label htmlFor="setup-password" className="mb-1.5 block text-xs text-foreground">
           Administrator password
-        </label>
+        </Label>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
-            <Lock className="h-4 w-4" />
+          <div className="absolute left-4 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
+            <Lock className="h-4 w-4" aria-hidden="true" />
           </div>
-          <input
+          <Input
             id="setup-password"
             name="password"
             type={showPassword ? 'text' : 'password'}
@@ -363,15 +356,21 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               setPassword(event.target.value);
               setDismissedError(null);
             }}
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            className={cn(setupFieldClass, 'pr-11')}
           />
           <button
             type="button"
             onClick={() => setShowPassword(v => !v)}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
-            className="absolute right-3 z-10 p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+            aria-pressed={showPassword}
+            aria-controls="setup-password"
+            className={toggleClass}
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" />
+            )}
           </button>
         </div>
         <div className="mt-2">
@@ -381,17 +380,14 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
 
       {/* Confirm Password */}
       <div>
-        <label
-          htmlFor="setup-confirm-password"
-          className="block text-xs font-medium text-slate-700 dark:text-zinc-300 mb-1.5"
-        >
+        <Label htmlFor="setup-confirm-password" className="mb-1.5 block text-xs text-foreground">
           Confirm password
-        </label>
+        </Label>
         <div className="group relative flex items-center">
-          <div className="absolute left-4 z-10 text-slate-400 dark:text-zinc-500 group-focus-within:text-slate-800 dark:group-focus-within:text-zinc-200 transition-colors pointer-events-none">
-            <Lock className="h-4 w-4" />
+          <div className="absolute left-4 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
+            <Lock className="h-4 w-4" aria-hidden="true" />
           </div>
-          <input
+          <Input
             id="setup-confirm-password"
             name="confirmPassword"
             type={showConfirmPassword ? 'text' : 'password'}
@@ -404,7 +400,13 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               setConfirmPassword(event.target.value);
               setDismissedError(null);
             }}
-            className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-zinc-600 focus:outline-none focus:border-slate-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            aria-invalid={(confirmPassword && !passwordsMatch) || undefined}
+            aria-describedby={confirmPassword ? 'setup-confirm-password-match' : undefined}
+            className={cn(
+              setupFieldClass,
+              'pr-11',
+              confirmPassword && !passwordsMatch && 'border-destructive'
+            )}
           />
           <button
             type="button"
@@ -412,17 +414,22 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
             aria-label={
               showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'
             }
-            className="absolute right-3 z-10 p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+            aria-pressed={showConfirmPassword}
+            aria-controls="setup-confirm-password"
+            className={toggleClass}
           >
-            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showConfirmPassword ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" />
+            )}
           </button>
         </div>
         {confirmPassword && (
           <p
+            id="setup-confirm-password-match"
             className={`flex items-center gap-1.5 text-xs pt-1.5 ${
-              passwordsMatch
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-red-600 dark:text-red-400'
+              passwordsMatch ? 'text-status-ok' : 'text-destructive'
             }`}
           >
             {passwordsMatch ? (

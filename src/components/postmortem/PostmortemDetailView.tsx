@@ -365,8 +365,10 @@ export default function PostmortemDetailView({
                 <UserAvatar
                   userId={postmortem.createdBy.id}
                   name={postmortem.createdBy.name}
+                  avatarUrl={postmortem.createdBy.avatarUrl}
                   gender={postmortem.createdBy.gender}
                   size="xs"
+                  aria-hidden
                 />
               )}
               Created by{' '}
@@ -568,8 +570,10 @@ export default function PostmortemDetailView({
                             <UserAvatar
                               userId={owner.id}
                               name={owner.name}
+                              avatarUrl={owner.avatarUrl}
                               gender={owner.gender}
                               size="xs"
+                              aria-hidden
                             />
                             {owner.name}
                           </span>

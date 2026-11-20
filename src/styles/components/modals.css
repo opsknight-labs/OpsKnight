@@ -4,73 +4,20 @@
    ======================================== */
 
 /* Modal backdrop overlay */
-.modal-backdrop {
-   position: fixed;
-   inset: 0;
-   background: var(--bg-overlay);
-   z-index: var(--z-modal-backdrop);
-   animation: fadeIn 0.2s ease-out;
-}
 
 /* Modal container */
-.modal-container {
-   position: fixed;
-   inset: 0;
-   display: flex;
-   align-items: center;
-   justify-content: center;
-   padding: 1rem;
-   z-index: var(--z-modal);
-}
 
 /* Modal content */
-.modal-content {
-   background: var(--bg-secondary);
-   border-radius: var(--radius-lg);
-   border: 1px solid var(--border);
-   box-shadow: var(--shadow-xl);
-   max-width: 480px;
-   width: 100%;
-   animation: slideUp 0.2s ease-out;
-}
 
 /* Modal header */
-.modal-header {
-   display: flex;
-   align-items: center;
-   justify-content: space-between;
-   padding: 1rem 1.25rem;
-   border-bottom: 1px solid var(--border);
-}
-
-.modal-title {
-   font-size: 1.125rem;
-   font-weight: 700;
-   color: var(--text-primary);
-   margin: 0;
-}
 
 /* Modal body */
-.modal-body {
-   padding: 1.25rem;
-}
 
 /* Modal footer */
-.modal-footer {
-   display: flex;
-   justify-content: flex-end;
-   gap: 0.75rem;
-   padding: 1rem 1.25rem;
-   border-top: 1px solid var(--border);
-}
 
 /* Confirm dialog */
 .confirm-dialog {
    text-align: center;
-}
-
-.confirm-dialog .modal-body {
-   padding: 1.5rem;
 }
 
 .confirm-dialog-icon {

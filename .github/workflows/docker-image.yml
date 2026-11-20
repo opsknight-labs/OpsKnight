@@ -1,7 +1,7 @@
 name: Docker Image (build + push)
 
 on:
-  # Pull requests build the image only when labelled `ci:full`; main always does.
+  # Pull requests build the image once each time `ci:full` is added; main always does.
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, labeled]
@@ -63,6 +63,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
           provenance: false
           sbom: false
       - name: Verify source and architecture and export checksummed archive
@@ -240,7 +241,7 @@ jobs:
     needs: [release-quality, integration-certification]
     if: >-
       !cancelled() && !inputs.certification_archive &&
-      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')) &&
+      (github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')) &&
       (!startsWith(github.ref, 'refs/tags/v') ||
         (needs.release-quality.result == 'success' && needs.integration-certification.result == 'success'))
     runs-on: ubuntu-22.04
@@ -323,6 +324,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
           cache-from: type=gha,scope=opsknight-main-amd64
           provenance: false
           sbom: false
@@ -722,6 +724,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
           cache-from: type=gha,scope=opsknight-main-amd64
           cache-to: type=gha,scope=opsknight-main-amd64,mode=max
           provenance: false
@@ -741,6 +744,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
           cache-from: |
             type=gha,scope=opsknight-release
             type=gha,scope=opsknight-main-amd64

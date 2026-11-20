@@ -40,34 +40,6 @@ textarea::placeholder {
     color: var(--text-muted);
 }
 
-.form-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.form-label {
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0;
-    line-height: 1.4;
-    color: var(--text-secondary);
-}
-
-.form-error {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0;
-    color: var(--color-error);
-}
-
-.filters-form-actions {
-    display: flex;
-    gap: 0.45rem;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-}
-
 .auth-input {
     min-height: 44px;
     color: inherit;

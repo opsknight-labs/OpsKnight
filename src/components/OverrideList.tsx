@@ -2,13 +2,12 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 import type { OverrideStatus } from '@/lib/schedules/detail-view-model';
 import { formatDateTime } from '@/lib/timezone';
-import { getDefaultAvatar } from '@/lib/avatar';
 import ConfirmDialog from './ConfirmDialog';
-import { DirectUserAvatar } from './UserAvatar';
+import UserAvatar from './UserAvatar';
 import { Card } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -55,7 +54,6 @@ export default function OverrideList({
   emptyMessage,
 }: OverrideListProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [deleteOverrideId, setDeleteOverrideId] = useState<string | null>(null);
 
@@ -64,11 +62,14 @@ export default function OverrideList({
     startTransition(async () => {
       try {
         const result = await deleteOverride(scheduleId, overrideId);
-        if (result?.error) return showToast(result, 'error');
-        showToast('Override deleted successfully.', 'success');
+        if (result?.error) {
+          notify.error(result);
+          return;
+        }
+        notify.success('Override deleted successfully.');
         router.refresh();
       } catch (error) {
-        showToast(error, 'error');
+        notify.error(error);
       }
     });
   };
@@ -102,14 +103,14 @@ export default function OverrideList({
               )}
             >
               <div className="flex items-start gap-3">
-                <DirectUserAvatar
-                  avatarUrl={
-                    override.user.avatarUrl ||
-                    getDefaultAvatar(override.user.gender, override.userId)
-                  }
+                <UserAvatar
+                  userId={override.userId}
+                  avatarUrl={override.user.avatarUrl}
+                  gender={override.user.gender}
                   name={override.user.name}
                   size="sm"
                   className="h-9 w-9"
+                  aria-hidden
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

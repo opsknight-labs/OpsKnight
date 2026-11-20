@@ -128,6 +128,10 @@ function changedPaths(
   } else if (eventName === 'push') {
     base = event.before;
     head = event.after;
+  } else if (eventName === 'workflow_dispatch' && event.inputs?.base_sha) {
+    // main-heavy.yml batches merges and passes the commit the previous batch tested.
+    base = event.inputs.base_sha;
+    head = process.env.GITHUB_SHA;
   } else return null;
   const valid = sha => typeof sha === 'string' && /^[a-f0-9]{40}$/.test(sha) && !/^0+$/.test(sha);
   if (!valid(base) || !valid(head)) return null;

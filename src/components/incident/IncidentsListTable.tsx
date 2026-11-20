@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useTimezone } from '@/contexts/TimezoneContext';
-import { formatDateTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -31,15 +29,17 @@ import {
 import { useToast } from '@/hooks/use-product-notification';
 import Pagination from './Pagination';
 
-import StatusBadge from './StatusBadge';
 import EscalationStatusBadge from './EscalationStatusBadge';
-import PriorityBadge from './PriorityBadge';
+import StatusBadge from '@/components/patterns/StatusBadge';
+import SeverityBadge from '@/components/patterns/SeverityBadge';
+import RelativeTime from '@/components/patterns/RelativeTime';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { incidentStatusTone } from '@/lib/design/status-palette';
 import AssigneeSection from './AssigneeSection';
 import ResolveIncidentModal, { type ResolvingIncidentData } from './ResolveIncidentModal';
 import SLABreachWarningBadge from './SLABreachWarningBadge';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useIncidentSlaState } from '@/hooks/useIncidentSlaState';
-import { Badge } from '@/components/ui/shadcn/badge';
 import EmptyState from '@/components/ui/EmptyState';
 import IncidentListBadges from '@/components/incident/intelligence/IncidentListBadges';
 import type { IncidentListBadges as IncidentListBadgesMap } from '@/lib/intelligence/incident-ux/list-badges';
@@ -103,34 +103,8 @@ type IncidentsListTableProps = {
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 type BulkActionMode = 'reassign' | 'priority' | 'snooze' | 'urgency' | 'status' | null;
 
-function getStatusAccentBar(status: IncidentStatus): string {
-  switch (status) {
-    case 'OPEN':
-      return 'bg-rose-500';
-    case 'ACKNOWLEDGED':
-      return 'bg-blue-600';
-    case 'RESOLVED':
-      return 'bg-emerald-500';
-    case 'SNOOZED':
-    case 'SUPPRESSED':
-    default:
-      return 'bg-slate-400';
-  }
-}
-
-function getStatusHoverBorder(status: IncidentStatus): string {
-  switch (status) {
-    case 'OPEN':
-      return 'hover:border-rose-300/80 dark:hover:border-rose-800/60';
-    case 'ACKNOWLEDGED':
-      return 'hover:border-blue-300/80 dark:hover:border-blue-800/60';
-    case 'RESOLVED':
-      return 'hover:border-emerald-300/80 dark:hover:border-emerald-800/60';
-    case 'SNOOZED':
-    case 'SUPPRESSED':
-    default:
-      return 'hover:border-slate-300/80 dark:hover:border-zinc-700/60';
-  }
+function statusTone(status: IncidentStatus) {
+  return toneClasses(incidentStatusTone(status));
 }
 
 function parseRealtimeIncident(raw: Record<string, unknown>): IncidentListItem {
@@ -192,6 +166,7 @@ function parseRealtimeIncident(raw: Record<string, unknown>): IncidentListItem {
           name: String(rawAssignee.name || 'Unassigned'),
           email: String(rawAssignee.email || ''),
           avatarUrl: typeof rawAssignee.avatarUrl === 'string' ? rawAssignee.avatarUrl : null,
+          gender: typeof rawAssignee.gender === 'string' ? rawAssignee.gender : null,
         }
       : null,
   };
@@ -367,7 +342,6 @@ export default function IncidentsListTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
-  const { userTimeZone } = useTimezone();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkActionMode>(null);
@@ -842,18 +816,6 @@ export default function IncidentsListTable({
     }
   };
 
-  const buildUrgencyChip = (urgency: string | null | undefined) => {
-    if (!urgency) return null;
-    const u = urgency.toUpperCase();
-    const variant = u === 'HIGH' ? 'danger' : u === 'MEDIUM' ? 'warning' : 'success';
-
-    return (
-      <Badge variant={variant} size="xs" className="uppercase" title={`Urgency: ${u}`}>
-        {u}
-      </Badge>
-    );
-  };
-
   const headerTitle = title ?? 'Incident list';
 
   return (
@@ -1225,7 +1187,6 @@ export default function IncidentsListTable({
             {displayedIncidents.map((incident, idx) => {
               const incidentStatus = incident.status as IncidentStatus;
               const isSelected = !readOnly && selectedIds.has(incident.id);
-              const urgencyChip = buildUrgencyChip(incident.urgency);
               const isFocused = !readOnly && focusedIndex === idx;
               const isNewlyIncoming = highlightedIncidentIds.has(incident.id);
 
@@ -1244,7 +1205,7 @@ export default function IncidentsListTable({
                     'hover:shadow-md hover:-translate-y-[1px]',
                     'focus-within:ring-2 focus-within:ring-primary/20',
                     'border-border',
-                    getStatusHoverBorder(incidentStatus),
+                    statusTone(incidentStatus).hoverBorder,
                     isSelected && 'ring-1 ring-primary/30 border-primary/50 bg-primary/5',
                     isFocused && 'ring-2 ring-primary/60 border-primary/70 shadow-sm bg-accent/25',
                     isNewlyIncoming &&
@@ -1275,7 +1236,7 @@ export default function IncidentsListTable({
                   <div
                     className={cn(
                       'absolute left-0 top-3 bottom-3 w-1 rounded-r-full transition-all duration-200',
-                      getStatusAccentBar(incidentStatus),
+                      statusTone(incidentStatus).solid,
                       isSelected
                         ? 'w-1.5 opacity-100'
                         : 'opacity-80 group-hover:opacity-100 group-hover:w-1.25'
@@ -1328,10 +1289,14 @@ export default function IncidentsListTable({
                               LIVE
                             </span>
                           )}
-                          <StatusBadge status={incidentStatus} size="sm" showDot />
-                          <PriorityBadge priority={incident.priority} size="sm" />
+                          <StatusBadge
+                            status={incidentStatus}
+                            size="xs"
+                            live={incidentStatus === 'OPEN'}
+                          />
+                          <SeverityBadge priority={incident.priority} size="xs" />
                           <IncidentListSlaBadge incident={incident} />
-                          {urgencyChip}
+                          <SeverityBadge urgency={incident.urgency} size="xs" />
                           {incident.escalationStatus && (
                             <EscalationStatusBadge
                               status={incident.escalationStatus}
@@ -1363,17 +1328,10 @@ export default function IncidentsListTable({
 
                           <span className="opacity-40">&middot;</span>
 
-                          <span
+                          <RelativeTime
+                            date={incident.createdAt}
                             className="cursor-help transition-colors hover:text-foreground underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
-                            title={formatDateTime(incident.createdAt, userTimeZone, {
-                              format: 'datetime',
-                              includeTimeZone: true,
-                            })}
-                          >
-                            {formatDateTime(incident.createdAt, userTimeZone, {
-                              format: 'relative',
-                            })}
-                          </span>
+                          />
                         </div>
                       </div>
                     </div>

@@ -6,7 +6,7 @@ import {
   getPasswordRequirements,
   isPasswordStrong as checkPasswordStrong,
 } from '@/lib/password-strength';
-import { validatePasswordStrength, type PasswordValidationContext } from '@/lib/passwords';
+import type { PasswordValidationContext } from '@/lib/passwords';
 
 interface PasswordStrengthMeterProps {
   password: string;
@@ -33,11 +33,11 @@ export default function PasswordStrengthMeter({
     <div className="space-y-2" aria-live="polite">
       <div className="space-y-1">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-medium text-slate-600 dark:text-zinc-300">Password strength</span>
+          <span className="font-medium text-muted-foreground">Password strength</span>
           <span className={`font-semibold ${strength.textColor}`}>{strength.label}</span>
         </div>
         <div
-          className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800"
+          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
           role="progressbar"
           aria-label="Password strength"
           aria-valuenow={strength.percentage}
@@ -45,7 +45,7 @@ export default function PasswordStrengthMeter({
           aria-valuemax={100}
         >
           <div
-            className={`h-full transition-all duration-300 ${strength.color || 'bg-slate-400'}`}
+            className={`h-full transition-all duration-300 ${strength.color || 'bg-muted'}`}
             style={{ width: `${strength.percentage}%` }}
           />
         </div>
@@ -57,7 +57,7 @@ export default function PasswordStrengthMeter({
             <div
               key={req.label}
               className={`flex items-center gap-2 text-xs ${
-                req.met ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                req.met ? 'text-status-ok' : 'text-muted-foreground'
               }`}
             >
               <span aria-hidden="true">{req.met ? '✓' : '○'}</span>
@@ -71,11 +71,3 @@ export default function PasswordStrengthMeter({
 }
 
 export { checkPasswordStrong as isPasswordStrong };
-
-export function getPasswordError(
-  password: string,
-  context?: PasswordValidationContext,
-  _minLength?: number
-): string | null {
-  return validatePasswordStrength(password, context);
-}

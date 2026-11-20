@@ -42,6 +42,11 @@ Pages for features unchanged since 2.1.0 remain in the [2.1.0 documentation](../
 
 - [Single sign-on guides](./guides/identity/README.md) and [sign-in troubleshooting](./troubleshooting/login/README.md)
 
+## Analytics
+
+- [Analytics](./guides/analytics/README.md): the rebuilt page — sections, ranges up to 3 years,
+  comparison, timezones, metric definitions and the CSV export ([use Analytics](./guides/analytics/use-analytics.md))
+
 ## Integrations
 
 - [Slack permissions and scopes](./integrations/communication/slack/permissions-and-scopes.md):

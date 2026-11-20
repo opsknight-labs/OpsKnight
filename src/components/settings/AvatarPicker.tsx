@@ -208,7 +208,15 @@ export function AvatarPicker({
                 </DialogDescription>
               </div>
               {onUploadClick && (
-                <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => { onUploadClick(); setOpen(false); }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  onClick={() => {
+                    onUploadClick();
+                    setOpen(false);
+                  }}
+                >
                   <Upload className="h-3.5 w-3.5" />
                   Upload Photo
                 </Button>
@@ -219,7 +227,7 @@ export function AvatarPicker({
           {/* Team Mascots & Animals */}
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-              <PawPrint className="h-4 w-4 text-amber-500" />
+              <PawPrint className="h-4 w-4 text-muted-foreground" />
               <span>Team Mascots & Animals</span>
             </h4>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
@@ -251,7 +259,7 @@ export function AvatarPicker({
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-2xs text-muted-foreground truncate max-w-full">
                       {avatar.label}
                     </span>
                   </button>
@@ -298,7 +306,7 @@ export function AvatarPicker({
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-2xs text-muted-foreground truncate max-w-full">
                       {avatar.label}
                     </span>
                   </button>
@@ -310,7 +318,7 @@ export function AvatarPicker({
           {/* Developer & SRE Bots */}
           <div className="space-y-3 pt-2">
             <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-              <Bot className="h-4 w-4 text-indigo-500" />
+              <Bot className="h-4 w-4 text-muted-foreground" />
               <span>Developer & SRE Bots</span>
             </h4>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
@@ -343,7 +351,7 @@ export function AvatarPicker({
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-2xs text-muted-foreground truncate max-w-full">
                       {avatar.label}
                     </span>
                   </button>
@@ -355,7 +363,7 @@ export function AvatarPicker({
           {/* Minimalist Notionists */}
           <div className="space-y-3 pt-2">
             <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-500" />
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
               <span>Minimalist Personas</span>
             </h4>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
@@ -388,7 +396,7 @@ export function AvatarPicker({
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-2xs text-muted-foreground truncate max-w-full">
                       {avatar.label}
                     </span>
                   </button>
@@ -400,7 +408,7 @@ export function AvatarPicker({
           {/* Personalized User Name Initials */}
           <div className="space-y-3 pt-2">
             <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-teal-500" />
+              <Cpu className="h-4 w-4 text-muted-foreground" />
               <span>Personalized Initials</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-normal">
                 {getInitials(userName)}
@@ -445,7 +453,7 @@ export function AvatarPicker({
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-2xs text-muted-foreground truncate max-w-full">
                       {palette.label}
                     </span>
                   </button>
@@ -487,7 +495,7 @@ export function AvatarPicker({
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-2xs text-muted-foreground truncate max-w-full">
                       {avatar.label}
                     </span>
                   </button>
@@ -529,7 +537,7 @@ export function AvatarPicker({
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-2xs text-muted-foreground truncate max-w-full">
                       {avatar.label}
                     </span>
                   </button>
@@ -541,7 +549,7 @@ export function AvatarPicker({
           {/* Abstract Geometric & Identicons */}
           <div className="space-y-3 pt-2">
             <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-              <Shield className="h-4 w-4 text-sky-500" />
+              <Shield className="h-4 w-4 text-muted-foreground" />
               <span>Abstract Badges & Tokens</span>
             </h4>
             <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-3">
@@ -574,7 +582,7 @@ export function AvatarPicker({
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-2xs text-muted-foreground truncate max-w-full">
                       {avatar.label}
                     </span>
                   </button>

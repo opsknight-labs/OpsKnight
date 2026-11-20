@@ -5,7 +5,6 @@ import IncidentQuickLinksCard from '@/components/incident/detail/IncidentQuickLi
 
 describe('IncidentQuickLinksCard', () => {
   const defaultProps = {
-    incidentId: 'inc-123',
     service: {
       id: 'srv-1',
       name: 'Authentication API',
@@ -28,7 +27,10 @@ describe('IncidentQuickLinksCard', () => {
     expect(screen.getByText('Quick Links')).toBeInTheDocument();
     expect(screen.getByText('Authentication API')).toBeInTheDocument();
     expect(screen.getByText('Current service default: Critical Escalation')).toBeInTheDocument();
-    expect(screen.getByText('Incident Analytics')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Service analytics/ })).toHaveAttribute(
+      'href',
+      '/insights?service=srv-1'
+    );
     expect(screen.getByText('Core Infra')).toBeInTheDocument();
   });
 

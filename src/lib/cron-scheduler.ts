@@ -635,6 +635,28 @@ async function runOnce() {
       logger.warn('[Cron] Maintenance schedule materialization failed', { error });
     }
 
+    // Weekly analytics emails: bounded per tick, idempotent per view and week.
+    try {
+      const { sendWeeklyAnalyticsReports } = await import('./analytics/weekly-report');
+      const weekly = await sendWeeklyAnalyticsReports(new Date());
+      if (weekly.sent > 0 || weekly.failed > 0) {
+        logger.info('[Cron] Weekly analytics reports processed', weekly);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Weekly analytics reports failed', { error });
+    }
+
+    // Default weekly summary to everyone with analytics access (unless switched off).
+    try {
+      const { sendWeeklyDigests } = await import('./analytics/digest');
+      const digest = await sendWeeklyDigests(new Date());
+      if (digest.sent > 0 || digest.failed > 0) {
+        logger.info('[Cron] Weekly analytics digests processed', digest);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Weekly analytics digests failed', { error });
+    }
+
     // Group 3: Maintenance tasks (low priority, run last)
     const { processAuthenticationAlerts } = await import('./auth-control/security-events');
     await processAuthenticationAlerts();

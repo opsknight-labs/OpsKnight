@@ -22,7 +22,7 @@ export const GLOBAL_NAVIGATION_SHORTCUTS = [
   { key: 'u', href: '/users', description: 'Go to Users' },
   { key: 'c', href: '/schedules', description: 'Go to Schedules' },
   { key: 'p', href: '/policies', description: 'Go to Policies' },
-  { key: 'a', href: '/analytics', description: 'Go to Analytics' },
+  { key: 'a', href: '/insights', description: 'Go to Analytics' },
 ] as const;
 
 export const KEYBOARD_SHORTCUTS: KeyboardShortcutDefinition[] = [

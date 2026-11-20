@@ -6,6 +6,8 @@ import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
 
 export type ProviderStatusProps = {
   slack: {
@@ -23,7 +25,7 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
   const anyConnected = slack.connected || teams.connected;
 
   return (
-    <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+    <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
         <div>
           <h3 className="text-sm font-bold text-foreground">Connected Providers</h3>
@@ -34,10 +36,15 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
       </div>
 
       {!anyConnected && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div
+          className={cn(
+            'rounded-lg border p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3',
+            toneClasses('elevated').soft
+          )}
+        >
           <div className="space-y-1">
             <p className="font-semibold flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
               No collaboration provider is configured yet
             </p>
             <p className="text-muted-foreground">
@@ -72,25 +79,28 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
               </div>
               <div>
                 <h4 className="text-xs font-bold text-foreground">Slack</h4>
-                <p className="text-[11px] text-muted-foreground">Incident channels & Bot</p>
+                <p className="text-2xs text-muted-foreground">Incident channels & Bot</p>
               </div>
             </div>
-            <Badge variant={slack.connected ? 'default' : 'secondary'} className="text-[10px]">
+            <Badge variant={slack.connected ? 'default' : 'secondary'} className="text-2xs">
               {slack.connected ? 'Connected' : 'Not configured'}
             </Badge>
           </div>
 
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
+          <p className="text-2xs text-muted-foreground leading-relaxed">
             {slack.connected
               ? 'Ready for automatic and manual war room provisioning with real-time incident cards.'
               : 'Install the OpsKnight Slack app to enable channel automation and responder messaging.'}
           </p>
 
           <div className="pt-1 flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <span className="text-2xs text-muted-foreground flex items-center gap-1">
               {slack.connected ? (
                 <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  <CheckCircle2
+                    className={cn('h-3.5 w-3.5', toneClasses('ok').text)}
+                    aria-hidden="true"
+                  />
                   <span>War Rooms available</span>
                 </>
               ) : (
@@ -115,12 +125,12 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
               </div>
               <div>
                 <h4 className="text-xs font-bold text-foreground">Microsoft Teams</h4>
-                <p className="text-[11px] text-muted-foreground">Tenant & Channel collaboration</p>
+                <p className="text-2xs text-muted-foreground">Tenant & Channel collaboration</p>
               </div>
             </div>
             <Badge
               variant={teams.connected && teams.warRoomsEnabled ? 'default' : 'secondary'}
-              className="text-[10px]"
+              className="text-2xs"
             >
               {teams.connected && teams.warRoomsEnabled
                 ? 'Connected'
@@ -130,7 +140,7 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
             </Badge>
           </div>
 
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
+          <p className="text-2xs text-muted-foreground leading-relaxed">
             {teams.connected && teams.warRoomsEnabled
               ? `Standard & private channels with RSC permissions. ${teams.destinationsCount} mapped destination(s).`
               : teams.connected
@@ -139,10 +149,13 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
           </p>
 
           <div className="pt-1 flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <span className="text-2xs text-muted-foreground flex items-center gap-1">
               {teams.connected && teams.warRoomsEnabled ? (
                 <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  <CheckCircle2
+                    className={cn('h-3.5 w-3.5', toneClasses('ok').text)}
+                    aria-hidden="true"
+                  />
                   <span>War Rooms available</span>
                 </>
               ) : (

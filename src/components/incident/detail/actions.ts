@@ -71,62 +71,6 @@ export async function updateIncidentDetailDescription(
 }
 
 import { redactNotificationError } from '@/lib/notification-operations';
-
-export async function loadOlderIncidentEvents(
-  incidentIdValue: string,
-  beforeDateISO: string,
-  beforeId?: string,
-  limit = 200
-) {
-  const parsedIncidentId = incidentId(incidentIdValue);
-  await assertCanViewIncident(parsedIncidentId);
-  const cursorDate = new Date(beforeDateISO);
-  const events = await prisma.incidentEvent.findMany({
-    where: {
-      incidentId: parsedIncidentId,
-      ...(beforeId
-        ? {
-            OR: [
-              { createdAt: { lt: cursorDate } },
-              { createdAt: cursorDate, id: { lt: beforeId } },
-            ],
-          }
-        : { createdAt: { lt: cursorDate } }),
-    },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: Math.min(Math.max(1, limit), 500),
-  });
-  const permissions = await getUserPermissions();
-  const decision = await prisma.incidentAutomationDecision.findUnique({
-    where: { incidentId: parsedIncidentId },
-    select: { incidentId: true },
-  });
-  const automationTraces = await prisma.automationTrace.findMany({
-    where: { incidentId: parsedIncidentId },
-    select: { incidentId: true },
-    take: 1,
-  });
-  const source = await prisma.incident.findUnique({
-    where: { id: parsedIncidentId },
-    select: { automationSourceRestricted: true },
-  });
-  const visible = visibleIncidentSource(
-    {
-      events,
-      automationDecision: decision,
-      automationTraces,
-      automationSourceRestricted: source?.automationSourceRestricted,
-    },
-    permissions.capabilities.includes('incident.sensitive.read')
-  );
-  return visible.events.map(e => ({
-    id: e.id,
-    message: e.message,
-    type: e.type,
-    createdAt: e.createdAt,
-  }));
-}
-
 export async function loadOlderIncidentNotes(
   incidentIdValue: string,
   beforeDateISO: string,

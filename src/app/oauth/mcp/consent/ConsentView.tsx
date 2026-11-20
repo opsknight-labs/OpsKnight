@@ -80,7 +80,7 @@ export default function ConsentView({
   return (
     <main
       id="mcp-consent"
-      className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-sans text-slate-900 sm:px-6 sm:py-12 dark:bg-slate-950 dark:text-slate-100"
+      className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-8 font-sans text-foreground sm:px-6 sm:py-12"
     >
       <div
         className={
@@ -92,12 +92,12 @@ export default function ConsentView({
         <AuthBrand />
         <section
           aria-labelledby="mcp-consent-title"
-          className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7 min-[1440px]:p-9 dark:border-slate-800 dark:bg-slate-900"
+          className="space-y-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7 min-[1440px]:p-9"
         >
           <div className="space-y-1.5">
             <h1
               id="mcp-consent-title"
-              className="flex items-center gap-2 break-words font-display font-bold tracking-tight text-slate-950 dark:text-white"
+              className="flex items-center gap-2 break-words font-display font-bold tracking-tight text-foreground"
             >
               {/* A brand logo only for a metadata host an administrator trusts (SEC-6); a chosen
                   name, or an untrusted publisher, gets the generic icon. */}
@@ -112,12 +112,12 @@ export default function ConsentView({
             </h1>
             <p
               data-testid="mcp-consent-identity"
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
             >
               {returnHost !== null ? (
                 <span>
                   Returns to{' '}
-                  <code className="rounded bg-slate-100 px-1 py-px font-mono text-[12px] [overflow-wrap:anywhere] text-slate-900 dark:bg-slate-800 dark:text-slate-100">
+                  <code className="rounded bg-muted px-1 py-px font-mono text-xs [overflow-wrap:anywhere] text-foreground">
                     {returnAddress ?? returnHost}
                   </code>
                 </span>
@@ -126,29 +126,29 @@ export default function ConsentView({
               )}
               {identity.kind === 'metadata' && identity.trusted ? (
                 // Only a host an administrator trusts earns the verified look.
-                <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1 font-medium text-status-ok-deep">
                   <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
                   Identified by{' '}
                   <code className="font-mono [overflow-wrap:anywhere]">{identity.host}</code>
                 </span>
               ) : identity.kind === 'metadata' ? (
-                <span className="text-slate-600 dark:text-slate-300">
+                <span className="text-muted-foreground">
                   Published by{' '}
-                  <code className="font-mono [overflow-wrap:anywhere] text-slate-900 dark:text-slate-100">
+                  <code className="font-mono [overflow-wrap:anywhere] text-foreground">
                     {identity.host}
                   </code>
                 </span>
               ) : identity.kind === 'self-registered' ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+                <span className="inline-flex items-center gap-1 rounded-full border border-status-elevated/30 bg-status-elevated-soft px-1.5 py-px font-medium text-status-elevated-deep">
                   Name not verified
                 </span>
               ) : (
                 <span>Registered by an administrator</span>
               )}
             </p>
-            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            <p className="text-sm leading-relaxed text-muted-foreground">
               Signed in as{' '}
-              <strong className="font-semibold [overflow-wrap:anywhere] text-slate-900 dark:text-white">
+              <strong className="font-semibold [overflow-wrap:anywhere] text-foreground">
                 {signedInAs}
               </strong>{' '}
               ({roleLabel}). The assistant acts as you and can only use the permissions you allow
@@ -159,7 +159,7 @@ export default function ConsentView({
             <div
               role="note"
               data-testid="mcp-device-warning"
-              className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+              className="flex items-start gap-2 rounded-lg border border-status-elevated/30 bg-status-elevated-soft px-3 py-2.5 text-sm text-status-elevated-deep"
             >
               <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
@@ -172,7 +172,7 @@ export default function ConsentView({
           {redirectWarning && (
             <div
               role="note"
-              className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+              className="flex items-start gap-2 rounded-lg border border-status-elevated/30 bg-status-elevated-soft px-3 py-2.5 text-sm text-status-elevated-deep"
             >
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               {identity.kind === 'metadata' ? (
@@ -194,23 +194,20 @@ export default function ConsentView({
           {!writesEnabled && hasChanges && (
             <div
               role="note"
-              className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+              className="flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground"
             >
               <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{MCP_CONSENT_WRITES_OFF_NOTE}</span>
             </div>
           )}
           {idleDays !== undefined && (
-            <p
-              data-testid="mcp-consent-duration"
-              className="text-xs text-slate-500 dark:text-slate-400"
-            >
+            <p data-testid="mcp-consent-duration" className="text-xs text-muted-foreground">
               Stays connected until you disconnect it in Settings, it goes unused for {idleDays}{' '}
               {idleDays === 1 ? 'day' : 'days'}, or {MCP_ABSOLUTE_SESSION_DAYS} days pass.
             </p>
           )}
           {previousConnection && (
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-muted-foreground">
               {previousConnection.inUse ? (
                 <>
                   Your existing connection from{' '}
@@ -244,11 +241,11 @@ export default function ConsentView({
             wide={wide}
             writesEnabled={writesEnabled}
           />
-          <p className="border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <p className="border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">
             You can{' '}
             <a
               href={mcpHref({ tab: 'connections' })}
-              className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
+              className="font-medium text-foreground underline underline-offset-2 hover:text-foreground"
             >
               disconnect any time
             </a>{' '}

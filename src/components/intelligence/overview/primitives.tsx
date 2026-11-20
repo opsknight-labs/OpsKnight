@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { AlertCircle, ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
-import Skeleton from '@/components/ui/Skeleton';
+import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { cn } from '@/lib/utils';
 
 /**
@@ -173,20 +173,19 @@ export function SectionError({ message }: { message: string }) {
 }
 
 export function SectionSkeleton({ title, tiles = 3 }: { title: string; tiles?: number }) {
-  const muted = { backgroundColor: 'hsl(var(--ui-muted))' };
   return (
     <section
       aria-busy="true"
       aria-label={`Loading ${title}`}
       className="min-w-0 space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5"
     >
-      <Skeleton variant="text" width="40%" height={18} style={muted} />
+      <Skeleton className="h-[18px] w-2/5" />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {Array.from({ length: tiles }, (_, index) => (
-          <Skeleton key={index} variant="rounded" width="100%" height={72} style={muted} />
+          <Skeleton key={index} className="h-[72px] w-full" />
         ))}
       </div>
-      <Skeleton variant="rounded" width="100%" height={96} style={muted} />
+      <Skeleton className="h-24 w-full" />
     </section>
   );
 }

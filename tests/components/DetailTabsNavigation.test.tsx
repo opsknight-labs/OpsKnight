@@ -123,3 +123,15 @@ it('keeps a keepMounted tab mounted with its local state while another tab is sh
   fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
   expect((screen.getByLabelText('draft') as HTMLInputElement).value).toBe('unsaved edit');
 });
+
+it('offers a mobile section picker that switches the active tab', async () => {
+  render(<DetailTabs tabs={tabs} />);
+  const picker = screen.getByRole('button', { name: 'Section: Overview' });
+  fireEvent.pointerDown(picker, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Runbooks' }));
+  await waitFor(() =>
+    expect(screen.getByRole('tab', { name: 'Runbooks' })).toHaveAttribute('aria-selected', 'true')
+  );
+  expect(window.location.search).toBe('?tab=runbooks');
+  expect(screen.getByRole('button', { name: 'Section: Runbooks' })).toBeTruthy();
+});

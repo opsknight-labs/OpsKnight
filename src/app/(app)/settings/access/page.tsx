@@ -20,7 +20,7 @@ import {
 } from '@/lib/access/requests';
 import { ROLE_DESCRIPTIONS, roleLabel, type Capability } from '@/lib/authorization';
 import { getUserTimeZone } from '@/lib/timezone';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -59,7 +59,7 @@ const ROLE_SOURCE_LABELS = new Map<string, string>([
 ]);
 
 const heroBadgeClass =
-  'bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-[10px] font-bold uppercase tracking-wider';
+  'bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-2xs font-bold uppercase tracking-wider';
 
 export default async function MyAccessPage() {
   const access = await requirePageAccessSnapshot('/settings/access');
@@ -87,15 +87,11 @@ export default async function MyAccessPage() {
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="Account & Identity"
+      <SettingsPageHeader
+        eyebrow="Account & Identity"
         title="My access"
-        subtitle="What you can see and do in OpsKnight, why, and how to get more."
-        icon={
-          <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
-            <KeyRound className="h-8 w-8" />
-          </div>
-        }
+        description="What you can see and do in OpsKnight, why, and how to get more."
+        icon={KeyRound}
         badges={
           <>
             <Badge variant="outline" className={heroBadgeClass}>
@@ -174,7 +170,7 @@ export default async function MyAccessPage() {
 
           {access.grants.length > 0 && (
             <div className="space-y-3">
-              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Temporary access
               </h4>
               <ul className="space-y-2">
@@ -429,7 +425,13 @@ export default async function MyAccessPage() {
             <ul className="flex flex-wrap gap-2">
               {grantors.people.map(person => (
                 <li key={person.id} className="p-0">
-                  <ContactChip name={person.name} email={person.email} subject="OpsKnight access" />
+                  <ContactChip
+                    userId={person.id}
+                    name={person.name}
+                    email={person.email}
+                    avatarUrl={person.avatarUrl}
+                    subject="OpsKnight access"
+                  />
                 </li>
               ))}
             </ul>

@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Hash, Lock, CheckCircle, Plus, Loader2, Send, Power, AlertCircle } from 'lucide-react';
@@ -42,10 +43,10 @@ export function SlackChannelCard({
       className={cn(
         'group relative flex items-center justify-between gap-4 px-4 py-3 rounded-lg border transition-all duration-200',
         'hover:shadow-sm',
-        isConnected && 'border-l-4 border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20',
+        isConnected && 'border-l-4 border-l-status-ok bg-status-ok-soft/50 dark:bg-status-ok/10',
         !isConnected &&
           isPrivate &&
-          'border-l-4 border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20',
+          'border-l-4 border-l-status-elevated bg-status-elevated-soft/50 dark:bg-status-elevated/10',
         canAutoJoin && 'border-l-4 border-l-ink-300 hover:border-l-primary'
       )}
     >
@@ -53,7 +54,7 @@ export function SlackChannelCard({
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           {isPrivate ? (
-            <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <Lock className={cn('h-4 w-4', toneClasses('elevated').text)} />
           ) : (
             <Hash className="h-4 w-4" />
           )}
@@ -90,7 +91,7 @@ export function SlackChannelCard({
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : testResult ? (
                 testResult.success ? (
-                  <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle className={cn('h-3.5 w-3.5', toneClasses('ok').text)} />
                 ) : (
                   <AlertCircle className="h-3.5 w-3.5 text-destructive" />
                 )
@@ -119,10 +120,7 @@ export function SlackChannelCard({
             </Button>
           </>
         ) : isPrivate ? (
-          <Badge
-            variant="outline"
-            className="border-amber-500 text-amber-700 dark:text-amber-400 gap-1"
-          >
+          <Badge variant="outline" className={cn('gap-1', toneClasses('elevated').soft)}>
             <Lock className="h-3 w-3" />
             Invite Required
           </Badge>

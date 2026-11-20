@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useTransition, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
+import DetailTabs from '@/components/ui/DetailTabs';
 import { Key, Bot, Code2, Activity } from 'lucide-react';
 
 import {
@@ -104,61 +104,34 @@ export default function ApiKeysWorkspaceTabs({
   };
 
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-      <TabsList className="h-auto max-w-full flex-wrap justify-start bg-muted/70 p-1 border border-border/80 rounded-xl">
-        <TabsTrigger
-          value="api-keys"
-          onClick={() => handleTabChange('api-keys')}
-          className="text-xs font-semibold gap-1.5 px-3.5 cursor-pointer"
-        >
-          <Key className="h-3.5 w-3.5" />
-          <span>API Keys ({totalKeys})</span>
-        </TabsTrigger>
-        <TabsTrigger
-          value="service-accounts"
-          onClick={() => handleTabChange('service-accounts')}
-          className="text-xs font-semibold gap-1.5 px-3.5 cursor-pointer"
-        >
-          <Bot className="h-3.5 w-3.5" />
-          <span>Service Accounts {isAdmin ? `(${totalServiceAccounts})` : ''}</span>
-        </TabsTrigger>
-        <TabsTrigger
-          value="explorer"
-          onClick={() => handleTabChange('explorer')}
-          className="text-xs font-semibold gap-1.5 px-3.5 cursor-pointer"
-        >
-          <Code2 className="h-3.5 w-3.5" />
-          <span>API Explorer ({endpointCount})</span>
-        </TabsTrigger>
-        <TabsTrigger
-          value="activity"
-          onClick={() => handleTabChange('activity')}
-          className="text-xs font-semibold gap-1.5 px-3.5 cursor-pointer"
-        >
-          <Activity className="h-3.5 w-3.5" />
-          <span>API Activity</span>
-        </TabsTrigger>
-      </TabsList>
-
-      {/* Tab 1: API Keys */}
-      <TabsContent value="api-keys" className="space-y-4">
-        {apiKeysContent}
-      </TabsContent>
-
-      {/* Tab 2: Service Accounts */}
-      <TabsContent value="service-accounts" className="space-y-4">
-        {serviceAccountsContent}
-      </TabsContent>
-
-      {/* Tab 3: API Explorer */}
-      <TabsContent value="explorer" className="space-y-4">
-        {explorerContent}
-      </TabsContent>
-
-      {/* Tab 4: API Activity */}
-      <TabsContent value="activity" className="space-y-4">
-        {activityContent}
-      </TabsContent>
-    </Tabs>
+    <DetailTabs
+      label="API workspace"
+      layout="auto"
+      syncWithUrl={false}
+      activeTab={activeTab}
+      onTabChange={handleTabChange}
+      contentClassName="space-y-4"
+      tabs={[
+        {
+          id: 'api-keys',
+          label: `API Keys (${totalKeys})`,
+          icon: <Key />,
+          content: apiKeysContent,
+        },
+        {
+          id: 'service-accounts',
+          label: isAdmin ? `Service Accounts (${totalServiceAccounts})` : 'Service Accounts',
+          icon: <Bot />,
+          content: serviceAccountsContent,
+        },
+        {
+          id: 'explorer',
+          label: `API Explorer (${endpointCount})`,
+          icon: <Code2 />,
+          content: explorerContent,
+        },
+        { id: 'activity', label: 'API Activity', icon: <Activity />, content: activityContent },
+      ]}
+    />
   );
 }

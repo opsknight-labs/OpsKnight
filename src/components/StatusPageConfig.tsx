@@ -49,6 +49,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { STATUS_PAGE_FONTS } from '@/lib/status-page-theme';
+import { toneClasses } from '@/components/patterns';
 import {
   STATUS_PAGE_THEME_VERSION,
   resolveStatusPageTheme,
@@ -182,13 +183,12 @@ type StatusPageConfigProps = {
   liveSnapshot?: any;
 };
 
-const ANNOUNCEMENT_TYPES = [
-  { value: 'INCIDENT', label: 'Incident', color: '#ef4444', background: '#fee2e2' },
-  { value: 'MAINTENANCE', label: 'Maintenance', color: '#2563eb', background: '#dbeafe' },
-  { value: 'UPDATE', label: 'Update', color: '#10b981', background: '#dcfce7' },
-  { value: 'WARNING', label: 'Warning', color: '#f59e0b', background: '#fef3c7' },
-  { value: 'INFO', label: 'Information', color: '#64748b', background: '#f1f5f9' },
-];
+const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(id => id.trim()).filter(Boolean);
+};
 
 export default function StatusPageConfig({
   statusPage,
@@ -334,13 +334,6 @@ export default function StatusPageConfig({
 
   const serviceLookup = new Map(allServices.map(service => [service.id, service] as const));
 
-  const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-    return value.map(id => id.trim()).filter(Boolean);
-  };
-
   const buildAnnouncementAffectedServices = (value?: string[] | null) => {
     const ids = normalizeAnnouncementServiceIds(value);
     return ids
@@ -351,19 +344,6 @@ export default function StatusPageConfig({
         name: service!.name,
         region: service!.region ?? null,
       }));
-  };
-
-  const getAnnouncementRegions = (services: Array<{ region?: string | null }>) => {
-    const regionSet = new Set<string>();
-    services.forEach(service => {
-      if (!service.region) return;
-      service.region
-        .split(',')
-        .map(entry => entry.trim())
-        .filter(Boolean)
-        .forEach(region => regionSet.add(region));
-    });
-    return Array.from(regionSet.values());
   };
 
   // Privacy settings - with defaults if not in statusPage
@@ -838,7 +818,8 @@ export default function StatusPageConfig({
     return statusPage.slug ? `status-${statusPage.slug}.opsknight.com` : 'status.opsknight.com';
   }, [formData.customDomain, formData.subdomain, formData.slug, statusPage.slug]);
 
-  const previewData = useMemo(() => {
+  // Inputs (branding, services, privacy) are rebuilt each render, so a memo here never cached.
+  const previewData = (() => {
     if (!showPreview) return null;
     return {
       statusPage: {
@@ -901,20 +882,7 @@ export default function StatusPageConfig({
       uptimeExcellentThreshold: formData.uptimeExcellentThreshold,
       uptimeGoodThreshold: formData.uptimeGoodThreshold,
     };
-  }, [
-    showPreview,
-    formData,
-    previewBranding,
-    previewServices,
-    previewStatusPageServices,
-    previewAnnouncements,
-    previewUptime90,
-    previewPrivacySettings,
-    statusPage.slug,
-    statusPage.subdomain,
-    statusPage.customDomain,
-    liveSnapshot,
-  ]);
+  })();
 
   return (
     <div className="status-page-config-root w-full">
@@ -959,7 +927,7 @@ export default function StatusPageConfig({
                       variant={isActive ? 'default' : 'neutral'}
                       size="xs"
                       className={cn(
-                        'ml-1 px-1.5 py-0 text-[10px] font-bold rounded-full',
+                        'ml-1 px-1.5 py-0 text-2xs font-bold rounded-full',
                         isActive
                           ? 'bg-primary-foreground/20 text-primary-foreground'
                           : 'bg-muted text-muted-foreground'
@@ -1010,7 +978,7 @@ export default function StatusPageConfig({
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              background: '#f9fafb',
+              background: 'hsl(var(--ui-muted))',
               transition: 'flex 0.3s ease',
             }}
           >
@@ -1318,11 +1286,11 @@ export default function StatusPageConfig({
                                     onChange={e => handleLogoUpload(e.target.files?.[0] || null)}
                                     className="w-full text-xs text-muted-foreground file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                                   />
-                                  <div className="text-[11px] text-muted-foreground mt-1">
+                                  <div className="text-2xs text-muted-foreground mt-1">
                                     Uploads stored as data URLs. Max size 2MB.
                                   </div>
                                   {logoUploadError && (
-                                    <div className="text-[11px] text-destructive mt-1 font-medium">
+                                    <div className="text-2xs text-destructive mt-1 font-medium">
                                       {logoUploadError}
                                     </div>
                                   )}
@@ -1416,26 +1384,8 @@ export default function StatusPageConfig({
                                 }))}
                                 helperText="Applies clean typography to the header, incident reports, service metrics, and subscriber forms."
                               />
-                              <div
-                                style={{
-                                  padding: 'var(--spacing-4)',
-                                  borderRadius: 'var(--radius-md)',
-                                  border: '1px solid #e2e8f0',
-                                  background: '#ffffff',
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: '6px',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.08em',
-                                    color: 'var(--text-muted)',
-                                    fontWeight: '600',
-                                  }}
-                                >
+                              <div className="flex flex-col gap-1.5 rounded-md border border-border bg-background p-4">
+                                <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                                   Live Font Preview
                                 </div>
                                 <div
@@ -1444,10 +1394,8 @@ export default function StatusPageConfig({
                                       STATUS_PAGE_FONTS.find(
                                         f => f.id === (formData.fontFamily || 'default')
                                       )?.fontFamily || 'inherit',
-                                    fontSize: '1.125rem',
-                                    fontWeight: '700',
-                                    color: '#0f172a',
                                   }}
+                                  className="text-lg font-bold text-foreground"
                                 >
                                   All Systems Operational — 99.98% 30-Day Uptime
                                 </div>
@@ -1457,9 +1405,8 @@ export default function StatusPageConfig({
                                       STATUS_PAGE_FONTS.find(
                                         f => f.id === (formData.fontFamily || 'default')
                                       )?.fontFamily || 'inherit',
-                                    fontSize: '0.875rem',
-                                    color: '#475569',
                                   }}
+                                  className="text-sm text-muted-foreground"
                                 >
                                   Incident communication, automated health telemetry, and service
                                   status tracking.
@@ -1713,9 +1660,9 @@ export default function StatusPageConfig({
                                   style={{
                                     marginTop: 'var(--spacing-4)',
                                     padding: 'var(--spacing-4)',
-                                    background: '#f9fafb',
+                                    background: 'hsl(var(--ui-muted))',
                                     borderRadius: 'var(--radius-md)',
-                                    border: '1px solid #e5e7eb',
+                                    border: '1px solid hsl(var(--ui-border))',
                                   }}
                                 >
                                   <h4
@@ -1723,7 +1670,7 @@ export default function StatusPageConfig({
                                       fontSize: 'var(--font-size-sm)',
                                       fontWeight: '600',
                                       marginBottom: 'var(--spacing-3)',
-                                      color: '#374151',
+                                      color: 'hsl(var(--ui-foreground))',
                                     }}
                                   >
                                     Uptime Thresholds
@@ -1731,7 +1678,7 @@ export default function StatusPageConfig({
                                   <p
                                     style={{
                                       fontSize: 'var(--font-size-xs)',
-                                      color: '#6b7280',
+                                      color: 'hsl(var(--ui-muted-foreground))',
                                       marginBottom: 'var(--spacing-3)',
                                     }}
                                   >
@@ -1880,7 +1827,7 @@ export default function StatusPageConfig({
                               )}
                               <div
                                 style={{
-                                  borderTop: '1px solid #e5e7eb',
+                                  borderTop: '1px solid hsl(var(--ui-border))',
                                   paddingTop: 'var(--spacing-3)',
                                   display: 'flex',
                                   flexDirection: 'column',
@@ -1980,7 +1927,7 @@ export default function StatusPageConfig({
                               )}
                               <div
                                 style={{
-                                  borderTop: '1px solid #e5e7eb',
+                                  borderTop: '1px solid hsl(var(--ui-border))',
                                   paddingTop: 'var(--spacing-4)',
                                 }}
                               >
@@ -2040,15 +1987,11 @@ export default function StatusPageConfig({
                                 )}
                                 {apiTokenValue && (
                                   <div
-                                    style={{
-                                      marginTop: 'var(--spacing-3)',
-                                      padding: 'var(--spacing-3)',
-                                      borderRadius: 'var(--radius-md)',
-                                      background: '#ecfdf5',
-                                      border: '1px solid #a7f3d0',
-                                      color: '#065f46',
-                                      fontSize: 'var(--font-size-sm)',
-                                    }}
+                                    role="status"
+                                    className={cn(
+                                      'mt-3 rounded-md border p-3 text-sm',
+                                      toneClasses('ok').soft
+                                    )}
                                   >
                                     Copy this token now. You will not be able to view it again.
                                     <div
@@ -2086,8 +2029,8 @@ export default function StatusPageConfig({
                                         style={{
                                           padding: 'var(--spacing-3)',
                                           borderRadius: 'var(--radius-md)',
-                                          border: '1px solid #e5e7eb',
-                                          background: '#f9fafb',
+                                          border: '1px solid hsl(var(--ui-border))',
+                                          background: 'hsl(var(--ui-muted))',
                                           display: 'flex',
                                           alignItems: 'center',
                                           justifyContent: 'space-between',
@@ -2158,8 +2101,8 @@ export default function StatusPageConfig({
                                   marginTop: 'var(--spacing-4)',
                                   padding: 'var(--spacing-3)',
                                   borderRadius: 'var(--radius-md)',
-                                  border: '1px solid #e5e7eb',
-                                  background: '#f9fafb',
+                                  border: '1px solid hsl(var(--ui-border))',
+                                  background: 'hsl(var(--ui-muted))',
                                   display: 'flex',
                                   flexDirection: 'column',
                                   gap: 'var(--spacing-3)',
@@ -2201,7 +2144,7 @@ export default function StatusPageConfig({
                             <div
                               style={{
                                 marginTop: 'var(--spacing-5)',
-                                borderTop: '1px solid #e5e7eb',
+                                borderTop: '1px solid hsl(var(--ui-border))',
                                 paddingTop: 'var(--spacing-4)',
                               }}
                             >
@@ -2224,8 +2167,8 @@ export default function StatusPageConfig({
                                 <div
                                   style={{
                                     padding: 'var(--spacing-3)',
-                                    background: '#f9fafb',
-                                    border: '1px solid #e5e7eb',
+                                    background: 'hsl(var(--ui-muted))',
+                                    border: '1px solid hsl(var(--ui-border))',
                                     borderRadius: 'var(--radius-md)',
                                   }}
                                 >
@@ -2251,8 +2194,8 @@ export default function StatusPageConfig({
                                 <div
                                   style={{
                                     padding: 'var(--spacing-3)',
-                                    background: '#f9fafb',
-                                    border: '1px solid #e5e7eb',
+                                    background: 'hsl(var(--ui-muted))',
+                                    border: '1px solid hsl(var(--ui-border))',
                                     borderRadius: 'var(--radius-md)',
                                   }}
                                 >
@@ -2338,7 +2281,7 @@ export default function StatusPageConfig({
             {!['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(
               activeSection
             ) && (
-              <div className="status-page-config-sticky-bar flex items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-card/95 backdrop-blur-md shadow-lg">
+              <div className="status-page-config-sticky-bar flex items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-card shadow-md">
                 <div className="flex items-center gap-3">
                   <DeleteConfirmDialog
                     title="Delete Status Page"

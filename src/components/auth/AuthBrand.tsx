@@ -31,7 +31,7 @@ function wordmarkClass(size: AuthBrandSize): string {
     case 'compact':
       return 'text-base';
     case 'hero':
-      return 'text-[clamp(1.25rem,4.5vw,1.5rem)] 2xl:text-3xl';
+      return 'text-xl sm:text-2xl 2xl:text-3xl';
     default:
       return 'text-lg';
   }
@@ -60,8 +60,8 @@ export default function AuthBrand({
       className={cn(
         'inline-flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
         tone === 'onDark'
-          ? 'focus-visible:ring-white focus-visible:ring-offset-slate-950'
-          : 'focus-visible:ring-slate-900 dark:focus-visible:ring-white',
+          ? 'focus-visible:ring-white focus-visible:ring-offset-transparent'
+          : 'focus-visible:ring-ring focus-visible:ring-offset-background',
         className
       )}
       aria-label="OpsKnight official website"
@@ -78,7 +78,7 @@ export default function AuthBrand({
       <span
         className={cn(
           'font-display font-bold tracking-tight',
-          tone === 'onDark' ? 'text-white' : 'text-slate-950 dark:text-white',
+          tone === 'onDark' ? 'text-white' : 'text-foreground',
           wordmarkClass(resolvedSize)
         )}
       >

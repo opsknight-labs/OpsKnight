@@ -247,7 +247,7 @@ export default function RecoveryAccounts() {
                             ? 'success'
                             : 'warning'
                       }
-                      className="text-[10px] font-semibold py-0"
+                      className="text-2xs font-semibold py-0"
                     >
                       {value.status === 'DISABLED'
                         ? 'Disabled'
@@ -265,7 +265,7 @@ export default function RecoveryAccounts() {
                         ? 'Verified'
                         : 'Needs a drill'}
                   </p>
-                  <p className="text-[11px] text-muted-foreground/80 mt-0.5 flex items-center gap-1">
+                  <p className="text-2xs text-muted-foreground/80 mt-0.5 flex items-center gap-1">
                     <Clock className="h-3 w-3" />
                     Last drill:{' '}
                     {value.verifiedAt
@@ -446,10 +446,7 @@ export default function RecoveryAccounts() {
                   <div>
                     <dt className="text-xs text-muted-foreground font-medium">Readiness</dt>
                     <dd className="mt-0.5">
-                      <Badge
-                        variant={account.ready ? 'success' : 'warning'}
-                        className="text-[10px]"
-                      >
+                      <Badge variant={account.ready ? 'success' : 'warning'} className="text-2xs">
                         {account.ready
                           ? 'Verified independent sign-in'
                           : 'Complete a fresh sign-in drill'}

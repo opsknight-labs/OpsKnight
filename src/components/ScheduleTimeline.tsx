@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { DirectUserAvatar } from '@/components/UserAvatar';
+import UserAvatar from '@/components/UserAvatar';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Tooltip,
@@ -10,7 +10,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
-import { getDefaultAvatar } from '@/lib/avatar';
 import { ChevronLeft, ChevronRight, Clock, Users, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -428,14 +427,10 @@ export default function ScheduleTimeline({
                                     top: `${rowIndex * rowHeight}px`,
                                   }}
                                 >
-                                  <DirectUserAvatar
-                                    avatarUrl={
-                                      shift.userAvatar ||
-                                      getDefaultAvatar(
-                                        shift.userGender,
-                                        shift.userId || shift.userName
-                                      )
-                                    }
+                                  <UserAvatar
+                                    userId={shift.userId || shift.userName}
+                                    avatarUrl={shift.userAvatar}
+                                    gender={shift.userGender}
                                     name={shift.userName}
                                     size="sm"
                                     className="ring-2 ring-white/40 shadow-sm"
@@ -472,16 +467,13 @@ export default function ScheduleTimeline({
                               <TooltipContent side="top" className="p-3 max-w-xs">
                                 <div className="space-y-1.5">
                                   <div className="flex items-center gap-2">
-                                    <DirectUserAvatar
-                                      avatarUrl={
-                                        shift.userAvatar ||
-                                        getDefaultAvatar(
-                                          shift.userGender,
-                                          shift.userId || shift.userName
-                                        )
-                                      }
+                                    <UserAvatar
+                                      userId={shift.userId || shift.userName}
+                                      avatarUrl={shift.userAvatar}
+                                      gender={shift.userGender}
                                       name={shift.userName}
                                       size="xs"
+                                      aria-hidden
                                     />
                                     <span className="font-semibold text-foreground">
                                       {shift.userName}
@@ -591,11 +583,10 @@ export default function ScheduleTimeline({
                                 top: '0px',
                               }}
                             >
-                              <DirectUserAvatar
-                                avatarUrl={
-                                  block.userAvatar ||
-                                  getDefaultAvatar(block.userGender, block.userId || block.userName)
-                                }
+                              <UserAvatar
+                                userId={block.userId || block.userName}
+                                avatarUrl={block.userAvatar}
+                                gender={block.userGender}
                                 name={block.userName}
                                 size="sm"
                                 className="ring-2 ring-white/40 shadow-sm"
@@ -627,16 +618,13 @@ export default function ScheduleTimeline({
                           <TooltipContent side="top" className="p-3 max-w-xs">
                             <div className="space-y-1.5">
                               <div className="flex items-center gap-2">
-                                <DirectUserAvatar
-                                  avatarUrl={
-                                    block.userAvatar ||
-                                    getDefaultAvatar(
-                                      block.userGender,
-                                      block.userId || block.userName
-                                    )
-                                  }
+                                <UserAvatar
+                                  userId={block.userId || block.userName}
+                                  avatarUrl={block.userAvatar}
+                                  gender={block.userGender}
                                   name={block.userName}
                                   size="xs"
+                                  aria-hidden
                                 />
                                 <span className="font-semibold text-foreground">
                                   {block.userName}

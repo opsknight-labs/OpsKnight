@@ -1,7 +1,11 @@
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import SystemNotificationSettings from '@/components/settings/SystemNotificationSettings';
+import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
+import { hasConfiguredEmailProvider, isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import { getNotificationProviders } from '@/app/(app)/settings/system/actions';
 import {
   ShieldCheck,
@@ -14,7 +18,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { requirePageAccess } from '@/lib/access/server';
 
 export default async function NotificationProviderSettingsPage() {
@@ -198,48 +201,32 @@ export default async function NotificationProviderSettingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* 1. Outbound Delivery Hero Banner */}
-      <DetailHeroBanner
-        tag="Outbound Delivery"
+      <SettingsPageHeader
+        eyebrow="Outbound Delivery"
         title="Notification Providers"
-        subtitle="Configure SMS (Twilio, Amazon SNS), Email (Resend/SendGrid/SES/SMTP), Web Push, and WhatsApp Business outbound gateways."
-        icon={
-          <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
-            <BellRing className="h-7 w-7" />
-          </div>
-        }
+        description="Configure SMS (Twilio, Amazon SNS), Email (Resend/SendGrid/SES/SMTP), Web Push, and WhatsApp Business outbound gateways."
+        icon={BellRing}
         badges={
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Outbound Delivery
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
-            >
-              {activeChannelsCount}/4 Channels Available
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-xs font-semibold"
-            >
-              {totalConfiguredProviders} Providers Configured
-            </Badge>
-          </div>
+          <>
+            <span className={pageHeaderBadgeClass}>
+              {activeChannelsCount} of 4 channels available
+            </span>
+            <span className={pageHeaderBadgeClass}>
+              {totalConfiguredProviders} {totalConfiguredProviders === 1 ? 'provider' : 'providers'}{' '}
+              configured
+            </span>
+          </>
         }
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
+        secondaryActions={
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+              className={cn('gap-2', pageHeaderActionClass)}
             >
               <Link href="/settings/notifications/operations">
-                <Activity className="h-3.5 w-3.5" />
+                <Activity className="h-4 w-4" aria-hidden="true" />
                 Delivery Operations
               </Link>
             </Button>
@@ -247,10 +234,10 @@ export default async function NotificationProviderSettingsPage() {
               variant="outline"
               size="sm"
               asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+              className={cn('gap-2', pageHeaderActionClass)}
             >
               <Link href="/settings/notifications/history">
-                <Radio className="h-3.5 w-3.5" />
+                <Radio className="h-4 w-4" aria-hidden="true" />
                 My Delivery History
               </Link>
             </Button>
@@ -261,7 +248,7 @@ export default async function NotificationProviderSettingsPage() {
           {
             label: 'Channels Available',
             value: `${activeChannelsCount} / 4`,
-            icon: <BellRing className="h-3.5 w-3.5" />,
+            icon: <BellRing className="h-4 w-4" aria-hidden="true" />,
             subtext:
               activeChannelsCount === 4
                 ? 'All channels covered'
@@ -307,7 +294,7 @@ export default async function NotificationProviderSettingsPage() {
       {/* 2. Runtime Overview Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl border border-border/80 bg-card shadow-xs text-xs">
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+          <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             Email Route
           </span>
           <span
@@ -318,7 +305,7 @@ export default async function NotificationProviderSettingsPage() {
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+          <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             SMS Provider
           </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">
@@ -326,7 +313,7 @@ export default async function NotificationProviderSettingsPage() {
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+          <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             WhatsApp
           </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">
@@ -334,7 +321,7 @@ export default async function NotificationProviderSettingsPage() {
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+          <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             Web Push
           </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">
@@ -345,6 +332,13 @@ export default async function NotificationProviderSettingsPage() {
 
       {/* 3. Categorized Provider Gateway Cards */}
       <SystemNotificationSettings providers={providers} />
+
+      {/* 4. Workspace-wide scheduled emails */}
+      <WeeklyDigestToggle
+        scope="workspace"
+        enabled={await isWeeklyDigestEnabled()}
+        emailReady={await hasConfiguredEmailProvider()}
+      />
     </div>
   );
 }

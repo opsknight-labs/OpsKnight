@@ -5,12 +5,12 @@ import MetricChangeWhy from '@/components/analytics/MetricChangeWhy';
 import StatusDraftSuggestions from '@/components/status-page/StatusDraftSuggestions';
 import { loadStatusDraftsAction } from '@/app/(app)/settings/status-pages/helper-actions';
 import { suggestForIncidentDraftAction } from '@/app/(app)/incidents/helper-actions';
-import { explainMetricChangeAction } from '@/app/(app)/analytics/helper-actions';
+import { explainMetricChangeAction } from '@/app/(app)/insights/helper-actions';
 
 vi.mock('@/app/(app)/incidents/helper-actions', () => ({
   suggestForIncidentDraftAction: vi.fn(),
 }));
-vi.mock('@/app/(app)/analytics/helper-actions', () => ({
+vi.mock('@/app/(app)/insights/helper-actions', () => ({
   explainMetricChangeAction: vi.fn(),
 }));
 

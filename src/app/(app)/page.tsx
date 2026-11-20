@@ -19,6 +19,8 @@ import DashboardHistorySection, {
   DashboardHistoryProvider,
 } from '@/components/dashboard/DashboardHistorySection';
 import { requirePageAccess } from '@/lib/access/server';
+import GetStartedChecklist from '@/components/onboarding/GetStartedChecklist';
+import { getOnboardingSteps } from '@/lib/onboarding';
 
 export const revalidate = 0;
 
@@ -91,6 +93,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const acknowledgeScope = canManageIncidents ? null : { teamIds: actor.teamIds };
   const canAssignSelf = canManageIncidents;
   const currentUserName = user.name || user.email;
+  // Setup checklist for admins only; five cheap counts, skipped for everyone else.
+  const onboardingSteps = hasCapability(actor.role, CAPABILITIES.ADMIN_MANAGE)
+    ? await getOnboardingSteps().catch(() => null)
+    : null;
 
   return (
     <DashboardHistoryProvider initialQuery={historyQuery}>
@@ -103,6 +109,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         canAssignSelf={canAssignSelf}
       >
         <div className="w-full space-y-4 px-3 py-3 sm:px-4 md:px-6 lg:px-6">
+          {onboardingSteps && <GetStartedChecklist steps={onboardingSteps} />}
           <LiveCommandStrip scopeMode={scopeMode} timeZone={timeZone} />
 
           <DashboardCockpit

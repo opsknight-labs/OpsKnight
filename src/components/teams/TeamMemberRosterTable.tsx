@@ -2,8 +2,7 @@
 
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -26,7 +25,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
 import { Trash2, Bell, BellOff, Crown, Loader2, X, ChevronDown, Users } from 'lucide-react';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import EmptyState from '@/components/ui/EmptyState';
 
 type TeamMember = {
@@ -107,7 +106,6 @@ export default function TeamMemberRosterTable({
   designateTeamLeadAction,
 }: TeamMemberRosterTableProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
   const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
@@ -132,13 +130,13 @@ export default function TeamMemberRosterTable({
       try {
         const res = await updateMemberRole(memberId, formData);
         if (res?.error) {
-          showToast(res.error, 'error');
+          notify.error(res.error);
         } else {
-          showToast(`Role updated to ${role}`, 'success');
+          notify.success(`Role updated to ${role}`);
           router.refresh();
         }
       } catch {
-        showToast('Failed to update role', 'error');
+        notify.error('Failed to update role');
       } finally {
         setPendingMemberId(null);
       }
@@ -151,13 +149,13 @@ export default function TeamMemberRosterTable({
       try {
         const res = await updateMemberNotifications(memberId, enabled);
         if (res?.error) {
-          showToast(res.error, 'error');
+          notify.error(res.error);
         } else {
-          showToast(enabled ? 'Team notifications enabled' : 'Team notifications muted', 'success');
+          notify.success(enabled ? 'Team notifications enabled' : 'Team notifications muted');
           router.refresh();
         }
       } catch {
-        showToast('Failed to update notifications', 'error');
+        notify.error('Failed to update notifications');
       } finally {
         setPendingMemberId(null);
       }
@@ -171,13 +169,13 @@ export default function TeamMemberRosterTable({
       try {
         const res = await designateTeamLeadAction(teamId, userId);
         if (res?.error) {
-          showToast(res.error, 'error');
+          notify.error(res.error);
         } else {
-          showToast(userId ? `${userName} is now the Team Lead` : 'Team Lead removed', 'success');
+          notify.success(userId ? `${userName} is now the Team Lead` : 'Team Lead removed');
           router.refresh();
         }
       } catch {
-        showToast('Failed to update team lead', 'error');
+        notify.error('Failed to update team lead');
       } finally {
         setPendingMemberId(null);
       }
@@ -192,13 +190,13 @@ export default function TeamMemberRosterTable({
       try {
         const res = await removeMember(memberId);
         if (res?.error) {
-          showToast(res.error, 'error');
+          notify.error(res.error);
         } else {
-          showToast('Member removed from team', 'success');
+          notify.success('Member removed from team');
           router.refresh();
         }
       } catch {
-        showToast('Failed to remove member', 'error');
+        notify.error('Failed to remove member');
       } finally {
         setMemberToRemove(null);
         setPendingMemberId(null);
@@ -258,14 +256,14 @@ export default function TeamMemberRosterTable({
               >
                 {/* User info */}
                 <div className="flex items-center gap-3 min-w-0">
-                  <DirectUserAvatar
-                    avatarUrl={
-                      member.user.avatarUrl ||
-                      getDefaultAvatar(member.user.gender, member.user.id || member.user.name)
-                    }
+                  <UserAvatar
+                    userId={member.user.id || member.user.name}
+                    avatarUrl={member.user.avatarUrl}
+                    gender={member.user.gender}
                     name={member.user.name}
                     size="sm"
                     className="h-8 w-8 shrink-0 ring-1 ring-border/80"
+                    aria-hidden
                   />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -336,7 +334,7 @@ export default function TeamMemberRosterTable({
                           <ChevronDown className="h-3 w-3 opacity-60" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="text-xs w-36">
+                      <DropdownMenuContent align="end">
                         {canAssignOwnerAdmin && (
                           <DropdownMenuItem onClick={() => handleRoleSelect(member.id, 'OWNER')}>
                             Owner
@@ -357,18 +355,17 @@ export default function TeamMemberRosterTable({
                             <DropdownMenuSeparator />
                             {isLead ? (
                               <DropdownMenuItem
+                                variant="destructive"
                                 onClick={() => handleDesignateLead(null)}
-                                className="text-amber-600 dark:text-amber-400 gap-1.5"
                               >
-                                <Crown className="h-3 w-3" />
+                                <Crown />
                                 Remove as Lead
                               </DropdownMenuItem>
                             ) : (
                               <DropdownMenuItem
                                 onClick={() => handleDesignateLead(member.userId, member.user.name)}
-                                className="text-primary font-medium gap-1.5"
                               >
-                                <Crown className="h-3 w-3 text-primary" />
+                                <Crown />
                                 Set as Team Lead
                               </DropdownMenuItem>
                             )}

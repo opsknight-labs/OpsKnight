@@ -10,16 +10,11 @@ const authPagesWithDismissibleNotices = {
 };
 
 describe('auth notice dismiss buttons', () => {
-  it('exempts icon-only buttons from the compact button padding', () => {
-    // The compact rule pads every button 0.375rem 0.875rem (with !important at
-    // 1024-1600px). Inside a 24px chip that collapsed the X icon to 0px wide.
-    const compactRules = topbar.match(/^\s*button:not\(\.login-btn\)[^{]*\{/gm) ?? [];
-
-    expect(compactRules).toHaveLength(2);
-    for (const rule of compactRules) {
-      expect(rule).toContain(':not([data-icon-button])');
-      expect(rule).toContain(':not([data-sonner-toaster] *)');
-    }
+  it('has no element-wide button padding override in the shell CSS', () => {
+    // A page-wide `button:not(...)` rule used to pad every button (with
+    // !important at 1024-1600px), collapsing icon-only buttons to 0px wide.
+    // Components own their sizing now; keep it that way.
+    expect(topbar).not.toMatch(/^\s*button:not\(/m);
   });
 
   it('marks every auth notice dismiss button as an icon button', () => {

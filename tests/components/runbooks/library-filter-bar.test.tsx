@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { LibraryFilterBar } from '@/components/runbooks/library/LibraryFilterBar';
 import { RunbookCard, type RunbookCardData } from '@/components/runbooks/library/RunbookCard';
 
+const SERVICE_ID = 'clh9876543210987654321098';
 const push = vi.fn();
 const replace = vi.fn();
 
@@ -12,13 +13,20 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/components/runbooks/SearchableRunbookSelect', () => ({
-  SearchableRunbookSelect: ({ ariaLabel }: { ariaLabel?: string }) => (
+  SearchableRunbookSelect: ({
+    ariaLabel,
+    onChange,
+  }: {
+    ariaLabel?: string;
+    onChange: (value: string) => void;
+  }) => (
     <button
       type="button"
       role="combobox"
       aria-label={ariaLabel}
       aria-expanded={false}
       aria-controls="service-options"
+      onClick={() => onChange(SERVICE_ID)}
     />
   ),
 }));
@@ -36,49 +44,94 @@ describe('LibraryFilterBar', () => {
     replace.mockClear();
   });
 
-  it('keeps stable accessible names for the core filters', () => {
-    render(<LibraryFilterBar query={{}} teams={teams} popularTags={popularTags} />);
-    expect(screen.getByRole('textbox', { name: 'Search runbooks' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Filter by status' })).toBeInTheDocument();
+  const counts = { all: 12, published: 7, draft: 4, archived: 2 };
+  const tagsToggle = () => screen.getByRole('button', { name: /^Tags/ });
+
+  it('keeps stable accessible names for the core filters, with no Apply button', () => {
+    render(<LibraryFilterBar query={{}} teams={teams} popularTags={popularTags} counts={counts} />);
+    expect(screen.getByRole('searchbox', { name: 'Search runbooks' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Quick filters' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Filter by service' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Filter by team' })).toHaveTextContent('All teams');
-    expect(screen.getByRole('button', { name: 'Apply filters' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /reset/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /apply filters/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /clear all/i })).not.toBeInTheDocument();
   });
 
-  it('applies status from the segmented control and drops pagination', () => {
-    render(<LibraryFilterBar query={{ page: '3', owner: TEAM_ID }} teams={teams} />);
-    const group = screen.getByRole('group', { name: 'Filter by status' });
-    expect(within(group).getByRole('button', { name: 'All active' })).toHaveAttribute(
+  it('shows lifecycle counts and applies status immediately, dropping pagination', () => {
+    render(
+      <LibraryFilterBar query={{ page: '3', owner: TEAM_ID }} teams={teams} counts={counts} />
+    );
+    const group = screen.getByRole('group', { name: 'Quick filters' });
+    expect(within(group).getByRole('button', { name: /All active\s*12/ })).toHaveAttribute(
       'aria-pressed',
       'true'
     );
-    fireEvent.click(within(group).getByRole('button', { name: 'Published' }));
+    expect(within(group).getByRole('button', { name: /Draft\s*4/ })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: /Archived\s*2/ })).toBeInTheDocument();
+    fireEvent.click(within(group).getByRole('button', { name: /Published\s*7/ }));
     expect(push).toHaveBeenCalledWith(`/runbooks?owner=${TEAM_ID}&status=published`);
   });
 
-  it('filters by a popular tag and removes the active tag', () => {
-    const { unmount } = render(<LibraryFilterBar query={{}} popularTags={popularTags} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Filter by tag linux' }));
-    expect(push).toHaveBeenCalledWith('/runbooks?tag=linux');
-    unmount();
-
-    render(<LibraryFilterBar query={{ tag: 'linux' }} popularTags={popularTags} />);
-    expect(screen.queryByRole('button', { name: 'Filter by tag linux' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove tag filter linux' }));
+  it('toggles the active status chip back to all and clears the legacy tab param', () => {
+    render(<LibraryFilterBar query={{ tab: 'archived' }} />);
+    const archived = screen.getByRole('button', { name: /Archived/ });
+    expect(archived).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(archived);
     expect(push).toHaveBeenLastCalledWith('/runbooks');
   });
 
-  it('shows active filter count and resets everything', () => {
+  it('applies a service selection immediately', () => {
+    render(<LibraryFilterBar query={{ status: 'draft', page: '2' }} />);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter by service' }));
+    expect(push).toHaveBeenCalledWith(`/runbooks?status=draft&service=${SERVICE_ID}`);
+  });
+
+  it('keeps every tag reachable in the Tags section and toggles a single tag', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ tag: `tag-${i}`, count: 20 - i }));
+    const { unmount } = render(<LibraryFilterBar query={{}} popularTags={many} />);
+    fireEvent.click(tagsToggle());
+    const group = screen.getByRole('group', { name: 'Filter by tag' });
+    expect(within(group).getAllByRole('button')).toHaveLength(20);
+    fireEvent.click(within(group).getByRole('button', { name: /^#tag-19/ }));
+    expect(push).toHaveBeenCalledWith('/runbooks?tag=tag-19');
+    unmount();
+
+    // A second tag replaces the first (single-select), and the active one toggles off.
+    render(<LibraryFilterBar query={{ tag: 'linux' }} popularTags={popularTags} />);
+    expect(tagsToggle()).toHaveTextContent('1');
+    const tags = screen.getByRole('group', { name: 'Filter by tag' });
+    const linux = within(tags).getByRole('button', { name: /^#linux\s*4$/ });
+    expect(linux).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(tags).getByRole('button', { name: /^#database\s*2$/ }));
+    expect(push).toHaveBeenLastCalledWith('/runbooks?tag=database');
+    fireEvent.click(linux);
+    expect(push).toHaveBeenLastCalledWith('/runbooks');
+  });
+
+  it('shows an active tag that is not among the popular tags', () => {
+    render(<LibraryFilterBar query={{ tag: 'rare' }} popularTags={popularTags} />);
+    expect(screen.getByRole('button', { name: '#rare' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows "No tags yet" when the library has no tags', () => {
+    render(<LibraryFilterBar query={{}} />);
+    fireEvent.click(tagsToggle());
+    expect(screen.getByText('No tags yet')).toBeInTheDocument();
+  });
+
+  it('removes the author filter and clears everything', () => {
     render(
       <LibraryFilterBar
         query={{ q: 'disk', team: TEAM_ID, tag: 'linux', owner: TEAM_ID }}
         teams={teams}
       />
     );
-    expect(screen.getByText('4 filters active')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Filter by team' })).toHaveTextContent('Platform');
-    fireEvent.click(screen.getByRole('button', { name: /reset/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove filter: Created by a specific user' })
+    );
+    expect(push).toHaveBeenLastCalledWith(`/runbooks?q=disk&team=${TEAM_ID}&tag=linux`);
+    fireEvent.click(screen.getByRole('button', { name: /clear all/i }));
     expect(push).toHaveBeenLastCalledWith('/runbooks');
   });
 
@@ -86,7 +139,7 @@ describe('LibraryFilterBar', () => {
     vi.useFakeTimers();
     try {
       render(<LibraryFilterBar query={{ status: 'draft' }} />);
-      fireEvent.change(screen.getByRole('textbox', { name: 'Search runbooks' }), {
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Search runbooks' }), {
         target: { value: 'restart' },
       });
       expect(replace).not.toHaveBeenCalled();

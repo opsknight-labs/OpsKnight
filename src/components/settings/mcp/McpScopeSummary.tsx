@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/
 import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 
 /**
  * A compact "3 scopes" chip that opens an accessible, search-filtered, and scrollable
@@ -56,8 +57,8 @@ function McpScopeSummary({
           data-icon-button
           aria-label={`${chipText} for ${context}. Show list`}
           className={cn(
-            'group inline-flex h-6.5 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold transition-all duration-150',
-            'border-border/80 bg-background/80 hover:border-primary/50 hover:bg-primary/5 hover:text-foreground',
+            'group inline-flex h-6.5 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-2xs font-semibold transition-all duration-150',
+            'border-border bg-background hover:bg-muted hover:text-foreground',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
             hasActions ? 'text-foreground' : 'text-foreground/90'
           )}
@@ -65,15 +66,13 @@ function McpScopeSummary({
           <Shield
             className={cn(
               'h-3 w-3 shrink-0 transition-colors',
-              hasActions ? 'text-amber-500' : 'text-blue-500'
+              hasActions ? 'text-status-elevated' : 'text-status-info'
             )}
             aria-hidden="true"
           />
           <span
             className={cn(
-              usableCount !== null &&
-                usableCount < scopes.length &&
-                'text-amber-700 dark:text-amber-300'
+              usableCount !== null && usableCount < scopes.length && toneClasses('elevated').text
             )}
           >
             {chipText}
@@ -87,7 +86,7 @@ function McpScopeSummary({
       <PopoverContent
         align="start"
         collisionPadding={12}
-        className="w-84 max-w-[calc(100vw-2rem)] rounded-xl border border-border/80 bg-popover/95 p-3.5 shadow-xl backdrop-blur-md"
+        className="w-84 max-w-[calc(100vw-2rem)] border p-3.5"
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-2.5 border-b border-border/70">
@@ -97,7 +96,7 @@ function McpScopeSummary({
               {usableSet ? 'Approved Scopes' : 'Allowed Scopes'}
             </span>
           </div>
-          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-bold tabular-nums">
+          <Badge variant="secondary" className="h-5 px-1.5 text-2xs font-bold tabular-nums">
             {chipText}
           </Badge>
         </div>
@@ -112,6 +111,7 @@ function McpScopeSummary({
             <Input
               type="text"
               placeholder="Search scopes..."
+              aria-label="Search scopes"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="h-7 pl-8 pr-7 text-xs bg-muted/40 border-border/60 focus-visible:ring-1"
@@ -154,21 +154,20 @@ function McpScopeSummary({
                       >
                         {label}
                       </p>
-                      <code className="block mt-0.5 font-mono text-[10px] text-muted-foreground truncate">
+                      <code className="block mt-0.5 font-mono text-2xs text-muted-foreground truncate">
                         {scope}
                       </code>
                       {blocked && (
-                        <p className="mt-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                        <p className="mt-0.5 text-2xs font-medium text-status-elevated-deep dark:text-amber-300">
                           No longer allowed
                         </p>
                       )}
                     </div>
                     <span
                       className={cn(
-                        'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider',
-                        isRead
-                          ? 'border border-blue-200/60 bg-blue-50/60 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300'
-                          : 'border border-amber-200/60 bg-amber-50/60 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300'
+                        'shrink-0 rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wider',
+                        'border',
+                        toneClasses(isRead ? 'info' : 'elevated').soft
                       )}
                     >
                       {isRead ? 'Read' : 'Action'}
@@ -181,7 +180,7 @@ function McpScopeSummary({
         </div>
 
         {/* Footer info */}
-        <div className="mt-2.5 pt-2 border-t border-border/60 flex items-center justify-between text-[10px] text-muted-foreground">
+        <div className="mt-2.5 pt-2 border-t border-border/60 flex items-center justify-between text-2xs text-muted-foreground">
           <span className="truncate" title={context}>
             Target: <strong className="text-foreground">{context}</strong>
           </span>

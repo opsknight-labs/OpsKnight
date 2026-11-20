@@ -1,0 +1,44 @@
+name: Actions budget
+
+# GitHub hid this org on 2026-11-16 after an Actions compute surge (221 runs that day).
+# This fails, which emails the owners, when the last 24 hours exceed the run budget,
+# so a runaway agent or workflow loop is caught before GitHub's abuse detection is.
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Sum workflow minutes in the last 24 hours
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Wall-clock minutes of runs that did work (skipped runs excluded).
+          # Busy days before the flag were 1,000–1,700; the flag day was ~1,950 after a quiet week.
+          BUDGET: ${{ vars.ACTIONS_DAILY_MINUTES_BUDGET || 1200 }}
+        run: |
+          since="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100&created=>=${since}" \
+            --jq '.workflow_runs[] | select(.conclusion != "skipped" and .run_started_at != null)
+                  | [.name, .head_branch, (((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601)) / 60 | floor)] | @tsv' > runs.tsv
+          total="$(awk -F'\t' '{m+=$3} END{print m+0}' runs.tsv)"
+          {
+            echo "### ${total} workflow minutes in the last 24 hours across $(wc -l < runs.tsv | tr -d ' ') runs (budget ${BUDGET})"
+            echo
+            echo '| Minutes | Runs | Workflow |'
+            echo '|---:|---:|---|'
+            awk -F'\t' '{m[$1]+=$3; n[$1]++} END{for(k in m) printf "%d\t%d\t%s\n", m[k], n[k], k}' runs.tsv | sort -rn | head -12 | awk -F'\t' '{print "| " $1 " | " $2 " | " $3 " |"}'
+            echo
+            echo '**Busiest branches (minutes):**'
+            awk -F'\t' '{m[$2]+=$3} END{for(k in m) printf "%d\t%s\n", m[k], k}' runs.tsv | sort -rn | head -5 | awk -F'\t' '{print "- `" $2 "`: " $1}'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$total" -gt "$BUDGET" ]; then
+            echo "::error::${total} workflow minutes in 24h exceeds the budget of ${BUDGET}. Pause agent pushes, remove stale ci:full labels, and check the summary."
+            exit 1
+          fi

@@ -9,7 +9,8 @@ import AppUrlSettings from '@/components/settings/AppUrlSettings';
 import OutboundWebhookSettings from '@/components/settings/OutboundWebhookSettings';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import RetentionPolicySettings from '@/components/settings/RetentionPolicySettings';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import SystemSettingsTabs from '@/components/settings/SystemSettingsTabs';
 import SystemOverviewTab from '@/components/settings/SystemOverviewTab';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
@@ -27,7 +28,10 @@ import {
   Layers,
   Terminal,
   UserCheck,
+  Settings,
 } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
 import { getScimConfig } from '@/lib/scim';
@@ -141,7 +145,13 @@ export default async function SystemSettingsPage() {
   }
   if (!loaded) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
+        <SettingsPageHeader
+          eyebrow="System Administration"
+          icon={Settings}
+          title="System Settings"
+          description="Application-wide configuration and defaults."
+        />
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>System settings are unavailable</AlertTitle>
@@ -156,10 +166,11 @@ export default async function SystemSettingsPage() {
   if (loaded.kind === 'forbidden') {
     return (
       <div className="space-y-6">
-        <DetailHeroBanner
-          tag="SYSTEM ADMINISTRATION"
+        <SettingsPageHeader
+          eyebrow="System Administration"
+          icon={Settings}
           title="System Settings"
-          subtitle="Application-wide configuration and defaults."
+          description="Application-wide configuration and defaults."
         />
         <Alert variant="destructive">
           <Shield className="h-4 w-4" />
@@ -246,7 +257,7 @@ export default async function SystemSettingsPage() {
       action={
         <div className="flex items-center gap-2">
           <div
-            className={`p-1.5 rounded-md ${scimConfig.enabled && scimConfig.hasSecretToken ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}
+            className={`p-1.5 rounded-md ${scimConfig.enabled && scimConfig.hasSecretToken ? 'bg-muted text-muted-foreground' : 'bg-muted text-muted-foreground'}`}
           >
             <UserCheck className="h-4 w-4" />
           </div>
@@ -396,10 +407,8 @@ export default async function SystemSettingsPage() {
           {envRows.map(row => (
             <div
               key={row.key}
-              className={`relative flex flex-col justify-between rounded-xl border p-4 transition-all duration-150 hover:shadow-sm ${
-                row.ok
-                  ? 'border-border/80 bg-card hover:border-emerald-500/40'
-                  : 'border-rose-500/40 bg-rose-500/5 hover:border-rose-500/60'
+              className={`relative flex flex-col justify-between rounded-xl border p-4 transition-all duration-150 ${
+                row.ok ? 'border-border bg-card' : 'border-rose-500/40 bg-rose-500/5'
               }`}
             >
               <div className="space-y-2">
@@ -407,9 +416,7 @@ export default async function SystemSettingsPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <div
                       className={`p-1.5 rounded-md shrink-0 ${
-                        row.ok
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                        row.ok ? 'bg-muted text-muted-foreground' : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {row.icon}
@@ -420,7 +427,7 @@ export default async function SystemSettingsPage() {
                   </div>
                   <Badge
                     variant={row.ok ? 'success' : 'destructive'}
-                    className="text-[10px] shrink-0 font-medium"
+                    className="text-2xs shrink-0 font-medium"
                   >
                     {row.ok ? (
                       <>
@@ -439,12 +446,10 @@ export default async function SystemSettingsPage() {
                 <p className="text-xs text-muted-foreground leading-relaxed">{row.note}</p>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground gap-2 flex-wrap">
+              <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-2xs text-muted-foreground gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-[10px] text-muted-foreground/80">
-                    {row.scope}
-                  </span>
-                  <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 border border-border/50 text-muted-foreground font-medium">
+                  <span className="font-mono text-2xs text-muted-foreground/80">{row.scope}</span>
+                  <span className="text-2xs rounded bg-muted/60 px-1.5 py-0.5 border border-border/50 text-muted-foreground font-medium">
                     {row.source}
                   </span>
                 </div>
@@ -453,14 +458,14 @@ export default async function SystemSettingsPage() {
                   {row.actionHref && (
                     <Link
                       href={row.actionHref}
-                      className="text-[11px] font-medium text-primary hover:underline"
+                      className="text-2xs font-medium text-primary hover:underline"
                     >
                       {row.actionLabel}
                     </Link>
                   )}
                   <Badge
                     variant="outline"
-                    className="text-[10px] font-normal text-muted-foreground border-border/70"
+                    className="text-2xs font-normal text-muted-foreground border-border"
                   >
                     {row.impact}
                   </Badge>
@@ -474,21 +479,15 @@ export default async function SystemSettingsPage() {
   );
 
   const encryptionBadge = env.encryptionKey ? (
-    <Badge
-      variant="outline"
-      className="border-emerald-400/60 bg-emerald-400/15 text-emerald-100 text-[10px] font-semibold"
-    >
-      <CheckCircle2 className="h-3 w-3 mr-1" />
-      Encryption Key Set
-    </Badge>
+    <span className={cn(pageHeaderBadgeClass, 'border-emerald-500/40 text-emerald-300')}>
+      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+      Encryption key set
+    </span>
   ) : (
-    <Badge
-      variant="outline"
-      className="border-rose-400/60 bg-rose-400/15 text-rose-100 text-[10px] font-semibold"
-    >
-      <XCircle className="h-3 w-3 mr-1" />
-      Encryption Key Missing
-    </Badge>
+    <span className={cn(pageHeaderBadgeClass, 'border-rose-500/40 text-rose-300')}>
+      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+      Encryption key missing
+    </span>
   );
 
   const overviewTab = (
@@ -510,30 +509,24 @@ export default async function SystemSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="SYSTEM ADMINISTRATION"
+      <SettingsPageHeader
+        eyebrow="System Administration"
+        icon={Settings}
         title="System Settings"
-        subtitle="Core application configuration — App URL, SSO, data retention, and environment."
-        badges={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
-            >
-              <Shield className="h-3 w-3 mr-1" />
-              Admin Only
-            </Badge>
-            {encryptionBadge}
-          </div>
-        }
-        actions={
-          <Link
-            href="/system-logs"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-foreground/15 hover:bg-primary-foreground/25 text-primary-foreground text-xs font-semibold transition-colors"
+        description="Core application configuration — App URL, SSO, data retention, and environment."
+        badges={encryptionBadge}
+        secondaryActions={
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className={cn('gap-2', pageHeaderActionClass)}
           >
-            <Terminal className="h-3.5 w-3.5" />
-            <span>View System Logs</span>
-          </Link>
+            <Link href="/system-logs">
+              <Terminal className="h-4 w-4" aria-hidden="true" />
+              View system logs
+            </Link>
+          </Button>
         }
         statsPlacement="bottom"
         stats={[

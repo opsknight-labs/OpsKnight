@@ -1,18 +1,189 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { X, ShieldAlert, Layers, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  X,
+  ShieldAlert,
+  Layers,
+  Loader2,
+  AlertTriangle,
+  Calendar,
+  Server,
+  Users,
+} from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
-import PolicyDirectoryCard, { type PolicyDirectoryItem } from './PolicyDirectoryCard';
+import {
+  DirectoryCardGrid,
+  DirectoryGuide,
+  DirectoryGuideSteps,
+  DirectoryHeader,
+  DirectoryPrimaryCell,
+  DirectoryTable,
+  RelativeTime,
+  toneClasses,
+  useDirectoryColumns,
+  useDirectoryView,
+  type DirectoryColumn,
+} from '@/components/patterns';
+import PolicyDirectoryCard, {
+  PolicyActionsMenu,
+  StepTargetIcon,
+  policyStepChain,
+  stepTargetName,
+  type PolicyDirectoryItem,
+} from './PolicyDirectoryCard';
 import Pagination from '@/components/service/Pagination';
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const policyCount = (n: number) => (n === 1 ? '1 policy' : `${n} policies`);
+
+const POLICY_COLUMNS: DirectoryColumn<PolicyDirectoryItem>[] = [
+  {
+    id: 'policy',
+    header: 'Policy',
+    // max-w-0 + w-full: take the spare width and truncate instead of pushing columns off-screen.
+    className: 'w-full max-w-0',
+    cell: policy => (
+      <DirectoryPrimaryCell
+        href={`/policies/${policy.id}`}
+        title={policy.name}
+        subtitle={policy.description || <span className="italic">No description provided</span>}
+      />
+    ),
+  },
+  {
+    id: 'team',
+    hideable: true,
+    header: 'Teams notified',
+    className: 'hidden w-36 lg:table-cell',
+    cell: policy => {
+      const teams = [
+        ...new Map(
+          policy.steps.flatMap(s => (s.targetTeam ? [[s.targetTeam.id, s.targetTeam]] : []))
+        ).values(),
+      ];
+      if (teams.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+      return (
+        <span
+          className="block max-w-36 truncate text-xs text-foreground"
+          title={teams.map(t => t.name).join(', ')}
+        >
+          {teams[0].name}
+          {teams.length > 1 && <span className="text-muted-foreground"> +{teams.length - 1}</span>}
+        </span>
+      );
+    },
+  },
+  {
+    id: 'steps',
+    hideable: true,
+    header: 'Steps',
+    className: 'w-48',
+    cell: policy => {
+      if (policy.stepCount === 0) {
+        return (
+          <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+            Needs setup · no steps
+          </span>
+        );
+      }
+      const first = policy.steps[0];
+      // Delays are relative to the previous step, so the first escalation is step 2's delay.
+      const firstEscalation = policy.steps[1]?.delayMinutes ?? 0;
+      return (
+        <div className="max-w-48 text-xs" title={policyStepChain(policy)}>
+          <span className="font-medium text-foreground tabular-nums">
+            {plural(policy.stepCount, 'step')}
+            {policy.stepCount > 1 && (
+              <span className="font-normal text-muted-foreground">
+                {' '}
+                · escalates in {firstEscalation}m
+              </span>
+            )}
+          </span>
+          <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
+            <StepTargetIcon targetType={first.targetType} />
+            <span className="truncate">Notify {stepTargetName(first, 0)}</span>
+          </span>
+        </div>
+      );
+    },
+  },
+  {
+    id: 'services',
+    hideable: true,
+    header: 'Services',
+    className: 'hidden w-36 md:table-cell',
+    cell: policy =>
+      policy.serviceCount === 0 ? (
+        <span className="text-xs text-muted-foreground">Unassigned</span>
+      ) : (
+        <div className="max-w-36 text-xs" title={policy.services.map(s => s.name).join(', ')}>
+          <span className="font-medium text-foreground tabular-nums">{policy.serviceCount}</span>
+          <Link
+            href={`/services/${policy.services[0].id}`}
+            className="block truncate text-muted-foreground hover:text-primary hover:underline"
+          >
+            {policy.services[0].name}
+            {policy.serviceCount > 1 && ` +${policy.serviceCount - 1}`}
+          </Link>
+        </div>
+      ),
+  },
+  {
+    id: 'updated',
+    hideable: true,
+    header: 'Updated',
+    className: 'hidden w-24 xl:table-cell',
+    cell: policy => (
+      <RelativeTime date={policy.updatedAt} className="text-xs text-muted-foreground" />
+    ),
+  },
+];
+
+const GUIDE_STEPS = [
+  {
+    title: 'Tier 1',
+    description:
+      'Start with on-call schedules or primary on-call responders with a 0m initial delay.',
+  },
+  {
+    title: 'Tier 2',
+    description: 'Escalate to backup engineers or team leads after 5–10 minutes if unacknowledged.',
+  },
+  {
+    title: 'Tier 3',
+    description:
+      'Route to entire escalation teams or engineering directors after 15–30 minutes for critical outages.',
+  },
+];
+
+const GUIDE_LINKS = [
+  {
+    href: '/services',
+    label: 'Services Directory',
+    icon: <Server className="h-3.5 w-3.5" aria-hidden="true" />,
+  },
+  {
+    href: '/schedules',
+    label: 'On-Call Schedules',
+    icon: <Calendar className="h-3.5 w-3.5" aria-hidden="true" />,
+  },
+  {
+    href: '/teams',
+    label: 'Teams & Members',
+    icon: <Users className="h-3.5 w-3.5" aria-hidden="true" />,
+  },
+];
 
 type PolicyDirectoryListProps = {
   policies: PolicyDirectoryItem[];
-  canManage?: boolean;
   pagination?: {
     currentPage: number;
     totalPages: number;
@@ -23,6 +194,7 @@ type PolicyDirectoryListProps = {
     total: number;
     inUse: number;
     unassigned: number;
+    needsSetup?: number;
   };
   currentSearch?: string;
   currentStatus?: string;
@@ -30,7 +202,6 @@ type PolicyDirectoryListProps = {
 
 export default function PolicyDirectoryList({
   policies,
-  canManage = false,
   pagination,
   filterCounts,
   currentSearch = '',
@@ -40,6 +211,9 @@ export default function PolicyDirectoryList({
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(currentSearch);
   const [isPending, startTransition] = useTransition();
+  const [view, setView] = useDirectoryView('policies');
+  const columnVisibility = useDirectoryColumns('policies', POLICY_COLUMNS);
+  const rangeStart = pagination ? (pagination.currentPage - 1) * pagination.itemsPerPage + 1 : 1;
 
   const [syncedSearch, setSyncedSearch] = useState(currentSearch);
   if (syncedSearch !== currentSearch) {
@@ -74,6 +248,7 @@ export default function PolicyDirectoryList({
   const totalCount = filterCounts?.total ?? pagination?.totalItems ?? policies.length;
   const inUseCount = filterCounts?.inUse ?? 0;
   const unassignedCount = filterCounts?.unassigned ?? 0;
+  const needsSetupCount = filterCounts?.needsSetup ?? 0;
   const hasActiveFilter = Boolean(currentSearch || (currentStatus && currentStatus !== 'all'));
 
   if (totalCount === 0 && !hasActiveFilter) {
@@ -128,6 +303,12 @@ export default function PolicyDirectoryList({
                 Link critical services to trigger routing on alert creation.
               </p>
             </div>
+          </div>
+          <div className="mx-auto max-w-xl border-t border-border pt-4 text-left">
+            <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              How escalation works
+            </p>
+            <DirectoryGuideSteps steps={GUIDE_STEPS} links={GUIDE_LINKS} />
           </div>
         </CardContent>
       </Card>
@@ -209,52 +390,143 @@ export default function PolicyDirectoryList({
           >
             Unassigned ({unassignedCount})
           </button>
+          {needsSetupCount > 0 && (
+            <button
+              type="button"
+              onClick={() => updateFilters({ status: 'needs-setup' })}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                currentStatus === 'needs-setup'
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              Needs setup ({needsSetupCount})
+            </button>
+          )}
           {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-1" />}
         </div>
       </div>
 
-      {policies.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {policies.map(policy => (
-            <PolicyDirectoryCard key={policy.id} policy={policy} canManage={canManage} />
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          icon={<Layers className="h-6 w-6 text-muted-foreground/60" />}
-          title="No matching escalation policies"
-          description={
-            currentSearch
-              ? `No escalation policies matched "${currentSearch}". Try a different search term.`
-              : 'No escalation policies match the selected filter.'
-          }
-          action={
-            currentSearch || currentStatus !== 'all' ? (
+      {(needsSetupCount > 0 || unassignedCount > 0) &&
+        currentStatus !== 'needs-setup' &&
+        currentStatus !== 'unassigned' && (
+          <div
+            role="status"
+            className={cn(
+              'flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2 text-sm',
+              toneClasses('elevated').soft
+            )}
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <p className="min-w-[14rem] flex-1">
+              {[
+                needsSetupCount > 0 &&
+                  `${policyCount(needsSetupCount)} ${needsSetupCount === 1 ? 'has' : 'have'} no steps, so nobody gets paged`,
+                unassignedCount > 0 &&
+                  `${policyCount(unassignedCount)} ${unassignedCount === 1 ? 'is' : 'are'} not used by any service`,
+              ]
+                .filter(Boolean)
+                .join('; ')}
+              .
+            </p>
+            {needsSetupCount > 0 && (
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  updateFilters({ q: '', status: 'all' });
-                }}
-                className="text-xs h-8"
+                onClick={() => updateFilters({ status: 'needs-setup' })}
+                className="h-7 px-2.5 text-xs"
               >
-                Reset Filters
+                Show policies needing setup
               </Button>
-            ) : undefined
+            )}
+            {unassignedCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => updateFilters({ status: 'unassigned' })}
+                className="h-7 px-2.5 text-xs"
+              >
+                Show unassigned
+              </Button>
+            )}
+          </div>
+        )}
+
+      <div className="overflow-clip rounded-lg border border-border bg-card">
+        <DirectoryHeader
+          title="Escalation policies"
+          summary={
+            policies.length > 0
+              ? `Showing ${rangeStart}–${rangeStart + policies.length - 1} of ${pagination?.totalItems ?? policies.length}`
+              : 'No matching policies'
+          }
+          columns={columnVisibility}
+          density
+          view={{ value: view, onChange: setView }}
+          guide={
+            <DirectoryGuide title="How escalation works" steps={GUIDE_STEPS} links={GUIDE_LINKS} />
           }
         />
-      )}
-
-      {pagination && (
-        <Pagination
-          currentPage={pagination.currentPage}
-          totalPages={pagination.totalPages}
-          totalItems={pagination.totalItems}
-          itemsPerPage={pagination.itemsPerPage}
-          itemLabel="policy"
-        />
-      )}
+        {policies.length === 0 ? (
+          <EmptyState
+            icon={<Layers className="h-6 w-6 text-muted-foreground/60" />}
+            title="No matching escalation policies"
+            description={
+              currentSearch
+                ? `No escalation policies matched "${currentSearch}". Try a different search term.`
+                : 'No escalation policies match the selected filter.'
+            }
+            action={
+              currentSearch || currentStatus !== 'all' ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery('');
+                    updateFilters({ q: '', status: 'all' });
+                  }}
+                  className="text-xs h-8"
+                >
+                  Reset Filters
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : view === 'cards' ? (
+          <DirectoryCardGrid className="md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
+            {policies.map(policy => (
+              <PolicyDirectoryCard key={policy.id} policy={policy} />
+            ))}
+          </DirectoryCardGrid>
+        ) : (
+          <DirectoryTable
+            label="Escalation policies"
+            rows={policies}
+            getRowId={policy => policy.id}
+            columns={POLICY_COLUMNS}
+            hiddenColumns={columnVisibility.hidden}
+            rowActions={policy => <PolicyActionsMenu policy={policy} />}
+            mobileRow={policy => (
+              <DirectoryPrimaryCell
+                href={`/policies/${policy.id}`}
+                title={policy.name}
+                subtitle={`${plural(policy.stepCount, 'step')} · ${plural(policy.serviceCount, 'service')}`}
+              />
+            )}
+          />
+        )}
+        {pagination && pagination.totalPages > 1 && (
+          <Pagination
+            currentPage={pagination.currentPage}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.totalItems}
+            itemsPerPage={pagination.itemsPerPage}
+            itemLabel="policy"
+          />
+        )}
+      </div>
     </div>
   );
 }

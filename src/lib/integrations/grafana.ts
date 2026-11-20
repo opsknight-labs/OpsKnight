@@ -49,6 +49,43 @@ export type GrafanaStandardEvent = {
   };
 };
 
+/**
+ * Grafana's default notification template ("simple" webhook) sends the alert as
+ * one `message` string: "Value: …", "Labels:\n - k = v", "Annotations:\n - k = v".
+ * Pull those fields out so the incident gets a real title, grouping and severity.
+ * shortcut: reads the first alert only when Grafana groups several into one
+ * message; upgrade by splitting on "Value:" if grouped simple webhooks show up.
+ */
+export function parseGrafanaMessage(message: string | undefined): {
+  value?: string;
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+} {
+  const labels: Record<string, string> = {};
+  const annotations: Record<string, string> = {};
+  let value: string | undefined;
+  let section: Record<string, string> | null = null;
+  for (const rawLine of (message ?? '').split('\n')) {
+    const line = rawLine.trim();
+    if (line.startsWith('Value:')) {
+      if (value !== undefined) break; // second alert in a grouped message
+      value = line.slice('Value:'.length).trim();
+      section = null;
+    } else if (line === 'Labels:') {
+      section = labels;
+    } else if (line === 'Annotations:') {
+      section = annotations;
+    } else if (section && line.startsWith('- ') && line.includes(' = ')) {
+      const item = line.slice(2);
+      const at = item.indexOf(' = ');
+      section[item.slice(0, at).trim()] = item.slice(at + 3).trim();
+    } else if (line) {
+      section = null;
+    }
+  }
+  return { value, labels, annotations };
+}
+
 export function transformGrafanaToEvent(
   payload: GrafanaAlert
 ): GrafanaStandardEvent | GrafanaStandardEvent[] {
@@ -57,15 +94,39 @@ export function transformGrafanaToEvent(
   const hasAlerts = Array.isArray(payload.alerts) && payload.alerts.length > 0;
   if (!hasAlerts && (payload.state !== undefined || payload.ruleName)) {
     const isResolved = payload.state === 'ok';
-    const summary = payload.title || payload.ruleName || payload.message || 'Grafana Alert';
-    // Use ruleId if available, otherwise create stable key from ruleName/title
-    // Avoids Date.now() which defeats deduplication
+    const parsed = parseGrafanaMessage(payload.message);
+    const alertName = parsed.labels.alertname;
+    const summary =
+      payload.title ||
+      payload.ruleName ||
+      parsed.annotations.summary ||
+      alertName ||
+      payload.message
+        ?.split('\n')
+        .find(line => line.trim())
+        ?.trim() ||
+      'Grafana Alert';
+    // Stable key (never Date.now(), which defeats deduplication). Without rule
+    // identity, the alert's labels identify it, so different alerts stay apart.
+    const labelKey = Object.entries(parsed.labels)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join(',');
     const dedupKey = payload.ruleId
       ? `grafana-${payload.ruleId}`
-      : `grafana-${(payload.ruleName || payload.title || 'unknown').replace(/\s+/g, '-').toLowerCase()}`;
+      : payload.ruleName || payload.title
+        ? `grafana-${(payload.ruleName || payload.title)!.replace(/\s+/g, '-').toLowerCase()}`
+        : labelKey
+          ? `grafana-${labelKey}`.slice(0, 512)
+          : 'grafana-unknown';
 
-    const severity =
-      payload.state === 'alerting' ? 'critical' : payload.state === 'no_data' ? 'warning' : 'info';
+    const severity = parsed.labels.severity
+      ? normalizeSeverity(parsed.labels.severity, 'critical')
+      : payload.state === 'alerting'
+        ? 'critical'
+        : payload.state === 'no_data'
+          ? 'warning'
+          : 'info';
 
     return {
       event_action: isResolved ? 'resolve' : 'trigger',
@@ -80,6 +141,9 @@ export function transformGrafanaToEvent(
           ruleUrl: payload.ruleUrl,
           state: payload.state,
           message: payload.message,
+          ...(parsed.value !== undefined && { value: parsed.value }),
+          ...(Object.keys(parsed.labels).length > 0 && { labels: parsed.labels }),
+          ...(Object.keys(parsed.annotations).length > 0 && { annotations: parsed.annotations }),
           evalMatches: payload.evalMatches,
           tags: payload.tags,
           dashboardId: payload.dashboardId,

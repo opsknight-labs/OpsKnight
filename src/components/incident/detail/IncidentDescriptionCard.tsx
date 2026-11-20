@@ -59,6 +59,52 @@ function renderJsonValue(val: string): ReactNode {
   );
 }
 
+/**
+ * ClickHouse prints Map, Array and Tuple values as `{'k':1}`, `['a','b']` and
+ * `('x',1)`. Grafana passes them through as text, so rewrite them as JSON.
+ */
+export function clickHouseLiteralToJson(text: string): string | null {
+  const trimmed = text.trim();
+  if (!/^[[{(][\s\S]*[\]})]$/.test(trimmed)) return null;
+  let out = '';
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed.charAt(i);
+    if (ch === "'") {
+      let value = '';
+      for (i++; i < trimmed.length && trimmed.charAt(i) !== "'"; i++) {
+        value += trimmed.charAt(i) === '\\' ? trimmed.charAt(++i) : trimmed.charAt(i);
+      }
+      out += JSON.stringify(value);
+    } else {
+      out += ch === '(' ? '[' : ch === ')' ? ']' : ch;
+    }
+  }
+  try {
+    return JSON.stringify(JSON.parse(out), null, 2);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A JSON string value that hides structure: multi-line text (ClickHouse query
+ * output, templated annotations), embedded JSON, or a ClickHouse literal.
+ * Returns the text to show expanded under its key, or null to keep it inline.
+ */
+export function expandStringValue(literal: string): { kind: 'json' | 'text'; text: string } | null {
+  if (!literal.startsWith('"') || !literal.endsWith('"')) return null;
+  let decoded: string;
+  try {
+    decoded = JSON.parse(literal);
+  } catch {
+    return null;
+  }
+  const json = tryParseJson(decoded) ?? clickHouseLiteralToJson(decoded);
+  if (json) return { kind: 'json', text: json };
+  if (decoded.includes('\n')) return { kind: 'text', text: decoded.replace(/\s+$/, '') };
+  return null;
+}
+
 function renderJsonLines(jsonStr: string): ReactNode[] {
   const lines = jsonStr.split('\n');
   return lines.map((line, idx) => {
@@ -70,11 +116,39 @@ function renderJsonLines(jsonStr: string): ReactNode[] {
     if (kvMatch) {
       const key = kvMatch[1];
       const val = kvMatch[3];
-      return (
-        <div key={idx} className="leading-snug">
+      const hasComma = val.trim().endsWith(',');
+      const expanded = expandStringValue(hasComma ? val.trim().slice(0, -1) : val.trim());
+      const keyNode = (
+        <>
           <span>{indent}</span>
           <span className="text-sky-700 dark:text-sky-300 font-semibold">{key}</span>
           <span className="text-muted-foreground">: </span>
+        </>
+      );
+      if (expanded) {
+        const nested = `${indent}  `;
+        return (
+          <div key={idx} className="leading-snug">
+            <div>{keyNode}</div>
+            {expanded.kind === 'json'
+              ? renderJsonLines(
+                  expanded.text
+                    .split('\n')
+                    .map(l => nested + l)
+                    .join('\n')
+                )
+              : expanded.text.split('\n').map((textLine, lineIdx) => (
+                  <div key={lineIdx} className="text-emerald-700 dark:text-emerald-400">
+                    {nested}
+                    {textLine}
+                  </div>
+                ))}
+          </div>
+        );
+      }
+      return (
+        <div key={idx} className="leading-snug">
+          {keyNode}
           {renderJsonValue(val)}
         </div>
       );

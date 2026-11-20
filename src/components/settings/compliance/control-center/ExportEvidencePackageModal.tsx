@@ -46,10 +46,10 @@ export function ExportEvidencePackageModal({
   const [evidenceMode, setEvidenceMode] = useState<'SNAPSHOT' | 'HISTORICAL'>('SNAPSHOT');
 
   // Historical dates (default to last 30 days)
-  const defaultTo = new Date().toISOString().slice(0, 16);
-  const defaultFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
-  const [fromDate, setFromDate] = useState(defaultFrom);
-  const [toDate, setToDate] = useState(defaultTo);
+  const [fromDate, setFromDate] = useState(() =>
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+  );
+  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 16));
 
   const [preview, setPreview] = useState<ExportPackagePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -60,6 +60,7 @@ export function ExportEvidencePackageModal({
   // Initialize selected controls if empty
   useEffect(() => {
     if (availableControls.length > 0 && selectedControlIds.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
       setSelectedControlIds([availableControls[0].id]);
     }
   }, [availableControls, selectedControlIds.length]);
@@ -83,6 +84,7 @@ export function ExportEvidencePackageModal({
   useEffect(() => {
     if (!isOpen) return;
     if (scopeType === 'CONTROLS' && selectedControlIds.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
       setPreview(null);
       setPreviewError(null);
       return;
@@ -220,8 +222,8 @@ export function ExportEvidencePackageModal({
 
         <div className="space-y-5 py-2 text-sm">
           {/* Non-Certification Notice */}
-          <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
+          <div className="p-3 rounded-lg border border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 text-xs flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-status-elevated mt-0.5" />
             <div>
               <span className="font-semibold block mb-0.5">Factual Technical Telemetry Only</span>
               This package exports observed technical state and supporting evidence. It does not
@@ -278,9 +280,10 @@ export function ExportEvidencePackageModal({
 
           {/* Framework Selection */}
           {scopeType === 'FRAMEWORK' && (
-            <div className="space-y-2 p-3 rounded-lg border bg-card/50">
+            <div className="space-y-2 p-3 rounded-lg border bg-card">
               <Label className="text-xs font-semibold">Select Compliance Framework</Label>
               <select
+                aria-label="Compliance framework"
                 value={selectedFramework}
                 onChange={e => setSelectedFramework(e.target.value as ComplianceFramework)}
                 className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
@@ -309,10 +312,10 @@ export function ExportEvidencePackageModal({
 
           {/* Controls Selection */}
           {scopeType === 'CONTROLS' && (
-            <div className="space-y-2 p-3 rounded-lg border bg-card/50">
+            <div className="space-y-2 p-3 rounded-lg border bg-card">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold">Select Controls</Label>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   {selectedControlIds.length} of {availableControls.length} selected
                 </span>
               </div>
@@ -330,7 +333,7 @@ export function ExportEvidencePackageModal({
                           : 'hover:bg-muted text-muted-foreground'
                       }`}
                     >
-                      <span className="font-mono text-[11px]">{c.id}</span>
+                      <span className="font-mono text-2xs">{c.id}</span>
                       <span className="truncate ml-2 text-right">{c.title}</span>
                     </button>
                   );
@@ -375,10 +378,11 @@ export function ExportEvidencePackageModal({
 
           {/* Historical Range Pickers */}
           {evidenceMode === 'HISTORICAL' && (
-            <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border bg-card/50">
+            <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border bg-card">
               <div className="space-y-1">
                 <Label className="text-xs">From (Observed At)</Label>
                 <input
+                  aria-label="From (observed at)"
                   type="datetime-local"
                   value={fromDate}
                   onChange={e => setFromDate(e.target.value)}
@@ -388,6 +392,7 @@ export function ExportEvidencePackageModal({
               <div className="space-y-1">
                 <Label className="text-xs">To (Observed At)</Label>
                 <input
+                  aria-label="To (observed at)"
                   type="datetime-local"
                   value={toDate}
                   onChange={e => setToDate(e.target.value)}
@@ -405,25 +410,25 @@ export function ExportEvidencePackageModal({
                 Package Summary Preview
               </span>
               {isLoadingPreview ? (
-                <span className="flex items-center gap-1 text-[11px]">
+                <span className="flex items-center gap-1 text-2xs">
                   <Loader2 className="h-3 w-3 animate-spin" /> Calculating...
                 </span>
               ) : (
-                <span className="text-[11px] font-mono">
+                <span className="text-2xs font-mono">
                   ~{preview ? (preview.estimatedSizeBytes / 1024).toFixed(1) : '0'} KB
                 </span>
               )}
             </div>
 
             {previewError ? (
-              <div className="p-2.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 flex items-center justify-between text-xs">
+              <div className="p-2.5 rounded border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 border flex items-center justify-between text-xs">
                 <span className="font-medium">Preview unavailable ({previewError})</span>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setRetryCount(c => c + 1)}
-                  className="h-6 px-2 text-[11px] gap-1 shrink-0 font-medium"
+                  className="h-6 px-2 text-2xs gap-1 shrink-0 font-medium"
                 >
                   <RefreshCw className="h-3 w-3" /> Retry
                 </Button>
@@ -431,19 +436,19 @@ export function ExportEvidencePackageModal({
             ) : (
               <div className="grid grid-cols-3 gap-2 pt-1">
                 <div className="p-2 rounded bg-background border text-center">
-                  <span className="block text-[11px] text-muted-foreground">Controls</span>
+                  <span className="block text-2xs text-muted-foreground">Controls</span>
                   <span className="text-base font-bold text-foreground">
                     {preview?.counts.controls ?? 0}
                   </span>
                 </div>
                 <div className="p-2 rounded bg-background border text-center">
-                  <span className="block text-[11px] text-muted-foreground">Requirements</span>
+                  <span className="block text-2xs text-muted-foreground">Requirements</span>
                   <span className="text-base font-bold text-foreground">
                     {preview?.counts.requirements ?? 0}
                   </span>
                 </div>
                 <div className="p-2 rounded bg-background border text-center">
-                  <span className="block text-[11px] text-muted-foreground">Evidence Records</span>
+                  <span className="block text-2xs text-muted-foreground">Evidence Records</span>
                   <span className="text-base font-bold text-foreground">
                     {preview?.counts.evidence ?? 0}
                   </span>
@@ -453,23 +458,23 @@ export function ExportEvidencePackageModal({
           </div>
 
           {/* Package Inclusions */}
-          <div className="text-[11px] text-muted-foreground space-y-1">
+          <div className="text-2xs text-muted-foreground space-y-1">
             <span className="font-semibold text-foreground block">Verified Package Contents:</span>
             <div className="grid grid-cols-2 gap-1">
               <div className="flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                <CheckCircle2 className="h-3 w-3 text-status-ok" />
                 <span>Canonical JSON control states</span>
               </div>
               <div className="flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                <CheckCircle2 className="h-3 w-3 text-status-ok" />
                 <span>SHA-256 package manifest</span>
               </div>
               <div className="flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                <CheckCircle2 className="h-3 w-3 text-status-ok" />
                 <span>Recalculated evidence digests</span>
               </div>
               <div className="flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                <CheckCircle2 className="h-3 w-3 text-status-ok" />
                 <span>CSV index & Markdown report</span>
               </div>
             </div>

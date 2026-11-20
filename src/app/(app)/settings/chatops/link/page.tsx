@@ -1,6 +1,10 @@
 import { linkMicrosoftTeamsAccount } from './actions';
 import { requirePageAccess } from '@/lib/access/server';
 import { describeMicrosoftTeamsIdentityChallenge } from '@/lib/microsoft-teams/identity';
+import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import { Button } from '@/components/ui/shadcn/button';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 
 export default async function LinkChatOpsPage({
   searchParams,
@@ -11,14 +15,19 @@ export default async function LinkChatOpsPage({
   const { token = '' } = await searchParams;
   const pending = await describeMicrosoftTeamsIdentityChallenge(token);
   return (
-    <main className="mx-auto max-w-xl space-y-6 p-8">
-      <h1 className="font-display text-2xl font-semibold">Link Microsoft Teams</h1>
+    <div className="space-y-6">
+      <SettingsPageHeader
+        title="Link Microsoft Teams"
+        icon={MicrosoftTeamsLogo}
+        description="Connect the Teams account that opened this link to your OpsKnight user, so actions you take in Teams are recorded as you."
+        hideSearch
+      />
       {pending ? (
-        <>
-          <p className="text-sm text-muted-foreground">
-            This link will let the Microsoft Teams account below act as your signed-in OpsKnight
-            user in Teams.
-          </p>
+        <SettingsSection
+          title="Confirm the account link"
+          description="This link will let the Microsoft Teams account below act as your signed-in OpsKnight user in Teams."
+          contentClassName="space-y-4 py-4"
+        >
           <dl className="rounded-md border p-4 text-sm">
             <dt className="text-muted-foreground">Teams account</dt>
             <dd className="font-medium">{pending.displayName || 'Unknown Teams user'}</dd>
@@ -31,20 +40,17 @@ export default async function LinkChatOpsPage({
           </p>
           <form action={linkMicrosoftTeamsAccount}>
             <input type="hidden" name="token" value={token} />
-            <button
-              type="submit"
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-            >
-              Link this Teams account
-            </button>
+            <Button type="submit">Link this Teams account</Button>
           </form>
-        </>
+        </SettingsSection>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          This Microsoft Teams account-link request is invalid or expired. Start a new link from
-          Teams.
-        </p>
+        <SettingsSection title="Link unavailable" contentClassName="py-4">
+          <p className="text-sm text-muted-foreground">
+            This Microsoft Teams account-link request is invalid or expired. Start a new link from
+            Teams.
+          </p>
+        </SettingsSection>
       )}
-    </main>
+    </div>
   );
 }

@@ -182,7 +182,7 @@ export async function scimDirectoryAction(input: unknown) {
         rows: rows.map(r => ({
           id: r.id,
           label: r.name,
-          detail: `${r._count.memberships} directory members · ${r.bindings.length ? r.bindings.map(b => b.team.name).join(', ') : 'No team binding'} · ${r.scimExternalId ?? 'No external ID'}`,
+          detail: `${r._count.memberships} directory members · ${r.systemRole ? `System role: ${r.systemRole}` : 'No system role mapping'} · ${r.bindings.length ? r.bindings.map(b => b.team.name).join(', ') : 'No team binding'} · ${r.scimExternalId ?? 'No external ID'}`,
           time: r.updatedAt.toISOString(),
         })),
       };

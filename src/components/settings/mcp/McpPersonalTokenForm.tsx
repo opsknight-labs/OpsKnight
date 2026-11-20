@@ -85,7 +85,7 @@ export default function McpPersonalTokenForm({
   return (
     <section
       aria-labelledby="mcp-pat-title"
-      className="my-4 space-y-4 rounded-xl border border-border bg-card p-4 shadow-2xs md:p-5"
+      className="my-4 space-y-4 rounded-lg border border-border bg-card p-4 shadow-2xs md:p-5"
     >
       <div className="space-y-1">
         <h3
@@ -130,7 +130,12 @@ export default function McpPersonalTokenForm({
       <form action={submit} noValidate className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="space-y-1.5">
-            <Label htmlFor="mcp-pat-label">Name</Label>
+            <span className="flex items-center gap-0.5">
+              <Label htmlFor="mcp-pat-label">Name</Label>
+              <span aria-hidden="true" className="text-sm text-destructive">
+                *
+              </span>
+            </span>
             <Input
               id="mcp-pat-label"
               name="label"
@@ -197,7 +202,7 @@ export default function McpPersonalTokenForm({
                   />
                   <span>
                     {choice.label}
-                    <code className="ml-1.5 font-mono text-[11px] text-muted-foreground">
+                    <code className="ml-1.5 font-mono text-2xs text-muted-foreground">
                       {choice.scope}
                     </code>
                   </span>

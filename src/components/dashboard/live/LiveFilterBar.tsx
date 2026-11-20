@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
@@ -34,8 +35,7 @@ import { useLiveDashboard } from './LiveDashboardProvider';
 export type LiveDirectoryOption = { id: string; name: string };
 
 const SEARCH_DEBOUNCE_MS = 250;
-const controlClass =
-  'h-8 rounded-lg border-border bg-card px-2.5 text-xs shadow-2xs hover:border-ink-300';
+const controlClass = 'h-8 rounded-md border-border bg-card px-2.5 text-xs hover:bg-muted';
 
 /** Facet options with live counts first, then the rest of the viewer's directory at zero. */
 function mergeOptions(directory: LiveDirectoryOption[], facets: LiveFacetOption[]) {
@@ -94,10 +94,7 @@ function FacetCombobox({
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        className="w-[21rem] overflow-hidden rounded-xl border border-border/80 p-0 shadow-xl dark:border-zinc-800 dark:shadow-2xl dark:shadow-black/60"
-        align="start"
-      >
+      <PopoverContent className="w-[21rem] overflow-hidden border p-0" align="start">
         <Command>
           <CommandInput placeholder={`Search ${label.toLowerCase()}s…`} />
           <CommandList className="max-h-[280px] p-1">
@@ -132,13 +129,18 @@ function FacetCombobox({
                   <span className="flex-1 truncate font-medium text-foreground">{option.name}</span>
                   <div className="flex shrink-0 items-center gap-1.5 pl-2">
                     {option.critical > 0 && (
-                      <span className="rounded border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.2 font-mono text-[9px] font-semibold text-rose-600 dark:text-rose-400">
+                      <span
+                        className={cn(
+                          'rounded-sm border px-1.5 text-2xs font-semibold tabular-nums',
+                          toneClasses('critical').soft
+                        )}
+                      >
                         {option.critical} crit
                       </span>
                     )}
                     <span
                       className={cn(
-                        'min-w-5 rounded px-1 text-center font-mono text-[10px] tabular-nums',
+                        'min-w-5 rounded px-1 text-center font-mono text-2xs tabular-nums',
                         option.count > 0
                           ? 'bg-muted font-medium text-foreground'
                           : 'text-muted-foreground/60'
@@ -179,14 +181,14 @@ function Segmented<T extends string>({
 }) {
   return (
     <fieldset>
-      <legend className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <legend className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </legend>
       <div
         role="radiogroup"
         aria-label={label}
         className={cn(
-          'grid gap-1 rounded-lg border border-border/60 bg-muted/30 p-1 dark:bg-zinc-900/40',
+          'grid gap-1 rounded-md border border-border bg-muted/30 p-1',
           cols ?? 'grid-cols-3'
         )}
         data-testid={testId}
@@ -202,9 +204,9 @@ function Segmented<T extends string>({
               data-value={option.value}
               onClick={() => onChange(option.value)}
               className={cn(
-                'flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                'flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 selected
-                  ? 'border border-border/80 bg-background font-semibold text-foreground shadow-2xs'
+                  ? 'border border-border bg-background font-semibold text-foreground shadow-xs'
                   : 'border border-transparent text-muted-foreground hover:bg-background/40 hover:text-foreground'
               )}
             >
@@ -212,7 +214,7 @@ function Segmented<T extends string>({
               {option.count !== undefined && (
                 <span
                   className={cn(
-                    'font-mono text-[10px] tabular-nums',
+                    'font-mono text-2xs tabular-nums',
                     selected ? 'font-semibold text-primary' : 'text-muted-foreground/80'
                   )}
                 >
@@ -233,7 +235,7 @@ function LiveViewPicker() {
   const counts = new Map(Object.entries(snapshot?.facets.views ?? {}));
   return (
     <fieldset>
-      <legend className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <legend className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         View
       </legend>
       <div role="radiogroup" aria-label="Live incident view" className="grid grid-cols-2 gap-1.5">
@@ -249,7 +251,7 @@ function LiveViewPicker() {
               data-testid={`live-view-${view}`}
               onClick={() => setQuery({ view })}
               className={cn(
-                'flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                'flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 active
                   ? 'border-primary/60 bg-primary/10 font-semibold text-primary shadow-2xs'
                   : 'border-border/70 bg-card text-foreground hover:border-border hover:bg-muted/60'
@@ -259,7 +261,7 @@ function LiveViewPicker() {
               {count !== undefined && (
                 <span
                   className={cn(
-                    'rounded px-1 font-mono text-[10px] tabular-nums',
+                    'rounded px-1 font-mono text-2xs tabular-nums',
                     active
                       ? 'bg-primary/20 font-bold text-primary'
                       : 'bg-muted/60 text-muted-foreground'
@@ -343,14 +345,14 @@ export function LiveToolbar({
           aria-keyshortcuts="/"
           className={cn(controlClass, 'w-full pl-8 pr-7')}
         />
-        <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-border bg-muted px-1 font-mono text-[10px] text-muted-foreground sm:block">
+        <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-border bg-muted px-1 font-mono text-2xs text-muted-foreground sm:block">
           /
         </kbd>
       </div>
       <FacetCombobox
         label="Service"
         testId="live-filter-service"
-        icon={<Briefcase className="h-3.5 w-3.5 shrink-0 text-blue-500" aria-hidden />}
+        icon={<Briefcase className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />}
         value={query.serviceId}
         options={serviceOptions}
         onChange={serviceId => setQuery({ serviceId })}
@@ -371,7 +373,7 @@ export function LiveToolbar({
             <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Filters
             {moreCount > 0 && (
-              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+              <span className="rounded-full bg-primary px-1.5 text-2xs font-bold text-primary-foreground">
                 {moreCount}
               </span>
             )}
@@ -380,7 +382,7 @@ export function LiveToolbar({
         <PopoverContent
           align="end"
           collisionPadding={12}
-          className="max-h-[min(38rem,var(--radix-popover-content-available-height))] w-[23rem] max-w-[calc(100vw-2rem)] space-y-3.5 overflow-y-auto overscroll-contain p-3.5 rounded-xl border border-border/80 shadow-xl dark:border-zinc-800 dark:shadow-2xl dark:shadow-black/60"
+          className="max-h-[min(38rem,var(--radix-popover-content-available-height))] w-[23rem] max-w-[calc(100vw-2rem)] space-y-3.5 overflow-y-auto overscroll-contain p-3.5 border"
         >
           <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
             <div className="flex items-center gap-1.5">
@@ -389,7 +391,7 @@ export function LiveToolbar({
                 Filter Incidents
               </span>
               {moreCount > 0 && (
-                <span className="rounded-full bg-primary/15 px-1.5 py-0.2 font-mono text-[10px] font-bold text-primary">
+                <span className="rounded-full bg-muted px-1.5 text-2xs font-semibold tabular-nums text-foreground">
                   {moreCount} active
                 </span>
               )}
@@ -405,7 +407,7 @@ export function LiveToolbar({
                     assignment: 'all',
                   })
                 }
-                className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors outline-none focus-visible:underline"
+                className="text-2xs font-medium text-muted-foreground hover:text-foreground transition-colors outline-none focus-visible:underline"
               >
                 Reset all
               </button>
@@ -413,13 +415,13 @@ export function LiveToolbar({
           </div>
           <LiveViewPicker />
           <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
               Team
             </p>
             <FacetCombobox
               label="Team"
               testId="live-filter-team"
-              icon={<Users className="h-3.5 w-3.5 shrink-0 text-violet-500" aria-hidden />}
+              icon={<Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />}
               value={query.teamId}
               options={teamOptions}
               onChange={teamId => setQuery({ teamId })}
@@ -461,7 +463,7 @@ export function LiveToolbar({
               { value: 'assigned', label: 'Assigned', count: facets?.assignment.assigned },
             ]}
           />
-          <p className="border-t border-border/60 pt-2.5 text-[11px] text-muted-foreground">
+          <p className="border-t border-border/60 pt-2.5 text-2xs text-muted-foreground">
             Snoozed and suppressed incidents are not active.{' '}
             <Link
               href="/incidents?filter=muted"
@@ -521,13 +523,13 @@ export function LiveActiveFilters({
   if (chips.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-testid="live-filter-chips">
-      <span className="text-[11px] font-medium text-muted-foreground">Filtered by</span>
+      <span className="text-2xs font-medium text-muted-foreground">Filtered by</span>
       {chips.map(chip => (
         <button
           key={chip.key}
           type="button"
           onClick={() => setQuery(chip.clear)}
-          className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-primary/10 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-2xs font-medium text-foreground hover:bg-primary/10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Remove filter ${chip.label}`}
         >
           {chip.label}
@@ -549,7 +551,7 @@ export function LiveActiveFilters({
               search: '',
             })
           }
-          className="text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          className="text-2xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
         >
           Clear all
         </button>

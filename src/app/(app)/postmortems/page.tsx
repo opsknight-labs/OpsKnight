@@ -14,7 +14,6 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { FileText, CheckCircle2, Clock, Archive, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import PostmortemsListTable from '@/components/postmortem/PostmortemsListTable';
-import { getUserTimeZone } from '@/lib/timezone';
 
 import PostmortemsFilters from '@/components/postmortem/PostmortemsFilters';
 import { parsePageParam, parseEnumValue } from '@/lib/pagination-parser';
@@ -50,16 +49,6 @@ export default async function PostmortemsPage({
     }),
   ]);
   const canCreate = permissions.isResponderOrAbove;
-
-  // Get user timezone for date formatting
-  const email = session?.user?.email ?? null;
-  const user = email
-    ? await prisma.user.findUnique({
-        where: { email },
-        select: { timeZone: true },
-      })
-    : null;
-  const userTimeZone = getUserTimeZone(user ?? undefined);
 
   // Get resolved incidents without postmortems for quick create
   const resolvedIncidentsWithoutPostmortems = canCreate
@@ -108,12 +97,12 @@ export default async function PostmortemsPage({
           canCreate && resolvedIncidentsWithoutPostmortems.length > 0 ? (
             <Button
               asChild
-              className="gap-2 shadow-sm font-semibold bg-background text-foreground hover:bg-background/90"
+              className="gap-2 shadow-sm font-semibold bg-white text-zinc-950 hover:bg-zinc-100"
             >
               <Link href="/postmortems/create">
                 <Plus className="h-4 w-4" />
                 Create Postmortem
-                <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-xs font-bold text-primary">
+                <span className="ml-1 rounded bg-zinc-950/10 px-1.5 py-0.5 text-xs font-bold text-zinc-950 tabular-nums">
                   {resolvedIncidentsWithoutPostmortems.length}
                 </span>
               </Link>
@@ -169,7 +158,6 @@ export default async function PostmortemsPage({
         <PostmortemsListTable
           postmortems={postmortems}
           pagination={pagination}
-          userTimeZone={userTimeZone}
           canManage={canCreate}
         />
       </div>

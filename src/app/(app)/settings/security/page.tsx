@@ -8,7 +8,8 @@ import ActiveSessionsSection from '@/components/settings/ActiveSessionsSection';
 import SecurityRecentActivity, {
   type SecurityAuditItem,
 } from '@/components/settings/SecurityRecentActivity';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -17,6 +18,11 @@ import { ShieldCheck, KeyRound, Fingerprint, ExternalLink } from 'lucide-react';
 import McpConnectEntry from '@/components/settings/mcp/McpConnectEntry';
 import { loadMcpInForce } from '@/lib/mcp/core/policy-in-force';
 import { requirePageAccess } from '@/lib/access/server';
+
+function formatRole(role: string | null | undefined): string {
+  const value = (role || 'USER').toLowerCase();
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 export default async function SecuritySettingsPage() {
   await requirePageAccess('/settings/security');
@@ -104,36 +110,17 @@ export default async function SecuritySettingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Centralized Glassmorphic Hero Banner */}
-      <DetailHeroBanner
-        tag="Identity & Protection"
+      <SettingsPageHeader
+        eyebrow="Identity & Protection"
         title="Security & Authentication"
-        subtitle="Control how you sign in, manage credentials, and review signed-in sessions across your account."
-        icon={
-          <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
-            <ShieldCheck className="h-8 w-8" />
-          </div>
-        }
+        description="Control how you sign in, manage credentials, and review signed-in sessions across your account."
+        icon={ShieldCheck}
         badges={
           <>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Active & Guarded
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-xs"
-            >
-              {isSsoLinked ? 'Identity Linked' : 'Identity Not Linked'}
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-xs"
-            >
-              Role: {user?.role || 'USER'}
-            </Badge>
+            <span className={pageHeaderBadgeClass}>
+              {isSsoLinked ? 'SSO identity linked' : 'No SSO identity linked'}
+            </span>
+            <span className={pageHeaderBadgeClass}>Role: {formatRole(user?.role)}</span>
           </>
         }
         stats={[

@@ -18,15 +18,7 @@ interface BaseFormFieldProps {
 interface InputFormFieldProps extends BaseFormFieldProps {
   type: 'input';
   inputType?:
-    | 'text'
-    | 'email'
-    | 'password'
-    | 'number'
-    | 'tel'
-    | 'url'
-    | 'search'
-    | 'date'
-    | 'datetime-local';
+    'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search' | 'date' | 'datetime-local';
   placeholder?: string;
   value?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -59,10 +51,7 @@ interface SwitchFormFieldProps extends BaseFormFieldProps {
 }
 
 type FormFieldProps =
-  | InputFormFieldProps
-  | TextareaFormFieldProps
-  | SelectFormFieldProps
-  | SwitchFormFieldProps;
+  InputFormFieldProps | TextareaFormFieldProps | SelectFormFieldProps | SwitchFormFieldProps;
 
 /**
  * FormField wrapper component for consistent form inputs
@@ -138,11 +127,17 @@ export default function FormField(props: FormFieldProps) {
         >
           {label}
           {required && (
-            <span style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}>*</span>
+            <span
+              aria-hidden="true"
+              style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}
+            >
+              *
+            </span>
           )}
         </label>
         <textarea
           id={id}
+          required={required}
           rows={props.rows || 4}
           placeholder={props.placeholder}
           value={props.value}
@@ -190,7 +185,7 @@ export default function FormField(props: FormFieldProps) {
               gap: 'var(--spacing-1)',
             }}
           >
-            <span>⚠️</span>
+            <span aria-hidden="true">⚠️</span>
             <span>{error}</span>
           </div>
         )}

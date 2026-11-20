@@ -18,6 +18,8 @@ import {
   Check,
 } from 'lucide-react';
 import { SlackLogo } from '@/components/common/BrandLogos';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
 
 /**
  * Lets an admin supply or rotate the Slack signing secret on an already-configured workspace.
@@ -72,15 +74,14 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
   };
 
   return (
-    <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+    <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
         <div className="flex items-center gap-3">
           <div
-            className={`p-2 rounded-lg border shrink-0 ${
-              isConfigured
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
-            }`}
+            className={cn(
+              'p-2 rounded-lg border shrink-0',
+              toneClasses(isConfigured ? 'ok' : 'critical').soft
+            )}
           >
             <KeyRound className="h-5 w-5" />
           </div>
@@ -90,7 +91,7 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
               <h3 className="text-base font-semibold text-foreground">Slack Signing Secret</h3>
               <Badge
                 variant={isConfigured ? 'success' : 'destructive'}
-                className="text-[10px] font-semibold gap-1"
+                className="text-2xs font-semibold gap-1"
               >
                 {isConfigured ? (
                   <>
@@ -125,8 +126,13 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
       </div>
 
       {isConfigured && !isEditing ? (
-        <div className="rounded-lg border bg-emerald-500/5 border-emerald-500/20 p-3.5 flex items-start gap-3 text-xs text-emerald-800 dark:text-emerald-300">
-          <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+        <div
+          className={cn(
+            'rounded-lg border p-3.5 flex items-start gap-3 text-xs',
+            toneClasses('ok').soft
+          )}
+        >
+          <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="space-y-0.5">
             <p className="font-semibold">Request Signature Verification Active</p>
             <p className="text-muted-foreground">
@@ -138,11 +144,16 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
       ) : (
         <div className="space-y-4 pt-1">
           {!isConfigured && (
-            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2.5">
-              <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+            <div
+              className={cn(
+                'rounded-lg border p-3.5 text-xs flex items-start gap-2.5',
+                toneClasses('critical').soft
+              )}
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
               <p className="leading-relaxed">
                 Without a signing secret, slash commands like{' '}
-                <code className="bg-rose-500/15 font-mono px-1 rounded">/incident</code>,
+                <code className="bg-background/60 font-mono px-1 rounded">/incident</code>,
                 interactive acknowledgment buttons, and reaction sync will be rejected to protect
                 your workspace.
               </p>
@@ -151,17 +162,18 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
 
           <div className="space-y-2 max-w-xl">
             <div className="flex items-center justify-between">
-              <Label
-                htmlFor="slackSigningSecret"
-                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
+              <Label htmlFor="slackSigningSecret" className="text-sm font-medium">
                 App Signing Secret
+                <span className="ml-1 text-destructive" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
               </Label>
               <a
                 href="https://api.slack.com/apps"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[11px] font-medium text-primary hover:underline inline-flex items-center gap-1"
+                className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
               >
                 <span>Find in Slack Basic Info</span>
                 <ExternalLink className="h-3 w-3" />
@@ -174,7 +186,8 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
                 value={signingSecret}
                 onChange={e => setSigningSecret(e.target.value)}
                 placeholder="Paste 32-character Signing Secret"
-                className="font-mono text-xs h-9 pr-10 bg-background border-border/80"
+                className="font-mono text-xs h-9 pr-10"
+                aria-describedby="slackSigningSecret-help"
               />
               <button
                 type="button"
@@ -185,7 +198,7 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
                 {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p id="slackSigningSecret-help" className="text-xs text-muted-foreground">
               Found under <strong>Slack App Console</strong> → <strong>Basic Information</strong> →{' '}
               <strong>App Credentials</strong> → <strong>Signing Secret</strong>.
             </p>

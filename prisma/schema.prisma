@@ -493,6 +493,8 @@ model UserEmailReservation {
 }
 
 model User {
+  // True only after an approved group role mapping has adopted this account.
+  scimRoleMappingAdopted Boolean @default(false)
   scimGivenName String?
   scimFamilyName String?
   scimIdentities ScimIdentity[]
@@ -598,6 +600,8 @@ model User {
   avatar                      UserAvatar?
   dashboards                  Dashboard[]
   savedReports                SavedReport[]
+  analyticsViews              AnalyticsView[]
+  analyticsDigest             AnalyticsDigestSubscription?
   reportExports               ReportExport[]
   auditExports                AuditExport[]
   assignedActionItems         ActionItem[]
@@ -667,6 +671,7 @@ model Team {
   incidents         Incident[]
   dashboards        Dashboard[]
   savedReports      SavedReport[]
+  analyticsViews    AnalyticsView[]
   runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
@@ -3275,6 +3280,39 @@ model SavedReport {
   @@index([teamId, createdAt, id])
 }
 
+/// A saved filter set on /analytics. `query` is the canonical string from
+/// toAnalyticsSearchParams and is re-validated through parseAnalyticsParams on load.
+model AnalyticsView {
+  id          String              @id @default(cuid())
+  name        String
+  query       String
+  visibility  DashboardVisibility @default(PRIVATE)
+  userId      String
+  teamId      String?
+  isDefault   Boolean             @default(false)
+  emailWeekly Boolean             @default(false)
+  lastSentAt  DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team        Team?               @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt, id])
+  @@index([teamId, createdAt, id])
+  @@index([emailWeekly, lastSentAt])
+}
+
+/// Default weekly analytics summary (sent to everyone with analytics access, PagerDuty-style).
+/// One row per user, created on first send. token backs the RFC 8058 one-click unsubscribe.
+model AnalyticsDigestSubscription {
+  userId     String    @id
+  optedOut   Boolean   @default(false)
+  token      String    @unique
+  lastSentAt DateTime?
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model ReportExport {
   id               String   @id @default(cuid())
   userId           String
@@ -4939,6 +4977,7 @@ model ScimGroup {
   updatedAt      DateTime               @updatedAt
   memberships    ScimGroupMembership[]
   bindings       ScimGroupTeamBinding[]
+  systemRole     Role? // Explicit administrator-approved system role mapping.
 
   @@unique([connectorId, scimExternalId])
   @@index([connectorId, name, id])

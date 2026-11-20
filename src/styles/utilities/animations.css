@@ -152,31 +152,8 @@
 }
 
 /* Animation utility classes */
-.animate-fade-in {
-    animation: fadeIn var(--transition-slow) var(--ease-out) forwards;
-}
-
-.animate-slide-up {
-    animation: slideUp var(--transition-slow) var(--ease-out) forwards;
-}
-
-.animate-slide-in-right {
-    animation: slideInRight var(--transition-slow) var(--ease-out) forwards;
-}
 
 /* Skeleton Component Styles */
-.skeleton-pulse {
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-.skeleton-wave {
-    background: linear-gradient(90deg,
-            var(--color-neutral-200) 0px,
-            var(--color-neutral-100) 40px,
-            var(--color-neutral-200) 80px);
-    background-size: 200px 100%;
-    animation: skeleton-wave 1.6s linear infinite;
-}
 
 /* Shimmer effect for premium loading states */
 @keyframes shimmer {

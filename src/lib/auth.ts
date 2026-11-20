@@ -445,7 +445,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   // across replicas cannot all slip under the limit. Only failed attempts keep their
                   // slot: a correct password refunds it, so responders switching devices never lock
                   // the account.
-                  const accountReservation = await checkRateLimit(accountKey, 10, ACCOUNT_WINDOW_MS);
+                  const accountReservation = await checkRateLimit(
+                    accountKey,
+                    10,
+                    ACCOUNT_WINDOW_MS
+                  );
                   const refundAccountAttempt = () =>
                     releaseRateLimit(accountKey, ACCOUNT_WINDOW_MS, accountReservation.resetAt);
                   if (!accountReservation.allowed) {
@@ -969,7 +973,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             session.user.email = (token.email as string) || session.user.email;
             session.user.avatarUrl = token.avatarUrl;
             session.user.gender = token.gender;
-            session.user.image = token.avatarUrl || getDefaultAvatar(token.gender, token.sub);
+            session.user.image = token.avatarUrl || getDefaultAvatar(token.name, token.sub);
             session.user.sessionId = sessionJti;
           }
           session.sessionId = sessionJti;
@@ -1201,6 +1205,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               {
                 role: targetUser.role as OidcRole,
                 roleSource: targetUser.roleSource as 'MANUAL' | 'OIDC' | 'SCIM',
+                scimRoleMappingAdopted: targetUser.scimRoleMappingAdopted,
               },
               { firstLink: resolution.identityCreated }
             );

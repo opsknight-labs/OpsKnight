@@ -1,5 +1,5 @@
-import { RunbookPageSkeleton } from '@/components/runbooks/skeletons';
+import { ListPageSkeleton } from '@/components/patterns';
 
-export default function RunbookAgentsLoading() {
-  return <RunbookPageSkeleton variant="agents" />;
+export default function AgentsLoading() {
+  return <ListPageSkeleton label="Loading agent fleet" stats={4} rows={6} columns={5} />;
 }

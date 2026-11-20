@@ -421,7 +421,7 @@ export default function CustomFieldsConfig({
             <SelectContent>
               <SelectItem value="ALL">All Types</SelectItem>
               {Object.entries(typeConfigs).map(([typeKey, cfg]) => (
-                <SelectItem key={typeKey} value={typeKey} className="text-xs">
+                <SelectItem key={typeKey} value={typeKey}>
                   {cfg.label}
                 </SelectItem>
               ))}
@@ -759,7 +759,7 @@ export default function CustomFieldsConfig({
                     {Object.entries(typeConfigs).map(([typeKey, cfg]) => {
                       const Icon = cfg.icon;
                       return (
-                        <SelectItem key={typeKey} value={typeKey} className="text-xs">
+                        <SelectItem key={typeKey} value={typeKey}>
                           <div className="flex items-center gap-2">
                             <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                             <span>{cfg.label}</span>

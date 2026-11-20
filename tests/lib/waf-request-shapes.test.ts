@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseAnalyticsParams, toAnalyticsSearchParams } from '@/lib/analytics/params';
 import { forcedSignOutUrl, signOutDestination } from '@/lib/app-routes';
 import { relativeToAppOrigin, safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import {
@@ -158,5 +159,20 @@ describe('relativeToAppOrigin', () => {
     ]) {
       expect(safeInternalCallbackUrl(relativeToAppOrigin(raw, origin), '/')).toBe('/');
     }
+  });
+});
+
+describe('analytics URLs', () => {
+  it('carry only short, plain filter values', () => {
+    const query = toAnalyticsSearchParams(
+      parseAnalyticsParams(
+        new URLSearchParams(
+          'range=custom&from=2026-11-10&to=2026-11-16&compare=0&service=cmvsarhjx0bnr10o1avmojh8i&team=cmvsarhjx0bnr10o1avmojh8j&urgency=HIGH&drill=afterHours'
+        )
+      )
+    ).toString();
+    assertWafFriendly(`/insights?${query}`);
+    expect(decodeURIComponent(query)).not.toMatch(/['"<>`;]/);
+    expect(query.length).toBeLessThan(512);
   });
 });

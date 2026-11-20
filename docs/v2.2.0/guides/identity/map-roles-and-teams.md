@@ -23,8 +23,9 @@ verification:
 # Map groups to roles and teams
 
 In **Settings → System → SSO / Authentication → 3 · Roles & teams**, you can give people a role
-and put them on teams based on the groups or roles your identity provider sends. Rules are
-applied every time someone signs in with single sign-on.
+and put them on teams based on the groups or roles your identity provider sends. OIDC rules are
+applied every time someone signs in with single sign-on. For roles updated without a
+sign-in, configure [SCIM group role mappings](./configure-scim/#assign-system-roles-from-microsoft-entra-groups).
 
 This step is optional. Without rules, everyone gets the default role, and you manage roles and
 teams by hand.
@@ -83,7 +84,10 @@ people directory and the console show which.
 - A role you set by hand stays as you set it. Single sign-on never changes it.
 - New accounts created by single sign-on get their role from the rules.
 - An existing account moves under SSO control on its **first** SSO sign-in if a rule matches.
-- A role from SCIM changes only when a rule matches. If no rule matches, the SCIM role stays.
+- A role explicitly adopted by a SCIM group role mapping stays under SCIM control; OIDC
+  rules never overwrite it, even on first SSO link. Legacy SCIM roles retain their previous
+  matching-rule takeover behavior until a group role mapping adopts the account. Use [SCIM group role mappings](./configure-scim/#assign-system-roles-from-microsoft-entra-groups)
+  to manage roles at provisioning time without a sign-in.
 - To hand a role back to the rules, open the account's menu in **2 · Who can sign in** and
   choose **Let role rules manage this role**. It applies at their next SSO sign-in.
 

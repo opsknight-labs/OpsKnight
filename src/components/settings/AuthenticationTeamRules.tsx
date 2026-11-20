@@ -97,7 +97,7 @@ export default function AuthenticationTeamRules({
                   maxLength={512}
                 />
               </label>
-              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
                 <input
                   type="checkbox"
                   className="h-3.5 w-3.5 rounded border-input"

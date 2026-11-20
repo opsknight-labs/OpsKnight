@@ -1,8 +1,8 @@
 'use client';
 
 import { ImpactMetrics } from './PostmortemImpactInput';
-import BarChart from '@/components/analytics/BarChart';
-import PieChart from '@/components/analytics/PieChart';
+import BarChart from '@/components/charts/BarChart';
+import PieChart from '@/components/charts/PieChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { cn } from '@/lib/utils';
 

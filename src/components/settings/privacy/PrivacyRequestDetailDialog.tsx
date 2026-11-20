@@ -17,7 +17,7 @@ import {
   User,
   XCircle,
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/shadcn/table';
+import { toneClasses } from '@/components/patterns';
 
 type ExportArtifactStatus = 'PENDING' | 'READY' | 'DOWNLOADED' | 'EXPIRED' | 'FAILED';
 
@@ -101,29 +102,29 @@ type ErasurePlan = {
 };
 
 const EXECUTION_BADGE_CLASS: Record<string, string> = {
-  PENDING: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-zinc-300',
-  RUNNING: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  PARTIAL: 'border-orange-600/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-  COMPLETED: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  FAILED: 'border-rose-600/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+  PENDING: toneClasses(null).soft,
+  RUNNING: toneClasses('info').soft,
+  PARTIAL: toneClasses('elevated').soft,
+  COMPLETED: toneClasses('ok').soft,
+  FAILED: toneClasses('critical').soft,
 };
 
 const ARTIFACT_BADGE_CLASS: Record<ExportArtifactStatus, string> = {
-  PENDING: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-zinc-300',
-  READY: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  DOWNLOADED: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
-  EXPIRED: 'border-orange-600/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-  FAILED: 'border-rose-600/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+  PENDING: toneClasses(null).soft,
+  READY: toneClasses('ok').soft,
+  DOWNLOADED: toneClasses(null).soft,
+  EXPIRED: toneClasses('elevated').soft,
+  FAILED: toneClasses('critical').soft,
 };
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
-  RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-zinc-300',
-  IDENTITY_VERIFICATION: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  IN_REVIEW: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  PROCESSING: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
-  BLOCKED: 'border-orange-600/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-  COMPLETED: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  REJECTED: 'border-rose-600/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+  RECEIVED: toneClasses(null).soft,
+  IDENTITY_VERIFICATION: toneClasses('info').soft,
+  IN_REVIEW: toneClasses('elevated').soft,
+  PROCESSING: toneClasses(null).soft,
+  BLOCKED: toneClasses('elevated').soft,
+  COMPLETED: toneClasses('ok').soft,
+  REJECTED: toneClasses('critical').soft,
 };
 
 function formatBytes(bytes: number | null): string {
@@ -164,7 +165,6 @@ export default function PrivacyRequestDetailDialog({
   subjectUser?: { id: string; name: string | null; email: string };
 }) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -238,7 +238,7 @@ export default function PrivacyRequestDetailDialog({
       });
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to load request detail.', 'error');
+        notify.error(body?.error ?? 'Failed to load request detail.');
         return;
       }
       const nextDetail = body.data.request as RequestDetail;
@@ -283,15 +283,15 @@ export default function PrivacyRequestDetailDialog({
       );
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to execute erasure.', 'error');
+        notify.error(body?.error ?? 'Failed to execute erasure.');
         return;
       }
       setConfirmInput('');
       setConfirmOpen(false);
       if (body?.data?.manualReviewRequired) {
-        showToast('Erasure completed — manual review required before closing the request.', 'info');
+        notify.info('Erasure completed — manual review required before closing the request.');
       } else {
-        showToast('Erasure executed.', 'success');
+        notify.success('Erasure executed.');
       }
       await loadDetail();
     } finally {
@@ -307,10 +307,10 @@ export default function PrivacyRequestDetailDialog({
       });
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to generate export.', 'error');
+        notify.error(body?.error ?? 'Failed to generate export.');
         return;
       }
-      showToast('Export generated.', 'success');
+      notify.success('Export generated.');
       await loadDetail();
     } finally {
       setGenerating(false);
@@ -327,14 +327,14 @@ export default function PrivacyRequestDetailDialog({
       });
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to move request to Processing.', 'error');
+        notify.error(body?.error ?? 'Failed to move request to Processing.');
         return;
       }
-      showToast('Request moved to Processing.', 'success');
+      notify.success('Request moved to Processing.');
       await loadDetail();
       router.refresh();
     } catch {
-      showToast('Failed to move request to Processing.', 'error');
+      notify.error('Failed to move request to Processing.');
     } finally {
       setTransitioning(false);
     }
@@ -353,14 +353,14 @@ export default function PrivacyRequestDetailDialog({
       });
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to verify identity.', 'error');
+        notify.error(body?.error ?? 'Failed to verify identity.');
         return;
       }
-      showToast('Identity verified (moved to In Review).', 'success');
+      notify.success('Identity verified (moved to In Review).');
       await loadDetail();
       router.refresh();
     } catch {
-      showToast('Failed to verify identity.', 'error');
+      notify.error('Failed to verify identity.');
     } finally {
       setTransitioning(false);
     }
@@ -376,14 +376,14 @@ export default function PrivacyRequestDetailDialog({
       });
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to mark request as completed.', 'error');
+        notify.error(body?.error ?? 'Failed to mark request as completed.');
         return;
       }
-      showToast('Privacy request marked as Completed.', 'success');
+      notify.success('Privacy request marked as Completed.');
       await loadDetail();
       router.refresh();
     } catch {
-      showToast('Failed to mark request as completed.', 'error');
+      notify.error('Failed to mark request as completed.');
     } finally {
       setTransitioning(false);
     }
@@ -421,7 +421,7 @@ export default function PrivacyRequestDetailDialog({
         ) : detail ? (
           <div className="space-y-4">
             {/* Visual Lifecycle Stepper */}
-            <div className="rounded-xl border bg-muted/40 p-3">
+            <div className="rounded-lg border bg-muted/40 p-3">
               <div className="flex items-center justify-between">
                 {lifecycleSteps.map((step, idx) => {
                   const isLast = idx === lifecycleSteps.length - 1;
@@ -431,11 +431,11 @@ export default function PrivacyRequestDetailDialog({
                         <div
                           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors ${
                             step.status === 'complete'
-                              ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-950/50 dark:text-emerald-300'
+                              ? toneClasses('ok').soft
                               : step.status === 'current'
                                 ? 'border-primary bg-primary text-primary-foreground shadow-xs ring-2 ring-primary/20'
                                 : step.status === 'error'
-                                  ? 'border-rose-600 bg-rose-50 text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/50 dark:text-rose-300'
+                                  ? toneClasses('critical').soft
                                   : 'border-muted-foreground/30 bg-muted/80 text-muted-foreground'
                           }`}
                         >
@@ -450,17 +450,15 @@ export default function PrivacyRequestDetailDialog({
                         <div className="hidden sm:block">
                           <p className="text-xs font-medium leading-none">{step.label}</p>
                           {step.caption && (
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">
-                              {step.caption}
-                            </p>
+                            <p className="mt-0.5 text-2xs text-muted-foreground">{step.caption}</p>
                           )}
                         </div>
                       </div>
                       {!isLast && (
                         <div
-                          className={`mx-2 h-[2px] flex-1 transition-colors ${
+                          className={`mx-2 h-0.5 flex-1 transition-colors ${
                             step.status === 'complete'
-                              ? 'bg-emerald-500/60 dark:bg-emerald-500/40'
+                              ? 'bg-status-ok/60'
                               : 'bg-muted-foreground/20'
                           }`}
                         />
@@ -491,7 +489,7 @@ export default function PrivacyRequestDetailDialog({
                       )}
                     </div>
                     <div className="flex items-center gap-1 text-xs font-mono text-muted-foreground">
-                      <span className="font-sans text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                      <span className="font-sans text-2xs uppercase tracking-wider text-muted-foreground/70">
                         Subject:
                       </span>
                       <span>
@@ -532,7 +530,7 @@ export default function PrivacyRequestDetailDialog({
                 <div className="col-span-full flex flex-wrap items-center gap-2 border-t pt-2">
                   <span className="text-muted-foreground">Identity verification:</span>
                   {detail.verifiedAt ? (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-status-ok-deep dark:text-emerald-300">
                       <CheckCircle2 className="h-4 w-4" />
                       <span>
                         Verified on {new Date(detail.verifiedAt).toLocaleDateString()}
@@ -543,7 +541,7 @@ export default function PrivacyRequestDetailDialog({
                       </span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-status-elevated-deep dark:text-amber-300">
                       <AlertTriangle className="h-4 w-4" />
                       <span>Pending verification</span>
                     </span>
@@ -557,16 +555,16 @@ export default function PrivacyRequestDetailDialog({
               <div
                 className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border p-3 text-xs ${
                   detail.verifiedAt
-                    ? 'border-indigo-200 bg-indigo-50/60 dark:border-indigo-900/40 dark:bg-indigo-950/20'
-                    : 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20'
+                    ? 'border-border bg-muted'
+                    : 'border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15'
                 }`}
               >
                 <div className="space-y-0.5">
                   <p
                     className={`font-semibold ${
                       detail.verifiedAt
-                        ? 'text-indigo-950 dark:text-indigo-200'
-                        : 'text-amber-950 dark:text-amber-200'
+                        ? 'text-muted-foreground'
+                        : 'text-status-elevated-deep dark:text-amber-300'
                     }`}
                   >
                     {detail.verifiedAt
@@ -576,8 +574,8 @@ export default function PrivacyRequestDetailDialog({
                   <p
                     className={
                       detail.verifiedAt
-                        ? 'text-indigo-700 dark:text-indigo-400'
-                        : 'text-amber-700 dark:text-amber-400'
+                        ? 'text-muted-foreground'
+                        : 'text-status-elevated-deep dark:text-amber-300'
                     }
                   >
                     {detail.verifiedAt
@@ -592,7 +590,7 @@ export default function PrivacyRequestDetailDialog({
                     {detail.verifiedAt ? (
                       <Button
                         size="sm"
-                        className="h-8 gap-1.5 bg-indigo-600 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500"
+                        className="h-8 gap-1.5 text-xs"
                         onClick={() => void handleMoveToProcessing()}
                         disabled={transitioning}
                       >
@@ -607,7 +605,7 @@ export default function PrivacyRequestDetailDialog({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 gap-1.5 border-amber-300 bg-white text-xs text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                        className="h-8 gap-1.5 text-xs"
                         onClick={() => void handleVerifyIdentity()}
                         disabled={transitioning}
                       >
@@ -626,12 +624,12 @@ export default function PrivacyRequestDetailDialog({
 
             {/* Quick Transition Callout when erasure execution has succeeded in PROCESSING */}
             {detail.status === 'PROCESSING' && detail.erasureExecution?.status === 'COMPLETED' && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-xs dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 p-3 text-xs">
                 <div className="space-y-0.5">
-                  <p className="font-semibold text-emerald-950 dark:text-emerald-200">
+                  <p className="font-semibold text-status-ok-deep dark:text-emerald-300">
                     Erasure execution completed
                   </p>
-                  <p className="text-emerald-700 dark:text-emerald-400">
+                  <p className="text-status-ok-deep dark:text-emerald-300">
                     Subject data has been permanently erased and anonymized. Mark this request as
                     Completed to close the ticket.
                   </p>
@@ -640,7 +638,7 @@ export default function PrivacyRequestDetailDialog({
                   <div className="shrink-0">
                     <Button
                       size="sm"
-                      className="h-8 gap-1.5 bg-emerald-600 text-xs text-white hover:bg-emerald-700 dark:bg-emerald-500"
+                      className="h-8 gap-1.5 text-xs"
                       onClick={() => void handleCompleteRequest()}
                       disabled={transitioning}
                     >
@@ -658,7 +656,7 @@ export default function PrivacyRequestDetailDialog({
 
             {/* Blocked or Rejected Notifications */}
             {detail.status === 'BLOCKED' && (
-              <div className="rounded-lg border border-orange-200 bg-orange-50/60 p-3 text-xs text-orange-800 dark:border-orange-900/40 dark:bg-orange-950/20 dark:text-orange-200">
+              <div className="rounded-lg border border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 p-3 text-xs">
                 <p className="font-semibold">Request is currently blocked</p>
                 <p className="mt-0.5">
                   {detail.notes ?? 'Resolve blocking conditions or legal holds before proceeding.'}
@@ -666,7 +664,7 @@ export default function PrivacyRequestDetailDialog({
               </div>
             )}
             {detail.status === 'REJECTED' && (
-              <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3 text-xs text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200">
+              <div className="rounded-lg border border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 p-3 text-xs">
                 <p className="font-semibold">Request was rejected</p>
                 <p className="mt-0.5">
                   {detail.notes ? `Reason: ${detail.notes}` : 'No specific reason recorded.'}
@@ -681,18 +679,18 @@ export default function PrivacyRequestDetailDialog({
                     exportEligible ? (
                       <span>Ready to generate a new export for this request.</span>
                     ) : !detail.verifiedAt ? (
-                      <span className="text-amber-600 dark:text-amber-400">
+                      <span className="text-status-elevated-deep dark:text-amber-300">
                         Complete identity verification and move this request to Processing before
                         generating an export.
                       </span>
                     ) : (
-                      <span className="text-amber-600 dark:text-amber-400">
+                      <span className="text-status-elevated-deep dark:text-amber-300">
                         Identity is verified. Move this request to Processing before generating an
                         export.
                       </span>
                     )
                   ) : (
-                    <span className="text-amber-600 dark:text-amber-400">
+                    <span className="text-status-elevated-deep dark:text-amber-300">
                       {detail.subjectType === 'STATUS_SUBSCRIBER'
                         ? 'Status-page subscriber export is not yet automated and requires manual fulfilment.'
                         : 'This request type is not yet automated and requires manual fulfilment.'}
@@ -775,7 +773,7 @@ export default function PrivacyRequestDetailDialog({
                 ) : plan ? (
                   <>
                     {plan.blockingConditions.length > 0 && (
-                      <ul className="list-inside list-disc space-y-1 text-xs text-amber-600 dark:text-amber-400">
+                      <ul className="list-inside list-disc space-y-1 text-xs text-status-elevated-deep dark:text-amber-300">
                         {plan.blockingConditions.map(condition => (
                           <li key={condition}>{condition}</li>
                         ))}
@@ -865,7 +863,7 @@ export default function PrivacyRequestDetailDialog({
                         detail.status === 'PROCESSING' ? (
                           <Button
                             size="sm"
-                            className="bg-emerald-600 text-xs text-white hover:bg-emerald-700 dark:bg-emerald-500"
+                            className="text-xs"
                             onClick={() => void handleCompleteRequest()}
                             disabled={transitioning}
                           >
@@ -963,7 +961,7 @@ export default function PrivacyRequestDetailDialog({
                       detail.status === 'PROCESSING' && (
                         <Button
                           size="sm"
-                          className="bg-emerald-600 text-xs text-white hover:bg-emerald-700 dark:bg-emerald-500"
+                          className="text-xs"
                           onClick={() => void handleCompleteRequest()}
                           disabled={transitioning}
                         >

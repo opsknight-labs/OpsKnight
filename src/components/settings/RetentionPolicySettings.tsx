@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useId } from 'react';
+import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns';
 import { errorFromResponse } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
 import { SETTINGS_CHANGED_MESSAGE } from '@/lib/settings-result';
@@ -284,9 +286,9 @@ export default function RetentionPolicySettings() {
   return (
     <div className="space-y-6 py-2">
       {conflict && (
-        <Alert className="bg-amber-500/10 border-amber-500/30" role="alert">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-800 dark:text-amber-200">
+        <Alert className={toneClasses('elevated').soft} role="alert">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <span>
               <strong>Settings changed elsewhere.</strong> Your unsaved retention values are still
               present. Reload the latest policy before saving or running cleanup.
@@ -317,14 +319,16 @@ export default function RetentionPolicySettings() {
       )}
 
       {stats && (
-        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="rounded-lg border bg-card p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
             <div className="flex items-start sm:items-center gap-3 min-w-0">
-              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+              <div className="p-2.5 rounded-lg bg-muted text-muted-foreground shrink-0">
                 <Database className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-foreground">Database Storage Footprint</h3>
+                <h3 className="text-base font-semibold text-foreground">
+                  Database Storage Footprint
+                </h3>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                   Live record counts and oldest recorded data points across historical telemetry
                   tables.
@@ -346,21 +350,21 @@ export default function RetentionPolicySettings() {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <CompactStatRowItem
-              icon={<Database className="w-4 h-4 text-blue-500" />}
+              icon={<Database className="w-4 h-4 text-muted-foreground" />}
               label="Incidents"
               value={stats.incidents.total}
               oldest={stats.incidents.oldest}
               subtext="Timelines & postmortems"
             />
             <CompactStatRowItem
-              icon={<Bell className="w-4 h-4 text-amber-500" />}
+              icon={<Bell className="w-4 h-4 text-muted-foreground" />}
               label="Alerts"
               value={stats.alerts.total}
               oldest={stats.alerts.oldest}
               subtext="Integration payloads"
             />
             <CompactStatRowItem
-              icon={<FileText className="w-4 h-4 text-violet-500" />}
+              icon={<FileText className="w-4 h-4 text-muted-foreground" />}
               label="Audit Logs"
               value={(stats.auditLogs?.total ?? 0) > 0 ? stats.auditLogs!.total : stats.logs.total}
               oldest={
@@ -375,7 +379,7 @@ export default function RetentionPolicySettings() {
               }
             />
             <CompactStatRowItem
-              icon={<BarChart3 className="w-4 h-4 text-emerald-500" />}
+              icon={<BarChart3 className="w-4 h-4 text-muted-foreground" />}
               label="Metric Rollups"
               value={stats.rollups.total}
               oldest={stats.rollups.oldest}
@@ -385,14 +389,16 @@ export default function RetentionPolicySettings() {
         </div>
       )}
 
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="rounded-lg border bg-card p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b">
           <div className="flex items-start sm:items-center gap-3 min-w-0">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+            <div className="p-2.5 rounded-lg bg-muted text-muted-foreground shrink-0">
               <Clock className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-foreground">Retention Schedule & Rules</h3>
+              <h3 className="text-base font-semibold text-foreground">
+                Retention Schedule & Rules
+              </h3>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                 Define how long records are kept before becoming eligible for automated lifecycle
                 pruning.
@@ -402,7 +408,7 @@ export default function RetentionPolicySettings() {
 
           {presets.length > 0 && (
             <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-lg border shrink-0 self-start sm:self-center">
-              <span className="text-[11px] font-medium text-muted-foreground px-1.5 hidden sm:inline">
+              <span className="text-2xs font-medium text-muted-foreground px-1.5 hidden sm:inline">
                 Preset:
               </span>
               {presets.map(preset => {
@@ -435,7 +441,7 @@ export default function RetentionPolicySettings() {
         {policy && (
           <div className="divide-y divide-border/60">
             <RetentionFieldRow
-              icon={<Database className="w-4 h-4 text-blue-500" />}
+              icon={<Database className="w-4 h-4 text-muted-foreground" />}
               label="Incident History & Postmortems"
               description="Resolved incidents, timelines, responder assignments, and post-incident investigation reviews."
               value={policy.incidentRetentionDays}
@@ -447,7 +453,7 @@ export default function RetentionPolicySettings() {
             />
 
             <RetentionFieldRow
-              icon={<Bell className="w-4 h-4 text-amber-500" />}
+              icon={<Bell className="w-4 h-4 text-muted-foreground" />}
               label="Alert Logs & Raw Webhook Payloads"
               description="Inbound alert events received from Datadog, Prometheus, CloudWatch, and custom monitoring webhooks."
               value={policy.alertRetentionDays}
@@ -459,7 +465,7 @@ export default function RetentionPolicySettings() {
             />
 
             <RetentionFieldRow
-              icon={<FileText className="w-4 h-4 text-violet-500" />}
+              icon={<FileText className="w-4 h-4 text-muted-foreground" />}
               label="Audit Trails & Security Events"
               description="Event history, authentication traces, and user actions. Audit log entries are always kept for at least 365 days."
               value={policy.logRetentionDays}
@@ -471,7 +477,7 @@ export default function RetentionPolicySettings() {
             />
 
             <RetentionFieldRow
-              icon={<BarChart3 className="w-4 h-4 text-emerald-500" />}
+              icon={<BarChart3 className="w-4 h-4 text-muted-foreground" />}
               label="Historical Metric Rollups"
               description="Aggregated performance time-series rollups stored in hourly and daily rollup buckets."
               value={policy.metricsRetentionDays}
@@ -483,7 +489,7 @@ export default function RetentionPolicySettings() {
             />
 
             <RetentionFieldRow
-              icon={<Clock className="w-4 h-4 text-cyan-500" />}
+              icon={<Clock className="w-4 h-4 text-muted-foreground" />}
               label="Live High-Resolution Analytics Window"
               description="Period queryable at raw second-by-second resolution before downsampling into aggregate metric rollups."
               value={policy.realTimeWindowDays}
@@ -495,7 +501,7 @@ export default function RetentionPolicySettings() {
             />
 
             <RetentionFieldRow
-              icon={<FileText className="w-4 h-4 text-blue-500" />}
+              icon={<FileText className="w-4 h-4 text-muted-foreground" />}
               label="Completed &amp; Rejected Privacy Requests"
               description="Retention period for terminal GDPR/CCPA privacy requests before the request record is cleaned up."
               value={policy.completedPrivacyRequestRetentionDays}
@@ -507,7 +513,7 @@ export default function RetentionPolicySettings() {
             />
 
             <RetentionFieldRow
-              icon={<FileKey className="w-4 h-4 text-amber-500" />}
+              icon={<FileKey className="w-4 h-4 text-muted-foreground" />}
               label="Expired Privacy Export Artifact Metadata"
               description="Period to retain expired export metadata records after artifact payloads have already expired and been wiped."
               value={policy.expiredPrivacyArtifactRetentionDays}
@@ -519,7 +525,7 @@ export default function RetentionPolicySettings() {
             />
 
             <RetentionFieldRow
-              icon={<UserX className="w-4 h-4 text-purple-500" />}
+              icon={<UserX className="w-4 h-4 text-muted-foreground" />}
               label="Unsubscribed Status Page Subscribers"
               description="Retention period for status page subscribers in UNSUBSCRIBED state before deletion."
               value={policy.unsubscribedSubscriberRetentionDays}
@@ -539,7 +545,7 @@ export default function RetentionPolicySettings() {
       {/* Cleanup Preview & Execution */}
       <CleanupPreview onCleanupCompleted={fetchData} />
 
-      <div className="sticky bottom-4 z-10 rounded-xl border bg-card/95 backdrop-blur-md p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+      <div className="sticky bottom-4 z-10 rounded-lg border bg-card p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           {!isDirty ? (
             <Button
@@ -554,8 +560,13 @@ export default function RetentionPolicySettings() {
               <span>Reset to System Defaults</span>
             </Button>
           ) : (
-            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <span
+              className={cn(
+                'text-xs font-semibold flex items-center gap-1.5',
+                toneClasses('elevated').text
+              )}
+            >
+              <span className={cn('w-2 h-2 rounded-full', toneClasses('elevated').solid)} />
               You have unsaved retention schedule changes
             </span>
           )}
@@ -577,12 +588,12 @@ export default function RetentionPolicySettings() {
           <Button
             type="button"
             onClick={handleSave}
-            disabled={saving || !isDirty || Boolean(conflict)}
+            disabled={!isDirty || Boolean(conflict)}
+            loading={saving}
             size="sm"
             className="h-9 text-xs px-4 font-semibold"
             title={conflict ? 'Reload latest settings before saving again.' : undefined}
           >
-            {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
             <span>Save Retention Policy</span>
           </Button>
         </div>
@@ -624,18 +635,27 @@ function RetentionFieldRow({
 }) {
   const human = daysToHuman(value);
   const currentNum = Number(value);
+  const id = useId();
+  const describedBy = [`${id}-description`, error && `${id}-error`].filter(Boolean).join(' ');
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 border-b border-border/60 last:border-0 hover:bg-muted/15 transition-colors px-1 sm:px-2 rounded-lg">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 border-b border-border last:border-0 hover:bg-muted/15 transition-colors px-1 sm:px-2 rounded-lg">
       <div className="space-y-1 flex-1 min-w-0 pr-2 sm:pr-4">
         <div className="flex items-center gap-2">
           <div className="p-1 rounded-md bg-muted text-muted-foreground shrink-0">{icon}</div>
-          <Label className="text-sm font-semibold text-foreground leading-none">{label}</Label>
+          <Label htmlFor={id} className="text-sm font-semibold text-foreground leading-none">
+            {label}
+          </Label>
         </div>
-        <p className="text-xs text-muted-foreground leading-relaxed pl-6">{description}</p>
+        <p id={`${id}-description`} className="text-xs text-muted-foreground leading-relaxed pl-6">
+          {description}
+        </p>
         {error && (
-          <p className="text-xs text-destructive mt-1 flex items-center gap-1 font-medium pl-6">
-            <XCircle className="h-3.5 w-3.5" />
+          <p
+            id={`${id}-error`}
+            className="text-xs text-destructive mt-1 flex items-center gap-1 font-medium pl-6"
+          >
+            <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
             {error}
           </p>
         )}
@@ -645,7 +665,10 @@ function RetentionFieldRow({
         <div className="flex items-center gap-2">
           <div className="flex items-center">
             <Input
+              id={id}
               type="number"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={describedBy}
               min={min}
               max={max}
               value={value}
@@ -663,7 +686,7 @@ function RetentionFieldRow({
             </div>
           </div>
           {human && (
-            <span className="text-[11px] font-mono font-medium text-foreground bg-muted/80 px-2 py-1 rounded-md border border-border/50 min-w-[55px] text-center">
+            <span className="text-2xs font-mono font-medium text-foreground bg-muted/80 px-2 py-1 rounded-md border border-border min-w-14 text-center">
               {human}
             </span>
           )}
@@ -671,18 +694,19 @@ function RetentionFieldRow({
 
         {shortcuts && shortcuts.length > 0 && (
           <div className="flex items-center gap-1 pt-0.5">
-            <span className="text-[10px] text-muted-foreground">Quick:</span>
+            <span className="text-2xs text-muted-foreground">Quick:</span>
             {shortcuts.map(days => {
               const isSelected = currentNum === days;
               return (
                 <button
                   key={days}
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => onChange(String(days))}
-                  className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition-all cursor-pointer ${
+                  className={`text-2xs font-mono px-1.5 py-0.5 rounded-sm border transition-colors cursor-pointer ${
                     isSelected
-                      ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
-                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                      ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border'
                   }`}
                 >
                   {daysToHuman(days)}
@@ -719,7 +743,7 @@ function CompactStatRowItem({
   };
 
   return (
-    <div className="rounded-xl border bg-card p-4 flex flex-col justify-between gap-2.5 shadow-sm transition-all hover:border-border">
+    <div className="rounded-lg border bg-card p-4 flex flex-col justify-between gap-2.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
@@ -727,11 +751,11 @@ function CompactStatRowItem({
         <div className="p-1.5 rounded-lg bg-muted text-muted-foreground shrink-0">{icon}</div>
       </div>
       <div>
-        <div className="text-2xl font-bold font-mono tracking-tight text-foreground">
+        <div className="text-2xl font-bold font-mono tabular-nums tracking-tight text-foreground">
           {value.toLocaleString()}
         </div>
-        {subtext && <p className="text-[11px] text-muted-foreground truncate">{subtext}</p>}
-        <div className="text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/40 flex items-center gap-1">
+        {subtext && <p className="text-2xs text-muted-foreground truncate">{subtext}</p>}
+        <div className="text-2xs text-muted-foreground mt-1.5 pt-1.5 border-t border-border/40 flex items-center gap-1">
           <Clock className="w-3 h-3 text-muted-foreground/70 shrink-0" />
           <span className="truncate">Oldest: {formatDate(oldest)}</span>
         </div>

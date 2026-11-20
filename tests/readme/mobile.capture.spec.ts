@@ -17,6 +17,7 @@ async function capture(page: Page, scheme: string, name: string) {
 
 test('captures current mobile PWA surfaces in WebKit', async ({ page }, testInfo) => {
   const scheme = testInfo.project.use.colorScheme === 'dark' ? 'dark' : 'light';
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- writes to a fixed test output directory
   await mkdir(resolve('generated/readme-captures/mobile', scheme), { recursive: true });
 
   await page.goto('/m');
@@ -35,7 +36,7 @@ test('captures current mobile PWA surfaces in WebKit', async ({ page }, testInfo
   await expect(page.getByText(DOCS_FIXTURES.schedule, { exact: true }).first()).toBeVisible();
   await capture(page, scheme, 'on-call');
 
-  await page.goto('/m/analytics');
-  await expect(page.getByText(/Analytics/i).first()).toBeVisible();
+  await page.goto('/insights');
+  await expect(page.getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible();
   await capture(page, scheme, 'analytics');
 });

@@ -2,11 +2,15 @@ name: Runbook protocol validation
 
 on:
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Diff against this commit to pick affected checks (set by main-heavy.yml); empty runs everything
+        type: string
+        required: false
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     branches: [main]
   push:
-    branches: [main]
     tags: ['v*']
 
 permissions:
@@ -22,7 +26,7 @@ env:
 jobs:
   changes:
     name: Detect validation changes
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -327,7 +331,7 @@ jobs:
 
   native-agent-artifacts:
     name: Native Linux Agent artifacts & installer verification
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

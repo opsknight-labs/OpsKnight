@@ -410,7 +410,7 @@ function PasswordAccessRecovery() {
             <option value="ADMIN_ONLY">Only this administrator · one hour</option>
             <option value="INSTANCE">Entire instance · Password Only</option>
           </select>
-          <p className="text-muted-foreground text-[11px] pt-0.5">
+          <p className="text-muted-foreground text-2xs pt-0.5">
             Instance recovery reactivates all existing local passwords and revokes OIDC sessions.
             Choose it only when deliberately abandoning SSO enforcement.
           </p>

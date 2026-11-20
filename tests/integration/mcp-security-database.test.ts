@@ -18,6 +18,7 @@ import { CostBudget } from '@/lib/mcp/core/budget';
 import { executeMcpPlan } from '@/lib/mcp/core/plan';
 import { POST as revokeToken } from '@/app/oauth/mcp/revoke/route';
 import { POST as mcpRequest } from '@/app/mcp/route';
+import { RATE_LIMIT_CONFIGS } from '@/lib/api-v2/rate-limit';
 
 beforeAll(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
@@ -611,6 +612,11 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
       body: { content: 'One durable note' },
       idempotencyKey: 'mcp-note-idempotent-1',
     };
+    // WRITE quota is a fixed window; two calls straddling its boundary would count 1, not 2.
+    const { windowMs } = RATE_LIMIT_CONFIGS.WRITE;
+    const untilBoundary = windowMs - (Date.now() % windowMs);
+    if (untilBoundary < 5_000)
+      await new Promise(resolve => setTimeout(resolve, untilBoundary + 50));
     await callMcpOperation(ctx, 'addIncidentNote', args);
     await callMcpOperation(ctx, 'addIncidentNote', args);
     expect(await db.incidentNote.count({ where: { incidentId: incident.id } })).toBe(1);

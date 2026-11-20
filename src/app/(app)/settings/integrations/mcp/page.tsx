@@ -1,28 +1,24 @@
 import Link from 'next/link';
 import {
-  AlertTriangle,
-  ArrowUpRight,
   BarChart3,
   Bot,
-  CheckCircle2,
   ClipboardCheck,
   Globe,
   LayoutDashboard,
   Layers,
   PencilLine,
   Plug,
-  Shield,
   ShieldAlert,
   SlidersHorizontal,
-  Sparkles,
   Users,
   XCircle,
 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { getMcpConfigurationStatus } from '@/lib/mcp/auth/config';
 import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { IntegrationStatusBadge } from '@/components/settings/integrations/IntegrationStatus';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import { Button } from '@/components/ui/shadcn/button';
 import { McpLogo } from '@/components/common/BrandLogos';
 import McpAppUrlSetup from '@/components/settings/mcp/McpAppUrlSetup';
@@ -212,61 +208,33 @@ export default async function McpSettings({
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="AI AGENT PROTOCOL & INTEGRATION"
+      <SettingsPageHeader
+        eyebrow="AI Agent Protocol & Integration"
         title="Model Context Protocol (MCP) Integration"
-        subtitle="Connect Claude, ChatGPT, Cursor and other assistants to OpsKnight. Each person consents, their own permissions apply, and higher-risk changes wait for human review."
-        icon={
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 via-primary/15 to-violet-500/20 border border-primary/30 shadow-inner">
-            <McpLogo className="h-7 w-7 text-white" />
-          </div>
-        }
+        description="Connect Claude, ChatGPT, Cursor and other assistants to OpsKnight. Each person consents, their own permissions apply, and higher-risk changes wait for human review."
+        icon={McpLogo}
         badges={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
-            >
-              <Shield className="mr-1 h-3 w-3" aria-hidden="true" />
-              {isAdmin ? 'Administrator view' : 'Your access'}
-            </Badge>
-            <Badge
-              variant="outline"
-              className={`text-[10px] font-semibold ${
+          <>
+            <IntegrationStatusBadge
+              onDark
+              state={enabled && ready ? 'connected' : enabled ? 'error' : 'not_connected'}
+              label={
                 enabled && ready
-                  ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-100'
+                  ? 'Ready'
                   : ready
-                    ? 'border-blue-400/60 bg-blue-400/15 text-blue-100'
-                    : 'border-amber-400/60 bg-amber-400/15 text-amber-100'
-              }`}
-            >
-              {enabled && ready ? (
-                <>
-                  <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
-                  Ready
-                </>
-              ) : ready ? (
-                <>
-                  <ArrowUpRight className="mr-1 h-3 w-3" aria-hidden="true" />
-                  Ready to connect
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
-                  {enabled ? 'Needs configuration' : 'Not set up'}
-                </>
-              )}
-            </Badge>
+                    ? 'Ready to connect'
+                    : enabled
+                      ? 'Needs configuration'
+                      : 'Not set up'
+              }
+            />
+            <span className={pageHeaderBadgeClass}>
+              {isAdmin ? 'Administrator view' : 'Your access'}
+            </span>
             {automaticReady && (
-              <Badge
-                variant="outline"
-                className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
-              >
-                <Sparkles className="mr-1 h-3 w-3 text-sky-300" aria-hidden="true" />
-                Automatic connections on
-              </Badge>
+              <span className={pageHeaderBadgeClass}>Automatic connections on</span>
             )}
-          </div>
+          </>
         }
         statsPlacement="bottom"
         stats={[
@@ -312,7 +280,7 @@ export default async function McpSettings({
         <section
           role="alert"
           aria-label="MCP disabled by deployment configuration"
-          className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm md:p-5"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm md:p-5"
         >
           <h2 className="flex items-center gap-2 font-semibold text-destructive">
             <XCircle className="h-4 w-4" aria-hidden="true" />
@@ -329,7 +297,7 @@ export default async function McpSettings({
         <section
           role="alert"
           aria-label="MCP configuration problems"
-          className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 md:p-5"
+          className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 md:p-5"
         >
           <h2 className="flex items-center gap-2 text-sm font-semibold text-destructive">
             <XCircle className="h-4 w-4" aria-hidden="true" />

@@ -2,8 +2,6 @@ name: Service automation validation
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     paths:
@@ -49,7 +47,7 @@ env:
 
 jobs:
   automation:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     services:

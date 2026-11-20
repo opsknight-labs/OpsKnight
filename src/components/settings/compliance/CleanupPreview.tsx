@@ -71,6 +71,7 @@ export default function CleanupPreview({
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
     fetchPreview();
   }, [fetchPreview]);
 
@@ -108,7 +109,7 @@ export default function CleanupPreview({
   };
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-6 shadow-xs space-y-6">
+    <div className="rounded-lg border border-border/70 bg-card p-6 shadow-xs space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -160,23 +161,25 @@ export default function CleanupPreview({
             <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-amber-500" />
+                  <Clock className="h-4 w-4 text-muted-foreground" />
                   Resolved Incidents
                 </span>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-2xs">
                   {preview.incidents + (preview.held?.incidents || 0)} eligible
                 </Badge>
               </div>
               <div className="space-y-1 text-xs pt-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Protected by Holds:</span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  <span className="font-semibold text-status-ok-deep dark:text-emerald-300">
                     {preview.held?.incidents || 0}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Will Delete:</span>
-                  <span className="font-semibold text-rose-500">{preview.incidents}</span>
+                  <span className="font-semibold text-status-critical-deep dark:text-rose-300">
+                    {preview.incidents}
+                  </span>
                 </div>
               </div>
             </div>
@@ -185,10 +188,10 @@ export default function CleanupPreview({
             <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <FileText className="h-4 w-4 text-blue-500" />
+                  <FileText className="h-4 w-4 text-muted-foreground" />
                   Completed Privacy Requests
                 </span>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-2xs">
                   {(preview.lifecycle?.privacyRequests || 0) + (preview.held?.privacyRequests || 0)}{' '}
                   eligible
                 </Badge>
@@ -196,13 +199,13 @@ export default function CleanupPreview({
               <div className="space-y-1 text-xs pt-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Protected by Holds:</span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  <span className="font-semibold text-status-ok-deep dark:text-emerald-300">
                     {preview.held?.privacyRequests || 0}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Will Delete:</span>
-                  <span className="font-semibold text-rose-500">
+                  <span className="font-semibold text-status-critical-deep dark:text-rose-300">
                     {preview.lifecycle?.privacyRequests || 0}
                   </span>
                 </div>
@@ -213,21 +216,21 @@ export default function CleanupPreview({
             <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <UserX className="h-4 w-4 text-purple-500" />
+                  <UserX className="h-4 w-4 text-muted-foreground" />
                   Unsubscribed Subscribers
                 </span>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-2xs">
                   {preview.lifecycle?.unsubscribedSubscribers || 0} eligible
                 </Badge>
               </div>
               <div className="space-y-1 text-xs pt-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Protected by Holds:</span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">0</span>
+                  <span className="font-semibold text-status-ok-deep dark:text-emerald-300">0</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Will Purge:</span>
-                  <span className="font-semibold text-rose-500">
+                  <span className="font-semibold text-status-critical-deep dark:text-rose-300">
                     {preview.lifecycle?.unsubscribedSubscribers || 0}
                   </span>
                 </div>
@@ -242,19 +245,19 @@ export default function CleanupPreview({
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="p-2.5 rounded-md bg-muted/30">
-                <p className="text-[11px] text-muted-foreground">Alerts</p>
+                <p className="text-2xs text-muted-foreground">Alerts</p>
                 <p className="text-sm font-bold text-foreground mt-0.5">{preview.alerts}</p>
               </div>
               <div className="p-2.5 rounded-md bg-muted/30">
-                <p className="text-[11px] text-muted-foreground">Incident Events</p>
+                <p className="text-2xs text-muted-foreground">Incident Events</p>
                 <p className="text-sm font-bold text-foreground mt-0.5">{preview.events}</p>
               </div>
               <div className="p-2.5 rounded-md bg-muted/30">
-                <p className="text-[11px] text-muted-foreground">Audit Logs</p>
+                <p className="text-2xs text-muted-foreground">Audit Logs</p>
                 <p className="text-sm font-bold text-foreground mt-0.5">{preview.auditLogs}</p>
               </div>
               <div className="p-2.5 rounded-md bg-muted/30">
-                <p className="text-[11px] text-muted-foreground">Metrics Rollups</p>
+                <p className="text-2xs text-muted-foreground">Metrics Rollups</p>
                 <p className="text-sm font-bold text-foreground mt-0.5">{preview.metrics}</p>
               </div>
             </div>
@@ -264,8 +267,8 @@ export default function CleanupPreview({
 
       {/* Destructive PURGE Modal */}
       {purgeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in-50">
-          <div className="w-full max-w-md rounded-xl border border-destructive/40 bg-card p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 animate-in fade-in-50">
+          <div className="w-full max-w-md rounded-lg border border-destructive/40 bg-card p-6 shadow-xl space-y-4">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-full bg-destructive/10 text-destructive shrink-0 mt-0.5">
                 <AlertTriangle className="h-5 w-5" />

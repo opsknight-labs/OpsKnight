@@ -5,6 +5,7 @@ import ApiKeysWorkspaceTabs from '@/components/settings/ApiKeysWorkspaceTabs';
 vi.mock('next/navigation', () => ({
   usePathname: () => '/settings/api-keys',
   useSearchParams: () => new URLSearchParams(''),
+  useRouter: () => ({ replace: vi.fn() }),
 }));
 
 describe('ApiKeysWorkspaceTabs Component', () => {
@@ -21,7 +22,9 @@ describe('ApiKeysWorkspaceTabs Component', () => {
         endpointCount={63}
         isAdmin={true}
         apiKeysContent={<div data-testid="api-keys-content">API Keys Content</div>}
-        serviceAccountsContent={<div data-testid="service-accounts-content">Service Accounts Content</div>}
+        serviceAccountsContent={
+          <div data-testid="service-accounts-content">Service Accounts Content</div>
+        }
         explorerContent={<div data-testid="explorer-content">Explorer Content</div>}
         activityContent={<div data-testid="activity-content">Activity Content</div>}
       />
@@ -46,14 +49,16 @@ describe('ApiKeysWorkspaceTabs Component', () => {
         endpointCount={63}
         isAdmin={true}
         apiKeysContent={<div data-testid="api-keys-content">API Keys Content</div>}
-        serviceAccountsContent={<div data-testid="service-accounts-content">Service Accounts Content</div>}
+        serviceAccountsContent={
+          <div data-testid="service-accounts-content">Service Accounts Content</div>
+        }
         explorerContent={<div data-testid="explorer-content">Explorer Content</div>}
         activityContent={<div data-testid="activity-content">Activity Content</div>}
       />
     );
 
     const explorerTab = screen.getByRole('tab', { name: /api explorer/i });
-    fireEvent.click(explorerTab);
+    fireEvent.mouseDown(explorerTab, { button: 0 });
 
     expect(screen.getByTestId('explorer-content')).toBeDefined();
     expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/settings/api-keys?tab=explorer');
@@ -70,14 +75,16 @@ describe('ApiKeysWorkspaceTabs Component', () => {
         endpointCount={63}
         isAdmin={true}
         apiKeysContent={<div data-testid="api-keys-content">API Keys Content</div>}
-        serviceAccountsContent={<div data-testid="service-accounts-content">Service Accounts Content</div>}
+        serviceAccountsContent={
+          <div data-testid="service-accounts-content">Service Accounts Content</div>
+        }
         explorerContent={<div data-testid="explorer-content">Explorer Content</div>}
         activityContent={<div data-testid="activity-content">Activity Content</div>}
       />
     );
 
     const apiKeysTab = screen.getByRole('tab', { name: /api keys/i });
-    fireEvent.click(apiKeysTab);
+    fireEvent.mouseDown(apiKeysTab, { button: 0 });
 
     expect(screen.getByTestId('api-keys-content')).toBeDefined();
     expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/settings/api-keys');

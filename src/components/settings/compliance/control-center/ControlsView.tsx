@@ -13,6 +13,7 @@ import type { ComplianceEvaluationStatus, ComplianceFramework } from '@/lib/comp
 import { RuntimeStatusBadge } from './RuntimeStatusBadge';
 import { EvidenceIntegrityBadge } from './EvidenceIntegrityBadge';
 import { ControlDetailDrawer } from './ControlDetailDrawer';
+import { toneClasses } from '@/components/patterns';
 
 interface ControlsViewProps {
   readonly controls: readonly ComplianceControlCenterControl[];
@@ -48,6 +49,7 @@ export function ControlsView({
   React.useEffect(() => {
     if (selectedControlId) {
       const found = controls.find(c => c.controlId === selectedControlId);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
       if (found) setActiveDrawerControl(found);
     }
   }, [selectedControlId, controls]);
@@ -92,9 +94,10 @@ export function ControlsView({
   return (
     <div className="space-y-4">
       {/* Controls Filter Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3.5 rounded-xl border bg-card/60">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3.5 rounded-lg border bg-card">
         <div className="relative flex-1">
           <Input
+            aria-label="Search controls"
             placeholder="Search by ID, title, description, or category..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
@@ -178,22 +181,20 @@ export function ControlsView({
               <div
                 key={ctrl.controlId}
                 onClick={() => handleOpenControl(ctrl)}
-                className="p-4 rounded-xl border border-border/80 bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 group"
+                className="p-4 rounded-lg border border-border/80 bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 group"
               >
                 <div className="space-y-1.5 min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs font-bold text-foreground bg-muted/60 px-2 py-0.5 rounded border border-border/60">
                       {ctrl.controlId}
                     </span>
-                    <Badge variant="outline" className="text-[11px] py-0">
+                    <Badge variant="outline" className="text-2xs py-0">
                       {ctrl.category}
                     </Badge>
                     <Badge
                       variant="secondary"
-                      className={`text-[10px] py-0 ${
-                        isRuntime
-                          ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400'
-                          : 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-400'
+                      className={`text-2xs py-0 ${
+                        isRuntime ? toneClasses(null).soft : toneClasses(null).soft
                       }`}
                     >
                       {isRuntime ? 'Runtime' : 'Repository'}
@@ -208,10 +209,10 @@ export function ControlsView({
                     {ctrl.description}
                   </p>
 
-                  <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 pt-1 text-2xs text-muted-foreground">
                     {ctrl.frameworkMappings.length > 0 && (
                       <span className="flex items-center gap-1 font-medium text-foreground">
-                        <Layers className="h-3 w-3 text-purple-500" />
+                        <Layers className="h-3 w-3 text-muted-foreground" />
                         {ctrl.frameworkMappings.length} framework requirement(s)
                       </span>
                     )}

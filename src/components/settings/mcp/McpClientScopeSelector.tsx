@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { describeMcpScope } from '@/lib/mcp/auth/scope-labels';
 
 type Props = {
@@ -86,7 +87,7 @@ function McpClientScopeSelector({
           </label>
           <Badge
             variant="secondary"
-            className="h-5 px-1.5 text-[10px] font-semibold tabular-nums leading-none"
+            className="h-5 px-1.5 text-2xs font-semibold tabular-nums leading-none"
           >
             {selected.size} of {scopeChoices.length} selected
           </Badge>
@@ -133,7 +134,7 @@ function McpClientScopeSelector({
                 'group relative flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 text-xs transition-all select-none',
                 isChecked
                   ? 'border-primary/50 bg-primary/[0.03] ring-1 ring-primary/20'
-                  : 'border-border/70 bg-card/60 hover:border-border hover:bg-muted/30'
+                  : 'border-border/70 bg-card hover:border-border hover:bg-muted/30'
               )}
             >
               <input
@@ -158,16 +159,14 @@ function McpClientScopeSelector({
                   </span>
                   <span
                     className={cn(
-                      'inline-flex shrink-0 items-center rounded px-1 py-0.5 text-[9px] font-semibold leading-none uppercase tracking-wide border',
-                      isRead
-                        ? 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-200'
-                        : 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200'
+                      'inline-flex shrink-0 items-center rounded px-1 py-0.5 text-2xs font-semibold leading-none uppercase tracking-wide border',
+                      toneClasses(isRead ? 'info' : 'elevated').soft
                     )}
                   >
                     {isRead ? 'READ' : 'ACTION'}
                   </span>
                 </span>
-                <span className="block font-mono text-[10px] text-muted-foreground truncate">
+                <span className="block font-mono text-2xs text-muted-foreground truncate">
                   {scope}
                 </span>
               </span>

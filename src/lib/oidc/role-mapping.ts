@@ -145,8 +145,9 @@ export function evaluateOidcRoleClaims(
  * - Manual roles are an explicit administrator decision and are never overwritten by the
  *   identity provider, except on an account's very first SSO link when a rule matches: that is
  *   the moment an existing account moves under directory control.
- * - A matching rule also takes over a role SCIM assigned, as before v2.2. Falling back to the
- *   default role only applies to roles single sign-on already owns.
+ * - Roles adopted by SCIM group mappings remain under provisioning authority, including
+ *   first link. Legacy SCIM roles retain matching-rule takeover until explicitly adopted.
+ *   Falling back to the default only applies to roles single sign-on already owns.
  * - Incomplete claims fail safe. They never raise a role and never touch a role an
  *   administrator or SCIM set, but a single sign-on role above the default is lowered to the
  *   default: otherwise removing someone from an admin group at the provider would never take
@@ -154,23 +155,27 @@ export function evaluateOidcRoleClaims(
  */
 export function resolveSignInRole(
   evaluation: OidcRoleEvaluation,
-  current: { role: OidcRole; roleSource: 'MANUAL' | 'OIDC' | 'SCIM' },
+  current: {
+    role: OidcRole;
+    roleSource: 'MANUAL' | 'OIDC' | 'SCIM';
+    scimRoleMappingAdopted?: boolean;
+  },
   options: { firstLink?: boolean } = {}
 ): { role: OidcRole; roleSource: 'MANUAL' | 'OIDC' | 'SCIM'; changed: boolean } {
+  const preserved = { role: current.role, roleSource: current.roleSource, changed: false };
+  if (current.roleSource === 'SCIM' && current.scimRoleMappingAdopted) return preserved;
   if (evaluation.outcome === 'INCOMPLETE') {
     const lower =
       current.roleSource === 'OIDC' &&
       OIDC_ROLE_RANK[current.role] > OIDC_ROLE_RANK[evaluation.role];
-    return lower
-      ? { role: evaluation.role, roleSource: 'OIDC', changed: true }
-      : { ...current, changed: false };
+    return lower ? { role: evaluation.role, roleSource: 'OIDC', changed: true } : preserved;
   }
   const matched = evaluation.outcome === 'MATCHED';
   const applies =
     current.roleSource === 'OIDC' ||
     (current.roleSource === 'SCIM' && matched) ||
     (options.firstLink === true && matched);
-  if (!applies) return { ...current, changed: false };
+  if (!applies) return preserved;
   const role = evaluation.role;
   return {
     role,

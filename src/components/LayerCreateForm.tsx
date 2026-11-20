@@ -1,8 +1,9 @@
 'use client';
 
+import UserAvatar from '@/components/UserAvatar';
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 
 import {
   Sheet,
@@ -38,7 +39,6 @@ export default function LayerCreateForm({
   users,
 }: LayerCreateFormProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
 
@@ -78,9 +78,9 @@ export default function LayerCreateForm({
       try {
         const result = await createLayer(scheduleId, formData);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
         } else {
-          showToast('Layer created successfully', 'success');
+          notify.success('Layer created successfully');
           setOpen(false);
           // Reset form state
           setSelectedDays([]);
@@ -92,7 +92,7 @@ export default function LayerCreateForm({
           router.refresh();
         }
       } catch {
-        showToast('Failed to create layer', 'error');
+        notify.error('Failed to create layer');
       }
     });
   };
@@ -188,9 +188,17 @@ export default function LayerCreateForm({
                       key={responder.id}
                       className="flex items-center justify-between rounded-lg bg-muted/[0.45] px-3 py-2"
                     >
-                      <span className="min-w-0 truncate text-sm font-medium">
-                        <span className="mr-2 text-xs text-muted-foreground">{index + 1}.</span>
-                        {responder.name}
+                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                        <span className="text-xs text-muted-foreground">{index + 1}.</span>
+                        <UserAvatar
+                          userId={responder.id}
+                          avatarUrl={responder.avatarUrl}
+                          name={responder.name}
+                          gender={responder.gender}
+                          size="xs"
+                          aria-hidden
+                        />
+                        <span className="truncate">{responder.name}</span>
                       </span>
                       <Button
                         type="button"

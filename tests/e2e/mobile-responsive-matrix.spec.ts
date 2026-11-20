@@ -247,8 +247,8 @@ test.describe('mobile responsive visual integrity matrix', () => {
       await page.goto('/m/postmortems');
       await assertResponsiveIntegrity(page);
 
-      // 15. Analytics
-      await page.goto('/m/analytics');
+      // 15. Analytics (responsive desktop page; no /m twin)
+      await page.goto('/insights');
       await assertResponsiveIntegrity(page);
 
       // 16. AIOps (More menu): the overview's Noise section and, when non-empty, its inbox

@@ -37,6 +37,8 @@ import {
 import GuidedSlackSetup from '@/components/settings/GuidedSlackSetup';
 import SlackSigningSecretCard from '@/components/settings/SlackSigningSecretCard';
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
 import { getBaseUrl } from '@/lib/env-validation';
 import { SLACK_REQUIRED_BOT_SCOPES, SLACK_OPTIONAL_BOT_SCOPES } from '@/lib/slack/app-manifest';
 
@@ -486,9 +488,15 @@ export default function SlackIntegrationPage({
 
           {/* Missing Scopes Alert */}
           {missingRequiredScopes.length > 0 && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 sm:p-5 text-xs text-rose-800 dark:text-rose-300 space-y-3">
+            <div
+              className={cn(
+                'rounded-lg border p-4 sm:p-5 text-xs space-y-3',
+                toneClasses('critical').soft
+              )}
+              role="alert"
+            >
               <div className="flex items-center gap-2 font-semibold">
-                <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>Missing Slack scopes: {missingRequiredScopes.join(', ')}</span>
               </div>
               <p className="leading-relaxed">
@@ -510,7 +518,7 @@ export default function SlackIntegrationPage({
           )}
 
           {/* Card 2: Channel Discovery & Notifications */}
-          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-4">
             {loadingChannels && channels.length === 0 ? (
               <>
                 <SlackChannelToolbarSkeleton />
@@ -537,7 +545,7 @@ export default function SlackIntegrationPage({
                 />
 
                 {channelsError && channels.length === 0 ? (
-                  <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-8 text-center space-y-3">
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-8 text-center space-y-3">
                     <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
                     <p className="font-semibold text-foreground text-sm">
                       Unable to load Slack channels
@@ -563,7 +571,7 @@ export default function SlackIntegrationPage({
                     )}
                   </div>
                 ) : filteredChannels.length === 0 ? (
-                  <div className="rounded-xl border border-dashed p-10 text-center space-y-2">
+                  <div className="rounded-lg border border-dashed p-10 text-center space-y-2">
                     <Hash className="h-8 w-8 text-muted-foreground mx-auto" />
                     <p className="font-semibold text-sm text-foreground">
                       {searchQuery ? 'No channels match your search' : 'No channels found'}
@@ -581,6 +589,16 @@ export default function SlackIntegrationPage({
                         </>
                       )}
                     </p>
+                    {searchQuery && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSearchQuery('')}
+                        className="h-8 text-xs"
+                      >
+                        Clear search
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2 pt-1">
@@ -632,10 +650,10 @@ export default function SlackIntegrationPage({
               <SlackSigningSecretCard isConfigured={isSigningSecretConfigured} />
 
               {/* App Manifest & Live Webhook URLs */}
-              <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+              <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0">
+                    <div className="p-2 rounded-lg border border-border bg-muted text-muted-foreground shrink-0">
                       <FileCode2 className="h-5 w-5" />
                     </div>
                     <div>
@@ -670,15 +688,13 @@ export default function SlackIntegrationPage({
                         className="p-3.5 rounded-lg border bg-muted/20 flex flex-col justify-between gap-2.5"
                       >
                         <div className="space-y-1">
-                          <span className="text-[11px] font-semibold text-foreground block">
+                          <span className="text-2xs font-semibold text-foreground block">
                             {ep.name}
                           </span>
-                          <p className="text-[10px] text-muted-foreground leading-snug">
-                            {ep.desc}
-                          </p>
+                          <p className="text-2xs text-muted-foreground leading-snug">{ep.desc}</p>
                         </div>
                         <div className="flex items-center gap-1.5 pt-1">
-                          <code className="text-[10px] font-mono bg-background px-2 py-1 rounded border flex-1 truncate text-foreground">
+                          <code className="text-2xs font-mono bg-background px-2 py-1 rounded border flex-1 truncate text-foreground">
                             {ep.url}
                           </code>
                           <Button
@@ -689,7 +705,7 @@ export default function SlackIntegrationPage({
                             title="Copy URL"
                           >
                             {isCopied ? (
-                              <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <Check className={cn('h-3.5 w-3.5', toneClasses('ok').text)} />
                             ) : (
                               <Copy className="h-3.5 w-3.5" />
                             )}
@@ -734,13 +750,13 @@ export default function SlackIntegrationPage({
           )}
 
           {/* Card 5: Danger Zone */}
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5 sm:p-6 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
                   <h3 className="text-base font-semibold text-foreground">Danger Zone</h3>
-                  <Badge variant="destructive" className="text-[9px] px-1.5 py-0">
+                  <Badge variant="destructive" className="text-2xs px-1.5 py-0">
                     Destructive
                   </Badge>
                 </div>
@@ -771,7 +787,7 @@ export default function SlackIntegrationPage({
 
           {/* Non-Admin Warning */}
           {!isOAuthConfigured && !isAdmin && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 flex items-start gap-3 text-xs text-destructive">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5 flex items-start gap-3 text-xs text-destructive">
               <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="font-semibold text-sm">Setup Required</p>
@@ -784,9 +800,9 @@ export default function SlackIntegrationPage({
           )}
 
           {/* Connect Workspace Hero Card */}
-          <div className="rounded-xl border bg-card p-8 sm:p-12 text-center space-y-5 shadow-sm">
+          <div className="rounded-lg border border-border bg-card p-8 sm:p-12 text-center space-y-5 shadow-sm">
             <div className="flex justify-center">
-              <div className="h-16 w-16 rounded-2xl bg-[#4A154B]/10 border border-[#4A154B]/20 flex items-center justify-center shadow-inner">
+              <div className="h-16 w-16 rounded-lg border border-border bg-muted flex items-center justify-center">
                 <SlackLogo className="h-8 w-8" />
               </div>
             </div>
@@ -803,11 +819,7 @@ export default function SlackIntegrationPage({
 
             {isOAuthConfigured ? (
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Button
-                  size="lg"
-                  asChild
-                  className="gap-2 text-sm font-semibold h-11 px-6 shadow-md"
-                >
+                <Button size="lg" asChild className="gap-2 text-sm font-semibold h-11 px-6">
                   <a href="/api/slack/oauth">
                     <SlackLogo className="h-4 w-4" />
                     <span>{isAdmin ? 'Connect to Slack' : 'Ask admin to connect'}</span>

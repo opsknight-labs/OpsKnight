@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, RotateCcw, Save, Settings2 } from 'lucide-react';
 
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 import TimeZoneSelect from './TimeZoneSelect';
 
@@ -39,18 +39,21 @@ export default function ScheduleEditForm({
   canManageSchedules,
 }: ScheduleEditFormProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [name, setName] = useState(currentName);
   const [timeZone, setTimeZone] = useState(currentTimeZone);
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
+  // Re-sync the draft when the saved values change (adjust-state-during-render, not an effect).
+  const [syncedName, setSyncedName] = useState(currentName);
+  const [syncedTimeZone, setSyncedTimeZone] = useState(currentTimeZone);
+  if (syncedName !== currentName) {
+    setSyncedName(currentName);
     setName(currentName);
-  }, [currentName]);
-
-  useEffect(() => {
+  }
+  if (syncedTimeZone !== currentTimeZone) {
+    setSyncedTimeZone(currentTimeZone);
     setTimeZone(currentTimeZone);
-  }, [currentTimeZone]);
+  }
 
   const isDirty = name.trim() !== currentName || timeZone !== currentTimeZone;
 
@@ -71,13 +74,13 @@ export default function ScheduleEditForm({
       try {
         const result = await updateSchedule(scheduleId, formData);
         if (result?.error) {
-          showToast(result, 'error');
+          notify.error(result);
           return;
         }
-        showToast('Schedule settings updated successfully', 'success');
+        notify.success('Schedule settings updated successfully');
         router.refresh();
       } catch (error) {
-        showToast(error, 'error');
+        notify.error(error);
       }
     });
   };

@@ -171,7 +171,7 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
 
   // ── ANALYTICS ─────────────────────────────────────────────────────────────
   {
-    href: '/analytics',
+    href: '/insights',
     label: 'Analytics',
     icon: PieChart,
     section: 'ANALYTICS',

@@ -2,7 +2,7 @@
 
 import { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -43,7 +43,6 @@ export default function PolicyStepCreateForm({
   addStep,
 }: PolicyStepCreateFormProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [targetType, setTargetType] = useState<'USER' | 'TEAM' | 'SCHEDULE'>('USER');
@@ -57,15 +56,15 @@ export default function PolicyStepCreateForm({
       try {
         const result = await addStep(policyId, formData);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
         } else {
-          showToast('Escalation step added successfully', 'success');
+          notify.success('Escalation step added successfully');
           setShowForm(false);
           router.refresh();
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        showToast(errorMessage || 'Failed to add step', 'error');
+        notify.error(errorMessage || 'Failed to add step');
       }
     });
   };

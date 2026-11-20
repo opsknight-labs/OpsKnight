@@ -40,6 +40,15 @@
 
 ## 3. Brand Identity & Design System Standards
 
+The full design system is in [`DESIGN.md`](DESIGN.md): colour roles, type scale, spacing, radius, elevation, motion, z-index, density, the component vocabulary (PageHeader, FilterBar, DataTable, EmptyState, ErrorState, Skeleton, StatusBadge, RelativeTime) and accessibility rules. Users, jobs and surfaces (console and mobile = Operate, docs and status pages = Read) are in [`PRODUCT.md`](PRODUCT.md). Read both before building UI.
+
+### Design Tokens
+
+- **One source**: every scale (type, spacing, radius, elevation, motion, z-index, density) and the light/dark semantic colour roles (`--ui-*`) are defined once in `src/styles/foundation/tokens.css`, which `src/styles/index.css` imports first. Other stylesheets may only alias a token (`--x: var(--token)`). The `ink-*` ramp and `.ok-inverse-surface` live in `src/styles/index.css`; status hues live in `src/lib/design/status-palette.ts`. Enforced by `tests/architecture/design-tokens-contract.test.ts`.
+- **Type scale**: Tailwind `text-2xs` … `text-5xl` resolve the CSS variables `--font-size-<step>` (`src/lib/design/type-scale.ts`), so CSS and Tailwind share one rem scale. Use a scale step, not arbitrary `text-[Npx]` sizes, and use `tabular-nums` for numbers that are compared or tick.
+- **Weights**: body text is 400. Emphasis is explicit: `font-medium` for interactive/primary row text and nav labels, `font-semibold` for titles and labels, `font-extrabold` for page headlines.
+- **Density**: the root font size comes from `--density-scale` (viewport-driven by default; pin with `html[data-density="compact"|"comfortable"]`). Never set `html { font-size }` anywhere else.
+
 ### Aesthetic Principles
 
 - **Subtle, Elegant, and SRE-Focused**: Clean, high-contrast, modern engineering aesthetic.
@@ -48,7 +57,7 @@
 ### Typography
 
 - **Inter** is the UI and body face; **Space Grotesk** is the display face for headings, badges and brand marks. Both are bundled with `next/font/local` in `src/app/layout.tsx` (no Google Fonts fetch at build or runtime).
-- Never hard-code a font family. Use the tokens `--font-family-sans`, `--font-family-display` and `--font-family-mono` (`src/styles/foundation/variables.css`) in CSS, and `font-sans`, `font-display` and `font-mono` in Tailwind. `h1`–`h6` pick up the display face automatically.
+- Never hard-code a font family. Use the tokens `--font-family-sans`, `--font-family-display` and `--font-family-mono` (`src/styles/foundation/tokens.css`) in CSS, and `font-sans`, `font-display` and `font-mono` in Tailwind. `h1`–`h6` pick up the display face automatically.
 - Transactional emails are the one exception: mail clients cannot load the bundled files, so email templates name `'Space Grotesk'` and Inter with system fallbacks.
 
 ### Official Brand Logo
@@ -178,12 +187,13 @@ Zero errors and zero warnings are required before pushing.
 Pull requests run only the fast required gate. Everything heavy runs after merge on `main`, or on a PR that opts in. Keep new work inside this structure. The full inventory is in [`docs/CI_TEST_INVENTORY.md`](docs/CI_TEST_INVENTORY.md).
 
 - **Every PR** runs `tests.yml` (static checks, unit tests, database integration in 4 shards, ingestion durability, database secret scripts, Next.js build, aggregated into the required `test` check) and `security.yml` (required `Security Summary`). The target is about 10 minutes.
-- **`main`, tags and `workflow_dispatch`** also run browser E2E (`e2e.yml`), the Docker image build and image checks, runbook, swarm, deployment, MCP, SSO, SCIM, Teams, automation, integration certification, and SBOM.
-- **`ci:full` label**: add it to a PR to run the heavy suites before merge. Add it when a PR touches deployment (`Dockerfile`, `deploy/**`, `agent/**`, `docker-entrypoint.sh`), runbooks, MCP, authentication/SSO/SCIM, `prisma/**`, or `package.json`/`package-lock.json`. Path filters still apply, so the label runs only the suites the diff affects.
+- **`main`** runs the PR gate, security and the Docker image build on every merge. The heavy suites (browser E2E, runbook with deployment and swarm, MCP, SSO, SCIM, Teams, automation, integration certification, SBOM) run in **batches**: every 6 hours `main-heavy.yml` starts each suite whose paths changed since the last successful batch, once, on the latest `main`. Release tags still run runbook and SBOM validation directly. Before cutting a release, run **Main heavy batch** with `force`.
+- **`ci:full` label**: add it to a PR to run the heavy suites before merge. Add it when a PR touches deployment (`Dockerfile`, `deploy/**`, `agent/**`, `docker-entrypoint.sh`), runbooks, MCP, authentication/SSO/SCIM, `prisma/**`, or `package.json`/`package-lock.json`. Path filters still apply, so the label runs only the suites the diff affects. The label is **one-shot**: the heavy suites run once when it is added, not on later pushes. Add it when the PR is ready to merge, and to re-run, remove and re-add it. Never leave agents pushing to a labelled PR expecting fresh heavy runs.
+- **Actions budget**: GitHub flagged and hid this org on 2026-11-16 for an Actions compute surge. Keep the run volume low: push finished work in a few commits rather than many small pushes, avoid many agent branches pushing in parallel, and do not add `pull_request` jobs outside this structure. `actions-budget.yml` fails daily when the last 24 hours exceed the run budget.
 - **Adding tests**: unit tests go in the `vitest.unit.config.ts` include paths, and database tests go in `tests/integration/`. Both are picked up and sharded automatically by `tests.yml`. Do not add browser, Docker, load or multi-service suites to `tests.yml`.
-- **Adding a heavy workflow or job**: give it `push: branches: [main]` and `workflow_dispatch`. If it also needs a `pull_request` trigger, add `types: [opened, synchronize, reopened, labeled]` and guard the entry job with:
+- **Adding a heavy workflow or job**: give it `workflow_dispatch` (no `push: branches: [main]`) and add it to `HEAVY` in `scripts/ci/dispatch-main-heavy.py`; its `pull_request` `paths` filter doubles as its batch filter. If it also needs a `pull_request` trigger, add `types: [opened, synchronize, reopened, labeled]` and guard the entry job with:
   ```yaml
-  if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+  if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
   ```
   Do not add `push` triggers for `feat/**` or `fix/**` branches; they duplicate the PR run.
 - **Required checks**: the ruleset requires exactly `test` and `Security Summary`. Never rename these jobs. When a job is added to or removed from the PR gate, update the `needs:` and status variables of the `test` job in `tests.yml`. When the database shard count changes, update the matrix, `--shard=N/<total>` and `DB_SHARDS` together.

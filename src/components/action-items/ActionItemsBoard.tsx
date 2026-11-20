@@ -17,17 +17,29 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { cn } from '@/lib/utils';
+import UserAvatar from '@/components/UserAvatar';
 import type { ActionItem } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
 import { ActionItemStatus } from '@prisma/client';
 import ActionItemJiraContext from '@/components/action-items/ActionItemJiraContext';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
-import DueDateBadge from '@/components/action-items/DueDateBadge';
+import DueDateBadge, { getDueDateStatus } from '@/components/action-items/DueDateBadge';
+import {
+  DirectoryGuide,
+  DirectoryHeader,
+  DirectoryPrimaryCell,
+  DirectoryTable,
+  RelativeTime,
+  useDirectoryColumns,
+  useDirectoryView,
+  type DirectoryColumn,
+} from '@/components/patterns';
 import SearchFilterBar from '@/components/ui/SearchFilterBar';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/service/Pagination';
@@ -45,8 +57,11 @@ import {
 import {
   Download,
   LayoutGrid,
-  List,
+  Columns3,
   CheckCircle2,
+  AlertTriangle,
+  ExternalLink,
+  FileText,
   Clock,
   AlertOctagon,
   Circle,
@@ -58,6 +73,8 @@ import {
 
 export interface BoardActionItem extends ActionItem {
   ownerName?: string;
+  ownerAvatarUrl?: string | null;
+  ownerGender?: string | null;
   postmortemId: string;
   postmortemTitle: string;
   incidentId: string;
@@ -73,7 +90,6 @@ export interface ActionItemsBoardProps {
   actionItems: BoardActionItem[];
   users: Array<{ id: string; name: string; email: string }>;
   canManage: boolean;
-  view: 'board' | 'list';
   filters: {
     status?: string;
     owner?: string;
@@ -157,6 +173,8 @@ const PRIORITY_CONFIG = {
   LOW: { color: 'text-ink-700', bgColor: 'bg-ink-100 border-ink-200/80', label: 'Low' },
 };
 
+const statusConfigFor = (item: BoardActionItem) => STATUS_CONFIG[item.status] || STATUS_CONFIG.OPEN;
+
 function getOwnerName(
   ownerId: string | undefined,
   users: Array<{ id: string; name: string; email: string }>,
@@ -165,6 +183,129 @@ function getOwnerName(
   if (ownerName) return ownerName;
   if (!ownerId) return 'Unassigned';
   return users.find(user => user.id === ownerId)?.name || 'Unknown';
+}
+
+/** Owner name with avatar; plain text when nobody owns the item. */
+function OwnerLabel({
+  item,
+  users,
+  className,
+}: {
+  item: BoardActionItem;
+  users: Array<{ id: string; name: string; email: string }>;
+  className?: string;
+}) {
+  const name = getOwnerName(item.owner, users, item.ownerName);
+  if (!item.owner) return <span className={cn('truncate', className)}>{name}</span>;
+  return (
+    <span className={cn('flex min-w-0 items-center gap-1.5', className)}>
+      <UserAvatar
+        userId={item.owner}
+        avatarUrl={item.ownerAvatarUrl}
+        name={name}
+        gender={item.ownerGender}
+        size="xs"
+        aria-hidden
+      />
+      <span className="truncate">{name}</span>
+    </span>
+  );
+}
+
+/** Status changes offered in every item menu (board card and table row). */
+function StatusMenuItems({
+  item,
+  onStatusChange,
+}: {
+  item: BoardActionItem;
+  onStatusChange: (itemId: string, status: ActionItemStatus) => void;
+}) {
+  return (
+    <>
+      <DropdownMenuItem
+        onClick={() => onStatusChange(item.id, ActionItemStatus.OPEN)}
+        disabled={item.status === 'OPEN'}
+        className="gap-2"
+      >
+        <Circle className="h-3.5 w-3.5 text-blue-500" />
+        <span>Set to Open</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={() => onStatusChange(item.id, ActionItemStatus.IN_PROGRESS)}
+        disabled={item.status === 'IN_PROGRESS'}
+        className="gap-2"
+      >
+        <Clock className="h-3.5 w-3.5 text-amber-500" />
+        <span>Set to In Progress</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={() => onStatusChange(item.id, ActionItemStatus.COMPLETED)}
+        disabled={item.status === 'COMPLETED'}
+        className="gap-2 text-emerald-600 focus:text-emerald-700 dark:text-emerald-400 dark:focus:text-emerald-300"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+        <span>Mark Completed</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={() => onStatusChange(item.id, ActionItemStatus.BLOCKED)}
+        disabled={item.status === 'BLOCKED'}
+        className="gap-2 text-rose-600 focus:text-rose-700 dark:text-rose-400 dark:focus:text-rose-300"
+      >
+        <AlertOctagon className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+        <span>Mark Blocked</span>
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+/** Due date as relative time; overdue reads in rose, due within 3 days in amber. */
+function DueCell({ item }: { item: BoardActionItem }) {
+  const due = getDueDateStatus(item.dueDate, item.status);
+  if (due.type === 'completed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300">
+        <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+        Done
+        {item.completedAt && (
+          <>
+            {' '}
+            <RelativeTime date={item.completedAt} />
+          </>
+        )}
+      </span>
+    );
+  }
+  if (due.type === 'none') return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 text-xs',
+        due.type === 'overdue' && 'font-semibold text-rose-600 dark:text-rose-400',
+        due.type === 'due-soon' && 'font-medium text-amber-700 dark:text-amber-300',
+        due.type === 'on-track' && 'text-muted-foreground'
+      )}
+    >
+      {due.type === 'overdue' && (
+        <AlertTriangle className="h-3 w-3 shrink-0" aria-label="Overdue" />
+      )}
+      <RelativeTime date={item.dueDate} />
+    </span>
+  );
+}
+
+function PriorityPill({ item }: { item: BoardActionItem }) {
+  const config = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
+  return (
+    <span
+      className={cn(
+        'inline-flex rounded border px-1.5 py-0.5 text-[11px] font-semibold',
+        config.bgColor,
+        config.color
+      )}
+    >
+      {config.label}
+    </span>
+  );
 }
 
 const DEFAULT_FALLBACK_CAPABILITY: JiraCapability = {
@@ -199,7 +340,6 @@ function ActionItemCard({
 }: ActionItemCardProps) {
   const router = useRouter();
   const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.OPEN;
-  const priorityConfig = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
   const inheritedIssues = item.incidentJiraIssues.filter(
     issue => issue.key !== item.externalIssue?.key
   );
@@ -207,10 +347,10 @@ function ActionItemCard({
   return (
     <div
       className={cn(
-        'group p-3.5 bg-card rounded-lg border shadow-sm transition-all duration-200',
+        'group p-2.5 bg-card rounded-md border shadow-2xs transition-all duration-200',
         statusConfig.borderColor,
         statusConfig.hoverBorderColor,
-        'hover:shadow-md hover:-translate-y-0.5 relative',
+        'hover:shadow-sm relative',
         isUpdating && 'opacity-60 pointer-events-none'
       )}
       onClick={() => router.push(`/postmortems/${item.incidentId}`)}
@@ -224,17 +364,9 @@ function ActionItemCard({
       role="button"
       tabIndex={0}
     >
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span
-            className={cn(
-              'px-1.5 py-0.5 rounded text-[11px] font-semibold border',
-              priorityConfig.bgColor,
-              priorityConfig.color
-            )}
-          >
-            {priorityConfig.label}
-          </span>
+          <PriorityPill item={item} />
           <DueDateBadge
             dueDate={item.dueDate}
             completedAt={item.completedAt}
@@ -257,55 +389,24 @@ function ActionItemCard({
                   <span className="sr-only">Actions</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 text-xs">
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(item.id, ActionItemStatus.OPEN)}
-                  disabled={item.status === 'OPEN'}
-                  className="gap-2"
-                >
-                  <Circle className="h-3.5 w-3.5 text-blue-500" />
-                  <span>Set to Open</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(item.id, ActionItemStatus.IN_PROGRESS)}
-                  disabled={item.status === 'IN_PROGRESS'}
-                  className="gap-2"
-                >
-                  <Clock className="h-3.5 w-3.5 text-amber-500" />
-                  <span>Set to In Progress</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(item.id, ActionItemStatus.COMPLETED)}
-                  disabled={item.status === 'COMPLETED'}
-                  className="gap-2 text-emerald-600 focus:text-emerald-700 dark:text-emerald-400 dark:focus:text-emerald-300"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Mark Completed</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(item.id, ActionItemStatus.BLOCKED)}
-                  disabled={item.status === 'BLOCKED'}
-                  className="gap-2 text-rose-600 focus:text-rose-700 dark:text-rose-400 dark:focus:text-rose-300"
-                >
-                  <AlertOctagon className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-                  <span>Mark Blocked</span>
-                </DropdownMenuItem>
+              <DropdownMenuContent align="end">
+                <StatusMenuItems item={item} onStatusChange={onStatusChange} />
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         )}
       </div>
 
-      <h4 className="text-sm font-semibold text-foreground mb-1 leading-snug line-clamp-2">
+      <h4 className="text-[13px] font-semibold text-foreground mb-0.5 leading-snug line-clamp-2">
         {item.title}
       </h4>
       {item.description && (
-        <p className="text-xs text-muted-foreground line-clamp-2 mb-2.5 leading-relaxed">
+        <p className="text-xs text-muted-foreground line-clamp-1 mb-1.5" title={item.description}>
           {item.description}
         </p>
       )}
 
-      <div className="mb-2.5 flex flex-col gap-1.5">
+      <div className="mb-1.5 flex flex-col gap-1 empty:hidden">
         <IncidentJiraContext issues={inheritedIssues} compact />
         <ActionItemJiraContext
           actionItemId={item.id}
@@ -316,16 +417,18 @@ function ActionItemCard({
         />
       </div>
 
-      <div className="pt-2 border-t border-ink-100 flex flex-col gap-1 text-[11px] text-muted-foreground">
-        <div className="flex items-center justify-between">
-          <span className="font-medium text-foreground truncate max-w-[150px]">
-            👤 {getOwnerName(item.owner, users, item.ownerName)}
-          </span>
-          <span className="bg-ink-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-ink-700 truncate max-w-[100px]">
+      <div className="pt-1.5 border-t border-border flex flex-col gap-0.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between gap-2">
+          <OwnerLabel
+            item={item}
+            users={users}
+            className="max-w-[150px] font-medium text-foreground"
+          />
+          <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono text-muted-foreground truncate max-w-[100px]">
             {item.serviceName}
           </span>
         </div>
-        <div className="truncate text-ink-500">
+        <div className="truncate">
           From{' '}
           <Link
             href={`/postmortems/${item.incidentId}`}
@@ -340,11 +443,39 @@ function ActionItemCard({
   );
 }
 
+const GUIDE_STEPS = [
+  {
+    title: 'Add them in a postmortem',
+    description: 'Each follow-up gets a title, priority, owner and due date.',
+  },
+  {
+    title: 'Track progress',
+    description:
+      'Move items through Open, In Progress, Blocked and Completed here. Overdue items are flagged.',
+  },
+  {
+    title: 'Sync with Jira',
+    description: 'Where the service has Jira connected, create or link a Jira issue for an item.',
+  },
+];
+
+const GUIDE_LINKS = [
+  {
+    label: 'Postmortems',
+    href: '/postmortems',
+    icon: <FileText className="h-3.5 w-3.5" aria-hidden="true" />,
+  },
+  {
+    label: 'Incidents',
+    href: '/incidents',
+    icon: <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />,
+  },
+];
+
 export default function ActionItemsBoard({
   actionItems: initialItems,
   users,
   canManage,
-  view,
   filters,
   initialSearch = '',
   jiraCapabilitiesByServiceId,
@@ -354,6 +485,8 @@ export default function ActionItemsBoard({
   const searchParams = useSearchParams();
   const { userTimeZone } = useTimezone();
   const [, startTransition] = useTransition();
+  // 'cards' is the kanban board here.
+  const [view, setView] = useDirectoryView('action-items');
   const [items, setItems] = useState<BoardActionItem[]>(initialItems);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [search, setSearch] = useState(initialSearch);
@@ -479,14 +612,12 @@ export default function ActionItemsBoard({
     status?: string;
     owner?: string;
     priority?: string;
-    view?: string;
     search?: string;
   }) => {
     const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
     const targetStatus = updates.status !== undefined ? updates.status : selectedStatus;
     const targetOwner = updates.owner !== undefined ? updates.owner : selectedOwner;
     const targetPriority = updates.priority !== undefined ? updates.priority : selectedPriority;
-    const targetView = updates.view !== undefined ? updates.view : view;
     const targetSearch = updates.search !== undefined ? updates.search : search;
 
     if (targetStatus && targetStatus !== 'all') params.set('status', targetStatus);
@@ -498,8 +629,7 @@ export default function ActionItemsBoard({
     if (targetPriority && targetPriority !== 'all') params.set('priority', targetPriority);
     else params.delete('priority');
 
-    if (targetView && targetView !== 'board') params.set('view', targetView);
-    else params.delete('view');
+    params.delete('view'); // retired URL toggle; the view is remembered per viewer now
 
     if (targetSearch && targetSearch.trim()) params.set('search', targetSearch.trim());
     else {
@@ -560,6 +690,147 @@ export default function ActionItemsBoard({
     setOwnerSearch('');
     startTransition(() => router.push('/action-items'));
   };
+
+  const rangeStart = pagination ? (pagination.currentPage - 1) * pagination.itemsPerPage + 1 : 1;
+
+  const rowMenu = (item: BoardActionItem) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+        >
+          <MoreVertical className="h-4 w-4" />
+          <span className="sr-only">Actions for {item.title}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem asChild>
+          <Link href={`/postmortems/${item.incidentId}`}>
+            <FileText />
+            <span>Open postmortem</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/incidents/${item.incidentId}`}>
+            <ExternalLink />
+            <span>Open incident</span>
+          </Link>
+        </DropdownMenuItem>
+        {canManage && (
+          <>
+            <DropdownMenuSeparator />
+            <StatusMenuItems item={item} onStatusChange={handleStatusChange} />
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const columns: DirectoryColumn<BoardActionItem>[] = [
+    {
+      id: 'item',
+      header: 'Item',
+      // max-w-0 + w-full: take the spare width and truncate instead of pushing columns off-screen.
+      className: 'w-full max-w-0',
+      cell: item => {
+        const inheritedIssues = item.incidentJiraIssues.filter(
+          issue => issue.key !== item.externalIssue?.key
+        );
+        return (
+          <div className="min-w-0">
+            <DirectoryPrimaryCell
+              href={`/postmortems/${item.incidentId}`}
+              title={<span title={item.description || item.title}>{item.title}</span>}
+              subtitle={
+                <>
+                  <Link
+                    href={`/postmortems/${item.incidentId}`}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {item.postmortemTitle}
+                  </Link>
+                  {' · '}
+                  <Link
+                    href={`/incidents/${item.incidentId}`}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {item.incidentTitle}
+                  </Link>
+                  {' · '}
+                  <span className="font-mono">{item.serviceName}</span>
+                </>
+              }
+            />
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 empty:hidden">
+              <IncidentJiraContext issues={inheritedIssues} compact />
+              <ActionItemJiraContext
+                actionItemId={item.id}
+                externalIssue={item.externalIssue}
+                canManage={canManage}
+                compact
+                jiraCapability={requireJiraCapability(jiraCapabilities, item.serviceId)}
+              />
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'owner',
+      hideable: true,
+      header: 'Owner',
+      className: 'hidden w-36 md:table-cell',
+      cell: item => (
+        <OwnerLabel item={item} users={users} className="max-w-36 text-xs text-foreground" />
+      ),
+    },
+    {
+      id: 'priority',
+      hideable: true,
+      header: 'Priority',
+      className: 'hidden w-24 lg:table-cell',
+      cell: item => <PriorityPill item={item} />,
+    },
+    {
+      id: 'status',
+      hideable: true,
+      header: 'Status',
+      className: 'w-36',
+      cell: item =>
+        canManage ? (
+          <Select
+            value={item.status}
+            onValueChange={value => handleStatusChange(item.id, value as ActionItemStatus)}
+            disabled={updatingId === item.id}
+          >
+            <SelectTrigger className="h-7 w-[124px] text-xs" aria-label={`Status of ${item.title}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="OPEN">Open</SelectItem>
+              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+              <SelectItem value="BLOCKED">Blocked</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <Badge variant={statusConfigFor(item).badgeVariant} size="xs" className="font-semibold">
+            {statusConfigFor(item).label}
+          </Badge>
+        ),
+    },
+    {
+      id: 'due',
+      hideable: true,
+      header: 'Due',
+      className: 'w-32 whitespace-nowrap',
+      cell: item => <DueCell item={item} />,
+    },
+  ];
+
+  const columnVisibility = useDirectoryColumns('action-items', columns);
 
   return (
     <div className="space-y-4">
@@ -703,34 +974,6 @@ export default function ActionItemsBoard({
         }
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-ink-200 bg-ink-50/60 p-0.5">
-              <Link
-                href={buildFilterUrl({ view: 'board' })}
-                className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
-                  view === 'board'
-                    ? 'bg-card text-primary shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                aria-label="Board view"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                <span>Board</span>
-              </Link>
-              <Link
-                href={buildFilterUrl({ view: 'list' })}
-                className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
-                  view === 'list'
-                    ? 'bg-card text-primary shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                aria-label="List view"
-              >
-                <List className="h-3.5 w-3.5" />
-                <span>List</span>
-              </Link>
-            </div>
             <Button
               variant="outline"
               size="sm"
@@ -745,60 +988,103 @@ export default function ActionItemsBoard({
         }
       />
 
-      {view === 'board' ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Object.entries(groupedByStatus).map(([status, groupItems]) => {
-            const config = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG];
-            const StatusIcon = config.icon;
-            return (
-              <Card
-                key={status}
-                className={cn(
-                  'p-3.5 min-h-[480px] rounded-xl flex flex-col',
-                  'bg-ink-50/50 border-2',
-                  config.borderColor,
-                  'shadow-sm'
-                )}
-              >
-                <CardHeader className="p-0 mb-3 pb-2.5 border-b border-ink-200/70">
-                  <div className="flex items-center justify-between">
-                    <h3 className={cn('text-xs font-bold flex items-center gap-1.5', config.color)}>
-                      <StatusIcon className="h-3.5 w-3.5" />
-                      <span>{config.label}</span>
-                    </h3>
-                    <Badge variant={config.badgeVariant} size="xs" className="font-bold">
-                      {groupItems.length}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0 flex flex-col gap-2.5 flex-1 overflow-y-auto max-h-[75vh]">
-                  {groupItems.length === 0 ? (
-                    <div className="p-6 text-center text-muted-foreground text-xs italic">
-                      No items
-                    </div>
-                  ) : (
-                    groupItems.map(item => (
-                      <ActionItemCard
-                        key={item.id}
-                        item={item}
-                        users={users}
-                        userTimeZone={userTimeZone}
-                        canManage={canManage}
-                        onStatusChange={handleStatusChange}
-                        isUpdating={updatingId === item.id}
-                        jiraCapability={requireJiraCapability(jiraCapabilities, item.serviceId)}
-                      />
-                    ))
+      <div className="overflow-clip rounded-lg border border-border bg-card">
+        <DirectoryHeader
+          title="Action items"
+          summary={
+            filteredItems.length > 0
+              ? `Showing ${rangeStart}–${rangeStart + filteredItems.length - 1} of ${pagination?.totalItems ?? filteredItems.length}`
+              : 'No matching action items'
+          }
+          columns={columnVisibility}
+          density
+          view={{
+            value: view,
+            onChange: setView,
+            cardsLabel: 'Board view',
+            cardsIcon: <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />,
+          }}
+          guide={
+            <DirectoryGuide title="How action items work" steps={GUIDE_STEPS} links={GUIDE_LINKS} />
+          }
+        />
+        {view === 'cards' ? (
+          <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4">
+            {Object.entries(groupedByStatus).map(([status, groupItems]) => {
+              const config = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG];
+              const StatusIcon = config.icon;
+              return (
+                <Card
+                  key={status}
+                  className={cn(
+                    'p-2.5 min-h-[320px] rounded-lg flex flex-col',
+                    'bg-muted/40 border',
+                    config.borderColor,
+                    'shadow-none'
                   )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {filteredItems.length === 0 ? (
-            <Card className="p-8 text-center bg-card border-ink-200 rounded-lg shadow-sm">
+                >
+                  <CardHeader className="p-0 mb-2 pb-2 border-b border-border">
+                    <div className="flex items-center justify-between">
+                      <h3
+                        className={cn('text-xs font-bold flex items-center gap-1.5', config.color)}
+                      >
+                        <StatusIcon className="h-3.5 w-3.5" />
+                        <span>{config.label}</span>
+                      </h3>
+                      <Badge variant={config.badgeVariant} size="xs" className="font-bold">
+                        {groupItems.length}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0 flex flex-col gap-2 flex-1 overflow-y-auto max-h-[75vh]">
+                    {groupItems.length === 0 ? (
+                      <div className="p-6 text-center text-muted-foreground text-xs italic">
+                        No items
+                      </div>
+                    ) : (
+                      groupItems.map(item => (
+                        <ActionItemCard
+                          key={item.id}
+                          item={item}
+                          users={users}
+                          userTimeZone={userTimeZone}
+                          canManage={canManage}
+                          onStatusChange={handleStatusChange}
+                          isUpdating={updatingId === item.id}
+                          jiraCapability={requireJiraCapability(jiraCapabilities, item.serviceId)}
+                        />
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <DirectoryTable
+            label="Action items"
+            rows={filteredItems}
+            getRowId={item => item.id}
+            columns={columns}
+            hiddenColumns={columnVisibility.hidden}
+            rowActions={rowMenu}
+            mobileRow={item => (
+              <div className="min-w-0 space-y-1">
+                <DirectoryPrimaryCell
+                  href={`/postmortems/${item.incidentId}`}
+                  title={item.title}
+                  subtitle={<OwnerLabel item={item} users={users} className="mt-0.5" />}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={statusConfigFor(item).badgeVariant} size="xs">
+                    {statusConfigFor(item).label}
+                  </Badge>
+                  <PriorityPill item={item} />
+                  <DueCell item={item} />
+                </div>
+              </div>
+            )}
+            empty={
               <EmptyState
                 icon={<LayoutGrid className="h-6 w-6 text-muted-foreground/60" />}
                 title="No action items found"
@@ -808,146 +1094,19 @@ export default function ActionItemsBoard({
                     : 'Preventative action items from postmortems will appear here.'
                 }
               />
-            </Card>
-          ) : (
-            filteredItems.map(item => {
-              const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.OPEN;
-              const priorityConfig = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
-              const isUpdating = updatingId === item.id;
-              const jiraCapability = requireJiraCapability(jiraCapabilities, item.serviceId);
-              const inheritedIssues = item.incidentJiraIssues.filter(
-                issue => issue.key !== item.externalIssue?.key
-              );
-
-              return (
-                <Card
-                  key={item.id}
-                  className={cn(
-                    'p-4 rounded-lg cursor-pointer shadow-sm bg-card',
-                    'border-2 border-l-4 transition-all duration-200 ease-out',
-                    statusConfig.borderColor,
-                    'hover:shadow-md hover:translate-x-0.5',
-                    isUpdating && 'opacity-60 pointer-events-none'
-                  )}
-                  onClick={() => router.push(`/postmortems/${item.incidentId}`)}
-                  onKeyDown={event => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      router.push(`/postmortems/${item.incidentId}`);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <Badge
-                          variant={statusConfig.badgeVariant}
-                          size="xs"
-                          className="font-semibold"
-                        >
-                          {statusConfig.label}
-                        </Badge>
-                        <span
-                          className={cn(
-                            'px-2 py-0.5 rounded text-xs font-semibold border',
-                            priorityConfig.bgColor,
-                            priorityConfig.color
-                          )}
-                        >
-                          {priorityConfig.label} Priority
-                        </span>
-                        <DueDateBadge
-                          dueDate={item.dueDate}
-                          completedAt={item.completedAt}
-                          status={item.status}
-                          userTimeZone={userTimeZone}
-                        />
-                      </div>
-                      <h3 className="text-base font-semibold mb-1 text-foreground">{item.title}</h3>
-                      <div className="flex flex-col gap-1.5">
-                        <IncidentJiraContext issues={inheritedIssues} compact />
-                        <ActionItemJiraContext
-                          actionItemId={item.id}
-                          externalIssue={item.externalIssue}
-                          canManage={canManage}
-                          compact
-                          jiraCapability={jiraCapability}
-                        />
-                      </div>
-                      {item.description && (
-                        <p className="text-sm text-muted-foreground mt-1 mb-2">
-                          {item.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {canManage && (
-                      <div onClick={event => event.stopPropagation()} className="shrink-0">
-                        <Select
-                          value={item.status}
-                          onValueChange={value =>
-                            handleStatusChange(item.id, value as ActionItemStatus)
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-[130px] text-xs bg-ink-50">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent align="end">
-                            <SelectItem value="OPEN">Open</SelectItem>
-                            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                            <SelectItem value="COMPLETED">Completed</SelectItem>
-                            <SelectItem value="BLOCKED">Blocked</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-4 pt-2.5 border-t border-ink-100 text-xs text-muted-foreground flex-wrap items-center">
-                    <span>👤 {getOwnerName(item.owner, users, item.ownerName)}</span>
-                    <span>
-                      📋{' '}
-                      <Link
-                        href={`/postmortems/${item.incidentId}`}
-                        className="text-primary hover:underline font-medium"
-                        onClick={event => event.stopPropagation()}
-                      >
-                        {item.postmortemTitle}
-                      </Link>
-                    </span>
-                    <span>
-                      🔗{' '}
-                      <Link
-                        href={`/incidents/${item.incidentId}`}
-                        className="text-primary hover:underline font-medium"
-                        onClick={event => event.stopPropagation()}
-                      >
-                        {item.incidentTitle}
-                      </Link>
-                    </span>
-                    <span className="bg-ink-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-ink-700">
-                      {item.serviceName}
-                    </span>
-                  </div>
-                </Card>
-              );
-            })
-          )}
-        </div>
-      )}
-
-      {pagination && (
-        <Pagination
-          currentPage={pagination.currentPage}
-          totalPages={pagination.totalPages}
-          totalItems={pagination.totalItems}
-          itemsPerPage={pagination.itemsPerPage}
-          itemLabel="action item"
-        />
-      )}
+            }
+          />
+        )}
+        {pagination && pagination.totalPages > 1 && (
+          <Pagination
+            currentPage={pagination.currentPage}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.totalItems}
+            itemsPerPage={pagination.itemsPerPage}
+            itemLabel="action item"
+          />
+        )}
+      </div>
     </div>
   );
 }

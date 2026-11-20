@@ -79,6 +79,7 @@ export default function ReviewForm({
   rejectLabel,
   freshSignInRequired = false,
   selfReview = false,
+  closed = false,
   reviewPath,
   children,
 }: {
@@ -90,6 +91,11 @@ export default function ReviewForm({
   freshSignInRequired?: boolean;
   /** The reviewer is the requester, who is not sent a notice about their own decision. */
   selfReview?: boolean;
+  /**
+   * Already decided or expired. The page renders this form either way so a decision made here
+   * keeps its confirmation after the action revalidates the page.
+   */
+  closed?: boolean;
   reviewPath: string;
   children?: ReactNode;
 }) {
@@ -118,6 +124,7 @@ export default function ReviewForm({
         </Link>
       </InlineNotice>
     );
+  if (closed) return null;
   return (
     <form action={formAction} className="space-y-4">
       {Object.entries(hidden).map(([name, value]) => (

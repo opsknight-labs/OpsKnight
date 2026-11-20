@@ -5,6 +5,8 @@ import ProfileForm from '@/components/settings/ProfileForm';
 import { userIdentityStatus } from '@/lib/users/identity-status';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
+import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
+import { hasConfiguredEmailProvider, isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
 import NoiseSettings from '@/components/settings/NoiseSettings';
 import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
@@ -67,6 +69,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           voiceNotificationsEnabled: true,
           pushNotificationsEnabled: true,
           whatsappNotificationsEnabled: true,
+          analyticsDigest: { select: { optedOut: true } },
           phoneNumber: true,
           quietHoursEnabled: true,
           quietHoursStartMinutes: true,
@@ -245,6 +248,12 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               phoneNumber={user?.phoneNumber ?? null}
             />
             {user?.id && <NoiseSettings viewer={{ id: user.id }} />}
+            <WeeklyDigestToggle
+              scope="me"
+              enabled={!user?.analyticsDigest?.optedOut}
+              workspaceEnabled={await isWeeklyDigestEnabled()}
+              emailReady={await hasConfiguredEmailProvider()}
+            />
           </>
         }
         scheduleContent={

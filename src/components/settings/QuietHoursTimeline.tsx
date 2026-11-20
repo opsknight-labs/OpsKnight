@@ -3,6 +3,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Moon, Sun, ShieldAlert, Clock, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
 
 type Props = {
   startMinutes: number;
@@ -109,18 +111,18 @@ export default function QuietHoursTimeline({
       : null;
 
   return (
-    <div className="mt-4 rounded-xl border border-border/80 bg-card/60 p-4 sm:p-5 space-y-4 shadow-2xs">
+    <div className="my-4 space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-primary" />
+          <Clock aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
           <h4 className="text-sm font-semibold text-foreground">24-Hour Schedule Timeline</h4>
           {enabled && (
             <Badge
               variant="outline"
               size="xs"
-              className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 text-[10px] gap-1"
+              className="gap-1 border-border bg-muted text-2xs text-ink-600"
             >
-              <Moon className="h-2.5 w-2.5" /> {quietDurationHours}h Quiet / Day
+              <Moon aria-hidden="true" className="h-2.5 w-2.5" /> {quietDurationHours}h Quiet / Day
             </Badge>
           )}
         </div>
@@ -128,9 +130,9 @@ export default function QuietHoursTimeline({
           <Badge
             variant="outline"
             size="xs"
-            className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] gap-1 self-start sm:self-auto"
+            className="gap-1 self-start border-border bg-muted text-2xs text-ink-600 sm:self-auto"
           >
-            <Sparkles className="h-2.5 w-2.5" /> 24h Weekends Silenced
+            <Sparkles aria-hidden="true" className="h-2.5 w-2.5" /> 24h Weekends Silenced
           </Badge>
         )}
       </div>
@@ -143,10 +145,10 @@ export default function QuietHoursTimeline({
             <div
               key={idx}
               style={{ width: `${seg.width}%` }}
-              className={`h-full transition-all duration-300 flex items-center justify-center text-[10px] font-medium select-none ${
+              className={`h-full transition-all duration-300 flex items-center justify-center text-2xs font-medium select-none ${
                 seg.type === 'quiet'
-                  ? 'bg-gradient-to-r from-indigo-500/25 to-purple-500/25 border-x border-indigo-500/30 text-indigo-700 dark:text-indigo-300'
-                  : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                  ? 'border-x border-ink-300 bg-ink-200 text-ink-700'
+                  : toneClasses('ok').soft
               }`}
             >
               {seg.width > 12 && (
@@ -175,14 +177,14 @@ export default function QuietHoursTimeline({
             className="absolute top-0 bottom-4 w-0.5 bg-primary shadow-sm z-10 pointer-events-none transition-all duration-500"
           >
             <div className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background animate-pulse" />
-            <span className="absolute -bottom-4 -left-3 text-[9px] font-mono font-bold text-primary whitespace-nowrap bg-card/90 px-1 rounded shadow-2xs">
+            <span className="absolute -bottom-4 -left-3 text-2xs font-mono font-semibold text-primary whitespace-nowrap bg-card px-1 rounded">
               Now
             </span>
           </div>
         )}
 
         {/* Hour Ticks */}
-        <div className="relative mt-1.5 flex justify-between text-[10px] font-mono text-muted-foreground select-none px-0.5">
+        <div className="relative mt-1.5 flex justify-between text-2xs font-mono tabular-nums text-muted-foreground select-none px-0.5">
           <span>00:00</span>
           <span>06:00</span>
           <span>12:00</span>
@@ -192,9 +194,12 @@ export default function QuietHoursTimeline({
       </div>
 
       {/* Details & Legend */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 border-t border-border/60 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 border-t border-border text-xs">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <div className="h-2.5 w-2.5 rounded-sm bg-gradient-to-r from-indigo-500/40 to-purple-500/40 border border-indigo-500/50" />
+          <div
+            aria-hidden="true"
+            className="h-2.5 w-2.5 rounded-sm border border-ink-300 bg-ink-200"
+          />
           <span>
             <strong>Quiet:</strong> {formatMinutesToLabel(startMinutes)} –{' '}
             {formatMinutesToLabel(endMinutes)} ({quietDurationHours}h)
@@ -202,17 +207,18 @@ export default function QuietHoursTimeline({
         </div>
 
         <div className="flex items-center gap-2 text-muted-foreground">
-          <div className="h-2.5 w-2.5 rounded-sm bg-emerald-500/30 border border-emerald-500/50" />
+          <div
+            aria-hidden="true"
+            className={cn('h-2.5 w-2.5 rounded-sm border', toneClasses('ok').soft)}
+          />
           <span>
             <strong>Active Paging:</strong> {activeDurationHours}h / day
           </span>
         </div>
 
         <div className="flex items-center gap-1.5 text-muted-foreground sm:justify-end">
-          <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-          <span className="text-[11px]">
-            Medium and High urgency alerts always bypass quiet hours
-          </span>
+          <ShieldAlert aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="text-2xs">Medium and High urgency alerts always bypass quiet hours</span>
         </div>
       </div>
     </div>

@@ -6,7 +6,6 @@ import { Compass, Server, ShieldAlert, BarChart2, Users, ArrowUpRight } from 'lu
 import { cn } from '@/lib/utils';
 
 export type IncidentQuickLinksCardProps = {
-  incidentId: string;
   incidentPolicy?: { id: string; name: string } | null;
   noEscalation?: boolean;
   pinnedPolicy?: boolean;
@@ -29,7 +28,6 @@ export type IncidentQuickLinksCardProps = {
 };
 
 export default function IncidentQuickLinksCard({
-  incidentId,
   incidentPolicy,
   noEscalation,
   pinnedPolicy,
@@ -116,7 +114,7 @@ export default function IncidentQuickLinksCard({
 
         {/* Analytics */}
         <Link
-          href={`${routePrefix}/analytics?incident=${incidentId}`}
+          href={`/insights?service=${encodeURIComponent(service.id)}`}
           className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -125,7 +123,7 @@ export default function IncidentQuickLinksCard({
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
-                Incident Analytics
+                Service analytics
               </p>
               <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
                 MTTR &amp; Frequency Metrics

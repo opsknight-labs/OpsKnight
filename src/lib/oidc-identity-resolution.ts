@@ -18,6 +18,7 @@ export type OidcTargetUser = {
   status: string;
   role: string;
   roleSource: string;
+  scimRoleMappingAdopted?: boolean;
   tokenVersion?: number;
   name: string | null;
   department: string | null;
@@ -123,6 +124,7 @@ const targetUserSelect = {
   status: true,
   role: true,
   roleSource: true,
+  scimRoleMappingAdopted: true,
   name: true,
   department: true,
   jobTitle: true,

@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import CopyButton from './CopyButton';
+import { toneClasses } from '@/components/patterns';
+import type { StatusTone } from '@/lib/design/status-palette';
 import { Code2, Terminal, Search, X, ChevronDown, ChevronRight, Shield } from 'lucide-react';
 
 export type ApiEndpointDoc = {
@@ -36,27 +38,18 @@ export type ApiEndpointDoc = {
   };
 };
 
+// Method colour follows risk: reads are info, writes elevated, deletes critical.
+const methodTone = (tone: StatusTone) => ({
+  badge: toneClasses(tone).soft,
+  border: toneClasses(tone).borderLeft,
+});
+
 const METHOD_STYLES = {
-  GET: {
-    badge: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
-    border: 'border-l-blue-500',
-  },
-  POST: {
-    badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
-    border: 'border-l-emerald-500',
-  },
-  PATCH: {
-    badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
-    border: 'border-l-amber-500',
-  },
-  PUT: {
-    badge: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
-    border: 'border-l-indigo-500',
-  },
-  DELETE: {
-    badge: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30',
-    border: 'border-l-rose-500',
-  },
+  GET: methodTone('info'),
+  POST: methodTone('ok'),
+  PATCH: methodTone('elevated'),
+  PUT: methodTone('elevated'),
+  DELETE: methodTone('critical'),
 };
 
 export function toPythonLiteral(value: unknown, indent = 0): string {
@@ -336,6 +329,7 @@ export default function ApiExplorerPanel({
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
+              aria-label="Search endpoints"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search endpoints by path or keyword..."
@@ -352,7 +346,10 @@ export default function ApiExplorerPanel({
           </div>
 
           <Select value={selectedTag} onValueChange={setSelectedTag}>
-            <SelectTrigger className="h-9 text-xs w-[160px] bg-background">
+            <SelectTrigger
+              aria-label="Filter by category"
+              className="h-9 text-xs w-[160px] bg-background"
+            >
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
@@ -366,7 +363,10 @@ export default function ApiExplorerPanel({
           </Select>
 
           <Select value={selectedMethod} onValueChange={setSelectedMethod}>
-            <SelectTrigger className="h-9 text-xs w-[120px] bg-background">
+            <SelectTrigger
+              aria-label="Filter by HTTP method"
+              className="h-9 text-xs w-[120px] bg-background"
+            >
               <SelectValue placeholder="All Methods" />
             </SelectTrigger>
             <SelectContent>
@@ -397,12 +397,12 @@ export default function ApiExplorerPanel({
         </span>
         <div className="flex items-center gap-2.5 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground font-medium">Auth Header:</span>
+            <span className="text-2xs text-muted-foreground font-medium">Auth Header:</span>
             <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setAuthFormat('BEARER')}
-                className={`px-2 py-0.5 text-[11px] font-mono rounded-md transition-all ${
+                className={`px-2 py-0.5 text-2xs font-mono rounded-md transition-all ${
                   authFormat === 'BEARER'
                     ? 'bg-primary text-primary-foreground font-semibold shadow-2xs'
                     : 'text-muted-foreground hover:text-foreground'
@@ -413,7 +413,7 @@ export default function ApiExplorerPanel({
               <button
                 type="button"
                 onClick={() => setAuthFormat('X_API_KEY')}
-                className={`px-2 py-0.5 text-[11px] font-mono rounded-md transition-all ${
+                className={`px-2 py-0.5 text-2xs font-mono rounded-md transition-all ${
                   authFormat === 'X_API_KEY'
                     ? 'bg-primary text-primary-foreground font-semibold shadow-2xs'
                     : 'text-muted-foreground hover:text-foreground'
@@ -423,7 +423,7 @@ export default function ApiExplorerPanel({
               </button>
             </div>
           </div>
-          <span className="font-mono text-[11px] bg-muted px-2 py-0.5 rounded border border-border/60">
+          <span className="font-mono text-2xs bg-muted px-2 py-0.5 rounded border border-border/60">
             Base: {baseUrl}/api/v2
           </span>
         </div>
@@ -468,12 +468,12 @@ export default function ApiExplorerPanel({
                         </code>
                         <Badge
                           variant="outline"
-                          className="text-[10px] bg-muted text-muted-foreground"
+                          className="text-2xs bg-muted text-muted-foreground"
                         >
                           {endpoint.tag}
                         </Badge>
                         {endpoint.scope && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20">
+                          <span className="inline-flex items-center gap-1 text-2xs font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20">
                             <Shield className="h-2.5 w-2.5" />
                             {endpoint.scope}
                           </span>
@@ -540,7 +540,7 @@ export default function ApiExplorerPanel({
                                     {param.required ? (
                                       <Badge
                                         variant="outline"
-                                        className="text-[10px] bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-400"
+                                        className="text-2xs font-semibold text-foreground"
                                       >
                                         Required
                                       </Badge>

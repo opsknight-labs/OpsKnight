@@ -40,7 +40,7 @@ const props = {
   onRetry: vi.fn().mockResolvedValue(true),
 };
 const deliveries = async () => {
-  fireEvent.click(screen.getByRole('tab', { name: 'Security notifications' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Security notifications' }), { button: 0 });
   await screen.findByRole('button', { name: 'View Provider activation' });
 };
 beforeEach(() => {
@@ -98,9 +98,9 @@ describe('paginated diagnostic interactions', () => {
     const calls = fetcher.mock.calls.length;
     rerender(<AuthenticationDiagnostics {...props} data={{ ...data, failedEmailAlertCount: 2 }} />);
     expect(fetcher.mock.calls.length).toBe(calls);
-    fireEvent.click(screen.getByRole('tab', { name: 'Recovery & audit' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Recovery & audit' }), { button: 0 });
     await screen.findByText('Provider activation');
-    fireEvent.click(screen.getByRole('tab', { name: 'Security notifications' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Security notifications' }), { button: 0 });
     await screen.findByText('Older alert');
     expect(String(fetcher.mock.calls.at(-1)?.[0])).toContain('after=older');
   });

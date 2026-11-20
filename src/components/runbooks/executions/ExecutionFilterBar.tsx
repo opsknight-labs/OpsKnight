@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, type ReactNode } from 'react';
-import { RUNBOOK_EXECUTION_STATUSES, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
+import { TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import { SearchableRunbookSelect } from '../SearchableRunbookSelect';
 import { SearchField } from '../ui/primitives';
 import { useRouter, usePathname } from 'next/navigation';
@@ -30,11 +30,6 @@ export type ExecutionFilterBarProps = {
   /** Rendered beneath the search row, e.g. status chips. */
   children?: ReactNode;
 };
-
-export const STATUS_OPTIONS = [
-  { value: 'all', label: 'All statuses' },
-  ...RUNBOOK_EXECUTION_STATUSES.map(value => ({ value, label: value.replaceAll('_', ' ') })),
-];
 const TRIGGER_OPTIONS = [
   { value: 'all', label: 'All triggers' },
   ...Object.entries(TRIGGER_LABELS).map(([value, label]) => ({ value, label })),
@@ -161,13 +156,9 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
             <Calendar className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
             <SelectValue placeholder="Time range" />
           </SelectTrigger>
-          <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
+          <SelectContent>
             {TIME_RANGE_OPTIONS.map(opt => (
-              <SelectItem
-                key={opt.value}
-                value={opt.value}
-                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-              >
+              <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
             ))}
@@ -225,10 +216,7 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            className="w-84 space-y-4 p-4 text-xs rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl"
-            align="end"
-          >
+          <PopoverContent className="w-84 space-y-4 p-4 text-xs border" align="end">
             <div>
               <p className="text-sm font-semibold">More filters</p>
               <p className="mt-0.5 text-muted-foreground">
@@ -252,13 +240,9 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
                 >
                   <SelectValue placeholder="Trigger" />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
+                <SelectContent>
                   {TRIGGER_OPTIONS.map(opt => (
-                    <SelectItem
-                      key={opt.value}
-                      value={opt.value}
-                      className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
-                    >
+                    <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
                   ))}

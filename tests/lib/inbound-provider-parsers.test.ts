@@ -152,7 +152,10 @@ describe('Sentry payload shapes', () => {
       action: 'triggered',
       data: { event: { issue_id: 7, title: { x: 1 }, level: 3 } },
     });
-    expect(fromEvent).toMatchObject({ dedup_key: 'sentry-7', payload: { summary: 'Sentry Error' } });
+    expect(fromEvent).toMatchObject({
+      dedup_key: 'sentry-7',
+      payload: { summary: 'Sentry Error' },
+    });
     expect(parseSentry({ data: { issue: { id: '2', level: 5 } } }).payload.severity).toBe('error');
   });
 });
@@ -202,6 +205,40 @@ describe('gen-1 provider parsing', () => {
       alerts: [alert('resolved', 'a')],
     });
     expect(resolved[0]).toMatchObject({ event_action: 'resolve', dedup_key: 'grafana-fp-a' });
+  });
+
+  it('Grafana simple webhook: title, grouping and severity come from the message text', () => {
+    // Real payload shape: no title/ruleName/ruleId, everything inside `message`.
+    const message = (alertname: string, status: string) =>
+      `**${status}**\n\nValue: B=22, C=1\nLabels:\n - alertname = ${alertname}\n - grafana_folder = Test Folder\n - instance = Grafana\n - severity = critical\n - team = platops\nAnnotations:\n - summary = ${alertname} from Scout Grafana (test, ignore)\nSource: ?orgId=1\nSilence: https://grafana.example/alerting/silence/new?orgId=1\n`;
+
+    const [firing] = transformGrafanaToEvents({
+      state: 'alerting',
+      message: message('OpsKnightDemoAlert', 'Firing'),
+    });
+    expect(firing.event_action).toBe('trigger');
+    expect(firing.payload.summary).toBe('OpsKnightDemoAlert from Scout Grafana (test, ignore)');
+    expect(firing.payload.severity).toBe('critical');
+    expect(firing.payload.custom_details).toMatchObject({
+      value: 'B=22, C=1',
+      labels: { alertname: 'OpsKnightDemoAlert', team: 'platops', grafana_folder: 'Test Folder' },
+      annotations: { summary: 'OpsKnightDemoAlert from Scout Grafana (test, ignore)' },
+    });
+    expect(firing.dedup_key).not.toBe('grafana-unknown');
+
+    // A different alert must not collapse into the same incident.
+    const [other] = transformGrafanaToEvents({
+      state: 'alerting',
+      message: message('DiskFull', 'Firing'),
+    });
+    expect(other.dedup_key).not.toBe(firing.dedup_key);
+
+    // The resolve carries the same labels, so it closes the same incident.
+    const [resolved] = transformGrafanaToEvents({
+      state: 'ok',
+      message: message('OpsKnightDemoAlert', 'Resolved'),
+    });
+    expect(resolved).toMatchObject({ event_action: 'resolve', dedup_key: firing.dedup_key });
   });
 
   it('Datadog $ALERT_TRANSITION Recovered and multi-alert titles resolve the same key', () => {

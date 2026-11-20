@@ -3,7 +3,7 @@
 import { useState, useRef, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import TimeZoneSelect from './TimeZoneSelect';
 import {
   Card,
@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
+import { CreateTrigger } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
@@ -47,17 +48,16 @@ export default function ScheduleCreateForm({ action, canCreate }: ScheduleCreate
   const [isOpen, setIsOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
-  const { showToast } = useToast();
 
   const handleAction = async (prevState: ScheduleActionState, formData: FormData) => {
     const res = await action(prevState, formData);
     if (res?.success) {
-      showToast('Schedule created successfully', 'success');
+      notify.success('Schedule created successfully');
       formRef.current?.reset();
       setIsOpen(false);
       router.refresh();
     } else if (res?.error) {
-      showToast(res.error, 'error');
+      notify.error(res.error);
     }
     return res;
   };
@@ -80,21 +80,11 @@ export default function ScheduleCreateForm({ action, canCreate }: ScheduleCreate
 
   if (!isOpen) {
     return (
-      <Button
-        variant="outline"
-        className="w-full h-auto py-8 border-dashed border-2 hover:border-primary hover:bg-primary/5 flex flex-col items-center justify-center gap-2 group transition-all rounded-lg"
+      <CreateTrigger
+        title="Create New Schedule"
+        description="Define rotation name, base timezone, and on-call coverage"
         onClick={() => setIsOpen(true)}
-      >
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-          <Plus className="h-6 w-6" />
-        </div>
-        <div className="text-center">
-          <h3 className="font-semibold text-base text-foreground">Create New Schedule</h3>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Define rotation name, base timezone, and on-call coverage
-          </p>
-        </div>
-      </Button>
+      />
     );
   }
 

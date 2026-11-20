@@ -1,14 +1,11 @@
 import { getUserPermissions } from '@/lib/rbac';
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
-import { cn } from '@/lib/utils';
 import { SETTINGS_NAV_SECTIONS } from '@/components/settings/navConfig';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   User,
   Settings,
   Shield,
-  Building2,
   Puzzle,
   Bell,
   ChevronRight,
@@ -19,96 +16,55 @@ import {
   SlidersHorizontal,
   ShieldCheck,
   Terminal,
+  Bot,
+  Users,
+  Target,
+  FileLock2,
+  HeartPulse,
+  History,
   type LucideIcon,
 } from 'lucide-react';
 import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import { PageHeader } from '@/components/patterns';
 import SettingsSearchTrigger from '@/components/settings/SettingsSearchTrigger';
+import { settingsSectionHref } from '@/components/settings/settings-breadcrumbs';
+import { IntegrationStatusBadge } from '@/components/settings/integrations/IntegrationStatus';
+import {
+  loadIntegrationStates,
+  type IntegrationStatus,
+} from '@/components/settings/integrations/load-integration-states';
 import { requirePageAccess } from '@/lib/access/server';
 import { canAccessPath } from '@/lib/access/pages';
 
-const sectionIcons: Record<string, LucideIcon | React.ComponentType<{ className?: string }>> = {
-  account: User,
-  workspace: Building2,
-  integrations: Puzzle,
-  system: Settings,
-};
+const itemIcons = new Map<string, LucideIcon | React.ComponentType<{ className?: string }>>([
+  ['profile', User],
+  ['security', Shield],
+  ['my-access', KeyRound],
+  ['access-requests', Users],
+  ['access-admin', ShieldCheck],
+  ['custom-fields', SlidersHorizontal],
+  ['incident-sla', Activity],
+  ['service-objectives', Target],
+  ['status-page', Globe],
+  ['api-keys', KeyRound],
+  ['audit-logs', History],
+  ['security-compliance', ShieldCheck],
+  ['privacy-requests', FileLock2],
+  ['slack', SlackLogo],
+  ['microsoft-teams', MicrosoftTeamsLogo],
+  ['chatops', MessageSquare],
+  ['mcp', Bot],
+  ['jira', JiraLogo],
+  ['health-center', HeartPulse],
+  ['system', Settings],
+  ['system-logs', Terminal],
+  ['notifications-admin', Bell],
+  ['notification-operations', Activity],
+  ['notification-history', Bell],
+]);
 
-const itemIcons: Record<string, LucideIcon | React.ComponentType<{ className?: string }>> = {
-  profile: User,
-  security: Shield,
-  'custom-fields': SlidersHorizontal,
-  'incident-sla': Activity,
-  'status-page': Globe,
-  'api-keys': KeyRound,
-  'audit-logs': Activity,
-  'security-compliance': ShieldCheck,
-  integrations: Puzzle,
-  slack: SlackLogo,
-  'microsoft-teams': MicrosoftTeamsLogo,
-  chatops: MessageSquare,
-  jira: JiraLogo,
-  'health-center': Activity,
-  system: Settings,
-  'system-logs': Terminal,
-  'notifications-admin': Bell,
-  'notification-operations': Activity,
-  'notification-history': Bell,
-};
-
-type ItemLiveStatus = {
-  label: string;
-  connected: boolean;
-};
-
-const itemThemes: Record<string, { bg: string; text: string }> = {
-  profile: { bg: 'bg-sky-500/10 dark:bg-sky-500/20', text: 'text-sky-600 dark:text-sky-400' },
-  security: {
-    bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-    text: 'text-emerald-600 dark:text-emerald-400',
-  },
-  'incident-sla': {
-    bg: 'bg-rose-500/10 dark:bg-rose-500/20',
-    text: 'text-rose-600 dark:text-rose-400',
-  },
-  'custom-fields': {
-    bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
-    text: 'text-indigo-600 dark:text-indigo-400',
-  },
-  'status-page': {
-    bg: 'bg-cyan-500/10 dark:bg-cyan-500/20',
-    text: 'text-cyan-600 dark:text-cyan-400',
-  },
-  'api-keys': {
-    bg: 'bg-amber-500/10 dark:bg-amber-500/20',
-    text: 'text-amber-600 dark:text-amber-400',
-  },
-  'audit-logs': {
-    bg: 'bg-slate-500/10 dark:bg-zinc-500/20',
-    text: 'text-slate-600 dark:text-zinc-400',
-  },
-  'security-compliance': {
-    bg: 'bg-teal-500/10 dark:bg-teal-500/20',
-    text: 'text-teal-600 dark:text-teal-400',
-  },
-  integrations: {
-    bg: 'bg-purple-500/10 dark:bg-purple-500/20',
-    text: 'text-purple-600 dark:text-purple-400',
-  },
-  slack: { bg: 'bg-muted/80 dark:bg-muted/50', text: '' },
-  'microsoft-teams': { bg: 'bg-[#505AC9]/10 dark:bg-[#505AC9]/20', text: 'text-[#7B83EB]' },
-  chatops: {
-    bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-    text: 'text-emerald-600 dark:text-emerald-400',
-  },
-  jira: { bg: 'bg-[#0052CC]/10 dark:bg-[#0052CC]/20', text: 'text-[#2684FF]' },
-  system: { bg: 'bg-violet-500/10 dark:bg-violet-500/20', text: 'text-violet-500' },
-  'system-logs': {
-    bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
-    text: 'text-indigo-600 dark:text-indigo-400',
-  },
-  'notifications-admin': { bg: 'bg-orange-500/10 dark:bg-orange-500/20', text: 'text-orange-500' },
-  'health-center': { bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', text: 'text-emerald-500' },
-};
+const notConnected: IntegrationStatus = { state: 'not_connected', label: 'Not connected' };
+const unavailable: IntegrationStatus = { state: 'error', label: "Couldn't check" };
 
 export default async function SettingsOverviewPage() {
   await requirePageAccess('/settings');
@@ -127,441 +83,221 @@ export default async function SettingsOverviewPage() {
       : Promise.resolve(0);
 
   const [
-    slackResult,
-    jiraResult,
-    chatOpsResult,
-    teamsResult,
+    integrationsResult,
     apiKeysResult,
     notificationProvidersResult,
     statusPageResult,
     customFieldsResult,
   ] = await Promise.allSettled([
-    permissions.isAdmin
-      ? prisma.slackIntegration.findFirst({
-          where: { services: { none: {} }, enabled: true },
-          select: { workspaceName: true, enabled: true },
-        })
-      : Promise.resolve(null),
-    permissions.isAdmin
-      ? prisma.jiraConfig.findUnique({
-          where: { id: 'default' },
-          select: { enabled: true, baseUrl: true },
-        })
-      : Promise.resolve(null),
-    permissions.isAdmin
-      ? prisma.chatOpsConfig.findUnique({
-          where: { id: 'default' },
-          select: { enabled: true },
-        })
-      : Promise.resolve(null),
-    permissions.isAdmin
-      ? prisma.microsoftTeamsConfig.findFirst({
-          select: { enabled: true },
-        })
-      : Promise.resolve(null),
+    permissions.isAdmin ? loadIntegrationStates() : Promise.resolve(null),
     apiKeysQuery,
     permissions.isAdmin
-      ? prisma.notificationProvider.count({
-          where: { enabled: true },
-        })
+      ? prisma.notificationProvider.count({ where: { enabled: true } })
       : Promise.resolve(0),
     permissions.isAdmin
-      ? prisma.statusPage.findFirst({
-          select: { enabled: true, privacyMode: true },
-        })
+      ? prisma.statusPage.findFirst({ select: { enabled: true, privacyMode: true } })
       : Promise.resolve(null),
     permissions.isAdmin ? prisma.customField.count() : Promise.resolve(0),
   ]);
 
-  const slackIntegration = slackResult.status === 'fulfilled' ? slackResult.value : null;
-  const jiraConfig = jiraResult.status === 'fulfilled' ? jiraResult.value : null;
-  const chatOpsConfig = chatOpsResult.status === 'fulfilled' ? chatOpsResult.value : null;
-  const teamsConfig = teamsResult.status === 'fulfilled' ? teamsResult.value : null;
+  const integrations = integrationsResult.status === 'fulfilled' ? integrationsResult.value : null;
+  const apiKeysFailed = apiKeysResult.status === 'rejected';
   const activeApiKeysCount = apiKeysResult.status === 'fulfilled' ? apiKeysResult.value : 0;
+  const notifFailed = notificationProvidersResult.status === 'rejected';
   const notificationProvidersCount =
     notificationProvidersResult.status === 'fulfilled' ? notificationProvidersResult.value : 0;
+  const statusPageFailed = statusPageResult.status === 'rejected';
   const statusPage = statusPageResult.status === 'fulfilled' ? statusPageResult.value : null;
+  const customFieldsFailed = customFieldsResult.status === 'rejected';
   const customFieldsCount =
     customFieldsResult.status === 'fulfilled' ? customFieldsResult.value : 0;
 
-  const slackFailed = slackResult.status === 'rejected';
-  const jiraFailed = jiraResult.status === 'rejected';
-  const chatOpsFailed = chatOpsResult.status === 'rejected';
-  const teamsFailed = teamsResult.status === 'rejected';
-  const apiKeysFailed = apiKeysResult.status === 'rejected';
-  const notifFailed = notificationProvidersResult.status === 'rejected';
-  const statusPageFailed = statusPageResult.status === 'rejected';
-  const customFieldsFailed = customFieldsResult.status === 'rejected';
+  const integrationStatus = (status: IntegrationStatus | undefined) =>
+    integrationsResult.status === 'rejected' ? unavailable : (status ?? notConnected);
 
-  const itemStatuses: Record<string, ItemLiveStatus> = {
-    slack: slackFailed
-      ? { label: 'Unavailable', connected: false }
-      : slackIntegration?.enabled
-        ? {
-            label: slackIntegration.workspaceName
-              ? `Connected (${slackIntegration.workspaceName})`
-              : 'Connected',
-            connected: true,
-          }
-        : { label: 'Not Connected', connected: false },
-    jira: jiraFailed
-      ? { label: 'Unavailable', connected: false }
-      : jiraConfig?.enabled
-        ? { label: 'Connected', connected: true }
-        : { label: 'Not Connected', connected: false },
-    'microsoft-teams': teamsFailed
-      ? { label: 'Unavailable', connected: false }
-      : teamsConfig?.enabled
-        ? { label: 'Connected', connected: true }
-        : { label: 'Not Connected', connected: false },
-    chatops: chatOpsFailed
-      ? { label: 'Unavailable', connected: false }
-      : chatOpsConfig?.enabled
-        ? { label: 'Active', connected: true }
-        : { label: 'Disabled', connected: false },
-    'status-page': statusPageFailed
-      ? { label: 'Unavailable', connected: false }
-      : statusPage?.enabled
-        ? {
-            label: statusPage.privacyMode === 'PUBLIC' ? 'Public' : 'Active',
-            connected: true,
-          }
-        : { label: 'Disabled', connected: false },
-    'api-keys': {
-      label: apiKeysFailed
-        ? 'Unavailable'
-        : activeApiKeysCount > 0
-          ? `${activeApiKeysCount} Active`
-          : '0 Active',
-      connected: !apiKeysFailed && activeApiKeysCount > 0,
-    },
-    'notifications-admin': {
-      label: notifFailed
-        ? 'Unavailable'
-        : notificationProvidersCount > 0
-          ? `${notificationProvidersCount} Active`
-          : 'Default Only',
-      connected: !notifFailed && notificationProvidersCount > 0,
-    },
-    'custom-fields': {
-      label: customFieldsFailed
-        ? 'Unavailable'
-        : customFieldsCount > 0
-          ? `${customFieldsCount} Defined`
-          : 'None',
-      connected: !customFieldsFailed && customFieldsCount > 0,
-    },
-  };
+  const itemStatuses = new Map<string, IntegrationStatus>(
+    permissions.isAdmin
+      ? [
+          ['slack', integrationStatus(integrations?.slack)],
+          ['microsoft-teams', integrationStatus(integrations?.['microsoft-teams'])],
+          ['chatops', integrationStatus(integrations?.chatops)],
+          ['jira', integrationStatus(integrations?.jira)],
+          [
+            'status-page',
+            statusPageFailed
+              ? unavailable
+              : statusPage?.enabled
+                ? {
+                    state: 'connected',
+                    label: statusPage.privacyMode === 'PUBLIC' ? 'Public' : 'Published',
+                  }
+                : { state: 'not_connected', label: 'Off' },
+          ],
+          [
+            'notifications-admin',
+            notifFailed
+              ? unavailable
+              : notificationProvidersCount > 0
+                ? { state: 'connected', label: `${notificationProvidersCount} active` }
+                : { state: 'not_connected', label: 'Defaults only' },
+          ],
+          [
+            'custom-fields',
+            customFieldsFailed
+              ? unavailable
+              : customFieldsCount > 0
+                ? { state: 'connected', label: `${customFieldsCount} defined` }
+                : { state: 'not_connected', label: 'None' },
+          ],
+          [
+            'api-keys',
+            apiKeysFailed
+              ? unavailable
+              : activeApiKeysCount > 0
+                ? { state: 'connected', label: `${activeApiKeysCount} active` }
+                : { state: 'not_connected', label: 'None active' },
+          ],
+        ]
+      : []
+  );
 
-  const activeIntegrationsCount =
-    (slackIntegration?.enabled ? 1 : 0) +
-    (jiraConfig?.enabled ? 1 : 0) +
-    (chatOpsConfig?.enabled ? 1 : 0) +
-    (teamsConfig?.enabled ? 1 : 0);
+  const connectedIntegrations = integrations
+    ? Object.values(integrations).filter(s => s.state === 'connected').length
+    : 0;
 
   const canAccess = (item: { href: string }) => canAccessPath(item.href, permissions.capabilities);
-
   const sectionGroups = SETTINGS_NAV_SECTIONS.filter(section => section.id !== 'overview');
 
   return (
-    <div className="space-y-8 pb-12 w-full">
-      {/* Settings Overview Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Manage your personal account, workspace configuration, integrations, and platform
-            operations.
-          </p>
-        </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Workspace Configuration"
+        title="Settings"
+        icon={Settings}
+        description="Your account, workspace configuration, integrations and platform operations."
+        primaryAction={<SettingsSearchTrigger tone="inverse" />}
+        stats={
+          permissions.isAdmin
+            ? [
+                {
+                  label: 'Integrations',
+                  value:
+                    integrationsResult.status === 'rejected'
+                      ? '—'
+                      : `${connectedIntegrations} connected`,
+                  icon: <Puzzle className="h-3.5 w-3.5" aria-hidden="true" />,
+                  href: '/settings/integrations',
+                },
+                {
+                  label: 'API keys',
+                  value: apiKeysFailed ? '—' : `${activeApiKeysCount} active`,
+                  icon: <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />,
+                  href: '/settings/api-keys',
+                },
+                {
+                  label: 'Custom fields',
+                  value: customFieldsFailed ? '—' : customFieldsCount,
+                  icon: <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />,
+                  href: '/settings/custom-fields',
+                },
+                {
+                  label: 'Status page',
+                  value: statusPageFailed ? '—' : statusPage?.enabled ? 'Published' : 'Off',
+                  icon: <Globe className="h-3.5 w-3.5" aria-hidden="true" />,
+                  href: '/settings/status-pages',
+                },
+              ]
+            : undefined
+        }
+      />
 
-        {/* Quick Search Button (⌘K) */}
-        <div className="flex items-center gap-2">
-          <SettingsSearchTrigger />
-        </div>
-      </div>
+      {sectionGroups.map(section => {
+        const visibleItems = section.items.filter(canAccess);
+        if (visibleItems.length === 0) return null;
+        const headingId = `settings-section-${section.id}`;
+        const isIntegrations = section.id === 'integrations';
 
-      {/* Metric Capsules */}
-      {permissions.isAdmin ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-          <Link
-            href="/settings/integrations/slack"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-purple-500/40 hover:bg-purple-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+        return (
+          <section
+            key={section.id}
+            id={section.id}
+            aria-labelledby={headingId}
+            className="scroll-mt-24 space-y-3"
           >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform shrink-0 border border-purple-500/20 shadow-2xs">
-                <Puzzle className="h-5 w-5" />
-              </div>
+            <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 px-1">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Integrations
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  {slackFailed && jiraFailed && chatOpsFailed && teamsFailed
-                    ? 'Unavailable'
-                    : `${activeIntegrationsCount} Active`}
-                </p>
+                <h2 id={headingId} className="text-base font-semibold text-foreground">
+                  {section.label}
+                </h2>
+                {section.description && (
+                  <p className="text-sm text-muted-foreground">{section.description}</p>
+                )}
               </div>
+              {isIntegrations &&
+                canAccessPath('/settings/integrations', permissions.capabilities) && (
+                  <Link
+                    href={settingsSectionHref(section.id)}
+                    className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    All integrations
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                )}
             </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-purple-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
 
-          <Link
-            href="/settings/api-keys"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0 border border-emerald-500/20 shadow-2xs">
-                <KeyRound className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  API Keys
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  {apiKeysFailed ? 'Unavailable' : `${activeApiKeysCount} Active`}
-                </p>
-              </div>
-            </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-emerald-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
+            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+              {visibleItems.map(item => {
+                const ItemIcon = itemIcons.get(item.id) ?? Settings;
+                const status = itemStatuses.get(item.id);
 
-          <Link
-            href="/settings/custom-fields"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-indigo-500/40 hover:bg-indigo-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0 border border-indigo-500/20 shadow-2xs">
-                <SlidersHorizontal className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Custom Fields
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  {customFieldsFailed ? 'Unavailable' : `${customFieldsCount} Defined`}
-                </p>
-              </div>
-            </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-indigo-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            href="/settings/status-pages"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-cyan-500/40 hover:bg-cyan-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0 border border-cyan-500/20 shadow-2xs">
-                <Globe className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Status Page
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  {statusPageFailed
-                    ? 'Unavailable'
-                    : statusPage?.enabled
-                      ? statusPage.privacyMode === 'PUBLIC'
-                        ? 'Public'
-                        : 'Active'
-                      : 'Disabled'}
-                </p>
-              </div>
-            </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-cyan-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-          <Link
-            href="/settings/profile"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-sky-500/40 hover:bg-sky-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 group-hover:scale-105 transition-transform shrink-0 border border-sky-500/20 shadow-2xs">
-                <User className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Personal Account
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  Profile & Preferences
-                </p>
-              </div>
-            </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-sky-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            href="/settings/security"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0 border border-emerald-500/20 shadow-2xs">
-                <Shield className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Security
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  Credentials & Sessions
-                </p>
-              </div>
-            </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-emerald-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            href="/settings/api-keys"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-amber-500/40 hover:bg-amber-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:scale-105 transition-transform shrink-0 border border-amber-500/20 shadow-2xs">
-                <KeyRound className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  API Keys
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  {apiKeysFailed ? 'Unavailable' : `${activeApiKeysCount} Active`}
-                </p>
-              </div>
-            </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-amber-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
-        </div>
-      )}
-
-      {/* Settings Sections - Grouped List Rows */}
-      <div className="space-y-8">
-        {sectionGroups.map(section => {
-          const visibleItems = section.items.filter(canAccess);
-          if (visibleItems.length === 0) return null;
-
-          const SectionIcon = sectionIcons[section.id] || Settings;
-
-          return (
-            <div key={section.id} className="space-y-3">
-              {/* Section Header */}
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-foreground/80 border border-border/60 shrink-0">
-                    <SectionIcon className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="flex flex-wrap items-baseline gap-x-2 min-w-0">
-                    <span className="text-sm font-bold text-foreground tracking-tight">
-                      {section.label}
-                    </span>
-                    {section.description && (
-                      <span className="text-xs text-muted-foreground truncate">
-                        — {section.description}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span className="text-[11px] font-medium text-muted-foreground/80 bg-muted/60 px-2.5 py-0.5 rounded-full border border-border/50 shrink-0 ml-2">
-                  {visibleItems.length} {visibleItems.length === 1 ? 'item' : 'items'}
-                </span>
-              </div>
-
-              {/* Grouped Rows Container */}
-              <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs overflow-hidden divide-y divide-border/60 dark:divide-border/40 shadow-xs hover:border-border transition-colors">
-                {visibleItems.map(item => {
-                  const ItemIcon = itemIcons[item.id] || Settings;
-                  const status = itemStatuses[item.id];
-                  const theme = itemThemes[item.id] || {
-                    bg: 'bg-muted text-muted-foreground',
-                    text: 'text-muted-foreground',
-                  };
-
-                  return (
+                return (
+                  <li key={item.id}>
                     <Link
-                      key={item.id}
                       href={item.href}
-                      className="group flex items-center justify-between p-4 sm:px-5 sm:py-4 hover:bg-accent/40 dark:hover:bg-accent/25 active:bg-accent/60 transition-colors duration-150"
+                      className="group flex items-center justify-between gap-4 px-4 py-3.5 transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-muted sm:px-5"
                     >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div
-                          className={cn(
-                            'flex h-10 w-10 items-center justify-center rounded-xl shrink-0 transition-transform duration-150 group-hover:scale-105 border border-border/40 shadow-2xs',
-                            theme.bg,
-                            theme.text
-                          )}
-                        >
-                          <ItemIcon className="h-5 w-5 shrink-0" />
+                      <div className="flex min-w-0 items-center gap-3.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
+                          <ItemIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[14px] font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium text-foreground">
                               {item.label}
                             </span>
                             {item.badge && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] font-semibold px-1.5 py-0 h-4 border-border/70 text-muted-foreground bg-muted/40"
-                              >
+                              <span className="rounded-full border border-border px-1.5 text-2xs font-medium leading-4 text-muted-foreground">
                                 {item.badge}
-                              </Badge>
+                              </span>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground/85 truncate mt-0.5 max-w-xl">
+                          <p className="mt-0.5 max-w-2xl truncate text-xs text-muted-foreground">
                             {item.description}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 shrink-0 ml-4">
+                      <div className="flex shrink-0 items-center gap-3">
                         {status && (
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-[11px] font-medium px-2.5 py-0.5 h-6 flex items-center gap-1.5 rounded-full border shadow-2xs',
-                              status.connected
-                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                : 'border-border/60 bg-muted/40 text-muted-foreground'
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                'h-1.5 w-1.5 rounded-full shrink-0',
-                                status.connected
-                                  ? 'bg-emerald-500 animate-pulse'
-                                  : 'bg-muted-foreground/50'
-                              )}
-                            />
-                            <span className="truncate max-w-[140px]">{status.label}</span>
-                          </Badge>
+                          <IntegrationStatusBadge
+                            state={status.state}
+                            label={status.label}
+                            className="hidden max-w-[180px] sm:inline-flex"
+                          />
                         )}
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-muted/60 transition-all">
-                          <ChevronRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
-                        </div>
+                        <ChevronRight
+                          className="h-4 w-4 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-foreground motion-reduce:transition-none"
+                          aria-hidden="true"
+                        />
                       </div>
                     </Link>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -1,0 +1,31 @@
+/* Brand panel palette for the pre-sign-in screens (AuthLayout + LoginAnimation).
+   The panel is a fixed night-sky illustration on otherwise light routes, so its
+   colours are their own tokens here rather than theme-switching UI tokens. */
+:root {
+  --auth-panel-bg: 216 29% 3%;
+  --auth-panel-border: 218 26% 14%;
+  --auth-space: 228 53% 3%;
+  --auth-tooltip: 223 41% 7%;
+  --auth-route-info: 198 93% 60%;
+  --auth-stage-past: 215 20% 65%;
+  --auth-stage-next: 215 25% 27%;
+  --auth-idle: 215 19% 35%;
+  --auth-globe-1: 199 66% 27%;
+  --auth-globe-2: 203 72% 17%;
+  --auth-globe-3: 207 74% 11%;
+  --auth-globe-4: 211 76% 5%;
+}
+
+/* Text and rule tones on the dark panel (kept as classes so Tailwind arbitrary values are not needed). */
+.auth-panel-text-muted {
+  color: hsl(var(--auth-stage-past));
+}
+.auth-panel-text-dim {
+  color: hsl(215 16% 47%);
+}
+.auth-panel-text-faint {
+  color: hsl(var(--auth-stage-next));
+}
+.auth-panel-rule {
+  border-color: hsl(217 33% 17% / 0.6);
+}

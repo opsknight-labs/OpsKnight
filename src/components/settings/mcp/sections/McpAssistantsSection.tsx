@@ -32,8 +32,8 @@ import {
 } from '@/app/(app)/settings/integrations/mcp/list-params';
 
 const TYPE_TONE: Record<McpClientRow['type'], PillTone> = {
-  automatic: 'info',
-  metadata: 'violet',
+  automatic: 'neutral',
+  metadata: 'neutral',
   manual: 'neutral',
 };
 
@@ -203,7 +203,7 @@ export default function McpAssistantsSection({
                         <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                           <span className="shrink-0">ID</span>
                           <code
-                            className="min-w-0 truncate font-mono text-[11px] text-foreground/80"
+                            className="min-w-0 truncate font-mono text-2xs text-foreground/80"
                             title={row.id}
                           >
                             {row.id}
@@ -218,9 +218,7 @@ export default function McpAssistantsSection({
                         {CLIENT_TYPE_LABEL[row.type]}
                       </StatusPill>
                       {row.metadataHost && (
-                        <span className="text-[11px] text-muted-foreground">
-                          {row.metadataHost}
-                        </span>
+                        <span className="text-2xs text-muted-foreground">{row.metadataHost}</span>
                       )}
                     </span>
                   </ResponsiveCell>
@@ -331,8 +329,8 @@ export default function McpAssistantsSection({
         </div>
       </SettingsSection>
 
-      <details className="group rounded-xl border border-border bg-card shadow-2xs">
-        <summary className="cursor-pointer list-none rounded-xl px-4 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:px-6 [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-lg border border-border bg-card shadow-2xs">
+        <summary className="cursor-pointer list-none rounded-lg px-4 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:px-6 [&::-webkit-details-marker]:hidden">
           <span className="flex items-center justify-between gap-3">
             <span>
               <span className="block text-sm font-semibold text-foreground">

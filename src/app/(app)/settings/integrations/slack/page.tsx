@@ -1,22 +1,17 @@
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { ServiceIntegrationsLink } from '@/components/settings/integrations/ServiceIntegrationsLink';
+import { IntegrationStatusBadge } from '@/components/settings/integrations/IntegrationStatus';
 import { SlackLogo } from '@/components/common/BrandLogos';
-import {
-  Shield,
-  ShieldCheck,
-  Hash,
-  Lock,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowUpRight,
-} from 'lucide-react';
+import { ShieldCheck, Hash, Lock, AlertTriangle } from 'lucide-react';
 import { SLACK_REQUIRED_BOT_SCOPES } from '@/lib/slack/app-manifest';
 import SlackIntegrationPage from '@/components/settings/SlackIntegrationPage';
 import { getAppUrl } from '@/lib/app-url';
 import { requirePageAccess } from '@/lib/access/server';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -87,48 +82,19 @@ export default async function GlobalSlackIntegrationPage(props: {
 
   return (
     <div className="space-y-6">
-      {/* Detail Hero Header */}
-      <DetailHeroBanner
-        tag="COLLABORATION ENGINE"
+      <SettingsPageHeader
+        eyebrow="Collaboration Engine"
+        icon={SlackLogo}
         title="Slack Integration"
-        subtitle="Connect your Slack workspace for incident alerts, bi-directional triage, slash commands, and video war rooms."
+        description="Connect your Slack workspace for incident alerts, bi-directional triage, slash commands, and video war rooms."
         badges={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
-            >
-              <Shield className="h-3 w-3 mr-1" />
-              Admin Only
-            </Badge>
-            <Badge
-              variant="outline"
-              className={`text-[10px] font-semibold ${
-                isConnected
-                  ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-100'
-                  : isOAuthConfigured
-                    ? 'border-blue-400/60 bg-blue-400/15 text-blue-100'
-                    : 'border-amber-400/60 bg-amber-400/15 text-amber-100'
-              }`}
-            >
-              {isConnected ? (
-                <>
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Workspace Connected
-                </>
-              ) : isOAuthConfigured ? (
-                <>
-                  <ArrowUpRight className="h-3 w-3 mr-1" />
-                  Ready to Connect
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  Setup Required
-                </>
-              )}
-            </Badge>
-          </div>
+          <IntegrationStatusBadge
+            onDark
+            state={isConnected ? 'connected' : 'not_connected'}
+            label={
+              isConnected ? 'Connected' : isOAuthConfigured ? 'Ready to connect' : 'Setup required'
+            }
+          />
         }
         statsPlacement="bottom"
         stats={[
@@ -180,9 +146,15 @@ export default async function GlobalSlackIntegrationPage(props: {
       />
 
       {oauthError && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 sm:p-5 text-xs text-rose-800 dark:text-rose-300 space-y-1.5">
+        <div
+          className={cn(
+            'rounded-lg border p-4 sm:p-5 text-xs space-y-1.5',
+            toneClasses('critical').soft
+          )}
+          role="alert"
+        >
           <div className="flex items-center gap-2 font-semibold">
-            <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
               {oauthMessage === 'bad_client_secret'
                 ? 'Slack Connection Failed: Bad Client Secret'
@@ -204,6 +176,7 @@ export default async function GlobalSlackIntegrationPage(props: {
         isAdmin={permissions.isAdmin}
         appUrl={appUrl}
       />
+      <ServiceIntegrationsLink description="Each service can post to its own Slack channel. Set it on the service's Notifications tab." />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 const sources = {
   tailwind: readFileSync('tailwind.config.ts', 'utf8'),
   styles: readFileSync('src/styles/index.css', 'utf8'),
+  tokens: readFileSync('src/styles/foundation/tokens.css', 'utf8'),
   mobileShell: readFileSync('src/app/(mobile)/m/mobile-shell.css', 'utf8'),
   providers: readFileSync('src/app/providers.tsx', 'utf8'),
   legacyDark: readFileSync('src/styles/foundation/variables-dark.css', 'utf8'),
@@ -29,7 +30,7 @@ describe('application theme contract', () => {
   });
 
   it('defines one light palette and the neutral OpsKnight dark palette', () => {
-    const styles = sources.styles;
+    const styles = sources.tokens;
     expect(styles).toContain('--ui-background: 210 40% 98%');
     expect(styles).toContain('--ui-card: 0 0% 100%');
     expect(styles).toContain("[data-theme='dark']");
@@ -116,7 +117,7 @@ describe('application theme contract', () => {
 
   it('pairs inverse foregrounds with dark backgrounds for inline chrome controls', () => {
     const inverse = sources.styles.split('.ok-inverse-surface {')[1].split('}')[0];
-    const dark = sources.styles.split("[data-theme='dark'] {")[1].split('}')[0];
+    const dark = sources.tokens.split("[data-theme='dark'] {")[1].split('}')[0];
     const tokens = (css: string) =>
       Object.fromEntries([...css.matchAll(/(--ui-[\w-]+):\s*([^;]+);/g)].map(m => [m[1], m[2]]));
     const inverseTokens = tokens(inverse);

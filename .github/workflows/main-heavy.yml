@@ -1,0 +1,39 @@
+name: Main heavy batch
+
+# Heavy suites run in batches instead of on every merge to main: every 6 hours this
+# starts each suite whose paths changed since the last batch. Release tags still run
+# runbook and SBOM validation directly. Use "Run workflow" with force before a release.
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Run every heavy suite even if nothing relevant changed
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: main-heavy
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Start heavy suites for changes since the last batch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet --break-system-packages pyyaml
+          python3 scripts/ci/dispatch-main-heavy.py

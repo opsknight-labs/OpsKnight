@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import { KeyRetirementReport } from '@/lib/encryption/types';
+import { toneClasses } from '@/components/patterns';
 
 interface KeyringMetadata {
   activeKeyId: string | null;
@@ -131,6 +132,7 @@ export function EncryptionMigrationPanel({
   }, [fetchStatus, fetchRetirementReadiness, fetchRuns]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
     refreshAll();
   }, [refreshAll]);
 
@@ -208,7 +210,7 @@ export function EncryptionMigrationPanel({
   return (
     <div className="space-y-6">
       {/* Scope Disclaimer Alert */}
-      <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs">
+      <div className="rounded-lg border border-border/70 bg-card p-4 shadow-xs">
         <div className="flex items-start gap-3">
           <div className="rounded-lg bg-primary/10 p-2 text-primary">
             <Key className="h-5 w-5" />
@@ -241,7 +243,7 @@ export function EncryptionMigrationPanel({
       </div>
 
       {actionError && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3.5 text-xs text-destructive flex items-center gap-2.5">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-xs text-destructive flex items-center gap-2.5">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{actionError}</span>
         </div>
@@ -250,7 +252,7 @@ export function EncryptionMigrationPanel({
       {/* Top 2-Column: Keyring Overview & Key Retirement Readiness */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Card 1: Keyring Overview */}
-        <div className="rounded-xl border border-border/70 bg-card p-5 shadow-xs space-y-4">
+        <div className="rounded-lg border border-border/70 bg-card p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Key className="h-4 w-4 text-primary" />
@@ -266,7 +268,7 @@ export function EncryptionMigrationPanel({
               <span className="text-muted-foreground">Active Primary Key ID</span>
               <span className="font-mono font-semibold text-foreground">
                 {keyring?.activeKeyId ? (
-                  <span className="text-emerald-600 dark:text-emerald-400">
+                  <span className="text-status-ok-deep dark:text-emerald-300">
                     {keyring.activeKeyId} (Active Writes)
                   </span>
                 ) : (
@@ -284,7 +286,7 @@ export function EncryptionMigrationPanel({
                     variant={k.isActive ? 'default' : 'secondary'}
                     className={cn(
                       'text-xs font-mono py-1 px-2.5',
-                      k.isActive && 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      k.isActive && 'bg-status-ok-deep text-white hover:bg-status-ok-deep/90'
                     )}
                   >
                     {k.id} {k.isActive ? '★ active' : '• fallback reader'}
@@ -293,7 +295,7 @@ export function EncryptionMigrationPanel({
               </div>
             </div>
 
-            <p className="text-[11px] text-muted-foreground pt-2">
+            <p className="text-2xs text-muted-foreground pt-2">
               Ciphertext is written with AES-256-GCM v3 envelope. Legacy v1/v2 AES-CBC ciphertext
               remains decryptable during overlapping key migrations.
             </p>
@@ -301,14 +303,14 @@ export function EncryptionMigrationPanel({
         </div>
 
         {/* Card 2: Key Retirement Readiness Assessment */}
-        <div className="rounded-xl border border-border/70 bg-card p-5 shadow-xs space-y-4">
+        <div className="rounded-lg border border-border/70 bg-card p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-primary" />
               <h4 className="text-sm font-semibold text-foreground">Key-Retirement Readiness</h4>
             </div>
             {retirementReport?.verifiedRunId ? (
-              <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs">
+              <Badge className="border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 text-status-ok-deep dark:text-emerald-300 text-xs">
                 Verified Scan Active
               </Badge>
             ) : (
@@ -328,12 +330,12 @@ export function EncryptionMigrationPanel({
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-medium text-foreground">Key: {a.keyId}</span>
                     {a.status === 'DATABASE_READY_FOR_RETIREMENT' && (
-                      <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      <Badge className="border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 text-status-ok-deep dark:text-emerald-300">
                         <CheckCircle2 className="h-3 w-3 mr-1" /> Ready for Operator Retirement
                       </Badge>
                     )}
                     {a.status === 'ACTIVE_REFERENCES_EXIST' && (
-                      <Badge className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                      <Badge className="border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300">
                         <AlertTriangle className="h-3 w-3 mr-1" /> {a.remainingReferences} secrets
                         remain
                       </Badge>
@@ -349,13 +351,13 @@ export function EncryptionMigrationPanel({
                       </Badge>
                     )}
                     {a.status === 'UNRESOLVED_RECORDS_EXIST' && (
-                      <Badge className="border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                      <Badge className="border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300">
                         <AlertTriangle className="h-3 w-3 mr-1" /> Blocked — unresolved records
                       </Badge>
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground">{a.message}</p>
-                  <p className="text-[11px] text-foreground font-medium pt-0.5">{a.guidance}</p>
+                  <p className="text-2xs text-muted-foreground">{a.message}</p>
+                  <p className="text-2xs text-foreground font-medium pt-0.5">{a.guidance}</p>
                 </div>
               ))
             ) : (
@@ -372,14 +374,14 @@ export function EncryptionMigrationPanel({
       {activeRun && (activeRun.status === 'RUNNING' || activeRun.status === 'PENDING') && (
         <div
           className={cn(
-            'rounded-xl border p-4 shadow-xs space-y-3',
+            'rounded-lg border p-4 shadow-xs space-y-3',
             activeRun.isOrphaned
-              ? 'border-amber-500/50 bg-amber-500/5 dark:bg-amber-500/10'
+              ? 'border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15'
               : 'border-primary/40 bg-primary/5'
           )}
         >
           {activeRun.isOrphaned && (
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs font-semibold pb-1 border-b border-amber-500/20">
+            <div className="flex items-center gap-2 text-status-elevated-deep dark:text-amber-300 border-status-elevated-border/30 text-xs font-semibold pb-1 border-b">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>
                 {activeRun.orphanReason ||
@@ -391,7 +393,7 @@ export function EncryptionMigrationPanel({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {activeRun.status === 'PENDING' ? (
-                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 animate-pulse" />
+                <Clock className="h-4 w-4 text-status-elevated-deep dark:text-amber-300 animate-pulse" />
               ) : (
                 <RefreshCw className="h-4 w-4 animate-spin text-primary" />
               )}
@@ -437,7 +439,7 @@ export function EncryptionMigrationPanel({
                 }}
               />
             </div>
-            <div className="flex gap-4 pt-1 text-[11px] text-muted-foreground">
+            <div className="flex gap-4 pt-1 text-2xs text-muted-foreground">
               <span>
                 Migrated: <strong className="text-foreground">{activeRun.migratedRecords}</strong>
               </span>
@@ -453,7 +455,7 @@ export function EncryptionMigrationPanel({
       )}
 
       {/* Control Actions Bar */}
-      <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      <div className="rounded-lg border border-border/70 bg-card p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div>
           <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">
             Controlled Migration Operations
@@ -465,7 +467,7 @@ export function EncryptionMigrationPanel({
 
         <div className="flex items-center gap-2.5">
           {!canManageEncryption && (
-            <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/80">
+            <Badge variant="outline" className="text-2xs text-muted-foreground border-border/80">
               Requires ENCRYPTION_MANAGE
             </Badge>
           )}
@@ -484,7 +486,7 @@ export function EncryptionMigrationPanel({
           >
             <Eye className="h-3.5 w-3.5 text-muted-foreground" />
             Preview Impact
-            <span className="text-[10px] text-muted-foreground font-mono ml-0.5">(Read-Only)</span>
+            <span className="text-2xs text-muted-foreground font-mono ml-0.5">(Read-Only)</span>
           </Button>
 
           <Button
@@ -499,9 +501,9 @@ export function EncryptionMigrationPanel({
             }
             className="gap-1.5 h-8 text-xs font-medium"
           >
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <ShieldCheck className="h-3.5 w-3.5 text-status-ok-deep dark:text-emerald-300" />
             Verify Integrity
-            <span className="text-[10px] text-muted-foreground font-mono ml-0.5">(Read-Only)</span>
+            <span className="text-2xs text-muted-foreground font-mono ml-0.5">(Read-Only)</span>
           </Button>
 
           <Button
@@ -524,8 +526,8 @@ export function EncryptionMigrationPanel({
 
       {/* Confirmation Modal for MIGRATE */}
       {confirmMigrateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4">
-          <div className="rounded-xl border border-border bg-card p-6 shadow-lg max-w-md w-full space-y-4 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+          <div className="rounded-lg border border-border bg-card p-6 shadow-lg max-w-md w-full space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-center gap-3 text-foreground">
               <div className="p-2 rounded-lg bg-primary/10 text-primary">
                 <Key className="h-5 w-5" />
@@ -568,7 +570,7 @@ export function EncryptionMigrationPanel({
       )}
 
       {/* Recent Runs History */}
-      <div className="rounded-xl border border-border/70 bg-card shadow-xs overflow-hidden">
+      <div className="rounded-lg border border-border/70 bg-card shadow-xs overflow-hidden">
         <div className="px-5 py-4 border-b border-border/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-primary" />
@@ -579,7 +581,7 @@ export function EncryptionMigrationPanel({
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-muted/40 text-muted-foreground uppercase text-[10px] tracking-wider border-b border-border/40">
+            <thead className="bg-muted/40 text-muted-foreground uppercase text-2xs tracking-wider border-b border-border/40">
               <tr>
                 <th className="py-2.5 px-4 font-semibold">Run ID</th>
                 <th className="py-2.5 px-4 font-semibold">Mode</th>
@@ -600,20 +602,18 @@ export function EncryptionMigrationPanel({
                       {run.id.slice(0, 10)}...
                     </td>
                     <td className="py-3 px-4">
-                      <Badge variant="outline" className="font-semibold text-[10px]">
+                      <Badge variant="outline" className="font-semibold text-2xs">
                         {run.mode}
                       </Badge>
                     </td>
                     <td className="py-3 px-4">
                       <Badge
                         className={cn(
-                          'text-[10px] font-semibold',
-                          run.status === 'COMPLETED' &&
-                            'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                          'text-2xs font-semibold',
+                          run.status === 'COMPLETED' && toneClasses('ok').soft,
                           run.status === 'RUNNING' &&
                             'border-primary/30 bg-primary/10 text-primary animate-pulse',
-                          run.status === 'FAILED' &&
-                            'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400',
+                          run.status === 'FAILED' && toneClasses('critical').soft,
                           run.status === 'CANCELLED' &&
                             'border-border bg-muted text-muted-foreground'
                         )}
@@ -624,13 +624,13 @@ export function EncryptionMigrationPanel({
                     <td className="py-3 px-4 font-mono">
                       {run.processedRecords} / {run.totalRecords}
                     </td>
-                    <td className="py-3 px-4 font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                    <td className="py-3 px-4 font-mono text-status-ok-deep dark:text-emerald-300 font-medium">
                       {run.migratedRecords}
                     </td>
-                    <td className="py-3 px-4 font-mono text-amber-600 dark:text-amber-400 font-medium">
+                    <td className="py-3 px-4 font-mono text-status-elevated-deep dark:text-amber-300 font-medium">
                       {run.conflictRecords}
                     </td>
-                    <td className="py-3 px-4 font-mono text-rose-600 dark:text-rose-400 font-medium">
+                    <td className="py-3 px-4 font-mono text-status-critical-deep dark:text-rose-300 font-medium">
                       {run.errorRecords}
                     </td>
                     <td className="py-3 px-4 text-muted-foreground">
@@ -663,8 +663,8 @@ export function EncryptionMigrationPanel({
 
       {/* Selected Run Details Modal */}
       {selectedRun && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4">
-          <div className="rounded-xl border border-border bg-card p-6 shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+          <div className="rounded-lg border border-border bg-card p-6 shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col space-y-4">
             <div className="flex items-center justify-between border-b border-border/50 pb-3">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">
@@ -687,20 +687,18 @@ export function EncryptionMigrationPanel({
             <div className="flex-1 overflow-y-auto space-y-4 text-xs">
               <div className="grid grid-cols-3 gap-3 p-3 bg-muted/20 rounded-lg border border-border/40">
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">Fingerprint</span>
-                  <span className="font-mono text-[11px] truncate block">
+                  <span className="text-muted-foreground block text-2xs">Fingerprint</span>
+                  <span className="font-mono text-2xs truncate block">
                     {selectedRun.registryFingerprint.slice(0, 16)}...
                   </span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">Active Key</span>
+                  <span className="text-muted-foreground block text-2xs">Active Key</span>
                   <span className="font-mono">{selectedRun.activeKeyId || 'none'}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">
-                    Safe for Retirement
-                  </span>
-                  <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                  <span className="text-muted-foreground block text-2xs">Safe for Retirement</span>
+                  <span className="font-mono text-status-ok-deep dark:text-emerald-300">
                     {selectedRun.safeForDatabaseKeyRetirement &&
                     selectedRun.safeForDatabaseKeyRetirement.length > 0
                       ? selectedRun.safeForDatabaseKeyRetirement.join(', ')
@@ -737,35 +735,35 @@ export function EncryptionMigrationPanel({
 
                 return (
                   <div className="grid grid-cols-4 gap-2">
-                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-center">
-                      <span className="text-[10px] uppercase font-semibold text-amber-600 dark:text-amber-400 block">
+                    <div className="rounded-lg border border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 p-2.5 text-center">
+                      <span className="text-2xs uppercase font-semibold text-status-elevated-deep dark:text-amber-300 block">
                         Migration Candidates
                       </span>
-                      <span className="text-base font-bold text-amber-700 dark:text-amber-300 font-mono">
+                      <span className="text-base font-bold text-status-elevated-deep dark:text-amber-300 font-mono">
                         {migrationCandidates}
                       </span>
                     </div>
-                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-center">
-                      <span className="text-[10px] uppercase font-semibold text-emerald-600 dark:text-emerald-400 block">
+                    <div className="rounded-lg border border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 p-2.5 text-center">
+                      <span className="text-2xs uppercase font-semibold text-status-ok-deep dark:text-emerald-300 block">
                         Already Current
                       </span>
-                      <span className="text-base font-bold text-emerald-700 dark:text-emerald-300 font-mono">
+                      <span className="text-base font-bold text-status-ok-deep dark:text-emerald-300 font-mono">
                         {currentV3}
                       </span>
                     </div>
-                    <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-2.5 text-center">
-                      <span className="text-[10px] uppercase font-semibold text-blue-600 dark:text-blue-400 block">
+                    <div className="rounded-lg border border-status-info-border/25 bg-status-info-soft dark:border-status-info/35 dark:bg-status-info/15 p-2.5 text-center">
+                      <span className="text-2xs uppercase font-semibold text-status-info-deep dark:text-blue-300 block">
                         Legacy Plaintext
                       </span>
-                      <span className="text-base font-bold text-blue-700 dark:text-blue-300 font-mono">
+                      <span className="text-base font-bold text-status-info-deep dark:text-blue-300 font-mono">
                         {plaintext}
                       </span>
                     </div>
-                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-center">
-                      <span className="text-[10px] uppercase font-semibold text-rose-600 dark:text-rose-400 block">
+                    <div className="rounded-lg border border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 p-2.5 text-center">
+                      <span className="text-2xs uppercase font-semibold text-status-critical-deep dark:text-rose-300 block">
                         Blocking Issues
                       </span>
-                      <span className="text-base font-bold text-rose-700 dark:text-rose-300 font-mono">
+                      <span className="text-base font-bold text-status-critical-deep dark:text-rose-300 font-mono">
                         {blockingIssues}
                       </span>
                     </div>
@@ -780,7 +778,7 @@ export function EncryptionMigrationPanel({
                     : 'Target Format Breakdown'}
                 </h5>
                 <div className="border border-border/60 rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-[11px]">
+                  <table className="w-full text-left text-2xs">
                     <thead className="bg-muted/40 text-muted-foreground border-b border-border/40">
                       <tr>
                         <th className="py-2 px-3 font-semibold">Target ID</th>
@@ -814,34 +812,34 @@ export function EncryptionMigrationPanel({
                                 <td className="py-2 px-3 font-mono text-right">
                                   {t.processedCount}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-right text-emerald-600 dark:text-emerald-400">
+                                <td className="py-2 px-3 font-mono text-right text-status-ok-deep dark:text-emerald-300">
                                   {t.migratedCount}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-right text-amber-600 dark:text-amber-400">
+                                <td className="py-2 px-3 font-mono text-right text-status-elevated-deep dark:text-amber-300">
                                   {t.conflictCount}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-right text-rose-600 dark:text-rose-400">
+                                <td className="py-2 px-3 font-mono text-right text-status-critical-deep dark:text-rose-300">
                                   {t.errorCount}
                                 </td>
                               </>
                             ) : (
                               <>
-                                <td className="py-2 px-3 font-mono text-right text-emerald-600 dark:text-emerald-400">
+                                <td className="py-2 px-3 font-mono text-right text-status-ok-deep dark:text-emerald-300">
                                   {s?.currentV3 ?? 0}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-right text-amber-600 dark:text-amber-400">
+                                <td className="py-2 px-3 font-mono text-right text-status-elevated-deep dark:text-amber-300">
                                   {s?.oldKeyV3 ?? 0}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-right text-purple-600 dark:text-purple-400">
+                                <td className="py-2 px-3 font-mono text-right text-muted-foreground">
                                   {s?.legacyV2 ?? 0}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-right text-indigo-600 dark:text-indigo-400">
+                                <td className="py-2 px-3 font-mono text-right text-muted-foreground">
                                   {s?.legacyV1 ?? 0}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-right text-blue-600 dark:text-blue-400">
+                                <td className="py-2 px-3 font-mono text-right text-status-info-deep dark:text-blue-300">
                                   {s?.plaintext ?? 0}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-right text-rose-600 dark:text-rose-400">
+                                <td className="py-2 px-3 font-mono text-right text-status-critical-deep dark:text-rose-300">
                                   {s
                                     ? (s.unavailableKey ?? 0) +
                                       (s.ambiguous ?? 0) +

@@ -18,7 +18,7 @@ import { accessDenialInsights, canSelfCertify, listCustomRoles } from '@/lib/acc
 import { describeRequirement } from '@/lib/access/catalog';
 import { isCapability, roleLabel, type AppRole, type Capability } from '@/lib/authorization';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import {
   Deadline,
@@ -79,7 +79,7 @@ export default async function AccessManagementPage() {
     listCustomRoles(),
     prisma.accessGrant.findMany({
       where: { revokedAt: null, expiresAt: { gt: now } },
-      include: { user: { select: { name: true, email: true } } },
+      include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
       orderBy: { expiresAt: 'asc' },
       take: 200,
     }),
@@ -108,15 +108,11 @@ export default async function AccessManagementPage() {
 
   return (
     <div className="space-y-6">
-      <DetailHeroBanner
-        tag="Workspace & Governance"
+      <SettingsPageHeader
+        eyebrow="Workspace & Governance"
         title="Access management"
-        subtitle="Roles, custom roles, temporary and emergency access, access reviews, and a checker that explains any access decision."
-        icon={
-          <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
-            <ShieldCheck className="h-8 w-8" />
-          </div>
-        }
+        description="Roles, custom roles, temporary and emergency access, access reviews, and a checker that explains any access decision."
+        icon={ShieldCheck}
         stats={[
           {
             label: 'Requests',
@@ -246,7 +242,12 @@ export default async function AccessManagementPage() {
                 {grants.map(grant => (
                   <ResponsiveRow key={grant.id}>
                     <ResponsiveCell label="Person" primary>
-                      <PersonCell name={grant.user.name} email={grant.user.email} />
+                      <PersonCell
+                        userId={grant.user.id}
+                        name={grant.user.name}
+                        email={grant.user.email}
+                        avatarUrl={grant.user.avatarUrl}
+                      />
                     </ResponsiveCell>
                     <ResponsiveCell label="Access">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -326,7 +327,7 @@ export default async function AccessManagementPage() {
             )}
             {pastReviews.length > 0 && (
               <div className="space-y-3">
-                <h4 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <h4 className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <History className="h-3.5 w-3.5" aria-hidden="true" />
                   Past reviews
                 </h4>

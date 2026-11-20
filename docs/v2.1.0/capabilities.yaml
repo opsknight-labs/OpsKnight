@@ -7,9 +7,22 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/runbooks.md]
-    guides: [guides/runbooks/README.md, guides/runbooks/author.md, guides/runbooks/respond.md, guides/runbooks/agents-pools-secrets.md, operate/deploy/agent-operations.md, troubleshooting/runbooks/README.md]
+    guides:
+      [
+        guides/runbooks/README.md,
+        guides/runbooks/author.md,
+        guides/runbooks/respond.md,
+        guides/runbooks/agents-pools-secrets.md,
+        operate/deploy/agent-operations.md,
+        troubleshooting/runbooks/README.md,
+      ]
     reference: [reference/runbooks.md]
-    tests: [tests/e2e/runbooks-ui.spec.ts, tests/integration/runbook-execution-safety.test.ts, tests/lib/runbooks/documentation-examples.test.ts]
+    tests:
+      [
+        tests/e2e/runbooks-ui.spec.ts,
+        tests/integration/runbook-execution-safety.test.ts,
+        tests/lib/runbooks/documentation-examples.test.ts,
+      ]
     sources: [src/lib/runbooks, src/app/(app)/runbooks, agent/]
     evidence: [tests/e2e/runbooks-ui.spec.ts, tests/integration/runbook-execution-safety.test.ts]
     roles: [responder, administrator, operator]
@@ -19,11 +32,26 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/incidents.md, concepts/incident-response.md, concepts/incident-sla.md]
-    guides: [guides/incidents/create.md, guides/incidents/acknowledge.md, guides/incidents/assign.md, guides/incidents/escalate.md, guides/incidents/resolve.md, guides/incidents/configure-incident-sla.md, guides/incidents/migrate-sla-scheduler.md]
-    reference: [reference/api/incidents.md, reference/api/authentication.md, reference/api/errors.md]
+    guides:
+      [
+        guides/incidents/create.md,
+        guides/incidents/acknowledge.md,
+        guides/incidents/assign.md,
+        guides/incidents/escalate.md,
+        guides/incidents/resolve.md,
+        guides/incidents/configure-incident-sla.md,
+        guides/incidents/migrate-sla-scheduler.md,
+      ]
+    reference:
+      [reference/api/incidents.md, reference/api/authentication.md, reference/api/errors.md]
     tests: [tests/docs/journeys/incident-lifecycle.spec.ts, tests/lib/incidents/lifecycle.test.ts]
     sources: [src/lib/incidents/lifecycle.ts, src/app/(app)/incidents/actions.ts]
-    evidence: [generated/docs-evidence/current/incidents/list.png, generated/docs-evidence/current/incidents/detail.png, generated/docs-evidence/current/incidents/acknowledge.png]
+    evidence:
+      [
+        generated/docs-evidence/current/incidents/list.png,
+        generated/docs-evidence/current/incidents/detail.png,
+        generated/docs-evidence/current/incidents/acknowledge.png,
+      ]
     roles: [responder, administrator]
   services_and_teams:
     title: Organize services and ownership teams
@@ -31,7 +59,13 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
     concepts: [concepts/services.md, concepts/teams.md]
-    guides: [guides/services/README.md, guides/services/manage-service.md, guides/teams/README.md, guides/teams/manage-team.md]
+    guides:
+      [
+        guides/services/README.md,
+        guides/services/manage-service.md,
+        guides/teams/README.md,
+        guides/teams/manage-team.md,
+      ]
     reference: [reference/api/README.md]
     tests: [tests/lib/authorization-filters.test.ts]
     sources: [src/app/(app)/services, src/app/(app)/teams]
@@ -69,8 +103,23 @@ capabilities:
     concepts: [concepts/notifications.md]
     guides: [guides/notifications/configure-routing.md, guides/notifications/inspect-delivery.md]
     reference: [reference/api/README.md]
-    tests: [tests/integration/notification-flow.test.ts, tests/integration/notification-policy-outcomes.test.ts]
-    sources: [src/lib/user-notifications.ts, src/lib/notification-providers.ts, src/lib/notification-control-plane.ts, src/lib/notification-delivery.ts, src/lib/service-notifications.ts, src/lib/job-worker.ts, src/lib/microsoft-teams, src/app/api/admin/notifications, src/app/api/settings/notifications]
+    tests:
+      [
+        tests/integration/notification-flow.test.ts,
+        tests/integration/notification-policy-outcomes.test.ts,
+      ]
+    sources:
+      [
+        src/lib/user-notifications.ts,
+        src/lib/notification-providers.ts,
+        src/lib/notification-control-plane.ts,
+        src/lib/notification-delivery.ts,
+        src/lib/service-notifications.ts,
+        src/lib/job-worker.ts,
+        src/lib/microsoft-teams,
+        src/app/api/admin/notifications,
+        src/app/api/settings/notifications,
+      ]
     evidence: [generated/docs-evidence/current/notifications/settings.png]
     roles: [responder, administrator, operator]
   status_pages:
@@ -79,10 +128,27 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/status-pages.md]
-    guides: [guides/status-pages/create-and-configure.md, guides/status-pages/publish-update.md, guides/status-pages/subscribers-and-api-access.md]
+    guides:
+      [
+        guides/status-pages/create-and-configure.md,
+        guides/status-pages/publish-update.md,
+        guides/status-pages/subscribers-and-api-access.md,
+      ]
     reference: [reference/api/README.md]
-    tests: [tests/integration/status-page-publication.test.ts, tests/integration/status-page-privacy-matrix.test.ts]
-    sources: [src/lib/status-page-projection.ts, src/lib/status-page-public-data.ts, src/lib/status-page-delivery.ts, src/app/(app)/settings/status-pages, src/app/api/status-page, src/app/api/settings/status-pages]
+    tests:
+      [
+        tests/integration/status-page-publication.test.ts,
+        tests/integration/status-page-privacy-matrix.test.ts,
+      ]
+    sources:
+      [
+        src/lib/status-page-projection.ts,
+        src/lib/status-page-public-data.ts,
+        src/lib/status-page-delivery.ts,
+        src/app/(app)/settings/status-pages,
+        src/app/api/status-page,
+        src/app/api/settings/status-pages,
+      ]
     evidence: [generated/docs-evidence/current/status-pages/list.png]
     roles: [responder, administrator]
   chatops:
@@ -92,9 +158,21 @@ capabilities:
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
     concepts: [concepts/chatops.md]
     guides: [guides/chatops/configure-global-policy.md, guides/chatops/create-war-room.md]
-    reference: [integrations/communication/slack/README.md, integrations/communication/microsoft-teams/README.md]
+    reference:
+      [
+        integrations/communication/slack/README.md,
+        integrations/communication/microsoft-teams/README.md,
+      ]
     tests: [tests/architecture/war-room-provider-neutral-contract.test.ts]
-    sources: [src/lib/war-room, src/lib/chatops, src/lib/slack.ts, src/lib/microsoft-teams, src/app/api/slack, src/app/api/microsoft-teams]
+    sources:
+      [
+        src/lib/war-room,
+        src/lib/chatops,
+        src/lib/slack.ts,
+        src/lib/microsoft-teams,
+        src/app/api/slack,
+        src/app/api/microsoft-teams,
+      ]
     evidence: []
     roles: [responder, administrator]
   inbound_integrations:
@@ -104,8 +182,16 @@ capabilities:
     required: { concepts: false, guides: true, reference: true, tests: true, evidence: true }
     concepts: []
     guides: [guides/integrations/send-test-event.md]
-    reference: [integrations/README.md, integrations/catalog.yaml, reference/api/events.md, reference/api/authentication.md, reference/api/errors.md]
-    tests: [tests/integration/event-resilience.test.ts, tests/integration/event-dedup-semantics.test.ts]
+    reference:
+      [
+        integrations/README.md,
+        integrations/catalog.yaml,
+        reference/api/events.md,
+        reference/api/authentication.md,
+        reference/api/errors.md,
+      ]
+    tests:
+      [tests/integration/event-resilience.test.ts, tests/integration/event-dedup-semantics.test.ts]
     sources: [src/lib/integrations, src/app/api/integrations]
     evidence: [generated/docs-evidence/current/integrations/settings.png]
     roles: [administrator, operator]
@@ -117,7 +203,11 @@ capabilities:
     concepts: []
     guides: [guides/jira/connect-jira.md]
     reference: [integrations/issue-tracking/jira/README.md]
-    tests: [tests/unit/jira-issue-creation.test.ts, tests/architecture/jira-enterprise-hardening-contract.test.ts]
+    tests:
+      [
+        tests/unit/jira-issue-creation.test.ts,
+        tests/architecture/jira-enterprise-hardening-contract.test.ts,
+      ]
     sources: [src/lib/jira-sync.ts, src/app/api/jira/webhook/route.ts]
     evidence: []
     roles: [responder, administrator]
@@ -175,11 +265,32 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/analytics.md]
-    guides: [guides/analytics/README.md, guides/analytics/use-analytics.md, guides/reports/README.md, guides/reports/create-dashboard.md, guides/reports/read-dashboard.md, guides/reports/manage-dashboard.md, guides/reports/troubleshooting.md]
+    guides:
+      [
+        guides/analytics/README.md,
+        guides/analytics/use-analytics.md,
+        guides/reports/README.md,
+        guides/reports/create-dashboard.md,
+        guides/reports/read-dashboard.md,
+        guides/reports/manage-dashboard.md,
+        guides/reports/troubleshooting.md,
+      ]
     reference: [reference/api/README.md, reference/metrics.md]
-    tests: [tests/unit/analytics-panels.test.ts, tests/api/reports-metrics-response.test.ts]
-    sources: [src/app/(app)/analytics, src/app/(app)/reports, src/app/api/dashboards, src/components/reports, src/lib/reports]
-    evidence: [generated/docs-evidence/current/analytics/reports.png, generated/docs-evidence/current/analytics/dashboard-template.png, generated/docs-evidence/current/analytics/dashboard-saved.png]
+    tests: [tests/integration/analytics-queries.test.ts, tests/api/reports-metrics-response.test.ts]
+    sources:
+      [
+        src/app/(app)/analytics,
+        src/app/(app)/reports,
+        src/app/api/dashboards,
+        src/components/reports,
+        src/lib/reports,
+      ]
+    evidence:
+      [
+        generated/docs-evidence/current/analytics/reports.png,
+        generated/docs-evidence/current/analytics/dashboard-template.png,
+        generated/docs-evidence/current/analytics/dashboard-saved.png,
+      ]
     roles: [responder, administrator]
   postmortems:
     title: Learn from resolved incidents
@@ -199,9 +310,20 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
     concepts: [concepts/privacy.md]
-    guides: [guides/privacy/README.md, guides/privacy/manage-request.md, guides/privacy/export-data.md, guides/privacy/process-erasure.md, guides/privacy/retention-and-troubleshooting.md]
+    guides:
+      [
+        guides/privacy/README.md,
+        guides/privacy/manage-request.md,
+        guides/privacy/export-data.md,
+        guides/privacy/process-erasure.md,
+        guides/privacy/retention-and-troubleshooting.md,
+      ]
     reference: [reference/api/README.md]
-    tests: [tests/integration/privacy-verification-lifecycle.test.ts, tests/integration/privacy-erasure-concurrency.test.ts]
+    tests:
+      [
+        tests/integration/privacy-verification-lifecycle.test.ts,
+        tests/integration/privacy-erasure-concurrency.test.ts,
+      ]
     sources: [src/lib/privacy, src/lib/retention-policy.ts]
     evidence: []
     roles: [administrator, operator]
@@ -213,7 +335,11 @@ capabilities:
     concepts: [concepts/compliance.md]
     guides: [guides/compliance/README.md, guides/compliance/evaluate-and-export.md]
     reference: [reference/api/README.md]
-    tests: [tests/integration/compliance-runtime-evaluation.test.ts, tests/integration/compliance-evidence-export.test.ts]
+    tests:
+      [
+        tests/integration/compliance-runtime-evaluation.test.ts,
+        tests/integration/compliance-evidence-export.test.ts,
+      ]
     sources: [src/lib/compliance, docs/compliance]
     evidence: []
     roles: [administrator, operator]
@@ -223,7 +349,13 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: false, tests: true, evidence: false }
     concepts: [concepts/mobile.md]
-    guides: [guides/mobile/install-and-notifications.md, guides/mobile/respond-to-incidents.md, guides/mobile/offline-and-updates.md, guides/mobile/use-mobile-operations.md]
+    guides:
+      [
+        guides/mobile/install-and-notifications.md,
+        guides/mobile/respond-to-incidents.md,
+        guides/mobile/offline-and-updates.md,
+        guides/mobile/use-mobile-operations.md,
+      ]
     reference: []
     tests: [tests/e2e/mobile-pwa.spec.ts, tests/e2e/mobile-responsive-matrix.spec.ts]
     sources: [src/app/(mobile)]
@@ -234,8 +366,31 @@ capabilities:
     product_area: deployment
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
-    concepts: [operate/deploy/README.md, operate/deploy/architecture/integrated-vs-split.md, operate/deploy/architecture/runtime-roles.md, operate/deploy/architecture/database-connections.md]
-    guides: [start/quickstart.md, start/production-install.md, operate/deploy/docker-compose/prerequisites.md, operate/deploy/docker-compose/integrated.md, operate/deploy/docker-compose/split.md, operate/deploy/docker-compose/external-postgres.md, operate/deploy/docker-compose/pgbouncer.md, operate/deploy/docker-compose/reverse-proxy.md, operate/deploy/docker-compose/upgrade.md, operate/deploy/docker-compose/troubleshooting.md, operate/deploy/docker-compose/production-checklist.md, operate/deploy/kubernetes-operations.md, operate/deploy/swarm-operations.md, operate/deploy/helm-operations.md, operate/deploy/kustomize-operations.md]
+    concepts:
+      [
+        operate/deploy/README.md,
+        operate/deploy/architecture/integrated-vs-split.md,
+        operate/deploy/architecture/runtime-roles.md,
+        operate/deploy/architecture/database-connections.md,
+      ]
+    guides:
+      [
+        start/quickstart.md,
+        start/production-install.md,
+        operate/deploy/docker-compose/prerequisites.md,
+        operate/deploy/docker-compose/integrated.md,
+        operate/deploy/docker-compose/split.md,
+        operate/deploy/docker-compose/external-postgres.md,
+        operate/deploy/docker-compose/pgbouncer.md,
+        operate/deploy/docker-compose/reverse-proxy.md,
+        operate/deploy/docker-compose/upgrade.md,
+        operate/deploy/docker-compose/troubleshooting.md,
+        operate/deploy/docker-compose/production-checklist.md,
+        operate/deploy/kubernetes-operations.md,
+        operate/deploy/swarm-operations.md,
+        operate/deploy/helm-operations.md,
+        operate/deploy/kustomize-operations.md,
+      ]
     reference: [reference/configuration/README.md, reference/health.md]
     tests: [tests/lib/deployment-config-unit.test.ts]
     sources: [deploy/compose, deploy/kubernetes, deploy/swarm]

@@ -287,11 +287,9 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
 
   const whatsappConfig = twilioProvider?.config as Record<string, unknown> | undefined;
   const whatsappAccountSid = (whatsappConfig?.whatsappAccountSid || twilioConfig?.accountSid) as
-    | string
-    | undefined;
+    string | undefined;
   const whatsappAuthToken = (whatsappConfig?.whatsappAuthToken || twilioConfig?.authToken) as
-    | string
-    | undefined;
+    string | undefined;
   const isWhatsappConfigured = Boolean(
     whatsappConfig?.whatsappNumber &&
     whatsappAccountSid &&
@@ -465,7 +463,7 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
 
         const activeBadge = (
           <span
-            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+            className={`text-2xs font-bold px-2 py-0.5 rounded-full border ${
               activeCount > 0
                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                 : 'bg-muted text-muted-foreground border-border/80'

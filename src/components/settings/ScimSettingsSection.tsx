@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import ScimRoleMapping from './ScimRoleMapping';
+import DetailTabs from '@/components/ui/DetailTabs';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   AlertDialog,
@@ -102,6 +104,11 @@ export default function ScimSettingsSection({
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [groupId, setGroupId] = useState('');
+  const [roleSelection, setRoleSelection] = useState<{
+    connectorId: string;
+    groupId: string;
+  } | null>(null);
+  const roleGroupId = roleSelection?.connectorId === selected ? roleSelection.groupId : '';
   const [teamId, setTeamId] = useState('');
   const [teamQuery, setTeamQuery] = useState('');
   const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
@@ -328,25 +335,19 @@ export default function ScimSettingsSection({
         </div>
         <Badge variant="outline">{connector?.enabled ? 'Enabled' : 'Disconnected'}</Badge>
       </div>
-      <nav aria-label="SCIM sections" className="flex flex-wrap gap-2">
-        {tabs.map(item => (
-          <Button
-            key={item}
-            type="button"
-            size="sm"
-            variant={tab === item ? 'default' : 'outline'}
-            aria-current={tab === item ? 'page' : undefined}
-            onClick={() => {
-              setTab(item);
-              setPage(1);
-              setQuery('');
-              setCredentialLoading(true);
-            }}
-          >
-            {item}
-          </Button>
-        ))}
-      </nav>
+      <DetailTabs
+        label="SCIM sections"
+        layout="auto"
+        syncWithUrl={false}
+        activeTab={tab}
+        onTabChange={next => {
+          setTab(next as (typeof tabs)[number]);
+          setPage(1);
+          setQuery('');
+          setCredentialLoading(true);
+        }}
+        tabs={tabs.map(item => ({ id: item, label: item }))}
+      />
       {error && (
         <p
           role="alert"
@@ -642,9 +643,9 @@ export default function ScimSettingsSection({
             </p>
             <p>
               Map displayName, name.givenName, name.familyName, active, title and the enterprise
-              extension department as needed. Keep system roles in your explicit OIDC or manual role
-              policy. Providers without immutable OIDC correspondence require existing-account
-              linking approval.
+              extension department as needed. Assign system roles with group role mappings below, or
+              keep OIDC or manual role policy. Providers without immutable OIDC correspondence
+              require existing-account linking approval.
             </p>
           </div>
         </div>
@@ -698,7 +699,7 @@ export default function ScimSettingsSection({
                   <p className="font-medium text-sm flex items-center gap-2">
                     {row.label}
                     {attention && (
-                      <Badge variant="outline" className="border-amber-500/40 text-[10px]">
+                      <Badge variant="outline" className="border-amber-500/40 text-2xs">
                         Needs coverage review
                       </Badge>
                     )}
@@ -711,6 +712,19 @@ export default function ScimSettingsSection({
                     {row.detail}
                   </p>
                   <p className="text-xs text-muted-foreground">{date(row.time)}</p>
+                  {tab === 'Users & Groups' && kind === 'groups' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setRoleSelection({ connectorId: selected, groupId: row.id });
+                      }}
+                    >
+                      Map system role
+                    </Button>
+                  )}
                   {tab === 'Users & Groups' && kind === 'groups' && (
                     <Button
                       type="button"
@@ -767,6 +781,14 @@ export default function ScimSettingsSection({
               Next
             </Button>
           </div>
+          {roleGroupId && tab === 'Users & Groups' && kind === 'groups' && (
+            <ScimRoleMapping
+              key={`${selected}:${roleGroupId}`}
+              connectorId={selected}
+              groupId={roleGroupId}
+              onSaved={() => setReload(value => value + 1)}
+            />
+          )}
           {groupId && tab === 'Users & Groups' && (
             <div className="rounded-lg border p-4 space-y-3">
               <h4 className="font-semibold">Provisioning impact preview</h4>

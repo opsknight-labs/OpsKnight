@@ -86,15 +86,15 @@ export function StatusPageManager({
           setError(null);
           setOpen(true);
         }}
-        className={cn(
-          'gap-2 font-semibold shadow-md transition-all text-xs h-9 px-4',
-          variant === 'hero'
-            ? 'bg-white text-zinc-900 hover:bg-white/90 dark:bg-white dark:text-zinc-900 dark:hover:bg-white/90 border border-white/20 hover:shadow-lg'
-            : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs',
-          className
-        )}
+        size="sm"
+        data-variant={variant}
+        className={cn('gap-2', className)}
       >
-        {canCreate ? <Plus className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+        {canCreate ? (
+          <Plus className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Lock className="h-4 w-4" aria-hidden="true" />
+        )}
         <span>Create status page</span>
       </Button>
 

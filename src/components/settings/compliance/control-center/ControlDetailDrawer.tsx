@@ -17,6 +17,7 @@ import { RuntimeStatusBadge } from './RuntimeStatusBadge';
 import { EvidenceIntegrityBadge } from './EvidenceIntegrityBadge';
 import { RequirementLifecycleBadge } from './RequirementLifecycleBadge';
 import { SharedResponsibilityCard } from './SharedResponsibilityCard';
+import { toneClasses } from '@/components/patterns';
 
 interface ControlDetailDrawerProps {
   readonly control: ComplianceControlCenterControl | null;
@@ -67,7 +68,7 @@ export function ControlDetailDrawer({
                 title="Copy Control ID"
               >
                 {copied ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  <Check className="h-3.5 w-3.5 text-status-ok" />
                 ) : (
                   <Copy className="h-3.5 w-3.5" />
                 )}
@@ -79,11 +80,7 @@ export function ControlDetailDrawer({
               </Badge>
               <Badge
                 variant="secondary"
-                className={
-                  isRuntime
-                    ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20'
-                    : 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-400'
-                }
+                className={isRuntime ? toneClasses(null).soft : toneClasses(null).soft}
               >
                 {isRuntime ? 'Runtime Control' : 'Repository Control'}
               </Badge>
@@ -98,7 +95,7 @@ export function ControlDetailDrawer({
 
         {/* Runtime Assessment Section */}
         {isRuntime && control.runtime ? (
-          <div className="space-y-3 p-4 rounded-lg border bg-card/60">
+          <div className="space-y-3 p-4 rounded-lg border bg-card">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Authoritative Runtime Assessment
@@ -106,7 +103,7 @@ export function ControlDetailDrawer({
               <RuntimeStatusBadge status={control.runtime.status} />
             </div>
 
-            <div className="text-sm p-2.5 rounded bg-muted/30 border border-border/50 text-foreground font-mono text-xs leading-relaxed">
+            <div className="p-2.5 rounded bg-muted/30 border border-border/50 text-foreground font-mono text-xs leading-relaxed">
               {control.runtime.summary}
             </div>
 
@@ -122,11 +119,13 @@ export function ControlDetailDrawer({
                 <span className="font-mono font-medium">
                   {control.runtime.evaluatorVersion ?? 'unknown'}{' '}
                   {control.runtime.isVersionCurrent ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 text-[11px]">
+                    <span className="text-status-ok-deep dark:text-emerald-300 text-2xs">
                       (Current)
                     </span>
                   ) : (
-                    <span className="text-amber-600 dark:text-amber-400 text-[11px]">(Stale)</span>
+                    <span className="text-status-elevated-deep dark:text-amber-300 text-2xs">
+                      (Stale)
+                    </span>
                   )}
                 </span>
               </div>
@@ -147,7 +146,7 @@ export function ControlDetailDrawer({
             </div>
           </div>
         ) : (
-          <div className="space-y-3 p-4 rounded-lg border bg-card/60">
+          <div className="space-y-3 p-4 rounded-lg border bg-card">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Repository Assessment
@@ -164,7 +163,7 @@ export function ControlDetailDrawer({
         )}
 
         {/* Supporting Evidence Section */}
-        <div className="space-y-3 p-4 rounded-lg border bg-card/60">
+        <div className="space-y-3 p-4 rounded-lg border bg-card">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Durable Supporting Evidence
@@ -189,7 +188,7 @@ export function ControlDetailDrawer({
           </div>
 
           {control.evidence.latestDigest && (
-            <div className="text-[11px] font-mono text-muted-foreground bg-muted/40 p-2 rounded border border-border/50 truncate">
+            <div className="text-2xs font-mono text-muted-foreground bg-muted/40 p-2 rounded border border-border/50 truncate">
               Latest SHA-256: {control.evidence.latestDigest}
             </div>
           )}
@@ -204,7 +203,7 @@ export function ControlDetailDrawer({
                 onNavigateToEvidence(control.controlId);
               }}
             >
-              <FileCheck2 className="h-3.5 w-3.5 text-sky-500" />
+              <FileCheck2 className="h-3.5 w-3.5 text-muted-foreground" />
               <span>Inspect {control.evidence.count} Evidence Record(s)</span>
             </Button>
           )}
@@ -244,7 +243,7 @@ export function ControlDetailDrawer({
                       >
                         <Badge
                           variant="secondary"
-                          className="text-[11px] font-mono hover:bg-muted transition-colors"
+                          className="text-2xs font-mono hover:bg-muted transition-colors"
                         >
                           {m.framework}
                         </Badge>
@@ -256,7 +255,7 @@ export function ControlDetailDrawer({
 
                   <p className="text-xs text-foreground font-medium">{m.title}</p>
 
-                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-1">
+                  <div className="flex items-center gap-3 text-2xs text-muted-foreground pt-1">
                     <span>
                       Relation: <strong className="text-foreground">{m.relationship}</strong>
                     </span>
@@ -280,8 +279,8 @@ export function ControlDetailDrawer({
 
         {/* Gaps / Operator Reminders */}
         {control.gaps.length > 0 && (
-          <div className="space-y-2 p-3.5 rounded-lg border border-amber-500/30 bg-amber-500/5">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+          <div className="space-y-2 p-3.5 rounded-lg border border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-status-elevated-deep dark:text-amber-300">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               <span>Operator & Organizational Gaps</span>
             </div>

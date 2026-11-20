@@ -7,7 +7,8 @@ import { SCIM_LIST_SCHEMA, parseScimGroupFilter, serializeScimGroup } from '@/li
 import { authorize, recheck } from '../security/credentials';
 import { groupSchema, pagination, parse, readBody, ScimFailure } from '../protocol/validation';
 import { patchGroup, type GroupDocument } from '../protocol/patch';
-import { json } from '../protocol/http';
+import { json, scimRequestId } from '../protocol/http';
+import { reconcileScimRoles } from './roles';
 import { resolveScimPublicOrigin } from '../protocol/origin';
 import { event } from './events';
 import { reconcileTeam } from './membership';
@@ -165,6 +166,13 @@ export async function groups(request: NextRequest, id?: string) {
         });
       }
       await tx.scimGroup.delete({ where: { id: existing.id } });
+      const roleChanges = await reconcileScimRoles(
+        tx,
+        principal.connectorId,
+        existing.memberships.map(member => member.userId),
+        scimRequestId()
+      );
+      roleChanges.forEach(userId => changedUserIds.add(userId));
       await event(tx, principal, 'group.deleted', existing.id, {
         policy: 'REVOKE_DIRECTORY_GRANTS',
         teams,
@@ -224,6 +232,13 @@ export async function groups(request: NextRequest, id?: string) {
       });
     const nextIds = new Set(ids);
     const affectedIds = [...additions, ...[...previousIds].filter(userId => !nextIds.has(userId))];
+    const roleChanges = await reconcileScimRoles(
+      tx,
+      principal.connectorId,
+      [...new Set([...ids, ...previousIds])],
+      scimRequestId()
+    );
+    roleChanges.forEach(userId => changedUserIds.add(userId));
     for (const binding of existing?.bindings ?? []) {
       const impact = await reconcileTeam(tx, binding.teamId, [], affectedIds);
       impact.changedUserIds.forEach(userId => changedUserIds.add(userId));

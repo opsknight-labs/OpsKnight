@@ -41,7 +41,7 @@ export default function SlackManifestCard({ baseUrl }: { baseUrl: string }) {
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <h4 className="text-sm font-semibold flex items-center gap-2">
-            <FileJson className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <FileJson className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             App Manifest
             <Badge variant="secondary" size="xs">
               Recommended

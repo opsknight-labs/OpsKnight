@@ -1,5 +1,5 @@
-import { RunbookPageSkeleton } from '@/components/runbooks/skeletons';
+import { DashboardPageSkeleton } from '@/components/patterns';
 
 export default function RunbookHealthLoading() {
-  return <RunbookPageSkeleton variant="health" />;
+  return <DashboardPageSkeleton label="Loading automation health" stats={4} />;
 }

@@ -4,8 +4,6 @@ import { useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Incident, Service } from '@prisma/client';
-import { useTimezone } from '@/contexts/TimezoneContext';
-import { formatDateTime } from '@/lib/timezone';
 import CopyButton from '@/components/common/CopyButton';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/shadcn/select';
 import { updateIncidentUrgency, updateIncidentVisibility } from '@/app/(app)/incidents/actions';
@@ -25,6 +23,10 @@ import {
   Pause,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { incidentStatusTone, urgencyTone } from '@/lib/design/status-palette';
+import { toneClasses } from '@/components/patterns/status-tone';
+import SeverityBadge from '@/components/patterns/SeverityBadge';
+import RelativeTime from '@/components/patterns/RelativeTime';
 import EscalationStatusBadge from './EscalationStatusBadge';
 import AssigneeSection from './AssigneeSection';
 import PrioritySelector from './PrioritySelector';
@@ -78,7 +80,6 @@ export default function IncidentHeader({
   canManage,
   routePrefix = '',
 }: IncidentHeaderProps) {
-  const { userTimeZone } = useTimezone();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -99,30 +100,14 @@ export default function IncidentHeader({
   const currentVisibility = incident.visibility || 'PUBLIC';
   const isPrivate = currentVisibility === 'PRIVATE';
 
-  // Status-adaptive card accent
-  const getStatusBorder = () => {
-    switch (incident.status) {
-      case 'OPEN':
-        return 'border-l-4 border-l-rose-500';
-      case 'ACKNOWLEDGED':
-        return 'border-l-4 border-l-amber-500';
-      case 'RESOLVED':
-        return 'border-l-4 border-l-emerald-500';
-      case 'SNOOZED':
-        return 'border-l-4 border-l-indigo-500';
-      case 'SUPPRESSED':
-        return 'border-l-4 border-l-zinc-500';
-      default:
-        return 'border-l-4 border-l-muted-foreground';
-    }
-  };
-
-  const urgencyDot =
-    incident.urgency === 'HIGH'
-      ? 'bg-rose-500 animate-pulse'
-      : incident.urgency === 'MEDIUM'
-        ? 'bg-amber-500'
-        : 'bg-emerald-500';
+  const statusAccent = cn(
+    'border-l-4',
+    toneClasses(incidentStatusTone(incident.status)).borderLeft
+  );
+  const urgencyDot = cn(
+    toneClasses(urgencyTone(incident.urgency)).solid,
+    incident.urgency === 'HIGH' && 'motion-safe:animate-pulse'
+  );
 
   const SELECTOR_BASE_CLASS =
     'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold bg-background border border-border/80 text-foreground shadow-2xs transition-all max-w-full select-none hover:bg-muted/40 hover:border-border';
@@ -135,7 +120,7 @@ export default function IncidentHeader({
     <div
       className={cn(
         'rounded-xl border border-border/80 bg-card shadow-2xs overflow-hidden transition-all text-card-foreground',
-        getStatusBorder()
+        statusAccent
       )}
     >
       {/* Unified 7-cell grid — all metadata in equal rhythm */}
@@ -171,7 +156,7 @@ export default function IncidentHeader({
             >
               <SelectTrigger
                 aria-label={`Urgency: ${incident.urgency}`}
-                className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group"
+                className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring rounded-md [&>svg]:hidden group"
               >
                 <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
                   <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
@@ -180,24 +165,11 @@ export default function IncidentHeader({
                 </div>
               </SelectTrigger>
               <SelectContent align="start" className="min-w-[150px]">
-                <SelectItem value="HIGH" className="cursor-pointer">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-rose-700 dark:text-rose-400">
-                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
-                    <span>HIGH</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="MEDIUM" className="cursor-pointer">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                    <span>MEDIUM</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="LOW" className="cursor-pointer">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                    <span>LOW</span>
-                  </div>
-                </SelectItem>
+                {(['HIGH', 'MEDIUM', 'LOW'] as const).map(value => (
+                  <SelectItem key={value} value={value} className="cursor-pointer">
+                    <SeverityBadge urgency={value} size="xs" />
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           ) : (
@@ -228,7 +200,7 @@ export default function IncidentHeader({
             >
               <SelectTrigger
                 aria-label={`Visibility: ${isPrivate ? 'Private' : 'Public'}`}
-                className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group"
+                className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring rounded-md [&>svg]:hidden group"
               >
                 <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
                   {isPrivate ? (
@@ -443,15 +415,14 @@ export default function IncidentHeader({
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3 text-muted-foreground" />
             <span>
-              Created {formatDateTime(incident.createdAt, userTimeZone, { format: 'relative' })}
+              Created <RelativeTime date={incident.createdAt} />
             </span>
           </div>
           {incident.acknowledgedAt && (
             <div className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
               <CheckCircle2 className="h-3 w-3 text-amber-600 dark:text-amber-400" />
               <span>
-                Ack&apos;d{' '}
-                {formatDateTime(incident.acknowledgedAt, userTimeZone, { format: 'relative' })}
+                Ack&apos;d <RelativeTime date={incident.acknowledgedAt} />
               </span>
             </div>
           )}
@@ -459,7 +430,7 @@ export default function IncidentHeader({
             <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
               <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
               <span>
-                Resolved {formatDateTime(incident.resolvedAt, userTimeZone, { format: 'relative' })}
+                Resolved <RelativeTime date={incident.resolvedAt} />
               </span>
             </div>
           )}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import {
   Dialog,
   DialogContent,
@@ -75,7 +75,6 @@ export default function UserEditModal({
   updateProfile,
 }: UserEditModalProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
 
   const [name, setName] = useState(user.name);
@@ -121,17 +120,14 @@ export default function UserEditModal({
       try {
         const result = await updateProfile(user.id, formData);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
         } else {
-          showToast('User profile updated successfully', 'success');
+          notify.success('User profile updated successfully');
           onClose();
           router.refresh();
         }
       } catch (error) {
-        showToast(
-          error instanceof Error ? error.message : 'Failed to update user profile',
-          'error'
-        );
+        notify.error(error instanceof Error ? error.message : 'Failed to update user profile');
       }
     });
   };
@@ -194,30 +190,10 @@ export default function UserEditModal({
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem
-                    value="ADMIN"
-                    className="text-xs font-medium text-rose-600 dark:text-rose-400"
-                  >
-                    Administrator (Full Access)
-                  </SelectItem>
-                  <SelectItem
-                    value="RESPONDER"
-                    className="text-xs font-medium text-indigo-600 dark:text-indigo-400"
-                  >
-                    Responder (Incident Access)
-                  </SelectItem>
-                  <SelectItem
-                    value="USER"
-                    className="text-xs font-medium text-sky-600 dark:text-sky-400"
-                  >
-                    User (Member View)
-                  </SelectItem>
-                  <SelectItem
-                    value="AUDITOR"
-                    className="text-xs font-medium text-amber-600 dark:text-amber-400"
-                  >
-                    Auditor (Read-Only)
-                  </SelectItem>
+                  <SelectItem value="ADMIN">Administrator (Full Access)</SelectItem>
+                  <SelectItem value="RESPONDER">Responder (Incident Access)</SelectItem>
+                  <SelectItem value="USER">User (Member View)</SelectItem>
+                  <SelectItem value="AUDITOR">Auditor (Read-Only)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -233,7 +209,7 @@ export default function UserEditModal({
                 </SelectTrigger>
                 <SelectContent className="max-h-[200px]">
                   {COMMON_TIMEZONES.map(tz => (
-                    <SelectItem key={tz} value={tz} className="text-xs">
+                    <SelectItem key={tz} value={tz}>
                       {tz}
                     </SelectItem>
                   ))}

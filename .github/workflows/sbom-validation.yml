@@ -1,11 +1,15 @@
 name: SBOM artifact validation
 on:
   push:
-    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 permissions:
   contents: read
+# A newer push to the same PR supersedes the running one; main and scheduled runs finish.
+concurrency:
+  group: sbom-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   validate:
     runs-on: ubuntu-latest

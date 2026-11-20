@@ -30,16 +30,17 @@ const severityBadgeConfig: Record<AttentionRequiredSeverity, { label: string; cl
   {
     HIGH: {
       label: 'High Severity',
-      className: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 font-semibold',
+      className:
+        'border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-semibold',
     },
     MEDIUM: {
       label: 'Medium Severity',
       className:
-        'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium',
+        'border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 font-medium',
     },
     LOW: {
       label: 'Low Severity',
-      className: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-700 dark:text-zinc-400 font-normal',
+      className: 'border-border bg-muted text-ink-600 font-normal',
     },
   };
 
@@ -58,8 +59,8 @@ export function AttentionRequiredList({
 }: AttentionRequiredListProps) {
   if (items.length === 0) {
     return (
-      <Card className="border-emerald-500/30 bg-emerald-500/5">
-        <CardContent className="p-6 flex items-center gap-3 text-emerald-700 dark:text-emerald-400">
+      <Card className="border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15">
+        <CardContent className="p-6 flex items-center gap-3 text-status-ok-deep dark:text-emerald-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <div className="space-y-0.5">
             <h4 className="text-sm font-semibold">No Attention Items Outstanding</h4>
@@ -113,7 +114,7 @@ export function AttentionRequiredList({
             >
               <div className="flex items-start gap-3 min-w-0">
                 <div className="p-1.5 rounded bg-muted shrink-0 mt-0.5">
-                  <Icon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <Icon className="h-4 w-4 text-status-elevated-deep dark:text-amber-300" />
                 </div>
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -125,7 +126,7 @@ export function AttentionRequiredList({
                     </span>
                     <Badge
                       variant="outline"
-                      className={cn('text-[10px] py-0 px-1.5', sevConfig.className)}
+                      className={cn('text-2xs py-0 px-1.5', sevConfig.className)}
                     >
                       {sevConfig.label}
                     </Badge>

@@ -16,23 +16,24 @@ const statusConfig: Record<
   IMPLEMENTED: {
     label: 'Implemented',
     className:
-      'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold',
+      'border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 text-status-ok-deep dark:text-emerald-300 font-semibold',
     icon: CheckCircle2,
   },
   PARTIAL: {
     label: 'Partial',
     className:
-      'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold',
+      'border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 font-semibold',
     icon: TriangleAlert,
   },
   ACTION_REQUIRED: {
     label: 'Action Required',
-    className: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 font-semibold',
+    className:
+      'border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-semibold',
     icon: AlertCircle,
   },
   UNVERIFIED: {
     label: 'Unverified',
-    className: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-700 dark:text-zinc-400 font-semibold',
+    className: 'border-border bg-muted text-ink-600 font-semibold',
     icon: HelpCircle,
   },
   NOT_APPLICABLE: {
@@ -65,7 +66,7 @@ export function RuntimeStatusBadge({ status, className }: RuntimeStatusBadgeProp
   return (
     <Badge
       variant="outline"
-      className={cn('gap-1 text-[11px] py-0.5 px-2', config.className, className)}
+      className={cn('gap-1 text-2xs py-0.5 px-2', config.className, className)}
     >
       <Icon className="h-3 w-3 shrink-0" />
       <span>{config.label}</span>

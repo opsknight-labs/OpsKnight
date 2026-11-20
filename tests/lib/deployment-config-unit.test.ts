@@ -1164,7 +1164,8 @@ describe('deployment configuration invariants', () => {
     );
     const setupUi = read('src/components/runbooks/AgentSetupInstructions.tsx');
     for (const method of ['Compose', 'Docker', 'Podman', 'Swarm', 'Helm', 'Kustomize', 'Linux']) {
-      expect(setupUi).toContain(`>${method}<`);
+      // Deployment methods are DetailTabs items: `'Compose'` tuples or `label: 'Linux'`.
+      expect(setupUi).toMatch(new RegExp(`(?:, |label: )'${method}'`));
     }
     expect(setupUi).toContain('agentSetupCommands');
     const setupCommands = read('src/lib/runbooks/agent-setup-commands.ts');

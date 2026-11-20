@@ -16,6 +16,11 @@ permissions:
   checks: write
   pull-requests: write # Required for results summary comment
 
+# A newer push to the same PR supersedes the running one; main and scheduled runs finish.
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   codeql:
     name: CodeQL

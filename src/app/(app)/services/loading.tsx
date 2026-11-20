@@ -1,5 +1,5 @@
-import PageLoadingSkeleton from '@/components/ui/PageLoadingSkeleton';
+import { ListPageSkeleton } from '@/components/patterns';
 
 export default function ServicesLoading() {
-  return <PageLoadingSkeleton type="list" itemCount={5} />;
+  return <ListPageSkeleton label="Loading services" stats={4} rows={10} columns={6} />;
 }

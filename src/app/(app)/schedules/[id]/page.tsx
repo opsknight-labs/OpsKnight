@@ -52,6 +52,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import { EmptyState } from '@/components/patterns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Calendar, CheckCircle2, Clock3, Info, Layers3, ShieldAlert, Users } from 'lucide-react';
 import { denyResourceAccess, requirePageAccess } from '@/lib/access/server';
@@ -519,13 +520,11 @@ export default async function ScheduleDetailPage({
       )}
 
       {schedule.layers.length === 0 ? (
-        <Card className="border-dashed p-10 text-center">
-          <Layers3 className="mx-auto h-10 w-10 text-muted-foreground" />
-          <h3 className="mt-3 font-semibold">No rotation layers yet</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Add a rotation layer, then assign active responders.
-          </p>
-        </Card>
+        <EmptyState
+          icon={<Layers3 />}
+          title="No rotation layers yet"
+          description="Add a rotation layer, then assign active responders."
+        />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {schedule.layers.map((layer, index) => (

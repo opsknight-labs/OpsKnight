@@ -29,6 +29,7 @@ import type {
   RequirementLifecycle,
 } from '@/lib/compliance/framework-mappings/types';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns';
 
 interface FrameworkRequirementsModalProps {
   readonly frameworkId: ComplianceFramework | null;
@@ -47,22 +48,22 @@ const lifecyclePresentation: Record<
 > = {
   ACTIVE: {
     label: 'Active Requirement',
-    className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    className: toneClasses('ok').soft,
     icon: CheckCircle2,
   },
   FUTURE: {
     label: 'Future Staged',
-    className: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+    className: toneClasses(null).soft,
     icon: Clock,
   },
   SUPERSEDED: {
     label: 'Superseded',
-    className: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
+    className: toneClasses(null).soft,
     icon: CircleDashed,
   },
   REFERENCE_ONLY: {
     label: 'Reference Only',
-    className: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
+    className: toneClasses(null).soft,
     icon: CircleDashed,
   },
 };
@@ -73,23 +74,23 @@ const runtimeStatusPresentation: Record<
 > = {
   IMPLEMENTED: {
     label: 'Implemented',
-    className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    className: toneClasses('ok').soft,
   },
   PARTIAL: {
     label: 'Partial',
-    className: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    className: toneClasses('elevated').soft,
   },
   ACTION_REQUIRED: {
     label: 'Action Required',
-    className: 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    className: toneClasses('critical').soft,
   },
   UNVERIFIED: {
     label: 'Unverified',
-    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-zinc-400',
+    className: toneClasses(null).soft,
   },
   NOT_APPLICABLE: {
     label: 'Not Applicable',
-    className: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
+    className: toneClasses(null).soft,
   },
 };
 
@@ -169,7 +170,7 @@ export function FrameworkRequirementsModal({
                   <Badge variant="outline" className="font-mono text-xs font-semibold">
                     {data.framework.version}
                   </Badge>
-                  <Badge variant="secondary" className="text-[10px] font-mono">
+                  <Badge variant="secondary" className="text-2xs font-mono">
                     {data.framework.frameworkType}
                   </Badge>
                 </div>
@@ -195,7 +196,7 @@ export function FrameworkRequirementsModal({
         </DialogHeader>
 
         {/* Non-certification disclaimer banner */}
-        <div className="rounded-xl border border-border/80 bg-muted/40 p-3.5 text-xs text-muted-foreground space-y-1">
+        <div className="rounded-lg border border-border/80 bg-muted/40 p-3.5 text-xs text-muted-foreground space-y-1">
           <div className="flex items-center gap-2 font-semibold text-foreground">
             <Shield className="h-4 w-4 text-primary shrink-0" />
             <span>Shared Responsibility &amp; Evidence Collection Boundary</span>
@@ -217,7 +218,7 @@ export function FrameworkRequirementsModal({
         {/* Error state */}
         {error && !isLoading && (
           <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 text-rose-500">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300">
               <AlertCircle className="h-5 w-5" />
             </div>
             <p className="text-sm font-medium text-foreground">{error}</p>
@@ -255,7 +256,7 @@ export function FrameworkRequirementsModal({
                 return (
                   <div
                     key={req.id}
-                    className="rounded-xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs"
+                    className="rounded-lg border border-border/80 bg-card p-4 space-y-3 shadow-2xs"
                   >
                     {/* Header */}
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -268,7 +269,7 @@ export function FrameworkRequirementsModal({
                           <Badge
                             variant="outline"
                             className={cn(
-                              'text-[10px] font-semibold flex items-center gap-1',
+                              'text-2xs font-semibold flex items-center gap-1',
                               lifecycleConfig.className
                             )}
                           >
@@ -278,11 +279,11 @@ export function FrameworkRequirementsModal({
                               <span className="font-mono">({req.effectiveFrom})</span>
                             )}
                           </Badge>
-                          <Badge variant="secondary" className="text-[10px] font-mono">
+                          <Badge variant="secondary" className="text-2xs font-mono">
                             {req.applicability}
                           </Badge>
                         </div>
-                        <span className="text-[10px] font-mono text-muted-foreground block">
+                        <span className="text-2xs font-mono text-muted-foreground block">
                           ID: {req.id}
                         </span>
                       </div>
@@ -291,7 +292,7 @@ export function FrameworkRequirementsModal({
                         href={req.sourceUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline shrink-0"
+                        className="inline-flex items-center gap-1 text-2xs text-primary hover:underline shrink-0"
                       >
                         <span>Source</span>
                         <ExternalLink className="h-2.5 w-2.5" />
@@ -304,7 +305,7 @@ export function FrameworkRequirementsModal({
                     {/* Mapped Controls */}
                     {reqView.mappings.length > 0 && (
                       <div className="space-y-2 pt-2 border-t border-border/40">
-                        <span className="text-[11px] font-semibold text-foreground block">
+                        <span className="text-2xs font-semibold text-foreground block">
                           Supporting Technical Controls ({reqView.mappings.length})
                         </span>
                         <div className="grid gap-2">
@@ -332,23 +333,23 @@ export function FrameworkRequirementsModal({
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <Badge
                                       variant="secondary"
-                                      className="text-[10px] py-0 px-1.5 font-normal"
+                                      className="text-2xs py-0 px-1.5 font-normal"
                                     >
                                       {mapped.relationship.replace(/_/g, ' ')}
                                     </Badge>
                                     <Badge
                                       variant="outline"
-                                      className="text-[10px] py-0 px-1.5 font-normal font-mono"
+                                      className="text-2xs py-0 px-1.5 font-normal font-mono"
                                     >
                                       {mapped.evidenceExpectation}
                                     </Badge>
                                     {mapped.evidenceSummary && (
                                       <span
                                         className={cn(
-                                          'inline-flex items-center gap-1 text-[10px] font-medium',
+                                          'inline-flex items-center gap-1 text-2xs font-medium',
                                           mapped.evidenceSummary.integrityValid
-                                            ? 'text-emerald-600 dark:text-emerald-400'
-                                            : 'text-rose-600 dark:text-rose-400'
+                                            ? 'text-status-ok-deep dark:text-emerald-300'
+                                            : 'text-status-critical-deep dark:text-rose-300'
                                         )}
                                       >
                                         <FileCheck2 className="h-3 w-3" />
@@ -360,7 +361,7 @@ export function FrameworkRequirementsModal({
                                     )}
                                   </div>
                                   {mapped.rationale && (
-                                    <p className="text-[11px] text-muted-foreground italic">
+                                    <p className="text-2xs text-muted-foreground italic">
                                       {mapped.rationale}
                                     </p>
                                   )}
@@ -370,7 +371,7 @@ export function FrameworkRequirementsModal({
                                   <Badge
                                     variant="outline"
                                     className={cn(
-                                      'text-[11px] font-semibold shrink-0 self-start sm:self-center',
+                                      'text-2xs font-semibold shrink-0 self-start sm:self-center',
                                       runtimeStatus.className
                                     )}
                                   >
@@ -379,7 +380,7 @@ export function FrameworkRequirementsModal({
                                 ) : (
                                   <Badge
                                     variant="outline"
-                                    className="text-[11px] font-semibold text-ink-500 shrink-0 self-start sm:self-center"
+                                    className="text-2xs font-semibold text-ink-500 shrink-0 self-start sm:self-center"
                                   >
                                     Static Only
                                   </Badge>
@@ -395,12 +396,12 @@ export function FrameworkRequirementsModal({
                     {(operatorMappings.length > 0 || orgMappings.length > 0) && (
                       <div className="pt-2 border-t border-border/40 grid sm:grid-cols-2 gap-2 text-xs">
                         {operatorMappings.length > 0 && (
-                          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5 space-y-1">
-                            <div className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-400 text-[11px]">
+                          <div className="rounded-lg border border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 p-2.5 space-y-1">
+                            <div className="flex items-center gap-1.5 font-semibold text-status-elevated-deep dark:text-amber-300 text-2xs">
                               <UserCheck className="h-3.5 w-3.5 shrink-0" />
                               <span>Operator Responsibility</span>
                             </div>
-                            <ul className="list-disc list-inside text-[11px] text-muted-foreground space-y-0.5">
+                            <ul className="list-disc list-inside text-2xs text-muted-foreground space-y-0.5">
                               {operatorMappings.map(m => (
                                 <li key={m.mappingId}>
                                   <strong className="text-foreground">{m.controlId}:</strong>{' '}
@@ -412,12 +413,12 @@ export function FrameworkRequirementsModal({
                         )}
 
                         {orgMappings.length > 0 && (
-                          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-2.5 space-y-1">
-                            <div className="flex items-center gap-1.5 font-semibold text-blue-700 dark:text-blue-400 text-[11px]">
+                          <div className="rounded-lg border border-status-info-border/25 bg-status-info-soft dark:border-status-info/35 dark:bg-status-info/15 p-2.5 space-y-1">
+                            <div className="flex items-center gap-1.5 font-semibold text-status-info-deep dark:text-blue-300 text-2xs">
                               <Building2 className="h-3.5 w-3.5 shrink-0" />
                               <span>Organizational Responsibility</span>
                             </div>
-                            <ul className="list-disc list-inside text-[11px] text-muted-foreground space-y-0.5">
+                            <ul className="list-disc list-inside text-2xs text-muted-foreground space-y-0.5">
                               {orgMappings.map(m => (
                                 <li key={m.mappingId}>
                                   <strong className="text-foreground">{m.controlId}:</strong>{' '}

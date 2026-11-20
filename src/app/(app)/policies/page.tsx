@@ -8,10 +8,8 @@ import { countOpenInsightsForScopes } from '@/lib/intelligence/ops-insights/view
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { ShieldAlert, Server, Layers, HelpCircle, ArrowRight, Calendar, Users } from 'lucide-react';
+import { ShieldAlert, Server, Layers } from 'lucide-react';
 import PolicyCreateForm from '@/components/policies/PolicyCreateForm';
 import PolicyDirectoryList from '@/components/policies/PolicyDirectoryList';
 import { createPolicyAction } from './actions';
@@ -63,6 +61,8 @@ export default async function PoliciesPage({
     filterConditions.push({ services: { some: {} } });
   } else if (statusFilter === 'unassigned') {
     filterConditions.push({ services: { none: {} } });
+  } else if (statusFilter === 'needs-setup') {
+    filterConditions.push({ steps: { none: {} } });
   }
 
   const where: Prisma.EscalationPolicyWhereInput =
@@ -72,6 +72,7 @@ export default async function PoliciesPage({
     allPoliciesCount,
     inUsePoliciesCount,
     unassignedPoliciesCount,
+    needsSetupPoliciesCount,
     totalStepsCount,
     totalFilteredCount,
     permissions,
@@ -79,6 +80,7 @@ export default async function PoliciesPage({
     prisma.escalationPolicy.count(),
     prisma.escalationPolicy.count({ where: { services: { some: {} } } }),
     prisma.escalationPolicy.count({ where: { services: { none: {} } } }),
+    prisma.escalationPolicy.count({ where: { steps: { none: {} } } }),
     prisma.escalationRule.count(),
     prisma.escalationPolicy.count({ where }),
     getUserPermissions(),
@@ -127,6 +129,7 @@ export default async function PoliciesPage({
     id: p.id,
     name: p.name,
     description: p.description,
+    updatedAt: p.updatedAt,
     stepCount: p.steps.length,
     serviceCount: p.services.length,
     services: p.services,
@@ -191,99 +194,24 @@ export default async function PoliciesPage({
         <PolicyCreateForm action={createPolicyAction} canCreate={canManagePolicies} />
       )}
 
-      {/* Main Grid: Policy Directory & Sidebar Helper */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left 3 Cols: Policy Directory List */}
-        <div className="lg:col-span-3 space-y-4">
-          <PolicyDirectoryList
-            policies={policyDirectoryItems}
-            canManage={canManagePolicies}
-            pagination={{
-              currentPage: pagination.page,
-              totalPages: pagination.totalPages,
-              totalItems: pagination.totalItems,
-              itemsPerPage: pagination.pageSize,
-            }}
-            filterCounts={{
-              total: allPoliciesCount,
-              inUse: inUsePoliciesCount,
-              unassigned: unassignedPoliciesCount,
-            }}
-            currentSearch={searchQuery}
-            currentStatus={statusFilter}
-          />
-        </div>
-
-        {/* Right 1 Col: Quick Links & Documentation */}
-        <div className="space-y-4">
-          {/* Quick Guide */}
-          <Card className="border-ink-200/80 bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <HelpCircle className="h-3.5 w-3.5 text-primary" />
-                Escalation Best Practices
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs text-muted-foreground leading-relaxed">
-              <p>
-                <strong className="text-foreground font-semibold">Tier 1:</strong> Start with
-                on-call schedules or primary on-call responders with a 0m initial delay.
-              </p>
-              <p>
-                <strong className="text-foreground font-semibold">Tier 2:</strong> Escalate to
-                backup engineers or team leads after 5–10 minutes if unacknowledged.
-              </p>
-              <p>
-                <strong className="text-foreground font-semibold">Tier 3:</strong> Route to entire
-                escalation teams or engineering directors after 15–30 minutes for critical outages.
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Quick Navigation Links */}
-          <Card className="border-ink-200/80 bg-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Connected Resources
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Link
-                href="/services"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
-              >
-                <span className="flex items-center gap-2">
-                  <Server className="h-3.5 w-3.5 text-ink-500" />
-                  Services Directory
-                </span>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
-              </Link>
-
-              <Link
-                href="/schedules"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
-              >
-                <span className="flex items-center gap-2">
-                  <Calendar className="h-3.5 w-3.5 text-ink-500" />
-                  On-Call Schedules
-                </span>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
-              </Link>
-
-              <Link
-                href="/teams"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-ink-50 border border-transparent hover:border-ink-200 transition-colors text-xs font-medium text-ink-700"
-              >
-                <span className="flex items-center gap-2">
-                  <Users className="h-3.5 w-3.5 text-ink-500" />
-                  Teams & Members
-                </span>
-                <ArrowRight className="h-3 w-3 text-ink-400" />
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      {/* Policy directory (full width; the old guide rail lives in its header popover) */}
+      <PolicyDirectoryList
+        policies={policyDirectoryItems}
+        pagination={{
+          currentPage: pagination.page,
+          totalPages: pagination.totalPages,
+          totalItems: pagination.totalItems,
+          itemsPerPage: pagination.pageSize,
+        }}
+        filterCounts={{
+          total: allPoliciesCount,
+          inUse: inUsePoliciesCount,
+          unassigned: unassignedPoliciesCount,
+          needsSetup: needsSetupPoliciesCount,
+        }}
+        currentSearch={searchQuery}
+        currentStatus={statusFilter}
+      />
     </div>
   );
 }

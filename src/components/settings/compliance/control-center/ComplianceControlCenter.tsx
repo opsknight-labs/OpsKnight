@@ -11,8 +11,11 @@ import {
   Key,
   GitCompare,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/shadcn/badge';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
+import DetailTabs from '@/components/ui/DetailTabs';
 import { notify } from '@/lib/toast';
 import type { ComplianceControlCenterOverview } from '@/lib/compliance/control-center/types';
 import { ControlCenterOverview } from './ControlCenterOverview';
@@ -39,12 +42,7 @@ interface ComplianceControlCenterProps {
   readonly frameworks: readonly FrameworkCardItem[];
   readonly capabilities: ComplianceCapabilities;
   readonly initialTab?:
-    | 'overview'
-    | 'controls'
-    | 'drift'
-    | 'frameworks'
-    | 'evidence'
-    | 'operations';
+    'overview' | 'controls' | 'drift' | 'frameworks' | 'evidence' | 'operations';
 }
 
 export function ComplianceControlCenter({
@@ -159,68 +157,40 @@ export function ComplianceControlCenter({
 
   return (
     <div className="space-y-6 pb-12 w-full">
-      {/* Canonical DetailHeroBanner */}
-      <DetailHeroBanner
-        tag="Security Posture & Compliance Engine"
+      <SettingsPageHeader
+        eyebrow="Security Posture & Compliance Engine"
         title="Compliance Control Center"
-        subtitle="Continuous runtime control telemetry, integrity-verified evidence, and versioned regulatory mapping."
-        icon={
-          <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
-            <ShieldCheck className="h-7 w-7" />
-          </div>
-        }
+        description="Continuous runtime control telemetry, integrity-verified evidence, and versioned regulatory mapping."
+        icon={ShieldCheck}
         badges={
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
-            >
-              Runtime Implemented: {overviewData.runtime.implemented}/{overviewData.runtime.total}
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Authoritative
-            </Badge>
-          </div>
+          <span className={cn(pageHeaderBadgeClass, 'tabular-nums')}>
+            {`Runtime implemented: ${overviewData.runtime.implemented}/${overviewData.runtime.total}`}
+          </span>
         }
       />
 
-      {/* Primary Navigation Tabs */}
-      <div className="flex items-center gap-1 border-b border-border/80 pb-px overflow-x-auto">
-        {tabs.map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap ${
-                isActive
-                  ? 'border-primary text-foreground bg-card'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
-              }`}
-            >
-              <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span>{tab.label}</span>
-              {tab.badge && (
-                <span
-                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    tab.badgeVariant === 'destructive'
-                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
+      <DetailTabs
+        label="Compliance sections"
+        layout="auto"
+        syncWithUrl={false}
+        activeTab={activeTab}
+        onTabChange={next => setActiveTab(next as typeof activeTab)}
+        tabs={tabs.map(tab => ({
+          id: tab.id,
+          label: tab.label,
+          icon: <tab.icon />,
+          badge: tab.badge ? (
+            <span
+              className={cn(
+                'rounded-full border px-1.5 text-2xs font-semibold tabular-nums',
+                toneClasses(tab.badgeVariant === 'destructive' ? 'critical' : 'neutral').soft
               )}
-            </button>
-          );
-        })}
-      </div>
+            >
+              {tab.badge}
+            </span>
+          ) : undefined,
+        }))}
+      />
 
       {/* Tab Panels */}
       <div>

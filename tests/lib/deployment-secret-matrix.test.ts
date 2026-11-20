@@ -252,7 +252,7 @@ describe('deployment secret matrix', () => {
     expect(pooler.metadata.labels['app.kubernetes.io/component']).toBe('pgbouncer');
     expect(pooler.spec.template.metadata.labels['app.kubernetes.io/component']).toBe('pgbouncer');
     expect(pooler.spec.selector.matchLabels).not.toHaveProperty('app.kubernetes.io/component');
-  });
+  }, 120_000); // spawns helm/kustomize; slow on loaded CI runners
 
   it('keeps Prisma compatibility selectable without changing worker database routing', () => {
     const args = [

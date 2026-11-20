@@ -15,6 +15,7 @@ import { useAuthenticationWorkspace } from './useAuthenticationController';
 import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
 import { providerDefinitions } from '@/lib/auth-control/provider-definitions';
 import ProviderLogo from './ProviderLogo';
+import { toneClasses } from '@/components/patterns';
 
 export default function AuthenticationDraftCoordinator() {
   const {
@@ -60,12 +61,12 @@ export default function AuthenticationDraftCoordinator() {
   return (
     <aside
       aria-label="Shared authentication draft"
-      className={`min-w-0 space-y-3 rounded-2xl border p-4 sm:p-5 shadow-sm transition-all duration-200 mt-6 ${
+      className={`min-w-0 space-y-3 rounded-xl border p-4 sm:p-5 mt-6 ${
         draftDirty
-          ? 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-card dark:from-amber-950/40 dark:via-amber-950/20 dark:to-card ring-1 ring-amber-500/30'
+          ? toneClasses('elevated').soft
           : data.revisions.length > 0
-            ? 'border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-card dark:from-emerald-950/35 dark:via-emerald-950/15 dark:to-card ring-1 ring-emerald-500/20'
-            : 'border-blue-500/40 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-card dark:from-blue-950/35 dark:via-indigo-950/15 dark:to-card ring-1 ring-blue-500/20'
+            ? toneClasses('ok').soft
+            : 'border-border bg-card'
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -73,10 +74,10 @@ export default function AuthenticationDraftCoordinator() {
           <div
             className={`p-2.5 rounded-xl shrink-0 ${
               draftDirty
-                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                ? toneClasses('elevated').soft
                 : data.revisions.length > 0
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+                  ? toneClasses('ok').soft
+                  : toneClasses('neutral').soft
             }`}
           >
             {draftDirty ? (
@@ -107,14 +108,14 @@ export default function AuthenticationDraftCoordinator() {
               {draftDirty ? (
                 <Badge
                   variant="outline"
-                  className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-semibold"
+                  className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300 text-2xs font-semibold"
                 >
                   Not saved
                 </Badge>
               ) : data.revisions.length > 0 ? (
                 <Badge
                   variant="outline"
-                  className="border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold"
+                  className="border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-2xs font-semibold"
                 >
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   Saved
@@ -122,7 +123,7 @@ export default function AuthenticationDraftCoordinator() {
               ) : (
                 <Badge
                   variant="outline"
-                  className="border-blue-500/40 bg-blue-500/15 text-blue-700 dark:text-blue-300 text-[10px] font-semibold"
+                  className="border-blue-500/40 bg-blue-500/15 text-blue-700 dark:text-blue-300 text-2xs font-semibold"
                 >
                   Not saved yet
                 </Badge>

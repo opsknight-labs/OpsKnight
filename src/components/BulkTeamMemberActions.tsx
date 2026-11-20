@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import VirtualList from './ui/VirtualList';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -49,7 +49,6 @@ export default function BulkTeamMemberActions({
   const [searchResults, setSearchResults] = useState<User[]>(availableUsers);
   const [isSearching, setIsSearching] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const { showToast } = useToast();
 
   const [syncedInputs, setSyncedInputs] = useState({ availableUsers, search });
   if (syncedInputs.availableUsers !== availableUsers || syncedInputs.search !== search) {
@@ -74,7 +73,7 @@ export default function BulkTeamMemberActions({
         setHasMore(Boolean(data.hasMore));
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          showToast('Unable to search the user directory', 'error');
+          notify.error('Unable to search the user directory');
         }
       } finally {
         if (!controller.signal.aborted) setIsSearching(false);
@@ -85,7 +84,7 @@ export default function BulkTeamMemberActions({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [search, showToast, teamId]);
+  }, [search, teamId]);
 
   if (!canManageMembers) {
     return null;
@@ -115,12 +114,12 @@ export default function BulkTeamMemberActions({
 
   const handleBulkAdd = () => {
     if (selectedUsers.size === 0) {
-      showToast('Select at least one user', 'error');
+      notify.error('Select at least one user');
       return;
     }
 
     if (!canAssignOwnerAdmin && (role === 'OWNER' || role === 'ADMIN')) {
-      showToast('Only admins can assign OWNER or ADMIN roles', 'error');
+      notify.error('Only admins can assign OWNER or ADMIN roles');
       return;
     }
 
@@ -141,13 +140,10 @@ export default function BulkTeamMemberActions({
       }
 
       if (successCount > 0) {
-        showToast(
-          `Successfully added ${successCount} member${successCount > 1 ? 's' : ''}`,
-          'success'
-        );
+        notify.success(`Successfully added ${successCount} member${successCount > 1 ? 's' : ''}`);
       }
       if (errorCount > 0) {
-        showToast(`Failed to add ${errorCount} member${errorCount > 1 ? 's' : ''}`, 'error');
+        notify.error(`Failed to add ${errorCount} member${errorCount > 1 ? 's' : ''}`);
       }
 
       setSelectedUsers(new Set());
@@ -166,7 +162,7 @@ export default function BulkTeamMemberActions({
         checked={selectedUsers.has(user.id)}
         onCheckedChange={() => handleToggleUser(user.id)}
       />
-      <UserAvatar userId={user.id} name={user.name} gender={user.gender} size="sm" />
+      <UserAvatar userId={user.id} name={user.name} gender={user.gender} size="sm" aria-hidden />
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{user.name}</div>
         <div className="text-xs text-muted-foreground truncate">{user.email}</div>

@@ -1,12 +1,12 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { assertAdmin } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Badge } from '@/components/ui/shadcn/badge';
-import { cn } from '@/lib/utils';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { IntegrationStatusBadge } from '@/components/settings/integrations/IntegrationStatus';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { Button } from '@/components/ui/shadcn/button';
 import { Globe, Layers, Users, Megaphone, Key, ExternalLink } from 'lucide-react';
 import StatusPageWorkspace from '@/components/status-page/StatusPageWorkspace';
 import { getStatusPageSnapshot, buildStatusPageSnapshot } from '@/lib/status-pages/snapshot';
@@ -93,66 +93,38 @@ export default async function StatusPageWorkspacePage({
   const subscriberCount = statusPage._count.subscriptions;
 
   return (
-    <div className="space-y-5">
-      <DetailHeroBanner
-        tag="Status Page Configuration"
+    <div className="space-y-6">
+      <SettingsPageHeader
         title={statusPage.name}
-        subtitle={
+        trail={[{ label: statusPage.name }]}
+        description={
           statusPage.customDomain || statusPage.subdomain
             ? `${statusPage.customDomain || `${statusPage.subdomain}.opsknight.com`} · ${publicHref}`
-            : `Independent public status page surface · ${publicHref}`
+            : `Public URL ${publicHref}`
         }
-        icon={
-          <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
-            <Globe className="h-8 w-8" />
-          </div>
-        }
+        icon={Globe}
         badges={
           <>
-            {statusPage.isDefault && (
-              <Badge
-                variant="outline"
-                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-[10px] font-bold uppercase tracking-wider"
-              >
-                Default Routing
-              </Badge>
-            )}
-            <Badge
-              variant="outline"
-              className={cn(
-                'text-xs font-semibold',
-                statusPage.enabled
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                  : 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30'
-              )}
-            >
-              <span
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full inline-block mr-1.5',
-                  statusPage.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-400'
-                )}
-              />
-              {statusPage.enabled ? 'Enabled' : 'Draft / Disabled'}
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-xs font-medium"
-            >
-              {statusPage.requireAuth ? 'Restricted (Auth Required)' : 'Public Access'}
-            </Badge>
+            <IntegrationStatusBadge
+              onDark
+              state={statusPage.enabled ? 'connected' : 'not_connected'}
+              label={statusPage.enabled ? 'Published' : 'Draft'}
+            />
+            {statusPage.isDefault && <span className={pageHeaderBadgeClass}>Default page</span>}
+            <span className={pageHeaderBadgeClass}>
+              {statusPage.requireAuth ? 'Sign-in required' : 'Public'}
+            </span>
           </>
         }
-        actions={
+        primaryAction={
           statusPage.enabled && !statusPage.requireAuth ? (
-            <Link
-              href={publicHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white text-zinc-900 hover:bg-white/90 transition-colors shadow-xs"
-            >
-              <span>Open live page</span>
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
+            <Button asChild size="sm" className="gap-2">
+              <a href={publicHref} target="_blank" rel="noopener noreferrer">
+                Open live page
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only">(opens in a new tab)</span>
+              </a>
+            </Button>
           ) : undefined
         }
         stats={[
@@ -182,7 +154,7 @@ export default async function StatusPageWorkspacePage({
           },
         ]}
       />
-      <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
         <StatusPageWorkspace
           key={statusPage.id}
           statusPage={formattedStatusPage}

@@ -116,7 +116,7 @@ const liveSetSelect = {
     },
   },
   team: { select: { id: true, name: true } },
-  assignee: { select: { id: true, name: true, email: true } },
+  assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
 } satisfies Prisma.IncidentSelect;
 
 const liveDetailSelect = {
@@ -310,7 +310,12 @@ function toSetRow(row: LiveRow, sensitive: boolean, counts?: RowCounts): LiveSet
     },
     team: owner ? { id: owner.id, name: owner.name } : null,
     assignee: visible.assignee
-      ? { id: visible.assignee.id, name: visible.assignee.name || visible.assignee.email }
+      ? {
+          id: visible.assignee.id,
+          name: visible.assignee.name || visible.assignee.email,
+          avatarUrl: visible.assignee.avatarUrl,
+          gender: visible.assignee.gender,
+        }
       : null,
   };
 }
@@ -686,6 +691,23 @@ function deriveCoverage(
     gaps: schedules.filter(schedule => !covered.has(schedule.id)),
     scheduleCount: schedules.length,
   };
+}
+
+/**
+ * Schedules in the actor's read scope with nobody on call, for the status bar. Same cached loaders
+ * (`live-oncall:` / `live-schedules:` keys) and `deriveCoverage` as the dashboard, so the answer and
+ * the cache entries are shared. Returns null when either read fails, so callers hide the signal.
+ */
+export async function getCoverageGapSummary(
+  actor: AuthorizationActor
+): Promise<{ count: number; first: { id: string; name: string } | null } | null> {
+  const [onCall, schedules] = await Promise.all([
+    loadOnCall(actor).catch(() => null),
+    loadSchedules(actor).catch(() => null),
+  ]);
+  if (!onCall || !schedules) return null;
+  const { gaps } = deriveCoverage(actor.id, onCall.data, schedules.data);
+  return { count: gaps.length, first: gaps[0] ?? null };
 }
 
 /**
