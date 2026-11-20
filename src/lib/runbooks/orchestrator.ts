@@ -259,6 +259,10 @@ async function prepareRunbookExecution(
         throw new RunbookDefinitionError(
           'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
         );
+      // Lock order: rule rate lock, then the incident row. A storm queues on the rule without holding
+      // incident rows that ingestion and responders need.
+      if (input.bindingId)
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-binding-rate:${input.bindingId}`}))`;
       const incidentLock = await lockOpenIncidentForAutomation(tx, input.incidentId);
       if (!incidentLock.open) throw new RunbookDefinitionError(incidentLock.reason);
     }
@@ -665,8 +669,7 @@ async function prepareRunbookExecution(
           'TRIGGER_ALREADY_HANDLED: this incident already started an automatic execution for the binding.'
         );
       if (mode === 'AUTOMATIC' && binding) {
-        // Serialized per rule so concurrent incidents cannot both take the last slot.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-binding-rate:${binding.id}`}))`;
+        // Serialized per rule (rate lock taken first, above) so concurrent incidents cannot both take the last slot.
         const recentRuns = await tx.runbookExecution.count({
           where: {
             serviceId: binding.serviceId,
