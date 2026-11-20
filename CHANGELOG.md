@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-External-secrets support is an **implementation candidate, not certified support**. PR #931 remains draft. Live legacy Kubernetes startup, CSI synchronization/bootstrap and failure recovery, AWS/Azure workload identity, rotation (including decryption of stored data), and OpenShift arbitrary-UID/SCC/file-readability results are explicit merge and release blockers. Source/rendering tests and local filesystem probes do not clear these gates.
+## [2.2.0] - 2026-11-20
+
+The headline of 2.2.0 is the **AI assistant (MCP) server**. Workflow automation in this release is per-service automation rules (Services → Automations); an organisation-wide trigger-and-steps workflow builder and alert correlation (AIOps) are planned for the next release.
+
+Optional external-secrets (Secrets Store CSI) support is included but **not certified**: live Kubernetes CSI synchronization and recovery, AWS/Azure workload identity, rotation and OpenShift results are still pending, so validate it in your own environment before production use.
 
 ### Added
 
@@ -50,8 +54,27 @@ External-secrets support is an **implementation candidate, not certified support
 
 ### Fixed
 
+- **Deep-audit bug sweep (#986): 194 user-impacting fixes**, including all 13 critical findings. Integration keys created in the UI now authenticate (the service page showed the encrypted key, so every provider rejected it, while `/api/events` accepted the ciphertext). Escalation pages sent more than 30 minutes into an incident are no longer silently expired. Full user rows (including password hashes) are no longer sent to the browser on incident and escalation-policy pages. Current New Relic and Sentry payload formats are parsed instead of ignored with a 202. Okta's standard SCIM create is accepted. A late or repeated recovery after a manual resolve stays with the closed incident instead of pre-resolving the next outage unpaged. Plus fixes across 20+ provider parsers, Slack and Microsoft Teams delivery, Jira, outbound webhooks, schedules and overrides, notifications, team and user administration, postmortems, analytics, status pages, search authorization and the mobile app.
+- The account-wide failed sign-in limit now reserves each attempt atomically before the password check, so parallel attempts across replicas cannot exceed it.
+- MCP: approving or rejecting a change or runbook run keeps the "You approved this change." confirmation on screen instead of losing it when the page refreshes (#991).
+- Security: Next.js upgraded to 16.4.6 for GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8, GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj and GHSA-vvgp-ww4w-46vf (#990).
 - The administrator who turned on SSO appeared as "not linked to the current provider".
 - The SSO button's accessible name now matches its visible text.
+
+### Upgrade notes
+
+- Two additive migrations run on upgrade. Existing integrations keep accepting the routing key value the old UI displayed (`Integration.legacyStoredKeyAccepted`), so live alerting does not break; keys created or rotated afterwards never accept the stored ciphertext.
+- Outgoing service webhooks require HTTPS by default, checked when saved and when sent. An administrator can allow `http://` in **System Settings → Application URL → Outgoing webhooks**; installs that already have `http://` service webhooks get this switch turned on automatically. Private and internal network targets stay blocked.
+- A team with open incidents or escalation steps can no longer be deleted.
+- A snooze without an end time now ends after 60 minutes instead of lasting forever.
+- API v2 service updates are limited to the operator's own teams; administrators keep global access.
+- Incident `PUBLIC`/`PRIVATE` visibility controls the status page only; Slack and Microsoft Teams war rooms are unchanged.
+
+### Known limitations
+
+- Next.js 16.4.5 and later drop a route handler's `Content-Length` header (vercel/next.js#101854). Audit, report and dashboard export downloads complete and remain verifiable through `X-Content-SHA256`, but browsers show no size or progress until a Next.js release includes the upstream fix.
+- The service automation browser certification suite (`automation-validation.yml`) has failing tests that predate this release; the automation unit and integration tests pass.
+- High-throughput event ingestion is not certified; see `plans/event-ingestion/certification.md`.
 
 ### Removed
 
