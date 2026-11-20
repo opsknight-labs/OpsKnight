@@ -1,7 +1,5 @@
 name: SCIM identity lifecycle certification
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, labeled]

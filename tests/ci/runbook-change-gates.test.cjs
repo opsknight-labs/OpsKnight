@@ -91,6 +91,16 @@ test('push checks its whole commit range; PR uses the base merge point', () => {
     }
   );
 });
+test('a main-heavy batch diffs from the base it was given to the dispatched commit', () => {
+  process.env.GITHUB_SHA = 'b'.repeat(40);
+  assert.deepEqual(
+    changedPaths('workflow_dispatch', { inputs: { base_sha: 'a'.repeat(40) } }, args => {
+      assert.deepEqual(args.slice(-3), ['a'.repeat(40), 'b'.repeat(40), '--']);
+      return 'src/lib/runbooks/a.ts\0';
+    }),
+    ['src/lib/runbooks/a.ts']
+  );
+});
 test('manual, new branches and unavailable history fail open to full validation', () => {
   assert.equal(changedPaths('workflow_dispatch', {}), null);
   assert.equal(changedPaths('push', { before: '0'.repeat(40), after: 'b'.repeat(40) }), null);

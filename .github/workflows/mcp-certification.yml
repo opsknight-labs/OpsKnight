@@ -3,9 +3,12 @@ name: Enterprise MCP PR validation
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Diff against this commit to pick affected checks (set by main-heavy.yml); empty runs everything
+        type: string
+        required: false
 permissions:
   contents: read
 concurrency:
@@ -24,11 +27,12 @@ jobs:
           fetch-depth: 2
       - id: detect
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base_sha }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "push" ]; then
+          # Manual runs validate everything unless main-heavy.yml passed the batch base.
+          if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "push" ] && [ -z "$BASE_SHA" ]; then
             echo "mcp=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
