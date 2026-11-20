@@ -7,7 +7,11 @@ import { mcpErrorPage } from '@/lib/mcp/auth/friendly-error';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import { MCP_DOCS_LINKS } from '@/lib/mcp/docs-links';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => '/settings/integrations/mcp',
+  useSearchParams: () => new URLSearchParams(),
+}));
 afterEach(cleanup);
 
 const docsHrefs = () =>

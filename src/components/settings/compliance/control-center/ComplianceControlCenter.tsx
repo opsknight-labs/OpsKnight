@@ -14,6 +14,8 @@ import {
 import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
+import DetailTabs from '@/components/ui/DetailTabs';
 import { notify } from '@/lib/toast';
 import type { ComplianceControlCenterOverview } from '@/lib/compliance/control-center/types';
 import { ControlCenterOverview } from './ControlCenterOverview';
@@ -167,40 +169,28 @@ export function ComplianceControlCenter({
         }
       />
 
-      {/* Primary Navigation Tabs */}
-      <div className="flex items-center gap-1 border-b border-border/80 pb-px overflow-x-auto">
-        {tabs.map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap ${
-                isActive
-                  ? 'border-primary text-foreground bg-card'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
-              }`}
-            >
-              <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span>{tab.label}</span>
-              {tab.badge && (
-                <span
-                  className={`text-2xs font-mono px-1.5 py-0.2 rounded-full ${
-                    tab.badgeVariant === 'destructive'
-                      ? 'border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-bold'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
+      <DetailTabs
+        label="Compliance sections"
+        layout="auto"
+        syncWithUrl={false}
+        activeTab={activeTab}
+        onTabChange={next => setActiveTab(next as typeof activeTab)}
+        tabs={tabs.map(tab => ({
+          id: tab.id,
+          label: tab.label,
+          icon: <tab.icon />,
+          badge: tab.badge ? (
+            <span
+              className={cn(
+                'rounded-full border px-1.5 text-2xs font-semibold tabular-nums',
+                toneClasses(tab.badgeVariant === 'destructive' ? 'critical' : 'neutral').soft
               )}
-            </button>
-          );
-        })}
-      </div>
+            >
+              {tab.badge}
+            </span>
+          ) : undefined,
+        }))}
+      />
 
       {/* Tab Panels */}
       <div>
