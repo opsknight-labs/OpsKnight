@@ -13,7 +13,14 @@ const FRESH_TTL_MS = 30_000;
 const STALE_TTL_MS = 5 * 60_000;
 const MAX_ENTRIES = 500;
 
-type Entry = { value: unknown; generation: string | null; freshUntil: number; staleUntil: number };
+type Entry = {
+  value: unknown;
+  generation: string | null;
+  /** When the value was computed (ms epoch). */
+  computedAt: number;
+  freshUntil: number;
+  staleUntil: number;
+};
 
 const cache = new Map<string, Entry>();
 const inFlight = new Map<string, Promise<Entry>>();
@@ -29,7 +36,7 @@ function refresh(key: string, compute: () => Promise<unknown>): Promise<Entry> {
   const request = Promise.all([compute(), getRealtimeChangeGeneration().catch(() => null)])
     .then(([value, generation]) => {
       const now = Date.now();
-      const entry = { value, generation, freshUntil: now + FRESH_TTL_MS, staleUntil: now + STALE_TTL_MS };
+      const entry = { value, generation, computedAt: now, freshUntil: now + FRESH_TTL_MS, staleUntil: now + STALE_TTL_MS };
       cache.delete(key);
       cache.set(key, entry);
       return entry;
@@ -39,20 +46,37 @@ function refresh(key: string, compute: () => Promise<unknown>): Promise<Entry> {
   return request;
 }
 
-export async function cached<T>(key: string, compute: () => Promise<T>): Promise<T> {
+export type Cached<T> = { value: T; asOf: Date };
+
+/** Like `cached`, plus when the returned value was computed. */
+export async function cachedWithTime<T>(key: string, compute: () => Promise<T>): Promise<Cached<T>> {
   const now = Date.now();
   prune(now);
-  const entry = cache.get(key);
+  let entry = cache.get(key);
   if (entry) {
     const generation = await getRealtimeChangeGeneration().catch(() => null);
     const changed = Boolean(generation && entry.generation && generation !== entry.generation);
-    if (entry.freshUntil > now && !changed) return entry.value as T;
-    if (entry.staleUntil > now && !changed) {
-      void refresh(key, compute).catch(() => undefined);
-      return entry.value as T;
+    if (changed || entry.staleUntil <= now) entry = undefined;
+    else if (entry.freshUntil <= now) void refresh(key, compute).catch(() => undefined);
+  }
+  entry ??= await refresh(key, compute);
+  return { value: entry.value as T, asOf: new Date(entry.computedAt) };
+}
+
+export async function cached<T>(key: string, compute: () => Promise<T>): Promise<T> {
+  return (await cachedWithTime(key, compute)).value;
+}
+
+/** Drops every entry whose key contains `fragment`; the next read recomputes. */
+export function invalidateCached(fragment: string): number {
+  let dropped = 0;
+  for (const key of cache.keys()) {
+    if (key.includes(fragment)) {
+      cache.delete(key);
+      dropped += 1;
     }
   }
-  return (await refresh(key, compute)).value as T;
+  return dropped;
 }
 
 export function resetAnalyticsCacheForTests() {

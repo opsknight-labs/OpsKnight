@@ -9,6 +9,7 @@ import type { MetricUnit } from '@/lib/analytics/definitions';
 import { cn } from '@/lib/utils';
 import { describeDelta, formatMetric } from './format';
 import DeltaBadge from './DeltaBadge';
+import IncidentDrillSheet from './IncidentDrillSheet';
 
 type Column = {
   key: keyof ServiceRow | 'alertsPerIncident';
@@ -66,6 +67,19 @@ export default function ServicesTable({ rows, compare }: { rows: ServiceRow[]; c
 
   const toggleSort = (key: Column['key']) =>
     setSort(current => ({ key, desc: current.key === key ? !current.desc : true }));
+
+  // The count opens the incidents behind it; the name link filters the page instead.
+  const drill = (row: ServiceRow, className?: string) => (
+    <IncidentDrillSheet
+      drill="all"
+      serviceId={row.id}
+      title={`Incidents on ${row.name}`}
+      label={`Show ${row.incidents} incidents on ${row.name}`}
+      className={cn('tabular-nums underline decoration-dotted underline-offset-4', className)}
+    >
+      {formatMetric(row.incidents, 'count')}
+    </IncidentDrillSheet>
+  );
 
   const delta = (row: ServiceRow) =>
     compare ? describeDelta(row.incidents, row.previousIncidents, 'count', 'down') : null;
@@ -128,7 +142,7 @@ export default function ServicesTable({ rows, compare }: { rows: ServiceRow[]; c
                   <td key={column.key} className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
                     {column.key === 'incidents' ? (
                       <span className="inline-flex items-center justify-end gap-2">
-                        {formatMetric(row.incidents, 'count')}
+                        {drill(row)}
                         <DeltaBadge delta={delta(row)} compact />
                       </span>
                     ) : (
@@ -155,7 +169,7 @@ export default function ServicesTable({ rows, compare }: { rows: ServiceRow[]; c
                 {row.name}
               </Link>
               <span className="inline-flex shrink-0 items-center gap-2 text-sm tabular-nums">
-                {formatMetric(row.incidents, 'count')}
+                {drill(row, 'inline-flex min-h-11 min-w-11 items-center justify-end')}
                 <DeltaBadge delta={delta(row)} compact />
               </span>
             </div>

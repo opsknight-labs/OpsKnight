@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { BarChart3, Download } from 'lucide-react';
 import AnalyticsFilters from '@/components/analytics/AnalyticsFilters';
+import AnalyticsFreshness from '@/components/analytics/AnalyticsFreshness';
 import { SectionSkeleton } from '@/components/analytics/SectionCard';
 import {
   FollowThroughSection,
@@ -120,6 +121,9 @@ export default async function AnalyticsPage({
         users={users.map(u => ({ id: u.id, name: u.name || u.email }))}
         priorities={PRIORITIES}
       />
+      <Suspense key={`fresh-${key}`} fallback={<div className="h-11 sm:h-5" aria-hidden />}>
+        <AnalyticsFreshness context={context} />
+      </Suspense>
 
       {accessContext.mode !== 'GLOBAL' && (
         <InlineNotice tone={accessContext.mode === 'NONE' ? 'warning' : 'info'}>

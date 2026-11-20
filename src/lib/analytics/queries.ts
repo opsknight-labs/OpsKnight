@@ -25,7 +25,7 @@ const n = (value: unknown) => Number(value ?? 0);
 // The correlated SLA-pause subqueries inflate cost estimates past the JIT threshold, and
 // Postgres then spends seconds compiling a query that runs in milliseconds. Turn JIT
 // off for analytics statements only (SET LOCAL ends with the transaction).
-async function run<T>(query: Prisma.Sql): Promise<T> {
+export async function run<T>(query: Prisma.Sql): Promise<T> {
   const [, rows] = await prisma.$transaction([
     prisma.$executeRaw`SET LOCAL jit = off`,
     prisma.$queryRaw<T>(query),

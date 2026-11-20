@@ -13,10 +13,12 @@ import {
   type AnalyticsSectionKey,
   type MetricId,
 } from '@/lib/analytics';
+import type { DrillKind } from '@/lib/analytics/drilldown';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import ChartFrame from './ChartFrame';
 import DeltaBadge from './DeltaBadge';
+import IncidentDrillSheet from './IncidentDrillSheet';
 import { describeDelta, formatBucket, formatDuration, formatMetric } from './format';
 import { DurationChart, VolumeChart } from './LazyTrendCharts';
 import MetricInfo from './MetricInfo';
@@ -62,15 +64,23 @@ const isFiltered = (context: AnalyticsContext) => {
 
 // ------------------------------------------------------------------ KPIs
 
-const KPI_TILES: Array<{ id: MetricId; secondary?: MetricId; href?: string }> = [
-  { id: 'incidents' },
+const KPI_TILES: Array<{
+  id: MetricId;
+  secondary?: MetricId;
+  href?: string;
+  drill?: { kind: DrillKind; title: string };
+}> = [
+  { id: 'incidents', drill: { kind: 'all', title: 'Incidents in this period' } },
   { id: 'openNow', href: '/incidents?filter=all_open' },
   { id: 'mttaP50', secondary: 'mttaP90' },
   { id: 'mttrP50', secondary: 'mttrP90' },
-  { id: 'ackSla' },
-  { id: 'resolveSla' },
-  { id: 'escalationRate' },
-  { id: 'afterHoursRate' },
+  { id: 'ackSla', drill: { kind: 'ackBreached', title: 'Incidents that breached the ack SLA' } },
+  {
+    id: 'resolveSla',
+    drill: { kind: 'resolveBreached', title: 'Incidents that breached the resolve SLA' },
+  },
+  { id: 'escalationRate', drill: { kind: 'escalated', title: 'Escalated incidents' } },
+  { id: 'afterHoursRate', drill: { kind: 'afterHours', title: 'Incidents created after hours' } },
 ];
 
 export async function KpiSection({ context }: { context: AnalyticsContext }) {
@@ -127,12 +137,16 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
             <>
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                 <span className="truncate">{definition.label}</span>
-                <MetricInfo metrics={tile.secondary ? [tile.id, tile.secondary] : [tile.id]} />
+                {/* Above the drill overlay so the info popover stays clickable. */}
+                <span className="relative z-10 inline-flex">
+                  <MetricInfo metrics={tile.secondary ? [tile.id, tile.secondary] : [tile.id]} />
+                </span>
               </div>
               <p
                 className={cn(
                   'mt-1 font-display text-2xl font-semibold tabular-nums sm:text-3xl',
-                  value === null && 'text-muted-foreground'
+                  value === null && 'text-muted-foreground',
+                  tile.drill && 'decoration-dotted underline-offset-4 group-hover:underline'
                 )}
               >
                 {formatMetric(value, definition.unit)}
@@ -149,7 +163,21 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
             </>
           );
           return (
-            <li key={tile.id} className="min-w-0 rounded-lg border bg-card p-3 shadow-sm sm:p-4">
+            <li
+              key={tile.id}
+              className={cn(
+                'min-w-0 rounded-lg border bg-card p-3 shadow-sm sm:p-4',
+                tile.drill && 'group relative'
+              )}
+            >
+              {tile.drill && (
+                <IncidentDrillSheet
+                  drill={tile.drill.kind}
+                  title={tile.drill.title}
+                  label={`${definition.label}: show ${tile.drill.title.toLowerCase()}`}
+                  className="absolute inset-0 rounded-lg"
+                />
+              )}
               {tile.href ? (
                 <Link
                   href={tile.href}

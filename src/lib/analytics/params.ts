@@ -162,3 +162,6 @@ export function hasActiveAnalyticsFilters(params: AnalyticsParams): boolean {
       params.assignee
   );
 }
+
+/** The id shape every analytics filter accepts; reuse it to validate other client ids. */
+export { id as analyticsIdSchema };

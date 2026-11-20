@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getRetentionPolicy } from '@/lib/retention-policy';
-import { cached } from './cache';
+import { cachedWithTime, invalidateCached, type Cached } from './cache';
 import { analyticsParamsKey, type AnalyticsParams } from './params';
 import {
   queryFollowThrough,
@@ -59,18 +59,35 @@ export async function createAnalyticsContext(
     params,
     scope,
     window,
-    cacheKey: `${scope.key}|${analyticsParamsKey(params)}|${window.timeZone}`,
+    cacheKey: `${filterCacheKey(scope, params)}${window.timeZone}`,
   };
 }
 
+// `|scope|filters|` identifies one actor's view of one filter set, in any timezone.
+const filterCacheKey = (scope: AnalyticsScope, params: AnalyticsParams) =>
+  `|${scope.key}|${analyticsParamsKey(params)}|`;
+
 /** The only way UI and export read analytics: scoped, cached, one section at a time. */
-export function getAnalyticsSection<K extends AnalyticsSectionKey>(
+export async function getAnalyticsSection<K extends AnalyticsSectionKey>(
   context: AnalyticsContext,
   section: K
 ): Promise<AnalyticsSectionData<K>> {
+  return (await getAnalyticsSectionWithTime(context, section)).value;
+}
+
+/** Same as getAnalyticsSection, plus `asOf`: when the numbers were computed. */
+export function getAnalyticsSectionWithTime<K extends AnalyticsSectionKey>(
+  context: AnalyticsContext,
+  section: K
+): Promise<Cached<AnalyticsSectionData<K>>> {
   const query = SECTIONS[section] as (
     scope: AnalyticsScope,
     window: AnalyticsWindow
   ) => Promise<AnalyticsSectionData<K>>;
-  return cached(`${section}|${context.cacheKey}`, () => query(context.scope, context.window));
+  return cachedWithTime(`${section}${context.cacheKey}`, () => query(context.scope, context.window));
+}
+
+/** Forces fresh numbers for this actor and filter set on the next read. */
+export function invalidateAnalyticsCache(actor: AuthorizationActor, params: AnalyticsParams): number {
+  return invalidateCached(filterCacheKey(buildAnalyticsScope(actor, params), params));
 }
