@@ -17,10 +17,10 @@ verification:
 
 # Integration tasks
 
-Start with the provider page in the [integration catalog](../../../v2.1.0/integrations/README.md).
-After saving the integration, [send a test event](../../../v2.1.0/guides/integrations/send-test-event.md)
+Start with the provider page in the [integration catalog](../../integrations/README.md).
+After saving the integration, [send a test event](./send-test-event.md)
 and verify service mapping, deduplication, urgency, and recovery behavior. If the request is
-rejected, use [integration troubleshooting](../../../v2.1.0/troubleshooting/integrations/README.md).
+rejected, use [integration troubleshooting](../../troubleshooting/integrations/README.md).
 
 ## Where the copied URL comes from
 
@@ -41,4 +41,4 @@ Events API v2 integrations always post to `<Application URL>/api/events`; other 
 > (or `NEXTAUTH_URL`) only, so they could disagree with **Settings → System → App URL**. If you
 > copied an integration URL in 2.1.0 and the two values differ, check the hostname configured in
 > the provider. It still works only while that host is an allowed application host (see
-> [Application URL and host routing](../../../v2.1.0/operate/deploy/application-url-and-host-routing.md)).
+> [Application URL and host routing](../../operate/deploy/application-url-and-host-routing.md)).
