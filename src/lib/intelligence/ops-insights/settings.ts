@@ -19,6 +19,8 @@ const switchesSchema = z
     opsInsightsPostmortemsEnabled: z.boolean(),
     opsInsightsRunbooksEnabled: z.boolean(),
     opsInsightsNotificationsEnabled: z.boolean(),
+    // Optional: callers written before this area existed keep the stored value.
+    opsInsightsIntelligenceEnabled: z.boolean().optional(),
     runbookFixWindowMinutes: z
       .number()
       .int()

@@ -12,7 +12,12 @@ import {
   type RunbookExample,
 } from '@/lib/intelligence/learning/runbook-weights';
 import { rankRunbooks, scoreRunbook } from '@/lib/intelligence/recommendations/wilson';
-import { coordinateDescent, hasMinimumSupport } from '@/lib/intelligence/learning/bounded-fit';
+import {
+  coordinateDescent,
+  hasMinimumSupport,
+  IMPLICIT_LABEL_WEIGHT,
+  logLoss,
+} from '@/lib/intelligence/learning/bounded-fit';
 
 const example = (overrides: Partial<RunbookExample>): RunbookExample => ({
   succeeded: 0,
@@ -159,6 +164,41 @@ describe('runbook ranking weights', () => {
       { ...evidence, helpful: false, source: 'OUTCOME' },
       { ...evidence, helpful: true, source: 'FEEDBACK' },
     ]);
+  });
+
+  it('adds implicit postmortem labels at lower weight, below stated verdicts and outcomes', () => {
+    const evidence = { succeeded: 3, eligible: 4, bound: true };
+    const merged = mergeRunbookLabels(
+      [{ findingId: 'f1', incidentId: 'i1', runbookId: 'r1', evidence, helpful: false }],
+      [],
+      [
+        { findingId: 'f1', incidentId: 'i1', runbookId: 'r1', evidence, helpful: true },
+        { findingId: 'f2', incidentId: 'i2', runbookId: 'r1', evidence, helpful: true },
+      ]
+    );
+    expect(merged).toEqual([
+      { ...evidence, helpful: false, source: 'FEEDBACK' },
+      { ...evidence, helpful: true, source: 'IMPLICIT', weight: IMPLICIT_LABEL_WEIGHT },
+    ]);
+  });
+
+  it('weights implicit rows in the loss and the support guard', () => {
+    const predict = () => 0.8;
+    // One stated miss (weight 1) and one implicit hit (weight 0.5).
+    const loss = logLoss(
+      [{ helpful: false }, { helpful: true, weight: IMPLICIT_LABEL_WEIGHT }],
+      null,
+      predict
+    );
+    expect(loss).toBeCloseTo((-Math.log(0.2) - 0.5 * Math.log(0.8)) / 1.5, 6);
+    const implicitOnly = Array.from({ length: 40 }, (_, i) => ({
+      helpful: i % 2 === 0,
+      weight: IMPLICIT_LABEL_WEIGHT,
+    }));
+    expect(hasMinimumSupport(implicitOnly, { rows: 40, perVerdict: 8 })).toBe(false);
+    expect(hasMinimumSupport([...implicitOnly, ...implicitOnly], { rows: 40, perVerdict: 8 })).toBe(
+      true
+    );
   });
 
   it('coordinate descent only keeps moves that lower the loss and respects bounds', () => {

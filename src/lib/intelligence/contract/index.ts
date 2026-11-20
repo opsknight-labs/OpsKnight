@@ -58,6 +58,7 @@ export const INTELLIGENCE_SETTINGS_DEFAULTS = {
   opsInsightsPostmortemsEnabled: false,
   opsInsightsRunbooksEnabled: false,
   opsInsightsNotificationsEnabled: false,
+  opsInsightsIntelligenceEnabled: false,
   runbookFixWindowMinutes: 120,
   opsHelpersEnabled: false,
   automationIntelligenceFieldsEnabled: false,
@@ -93,6 +94,7 @@ export const intelligenceSettingsInputSchema = z
     opsInsightsPostmortemsEnabled: z.boolean().optional(),
     opsInsightsRunbooksEnabled: z.boolean().optional(),
     opsInsightsNotificationsEnabled: z.boolean().optional(),
+    opsInsightsIntelligenceEnabled: z.boolean().optional(),
     runbookFixWindowMinutes: bounded(
       INTELLIGENCE_SETTINGS_BOUNDS.runbookFixWindowMinutes
     ).optional(),

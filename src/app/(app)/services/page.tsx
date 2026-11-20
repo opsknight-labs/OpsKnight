@@ -26,6 +26,7 @@ import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import { getServiceListBadges } from '@/lib/intelligence/surfaces/service-list-badges';
 import { requirePageAccess } from '@/lib/access/server';
+import { seedShadowServicePolicy } from '@/lib/intelligence/settings/service-defaults';
 
 export const revalidate = 0;
 
@@ -84,6 +85,7 @@ async function createService(formData: FormData) {
       actorId: currentUser.id,
       details: { name: normalizedName, teamId: teamId || null },
     });
+    await seedShadowServicePolicy(service.id, { actorId: currentUser.id, source: 'UI' });
 
     revalidatePath('/services');
     revalidatePath('/audit');

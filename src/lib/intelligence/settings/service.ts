@@ -83,6 +83,7 @@ export type IntelligenceSettingsView = {
   opsInsightsPostmortemsEnabled: boolean;
   opsInsightsRunbooksEnabled: boolean;
   opsInsightsNotificationsEnabled: boolean;
+  opsInsightsIntelligenceEnabled: boolean;
   /** A run fixed its incident when the incident resolved within this long after the run finished. */
   runbookFixWindowMinutes: number;
   /** Small deterministic helpers: create-form suggestions, status drafts, palette knowledge search. */
@@ -122,6 +123,7 @@ const SETTINGS_SELECT = {
   opsInsightsPostmortemsEnabled: true,
   opsInsightsRunbooksEnabled: true,
   opsInsightsNotificationsEnabled: true,
+  opsInsightsIntelligenceEnabled: true,
   runbookFixWindowMinutes: true,
   opsHelpersEnabled: true,
   automationIntelligenceFieldsEnabled: true,

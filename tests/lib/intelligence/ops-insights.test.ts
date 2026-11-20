@@ -19,6 +19,8 @@ import {
   integrationHealthProducer,
   type IntegrationHealthInput,
 } from '@/lib/intelligence/ops-insights/producers/integration-health';
+import { deriveAcceptanceDrift } from '@/lib/intelligence/ops-insights/producers/acceptance-drift';
+import { deriveMetricEarlyWarnings } from '@/lib/intelligence/ops-insights/producers/metric-early-warning';
 
 const OFF: OpsInsightSwitches = {
   opsInsightsEnabled: false,
@@ -28,6 +30,7 @@ const OFF: OpsInsightSwitches = {
   opsInsightsPostmortemsEnabled: false,
   opsInsightsRunbooksEnabled: false,
   opsInsightsNotificationsEnabled: false,
+  opsInsightsIntelligenceEnabled: false,
 };
 
 describe('operations insight contract', () => {
@@ -42,7 +45,7 @@ describe('operations insight contract', () => {
         opsInsightsOnCallEnabled: true,
       })
     ).toEqual(['onCall', 'runbooks']);
-    expect(OPS_INSIGHT_AREA_KEYS).toHaveLength(6);
+    expect(OPS_INSIGHT_AREA_KEYS).toHaveLength(7);
   });
 
   it('caps evidence and accepts only in-app draft links', () => {
@@ -153,5 +156,39 @@ describe('integration health (pure half)', () => {
       title: '95% of recent alerts have no severity',
       draftHref: '/services/svc/integrations',
     });
+  });
+});
+
+describe('intelligence-area insights', () => {
+  const row = (currentAccepted: number, currentTotal = 20, baselineAccepted = 32, baselineTotal = 40) => ({
+    kind: 'CHANGE_CORRELATION',
+    currentTotal,
+    currentAccepted,
+    baselineTotal,
+    baselineAccepted,
+  });
+  it('flags acceptance drops above 20 points only with 20+ verdicts in each window', () => {
+    // Baseline 80%.
+    expect(deriveAcceptanceDrift({ kinds: [row(12)] })).toEqual([]); // 60%: exactly 20 points
+    const [item] = deriveAcceptanceDrift({ kinds: [row(11)] }); // 55%
+    expect(item).toMatchObject({ key: 'CHANGE_CORRELATION', severity: 'WARNING' });
+    expect(item.title).toContain('80% to 55%');
+    expect(opsInsightItemSchema.safeParse(item).success).toBe(true);
+    expect(deriveAcceptanceDrift({ kinds: [row(5, 19)] })).toEqual([]);
+    expect(deriveAcceptanceDrift({ kinds: [row(0, 20, 19, 19)] })).toEqual([]);
+  });
+  it('turns a deviation into a valid, non-paging early warning', () => {
+    const items = deriveMetricEarlyWarnings({
+      deviations: [
+        { templateId: 't1', name: 'p99 latency', direction: 'UP', score: 12.3, startedAt: '2026-11-20 10:15', series: 2 },
+        { templateId: 't2', name: 'orders/min', direction: 'DOWN', score: 6, startedAt: '2026-11-20 10:30', series: 1 },
+      ],
+    });
+    expect(items.map(item => [item.key, item.severity])).toEqual([
+      ['t1', 'WARNING'],
+      ['t2', 'INFO'],
+    ]);
+    expect(items[1].title).toContain('below');
+    expect(items.every(item => opsInsightItemSchema.safeParse(item).success)).toBe(true);
   });
 });

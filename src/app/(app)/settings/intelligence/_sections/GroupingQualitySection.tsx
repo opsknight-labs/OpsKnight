@@ -180,6 +180,11 @@ export default async function GroupingQualitySection({
                   {gate?.allowed
                     ? 'Quality qualified for automatic grouping'
                     : 'Automatic grouping unavailable'}
+                  {gate?.pooled && (
+                    <span className="ml-2 rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                      Pooled evidence
+                    </span>
+                  )}
                 </p>
                 <p className="text-sm text-muted-foreground">{gate?.reason}</p>
                 <p className="text-xs text-muted-foreground">

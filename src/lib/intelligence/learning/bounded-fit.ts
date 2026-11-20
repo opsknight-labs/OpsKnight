@@ -8,18 +8,28 @@ export const sigmoid = (x: number) => 1 / (1 + Math.exp(-Math.max(-30, Math.min(
 export const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-/** Mean negative log-likelihood of `rows` under `predict`. */
-export function logLoss<R extends { helpful: boolean }, W>(
+/**
+ * Implicit labels (a rollback after an incident, a cause or runbook named in a postmortem) are inferred, not
+ * stated, so they count for this fraction of an explicit verdict in both the loss and the support guard.
+ */
+export const IMPLICIT_LABEL_WEIGHT = 0.5;
+
+const weightOf = (row: { weight?: number }) => row.weight ?? 1;
+
+/** Weighted mean negative log-likelihood of `rows` under `predict` (rows without a weight count 1). */
+export function logLoss<R extends { helpful: boolean; weight?: number }, W>(
   rows: readonly R[],
   weights: W,
   predict: (row: R, weights: W) => number
 ): number {
-  return (
-    rows.reduce((sum, row) => {
-      const p = Math.max(1e-6, Math.min(1 - 1e-6, predict(row, weights)));
-      return sum - Math.log(row.helpful ? p : 1 - p);
-    }, 0) / rows.length
-  );
+  let total = 0;
+  let mass = 0;
+  for (const row of rows) {
+    const p = Math.max(1e-6, Math.min(1 - 1e-6, predict(row, weights)));
+    total -= weightOf(row) * Math.log(row.helpful ? p : 1 - p);
+    mass += weightOf(row);
+  }
+  return mass ? total / mass : 0;
 }
 
 /**
@@ -63,13 +73,16 @@ export function holdOutSplit<R>(rows: readonly R[]): { train: R[]; held: R[] } {
 
 /** The minimum-sample guard every fit shares: enough rows and enough of each verdict. */
 export function hasMinimumSupport(
-  rows: ReadonlyArray<{ helpful: boolean }>,
+  rows: ReadonlyArray<{ helpful: boolean; weight?: number }>,
   minimum: { rows: number; perVerdict: number }
 ): boolean {
-  const helpful = rows.filter(row => row.helpful).length;
+  let helpful = 0;
+  let total = 0;
+  for (const row of rows) {
+    total += weightOf(row);
+    if (row.helpful) helpful += weightOf(row);
+  }
   return (
-    rows.length >= minimum.rows &&
-    helpful >= minimum.perVerdict &&
-    rows.length - helpful >= minimum.perVerdict
+    total >= minimum.rows && helpful >= minimum.perVerdict && total - helpful >= minimum.perVerdict
   );
 }
