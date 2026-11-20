@@ -12,6 +12,7 @@ describe('Service Integration Types UI Registry', () => {
     expect(values).toContain('GOOGLE_CLOUD_MONITORING');
     expect(values).toContain('DATADOG');
     expect(values).toContain('GRAFANA');
+    expect(values).toContain('BASE14');
     expect(values).toContain('PROMETHEUS');
     expect(values).toContain('NEWRELIC');
     expect(values).toContain('SENTRY');

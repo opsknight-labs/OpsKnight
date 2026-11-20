@@ -1371,6 +1371,7 @@ export const IntegrationSchemas = {
   DATADOG: DatadogEventSchema,
   GITHUB: GitHubEventSchema,
   GRAFANA: GrafanaAlertSchema,
+  BASE14: GrafanaAlertSchema,
   PROMETHEUS: PrometheusAlertSchema,
   NEWRELIC: NewRelicEventSchema,
   SENTRY: SentryEventSchema,
