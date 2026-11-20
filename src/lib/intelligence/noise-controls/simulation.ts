@@ -205,6 +205,8 @@ export async function simulatePrePagingControls(
       }
     }
     const opensIncident = (row: Row) => firstAlertOfIncident.get(row.incidentId) === row.alertId;
+    /** Incidents this replay grouped under a storm parent: never parents themselves, as in the live lookup. */
+    const stormChildren = new Set<string>();
     const lookups: PrePagingLookups = {
       async findOpenIncidentByFingerprint(serviceId, hash, since) {
         for (const row of recentRows(since))
@@ -222,10 +224,17 @@ export async function simulatePrePagingControls(
           if (serviceIds.includes(row.serviceId) && opensIncident(row)) ids.add(row.incidentId);
         return ids.size;
       },
-      async findStormParent(serviceIds, since) {
+      async findStormParent(serviceIds, since, preferServiceId) {
         let parent: Row | null = null;
+        // Same order as the live lookup: the alert's own service first, then the earliest.
         for (const row of recentRows(since))
-          if (serviceIds.includes(row.serviceId) && opensIncident(row)) parent = row;
+          if (
+            serviceIds.includes(row.serviceId) &&
+            opensIncident(row) &&
+            !stormChildren.has(row.incidentId) &&
+            (!parent || row.serviceId === preferServiceId || parent.serviceId !== preferServiceId)
+          )
+            parent = row;
         return parent ? { id: parent.incidentId } : null;
       },
       async recentAlertStatuses(serviceId, key, since, limit) {
@@ -281,6 +290,7 @@ export async function simulatePrePagingControls(
           deadlineMs: 250,
         });
         outcome.incidentsEvaluated += 1;
+        if (decision.action === 'GROUP_CHILD') stormChildren.add(row.incidentId);
         if (decision.failOpen && decision.failOpen.reason !== 'off') outcome.failOpen += 1;
         // Orchestration rules run in order and stop at the first DROP or SUPPRESS, as in the hook.
         for (const rule of resolvePolicy(snapshot, input.serviceId)?.orchestration ?? []) {

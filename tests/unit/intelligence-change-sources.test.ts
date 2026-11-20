@@ -20,7 +20,11 @@ describe('native change-source mappers', () => {
         spec: { project: 'shop', destination: { name: 'prod-eu' } },
         status: {
           sync: { status: 'Synced', revision: 'abcdef1234567890' },
-          operationState: { phase: 'Succeeded', finishedAt: '2026-11-07T10:00:00Z' },
+          operationState: {
+            phase: 'Succeeded',
+            startedAt: '2026-11-07T09:52:00Z',
+            finishedAt: '2026-11-07T10:00:00Z',
+          },
         },
       },
     };
@@ -31,7 +35,14 @@ describe('native change-source mappers', () => {
       version: 'abcdef1234567890',
       dedupKey: 'checkout:abcdef1234567890:2026-11-07T10:00:00Z',
       occurredAt: '2026-11-07T10:00:00Z',
-      labels: { environment: 'prod', project: 'shop', cluster: 'prod-eu', phase: 'Succeeded' },
+      labels: {
+        environment: 'prod',
+        project: 'shop',
+        cluster: 'prod-eu',
+        phase: 'Succeeded',
+        // The rollout start, which root-cause scoring prefers over the finish time.
+        startedAt: '2026-11-07T09:52:00Z',
+      },
     });
     expect(
       mapArgoCdChange({
@@ -116,6 +127,21 @@ describe('native change-source mappers', () => {
       dedupKey: 'run-123:applied',
       occurredAt: '2026-11-07T08:00:00Z',
     });
+    const applied = { run_status: 'applied', run_updated_at: '2026-11-07T08:00:00Z' };
+    const queued = { ...base, run_created_at: '2026-11-07T06:00:00Z' };
+    // Run creation includes queue and approval waits: never the change start.
+    expect(
+      mapTerraformChange({ ...queued, notifications: [applied] })?.labels.startedAt
+    ).toBeUndefined();
+    expect(
+      mapTerraformChange({
+        ...queued,
+        notifications: [
+          { run_status: 'applying', run_updated_at: '2026-11-07T07:55:00Z' },
+          applied,
+        ],
+      })?.labels.startedAt
+    ).toBe('2026-11-07T07:55:00Z');
     expect(mapTerraformChange({ ...base, notifications: [{ run_status: 'planning' }] })).toBeNull();
     expect(
       mapTerraformChange({ ...base, notifications: [{ run_status: 'discarded' }] })

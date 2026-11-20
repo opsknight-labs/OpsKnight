@@ -50,6 +50,8 @@ export function mapArgoCdChange(payload: unknown): MappedChange | null {
   const destination = obj(obj(app.spec).destination);
   label(labels, 'cluster', destination.name ?? destination.server);
   label(labels, 'environment', obj(metadata.labels).environment ?? obj(metadata.labels).env);
+  // occurredAt is the finish; root-cause scoring measures lead from the start when it is known.
+  label(labels, 'startedAt', operation.startedAt);
   return {
     source: 'argocd',
     kind: 'DEPLOY',
@@ -135,6 +137,12 @@ export function mapTerraformChange(payload: unknown): MappedChange | null {
   label(labels, 'workspace', workspace);
   label(labels, 'status', status);
   label(labels, 'trigger', latest.trigger);
+  // The apply start, only when the notification carries it: run_created_at includes queue and approval waits.
+  label(
+    labels,
+    'startedAt',
+    notifications.find(notification => notification.run_status === 'applying')?.run_updated_at
+  );
   return {
     source: 'terraform',
     kind: 'INFRA',

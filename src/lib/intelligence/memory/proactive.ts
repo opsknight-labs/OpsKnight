@@ -1,4 +1,5 @@
 import 'server-only';
+import { z } from 'zod/v4';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
@@ -7,7 +8,7 @@ import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
 import { resolveEffectivePolicy } from '../settings/service';
 import { registerAiGateway } from '../ai/gateway';
 import { resolveLanguageModel, type AiOutputSchema } from '../ai/port';
-import { outputTokensFor } from '../ai/output-limits';
+import { outputTokensFor, type AiFeature } from '../ai/output-limits';
 import { cachedGenerateStructured } from '../ai/result-cache';
 import { getBuiltInPrompt, getGuidance, renderPrompt } from '../ai/prompts';
 import { getAiSettings } from '../ai/settings';
@@ -318,6 +319,9 @@ async function gather(tx: Tx, incidentId: string): Promise<Gathered | null> {
   };
 }
 
+/** The nudge shows one short draft, so the model is asked for only that (not a full incident summary). */
+const stakeholderUpdateSchema = z.object({ update: z.string().trim().min(1).max(1_000) }).strict();
+
 export type ProactiveOutcome = 'written' | 'skipped' | 'stale' | 'waiting' | 'off';
 
 /**
@@ -403,10 +407,10 @@ export async function runProactiveJob(
       thresholdMinutes: threshold,
     });
     const ai = await generate(
-      'incident.summary',
-      incidentSummarySchema,
-      'incident_summary',
-      'Summarise the current state for a stakeholder update. Plain language, no internal jargon.',
+      'stakeholder.update',
+      stakeholderUpdateSchema,
+      'stakeholder_update',
+      'Write a short stakeholder update on the current state and impact in "update". Plain language, no internal jargon.',
       proactiveModelBrief(facts, { similar: [], changes: [], runbooks: [] }),
       incidentId,
       gathered.serviceId,
@@ -417,10 +421,7 @@ export async function runProactiveJob(
       model = ai.model;
       nudge.ai = {
         model: ai.model,
-        draft: `${ai.value.currentState}${ai.value.impact ? ` ${ai.value.impact}` : ''}`.slice(
-          0,
-          1_000
-        ),
+        draft: ai.value.update,
       };
     }
     content = nudge as unknown as Prisma.InputJsonValue;
@@ -496,14 +497,15 @@ async function writeProactiveNote(
  * output or any error.
  */
 async function generate<T>(
-  promptId: 'incident.summary' | 'postmortem.draft',
+  promptId: 'incident.summary' | 'postmortem.draft' | 'stakeholder.update',
   schema: AiOutputSchema<T> & object,
   schemaName: string,
   instruction: string,
   brief: string,
   incidentId: string,
   serviceId: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  feature: AiFeature = promptId === 'stakeholder.update' ? 'stakeholder.nudge' : promptId
 ): Promise<{ value: T; model: string } | null> {
   try {
     const settings = await getAiSettings();
@@ -545,7 +547,7 @@ async function generate<T>(
       ],
       schema,
       schemaName,
-      maxOutputTokens: outputTokensFor(promptId),
+      maxOutputTokens: outputTokensFor(feature),
     });
     return { value: result.object, model: result.served.model };
   } catch (error) {

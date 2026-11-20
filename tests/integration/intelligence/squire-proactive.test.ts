@@ -16,6 +16,7 @@ import {
   scheduleSquireMemoryWork,
 } from '@/lib/intelligence/memory/handlers';
 import { runProactiveJob, scanProactiveWork } from '@/lib/intelligence/memory/proactive';
+import { streamSquire } from '@/lib/intelligence/squire/chat';
 import { getProactiveNotesForActor } from '@/lib/intelligence/memory/proactive-view';
 import { updateSquireServicePolicy } from '@/lib/intelligence/memory/settings';
 import { getIntelligenceSettings, publishPolicyVersion } from '@/lib/intelligence/settings/service';
@@ -425,6 +426,42 @@ describe('proactive Squire with a model', () => {
     expect(model.requests).toHaveLength(1);
   });
 
+  it('drafts the stakeholder nudge with its own small schema', async () => {
+    const { service, teamA, admin } = await setup({ ai: true });
+    await updateSquireServicePolicy(
+      service.id,
+      {
+        briefingEnabled: false,
+        nudgeAfterMinutes: 30,
+        postmortemDraftEnabled: false,
+        expectedRevision: 0,
+      },
+      admin.id
+    );
+    const quiet = await createTestIncident('Checkout latency high', service.id, {
+      teamId: teamA.id,
+      createdAt: past(45 * MIN),
+    });
+    model.script.push({
+      content: JSON.stringify({
+        update: 'Checkout is slow for some customers; a fix is underway.',
+      }),
+    });
+    expect(await runProactiveJob(`STAKEHOLDER_NUDGE:${quiet.id}`, 10, budget)).toBe('written');
+    const note = await db.squireProactiveNote.findFirstOrThrow({ where: { incidentId: quiet.id } });
+    expect(note.mode).toBe('AI');
+    expect((note.content as { ai?: { draft?: string } }).ai?.draft).toBe(
+      'Checkout is slow for some customers; a fix is underway.'
+    );
+    expect(model.requests).toHaveLength(1);
+    const body = JSON.stringify(model.requests[0].body);
+    expect(body).toContain('"max_tokens":250');
+    expect(body).not.toContain('possibleCauses');
+    // Its own prompt, not the incident summary's.
+    expect(body).toContain('status update about one incident for stakeholders');
+    expect(body).not.toContain('summarise one incident');
+  });
+
   it('writes AI text through the gateway and shows it only to viewers who may read its inputs', async () => {
     const { service, teamA, admin, member } = await setup({ ai: true });
     await updateSquireServicePolicy(
@@ -463,6 +500,33 @@ describe('proactive Squire with a model', () => {
     const restricted = await getProactiveNotesForActor(incident.id, await actorOf(member.id));
     expect(restricted?.briefing).toMatchObject({ mode: 'BASIC', ai: null });
     expect(restricted?.briefing?.refs.similar).toEqual([]);
+  });
+
+  it('gives a chat turn the shared incident summary instead of rebuilding the timeline', async () => {
+    const { service, teamA, admin, member } = await setup({ ai: true });
+    await updateSquireServicePolicy(
+      service.id,
+      {
+        briefingEnabled: true,
+        nudgeAfterMinutes: null,
+        postmortemDraftEnabled: false,
+        expectedRevision: 0,
+      },
+      admin.id
+    );
+    const { incident } = await analysedIncident(service.id, teamA.id);
+    model.script.push({ content: JSON.stringify(SUMMARY) });
+    expect(await runProactiveJob(`BRIEFING:${incident.id}`, 10, budget)).toBe('written');
+    model.requests.length = 0;
+    model.script.push({ content: 'Latency is up after v42.' });
+    for await (const _event of streamSquire(await actorOf(member.id), {
+      message: 'what is going on?',
+      history: [],
+      incidentId: incident.id,
+    }));
+    const chat = JSON.stringify(model.requests.at(-1)!.body);
+    expect(chat).toContain(SUMMARY.headline);
+    expect(chat).not.toContain('Recent timeline');
   });
 
   it('keeps the deterministic note when the model fails or returns garbage, and drafts with POSTMORTEM', async () => {

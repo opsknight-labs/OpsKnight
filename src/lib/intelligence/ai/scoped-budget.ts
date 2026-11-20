@@ -29,6 +29,9 @@ export interface UsageAttribution {
   cacheSavedMicros?: number;
 }
 
+/** Weight of one cache-read token against every token budget (daily, per-user, team, capability). */
+export const CACHE_READ_BUDGET_WEIGHT = 0.1;
+
 const toLimits = (row: {
   dailyTokenLimit: number | null;
   dailyCostLimitMicros: bigint | null;
@@ -62,13 +65,15 @@ export async function exceededScopedBudget(
   if (budgets.length === 0) return null;
   const team = scope.teamId ?? null;
   const capability = scope.capability ?? null;
+  // Token budgets weigh cache reads at a tenth, as the daily and per-user budgets do; dollars stay exact.
+  const weighted = Prisma.sql`greatest(0, "inputTokens" + "outputTokens" - round(coalesce("cacheReadTokens", 0) * ${1 - CACHE_READ_BUDGET_WEIGHT}::numeric))`;
   const [settled] = await tx.$queryRaw<
     Array<{ teamTokens: bigint; teamCost: bigint; capTokens: bigint; capCost: bigint }>
   >(Prisma.sql`
     SELECT
-      coalesce(sum("inputTokens" + "outputTokens") FILTER (WHERE "teamId" = ${team ?? ''}), 0)::bigint AS "teamTokens",
+      coalesce(sum(${weighted}) FILTER (WHERE "teamId" = ${team ?? ''}), 0)::bigint AS "teamTokens",
       coalesce(sum("costMicros") FILTER (WHERE "teamId" = ${team ?? ''}), 0)::bigint AS "teamCost",
-      coalesce(sum("inputTokens" + "outputTokens") FILTER (WHERE capability = ${capability}), 0)::bigint AS "capTokens",
+      coalesce(sum(${weighted}) FILTER (WHERE capability = ${capability}), 0)::bigint AS "capTokens",
       coalesce(sum("costMicros") FILTER (WHERE capability = ${capability}), 0)::bigint AS "capCost"
     FROM "AiUsageBreakdownDay" WHERE day = ${day}`);
   const [held] = await tx.$queryRaw<

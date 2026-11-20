@@ -6,6 +6,8 @@ import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { combinedContent } from '../similarity/scoring';
 import { fitScoringWeights, type ScoringExample } from './weights';
+import { readWeightProposal, storeWeightProposal } from './proposal-store';
+import { scoringWeightsSchema } from '../contract';
 import {
   parseOrThrow,
   publishPolicyVersion,
@@ -13,8 +15,10 @@ import {
   type IntelligenceActor,
 } from '../settings/service';
 
-export async function suggestScoringWeights() {
-  const rows = await prisma.$queryRaw<
+export async function suggestScoringWeights(
+  client: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma
+) {
+  const rows = await client.$queryRaw<
     Array<{ pair: string; evidence: Prisma.JsonValue; helpful: boolean }>
   >`
     SELECT DISTINCT ON (f."incidentId", f."subjectRef")
@@ -57,6 +61,19 @@ export async function suggestScoringWeights() {
   };
 }
 
+type ScoringWeightsProposal = NonNullable<Awaited<ReturnType<typeof suggestScoringWeights>>>;
+
+/** Fits now and stores the result for the settings page (null when there is no supported improvement). */
+export async function refreshScoringWeightProposal(client: Prisma.TransactionClient = prisma) {
+  const proposal = await suggestScoringWeights(client);
+  await storeWeightProposal('SCORING_WEIGHTS_PROPOSAL', proposal, client);
+  return proposal;
+}
+
+/** The proposal the daily fit stored: one indexed read, no fit. */
+export const readScoringWeightProposal = () =>
+  readWeightProposal<ScoringWeightsProposal>('SCORING_WEIGHTS_PROPOSAL', scoringWeightsSchema);
+
 /** Recompute before publishing: the browser cannot supply arbitrary coefficients or stale evidence. */
 export async function adoptScoringWeights(input: unknown, actor: IntelligenceActor) {
   const parsed = parseOrThrow(
@@ -68,7 +85,8 @@ export async function adoptScoringWeights(input: unknown, actor: IntelligenceAct
       .strict(),
     input
   );
-  const suggestion = await suggestScoringWeights();
+  // The recomputed proposal replaces the stored one, so a refresh after a conflict shows the current one.
+  const suggestion = await refreshScoringWeightProposal();
   if (!suggestion || suggestion.id !== parsed.suggestionId)
     throw new AppError({
       code: 'RESOURCE_CONFLICT',

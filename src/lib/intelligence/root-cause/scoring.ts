@@ -14,7 +14,10 @@ export interface CauseScoreInput {
   relation: CauseRelation;
   /** Hops from the affected service; 0 for the same service and for global changes. */
   depth: number;
-  /** Seconds the candidate preceded incident onset. Negative or beyond the window scores zero. */
+  /**
+   * Seconds the candidate preceded incident onset. Up to MAX_NEGATIVE_LEAD_SECONDS after onset still
+   * scores (a rollout still in progress, clock skew); later, or beyond the window, scores zero.
+   */
   leadSeconds: number;
   kind: ChangeKindValue | 'INCIDENT';
   chanceFactor?: number;
@@ -33,6 +36,11 @@ function relationWeight(relation: CauseRelation, depth: number, weights: Respons
   return Math.pow(weights.upstreamDecay, Math.max(1, depth));
 }
 
+/** How far after onset a candidate may start and still be a plausible cause. */
+export const MAX_NEGATIVE_LEAD_SECONDS = 5 * 60;
+/** A change after onset stays a candidate but ranks below comparable changes that preceded it. */
+const AFTER_ONSET_FACTOR = 0.25;
+
 const round = (value: number) => Math.round(value * 1000) / 1000;
 
 /**
@@ -44,13 +52,16 @@ export function scoreCause(input: CauseScoreInput): CauseScore {
   const windowSeconds = RESPONSE_LIMITS.causeLookbackMinutes * 60;
   if (
     !Number.isFinite(input.leadSeconds) ||
-    input.leadSeconds < 0 ||
+    input.leadSeconds < -MAX_NEGATIVE_LEAD_SECONDS ||
     input.leadSeconds > windowSeconds
   ) {
     return { confidence: 0, components: { proximity: 0, relation: 0, kind: 0 } };
   }
   const weights = input.weights ?? DEFAULT_RESPONSE_WEIGHTS;
-  const proximity = Math.exp(-input.leadSeconds / (RESPONSE_LIMITS.proximityTauMinutes * 60));
+  const proximity =
+    input.leadSeconds < 0
+      ? AFTER_ONSET_FACTOR
+      : Math.exp(-input.leadSeconds / (RESPONSE_LIMITS.proximityTauMinutes * 60));
   const relation = relationWeight(input.relation, input.depth, weights);
   const kind = input.kind === 'INCIDENT' ? 0.85 : weights.kind[input.kind];
   const chance = Math.max(0.1, Math.min(1, input.chanceFactor ?? 1));

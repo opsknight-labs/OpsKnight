@@ -98,6 +98,7 @@ export async function predictTriage(
       teamId: true,
       assigneeId: true,
       createdAt: true,
+      service: { select: { teamId: true } },
       intelligenceFingerprint: {
         select: { template: true, updatedAt: true, sourceUpdatedAt: true },
       },
@@ -108,7 +109,8 @@ export async function predictTriage(
   if (policy.effectiveMode === 'OFF') return 'skipped_off';
   if (!policy.definition.triage.enabled) return 'skipped_disabled_feature';
 
-  const burn = await getSloBurn(incident.serviceId, now).catch(() => null);
+  // The incident being triaged is not evidence of its own urgency: leave its downtime out.
+  const burn = await getSloBurn(incident.serviceId, now, prisma, incidentId).catch(() => null);
   const burning = burn?.burning ?? false;
 
   return withDbBudget(settings, async tx => {
@@ -160,10 +162,23 @@ export async function predictTriage(
       }));
       const vote = weightedVote(owners);
       const current = incident.teamId ? `team:${incident.teamId}` : null;
-      if (vote && vote.value !== current) {
+      // A person is suggested only while active and still on the owning team; otherwise the team is.
+      let suggested = vote?.value ?? null;
+      const owningTeamId = incident.teamId ?? incident.service.teamId;
+      if (suggested?.startsWith('user:')) {
+        const eligible = await tx.user.count({
+          where: {
+            id: suggested.slice('user:'.length),
+            status: 'ACTIVE',
+            ...(owningTeamId ? { teamMemberships: { some: { teamId: owningTeamId } } } : {}),
+          },
+        });
+        if (!eligible) suggested = owningTeamId ? `team:${owningTeamId}` : null;
+      }
+      if (vote && suggested && suggested !== current) {
         assignmentRows.push({
           confidence: vote.confidence,
-          subjectRef: vote.value,
+          subjectRef: suggested,
           evidence: {
             type: 'triage_assignment',
             calibrated: false,

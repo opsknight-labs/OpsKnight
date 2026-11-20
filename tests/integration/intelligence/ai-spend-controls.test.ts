@@ -106,6 +106,40 @@ describe('background AI allowance', () => {
   });
 });
 
+describe('per-step holds and cache-read weighting', () => {
+  it('tops an open hold up under the same checks, and never a settled one', async () => {
+    const person = await createTestUser();
+    const first = await reserveAiTokens(person.id, limits, 400, 120_000, now);
+    expect(first).not.toBeNull();
+    expect(await reserveAiTokens(person.id, limits, 400, 120_000, now, undefined, first!)).toEqual(
+      first
+    );
+    expect(await db.aiTokenReservation.count()).toBe(1);
+    expect(
+      (await db.aiTokenReservation.findUniqueOrThrow({ where: { id: first!.id } })).tokens
+    ).toBe(800);
+    // 800 held + 400 more is past the 1000-token day.
+    expect(
+      await reserveAiTokens(person.id, limits, 400, 120_000, now, undefined, first!)
+    ).toBeNull();
+    await recordAiUsage({ inputTokens: 10, outputTokens: 5 }, now, person.id, first!);
+    expect(await reserveAiTokens(person.id, limits, 1, 120_000, now, undefined, first!)).toBeNull();
+  });
+
+  it('counts cache reads at a tenth against token budgets', async () => {
+    const person = await createTestUser();
+    await recordAiUsage(
+      { inputTokens: 1_000, outputTokens: 50, cacheReadTokens: 900 },
+      now,
+      person.id
+    );
+    // 100 uncached + 900 cached x 0.1 = 190 input tokens against the budget.
+    expect((await getTodayUsage(now)).inputTokens).toBe(190);
+    const personal = await db.aiUsageUserDay.findFirstOrThrow({ where: { userId: person.id } });
+    expect(personal.tokens).toBe(240);
+  });
+});
+
 describe('degradation at 80%', () => {
   it('degrades people, pauses background AI, and goes deterministic at the budget', async () => {
     const person = await createTestUser();
@@ -213,6 +247,78 @@ describe('gateway routing and degradation', () => {
     const result = await classify!.generate(ask(admin.id, 'CLASSIFY'));
     expect(result.served.model).toBe('gpt-5-mini');
     expect(server.requests.at(-1)?.body.model).toBe('gpt-5-mini');
+  });
+
+  it('tiers classification to the small model by default, but leaves conclusions on the configured one', async () => {
+    const admin = await configure(1_000_000);
+    await db.aiSettings.update({ where: { id: 'default' }, data: { spendControlsEnabled: false } });
+    invalidateGatewayCache();
+    expect((await resolveGatewayPort('INTERNAL', 'CLASSIFY'))?.model).toBe('gpt-5-mini');
+    expect((await resolveGatewayPort('INTERNAL', 'SUMMARIZE'))?.model).toBe('gpt-5-mini');
+    expect((await resolveGatewayPort('INTERNAL', 'DIAGNOSE'))?.model).toBe('gpt-5');
+    expect((await resolveGatewayPort('INTERNAL', 'SQUIRE_CHAT'))?.model).toBe('gpt-5');
+    void admin;
+  });
+
+  it('holds one step at a time, so a tool loop runs where holding every step up front would not', async () => {
+    // One step (~prompt + 400 output) fits; six steps up front (the old hold) would exceed 2,000.
+    const admin = await configure(2_000);
+    let reads = 0;
+    server.script.push(
+      { toolCall: { name: 'lookup', args: '{}' }, usage: [20, 5] },
+      { toolCall: { name: 'lookup', args: '{}' }, usage: [20, 5] },
+      { content: 'done', usage: [20, 5] }
+    );
+    const port = await resolveGatewayPort('INTERNAL', 'DIAGNOSE');
+    const result = await port!.generate({
+      ...ask(admin.id, 'DIAGNOSE'),
+      maxSteps: 6,
+      tools: [
+        {
+          name: 'lookup',
+          description: 'Look something up.',
+          kind: 'READ',
+          dataClass: 'INTERNAL',
+          inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          execute: async () => ({ ok: (reads += 1) }),
+        },
+      ],
+    });
+    expect(result.text).toBe('done');
+    expect(reads).toBe(2);
+    const holds = await db.aiTokenReservation.findMany();
+    expect(holds).toHaveLength(1);
+    expect(holds[0].settledAt).not.toBeNull();
+    expect((await getTodayUsage()).inputTokens).toBe(60);
+  });
+
+  it('stops the loop when a top-up is refused, without another (unfunded) model call', async () => {
+    const admin = await configure(2_000);
+    // 800 tokens left: the first step's hold fits, a second one on top of it does not.
+    await recordAiUsage({ inputTokens: 1_200, outputTokens: 0 }, new Date(), 'system:other');
+    server.script.push(
+      { toolCall: { name: 'lookup', args: '{}' }, usage: [20, 5] },
+      { content: 'answered without more tools', usage: [20, 5] }
+    );
+    const port = await resolveGatewayPort('INTERNAL', 'DIAGNOSE');
+    const result = await port!.generate({
+      ...ask(admin.id, 'DIAGNOSE'),
+      maxSteps: 6,
+      tools: [
+        {
+          name: 'lookup',
+          description: 'Look something up.',
+          kind: 'READ',
+          dataClass: 'INTERNAL',
+          inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          execute: async () => ({ ok: true }),
+        },
+      ],
+    });
+    // Only the funded first step reached the provider: the scripted second answer was never requested.
+    expect(server.script).toHaveLength(1);
+    expect(result.text).toBe('');
+    server.script.length = 0;
   });
 
   it('switches to the small model with a shorter answer from 80% and does not cache it', async () => {

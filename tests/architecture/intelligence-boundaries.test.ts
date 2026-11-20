@@ -755,7 +755,7 @@ describe('pre-paging lookups started early by ingestion', () => {
   it('are sent after the dedup-key lock, the open-incident and buffered-resolve checks, and before the hook reads them', () => {
     const order = [
       'await lockEventDedupKeys(tx,',
-      'await findOpenEventIncident(tx,',
+      'await findOpenEventIncident(',
       'const recentResolveAlert = await tx.alert.findFirst(',
       'beginIngestNoiseLookups(',
       'await evaluateIngestNoiseControls(',

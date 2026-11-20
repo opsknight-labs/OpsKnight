@@ -101,6 +101,19 @@ export function noisePipelineOrder(
   return policy?.pipelineOrder ?? 'OFF';
 }
 
+/**
+ * Whether a resolve must also look for an incident carrying the key as an appended alert (content dedup):
+ * an in-process map lookup, no query. A cold snapshot (process start) answers yes, to stay correct.
+ * shortcut: a policy switched OFF stops this, so its already-appended keys no longer hold their incident
+ * open (the pre-feature behaviour); track appends per incident if that ever matters.
+ */
+export function contentDedupMayAppend(serviceId: string): boolean {
+  const snapshot = getPrePagingSnapshot();
+  if (!snapshot) return true;
+  const policy = resolvePolicy(snapshot, serviceId);
+  return !!policy && policy.mode !== 'OFF' && policy.definition.contentDedup.enabled;
+}
+
 /** The reads `evaluatePrePagingControls` will make, computed exactly as it computes them. */
 export function lookupPlan(
   input: Pick<PrePagingInput, 'serviceId' | 'fingerprintHash' | 'dedupKey'>,

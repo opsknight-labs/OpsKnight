@@ -513,5 +513,75 @@
       "Local million-row benchmark: 1M incidents, alerts and normalized fingerprints, durable PostgreSQL; 5k-alert incremental p50 12.53ms / p99 15.21ms, all index-plan gates passed. Foundation-only nightly workflow added; not full ingestion A/B certification."
     ],
     "scope": "Expanded roadmap still in progress. Incremental indexing, bounded observer, shared alert shape/backfill and foundation benchmark now implemented and verified locally."
+  },
+  "gap_audit": {
+    "branch": "wip/intel-m12-int (merges wip/intel-m1-engine, wip/intel-m1-ingest, wip/intel-m2-bg, wip/intel-m2-chat onto feat/intelligence-engine a445b0c11)",
+    "M1": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "1 legacy fixed-threshold flapping check removed from processEvent (flapping.ts kept only to drain pre-existing holds)",
+        "2 lane sweep un-suppresses noise-control and legacy flapping holds whose reason ended (NoiseMaintenanceWindow); incidents held by product maintenance are left to the service-maintenance end sweep",
+        "3 resolve matches content-dedup appended keys; incident stays open until every alert key is clear",
+        "4 storm parent takes children's top urgency, prefers its own service, cascades resolve/re-page on parent resolve",
+        "5 automatic runbooks skip storm children and are rate-limited per rule with a recorded skip",
+        "6 triage SLO burn excludes the subject incident",
+        "7 change risk uses local time zone",
+        "8 root cause keeps changes trailing onset slightly, ranked below preceding ones",
+        "9 automation tool evidence verified",
+        "10 oversized tool output trimmed, not dropped",
+        "11 triage owner limited to current active members",
+        "12 weight fits moved to the daily lane job"
+      ],
+      "gaps": [
+        "SUPPRESSION-rule (automation suppression rule) suppressions are not lifted by the sweep; only noise-control holds are (legacy flapping holds are released by releaseStableFlappingHolds)",
+        "Storm cascade shortcut: parents resolved more than 24h ago are not cascaded",
+        "Appended-key resolve lookup follows the live content-dedup switch: keys appended while it was on stop holding their incident open once it is switched off",
+        "Alert(incidentId, dedupKey, createdAt, id) INCLUDE (status) index not added: the open-other-keys count now runs only on resolves for content-dedup services; add it if that count shows up in profiles"
+      ]
+    },
+    "M2": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "1 cache-friendly prompt order, volatile briefing after the prefix",
+        "2 rolling cache breakpoint and per-step holds",
+        "3 tool subset by intent",
+        "4 short evidence handles",
+        "5 lean planner with fixed first read round; diagnosis gets system prompt + current briefing only",
+        "6 narrower investigation trigger",
+        "7 model tiering on by default",
+        "8 compact, block-stable history",
+        "9 one handoff narrative per handoff; stakeholder nudge has its own prompt (stakeholder.update) and schema; one shared incident summary reused by inspector, pinned briefing and the chat-turn brief",
+        "10 per-step holds; cache reads weighted 0.1 against daily, per-user, team and capability token budgets (dollars unchanged)",
+        "11 scripted investigation prompt-token median gated in baseline.json"
+      ],
+      "gaps": [
+        "Target (-50-70% input tokens per turn) not met: scripted eval median -1.2%, representative incident turn -26.5%",
+        "Provider prompt-cache savings unmeasured (needs a live Anthropic/Bedrock eval run)"
+      ]
+    },
+    "review_fixes": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "C1 flapping quiet measured from the key's latest resolve, so a re-sending hard-down alert is unsuppressed",
+        "C2 storm cascade resolves as SYSTEM/AUTOMATION, isolates each row, falls back to paging an unpaged child whose resolve failed; un-suppress rows isolated too",
+        "C3 storm parent never an unpaged storm child (live, prefetched, simulated)",
+        "C4 STORM_CHILD runbook skip only for prepaging_storm links",
+        "C5 appended key with a newer incident of its own no longer holds the original open",
+        "C6 reversed GROUP_CHILD children are not re-paged by the cascade",
+        "C7 sweep leaves legacy flapping-suppression holds to releaseStableFlappingHolds",
+        "C8 Terraform startedAt is the apply start or absent",
+        "P1 appended-key resolve lookup gated on content dedup via the noise snapshot; branch 2 only on a branch 1 miss",
+        "P2/P3 sweep probes on partial indexes idx_sla_pause_open_noise and idx_incident_relationship_storm_open; closed-child links marked",
+        "P4 rule rate lock before the incident row lock",
+        "P6 storm parent: own-service probe UNION ALL scope, LIMIT 1",
+        "P8 weight proposal refits under withDbBudget",
+        "P9 chat brief reuses the read incident and reads only BRIEFING notes",
+        "S1 refused top-up stops the tool loop without another model call",
+        "S2 volatile Squire context wrapped as untrusted data"
+      ],
+      "gaps": [
+        "Ingestion A/B (processEvent p50/p99 vs OFF) not re-benchmarked after the resolve-path change"
+      ]
+    }
   }
 }

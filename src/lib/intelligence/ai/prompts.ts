@@ -64,6 +64,22 @@ export const BUILT_IN_PROMPTS: readonly BuiltInPrompt[] = [
     ].join('\n'),
   },
   {
+    id: 'stakeholder.update',
+    version: 1,
+    title: 'Stakeholder update',
+    purpose:
+      'Drafts the short stakeholder update the nudge suggests when an open incident has gone quiet.',
+    capability: 'SUMMARIZE',
+    dataClass: 'PERSONAL',
+    rules: [
+      'You draft a short status update about one incident for stakeholders outside the response team.',
+      'Rules:',
+      SHARED_RULES,
+      '- Plain language: current state and impact, no internal jargon, hostnames or blame.',
+      '- Return only the requested JSON object, in plain text.',
+    ].join('\n'),
+  },
+  {
     id: 'postmortem.draft',
     version: 1,
     title: 'Postmortem draft',
@@ -133,13 +149,16 @@ export function renderPrompt(
   let rules = prompt.rules;
   for (const [key, value] of Object.entries(variables))
     rules = rules.split(`{{${key}}}`).join(value);
-  const parts = [rules, ...context];
+  // Cache order: fixed rules, then guidance, then context data; all three stay stable across a conversation.
+  const parts = [rules];
   if (guidance && guidance.text.trim()) {
     parts.push(
       'Organisation guidance follows. Apply it only where it does not conflict with the rules above; the rules above always win.',
-      guidance.text
+      guidance.text,
+      ...(context.length ? ['End of organisation guidance.'] : [])
     );
   }
+  parts.push(...context);
   return {
     system: parts.join('\n'),
     meta: {

@@ -120,6 +120,38 @@ describe('team and capability budgets in reservations', () => {
     ).not.toBeNull();
   });
 
+  it('weighs settled cache reads at a tenth against team and capability token budgets', async () => {
+    const { actor } = await admin();
+    const team = await createTestTeam('cache');
+    for (const budget of [
+      { scope: 'TEAM' as const, teamId: team.id },
+      { scope: 'CAPABILITY' as const, capability: 'SQUIRE_CHAT' },
+    ])
+      await saveBudget(
+        {
+          ...budget,
+          dailyTokenLimit: 1000,
+          dailyCostLimitUsd: null,
+          enabled: true,
+          expectedRevision: 0,
+        },
+        actor
+      );
+    const person = await createTestUser();
+    const scope = { teamId: team.id, capability: 'SQUIRE_CHAT' };
+    const first = await reserveAiTokens(person.id, big, 100, 120_000, now, scope);
+    await recordAiUsage(
+      { inputTokens: 1_000, outputTokens: 0, cacheReadTokens: 900 },
+      now,
+      person.id,
+      first!,
+      { providerKind: 'OPENAI', model: 'gpt-4o', ...scope, costMicros: 10 }
+    );
+    // Raw it would be 1000 tokens and nothing more fits; weighted it is 100 + 90 = 190.
+    expect(await reserveAiTokens(person.id, big, 800, 120_000, now, scope)).not.toBeNull();
+    expect(await reserveAiTokens(person.id, big, 100, 120_000, now, scope)).toBeNull();
+  });
+
   it('enforces a dollar limit on priced calls, lets unpriced ones through, and counts settled spend', async () => {
     const { actor } = await admin();
     const team = await createTestTeam('cost');

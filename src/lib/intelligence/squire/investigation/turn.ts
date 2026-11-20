@@ -15,7 +15,7 @@ import type { SquireEvent } from '../contract';
 import type { EligibleConnection } from '../../connectors/service';
 import type { SquireEvidenceRegistry } from '../evidence';
 import { buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from '../tools';
-import { INVESTIGATION_LIMITS, runInvestigation } from './engine';
+import { INVESTIGATION_LIMITS, runInvestigation, standardFirstReads } from './engine';
 
 const CHUNK = 48;
 
@@ -84,6 +84,10 @@ export async function* streamInvestigation(input: {
   const run = runInvestigation({
     question: input.question,
     preamble: input.preamble,
+    firstReads: standardFirstReads(
+      tools.map(tool => tool.name),
+      input.context.incidentId
+    ),
     context: input.context,
     dataClass: input.dataClass,
     planner,

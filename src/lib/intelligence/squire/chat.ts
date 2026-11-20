@@ -23,8 +23,7 @@ import { getAiSettings } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
 import { getHistoryStatus, type ConversationDetail } from '../conversations/store';
 import { getConversationForActor } from '../conversations/view';
-import { getResponseIntelligenceForActor } from '../response/view';
-import { getSimilarIncidentsForActor } from '../similarity/view';
+import { getPinnedBriefingForActor } from './briefing-view';
 import { buildProposal } from './actions/proposals';
 import {
   SQUIRE_LIMITS,
@@ -44,7 +43,7 @@ import {
 import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
-import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';
+import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS, toolsForMessage } from './tools';
 import { OBSERVABILITY_TOOL_LABELS, OBSERVABILITY_TOOL_NAMES } from './tools-observability';
 import { listEligibleConnections } from '../connectors/service';
 import { INCIDENT_TOOL_LABELS } from './tools-incident';
@@ -203,11 +202,11 @@ export async function* streamSquire(
         ? []
         : await listEligibleConnections(actor).catch(() => []);
       const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
-      const messages: AiMessage[] = [
-        { role: 'system', content: prompt.system, dataClass: 'PERSONAL' },
-        ...history,
-        { role: 'user', content: request.message, dataClass: 'PERSONAL' },
-      ];
+      const system: AiMessage = { role: 'system', content: prompt.system, dataClass: 'PERSONAL' };
+      // The parts of the briefing that change between turns, sent after the cached prefix.
+      const volatile: AiMessage[] = prompt.volatile
+        ? [{ role: 'user', content: prompt.volatile, dataClass: 'PERSONAL' }]
+        : [];
 
       // ---- Investigation mode (off unless an administrator enables it) ----
       const investigationContext = {
@@ -230,7 +229,9 @@ export async function* streamSquire(
         yield* streamInvestigation({
           actor,
           question: request.message,
-          preamble: messages.slice(0, -1),
+          // Only the final diagnosis reads this (the planner has its own prompt): the system prompt and
+          // the current briefing, without the chat history.
+          preamble: [system, ...volatile],
           context: investigationContext,
           dataClass,
           chatPort: port,
@@ -266,6 +267,12 @@ export async function* streamSquire(
         return;
       }
 
+      const messages: AiMessage[] = [
+        system,
+        ...history,
+        ...volatile,
+        { role: 'user', content: request.message, dataClass: 'PERSONAL' },
+      ];
       let answer = '';
       let proposals = 0;
       let failed = false;
@@ -285,21 +292,25 @@ export async function* streamSquire(
           prompt: prompt.meta,
         },
         messages,
-        tools: buildSquireTools(actor, {
-          personal: true,
-          extendedActions: settings.squireExtendedActions,
-          // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
-          knowledge: await squireKnowledgeEnabled(),
-          dataClass,
-          signal,
-          observability,
-          observe: (name, input, result) => {
-            // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
-            ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
-            readUntrusted = true;
-            return evidence.observe(name, input, result);
-          },
-        }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
+        tools: toolsForMessage(
+          buildSquireTools(actor, {
+            personal: true,
+            extendedActions: settings.squireExtendedActions,
+            // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
+            knowledge: await squireKnowledgeEnabled(),
+            dataClass,
+            signal,
+            observability,
+            observe: (name, input, result) => {
+              // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
+              ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
+              readUntrusted = true;
+              return evidence.observe(name, input, result);
+            },
+          }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
+          request.message,
+          Boolean(incident)
+        ),
         maxSteps: SQUIRE_LIMITS.maxSteps,
       })) {
         for (const text of evidence.notices()) {
@@ -537,9 +548,9 @@ async function brief(
   actor: AuthorizationActor,
   incident: ReadableIncident
 ): Promise<IncidentBriefing> {
-  const [similar, response, events, analysis] = await Promise.all([
-    getSimilarIncidentsForActor(incident.id, actor).catch(() => null),
-    getResponseIntelligenceForActor(incident.id, actor).catch(() => null),
+  // The pinned briefing is the panel's view of the same findings, with the incident's one shared AI summary.
+  const [pinned, events, analysis] = await Promise.all([
+    getPinnedBriefingForActor(actor, incident.id, undefined, incident).catch(() => null),
     prisma.incidentEvent
       .findMany({
         where: { incidentId: incident.id },
@@ -559,30 +570,50 @@ async function brief(
           lastSuccessfulAt: analysis.lastSuccessfulAt,
         }
       : { status: 'UNAVAILABLE', message: 'Recommendation freshness could not be verified.' },
-    timeline: events.map(event => ({
-      type: event.type ?? 'EVENT',
-      at: event.createdAt.toISOString(),
-      summary: event.message.slice(0, 240),
-    })),
-    similar: (similar ?? []).slice(0, 3).map(s => ({
+    // The shared summary already covers the incident's story; the raw timeline is only the fallback.
+    ...(pinned?.summary
+      ? { summary: pinned.summary }
+      : {
+          timeline: events.map(event => ({
+            type: event.type ?? 'EVENT',
+            at: event.createdAt.toISOString(),
+            summary: event.message.slice(0, 240),
+          })),
+        }),
+    similar: (pinned?.similar ?? []).map(s => ({
       id: s.incidentId,
       title: s.title,
       matchPercent: s.matchPercent,
       status: s.status,
     })),
-    changes: (response?.changes ?? []).slice(0, 3).map(c => ({
+    changes: (pinned?.changes ?? []).map(c => ({
       id: c.changeId,
       summary: c.summary,
       kind: c.kind,
       minutesBeforeOnset: c.leadMinutes,
     })),
-    runbooks: (response?.runbooks ?? []).slice(0, 3).map(r => ({
+    runbooks: (pinned?.runbooks ?? []).map(r => ({
       id: r.runbookId,
       name: r.name,
       succeeded: r.succeeded,
       completedRuns: r.eligible,
     })),
   };
+}
+
+/** Messages summarised together: the replay boundary moves in steps of this many (three exchanges). */
+const HISTORY_BLOCK = 6;
+const SOURCE_LINK =
+  /\/(?:incidents|runbooks|changes|alerts|services|schedules|postmortems)\/[A-Za-z0-9_-]{1,64}(?![A-Za-z0-9_-])/g;
+
+/** An older answer as history: its first sentence plus the in-app sources it cited. */
+export function replayDigest(answer: string): string {
+  const text = answer.trim();
+  const first = (text.match(/^[\s\S]*?[.!?](?=\s|$)/)?.[0] ?? text).slice(0, 400);
+  const sources = [...new Set(text.match(SOURCE_LINK) ?? [])]
+    .filter(link => !first.includes(link))
+    .slice(0, 8);
+  return sources.length ? `${first} Sources: ${sources.join(' ')}` : first;
 }
 
 /**
@@ -596,7 +627,13 @@ async function priorTurns(
   incidentId: string | null
 ): Promise<{ messages: AiMessage[]; omitted: boolean }> {
   if (saved) {
-    const turns = saved.messages.slice(-SQUIRE_LIMITS.historyMax);
+    // The summarised/verbatim boundary moves in fixed blocks, so the summary and the replayed turns stay
+    // byte-identical (and cached) for several turns instead of shifting by one on every turn.
+    const cut = Math.max(
+      0,
+      Math.ceil((saved.messages.length - SQUIRE_LIMITS.historyMax) / HISTORY_BLOCK) * HISTORY_BLOCK
+    );
+    const turns = saved.messages.slice(cut);
     const isReplayable = (message: ConversationDetail['messages'][number]) =>
       message.role === 'user' ||
       (message.replayable !== false &&
@@ -607,18 +644,23 @@ async function priorTurns(
     // summary is the deterministic digest: a model summary here would add a SUMMARIZE call, a per-user
     // rate-limit slot, budget spend and a serial round trip before the answer to every turn of a long
     // conversation, with nothing to switch it off.
-    const summary = await summarizeOlderTurns(
-      saved.messages.slice(0, -SQUIRE_LIMITS.historyMax).filter(isReplayable),
-      { actorId: actor.id, incidentId: incidentId ?? undefined }
-    ).catch(() => null);
+    const summary = await summarizeOlderTurns(saved.messages.slice(0, cut).filter(isReplayable), {
+      actorId: actor.id,
+      incidentId: incidentId ?? undefined,
+    }).catch(() => null);
     return {
       messages: [
         ...(summary ? [summary] : []),
-        ...replayable.map(message => ({
+        ...replayable.map((message, index) => ({
           role: message.role,
           content:
             message.role === 'assistant'
-              ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]\n${message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)}`
+              ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]\n${
+                  // Only the latest answer is replayed in full; older ones as their gist and sources.
+                  replayable.slice(index + 1).some(later => later.role === 'assistant')
+                    ? replayDigest(message.content)
+                    : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)
+                }`
               : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
           dataClass: message.dataClass,
         })),

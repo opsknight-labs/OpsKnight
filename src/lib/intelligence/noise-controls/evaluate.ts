@@ -101,7 +101,12 @@ export interface PrePagingLookups {
     since: Date
   ): Promise<{ id: string; labels: Record<string, string> | null } | null>;
   countRecentIncidents(serviceIds: readonly string[], since: Date): Promise<number>;
-  findStormParent(serviceIds: readonly string[], since: Date): Promise<{ id: string } | null>;
+  /** The earliest open incident in scope, preferring one on `preferServiceId` (the alert's own service). */
+  findStormParent(
+    serviceIds: readonly string[],
+    since: Date,
+    preferServiceId?: string
+  ): Promise<{ id: string } | null>;
   /** Alert statuses for the key, newest first, bounded. */
   recentAlertStatuses(
     serviceId: string,
@@ -475,7 +480,7 @@ async function decideWithLookups(
     const since = new Date(now.getTime() - definition.storm.windowSeconds * 1000);
     const recent = await lookups.countRecentIncidents(scope, since);
     if (recent >= definition.storm.threshold) {
-      const parent = await lookups.findStormParent(scope, since);
+      const parent = await lookups.findStormParent(scope, since, input.serviceId);
       if (parent) {
         return {
           action: 'GROUP_CHILD',

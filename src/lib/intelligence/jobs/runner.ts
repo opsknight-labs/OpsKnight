@@ -52,6 +52,7 @@ import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '.
 import { scheduleSquireMemoryWork, SQUIRE_MEMORY_HANDLERS } from '../memory/handlers';
 import { OPS_INSIGHT_HANDLERS, scheduleOpsInsightsWork } from '../ops-insights/handlers';
 import { runRunbookWeightFit, scheduleRunbookWeightFit } from '../learning/runbook-weights';
+import { runNoiseSweep, scheduleNoiseSweeps } from '../noise-controls/sweep';
 import {
   currentEmbeddingModel,
   embedIncidents,
@@ -219,8 +220,11 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   ...SQUIRE_MEMORY_HANDLERS,
   // Operations insights (Workstream J): opt-in, one scope per item, see ops-insights/handlers.ts.
   ...OPS_INSIGHT_HANDLERS,
-  [WORK_KINDS.FIT_RUNBOOK_WEIGHTS]: async item => {
-    await runRunbookWeightFit(item);
+  [WORK_KINDS.FIT_RUNBOOK_WEIGHTS]: async (item, { settings }) => {
+    await runRunbookWeightFit(item, undefined, settings);
+  },
+  [WORK_KINDS.NOISE_SWEEP]: async (item, { settings, signal }) => {
+    await runNoiseSweep(item, settings, signal);
   },
 };
 
@@ -786,6 +790,15 @@ async function runCycle(
       if (handlers[WORK_KINDS.FIT_RUNBOOK_WEIGHTS]) await scheduleRunbookWeightFit(now());
     } catch (error) {
       logger.warn('[Intelligence] Runbook weight fit failed; will retry', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Noise-control follow-ups (un-suppress, storm cascade): one coalesced upsert per interval.
+    try {
+      if (handlers[WORK_KINDS.NOISE_SWEEP]) await scheduleNoiseSweeps(now());
+    } catch (error) {
+      logger.warn('[Intelligence] Could not schedule noise-control sweeps; will retry', {
         error: error instanceof Error ? error.message : String(error),
       });
     }

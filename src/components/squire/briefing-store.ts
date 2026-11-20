@@ -95,7 +95,14 @@ export function parsePinnedBriefing(value: unknown): PinnedBriefing | null {
         : null;
     }),
   };
-  return briefing.similar.length + briefing.changes.length + briefing.runbooks.length > 0
+  const summary =
+    raw.summary && typeof raw.summary === 'object'
+      ? (raw.summary as Record<string, unknown>)
+      : null;
+  const headline = str(summary?.headline);
+  briefing.summary = headline ? { headline, currentState: str(summary?.currentState) ?? '' } : null;
+  return briefing.summary ||
+    briefing.similar.length + briefing.changes.length + briefing.runbooks.length > 0
     ? briefing
     : null;
 }

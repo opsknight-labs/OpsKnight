@@ -29,10 +29,28 @@ function composed(plan: PrePagingLookupPlan): Prisma.Sql {
         WHERE "serviceId" = ANY(${[...plan.storm.serviceIds]}::text[]) AND "createdAt" >= ${plan.storm.since})`
     : none;
   const stormParent = plan.storm
-    ? Prisma.sql`(SELECT "id" FROM "Incident"
+    ? Prisma.sql`(SELECT "id" FROM (
+        (SELECT "id" FROM "Incident"
+        WHERE "serviceId" = ${plan.serviceId}::text AND "createdAt" >= ${plan.storm.since}
+          AND "status" IN ('OPEN', 'ACKNOWLEDGED')
+          AND NOT EXISTS (
+            SELECT 1 FROM "IncidentRelationship" r
+            WHERE r."sourceIncidentId" = "Incident"."id" AND r."type" = 'PARENT_CHILD'
+              AND r."evidence"->>'kind' = 'prepaging_storm'
+              AND "Incident"."status" = 'OPEN' AND "Incident"."escalationStatus" = 'COMPLETED'
+          )
+        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)
+        UNION ALL
+        (SELECT "id" FROM "Incident"
         WHERE "serviceId" = ANY(${[...plan.storm.serviceIds]}::text[]) AND "createdAt" >= ${plan.storm.since}
           AND "status" IN ('OPEN', 'ACKNOWLEDGED')
-        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)`
+          AND NOT EXISTS (
+            SELECT 1 FROM "IncidentRelationship" r
+            WHERE r."sourceIncidentId" = "Incident"."id" AND r."type" = 'PARENT_CHILD'
+              AND r."evidence"->>'kind' = 'prepaging_storm'
+              AND "Incident"."status" = 'OPEN' AND "Incident"."escalationStatus" = 'COMPLETED'
+          )
+        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)) parent LIMIT 1)`
     : none;
   return Prisma.sql`SELECT ${dedup} AS "dedup", ${statuses} AS "statuses",
           ${stormCount} AS "stormCount", ${stormParent} AS "stormParent"`;

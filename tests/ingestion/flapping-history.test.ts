@@ -1,81 +1,53 @@
 import { afterAll, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import prisma from '@/lib/prisma';
-import { checkAlertFlapping } from '@/lib/flapping';
+import { processEvent } from '@/lib/events';
+import { primePrePagingSnapshot } from '@/lib/intelligence/noise-controls';
 
 afterAll(() => prisma.$disconnect());
 
-it('filters the service before limiting key history and observes the caller transaction', async () => {
+/**
+ * Flapping is decided only by the policy flapping control (noise-controls/evaluate.ts). With no noise
+ * policy a key with a flapping history still pages: there is no fixed-threshold legacy path anymore.
+ */
+it('a trigger after rapid TRIGGERED/RESOLVED oscillation pages when no flapping policy is on', async () => {
   const url = new URL(process.env.DATABASE_URL!);
   expect(url.hostname).toBe('127.0.0.1');
   expect(url.pathname).toMatch(/^\/ingestion_test_/);
-  const services = await Promise.all(
-    [0, 1].map(() => prisma.service.create({ data: { name: `Owned flapping ${randomUUID()}` } }))
-  );
+  const service = await prisma.service.create({ data: { name: `Flapping ${randomUUID()}` } });
+  await primePrePagingSnapshot();
+  const integrationId = 'flapping-history';
   const key = randomUUID();
-  const cappedKey = randomUUID();
   const now = Date.now();
   try {
+    // Linked to an earlier, resolved incident so no alert reads as a buffered out-of-order resolve.
+    const previous = await prisma.incident.create({
+      data: { title: 'Disk flapping', serviceId: service.id, status: 'RESOLVED' },
+    });
     await prisma.alert.createMany({
-      data: [
-        ...Array.from({ length: 30 }, (_, i) => ({
-          serviceId: services[1].id,
-          dedupKey: key,
-          status: 'TRIGGERED',
-          createdAt: new Date(now - i * 10),
-          payload: {},
-        })),
-        ...Array.from({ length: 6 }, (_, i) => ({
-          serviceId: services[0].id,
-          dedupKey: key,
-          status: i % 2 ? 'RESOLVED' : 'TRIGGERED',
-          createdAt: new Date(now - 10000 - i * 1000),
-          payload: {},
-        })),
-        ...Array.from({ length: 25 }, (_, i) => ({
-          serviceId: services[0].id,
-          dedupKey: cappedKey,
-          status: i < 20 || i % 2 === 0 ? 'TRIGGERED' : 'RESOLVED',
-          createdAt: new Date(now - 10000 - i * 1000),
-          payload: {},
-        })),
-        {
-          serviceId: services[0].id,
-          dedupKey: key,
-          status: 'RESOLVED',
-          createdAt: new Date(now - 3600000),
-          payload: {},
-        },
-      ],
+      data: Array.from({ length: 6 }, (_, i) => ({
+        serviceId: service.id,
+        dedupKey: `${integrationId}:${key}`,
+        status: i % 2 ? 'RESOLVED' : 'TRIGGERED',
+        createdAt: new Date(now - 10_000 - i * 1000),
+        payload: {},
+        incidentId: previous.id,
+      })),
     });
-    expect(await checkAlertFlapping(key, services[0].id)).toEqual({
-      isFlapping: true,
-      transitionCount: 5,
-    });
-    expect(await checkAlertFlapping(cappedKey, services[0].id)).toEqual({
-      isFlapping: false,
-      transitionCount: 0,
-    });
-    expect(await checkAlertFlapping(randomUUID(), services[0].id)).toEqual({
-      isFlapping: false,
-      transitionCount: 0,
-    });
-    await prisma.$transaction(async tx => {
-      await tx.alert.create({
-        data: {
-          serviceId: services[0].id,
-          dedupKey: key,
-          status: 'RESOLVED',
-          createdAt: new Date(now + 1),
-          payload: {},
-        },
-      });
-      expect(await checkAlertFlapping(key, services[0].id, undefined, tx)).toEqual({
-        isFlapping: true,
-        transitionCount: 6,
-      });
-    });
+    const result = await processEvent(
+      {
+        event_action: 'trigger',
+        dedup_key: key,
+        payload: { summary: 'Disk flapping', source: 'test', severity: 'critical' },
+      },
+      service.id,
+      integrationId
+    );
+    expect(result.action).toBe('triggered');
+    expect('incident' in result && result.incident?.status).toBe('OPEN');
   } finally {
-    await prisma.service.deleteMany({ where: { id: { in: services.map(service => service.id) } } });
+    await prisma.alert.deleteMany({ where: { serviceId: service.id } });
+    await prisma.incident.deleteMany({ where: { serviceId: service.id } });
+    await prisma.service.delete({ where: { id: service.id } });
   }
 });

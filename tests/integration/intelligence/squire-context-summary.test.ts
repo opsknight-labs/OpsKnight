@@ -111,6 +111,24 @@ describe('earlier-turn summary in AI conversations', () => {
     expect(chat.messages.at(-1)).toMatchObject({ role: 'user', content: 'What did we decide?' });
   });
 
+  it('keeps the summary and the replayed prefix byte-identical across the next exchange', async () => {
+    const { actor, conversationId } = await longConversation();
+    model.script.push({ content: 'Done.' }, { content: 'Done again.' });
+    await run(actor, conversationId);
+    await recordExchange({
+      userId: actor.id,
+      conversationId,
+      question: 'Question number 8 about the checkout pool',
+      answer: 'Answer number 8.',
+    });
+    await run(actor, conversationId);
+    const [before, after] = model.requests.map(r => (r.body as unknown as Body).messages);
+    // Same summary block, and every turn replayed before still opens the request the same way.
+    expect(after[1]).toEqual(before[1]);
+    expect(after.slice(0, before.length - 1)).toEqual(before.slice(0, -1));
+    expect(after.at(-2)?.content).toBe('Question number 8 about the checkout pool');
+  });
+
   it('still answers in one model call when a person is limited to one request per minute', async () => {
     const { actor, conversationId } = await longConversation();
     await db.aiSettings.update({

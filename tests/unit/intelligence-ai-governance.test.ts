@@ -21,7 +21,7 @@ describe('prompt registry', () => {
     }
   });
 
-  it('puts guidance after the fixed rules and ranks it below them', () => {
+  it('puts guidance after the fixed rules, ranks it below them, and keeps context data last', () => {
     const rendered = renderPrompt(
       'squire.system',
       { name: 'Pip' },
@@ -32,8 +32,11 @@ describe('prompt registry', () => {
     const contextAt = rendered.system.indexOf('Viewing incident X.');
     const guidanceAt = rendered.system.indexOf('Use UTC.');
     expect(rulesAt).toBe(0);
-    expect(contextAt).toBeGreaterThan(rulesAt);
-    expect(guidanceAt).toBeGreaterThan(contextAt);
+    // Rules, guidance and stable facts form the cacheable prefix in that order; the guidance block is
+    // closed before the data starts, so incident text can never read as more guidance.
+    expect(guidanceAt).toBeGreaterThan(rulesAt);
+    expect(contextAt).toBeGreaterThan(guidanceAt);
+    expect(rendered.system.slice(guidanceAt, contextAt)).toMatch(/End of organisation guidance/);
     expect(rendered.system).toMatch(/the rules above always win/);
     expect(rendered.meta).toEqual({
       id: 'squire.system',

@@ -21,6 +21,7 @@ import {
   logLoss,
   sigmoid,
 } from './bounded-fit';
+import { readWeightProposal, storeWeightProposal } from './proposal-store';
 
 /**
  * Offline fitting of probable-cause ranking weights from responder feedback on cause findings. Each
@@ -113,8 +114,10 @@ const evidenceSchema = z.object({
   components: z.object({ proximity: z.number() }),
 });
 
-export async function suggestResponseWeights() {
-  const rows = await prisma.$queryRaw<
+export async function suggestResponseWeights(
+  client: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma
+) {
+  const rows = await client.$queryRaw<
     Array<{ id: string; kind: string; evidence: Prisma.JsonValue; helpful: boolean }>
   >`
     SELECT DISTINCT ON (f."id") f."id", f."kind", f."evidence", fb."verdict" IN ('HELPFUL', 'CORRECT') AS helpful
@@ -148,6 +151,22 @@ export async function suggestResponseWeights() {
   };
 }
 
+type StoredResponseWeightsProposal = ResponseWeightsProposal & { id: string };
+
+/** Fits now and stores the result for the settings page (null when there is no supported improvement). */
+export async function refreshResponseWeightProposal(client: Prisma.TransactionClient = prisma) {
+  const proposal = await suggestResponseWeights(client);
+  await storeWeightProposal('RESPONSE_WEIGHTS_PROPOSAL', proposal, client);
+  return proposal;
+}
+
+/** The proposal the daily fit stored: one indexed read, no fit. */
+export const readResponseWeightProposal = () =>
+  readWeightProposal<StoredResponseWeightsProposal>(
+    'RESPONSE_WEIGHTS_PROPOSAL',
+    responseWeightsSchema
+  );
+
 /** Recompute before publishing: the browser cannot supply arbitrary coefficients or stale evidence. */
 export async function adoptResponseWeights(input: unknown, actor: IntelligenceActor) {
   const parsed = parseOrThrow(
@@ -159,7 +178,8 @@ export async function adoptResponseWeights(input: unknown, actor: IntelligenceAc
       .strict(),
     input
   );
-  const suggestion = await suggestResponseWeights();
+  // The recomputed proposal replaces the stored one, so a refresh after a conflict shows the current one.
+  const suggestion = await refreshResponseWeightProposal();
   if (!suggestion || suggestion.id !== parsed.suggestionId)
     throw new AppError({
       code: 'RESOURCE_CONFLICT',

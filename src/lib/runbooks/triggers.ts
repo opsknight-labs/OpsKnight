@@ -5,6 +5,7 @@ import { computeTriggerFingerprint } from './definition';
 import { evaluateTrigger } from './matcher';
 import { loadRunbookIncidentContext } from './incident-context';
 import {
+  BINDING_RATE_LIMITED,
   INCIDENT_NOT_OPEN,
   lockOpenIncidentForAutomation,
   startTriggeredRunbookExecution,
@@ -58,8 +59,10 @@ async function recordRunbookSkip(input: {
   });
 }
 
-const isIncidentNotOpen = (error: unknown) =>
-  error instanceof RunbookDefinitionError && error.message.startsWith(INCIDENT_NOT_OPEN);
+/** Start-time refusals that become a recorded skip rather than a failure. */
+const isRecordedSkip = (error: unknown) =>
+  error instanceof RunbookDefinitionError &&
+  (error.message.startsWith(INCIDENT_NOT_OPEN) || error.message.startsWith(BINDING_RATE_LIMITED));
 
 const isAlreadyHandled = (error: unknown) =>
   (error as { code?: string })?.code === 'P2002' ||
@@ -171,6 +174,8 @@ export async function evaluateIncidentTriggers(
     return { matched, started, suggested, suppressed, skipped };
   }
   const transientFailures: unknown[] = [];
+  // A storm child's remediation belongs to its parent; read once, only if an automatic rule matches.
+  let stormParentId: string | null | undefined;
   for await (const bindings of incidentRuleBatches(serviceId, evaluationSource)) {
     for (const binding of bindings) {
       let matchedTrigger: { id: string; revision: number; reason: string } | null = null;
@@ -326,6 +331,29 @@ export async function evaluateIncidentTriggers(
           }
           continue;
         }
+        if (stormParentId === undefined)
+          stormParentId =
+            (
+              await prisma.incidentRelationship.findFirst({
+                where: {
+                  sourceIncidentId: incidentId,
+                  type: 'PARENT_CHILD',
+                  decision: 'ACCEPTED',
+                  evidence: { path: ['kind'], equals: 'prepaging_storm' },
+                },
+                select: { targetIncidentId: true },
+              })
+            )?.targetIncidentId ?? null;
+        if (stormParentId) {
+          skipped++;
+          await recordRunbookSkip({
+            incidentId,
+            bindingId: binding.id,
+            runbookName: binding.runbook.name,
+            reason: `STORM_CHILD: grouped under incident ${stormParentId}; automatic runs start on the parent only`,
+          });
+          continue;
+        }
         try {
           await startTriggeredRunbookExecution({
             runbookId: binding.runbookId,
@@ -342,7 +370,7 @@ export async function evaluateIncidentTriggers(
           });
           started++;
         } catch (error) {
-          if (isIncidentNotOpen(error)) {
+          if (isRecordedSkip(error)) {
             skipped++;
             await recordRunbookSkip({
               incidentId,
