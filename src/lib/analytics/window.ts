@@ -29,6 +29,8 @@ export type AnalyticsWindow = {
   businessTimeZone: string;
   /** True when retention or "now" shortened the requested range. */
   isClipped: boolean;
+  /** False when the previous period would reach past retention; it is then empty. */
+  hasPrevious: boolean;
 };
 
 function rangeMs(params: AnalyticsParams): number {
@@ -74,14 +76,19 @@ export function resolveAnalyticsWindow(input: {
   });
   const { start, end } = resolved.effective;
   const length = end.getTime() - start.getTime();
+  // A comparison period older than retention would read purged (or not-yet-purged)
+  // data and show a misleading baseline, so it is dropped instead.
+  const previousStart = new Date(start.getTime() - length);
+  const hasPrevious = previousStart >= resolved.retentionStart;
   return {
     start,
     end,
-    previousStart: new Date(start.getTime() - length),
+    previousStart: hasPrevious ? previousStart : start,
     previousEnd: start,
     bucket: bucketFor(length),
     timeZone,
     businessTimeZone: context.businessTimeZone,
     isClipped: resolved.isClipped,
+    hasPrevious,
   };
 }

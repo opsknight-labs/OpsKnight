@@ -32,6 +32,14 @@ describe('analytics cache', () => {
     expect(compute).toHaveBeenCalledTimes(1);
   });
 
+  it('fails closed: recomputes when the change signal is unavailable', async () => {
+    const compute = vi.fn().mockResolvedValueOnce('v1').mockResolvedValueOnce('v2');
+    expect(await cached('k', compute)).toBe('v1');
+    mocks.generation.mockResolvedValue(null);
+    expect(await cached('k', compute)).toBe('v2');
+    expect(compute).toHaveBeenCalledTimes(2);
+  });
+
   it('serves stale data while one refresh runs, then the refreshed value', async () => {
     const compute = vi.fn().mockResolvedValueOnce('old').mockResolvedValueOnce('new');
     await cachedWithTime('k', compute);

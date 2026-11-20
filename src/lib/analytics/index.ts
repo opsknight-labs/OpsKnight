@@ -69,7 +69,9 @@ export async function createAnalyticsContext(
     userTimeZone,
   });
   return {
-    params,
+    // No comparison when the previous period would fall outside retention. The cache key
+    // keeps the requested params (the override follows from them) so Refresh still matches.
+    params: window.hasPrevious ? params : { ...params, compare: false },
     scope,
     window,
     cacheKey: `${filterCacheKey(scope, params)}${window.timeZone}`,

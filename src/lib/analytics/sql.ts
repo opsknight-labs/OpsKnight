@@ -20,7 +20,8 @@ import type { AnalyticsWindow } from './window';
  * resolve_met, resolve_breached, escalated, after_hours, auto_resolved,
  * local_at (viewer tz wall clock), business_at (business tz wall clock).
  *
- * SLA rules mirror calculateDbAggregateMetrics in sla-server.ts.
+ * SLA rules mirror calculateDbAggregateMetrics in sla-server.ts, except that an
+ * incident whose ack/resolve time precedes createdAt counts as neither met nor breached.
  */
 export function metricRowsCte(
   scope: AnalyticsScope,
@@ -50,8 +51,6 @@ export function metricRowsCte(
         (${col('slaAckElapsedMs')} IS NOT NULL
           OR (${col('acknowledgedAt')} IS NOT NULL AND ${col('acknowledgedAt')} >= ${col('createdAt')})) AS ack_valid,
         (${col('status')} = 'RESOLVED'::"IncidentStatus"
-          AND COALESCE(${col('resolvedAt')}, ${col('updatedAt')}) IS NOT NULL) AS resolved_any,
-        (${col('status')} = 'RESOLVED'::"IncidentStatus"
           AND COALESCE(${col('resolvedAt')}, ${col('updatedAt')}) >= ${col('createdAt')}) AS resolved_valid,
         EXISTS (
           SELECT 1 FROM "IncidentEvent" e
@@ -70,18 +69,18 @@ export function metricRowsCte(
         in_current, escalated, local_at, business_at,
         CASE WHEN ack_valid THEN ack_elapsed END AS ack_ms,
         CASE WHEN resolved_valid THEN resolve_elapsed END AS resolve_ms,
-        COALESCE(ack_any AND ack_elapsed <= ack_target, false) AS ack_met,
+        COALESCE(ack_valid AND ack_elapsed <= ack_target, false) AS ack_met,
         COALESCE(
-          (ack_any AND ack_elapsed > ack_target)
+          (ack_valid AND ack_elapsed > ack_target)
           OR (NOT ack_any AND status = 'RESOLVED'::"IncidentStatus"
             AND NOT ("resolutionKind" = 'SOURCE_RECOVERY'::"IncidentResolutionKind"
               AND resolve_elapsed <= ack_target))
           OR (NOT ack_any AND status <> 'RESOLVED'::"IncidentStatus" AND current_elapsed > ack_target),
           false
         ) AS ack_breached,
-        COALESCE(resolved_any AND resolve_elapsed <= resolve_target, false) AS resolve_met,
+        COALESCE(resolved_valid AND resolve_elapsed <= resolve_target, false) AS resolve_met,
         COALESCE(
-          (resolved_any AND resolve_elapsed > resolve_target)
+          (resolved_valid AND resolve_elapsed > resolve_target)
           OR (status <> 'RESOLVED'::"IncidentStatus" AND current_elapsed > resolve_target),
           false
         ) AS resolve_breached,

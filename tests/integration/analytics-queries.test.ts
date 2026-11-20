@@ -155,6 +155,40 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
     expect(current.resolveSla).toBe(80); // 90-minute resolve breaches the 60-minute target
   });
 
+  it('excludes incidents whose ack/resolve time precedes creation from SLA outcomes', async () => {
+    const service = await testPrisma.service.create({ data: { name: 'bad-clock' } });
+    const createdAt = new Date(NOW.getTime() - DAY);
+    await testPrisma.incident.createMany({
+      data: [
+        // Valid: acked in 10m (breaches 5m), resolved in 30m (meets 60m).
+        {
+          title: 'valid',
+          serviceId: service.id,
+          status: 'RESOLVED' as const,
+          createdAt,
+          acknowledgedAt: new Date(createdAt.getTime() + 10 * MIN),
+          resolvedAt: new Date(createdAt.getTime() + 30 * MIN),
+          ...sla,
+        },
+        // Legacy/imported: both timestamps before createdAt. Must not count as "met".
+        {
+          title: 'bad clock',
+          serviceId: service.id,
+          status: 'RESOLVED' as const,
+          createdAt,
+          acknowledgedAt: new Date(createdAt.getTime() - 5 * MIN),
+          resolvedAt: new Date(createdAt.getTime() - MIN),
+          ...sla,
+        },
+      ],
+    });
+    const { scope, window } = context();
+    const { current } = await queryKpis(scope, window);
+    expect(current.incidents).toBe(2);
+    expect(current.ackSla).toBe(0);
+    expect(current.resolveSla).toBe(100);
+  });
+
   it('buckets in the viewer timezone and classifies after-hours in the business timezone', async () => {
     const service = await testPrisma.service.create({ data: { name: 'tz' } });
     // 2026-01-14 12:00 UTC is 07:00 in New York: before business hours there.

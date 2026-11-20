@@ -101,6 +101,16 @@ describe('resolveAnalyticsWindow', () => {
     expect(window.start).toEqual(new Date(now.getTime() - 90 * 86_400_000));
   });
 
+  it('drops the previous period when it would reach past retention', () => {
+    const clipped = resolveAnalyticsWindow({ params: parseAnalyticsParams({ range: '90d' }), policy, now });
+    expect(clipped.hasPrevious).toBe(false);
+    expect(clipped.previousStart).toEqual(clipped.start);
+    expect(clipped.previousEnd).toEqual(clipped.start);
+    const fits = resolveAnalyticsWindow({ params: parseAnalyticsParams({ range: '30d' }), policy, now });
+    expect(fits.hasPrevious).toBe(true);
+    expect(fits.previousStart).toEqual(new Date(fits.start.getTime() - 30 * 86_400_000));
+  });
+
   it("runs custom ranges midnight-to-midnight in the viewer's timezone", () => {
     const params = parseAnalyticsParams({ from: '2026-01-01', to: '2026-01-02' });
     const ny = resolveAnalyticsWindow({ params, policy: { ...policy, incidentRetentionDays: 730 }, userTimeZone: 'America/New_York', now });

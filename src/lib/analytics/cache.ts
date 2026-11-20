@@ -55,7 +55,9 @@ export async function cachedWithTime<T>(key: string, compute: () => Promise<T>):
   let entry = cache.get(key);
   if (entry) {
     const generation = await getRealtimeChangeGeneration().catch(() => null);
-    const changed = Boolean(generation && entry.generation && generation !== entry.generation);
+    // Fail closed: if we can't prove the data is unchanged (signal unavailable now or
+    // when cached), recompute. Assignee/watcher/team changes alter what an actor may see.
+    const changed = !generation || !entry.generation || generation !== entry.generation;
     if (changed || entry.staleUntil <= now) entry = undefined;
     else if (entry.freshUntil <= now) void refresh(key, compute).catch(() => undefined);
   }
