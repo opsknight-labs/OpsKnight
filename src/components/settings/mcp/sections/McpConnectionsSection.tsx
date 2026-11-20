@@ -294,7 +294,14 @@ export default function McpConnectionsSection({
                     {isAdmin && (
                       <ResponsiveCell label="Person" primary>
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <UserAvatar userId={row.user.id} name={who} size="xs" aria-hidden />
+                          <UserAvatar
+                            userId={row.user.id}
+                            name={who}
+                            avatarUrl={row.user.avatarUrl}
+                            gender={row.user.gender}
+                            size="xs"
+                            aria-hidden
+                          />
                           <div className="min-w-0">
                             <p className="truncate font-medium text-foreground">{who}</p>
                             {row.user.name && row.user.email && (

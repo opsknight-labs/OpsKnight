@@ -32,6 +32,8 @@ type User = {
   id: string;
   name: string | null;
   email: string;
+  avatarUrl?: string | null;
+  gender?: string | null;
   role: string;
   roleSource: string;
   issuers: string[];
@@ -151,7 +153,14 @@ export default function AuthenticationUserDirectory() {
               className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <UserAvatar userId={user.id} name={user.name || user.email} size="sm" aria-hidden />
+                <UserAvatar
+                  userId={user.id}
+                  name={user.name || user.email}
+                  avatarUrl={user.avatarUrl}
+                  gender={user.gender}
+                  size="sm"
+                  aria-hidden
+                />
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{user.name || user.email}</p>
                   <p className="text-xs text-muted-foreground break-all">{user.email}</p>
@@ -210,19 +219,13 @@ export default function AuthenticationUserDirectory() {
                       <span className="sr-only">Actions for {user.name || user.email}</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="w-64 p-1.5 rounded-xl border shadow-xl"
-                  >
-                    <DropdownMenuLabel className="px-2 py-1.5 text-xs text-muted-foreground font-semibold">
-                      Account & Identity
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator className="my-1" />
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Account & Identity</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => router.push(`/users?q=${encodeURIComponent(user.email)}`)}
-                      className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium"
                     >
-                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      <ExternalLink />
                       <span>Manage in Users directory</span>
                     </DropdownMenuItem>
                     {user.roleSource === 'MANUAL' && user.issuers.length > 0 && (
@@ -238,9 +241,9 @@ export default function AuthenticationUserDirectory() {
                               );
                           })
                         }
-                        className="flex items-start gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium"
+                        className="items-start"
                       >
-                        <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                        <RotateCcw />
                         <span>
                           Let role rules manage this role
                           <span className="block font-normal text-muted-foreground">

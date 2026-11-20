@@ -77,7 +77,14 @@ export default function McpGrantList({
                   href={`/users/${row.user.id}`}
                   className="flex min-w-0 items-start gap-2 break-words font-medium text-foreground underline-offset-2 hover:underline"
                 >
-                  <UserAvatar userId={row.user.id} name={who} size="xs" aria-hidden />
+                  <UserAvatar
+                    userId={row.user.id}
+                    name={who}
+                    avatarUrl={row.user.avatarUrl}
+                    gender={row.user.gender}
+                    size="xs"
+                    aria-hidden
+                  />
                   <span className="min-w-0">
                     {who}
                     {row.user.name && row.user.email && (

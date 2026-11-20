@@ -92,13 +92,13 @@ export default function DashboardCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive cursor-pointer"
+                  variant="destructive"
                   onClick={e => {
                     e.preventDefault();
                     setShowDeleteModal(true);
                   }}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <Trash2 />
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -126,7 +126,7 @@ export default function DashboardCard({
             {name}
           </CardTitle>
           {ownerName && (
-            <p className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
               By
               {owner && (
                 <UserAvatar
@@ -139,7 +139,7 @@ export default function DashboardCard({
                 />
               )}
               {ownerName}
-            </p>
+            </div>
           )}
           {description && (
             <CardDescription className="text-xs line-clamp-2">{description}</CardDescription>

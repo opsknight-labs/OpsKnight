@@ -82,7 +82,7 @@ export default async function MobilePostmortemsPage() {
                   <h2 className="line-clamp-2 text-[12px] font-semibold leading-snug text-foreground">
                     {postmortem.incident.title}
                   </h2>
-                  <p className="mt-1 flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
+                  <div className="mt-1 flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
                     <span className="truncate">{postmortem.incident.service.name} ·</span>
                     {postmortem.createdBy && (
                       <UserAvatar
@@ -97,7 +97,7 @@ export default async function MobilePostmortemsPage() {
                     <span className="truncate">
                       {postmortem.createdBy?.name || postmortem.createdBy?.email || 'Deleted user'}
                     </span>
-                  </p>
+                  </div>
                 </div>
                 <ChevronRight
                   className="h-4 w-4 shrink-0 text-muted-foreground"

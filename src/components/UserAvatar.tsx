@@ -108,8 +108,10 @@ export default function UserAvatar({
   const sizeConfig = SIZE_CLASSES.get(size) ?? { container: 'h-10 w-10', text: 'text-xs' };
   const palette = getAvatarPalette(name || userId);
 
+  // A span (not a div) so the avatar is valid inside <p>, <a>, <button> and <label>;
+  // a div inside <p> makes the browser split the paragraph and breaks hydration.
   return (
-    <div
+    <span
       aria-hidden={ariaHidden || undefined}
       className={cn('relative inline-flex shrink-0 select-none', sizeConfig.container, className)}
     >
@@ -138,6 +140,6 @@ export default function UserAvatar({
           {getInitials(name)}
         </AvatarFallback>
       </Avatar>
-    </div>
+    </span>
   );
 }
