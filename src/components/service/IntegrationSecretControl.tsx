@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Key, RefreshCw, Trash2 } from 'lucide-react';
 import CopyButton from '@/components/service/CopyButton';
 import { rotateIntegrationSecret, clearIntegrationSecret } from '@/app/(app)/services/actions';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,7 +40,6 @@ export default function IntegrationSecretControl({
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState(isInitiallyConfigured);
   const [revealedSecret, setRevealedSecret] = useState<string | null>(initialSecret || null);
-  const { showToast } = useToast();
 
   const handleRotate = async () => {
     setLoading(true);
@@ -48,9 +47,9 @@ export default function IntegrationSecretControl({
       const result = await rotateIntegrationSecret(integrationId, serviceId);
       setConfigured(true);
       setRevealedSecret(result.secret);
-      showToast('Secret rotated successfully', 'success');
+      notify.success('Secret rotated successfully');
     } catch (_error) {
-      showToast('Failed to rotate secret', 'error');
+      notify.error('Failed to rotate secret');
     } finally {
       setLoading(false);
     }
@@ -62,9 +61,9 @@ export default function IntegrationSecretControl({
       await clearIntegrationSecret(integrationId, serviceId);
       setConfigured(false);
       setRevealedSecret(null);
-      showToast('Secret cleared successfully', 'success');
+      notify.success('Secret cleared successfully');
     } catch (_error) {
-      showToast('Failed to clear secret', 'error');
+      notify.error('Failed to clear secret');
     } finally {
       setLoading(false);
     }

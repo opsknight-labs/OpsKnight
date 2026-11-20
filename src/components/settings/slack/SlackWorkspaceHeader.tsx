@@ -25,11 +25,11 @@ export function SlackWorkspaceHeader({
   onReplaceWorkspace,
 }: SlackWorkspaceHeaderProps) {
   return (
-    <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm">
+    <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Left: Logo and Info */}
         <div className="flex items-center gap-4 min-w-0">
-          <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-[#4A154B]/10 border border-[#4A154B]/20 shrink-0">
+          <div className="flex items-center justify-center h-12 w-12 rounded-lg border border-border bg-muted shrink-0">
             <SlackLogo className="h-6 w-6" />
           </div>
           <div className="min-w-0">
@@ -39,7 +39,7 @@ export function SlackWorkspaceHeader({
               </h3>
               <Badge
                 variant={enabled ? 'success' : 'neutral'}
-                className="text-[10px] font-semibold gap-1"
+                className="text-2xs font-semibold gap-1"
               >
                 {enabled ? (
                   <>

@@ -973,7 +973,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             session.user.email = (token.email as string) || session.user.email;
             session.user.avatarUrl = token.avatarUrl;
             session.user.gender = token.gender;
-            session.user.image = token.avatarUrl || getDefaultAvatar(token.gender, token.sub);
+            session.user.image = token.avatarUrl || getDefaultAvatar(token.name, token.sub);
             session.user.sessionId = sessionJti;
           }
           session.sessionId = sessionJti;

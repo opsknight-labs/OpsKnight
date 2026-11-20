@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { errorFromResponse } from '@/lib/client-error';
 import { SETTINGS_CHANGED_MESSAGE } from '@/lib/settings-result';
 import { Input } from '@/components/ui/shadcn/input';
@@ -35,7 +35,6 @@ type Props = {
 
 export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
   const router = useRouter();
-  const { showToast } = useToast();
   const initialValue = appUrl || '';
   const [value, setValue] = useState(initialValue);
   const [savedValue, setSavedValue] = useState(initialValue);
@@ -63,10 +62,10 @@ export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
     try {
       await navigator.clipboard.writeText(activeUrl);
       setCopied(true);
-      showToast('URL copied to clipboard', 'info');
+      notify.info('URL copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      showToast('Failed to copy URL', 'error');
+      notify.error('Failed to copy URL');
     }
   };
 
@@ -81,13 +80,13 @@ export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
     } catch {
       // Invalid URL
     }
-    showToast('Please configure a valid HTTP or HTTPS URL to test', 'error');
+    notify.error('Please configure a valid HTTP or HTTPS URL to test');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (value.trim() && !isValidUrl(value.trim())) {
-      showToast('Please enter a valid HTTP or HTTPS URL', 'error');
+      notify.error('Please enter a valid HTTP or HTTPS URL');
       return;
     }
 
@@ -113,11 +112,11 @@ export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
       setValue(nextValue);
       setSavedValue(nextValue);
       setRevision(nextRevision);
-      showToast('Application URL updated successfully', 'success');
+      notify.success('Application URL updated successfully');
       setLastSaved(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       router.refresh();
     } catch (error) {
-      showToast(error, 'error');
+      notify.error(error);
     } finally {
       setIsLoading(false);
     }
@@ -141,22 +140,31 @@ export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 py-4">
       {conflict && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-100 flex items-start justify-between gap-4">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-100 flex items-start justify-between gap-4">
           <div className="flex gap-2 min-w-0">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold">Settings changed elsewhere</p>
               <p>{conflict}</p>
-              <p className="text-xs mt-1 opacity-80">Your local URL edit has not been overwritten.</p>
+              <p className="text-xs mt-1 opacity-80">
+                Your local URL edit has not been overwritten.
+              </p>
             </div>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()} className="shrink-0 gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5" />Reload latest
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+            className="shrink-0 gap-1.5"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Reload latest
           </Button>
         </div>
       )}
 
-      <div className="rounded-xl border bg-muted/30 p-4 sm:p-5">
+      <div className="rounded-lg border bg-muted/30 p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -165,7 +173,7 @@ export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
               </span>
               <Badge
                 variant={value.trim() ? 'success' : 'neutral'}
-                className="text-[10px] font-medium"
+                className="text-2xs font-medium"
               >
                 {value.trim() ? (
                   <>
@@ -289,7 +297,7 @@ export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
           {usageTiles.map(({ icon: Icon, label, sub }) => (
             <div
               key={label}
-              className="rounded-xl border bg-card p-3.5 flex flex-col justify-between gap-2 transition-colors hover:border-border"
+              className="rounded-lg border bg-card p-3.5 flex flex-col justify-between gap-2 transition-colors hover:border-border"
             >
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-md bg-muted text-muted-foreground shrink-0">
@@ -297,7 +305,7 @@ export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
                 </div>
                 <span className="text-xs font-semibold text-foreground">{label}</span>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">{sub}</p>
+              <p className="text-2xs text-muted-foreground leading-relaxed">{sub}</p>
             </div>
           ))}
         </div>

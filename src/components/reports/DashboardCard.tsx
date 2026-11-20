@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import UserAvatar from '@/components/UserAvatar';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LayoutDashboard, Clock, Trash2, MoreVertical, AlertTriangle } from 'lucide-react';
@@ -28,6 +29,7 @@ interface DashboardCardProps {
   isDefault: boolean;
   updatedAt: string;
   ownerName?: string | null;
+  owner?: { id: string; avatarUrl?: string | null; gender?: string | null } | null;
   visibility?: string;
   canDelete?: boolean;
 }
@@ -40,6 +42,7 @@ export default function DashboardCard({
   isDefault,
   updatedAt,
   ownerName,
+  owner,
   visibility,
   canDelete = true,
 }: DashboardCardProps) {
@@ -89,13 +92,13 @@ export default function DashboardCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive cursor-pointer"
+                  variant="destructive"
                   onClick={e => {
                     e.preventDefault();
                     setShowDeleteModal(true);
                   }}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <Trash2 />
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -123,7 +126,20 @@ export default function DashboardCard({
             {name}
           </CardTitle>
           {ownerName && (
-            <p className="text-[11px] text-muted-foreground">By {ownerName}</p>
+            <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+              By
+              {owner && (
+                <UserAvatar
+                  userId={owner.id}
+                  avatarUrl={owner.avatarUrl}
+                  name={ownerName}
+                  gender={owner.gender}
+                  size="xs"
+                  aria-hidden
+                />
+              )}
+              {ownerName}
+            </div>
           )}
           {description && (
             <CardDescription className="text-xs line-clamp-2">{description}</CardDescription>

@@ -98,7 +98,7 @@ function Pill({
     <span
       title={title}
       className={cn(
-        'inline-flex items-center whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-semibold leading-4 tracking-wide',
+        'inline-flex items-center whitespace-nowrap rounded-md border px-1.5 py-0.5 text-2xs font-semibold leading-4 tracking-wide',
         className
       )}
     >
@@ -523,27 +523,18 @@ export default function McpCapabilityControlsPanel({
                 </SelectTrigger>
                 <SelectContent
                   position="popper"
-                  className="max-h-60 w-64 overflow-y-auto overscroll-contain rounded-xl border-border/80 shadow-xl"
+                  className="max-h-60 w-64 overflow-y-auto overscroll-contain"
                 >
                   <SelectGroup>
-                    <SelectLabel className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <SelectLabel className="px-2 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Capability Domains
                     </SelectLabel>
-                    <SelectItem
-                      value="all"
-                      className="rounded-lg text-xs font-medium cursor-pointer"
-                    >
-                      All Domains ({capabilities.length})
-                    </SelectItem>
+                    <SelectItem value="all">All Domains ({capabilities.length})</SelectItem>
                     {groups.map(g => (
-                      <SelectItem
-                        key={g.domain}
-                        value={g.domain}
-                        className="rounded-lg text-xs font-medium cursor-pointer"
-                      >
+                      <SelectItem key={g.domain} value={g.domain}>
                         <div className="flex items-center justify-between gap-2 w-full">
                           <span>{domainLabel(g.domain)}</span>
-                          <span className="text-[10px] tabular-nums text-muted-foreground">
+                          <span className="text-2xs tabular-nums text-muted-foreground">
                             {g.items.length}
                           </span>
                         </div>
@@ -581,42 +572,17 @@ export default function McpCapabilityControlsPanel({
                 </SelectTrigger>
                 <SelectContent
                   position="popper"
-                  className="max-h-60 w-60 overflow-y-auto overscroll-contain rounded-xl border-border/80 shadow-xl"
+                  className="max-h-60 w-60 overflow-y-auto overscroll-contain"
                 >
                   <SelectGroup>
-                    <SelectLabel className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <SelectLabel className="px-2 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Risk Classification
                     </SelectLabel>
-                    <SelectItem
-                      value="all"
-                      className="rounded-lg text-xs font-medium cursor-pointer"
-                    >
-                      All Risk Levels
-                    </SelectItem>
-                    <SelectItem
-                      value="R0"
-                      className="rounded-lg text-xs font-medium cursor-pointer"
-                    >
-                      R0 · Read only
-                    </SelectItem>
-                    <SelectItem
-                      value="R1"
-                      className="rounded-lg text-xs font-medium cursor-pointer"
-                    >
-                      R1 · Routine change
-                    </SelectItem>
-                    <SelectItem
-                      value="R2"
-                      className="rounded-lg text-xs font-medium cursor-pointer"
-                    >
-                      R2 · Sensitive change
-                    </SelectItem>
-                    <SelectItem
-                      value="R3"
-                      className="rounded-lg text-xs font-medium cursor-pointer"
-                    >
-                      R3 · Destructive or high-impact
-                    </SelectItem>
+                    <SelectItem value="all">All Risk Levels</SelectItem>
+                    <SelectItem value="R0">R0 · Read only</SelectItem>
+                    <SelectItem value="R1">R1 · Routine change</SelectItem>
+                    <SelectItem value="R2">R2 · Sensitive change</SelectItem>
+                    <SelectItem value="R3">R3 · Destructive or high-impact</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -801,7 +767,7 @@ export default function McpCapabilityControlsPanel({
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center gap-2">
-                        <div className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground mr-1">
+                        <div className="hidden sm:flex items-center gap-1 text-2xs text-muted-foreground mr-1">
                           <button
                             type="button"
                             onClick={() => setGroup(group.domain, group.items, true)}
@@ -872,7 +838,7 @@ export default function McpCapabilityControlsPanel({
                                     <span className="flex flex-wrap items-center gap-1.5">
                                       <code
                                         className={cn(
-                                          'break-all font-mono text-[13px] font-medium',
+                                          'break-all font-mono text-sm font-medium',
                                           off &&
                                             'text-muted-foreground line-through decoration-muted-foreground/60'
                                         )}
@@ -896,7 +862,7 @@ export default function McpCapabilityControlsPanel({
                                       <Pill
                                         className={
                                           capability.curated
-                                            ? 'border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-500/50 dark:bg-violet-500/10 dark:text-violet-200'
+                                            ? 'border-border bg-muted text-foreground'
                                             : 'border-border bg-transparent text-muted-foreground'
                                         }
                                       >

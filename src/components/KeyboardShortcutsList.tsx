@@ -2,6 +2,7 @@
 
 import { Fragment } from 'react';
 import { Keyboard } from 'lucide-react';
+import { EmptyState } from '@/components/patterns';
 import {
   KEYBOARD_SHORTCUTS,
   type KeyboardShortcutCategory,
@@ -88,12 +89,12 @@ export function ShortcutRows({
 
 export function ShortcutsEmpty({ query }: { query: string }) {
   return (
-    <div className="flex flex-col items-center gap-1 py-10 text-center">
-      <Keyboard className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-      <p className="text-sm font-medium text-foreground">No shortcuts match “{query}”</p>
-      <p className="text-xs text-muted-foreground">
-        Try a key such as “G” or an action such as “resolve”.
-      </p>
-    </div>
+    <EmptyState
+      variant="simple"
+      size="sm"
+      icon={<Keyboard />}
+      title={`No shortcuts match “${query}”`}
+      description="Try a key such as “G” or an action such as “resolve”."
+    />
   );
 }

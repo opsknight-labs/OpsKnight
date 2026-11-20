@@ -136,6 +136,8 @@ export default function AccessDeniedView({
                 {grantors.people.map(person => (
                   <li key={person.id} className="p-0">
                     <ContactChip
+                      userId={person.id}
+                      avatarUrl={person.avatarUrl}
                       name={person.name}
                       email={person.email}
                       subject={`OpsKnight access: ${explanation.label}`}

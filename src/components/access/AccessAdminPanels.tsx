@@ -499,7 +499,12 @@ export function WhoHasAccess() {
                   key={`r-${user.id}`}
                   className="flex items-center justify-between gap-3 px-4 py-3"
                 >
-                  <PersonCell name={user.name} email={user.email} />
+                  <PersonCell
+                    userId={user.id}
+                    name={user.name}
+                    email={user.email}
+                    avatarUrl={user.avatarUrl}
+                  />
                   <StatusPill tone="neutral">{roleLabel(user.role as AppRole)} role</StatusPill>
                 </li>
               ))}
@@ -508,7 +513,12 @@ export function WhoHasAccess() {
                   key={`c-${user.id}`}
                   className="flex items-center justify-between gap-3 px-4 py-3"
                 >
-                  <PersonCell name={user.name} email={user.email} />
+                  <PersonCell
+                    userId={user.id}
+                    name={user.name}
+                    email={user.email}
+                    avatarUrl={user.avatarUrl}
+                  />
                   <StatusPill tone="violet">Custom: {user.customRole}</StatusPill>
                 </li>
               ))}
@@ -518,6 +528,8 @@ export function WhoHasAccess() {
                   className="flex items-center justify-between gap-3 px-4 py-3"
                 >
                   <PersonCell
+                    userId={grant.user.id}
+                    avatarUrl={grant.user.avatarUrl}
                     name={grant.user.name}
                     email={grant.user.email}
                     meta={`Until ${new Date(grant.expiresAt).toLocaleString(undefined, {

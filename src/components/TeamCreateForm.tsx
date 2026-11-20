@@ -4,7 +4,7 @@ import { useState, useRef, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { CreateTrigger } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
@@ -52,17 +52,16 @@ export default function TeamCreateForm({ action, canCreate = true }: TeamCreateF
   const [isOpen, setIsOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
-  const { showToast } = useToast();
 
   const handleAction = async (prevState: FormState, formData: FormData) => {
     const res = await action(prevState, formData);
     if (res?.success) {
-      showToast('Team created successfully', 'success');
+      notify.success('Team created successfully');
       formRef.current?.reset();
       setIsOpen(false);
       router.refresh();
     } else if (res?.error) {
-      showToast(getUserFacingErrorMessage(res.error), 'error');
+      notify.error(getUserFacingErrorMessage(res.error));
     }
     return res;
   };

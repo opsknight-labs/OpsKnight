@@ -8,7 +8,13 @@ import AuthBrand from '@/components/auth/AuthBrand';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
 import { useCapabilityToken } from '@/components/auth/useCapabilityToken';
 import Spinner from '@/components/ui/Spinner';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
+import { cn } from '@/lib/utils';
+
+const passwordFieldClass =
+  'h-11 min-h-11 2xl:h-12 pl-10 pr-10 rounded-xl bg-card text-sm shadow-xs hover:border-ring/50 transition-colors';
 
 function ResetPasswordForm() {
   const { token, ready: tokenReady, clearToken } = useCapabilityToken();
@@ -31,12 +37,12 @@ function ResetPasswordForm() {
     return (
       <div
         role="alert"
-        className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm dark:border-red-500/20 dark:bg-red-500/10"
+        className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm"
       >
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
         <div>
-          <p className="font-medium text-red-700 dark:text-red-300">Invalid reset link</p>
-          <p className="mt-1 text-xs text-red-600 dark:text-red-300/80">
+          <p className="font-medium text-destructive">Invalid reset link</p>
+          <p className="mt-1 text-xs text-destructive">
             Request a new password reset link and try again.
           </p>
         </div>
@@ -77,18 +83,16 @@ function ResetPasswordForm() {
   if (success) {
     return (
       <div className="space-y-4" role="status" aria-live="polite">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
-          <ShieldCheck className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-          <h3 className="mt-3 font-display font-semibold text-emerald-800 dark:text-emerald-300">
-            Password updated
-          </h3>
-          <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-200/80">
+        <div className="rounded-xl border border-status-ok/30 bg-status-ok-soft p-5 text-center">
+          <ShieldCheck className="mx-auto h-8 w-8 text-status-ok" />
+          <h3 className="mt-3 font-display font-semibold text-status-ok-deep">Password updated</h3>
+          <p className="mt-1 text-sm text-status-ok-deep">
             All previously issued sessions have been revoked.
           </p>
         </div>
         <Link
           href="/login?passwordReset=1"
-          className="flex w-full items-center justify-center rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+          className="flex w-full items-center justify-center rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Continue to sign in
         </Link>
@@ -102,17 +106,19 @@ function ResetPasswordForm() {
         <div
           role="alert"
           aria-live="assertive"
-          className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-500/20 dark:bg-red-500/10"
+          className="mb-5 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3.5 text-sm"
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-          <p className="flex-1 text-red-700 dark:text-red-300">{error}</p>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <p id="form-error" className="flex-1 text-destructive">
+            {error}
+          </p>
           <button
             type="button"
             data-icon-button
             onClick={() => setError('')}
             aria-label="Dismiss error"
             title="Dismiss"
-            className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 transition-colors cursor-pointer"
+            className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="h-3.5 w-3.5 stroke-[2.25]" />
           </button>
@@ -120,17 +126,14 @@ function ResetPasswordForm() {
       )}
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
-          <label
-            htmlFor="password"
-            className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-          >
+          <Label htmlFor="password" className="text-xs text-foreground">
             New password
-          </label>
+          </Label>
           <div className="group relative flex items-center">
-            <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+            <div className="absolute left-3.5 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
               <Lock className="h-4 w-4" aria-hidden="true" />
             </div>
-            <input
+            <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
               required
@@ -143,35 +146,36 @@ function ResetPasswordForm() {
               autoComplete="new-password"
               disabled={isSubmitting}
               placeholder="Enter new password"
-              className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={cn('password-help', error && 'form-error')}
+              className={cn(passwordFieldClass, error && 'border-destructive')}
               autoFocus
             />
             <button
               type="button"
               onClick={() => setShowPassword(value => !value)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-2.5 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+              aria-pressed={showPassword}
+              aria-controls="password"
+              className="absolute right-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           <PasswordStrengthMeter password={password} />
-          <p className="text-[11px] text-slate-400">
+          <p id="password-help" className="text-xs text-muted-foreground">
             Additional account-specific password checks are enforced securely on submit.
           </p>
         </div>
         <div className="space-y-1.5">
-          <label
-            htmlFor="confirm-password"
-            className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-          >
+          <Label htmlFor="confirm-password" className="text-xs text-foreground">
             Confirm password
-          </label>
+          </Label>
           <div className="group relative flex items-center">
-            <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+            <div className="absolute left-3.5 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
               <Lock className="h-4 w-4" aria-hidden="true" />
             </div>
-            <input
+            <Input
               id="confirm-password"
               type={showConfirmPassword ? 'text' : 'password'}
               required
@@ -184,7 +188,14 @@ function ResetPasswordForm() {
               autoComplete="new-password"
               disabled={isSubmitting}
               placeholder="Confirm new password"
-              className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+              aria-invalid={(confirmPassword && !passwordsMatch) || error ? true : undefined}
+              aria-describedby={
+                cn(confirmPassword && 'confirm-password-match', error && 'form-error') || undefined
+              }
+              className={cn(
+                passwordFieldClass,
+                ((confirmPassword && !passwordsMatch) || error) && 'border-destructive'
+              )}
             />
             <button
               type="button"
@@ -192,16 +203,23 @@ function ResetPasswordForm() {
               aria-label={
                 showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'
               }
-              className="absolute right-2.5 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+              aria-pressed={showConfirmPassword}
+              aria-controls="confirm-password"
+              className="absolute right-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           {confirmPassword && (
             <p
-              className={`flex items-center gap-1 text-xs ${passwordsMatch ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
+              id="confirm-password-match"
+              className={`flex items-center gap-1 text-xs ${passwordsMatch ? 'text-status-ok' : 'text-destructive'}`}
             >
-              {passwordsMatch ? <CheckCircle2 className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              {passwordsMatch ? (
+                <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+              ) : (
+                <X className="h-3 w-3" aria-hidden="true" />
+              )}
               {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
             </p>
           )}
@@ -209,7 +227,8 @@ function ResetPasswordForm() {
         <button
           type="submit"
           disabled={isSubmitting || !isPasswordStrong(password) || !passwordsMatch}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+          aria-busy={isSubmitting || undefined}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           {isSubmitting ? (
             <>
@@ -232,10 +251,8 @@ export default function ResetPasswordPage() {
       <AuthCard>
         <div className="mb-8 text-center">
           <AuthBrand className="mb-6" />
-          <h1 className="font-display text-2xl font-bold text-slate-950 dark:text-white">
-            Reset password
-          </h1>
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+          <h1 className="font-display text-2xl font-bold text-foreground">Reset password</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
             Secure your account with a new passphrase.
           </p>
         </div>

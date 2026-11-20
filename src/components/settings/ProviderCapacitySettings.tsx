@@ -369,12 +369,12 @@ export default function ProviderCapacitySettings({
         <div className="flex items-center gap-2">
           <Gauge className="h-4 w-4 text-primary" />
           <span className="text-xs font-bold tracking-tight">Delivery Capacity</span>
-          <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider">
+          <Badge variant="outline" className="text-2xs font-bold uppercase tracking-wider">
             {channel} · {provider}
           </Badge>
         </div>
         {row && (
-          <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider">
+          <Badge variant="outline" className="text-2xs font-bold uppercase tracking-wider">
             rev {row.revision}
           </Badge>
         )}
@@ -387,7 +387,7 @@ export default function ProviderCapacitySettings({
           className={`rounded-lg border p-3 text-left transition-colors ${mode === 'AUTO' ? 'bg-primary/10 border-primary/30 ring-1 ring-primary/20' : 'bg-background border-border/60 hover:bg-muted/40'}`}
         >
           <div className="text-xs font-bold">Automatic — Recommended</div>
-          <div className="text-[11px] text-muted-foreground leading-snug mt-1">
+          <div className="text-2xs text-muted-foreground leading-snug mt-1">
             OpsKnight uses safe defaults and automatically throttles when provider pressure is
             detected.
           </div>
@@ -398,7 +398,7 @@ export default function ProviderCapacitySettings({
           className={`rounded-lg border p-3 text-left transition-colors ${mode === 'CUSTOM' ? 'bg-primary/10 border-primary/30 ring-1 ring-primary/20' : 'bg-background border-border/60 hover:bg-muted/40'}`}
         >
           <div className="text-xs font-bold">Custom</div>
-          <div className="text-[11px] text-muted-foreground leading-snug mt-1">
+          <div className="text-2xs text-muted-foreground leading-snug mt-1">
             Set explicit rate and concurrency. Bulk share reserves critical capacity.
           </div>
         </button>
@@ -440,7 +440,7 @@ export default function ProviderCapacitySettings({
       )}
 
       {mode === 'AUTO' && (
-        <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[11px] text-muted-foreground">
+        <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-2xs text-muted-foreground">
           <Info className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
           <span>
             When pressure (429 / Retry-After / latency) is detected, effective rate halves and
@@ -463,7 +463,7 @@ export default function ProviderCapacitySettings({
             onChange={e => setBulkSharePercent(Number(e.target.value))}
             className="w-full accent-primary"
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground">
+          <div className="flex justify-between text-2xs text-muted-foreground">
             <span>5% bulk</span>
             <span>95% bulk</span>
           </div>
@@ -471,7 +471,7 @@ export default function ProviderCapacitySettings({
         <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background px-3 py-2">
           <div>
             <div className="text-xs font-semibold">Adaptive throttling</div>
-            <div className="text-[11px] text-muted-foreground">Halve on 429, recover slowly</div>
+            <div className="text-2xs text-muted-foreground">Halve on 429, recover slowly</div>
           </div>
           <Switch checked={adaptiveBackpressure} onCheckedChange={setAdaptiveBackpressure} />
         </div>
@@ -486,7 +486,7 @@ export default function ProviderCapacitySettings({
               {isEnvTakeover ? 'Legacy environment — take ownership' : takeoverHint}
             </span>
             {isEnvTakeover && (
-              <Badge variant="outline" className="text-[10px] shrink-0">
+              <Badge variant="outline" className="text-2xs shrink-0">
                 ENV → DB
               </Badge>
             )}
@@ -578,7 +578,7 @@ export default function ProviderCapacitySettings({
         </div>
       )}
 
-      <div className="text-[11px] text-muted-foreground">
+      <div className="text-2xs text-muted-foreground">
         Hard ceilings ({limits?.ratePerSecond.max ?? 10000}/sec, {limits?.maxInFlight.max ?? 5000}{' '}
         in-flight) always apply. DB wins over legacy env; fresh replicas refresh within ~5s via TTL.
       </div>

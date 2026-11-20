@@ -185,6 +185,7 @@ export default function IncidentPostmortemTabContent({
                   gender={postmortem.createdBy.gender}
                   avatarUrl={postmortem.createdBy.avatarUrl}
                   size="xs"
+                  aria-hidden
                 />
                 <span className="text-xs text-slate-600 dark:text-zinc-300">
                   Lead author: <span className="font-semibold">{postmortem.createdBy.name}</span>
@@ -338,6 +339,7 @@ export default function IncidentPostmortemTabContent({
                             gender={owner.gender}
                             avatarUrl={owner.avatarUrl}
                             size="xs"
+                            aria-hidden
                           />
                           <span className="text-[11px] text-slate-600 dark:text-zinc-400 max-w-[100px] truncate">
                             {owner.name}

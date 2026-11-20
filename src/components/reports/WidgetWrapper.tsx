@@ -3,6 +3,7 @@
 import { ReactNode, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
+import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { GripVertical, Settings, X, Maximize2 } from 'lucide-react';
 
 type WidgetWrapperProps = {
@@ -105,11 +106,10 @@ const WidgetWrapper = memo(function WidgetWrapper({
 
       <CardContent className={`flex-1 ${getSizeClass(size)} pt-2 overflow-auto`}>
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="flex flex-col items-center gap-2 text-muted-foreground">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
-              <span className="text-xs">Loading...</span>
-            </div>
+          <div role="status" aria-busy="true" className="flex h-full min-h-24 flex-col gap-2">
+            <span className="sr-only">Loading widget</span>
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="w-full flex-1 rounded-md" />
           </div>
         ) : error ? (
           <div className="flex items-center justify-center h-full">

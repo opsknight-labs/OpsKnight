@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/shadcn/dropdown-menu';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { cn } from '@/lib/utils';
+import UserAvatar from '@/components/UserAvatar';
 import type { ActionItem } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
@@ -35,6 +36,7 @@ import {
   DirectoryPrimaryCell,
   DirectoryTable,
   RelativeTime,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
 } from '@/components/patterns';
@@ -71,6 +73,8 @@ import {
 
 export interface BoardActionItem extends ActionItem {
   ownerName?: string;
+  ownerAvatarUrl?: string | null;
+  ownerGender?: string | null;
   postmortemId: string;
   postmortemTitle: string;
   incidentId: string;
@@ -179,6 +183,33 @@ function getOwnerName(
   if (ownerName) return ownerName;
   if (!ownerId) return 'Unassigned';
   return users.find(user => user.id === ownerId)?.name || 'Unknown';
+}
+
+/** Owner name with avatar; plain text when nobody owns the item. */
+function OwnerLabel({
+  item,
+  users,
+  className,
+}: {
+  item: BoardActionItem;
+  users: Array<{ id: string; name: string; email: string }>;
+  className?: string;
+}) {
+  const name = getOwnerName(item.owner, users, item.ownerName);
+  if (!item.owner) return <span className={cn('truncate', className)}>{name}</span>;
+  return (
+    <span className={cn('flex min-w-0 items-center gap-1.5', className)}>
+      <UserAvatar
+        userId={item.owner}
+        avatarUrl={item.ownerAvatarUrl}
+        name={name}
+        gender={item.ownerGender}
+        size="xs"
+        aria-hidden
+      />
+      <span className="truncate">{name}</span>
+    </span>
+  );
 }
 
 /** Status changes offered in every item menu (board card and table row). */
@@ -358,7 +389,7 @@ function ActionItemCard({
                   <span className="sr-only">Actions</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 text-xs">
+              <DropdownMenuContent align="end">
                 <StatusMenuItems item={item} onStatusChange={onStatusChange} />
               </DropdownMenuContent>
             </DropdownMenu>
@@ -388,9 +419,11 @@ function ActionItemCard({
 
       <div className="pt-1.5 border-t border-border flex flex-col gap-0.5 text-[11px] text-muted-foreground">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-medium text-foreground truncate max-w-[150px]">
-            👤 {getOwnerName(item.owner, users, item.ownerName)}
-          </span>
+          <OwnerLabel
+            item={item}
+            users={users}
+            className="max-w-[150px] font-medium text-foreground"
+          />
           <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono text-muted-foreground truncate max-w-[100px]">
             {item.serviceName}
           </span>
@@ -672,16 +705,16 @@ export default function ActionItemsBoard({
           <span className="sr-only">Actions for {item.title}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 text-xs">
-        <DropdownMenuItem asChild className="gap-2">
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem asChild>
           <Link href={`/postmortems/${item.incidentId}`}>
-            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+            <FileText />
             <span>Open postmortem</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild className="gap-2">
+        <DropdownMenuItem asChild>
           <Link href={`/incidents/${item.incidentId}`}>
-            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+            <ExternalLink />
             <span>Open incident</span>
           </Link>
         </DropdownMenuItem>
@@ -746,22 +779,23 @@ export default function ActionItemsBoard({
     },
     {
       id: 'owner',
+      hideable: true,
       header: 'Owner',
       className: 'hidden w-36 md:table-cell',
       cell: item => (
-        <span className="block max-w-36 truncate text-xs text-foreground">
-          {getOwnerName(item.owner, users, item.ownerName)}
-        </span>
+        <OwnerLabel item={item} users={users} className="max-w-36 text-xs text-foreground" />
       ),
     },
     {
       id: 'priority',
+      hideable: true,
       header: 'Priority',
       className: 'hidden w-24 lg:table-cell',
       cell: item => <PriorityPill item={item} />,
     },
     {
       id: 'status',
+      hideable: true,
       header: 'Status',
       className: 'w-36',
       cell: item =>
@@ -789,11 +823,14 @@ export default function ActionItemsBoard({
     },
     {
       id: 'due',
+      hideable: true,
       header: 'Due',
       className: 'w-32 whitespace-nowrap',
       cell: item => <DueCell item={item} />,
     },
   ];
+
+  const columnVisibility = useDirectoryColumns('action-items', columns);
 
   return (
     <div className="space-y-4">
@@ -959,6 +996,8 @@ export default function ActionItemsBoard({
               ? `Showing ${rangeStart}–${rangeStart + filteredItems.length - 1} of ${pagination?.totalItems ?? filteredItems.length}`
               : 'No matching action items'
           }
+          columns={columnVisibility}
+          density
           view={{
             value: view,
             onChange: setView,
@@ -1027,13 +1066,14 @@ export default function ActionItemsBoard({
             rows={filteredItems}
             getRowId={item => item.id}
             columns={columns}
+            hiddenColumns={columnVisibility.hidden}
             rowActions={rowMenu}
             mobileRow={item => (
               <div className="min-w-0 space-y-1">
                 <DirectoryPrimaryCell
                   href={`/postmortems/${item.incidentId}`}
                   title={item.title}
-                  subtitle={getOwnerName(item.owner, users, item.ownerName)}
+                  subtitle={<OwnerLabel item={item} users={users} className="mt-0.5" />}
                 />
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={statusConfigFor(item).badgeVariant} size="xs">

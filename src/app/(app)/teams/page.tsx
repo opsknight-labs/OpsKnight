@@ -4,7 +4,7 @@ import { createTeam } from './actions';
 import TeamDirectoryList from '@/components/teams/TeamDirectoryList';
 import TeamCreateForm from '@/components/TeamCreateForm';
 import { AlertTriangle, Shield, UserCheck, Users } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 import { Prisma } from '@prisma/client';
@@ -146,55 +146,38 @@ export default async function TeamsPage({
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      {/* Header Banner with Glassmorphic Stats Capsule */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
-              <Users className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                Organization &amp; Ownership
-              </p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-                Teams
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-300">
-                Manage team ownership, lead assignments, responder rosters, and service coverage.
-              </p>
-            </div>
+      <DetailHeroBanner
+        tag="Organization & Ownership"
+        title="Teams"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Users className="h-6 w-6" aria-hidden="true" />
           </div>
-
-          <dl className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 text-center shadow-xs lg:min-w-[330px]">
-            {[
-              { label: 'Members', value: totalMembersCount, icon: UserCheck, warn: false },
-              { label: 'Services', value: totalServicesCount, icon: Shield, warn: false },
-              {
-                label: 'Needs lead',
-                value: needsLeadTeamsCount,
-                icon: AlertTriangle,
-                warn: needsLeadTeamsCount > 0,
-              },
-            ].map(stat => (
-              <div key={stat.label} className="min-w-0 rounded-lg px-3 py-2">
-                <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                  {stat.label}
-                </dt>
-                <dd
-                  className={cn(
-                    'mt-1 flex items-center justify-center gap-1.5 text-sm font-bold',
-                    stat.warn ? 'text-amber-300' : 'text-white'
-                  )}
-                >
-                  <stat.icon className="h-3.5 w-3.5" aria-hidden="true" /> {stat.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Manage team ownership, lead assignments, responder rosters, and service coverage.
+          </p>
+        }
+        stats={[
+          {
+            label: 'Members',
+            value: totalMembersCount,
+            icon: <UserCheck className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Services',
+            value: totalServicesCount,
+            icon: <Shield className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Needs lead',
+            value: needsLeadTeamsCount,
+            icon: <AlertTriangle className="h-3.5 w-3.5" />,
+            valueClassName: needsLeadTeamsCount > 0 ? 'text-amber-200' : undefined,
+          },
+        ]}
+      />
 
       {/* Top Action: Create Team Dashed Expander */}
       <TeamCreateForm action={createTeam} canCreate={canCreateTeam} />

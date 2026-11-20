@@ -79,7 +79,7 @@ export default async function AccessManagementPage() {
     listCustomRoles(),
     prisma.accessGrant.findMany({
       where: { revokedAt: null, expiresAt: { gt: now } },
-      include: { user: { select: { name: true, email: true } } },
+      include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
       orderBy: { expiresAt: 'asc' },
       take: 200,
     }),
@@ -242,7 +242,12 @@ export default async function AccessManagementPage() {
                 {grants.map(grant => (
                   <ResponsiveRow key={grant.id}>
                     <ResponsiveCell label="Person" primary>
-                      <PersonCell name={grant.user.name} email={grant.user.email} />
+                      <PersonCell
+                        userId={grant.user.id}
+                        name={grant.user.name}
+                        email={grant.user.email}
+                        avatarUrl={grant.user.avatarUrl}
+                      />
                     </ResponsiveCell>
                     <ResponsiveCell label="Access">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -322,7 +327,7 @@ export default async function AccessManagementPage() {
             )}
             {pastReviews.length > 0 && (
               <div className="space-y-3">
-                <h4 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <h4 className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <History className="h-3.5 w-3.5" aria-hidden="true" />
                   Past reviews
                 </h4>

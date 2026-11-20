@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/shadcn/sheet';
 import LayerRestrictionsFields from '@/components/schedules/LayerRestrictionsFields';
 import LayerTimingFields from '@/components/schedules/LayerTimingFields';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { formatDateForInput } from '@/lib/timezone';
 
 type LayerRestrictions = {
@@ -49,7 +49,6 @@ export default function LayerEditSheet({
   onOpenChange,
 }: LayerEditSheetProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [rotationDuration, setRotationDuration] = useState(layer.rotationLengthHours.toString());
   const [shiftDuration, setShiftDuration] = useState(layer.shiftLengthHours?.toString() || '');
@@ -77,14 +76,14 @@ export default function LayerEditSheet({
       try {
         const result = await updateLayer(layer.id, formData);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
           return;
         }
-        showToast('Layer updated successfully', 'success');
+        notify.success('Layer updated successfully');
         onOpenChange(false);
         router.refresh();
       } catch {
-        showToast('Failed to update layer', 'error');
+        notify.error('Failed to update layer');
       }
     });
   };

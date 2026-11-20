@@ -16,7 +16,7 @@ describe('AuthLayout', () => {
       </AuthLayout>
     );
 
-    const banner = document.querySelector('.border-b.border-\\[\\#1a202c\\].sm\\:block');
+    const banner = document.querySelector('.border-b.sm\\:block.lg\\:hidden');
     expect(banner).toBeTruthy();
     expect(banner?.className).toContain('hidden');
     expect(banner?.className).toContain('sm:block');

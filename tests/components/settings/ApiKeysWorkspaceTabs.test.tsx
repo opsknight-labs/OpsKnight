@@ -5,6 +5,7 @@ import ApiKeysWorkspaceTabs from '@/components/settings/ApiKeysWorkspaceTabs';
 vi.mock('next/navigation', () => ({
   usePathname: () => '/settings/api-keys',
   useSearchParams: () => new URLSearchParams(''),
+  useRouter: () => ({ replace: vi.fn() }),
 }));
 
 describe('ApiKeysWorkspaceTabs Component', () => {
@@ -53,7 +54,7 @@ describe('ApiKeysWorkspaceTabs Component', () => {
     );
 
     const explorerTab = screen.getByRole('tab', { name: /api explorer/i });
-    fireEvent.click(explorerTab);
+    fireEvent.mouseDown(explorerTab, { button: 0 });
 
     expect(screen.getByTestId('explorer-content')).toBeDefined();
     expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/settings/api-keys?tab=explorer');
@@ -77,7 +78,7 @@ describe('ApiKeysWorkspaceTabs Component', () => {
     );
 
     const apiKeysTab = screen.getByRole('tab', { name: /api keys/i });
-    fireEvent.click(apiKeysTab);
+    fireEvent.mouseDown(apiKeysTab, { button: 0 });
 
     expect(screen.getByTestId('api-keys-content')).toBeDefined();
     expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/settings/api-keys');

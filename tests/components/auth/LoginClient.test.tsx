@@ -59,9 +59,10 @@ describe('desktop login authentication methods', () => {
 
     const dismissBtn = screen.getByRole('button', { name: 'Dismiss error' });
     expect(dismissBtn).toBeInTheDocument();
-    expect(dismissBtn.className).toContain('dark:border-red-500/50');
-    expect(dismissBtn.className).toContain('dark:text-red-100');
-    expect(dismissBtn.className).toContain('dark:hover:text-white');
+    // Theme tokens keep the dismiss control legible in light and dark.
+    expect(dismissBtn.className).toContain('border-destructive/30');
+    expect(dismissBtn.className).toContain('text-destructive');
+    expect(dismissBtn.className).toContain('focus-visible:ring-destructive/50');
 
     fireEvent.click(dismissBtn);
     expect(screen.queryByText('Incorrect email or password')).not.toBeInTheDocument();
@@ -77,8 +78,8 @@ describe('desktop login authentication methods', () => {
 
     const dismissBtn = screen.getByRole('button', { name: 'Dismiss message' });
     expect(dismissBtn).toBeInTheDocument();
-    expect(dismissBtn.className).toContain('dark:border-white/25');
-    expect(dismissBtn.className).toContain('dark:text-white');
+    expect(dismissBtn.className).toContain('border-input/70');
+    expect(dismissBtn.className).toContain('text-foreground');
 
     fireEvent.click(dismissBtn);
     expect(screen.queryByText('Password set successfully')).not.toBeInTheDocument();

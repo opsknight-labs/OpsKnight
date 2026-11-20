@@ -36,6 +36,8 @@ import { AccessProvider } from '@/components/access/AccessProvider';
 import ElevatedAccessBanner from '@/components/access/ElevatedAccessBanner';
 import { getAccessSnapshot } from '@/lib/access/server';
 import AccountThemeSync from '@/components/theme/AccountThemeSync';
+import StatusBar from '@/components/layout/StatusBar';
+import { getStatusBarData } from '@/lib/status-bar-data';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -74,6 +76,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/login?error=SessionExpired');
   }
 
+  // Started alongside the shell read and awaited with the access snapshot; never rejects.
+  const statusBarPromise = getStatusBarData(requestContext.actor);
   let shell: AppShellContext | null = null;
   let shellError: unknown = null;
   try {
@@ -103,7 +107,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const userGender = activeShell.user.gender;
   const userId = activeShell.user.id;
   const userTimeZone = activeShell.user.timeZone || 'UTC';
-  const access = await getAccessSnapshot();
+  const [access, statusBar] = await Promise.all([getAccessSnapshot(), statusBarPromise]);
   const canCreate = access
     ? access.capabilities.includes(CAPABILITIES.OPERATIONS_MANAGE)
     : isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
@@ -184,6 +188,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                             </main>
                           </div>
                         </div>
+                        <StatusBar
+                          shifts={statusBar.shifts}
+                          counts={statusBar.counts}
+                          health={statusBar.health}
+                          renderedAt={statusBar.renderedAt}
+                        />
                       </div>
                       <CreateIncidentModal />
                     </IncidentAlertProvider>

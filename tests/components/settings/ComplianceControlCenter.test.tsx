@@ -160,11 +160,11 @@ describe('ComplianceControlCenter Component', () => {
     expect(screen.getByText('Runtime implemented: 4/6')).toBeInTheDocument();
 
     // Check all 5 tabs exist
-    expect(screen.getByRole('button', { name: /^Overview/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Controls/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Frameworks/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Evidence Ledger/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Operations$/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Overview/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Controls/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Frameworks/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Evidence Ledger/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Operations$/i })).toBeInTheDocument();
   });
 
   it('renders overview with factual metrics and attention required item', () => {
@@ -206,8 +206,8 @@ describe('ComplianceControlCenter Component', () => {
       />
     );
 
-    const controlsTabBtn = screen.getByRole('button', { name: /^Controls/i });
-    fireEvent.click(controlsTabBtn);
+    const controlsTabBtn = screen.getByRole('tab', { name: /^Controls/i });
+    fireEvent.mouseDown(controlsTabBtn, { button: 0 });
 
     expect(screen.getByPlaceholderText(/Search by ID, title, description/i)).toBeInTheDocument();
     expect(screen.getByText('SEC-ENC-001')).toBeInTheDocument();
@@ -223,8 +223,8 @@ describe('ComplianceControlCenter Component', () => {
       />
     );
 
-    const opsTabBtn = screen.getByRole('button', { name: /^Operations$/i });
-    fireEvent.click(opsTabBtn);
+    const opsTabBtn = screen.getByRole('tab', { name: /^Operations$/i });
+    fireEvent.mouseDown(opsTabBtn, { button: 0 });
 
     expect(screen.getByText(/Cryptographic Envelope & Secret Lifecycle/i)).toBeInTheDocument();
     expect(screen.getByText(/Privacy Requests & DSR Processing Portal/i)).toBeInTheDocument();

@@ -1314,6 +1314,7 @@ function CreateIncidentModalContent({
                                           avatarUrl={selectedAssigneeUser.avatarUrl}
                                           size="xs"
                                           className="border-border"
+                                          aria-hidden
                                         />
                                         <span className="truncate font-medium text-foreground">
                                           {selectedAssigneeUser.name}
@@ -1410,6 +1411,7 @@ function CreateIncidentModalContent({
                                           avatarUrl={user.avatarUrl}
                                           size="xs"
                                           className="mr-2 border-border"
+                                          aria-hidden
                                         />
                                         <div className="flex flex-col min-w-0">
                                           <span className="font-medium text-xs truncate">
@@ -1738,6 +1740,7 @@ function CreateIncidentModalContent({
                               avatarUrl={selectedAssigneeUser.avatarUrl}
                               size="xs"
                               className="border-border"
+                              aria-hidden
                             />
                             <span className="truncate max-w-[90px]">
                               {selectedAssigneeUser.name.split(' ')[0]}

@@ -16,6 +16,7 @@ import {
   FilterBar,
   FilterChip,
   toneClasses,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
 } from '@/components/patterns';
@@ -124,12 +125,14 @@ const columns: DirectoryColumn<TeamItem>[] = [
   },
   {
     id: 'lead',
+    hideable: true,
     header: 'Lead',
     className: 'w-[20%] max-w-0',
     cell: team => <TeamLead lead={team.teamLead} />,
   },
   {
     id: 'members',
+    hideable: true,
     header: 'Members',
     className: 'w-[18%]',
     cell: team =>
@@ -144,6 +147,7 @@ const columns: DirectoryColumn<TeamItem>[] = [
   },
   {
     id: 'services',
+    hideable: true,
     header: 'Services',
     className: 'max-w-0',
     cell: team => <ServicesSummary team={team} />,
@@ -210,6 +214,7 @@ export default function TeamDirectoryList({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [view, setView] = useDirectoryView('teams');
+  const columnVisibility = useDirectoryColumns('teams', columns);
 
   const updateFilters = (newParams: { q?: string; status?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -341,6 +346,8 @@ export default function TeamDirectoryList({
         <DirectoryHeader
           title="Team directory"
           summary={`Showing ${from}–${to} of ${shownTotal}`}
+          columns={columnVisibility}
+          density
           view={{ value: view, onChange: setView }}
           guide={
             <DirectoryGuide title="Team setup guide" steps={GUIDE_STEPS} links={GUIDE_LINKS} />
@@ -371,6 +378,7 @@ export default function TeamDirectoryList({
               rows={teams}
               getRowId={team => team.id}
               columns={columns}
+              hiddenColumns={columnVisibility.hidden}
               label="Teams"
               rowActions={manageAction}
               mobileRow={mobileRow}

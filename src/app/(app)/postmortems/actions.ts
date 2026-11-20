@@ -335,7 +335,7 @@ export async function getPostmortem(incidentId: string) {
     },
     include: {
       createdBy: {
-        select: { id: true, name: true, email: true },
+        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
       },
       incident: {
         select: {

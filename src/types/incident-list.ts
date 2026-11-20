@@ -36,5 +36,6 @@ export interface IncidentListItem {
     name: string;
     email: string;
     avatarUrl: string | null;
+    gender?: string | null;
   } | null;
 }

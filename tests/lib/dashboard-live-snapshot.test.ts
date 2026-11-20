@@ -26,6 +26,7 @@ import {
   decodeLiveCursor,
   getLiveIncidentDetail,
   encodeLiveCursor,
+  getCoverageGapSummary,
   getLiveDashboardSnapshot,
   getLiveIncidentPage,
   liveQueryWhere,
@@ -316,6 +317,28 @@ describe('getLiveDashboardSnapshot', () => {
     expect(snapshot.coverage.scheduleCount).toBe(0);
     expect(snapshot.coverage.gaps).toEqual([]);
     expect(snapshot.rail.onCall).toEqual([]);
+  });
+
+  it("summarizes coverage gaps for the status bar from the dashboard's cached reads", async () => {
+    const actor = scoped('u1', ['team-a']);
+    await getLiveDashboardSnapshot(actor, DEFAULT_LIVE_QUERY, { generation: '30' });
+    vi.mocked(getActiveOnCallShifts).mockClear();
+
+    // s1 is covered by shift-1; s2 has nobody on call.
+    await expect(getCoverageGapSummary(actor)).resolves.toEqual({
+      count: 1,
+      first: { id: 's2', name: 'Secondary' },
+    });
+    // Same cache entries as the dashboard: no second on-call expansion.
+    expect(vi.mocked(getActiveOnCallShifts)).not.toHaveBeenCalled();
+  });
+
+  it('reports no coverage gaps when the viewer can read no schedules', async () => {
+    prismaMock.onCallSchedule.findMany.mockResolvedValue([]);
+    await expect(getCoverageGapSummary(scoped('u-no-schedules', []))).resolves.toEqual({
+      count: 0,
+      first: null,
+    });
   });
 
   it('keeps counters exact and surfaces older critical work when the window is truncated', async () => {

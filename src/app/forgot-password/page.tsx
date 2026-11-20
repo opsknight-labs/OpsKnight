@@ -5,10 +5,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Mail, ArrowLeft, Send, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import AuthBrand from '@/components/auth/AuthBrand';
 import { fetchWithTimeout } from '@/lib/client-timeout';
 import { appRoutes } from '@/lib/app-routes';
+import { cn } from '@/lib/utils';
 
 const GENERIC_MESSAGE =
   'If an account exists with this email, you will receive password reset instructions.';
@@ -50,10 +53,10 @@ export default function ForgotPasswordPage() {
       <AuthCard>
         <div className="mb-8 text-center">
           <AuthBrand className="mb-6" />
-          <h1 className="font-display text-2xl font-bold text-slate-950 dark:text-white">
+          <h1 className="font-display text-2xl font-bold text-foreground">
             {isSent ? 'Check your inbox' : 'Account recovery'}
           </h1>
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             {isSent
               ? 'If the account exists, recovery instructions will arrive shortly.'
               : 'Enter your email to request a password reset link.'}
@@ -61,15 +64,13 @@ export default function ForgotPasswordPage() {
         </div>
         {isSent ? (
           <div className="space-y-4" role="status" aria-live="polite">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
-              <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-              <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-200/80">
-                {GENERIC_MESSAGE}
-              </p>
+            <div className="rounded-xl border border-status-ok/30 bg-status-ok-soft p-4 text-center">
+              <CheckCircle2 className="mx-auto h-6 w-6 text-status-ok" />
+              <p className="mt-2 text-sm text-status-ok-deep">{GENERIC_MESSAGE}</p>
             </div>
             <Link
               href={loginHref}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to sign in
@@ -81,12 +82,12 @@ export default function ForgotPasswordPage() {
               <div
                 role="alert"
                 aria-live="assertive"
-                className="mb-5 flex items-start gap-3 rounded-lg border border-red-200/80 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/20 p-3 text-xs shadow-xs transition-all"
+                className="mb-5 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs shadow-xs transition-all"
               >
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 mt-0.5">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive mt-0.5">
                   <AlertCircle className="h-3.5 w-3.5" />
                 </div>
-                <p className="flex-1 text-slate-700 dark:text-slate-300 leading-relaxed pt-0.5">
+                <p id="email-error" className="flex-1 text-foreground leading-relaxed pt-0.5">
                   {error}
                 </p>
                 <button
@@ -95,7 +96,7 @@ export default function ForgotPasswordPage() {
                   onClick={() => setError('')}
                   aria-label="Dismiss error"
                   title="Dismiss"
-                  className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 transition-colors cursor-pointer"
+                  className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-3.5 w-3.5 stroke-[2.25]" />
                 </button>
@@ -103,17 +104,14 @@ export default function ForgotPasswordPage() {
             )}
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-1.5">
-                <label
-                  htmlFor="email"
-                  className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                >
+                <Label htmlFor="email" className="text-xs text-foreground">
                   Email address
-                </label>
+                </Label>
                 <div className="group relative flex items-center">
-                  <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+                  <div className="absolute left-3.5 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
                     <Mail className="h-4 w-4" aria-hidden="true" />
                   </div>
-                  <input
+                  <Input
                     id="email"
                     type="email"
                     value={email}
@@ -126,15 +124,24 @@ export default function ForgotPasswordPage() {
                     required
                     disabled={isSubmitting}
                     placeholder="you@company.com"
-                    className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? 'email-error' : 'email-help'}
+                    className={cn(
+                      'h-11 min-h-11 2xl:h-12 pl-10 pr-4 rounded-xl bg-card text-sm shadow-xs hover:border-ring/50 transition-colors',
+                      error && 'border-destructive'
+                    )}
                     autoFocus
                   />
                 </div>
+                <p id="email-help" className="text-xs text-muted-foreground">
+                  Use the address you sign in with.
+                </p>
               </div>
               <button
                 type="submit"
                 disabled={isSubmitting || !email}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+                aria-busy={isSubmitting || undefined}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {isSubmitting ? (
                   <>
@@ -149,7 +156,7 @@ export default function ForgotPasswordPage() {
               <div className="text-center">
                 <Link
                   href={loginHref}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
                   <ArrowLeft className="h-3 w-3" />
                   Back to sign in

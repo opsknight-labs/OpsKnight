@@ -1,5 +1,5 @@
-import { RunbookPageSkeleton } from '@/components/runbooks/skeletons';
+import { DetailPageSkeleton } from '@/components/patterns';
 
 export default function RunbookDetailLoading() {
-  return <RunbookPageSkeleton variant="runbook-detail" />;
+  return <DetailPageSkeleton label="Loading runbook" />;
 }

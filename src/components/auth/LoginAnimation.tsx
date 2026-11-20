@@ -3,6 +3,8 @@
 import React, { useEffect, useRef } from 'react';
 import AuthBrand from '@/components/auth/AuthBrand';
 import { cn } from '@/lib/utils';
+import { STATUS_PALETTE } from '@/lib/design/status-palette';
+import './auth-panel.css';
 
 // Deterministic pseudo-random star field — seeded so the server-rendered and
 // hydrated client markup match exactly (no Math.random() during render).
@@ -87,12 +89,15 @@ const SLA_RING_CIRCUMFERENCE = 2 * Math.PI * SLA_RING_RADIUS;
 
 type Phase = 'triggered' | 'acknowledged' | 'resolved' | 'idle';
 
-const IDLE_COLOR = '#475569';
+const IDLE_COLOR = 'hsl(var(--auth-idle))';
+
+// Decorative route colour; the other routes reuse the status palette by meaning.
+const ROUTE_INFO = 'hsl(var(--auth-route-info))';
 
 const PHASE_COLOR = new Map<Phase, string>([
-  ['triggered', '#ef4444'],
-  ['acknowledged', '#f59e0b'],
-  ['resolved', '#10b981'],
+  ['triggered', STATUS_PALETTE.critical.base],
+  ['acknowledged', STATUS_PALETTE.elevated.base],
+  ['resolved', STATUS_PALETTE.ok.base],
   ['idle', IDLE_COLOR],
 ]);
 
@@ -195,10 +200,15 @@ type NetworkRoute = {
 };
 
 const NETWORK_ROUTES: NetworkRoute[] = [
-  { id: 'route-ny-lon', fromId: 'INC-2481', toId: 'INC-3390', color: '#38bdf8' }, // New York -> London
-  { id: 'route-lon-mum', fromId: 'INC-3390', toId: 'INC-6642', color: '#ef4444' }, // London -> Mumbai
-  { id: 'route-mum-tok', fromId: 'INC-6642', toId: 'INC-5127', color: '#38bdf8' }, // Mumbai -> Tokyo
-  { id: 'route-ny-sp', fromId: 'INC-2481', toId: 'INC-7215', color: '#f59e0b' }, // New York -> São Paulo
+  { id: 'route-ny-lon', fromId: 'INC-2481', toId: 'INC-3390', color: ROUTE_INFO }, // New York -> London
+  {
+    id: 'route-lon-mum',
+    fromId: 'INC-3390',
+    toId: 'INC-6642',
+    color: STATUS_PALETTE.critical.base,
+  }, // London -> Mumbai
+  { id: 'route-mum-tok', fromId: 'INC-6642', toId: 'INC-5127', color: ROUTE_INFO }, // Mumbai -> Tokyo
+  { id: 'route-ny-sp', fromId: 'INC-2481', toId: 'INC-7215', color: STATUS_PALETTE.elevated.base }, // New York -> São Paulo
 ];
 
 type LoginAnimationProps = {
@@ -364,7 +374,10 @@ export default function LoginAnimation({
 
         if (node.dot) {
           node.dot.style.backgroundColor = colour;
-          node.dot.style.boxShadow = phase === 'idle' ? 'none' : `0 0 8px 1px ${colour}b3`;
+          node.dot.style.boxShadow =
+            phase === 'idle'
+              ? 'none'
+              : `0 0 8px 1px color-mix(in srgb, ${colour} 70%, transparent)`;
         }
 
         // One-shot "arrived" ping over the first slice of the triggered phase.
@@ -424,8 +437,8 @@ export default function LoginAnimation({
             stageEl.style.backgroundColor = isActive
               ? colour
               : stageRank < rank
-                ? '#94a3b8'
-                : '#334155';
+                ? 'hsl(var(--auth-stage-past))'
+                : 'hsl(var(--auth-stage-next))';
             stageEl.style.transform = isActive ? 'scale(1.5)' : 'scale(1)';
           }
           node.lastPhase = phase;
@@ -494,7 +507,7 @@ export default function LoginAnimation({
           );
           // On successful sign-in every route reads "all clear".
           const allClear = resolvedRef.current;
-          const routeColour = allClear ? '#10b981' : route.color;
+          const routeColour = allClear ? STATUS_PALETTE.ok.base : route.color;
           pathEl.style.stroke = routeColour;
           packetEl.style.fill = routeColour;
           pathEl.style.opacity = String(routeAlpha * (allClear ? 1 : 0.75));
@@ -526,7 +539,7 @@ export default function LoginAnimation({
   }, []);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#04060d] select-none">
+    <div className="relative h-full w-full overflow-hidden bg-[hsl(var(--auth-space))] select-none">
       {/* Starfield */}
       <div className="absolute inset-0" aria-hidden="true">
         {(isBanner ? STARS_BANNER : STARS_PANEL).map(s => (
@@ -567,7 +580,7 @@ export default function LoginAnimation({
           }}
         />
         <span
-          className="absolute h-px w-32 rounded-full bg-gradient-to-r from-slate-200 to-transparent opacity-0"
+          className="absolute h-px w-32 rounded-full bg-gradient-to-r from-white/80 to-transparent opacity-0"
           style={{
             top: '8%',
             left: '45%',
@@ -674,7 +687,7 @@ export default function LoginAnimation({
             className="absolute inset-0"
             style={{
               background:
-                'radial-gradient(circle at 35% 30%, #175472 0%, #0c334b 35%, #071e30 65%, #030c16 100%)',
+                'radial-gradient(circle at 35% 30%, hsl(var(--auth-globe-1)) 0%, hsl(var(--auth-globe-2)) 35%, hsl(var(--auth-globe-3)) 65%, hsl(var(--auth-globe-4)) 100%)',
             }}
           />
           {/* Rotating continents strip. Each texture layer is one tile wider
@@ -694,9 +707,9 @@ export default function LoginAnimation({
             className="absolute inset-0 overflow-hidden pointer-events-none mix-blend-screen"
             style={{
               WebkitMaskImage:
-                'radial-gradient(circle at 32% 28%, transparent 42%, rgba(0,0,0,0.5) 64%, #000 84%)',
+                'radial-gradient(circle at 32% 28%, transparent 42%, rgba(0,0,0,0.5) 64%, black 84%)',
               maskImage:
-                'radial-gradient(circle at 32% 28%, transparent 42%, rgba(0,0,0,0.5) 64%, #000 84%)',
+                'radial-gradient(circle at 32% 28%, transparent 42%, rgba(0,0,0,0.5) 64%, black 84%)',
             }}
           >
             <div
@@ -738,19 +751,18 @@ export default function LoginAnimation({
                     routePathsRef.current.set(route.id, el);
                   }}
                   fill="none"
-                  stroke={route.color}
                   strokeWidth="1.6"
                   strokeDasharray="4 4"
                   opacity="0"
+                  style={{ stroke: route.color }}
                 />
                 <circle
                   ref={el => {
                     routePacketsRef.current.set(route.id, el);
                   }}
                   r="2.5"
-                  fill={route.color}
                   opacity="0"
-                  style={{ filter: `drop-shadow(0 0 4px ${route.color})` }}
+                  style={{ fill: route.color, filter: `drop-shadow(0 0 4px ${route.color})` }}
                 />
               </g>
             ))}
@@ -837,7 +849,7 @@ export default function LoginAnimation({
               <span
                 data-role="dot"
                 className="absolute rounded-full"
-                style={{ left: -3, top: -3, width: 6, height: 6, backgroundColor: '#475569' }}
+                style={{ left: -3, top: -3, width: 6, height: 6, backgroundColor: IDLE_COLOR }}
               />
 
               {/* Ticket callout — tracks its marker; only one is shown at a
@@ -846,7 +858,7 @@ export default function LoginAnimation({
               <div
                 data-role="label"
                 className={cn(
-                  'absolute whitespace-nowrap rounded border border-white/10 bg-[#0a0e18]/95 px-2 py-1 shadow-lg opacity-0',
+                  'absolute whitespace-nowrap rounded border border-white/10 bg-[hsl(var(--auth-tooltip)/0.95)] px-2 py-1 shadow-lg opacity-0',
                   isBanner && 'hidden'
                 )}
                 style={{
@@ -857,7 +869,7 @@ export default function LoginAnimation({
                 }}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold tracking-tight text-white leading-none">
+                  <span className="text-2xs font-semibold tracking-tight text-white leading-none">
                     {m.id}
                   </span>
                   {/* lifecycle as three dots: passed / current / upcoming */}
@@ -866,39 +878,39 @@ export default function LoginAnimation({
                       data-stage
                       data-rank="0"
                       className="block h-[3px] w-[3px] rounded-full transition-transform"
-                      style={{ backgroundColor: '#334155' }}
+                      style={{ backgroundColor: 'hsl(var(--auth-stage-next))' }}
                     />
                     <span
                       data-stage
                       data-rank="1"
                       className="block h-[3px] w-[3px] rounded-full transition-transform"
-                      style={{ backgroundColor: '#334155' }}
+                      style={{ backgroundColor: 'hsl(var(--auth-stage-next))' }}
                     />
                     <span
                       data-stage
                       data-rank="2"
                       className="block h-[3px] w-[3px] rounded-full transition-transform"
-                      style={{ backgroundColor: '#334155' }}
+                      style={{ backgroundColor: 'hsl(var(--auth-stage-next))' }}
                     />
                   </span>
                   <span
                     data-role="clock"
-                    className="text-[11px] tabular-nums font-semibold leading-none ml-auto"
+                    className="text-2xs tabular-nums font-semibold leading-none ml-auto"
                   >
                     00:00
                   </span>
                 </div>
-                <div className="text-[10px] leading-tight mt-1.5 text-slate-500">
+                <div className="text-2xs leading-tight mt-1.5 auth-panel-text-dim">
                   {m.service}
-                  <span className="mx-1 text-slate-700">·</span>
-                  <span data-role="responder" className="text-slate-400">
+                  <span className="mx-1 auth-panel-text-faint">·</span>
+                  <span data-role="responder" className="auth-panel-text-muted">
                     Paging on-call…
                   </span>
                 </div>
 
                 <div
                   className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent"
-                  style={{ borderTopColor: '#0a0e18' }}
+                  style={{ borderTopColor: 'hsl(var(--auth-tooltip))' }}
                 />
               </div>
             </div>
@@ -909,22 +921,19 @@ export default function LoginAnimation({
       {/* Bottom tagline */}
       <div
         className={cn(
-          'absolute inset-x-0 bottom-0 z-20 p-8 lg:p-12 2xl:p-16 pt-24 bg-gradient-to-t from-[#04060d] via-[#04060d]/85 to-transparent',
+          'absolute inset-x-0 bottom-0 z-20 p-8 lg:p-12 2xl:p-16 pt-24 bg-gradient-to-t from-[hsl(var(--auth-space))] via-[hsl(var(--auth-space)/0.85)] to-transparent',
           isBanner && 'hidden'
         )}
       >
         <div className="w-7 h-[2px] bg-red-600 mb-3" />
         <h2 className="text-3xl lg:text-4xl 2xl:text-5xl min-[2000px]:text-6xl font-extrabold text-white tracking-tight leading-[1.2]">
-          You are not{' '}
-          <span className="text-red-500">
-            the only one awake.
-          </span>
+          You are not <span className="text-red-500">the only one awake.</span>
         </h2>
-        <p className="text-xs lg:text-sm 2xl:text-base text-slate-400 mt-2 max-w-sm 2xl:max-w-md leading-relaxed">
+        <p className="text-xs lg:text-sm 2xl:text-base auth-panel-text-muted mt-2 max-w-sm 2xl:max-w-md leading-relaxed">
           Alerts reach the right responder in seconds.
         </p>
 
-        <div className="flex items-center justify-between pt-4 mt-5 2xl:mt-7 border-t border-slate-800/60 text-[10px] 2xl:text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+        <div className="flex items-center justify-between pt-4 mt-5 2xl:mt-7 border-t auth-panel-rule text-2xs 2xl:text-xs font-semibold uppercase tracking-[0.14em] auth-panel-text-muted">
           <div>Open source &nbsp;•&nbsp; Self-hosted</div>
           <div>EVERY ALERT HAS AN OWNER</div>
         </div>

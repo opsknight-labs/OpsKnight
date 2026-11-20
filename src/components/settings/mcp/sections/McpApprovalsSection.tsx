@@ -202,7 +202,7 @@ export default function McpApprovalsSection({
                         </p>
                         {row.detail && (
                           <p
-                            className="truncate font-mono text-[11px] text-muted-foreground"
+                            className="truncate font-mono text-2xs text-muted-foreground"
                             title={row.detail}
                           >
                             {row.detail}

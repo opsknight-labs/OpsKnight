@@ -3,6 +3,7 @@
 import { useSyncExternalStore, memo, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { SerializedSLAMetrics } from '@/lib/sla';
+import { Skeleton } from '@/components/ui/shadcn/skeleton';
 
 const subscribe = () => () => {};
 const getSnapshot = () => true;
@@ -18,7 +19,8 @@ import BarChart from '@/components/charts/BarChart';
 import PieChart from '@/components/charts/PieChart';
 import HeatmapCalendar from '@/components/charts/HeatmapCalendar';
 
-export type ChartType = 'line' | 'bar' | 'area' | 'pie' | 'mttaVsMttr' | 'slaCompliance' | 'heatmap';
+export type ChartType =
+  'line' | 'bar' | 'area' | 'pie' | 'mttaVsMttr' | 'slaCompliance' | 'heatmap';
 export type ChartDatum = Record<string, string | number | null | undefined>;
 
 interface ChartWidgetProps {
@@ -124,8 +126,9 @@ const ChartWidget = memo(function ChartWidget({
   // Show loading state during hydration
   if (!isMounted) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      <div role="status" aria-busy="true" className="h-full">
+        <span className="sr-only">Loading chart</span>
+        <Skeleton className="h-full min-h-24 w-full rounded-md" />
       </div>
     );
   }

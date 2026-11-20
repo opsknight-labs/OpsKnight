@@ -23,6 +23,12 @@ export default function StatusPageSubscribeModal({
   const backdropRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  // The parent passes a fresh onClose each render (and auto-refresh re-renders it); keeping it in a
+  // ref stops the effect below from re-running, which re-focused the email field and lost the trigger.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -61,7 +67,7 @@ export default function StatusPageSubscribeModal({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !dialog) return;
@@ -95,7 +101,7 @@ export default function StatusPageSubscribeModal({
         requestAnimationFrame(() => toFocus.focus());
       }
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

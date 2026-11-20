@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import ScimRoleMapping from './ScimRoleMapping';
+import DetailTabs from '@/components/ui/DetailTabs';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   AlertDialog,
@@ -334,25 +335,19 @@ export default function ScimSettingsSection({
         </div>
         <Badge variant="outline">{connector?.enabled ? 'Enabled' : 'Disconnected'}</Badge>
       </div>
-      <nav aria-label="SCIM sections" className="flex flex-wrap gap-2">
-        {tabs.map(item => (
-          <Button
-            key={item}
-            type="button"
-            size="sm"
-            variant={tab === item ? 'default' : 'outline'}
-            aria-current={tab === item ? 'page' : undefined}
-            onClick={() => {
-              setTab(item);
-              setPage(1);
-              setQuery('');
-              setCredentialLoading(true);
-            }}
-          >
-            {item}
-          </Button>
-        ))}
-      </nav>
+      <DetailTabs
+        label="SCIM sections"
+        layout="auto"
+        syncWithUrl={false}
+        activeTab={tab}
+        onTabChange={next => {
+          setTab(next as (typeof tabs)[number]);
+          setPage(1);
+          setQuery('');
+          setCredentialLoading(true);
+        }}
+        tabs={tabs.map(item => ({ id: item, label: item }))}
+      />
       {error && (
         <p
           role="alert"
@@ -704,7 +699,7 @@ export default function ScimSettingsSection({
                   <p className="font-medium text-sm flex items-center gap-2">
                     {row.label}
                     {attention && (
-                      <Badge variant="outline" className="border-amber-500/40 text-[10px]">
+                      <Badge variant="outline" className="border-amber-500/40 text-2xs">
                         Needs coverage review
                       </Badge>
                     )}

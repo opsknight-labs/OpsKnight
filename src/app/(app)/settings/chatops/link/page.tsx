@@ -15,7 +15,7 @@ export default async function LinkChatOpsPage({
   const { token = '' } = await searchParams;
   const pending = await describeMicrosoftTeamsIdentityChallenge(token);
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="space-y-6">
       <SettingsPageHeader
         title="Link Microsoft Teams"
         icon={MicrosoftTeamsLogo}

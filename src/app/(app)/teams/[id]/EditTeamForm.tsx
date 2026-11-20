@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Button } from '@/components/ui/shadcn/button';
@@ -35,7 +35,6 @@ export default function EditTeamForm({
   updateTeamAction,
 }: EditTeamFormProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
 
   const [name, setName] = useState(team.name);
@@ -50,7 +49,7 @@ export default function EditTeamForm({
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim()) {
-      return showToast('Team name is required.', 'error');
+      return notify.error('Team name is required.');
     }
 
     const formData = new FormData();
@@ -62,13 +61,13 @@ export default function EditTeamForm({
       try {
         const res = await updateTeamAction(team.id, formData);
         if (res?.error) {
-          showToast(res.error, 'error');
+          notify.error(res.error);
         } else {
-          showToast('Team settings updated successfully', 'success');
+          notify.success('Team settings updated successfully');
           router.refresh();
         }
       } catch {
-        showToast('Failed to update team settings', 'error');
+        notify.error('Failed to update team settings');
       }
     });
   };

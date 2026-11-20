@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -63,6 +63,7 @@ type Props = {
   destinations: DestinationRow[];
 };
 
+const noopSubscribe = () => () => {};
 const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function MicrosoftTeamsSetupWizard({
@@ -143,7 +144,13 @@ export default function MicrosoftTeamsSetupWizard({
     }
   };
 
-  const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  // Server snapshot is '' so hydration matches; reading window during render made
+  // React discard the server HTML and re-render the whole page on the client.
+  const originUrl = useSyncExternalStore(
+    noopSubscribe,
+    () => window.location.origin,
+    () => ''
+  );
   const botEndpoint = `${originUrl}/api/microsoft-teams/messages`;
   const callbackUrl = `${originUrl}/api/microsoft-teams/auth/callback`;
 
@@ -226,7 +233,7 @@ export default function MicrosoftTeamsSetupWizard({
                   <div className="text-xs font-semibold truncate flex items-center gap-1">
                     {step.title}
                   </div>
-                  <div className="text-[10px] text-muted-foreground truncate">{step.desc}</div>
+                  <div className="text-2xs text-muted-foreground truncate">{step.desc}</div>
                 </div>
               </button>
             );
@@ -240,7 +247,7 @@ export default function MicrosoftTeamsSetupWizard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-[10px] font-bold">
+                <Badge variant="secondary" className="text-2xs font-bold">
                   STEP 1
                 </Badge>
                 <h3 className="text-base font-semibold">Register App in Microsoft Entra ID</h3>
@@ -287,14 +294,14 @@ export default function MicrosoftTeamsSetupWizard({
               <li>
                 Web Redirect URI (optional):
                 <div className="mt-1 flex items-center gap-2">
-                  <code className="bg-background px-2 py-1 rounded border text-[11px] font-mono text-foreground truncate max-w-md">
+                  <code className="bg-background px-2 py-1 rounded border text-2xs font-mono text-foreground truncate max-w-md">
                     {callbackUrl}
                   </code>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-6 text-[10px] px-2"
+                    className="h-6 text-2xs px-2"
                     onClick={() => copy(callbackUrl, 'callback')}
                   >
                     {copied === 'callback' ? (
@@ -323,10 +330,13 @@ export default function MicrosoftTeamsSetupWizard({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="mt-clientId" className="text-xs font-semibold">
-                    Application (Client) ID <span className="text-destructive">*</span>
+                    Application (Client) ID{' '}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
                   </Label>
                   {clientIdInput && !GUID_REGEX.test(clientIdInput.trim()) && (
-                    <span className="text-[10px] text-amber-600 flex items-center gap-1 dark:text-amber-400">
+                    <span className="text-2xs text-amber-600 flex items-center gap-1 dark:text-amber-400">
                       <AlertCircle className="h-2.5 w-2.5" /> GUID format expected
                     </span>
                   )}
@@ -346,10 +356,13 @@ export default function MicrosoftTeamsSetupWizard({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="mt-tenantId" className="text-xs font-semibold">
-                    Directory (Tenant) ID <span className="text-destructive">*</span>
+                    Directory (Tenant) ID{' '}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
                   </Label>
                   {tenantIdInput && !GUID_REGEX.test(tenantIdInput.trim()) && (
-                    <span className="text-[10px] text-amber-600 flex items-center gap-1 dark:text-amber-400">
+                    <span className="text-2xs text-amber-600 flex items-center gap-1 dark:text-amber-400">
                       <AlertCircle className="h-2.5 w-2.5" /> GUID format expected
                     </span>
                   )}
@@ -373,10 +386,12 @@ export default function MicrosoftTeamsSetupWizard({
                     {config?.clientId ? (
                       '(Optional update)'
                     ) : (
-                      <span className="text-destructive">*</span>
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
                     )}
                   </Label>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <span className="text-2xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                     <Shield className="h-2.5 w-2.5" /> AES-256 encrypted
                   </span>
                 </div>
@@ -422,7 +437,7 @@ export default function MicrosoftTeamsSetupWizard({
                   disabled={!isAdmin}
                   className="text-xs"
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   Used as organizer for automated Teams Video Bridge meetings when an incident
                   assignee does not have a linked Microsoft identity.
                 </p>
@@ -442,7 +457,7 @@ export default function MicrosoftTeamsSetupWizard({
                   <span className="font-semibold text-foreground block">
                     Enable Interactive ChatOps (Acknowledge, Resolve, Add Notes)
                   </span>
-                  <span className="text-muted-foreground text-[11px]">
+                  <span className="text-muted-foreground text-2xs">
                     Allows responders to take action directly from Teams Adaptive Cards.
                   </span>
                 </div>
@@ -460,7 +475,7 @@ export default function MicrosoftTeamsSetupWizard({
                   <span className="font-semibold text-foreground block">
                     Enable Incident War Rooms & Video Bridges
                   </span>
-                  <span className="text-muted-foreground text-[11px]">
+                  <span className="text-muted-foreground text-2xs">
                     Enables provisioning dedicated collaboration channels and Teams meetings for
                     critical incidents.
                   </span>
@@ -493,7 +508,7 @@ export default function MicrosoftTeamsSetupWizard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-[10px] font-bold">
+                <Badge variant="secondary" className="text-2xs font-bold">
                   STEP 2
                 </Badge>
                 <h3 className="text-base font-semibold">Configure Azure Bot Messaging Endpoint</h3>
@@ -536,7 +551,7 @@ export default function MicrosoftTeamsSetupWizard({
             <div className="font-mono text-xs p-2.5 rounded bg-background border truncate select-all">
               {botEndpoint}
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               Paste this URL into your Azure Bot under{' '}
               <span className="font-semibold text-foreground">
                 Configuration &gt; Messaging endpoint
@@ -593,7 +608,7 @@ export default function MicrosoftTeamsSetupWizard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-[10px] font-bold">
+                <Badge variant="secondary" className="text-2xs font-bold">
                   STEP 3
                 </Badge>
                 <h3 className="text-base font-semibold">
@@ -620,7 +635,7 @@ export default function MicrosoftTeamsSetupWizard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold">Pre-Configured Teams App Package</div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-2xs text-muted-foreground">
                   Includes your Client ID (
                   {config?.clientId ? `${config.clientId.slice(0, 8)}…` : 'not configured'}), app
                   icons, and Resource-Specific Consent permissions.
@@ -661,7 +676,7 @@ export default function MicrosoftTeamsSetupWizard({
             </div>
 
             {showManifest && (
-              <pre className="max-h-60 overflow-auto rounded border bg-muted/40 p-3 text-[10px] font-mono leading-relaxed">
+              <pre className="max-h-60 overflow-auto rounded border bg-muted/40 p-3 text-2xs font-mono leading-relaxed">
                 {appManifestJson}
               </pre>
             )}
@@ -674,7 +689,7 @@ export default function MicrosoftTeamsSetupWizard({
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Option A: Teams Admin
                 Center (Recommended)
               </div>
-              <p className="text-muted-foreground text-[11px] leading-relaxed">
+              <p className="text-muted-foreground text-2xs leading-relaxed">
                 1. Open{' '}
                 <a
                   href="https://admin.teams.microsoft.com/policies/manage-apps"
@@ -698,7 +713,7 @@ export default function MicrosoftTeamsSetupWizard({
                 <Bot className="h-3.5 w-3.5 text-blue-500" /> Option B: Direct Sideloading in Teams
                 Client
               </div>
-              <p className="text-muted-foreground text-[11px] leading-relaxed">
+              <p className="text-muted-foreground text-2xs leading-relaxed">
                 1. Open Microsoft Teams desktop application.
                 <br />
                 2. Click <strong>Apps</strong> on the left bar &gt;{' '}
@@ -737,7 +752,7 @@ export default function MicrosoftTeamsSetupWizard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-[10px] font-bold">
+                <Badge variant="secondary" className="text-2xs font-bold">
                   STEP 4
                 </Badge>
                 <h3 className="text-base font-semibold">
@@ -784,10 +799,10 @@ export default function MicrosoftTeamsSetupWizard({
                         <div className="font-semibold text-foreground truncate">
                           {inst.teamName ?? 'Microsoft Teams Channel'}
                         </div>
-                        <div className="text-[11px] text-muted-foreground font-mono truncate">
+                        <div className="text-2xs text-muted-foreground font-mono truncate">
                           Team ID: {inst.teamId}
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                        <div className="text-2xs text-muted-foreground mt-0.5">
                           {inst.unknown
                             ? (inst.error ?? 'Permission probe pending')
                             : inst.missing.length === 0
@@ -797,7 +812,7 @@ export default function MicrosoftTeamsSetupWizard({
                       </div>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] shrink-0 ${
+                        className={`text-2xs shrink-0 ${
                           isHealthy
                             ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10'
                             : 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
@@ -823,7 +838,7 @@ export default function MicrosoftTeamsSetupWizard({
                 <h4 className="text-xs font-semibold flex items-center gap-1.5">
                   <Send className="h-3.5 w-3.5 text-primary" /> Live Test Card
                 </h4>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   Send a sample interactive incident card to verify end-to-end delivery.
                 </p>
               </div>

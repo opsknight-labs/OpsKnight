@@ -181,7 +181,7 @@ export default function StatusPageV3({
       )}
 
       {stale && (
-        <p role="note" className="status-muted">
+        <p role="note" className="status-muted status-stale-note">
           Showing the last verified status update.
         </p>
       )}

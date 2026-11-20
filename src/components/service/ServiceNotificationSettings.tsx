@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '@/lib/logger';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import {
   Card,
   CardContent,
@@ -160,6 +161,9 @@ export default function ServiceNotificationSettings({
 
   // Ref for native validation (if using hidden native select for form submission)
   const selectRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const slackRemovalConfirmed = useRef(false);
+  const [confirmSlackRemoval, setConfirmSlackRemoval] = useState(false);
 
   // Validation effect - adapted for custom select
   useEffect(() => {
@@ -507,6 +511,7 @@ export default function ServiceNotificationSettings({
 
       {/* FORM: Notification Channels and Event Triggers */}
       <form
+        ref={formRef}
         action={saveNotificationSettings}
         onSubmit={e => {
           // Saving without Slack clears its webhook/channel and disables every linked
@@ -515,14 +520,9 @@ export default function ServiceNotificationSettings({
             serviceNotificationChannels.includes('SLACK') &&
             !channels.includes('SLACK') &&
             Boolean(slackWebhookUrl || slackChannel || existingSlackDests.some(d => d.enabled));
-          if (
-            removesSlack &&
-            // eslint-disable-next-line no-alert -- form onSubmit must decide synchronously whether to preventDefault the server action
-            !window.confirm(
-              'Turning off Slack removes the Slack webhook URL and channel and disables all linked Slack destinations. Continue?'
-            )
-          ) {
+          if (removesSlack && !slackRemovalConfirmed.current) {
             e.preventDefault();
+            setConfirmSlackRemoval(true);
           }
         }}
         className="space-y-3.5"
@@ -1474,6 +1474,22 @@ export default function ServiceNotificationSettings({
           </CardContent>
         </Card>
       </form>
+
+      <ConfirmDialog
+        isOpen={confirmSlackRemoval}
+        title="Turn off Slack?"
+        message="This removes the Slack webhook URL and channel and disables every linked Slack destination. You will need to re-link them by hand."
+        confirmText="Turn off Slack"
+        cancelText="Cancel"
+        onCancel={() => setConfirmSlackRemoval(false)}
+        onConfirm={() => {
+          setConfirmSlackRemoval(false);
+          // requestSubmit re-runs onSubmit synchronously; the flag lets it through once.
+          slackRemovalConfirmed.current = true;
+          formRef.current?.requestSubmit();
+          slackRemovalConfirmed.current = false;
+        }}
+      />
 
       {/* CARD 3 (Children, e.g. ChatOpsWarRoomSettings) */}
       {children}

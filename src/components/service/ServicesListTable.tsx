@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/service/Pagination';
-import { ServicesSortSelect } from '@/components/service/ServicesFilters';
+import { ServicesSortSelect, useServicesParams } from '@/components/service/ServicesFilters';
 import {
   DirectoryCardGrid,
   DirectoryGuide,
@@ -34,8 +34,10 @@ import {
   DirectoryPrimaryCell,
   DirectoryTable,
   toneClasses,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
+  type DirectorySort,
 } from '@/components/patterns';
 
 export type ServiceListItem = {
@@ -171,10 +173,10 @@ function ServiceActions({ service }: { service: ServiceListItem }) {
           <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end">
         <DropdownMenuItem asChild>
           <Link href={`/services/${service.id}`} className="flex cursor-pointer items-center gap-2">
-            <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Eye aria-hidden="true" />
             View Details
           </Link>
         </DropdownMenuItem>
@@ -183,7 +185,7 @@ function ServiceActions({ service }: { service: ServiceListItem }) {
             href={`/services/${service.id}/settings`}
             className="flex cursor-pointer items-center gap-2"
           >
-            <Settings className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Settings aria-hidden="true" />
             Settings
           </Link>
         </DropdownMenuItem>
@@ -203,6 +205,7 @@ const columns: DirectoryColumn<ServiceListItem>[] = [
   {
     id: 'service',
     header: 'Service',
+    sortKey: 'name',
     className: 'max-w-0 w-[30%]',
     cell: s => (
       <DirectoryPrimaryCell
@@ -212,27 +215,43 @@ const columns: DirectoryColumn<ServiceListItem>[] = [
       />
     ),
   },
-  { id: 'status', header: 'Status', cell: s => <StatusCell service={s} /> },
-  { id: 'team', header: 'Team', className: 'hidden md:table-cell', cell: s => muted(s.team?.name) },
+  { id: 'status', header: 'Status', hideable: true, cell: s => <StatusCell service={s} /> },
+  {
+    id: 'team',
+    header: 'Team',
+    hideable: true,
+    className: 'hidden md:table-cell',
+    cell: s => muted(s.team?.name),
+  },
   {
     id: 'incidents',
     header: 'Open incidents',
+    sortKey: 'incidents',
+    hideable: true,
     className: 'whitespace-nowrap text-right',
     cell: s => <OpenIncidents service={s} />,
   },
   {
     id: 'policy',
     header: 'Escalation policy',
+    hideable: true,
     className: 'hidden lg:table-cell',
     cell: s => <PolicyLink policy={s.policy} />,
   },
   {
     id: 'sla',
     header: 'SLA tier',
+    hideable: true,
     className: 'hidden whitespace-nowrap xl:table-cell',
     cell: s => muted(s.slaTier),
   },
-  { id: 'region', header: 'Region', className: 'hidden xl:table-cell', cell: s => muted(s.region) },
+  {
+    id: 'region',
+    header: 'Region',
+    hideable: true,
+    className: 'hidden xl:table-cell',
+    cell: s => muted(s.region),
+  },
 ];
 
 function mobileRow(s: ServiceListItem) {
@@ -365,6 +384,14 @@ export default function ServicesListTable({
   emptyState,
 }: ServicesListTableProps) {
   const [view, setView] = useDirectoryView('services');
+  const columnVisibility = useDirectoryColumns('services', columns);
+  const { updateParams } = useServicesParams();
+  // The URL sort is `<key>_<direction>` (e.g. incidents_desc); "status" has no column.
+  const [sortKey, sortDirection] = (currentSort ?? 'name_asc').split('_');
+  const sort: DirectorySort | null =
+    sortDirection === 'asc' || sortDirection === 'desc'
+      ? { key: sortKey, direction: sortDirection }
+      : null;
 
   const totalItems = pagination?.totalItems ?? services.length;
   const showingFrom =
@@ -383,6 +410,8 @@ export default function ServicesListTable({
         title="Service directory"
         summary={`Showing ${showingFrom}–${showingTo} of ${totalItems}`}
         sort={<ServicesSortSelect currentSort={currentSort} />}
+        columns={columnVisibility}
+        density
         view={{ value: view, onChange: setView }}
         guide={<DirectoryGuide title="How services work" steps={GUIDE_STEPS} links={GUIDE_LINKS} />}
       />
@@ -413,6 +442,9 @@ export default function ServicesListTable({
           getRowId={s => s.id}
           columns={columns}
           label="Services"
+          hiddenColumns={columnVisibility.hidden}
+          sort={sort}
+          onSortChange={next => updateParams({ sort: `${next.key}_${next.direction}` })}
           rowActions={canManageServices ? s => <ServiceActions service={s} /> : undefined}
           mobileRow={mobileRow}
         />

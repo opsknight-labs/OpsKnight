@@ -14,6 +14,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/shadcn/sheet';
 import { Button } from '@/components/ui/shadcn/button';
+import { TableRowsSkeleton } from '@/components/patterns';
 import {
   Bell,
   CheckCheck,
@@ -530,10 +531,13 @@ export default function TopbarNotifications() {
 
           <div className="flex-1 overflow-y-auto bg-zinc-50/50 dark:bg-zinc-950">
             {loading ? (
-              <div className="flex h-48 items-center justify-center text-xs text-muted-foreground">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mr-2" />
-                Loading notifications...
-              </div>
+              <TableRowsSkeleton
+                rows={4}
+                columns={1}
+                showHeader={false}
+                label="Loading notifications"
+                className="rounded-none border-0 bg-transparent"
+              />
             ) : (
               <>
                 <TabsContent value="all" className="m-0 border-0 h-full">

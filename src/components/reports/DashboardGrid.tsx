@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState } from '@/components/patterns';
+import { Button } from '@/components/ui/shadcn/button';
 import { memo, useMemo, useState } from 'react';
 import { Plus, GripVertical } from 'lucide-react';
 import {
@@ -130,20 +132,20 @@ const DashboardGrid = memo(function DashboardGrid({
 
   if (widgets.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground border-2 border-dashed rounded-lg">
-        <Plus className="h-12 w-12 mb-4 opacity-30" />
-        <p className="text-lg font-medium mb-2">No widgets yet</p>
-        <p className="text-sm mb-4">Add widgets to start building your dashboard</p>
-        {onAddWidget && (
-          <button
-            onClick={onAddWidget}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Widget
-          </button>
-        )}
-      </div>
+      <EmptyState
+        size="lg"
+        icon={<Plus />}
+        title="No widgets yet"
+        description="Add widgets to start building your dashboard."
+        action={
+          onAddWidget ? (
+            <Button onClick={onAddWidget}>
+              <Plus />
+              Add widget
+            </Button>
+          ) : undefined
+        }
+      />
     );
   }
 
@@ -378,9 +380,7 @@ const WidgetContent = memo(function WidgetContent({
           <TableWidget
             data={Array.isArray(data) ? data : []}
             metricKey={widget.metricKey}
-            maxRows={
-              typeof widget.config?.maxRows === 'number' ? widget.config.maxRows : undefined
-            }
+            maxRows={typeof widget.config?.maxRows === 'number' ? widget.config.maxRows : undefined}
           />
         );
 
@@ -399,10 +399,8 @@ const WidgetContent = memo(function WidgetContent({
           typeof widget.config?.chartType === 'string'
             ? (widget.config.chartType as ChartType)
             : 'line';
-        const color =
-          typeof widget.config?.color === 'string' ? widget.config.color : undefined;
-        const height =
-          typeof widget.config?.height === 'number' ? widget.config.height : 160;
+        const color = typeof widget.config?.color === 'string' ? widget.config.color : undefined;
+        const height = typeof widget.config?.height === 'number' ? widget.config.height : 160;
         const showLegend =
           typeof widget.config?.showLegend === 'boolean' ? widget.config.showLegend : undefined;
         const showTrend =

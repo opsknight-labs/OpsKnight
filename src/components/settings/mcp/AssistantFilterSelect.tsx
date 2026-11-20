@@ -85,24 +85,20 @@ function AssistantFilterSelect({
         <SelectContent
           position="popper"
           align="end"
-          className="max-h-64 min-w-[200px] overflow-y-auto overscroll-contain p-1 rounded-xl border-border/80 shadow-xl"
+          className="max-h-64 min-w-[200px] overflow-y-auto overscroll-contain"
         >
           <SelectGroup>
-            <SelectLabel className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <SelectLabel className="px-2 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
               Filter by Assistant
             </SelectLabel>
-            <SelectItem value="all" className="rounded-lg text-xs font-medium cursor-pointer">
+            <SelectItem value="all">
               <div className="flex items-center gap-2">
                 <Bot className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>All Assistants</span>
               </div>
             </SelectItem>
             {clients.map(client => (
-              <SelectItem
-                key={client.id}
-                value={client.id}
-                className="rounded-lg text-xs font-medium cursor-pointer"
-              >
+              <SelectItem key={client.id} value={client.id}>
                 <div className="flex items-center gap-2 truncate">
                   {getAssistantIcon(client.name, 'h-3.5 w-3.5 shrink-0', client.metadataHost)}
                   <span className="truncate">{client.label ?? client.name}</span>
@@ -110,7 +106,7 @@ function AssistantFilterSelect({
               </SelectItem>
             ))}
             {truncated && (
-              <SelectLabel className="px-2 py-1.5 text-[10px] font-normal text-muted-foreground">
+              <SelectLabel className="px-2 py-1.5 text-2xs font-normal text-muted-foreground">
                 Showing the first {clients.length}. Search by name to find others.
               </SelectLabel>
             )}

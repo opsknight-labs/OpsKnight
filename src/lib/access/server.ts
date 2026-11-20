@@ -124,7 +124,12 @@ export async function currentPathname(): Promise<string> {
   }
 }
 
-export type Grantor = { id: string; name: string | null; email: string };
+export type Grantor = {
+  id: string;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+};
 
 const MAX_GRANTORS = 5;
 
@@ -144,7 +149,10 @@ export async function findGrantors(opts: {
             role: { in: ['OWNER', 'ADMIN'] },
             user: { status: 'ACTIVE', role: { not: 'AUDITOR' } },
           },
-          select: { role: true, user: { select: { id: true, name: true, email: true } } },
+          select: {
+            role: true,
+            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          },
           orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
           take: MAX_GRANTORS,
         },
@@ -160,7 +168,7 @@ export async function findGrantors(opts: {
   }
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', status: 'ACTIVE' },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, avatarUrl: true },
     orderBy: { name: 'asc' },
     take: MAX_GRANTORS,
   });

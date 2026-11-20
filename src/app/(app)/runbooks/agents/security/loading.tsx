@@ -1,5 +1,5 @@
-import { RunbookPageSkeleton } from '@/components/runbooks/skeletons';
+import { SettingsPageSkeleton } from '@/components/patterns';
 
-export default function RunbookFleetSecurityLoading() {
-  return <RunbookPageSkeleton variant="security" />;
+export default function AgentSecurityLoading() {
+  return <SettingsPageSkeleton label="Loading fleet security" sections={2} />;
 }

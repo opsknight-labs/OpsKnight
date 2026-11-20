@@ -3,7 +3,7 @@
 import { useState, useRef, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { CreateTrigger } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
@@ -48,12 +48,11 @@ export default function PolicyCreateForm({ action, canCreate = true }: PolicyCre
   const [isOpen, setIsOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
-  const { showToast } = useToast();
 
   const handleAction = async (prevState: PolicyFormState, formData: FormData) => {
     const res = await action(prevState, formData);
     if (res?.success) {
-      showToast('Escalation policy created successfully', 'success');
+      notify.success('Escalation policy created successfully');
       formRef.current?.reset();
       setIsOpen(false);
       if (res.policyId) {
@@ -62,7 +61,7 @@ export default function PolicyCreateForm({ action, canCreate = true }: PolicyCre
         router.refresh();
       }
     } else if (res?.error) {
-      showToast(res.error, 'error');
+      notify.error(res.error);
     }
     return res;
   };

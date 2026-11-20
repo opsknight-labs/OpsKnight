@@ -299,8 +299,10 @@ export default function PostmortemActionItems({
                             <UserAvatar
                               userId={owner.id}
                               name={owner.name}
+                              avatarUrl={owner.avatarUrl}
                               gender={owner.gender}
                               size="xs"
+                              aria-hidden
                             />
                             {owner.name}
                           </span>

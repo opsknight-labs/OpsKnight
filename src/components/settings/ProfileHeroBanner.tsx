@@ -129,6 +129,7 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
                 gender={user.gender}
                 size="2xl"
                 className="shrink-0 rounded-full shadow-xl ring-4 ring-primary-foreground/20 transition-shadow duration-200 group-hover:ring-primary-foreground/40"
+                aria-hidden
               />
               <span
                 aria-hidden="true"

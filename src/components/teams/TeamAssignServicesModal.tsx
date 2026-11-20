@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import {
   Dialog,
   DialogContent,
@@ -43,7 +43,6 @@ export default function TeamAssignServicesModal({
   assignServicesAction,
 }: TeamAssignServicesModalProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -58,25 +57,24 @@ export default function TeamAssignServicesModal({
 
   const handleAssign = () => {
     if (selectedIds.length === 0) {
-      return showToast('Please select at least one service', 'error');
+      return notify.error('Please select at least one service');
     }
 
     startTransition(async () => {
       try {
         const res = await assignServicesAction(teamId, selectedIds);
         if (res?.error) {
-          showToast(res.error, 'error');
+          notify.error(res.error);
         } else {
-          showToast(
-            `Assigned ${selectedIds.length} service${selectedIds.length === 1 ? '' : 's'} to ${teamName}`,
-            'success'
+          notify.success(
+            `Assigned ${selectedIds.length} service${selectedIds.length === 1 ? '' : 's'} to ${teamName}`
           );
           setSelectedIds([]);
           setOpen(false);
           router.refresh();
         }
       } catch {
-        showToast('Failed to assign services', 'error');
+        notify.error('Failed to assign services');
       }
     });
   };

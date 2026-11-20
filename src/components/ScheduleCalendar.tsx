@@ -300,6 +300,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
                                       gender={shift.user.gender}
                                       size="xs"
                                       className="h-4 w-4 ring-1 ring-white/50"
+                                      aria-hidden
                                     />
                                   )}
                                   <span className="font-medium text-foreground truncate flex-1 min-w-0">

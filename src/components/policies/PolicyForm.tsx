@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { createPolicy } from '@/app/(app)/policies/actions';
 import { Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -30,7 +30,6 @@ const formSchema = z.object({
 
 export default function PolicyForm() {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -64,7 +63,7 @@ export default function PolicyForm() {
 
       try {
         await createPolicy(formData);
-        showToast('Policy created successfully', 'success');
+        notify.success('Policy created successfully');
         // The action likely redirects, but if not:
         // router.push('/policies');
       } catch (error) {
@@ -78,7 +77,7 @@ export default function PolicyForm() {
         ) {
           throw error;
         }
-        showToast('Failed to create policy', 'error');
+        notify.error('Failed to create policy');
       }
     });
   }

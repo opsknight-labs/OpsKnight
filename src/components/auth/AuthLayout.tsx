@@ -14,10 +14,10 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ children, showAnimation = true, isSuccess = false }: AuthLayoutProps) {
   return (
-    <div className="relative min-h-[100dvh] lg:h-[100dvh] w-full overflow-hidden bg-[#06080b] font-sans selection:bg-red-500/20">
+    <div className="relative min-h-[100dvh] lg:h-[100dvh] w-full overflow-hidden bg-[hsl(var(--auth-panel-bg))] font-sans selection:bg-destructive/20">
       <div className="flex min-h-[100dvh] w-full flex-col lg:h-full lg:flex-row">
         {showAnimation && (
-          <section className="relative hidden h-full overflow-hidden border-r border-[#1a202c] lg:flex lg:w-1/2">
+          <section className="relative hidden h-full overflow-hidden border-r border-[hsl(var(--auth-panel-border))] lg:flex lg:w-1/2">
             <LoginAnimation resolved={isSuccess} />
           </section>
         )}
@@ -28,7 +28,7 @@ export function AuthLayout({ children, showAnimation = true, isSuccess = false }
               // Phone widths (<sm): no decorative banner at all — authentication
               // controls own the viewport. Tablet (sm-lg): a smaller banner.
               // Desktop (lg+): the full side animation above renders instead.
-              'relative hidden w-full shrink-0 overflow-hidden border-b border-[#1a202c] sm:block lg:hidden',
+              'relative hidden w-full shrink-0 overflow-hidden border-b border-[hsl(var(--auth-panel-border))] sm:block lg:hidden',
               'sm:h-[clamp(72px,12dvh,120px)]',
               // Short viewports (phones in landscape, small tablets): drop the
               // banner before compressing the actual auth controls below it.
@@ -59,10 +59,10 @@ export function AuthLayout({ children, showAnimation = true, isSuccess = false }
             href="https://opsknight.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 py-3 text-center text-[11px] font-medium text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200 dark:focus-visible:ring-white 2xl:text-xs"
+            className="flex items-center justify-center gap-1.5 py-3 text-center text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <svg
-              className="h-3.5 w-3.5 text-slate-400 dark:text-zinc-500"
+              className="h-3.5 w-3.5 text-muted-foreground"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

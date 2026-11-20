@@ -280,7 +280,7 @@ export default async function McpSettings({
         <section
           role="alert"
           aria-label="MCP disabled by deployment configuration"
-          className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm md:p-5"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm md:p-5"
         >
           <h2 className="flex items-center gap-2 font-semibold text-destructive">
             <XCircle className="h-4 w-4" aria-hidden="true" />
@@ -297,7 +297,7 @@ export default async function McpSettings({
         <section
           role="alert"
           aria-label="MCP configuration problems"
-          className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 md:p-5"
+          className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 md:p-5"
         >
           <h2 className="flex items-center gap-2 text-sm font-semibold text-destructive">
             <XCircle className="h-4 w-4" aria-hidden="true" />

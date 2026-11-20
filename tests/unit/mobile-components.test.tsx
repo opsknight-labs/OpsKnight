@@ -3,7 +3,6 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   MobileStatusBadge,
   MobileUrgencyBadge,
-  MobileAvatar,
   MobileHealthIndicator,
   MobileProgressBar,
 } from '@/components/mobile/MobileUtils';
@@ -39,18 +38,6 @@ describe('Mobile Components', () => {
     it('renders HIGH urgency', () => {
       render(<MobileUrgencyBadge urgency="high" />);
       expect(screen.getByText('high')).toBeInTheDocument();
-    });
-  });
-
-  describe('MobileAvatar', () => {
-    it('renders initials from name', () => {
-      render(<MobileAvatar name="John Doe" />);
-      expect(screen.getByText('JD')).toBeInTheDocument();
-    });
-
-    it('renders single initial for single name', () => {
-      render(<MobileAvatar name="Alice" />);
-      expect(screen.getByText('A')).toBeInTheDocument();
     });
   });
 

@@ -3,8 +3,7 @@
 import { memo, useMemo } from 'react';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { Clock, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteMarkdown } from './detail/NoteMarkdown';
@@ -39,8 +38,10 @@ function NoteCard({
   return (
     <div className="flex gap-3 items-start group">
       {/* Avatar */}
-      <DirectUserAvatar
-        avatarUrl={userAvatar || getDefaultAvatar(userGender, userId || userName)}
+      <UserAvatar
+        userId={userId || userName}
+        avatarUrl={userAvatar}
+        gender={userGender}
         name={userName}
         size="sm"
         className={cn(
@@ -53,6 +54,7 @@ function NoteCard({
             ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'
             : 'bg-muted text-muted-foreground'
         )}
+        aria-hidden
       />
 
       {/* Content */}

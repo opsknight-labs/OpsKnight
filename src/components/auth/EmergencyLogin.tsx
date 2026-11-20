@@ -4,6 +4,8 @@ import { useState } from 'react';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server';
 import { authenticationRequest } from '@/components/settings/AuthenticationConsole';
 import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
 
 export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: boolean }) {
   const [method, setMethod] = useState<'WEBAUTHN' | 'PASSWORD'>('WEBAUTHN');
@@ -29,7 +31,9 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
       setPending(false);
     }
   };
-  const fieldClass = 'block w-full rounded-md border border-border bg-background px-3 py-2';
+  const errorProps = error
+    ? ({ 'aria-invalid': true, 'aria-describedby': 'emergency-error' } as const)
+    : {};
   return (
     <div className="space-y-6">
       <form
@@ -62,10 +66,11 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
           });
         }}
       >
-        <label className="block space-y-1">
-          <span>Recovery method</span>
+        <div className="space-y-1.5">
+          <Label htmlFor="emergency-method">Recovery method</Label>
           <select
-            className={fieldClass}
+            id="emergency-method"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             value={method}
             disabled={pending}
             onChange={event => {
@@ -76,11 +81,12 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
             <option value="WEBAUTHN">Hardware security key</option>
             <option value="PASSWORD">Recovery password</option>
           </select>
-        </label>
-        <label className="block space-y-1">
-          <span>Emergency account identifier</span>
-          <input
-            className={fieldClass}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="emergency-account">Emergency account identifier</Label>
+          <Input
+            id="emergency-account"
+            {...errorProps}
             value={accountId}
             onChange={event => setAccountId(event.target.value)}
             required
@@ -88,12 +94,13 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
             maxLength={128}
             disabled={pending}
           />
-        </label>
+        </div>
         {method === 'PASSWORD' && (
-          <label className="block space-y-1">
-            <span>Recovery password</span>
-            <input
-              className={fieldClass}
+          <div className="space-y-1.5">
+            <Label htmlFor="emergency-recovery-password">Recovery password</Label>
+            <Input
+              id="emergency-recovery-password"
+              {...errorProps}
               type="password"
               autoComplete="current-password"
               required
@@ -102,15 +109,21 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
               disabled={pending}
               maxLength={256}
             />
-          </label>
+          </div>
         )}
-        <Button disabled={pending || !accountId} type="submit">
-          {method === 'PASSWORD' ? 'Sign in to recovery' : 'Sign in with hardware key'}
+        <Button disabled={pending || !accountId} type="submit" aria-busy={busy || undefined}>
+          {busy
+            ? 'Signing in…'
+            : method === 'PASSWORD'
+              ? 'Sign in to recovery'
+              : 'Sign in with hardware key'}
         </Button>
       </form>
       {legacyAvailable && (
         <details>
-          <summary className="cursor-pointer text-sm">Imported legacy emergency password</summary>
+          <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+            Imported legacy emergency password
+          </summary>
           <form
             className="mt-4 space-y-4"
             onSubmit={event => {
@@ -124,14 +137,15 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
               });
             }}
           >
-            <p className="text-sm">
+            <p className="text-sm text-muted-foreground">
               This compatibility credential opens only the recovery console. Enroll two independent
               identities and retire it after successful drills.
             </p>
-            <label className="block space-y-1">
-              <span>Emergency administrator email</span>
-              <input
-                className={fieldClass}
+            <div className="space-y-1.5">
+              <Label htmlFor="emergency-legacy-email">Emergency administrator email</Label>
+              <Input
+                id="emergency-legacy-email"
+                {...errorProps}
                 type="email"
                 autoComplete="username"
                 value={email}
@@ -139,11 +153,12 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
                 required
                 disabled={pending}
               />
-            </label>
-            <label className="block space-y-1">
-              <span>Emergency password</span>
-              <input
-                className={fieldClass}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="emergency-legacy-password">Emergency password</Label>
+              <Input
+                id="emergency-legacy-password"
+                {...errorProps}
                 type="password"
                 autoComplete="current-password"
                 value={password}
@@ -151,14 +166,14 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
                 required
                 disabled={pending}
               />
-            </label>
-            <Button disabled={pending} type="submit">
-              Sign in to recovery
+            </div>
+            <Button disabled={pending} type="submit" aria-busy={busy || undefined}>
+              {busy ? 'Signing in…' : 'Sign in to recovery'}
             </Button>
           </form>
         </details>
       )}
-      <p role="alert" className="break-words text-sm">
+      <p id="emergency-error" role="alert" className="break-words text-sm text-destructive">
         {error}
       </p>
     </div>

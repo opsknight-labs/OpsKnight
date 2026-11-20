@@ -26,6 +26,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import SidebarThemeMenu from '@/components/theme/SidebarThemeMenu';
+import AppearanceControl from '@/components/theme/AppearanceControl';
 import UserAvatar from '@/components/UserAvatar';
 import BrandLockup from '@/components/layout/BrandLockup';
 import { APP_VERSION } from '@/lib/constants';
@@ -691,6 +693,7 @@ export default function Sidebar({
                   size="sm"
                   className="border-white/10 h-8 w-8 shrink-0"
                   fallbackClassName="bg-indigo-500/20 text-indigo-200 text-xs"
+                  aria-hidden
                 />
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                   <div className="text-[13px] font-semibold text-white truncate">
@@ -746,6 +749,7 @@ export default function Sidebar({
           {/* Quick Action Bar (Collapsed) */}
           {isDesktopCollapsed && (
             <div className="mt-2 flex flex-col gap-1.5 items-center pt-2 border-t border-white/10">
+              <SidebarThemeMenu side="right" className="h-8 w-8 [&_svg]:h-4 [&_svg]:w-4" />
               <Tooltip delayDuration={150}>
                 <TooltipTrigger asChild>
                   <Link
@@ -786,7 +790,15 @@ export default function Sidebar({
             </div>
           )}
 
-          {/* Metadata version info */}
+          {/* Theme */}
+          {!isDesktopCollapsed && (
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/5 pt-2">
+              <span className="text-2xs font-medium text-ink-400">Theme</span>
+              <AppearanceControl size="xs" />
+            </div>
+          )}
+
+          {/* Metadata version info (the collapsed rail shows it in the status bar instead) */}
           {!isDesktopCollapsed && (
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[10px] text-ink-400">
               <a

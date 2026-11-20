@@ -507,11 +507,9 @@ export default function NotificationOperations({
                 <SelectValue placeholder="All Channels" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="text-xs">
-                  All Channels
-                </SelectItem>
+                <SelectItem value="all">All Channels</SelectItem>
                 {CHANNELS.map(value => (
-                  <SelectItem key={value} value={value} className="text-xs">
+                  <SelectItem key={value} value={value}>
                     {value}
                   </SelectItem>
                 ))}
@@ -532,11 +530,9 @@ export default function NotificationOperations({
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="text-xs">
-                  All Statuses
-                </SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 {STATUSES.map(value => (
-                  <SelectItem key={value} value={value} className="text-xs">
+                  <SelectItem key={value} value={value}>
                     {value}
                   </SelectItem>
                 ))}
@@ -551,11 +547,9 @@ export default function NotificationOperations({
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="text-xs">
-                  All Categories
-                </SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 {CATEGORIES.map(value => (
-                  <SelectItem key={value} value={value} className="text-xs">
+                  <SelectItem key={value} value={value}>
                     {value}
                   </SelectItem>
                 ))}
@@ -582,7 +576,7 @@ export default function NotificationOperations({
                       key={preset.id}
                       type="button"
                       onClick={() => applyDatePreset(preset.id as 'today' | '7d' | '30d')}
-                      className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                      className={`text-2xs font-semibold px-2 py-1 rounded-md border transition-all ${
                         isActive
                           ? 'bg-primary/10 border-primary/40 text-primary'
                           : 'bg-background border-border/80 text-muted-foreground hover:text-foreground hover:border-border'
@@ -697,7 +691,7 @@ export default function NotificationOperations({
                         <p className="text-xs font-semibold text-foreground">
                           No operations match these filters
                         </p>
-                        <p className="text-[11px]">
+                        <p className="text-2xs">
                           Try adjusting your search query, status, or date range.
                         </p>
                       </div>
@@ -719,7 +713,7 @@ export default function NotificationOperations({
                           {isDelivered ? (
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1"
+                              className="text-2xs font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1"
                             >
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                               {row.status}
@@ -734,7 +728,7 @@ export default function NotificationOperations({
                           ) : isPending ? (
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 inline-flex items-center gap-1"
+                              className="text-2xs font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 inline-flex items-center gap-1"
                             >
                               <Clock3 className="h-3 w-3 animate-pulse" />
                               {row.status}
@@ -742,7 +736,7 @@ export default function NotificationOperations({
                           ) : isFailed ? (
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
+                              className="text-2xs font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
                             >
                               <AlertTriangle className="h-3 w-3" />
                               {row.status}
@@ -750,7 +744,7 @@ export default function NotificationOperations({
                           ) : (
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
+                              className="text-2xs font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
                             >
                               {row.status}
                             </Badge>
@@ -762,16 +756,16 @@ export default function NotificationOperations({
                             {getChannelIcon(row.channel)}
                             <span className="text-xs font-bold text-foreground">{row.channel}</span>
                           </div>
-                          <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <div className="text-2xs text-muted-foreground flex items-center gap-1 mt-0.5">
                             <span>{row.category}</span>
                             <span>·</span>
-                            <code className="text-[10px] font-mono bg-muted/60 px-1 py-0.2 rounded border border-border/40">
+                            <code className="text-2xs font-mono bg-muted/60 px-1 py-0.2 rounded border border-border/40">
                               {row.templateKey || 'direct_dispatch'}
                             </code>
                           </div>
                           {row.errorMsg && (
                             <div
-                              className="mt-1 max-w-xs truncate text-[11px] text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 flex items-center gap-1"
+                              className="mt-1 max-w-xs truncate text-2xs text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 flex items-center gap-1"
                               title={row.errorMsg}
                             >
                               <AlertTriangle className="h-3 w-3 shrink-0 text-rose-500" />
@@ -781,7 +775,7 @@ export default function NotificationOperations({
                         </TableCell>
 
                         <TableCell className="font-mono text-xs py-2.5 whitespace-nowrap">
-                          <span className="bg-muted/50 text-foreground px-2 py-0.5 rounded-md border border-border/50 text-[11px] inline-block">
+                          <span className="bg-muted/50 text-foreground px-2 py-0.5 rounded-md border border-border/50 text-2xs inline-block">
                             {row.recipientDisplay || 'Encrypted Recipient'}
                           </span>
                         </TableCell>
@@ -800,7 +794,7 @@ export default function NotificationOperations({
                               {row.sourceType || 'System Event'}
                             </div>
                           )}
-                          <div className="text-[11px] text-muted-foreground">
+                          <div className="text-2xs text-muted-foreground">
                             {row.sourceType || 'Internal Trigger'}
                           </div>
                         </TableCell>
@@ -810,7 +804,7 @@ export default function NotificationOperations({
                             {row.attempts} / {row.maxAttempts}
                           </div>
                           {row.lastAttempt && (
-                            <div className="text-[10px] text-muted-foreground font-mono">
+                            <div className="text-2xs text-muted-foreground font-mono">
                               {row.lastAttempt.latencyMs}ms latency
                             </div>
                           )}
@@ -819,7 +813,7 @@ export default function NotificationOperations({
                         <TableCell className="whitespace-nowrap text-xs py-2.5 text-muted-foreground">
                           <div>{formatTimestamp(row.createdAt)}</div>
                           {row.status === 'PENDING' && (
-                            <div className="text-[10px] text-amber-600 dark:text-amber-400">
+                            <div className="text-2xs text-amber-600 dark:text-amber-400">
                               Next: {formatTimestamp(row.nextAttemptAt)}
                             </div>
                           )}

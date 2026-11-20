@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Check, Copy, Link as LinkIcon } from 'lucide-react';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 type CopyButtonProps = {
@@ -21,17 +21,16 @@ export default function CopyButton({
   icon = 'copy',
   className,
 }: CopyButtonProps) {
-  const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      showToast('Copied to clipboard', 'success');
+      notify.success('Copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      showToast('Failed to copy', 'error');
+    } catch {
+      notify.error('Failed to copy');
     }
   };
 

@@ -47,6 +47,7 @@ export function ControlCenterOverview({
   }, []);
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
     fetchMonitoringStatus();
   }, [fetchMonitoringStatus]);
 
@@ -57,13 +58,13 @@ export function ControlCenterOverview({
   return (
     <div className="space-y-6">
       {/* Top Bar: Action & Timestamp */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border bg-card/60 backdrop-blur-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border bg-card">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold tracking-tight text-foreground">
               Continuous Compliance Posture
             </h2>
-            <Badge variant="outline" className="text-[11px] font-mono">
+            <Badge variant="outline" className="text-2xs font-mono">
               Factual Diagnostics
             </Badge>
           </div>
@@ -74,7 +75,7 @@ export function ControlCenterOverview({
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-[11px] text-muted-foreground hidden lg:inline">
+          <span className="text-2xs text-muted-foreground hidden lg:inline">
             Generated: {new Date(overview.generatedAt).toLocaleTimeString()}
           </span>
           {canExport && (
@@ -110,7 +111,7 @@ export function ControlCenterOverview({
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Runtime Controls
             </CardTitle>
-            <ShieldCheck className="h-4 w-4 text-sky-500" />
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-4 pt-1 space-y-3">
             <div className="flex items-baseline gap-2">
@@ -121,43 +122,43 @@ export function ControlCenterOverview({
             <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="h-2 w-2 rounded-full bg-status-ok" />
                   Implemented:
                 </span>
-                <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
+                <span className="font-mono font-semibold text-status-ok-deep dark:text-emerald-300">
                   {runtime.implemented}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Superseded:</span>
-                <span className="font-mono font-semibold text-zinc-600 dark:text-zinc-400">
+                <span className="font-mono font-semibold text-muted-foreground">
                   {frameworks.supersededRequirements}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="h-2 w-2 rounded-full bg-status-elevated" />
                   Partial:
                 </span>
-                <span className="font-mono font-semibold text-amber-700 dark:text-amber-400">
+                <span className="font-mono font-semibold text-status-elevated-deep dark:text-amber-300">
                   {runtime.partial}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-rose-500" />
+                  <span className="h-2 w-2 rounded-full bg-status-critical" />
                   Action Req:
                 </span>
-                <span className="font-mono font-semibold text-rose-700 dark:text-rose-400">
+                <span className="font-mono font-semibold text-status-critical-deep dark:text-rose-300">
                   {runtime.actionRequired}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                  <span className="h-2 w-2 rounded-full bg-ink-400" />
                   Unverified:
                 </span>
-                <span className="font-mono font-semibold text-zinc-600 dark:text-zinc-400">
+                <span className="font-mono font-semibold text-muted-foreground">
                   {runtime.unverified}
                 </span>
               </div>
@@ -171,7 +172,7 @@ export function ControlCenterOverview({
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Evidence Ledger
             </CardTitle>
-            <FileCheck2 className="h-4 w-4 text-emerald-500" />
+            <FileCheck2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-4 pt-1 space-y-3">
             <div className="flex items-baseline gap-2">
@@ -184,7 +185,7 @@ export function ControlCenterOverview({
             <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Recent Sample:</span>
-                <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
+                <span className="font-mono font-semibold text-status-ok-deep dark:text-emerald-300">
                   {evidence.integritySample?.validRecords ?? evidence.verifiedRecords}/
                   {evidence.integritySample?.checkedRecords ?? evidence.verifiedRecords} valid
                 </span>
@@ -194,8 +195,8 @@ export function ControlCenterOverview({
                 <span
                   className={`font-mono font-semibold ${
                     (evidence.integritySample?.mismatches ?? evidence.integrityMismatches) > 0
-                      ? 'text-rose-600 dark:text-rose-400'
-                      : 'text-zinc-600 dark:text-zinc-400'
+                      ? 'text-status-critical-deep dark:text-rose-300'
+                      : 'text-muted-foreground'
                   }`}
                 >
                   {evidence.integritySample?.mismatches ?? evidence.integrityMismatches}
@@ -211,7 +212,7 @@ export function ControlCenterOverview({
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Frameworks Mapped
             </CardTitle>
-            <Layers className="h-4 w-4 text-purple-500" />
+            <Layers className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-4 pt-1 space-y-3">
             <div className="flex items-baseline gap-2">
@@ -230,7 +231,7 @@ export function ControlCenterOverview({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Future Staged:</span>
-                <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                <span className="font-mono font-semibold text-muted-foreground">
                   {frameworks.futureRequirements}
                 </span>
               </div>
@@ -258,8 +259,8 @@ export function ControlCenterOverview({
       <SharedResponsibilityCard />
 
       {/* Scope / Non-Certification Disclaimer */}
-      <div className="p-4 rounded-xl border border-border/70 bg-muted/20 flex items-start gap-3 text-xs text-muted-foreground">
-        <Info className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
+      <div className="p-4 rounded-lg border border-border/70 bg-muted/20 flex items-start gap-3 text-xs text-muted-foreground">
+        <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
         <div className="space-y-1">
           <p className="font-semibold text-foreground">
             Architectural Scope & Non-Certification Notice

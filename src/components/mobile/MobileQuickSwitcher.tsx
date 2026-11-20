@@ -156,7 +156,10 @@ export default function MobileQuickSwitcher() {
         if (!response.ok) throw new Error(`Search returned HTTP ${response.status}`);
         const data = (await response.json()) as { results?: SearchResult[] };
         if (generation !== searchGeneration.current) return;
-        setResults(Array.isArray(data.results) ? data.results : []);
+        // The API also returns schedules and runbooks, which have no mobile route.
+        setResults(
+          Array.isArray(data.results) ? data.results.filter(result => result.type in typeMeta) : []
+        );
       } catch (error) {
         if (controller.signal.aborted || generation !== searchGeneration.current) return;
         logger.warn('mobile.quick_switcher.search_failed', {

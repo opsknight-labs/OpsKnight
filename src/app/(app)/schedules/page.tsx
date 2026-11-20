@@ -5,6 +5,7 @@ import { createSchedule } from './actions';
 import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
 import { Calendar, Layers3, Users, CheckCircle2 } from 'lucide-react';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 
 import { Prisma } from '@prisma/client';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
@@ -172,61 +173,38 @@ export default async function SchedulesPage({
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      {/* Header with Glassmorphic Stats Capsule */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
-              <Calendar className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                On-call schedules
-              </p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-                Schedules
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-300">
-                Manage rotation layers, shifts, on-call responders, and coverage calendars.
-              </p>
-            </div>
+      <DetailHeroBanner
+        tag="On-call schedules"
+        title="Schedules"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Calendar className="h-6 w-6" aria-hidden="true" />
           </div>
-
-          {/* Frosted Glassmorphism 3-column stats capsule */}
-          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs lg:min-w-[340px]">
-            <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Responders
-              </p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
-                <Users className="h-3.5 w-3.5" /> {totalUniqueResponders}
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg border-x border-zinc-800/80 px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Layers
-              </p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
-                <Layers3 className="h-3.5 w-3.5" /> {totalLayers}
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Status
-              </p>
-              <p
-                className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-bold ${
-                  hasConfiguredResponders ? 'text-emerald-400' : 'text-amber-400'
-                }`}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {hasConfiguredResponders ? 'Configured' : 'Needs setup'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Manage rotation layers, shifts, on-call responders, and coverage calendars.
+          </p>
+        }
+        stats={[
+          {
+            label: 'Responders',
+            value: totalUniqueResponders,
+            icon: <Users className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Layers',
+            value: totalLayers,
+            icon: <Layers3 className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Status',
+            value: hasConfiguredResponders ? 'Configured' : 'Needs setup',
+            icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+            valueClassName: hasConfiguredResponders ? 'text-emerald-200' : 'text-amber-200',
+          },
+        ]}
+      />
 
       {/* Top Action: Create Schedule Dashed Expander */}
       <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />

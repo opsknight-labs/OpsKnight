@@ -159,6 +159,7 @@ export default function AssigneeSection({
                 avatarUrl={u.avatarUrl}
                 size="sm"
                 className="mr-2 border-ink-200"
+                aria-hidden
               />
               <div className="flex flex-col min-w-0">
                 <span className="font-medium truncate text-xs">{u.name}</span>
@@ -199,6 +200,7 @@ export default function AssigneeSection({
                 avatarUrl={assignee.avatarUrl}
                 size="xs"
                 className="border-border/80 shrink-0 h-4 w-4 text-[9px]"
+                aria-hidden
               />
               <span className="truncate max-w-[110px]">{assignee.name}</span>
             </>
@@ -237,6 +239,7 @@ export default function AssigneeSection({
                   avatarUrl={assignee.avatarUrl}
                   size="xs"
                   className="border-border/80 shrink-0 h-4 w-4 text-[9px]"
+                  aria-hidden
                 />
                 <span className="truncate max-w-[110px]">{assignee.name}</span>
               </>
@@ -279,6 +282,7 @@ export default function AssigneeSection({
                 avatarUrl={assignee.avatarUrl}
                 size="xs"
                 className="border-border/80"
+                aria-hidden
               />
               <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
                 {assignee.name.split(' ')[0]}

@@ -160,7 +160,7 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
       </dl>
       <DecisionReason reason={preview.decisionReason} />
       {summary.inputs.length > 0 && (
-        <section className="space-y-2 rounded border p-4" aria-labelledby="runbook-inputs">
+        <section className="space-y-2 rounded-lg border border-border p-4" aria-labelledby="runbook-inputs">
           <h2 id="runbook-inputs" className="font-display text-lg font-semibold">
             Inputs the assistant supplied
           </h2>
@@ -182,7 +182,7 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
       )}
       <h2 className="font-display text-lg font-semibold">Frozen actions</h2>
       {summary.steps.map(step => (
-        <section key={step.key} className="space-y-2 rounded border p-4">
+        <section key={step.key} className="space-y-2 rounded-lg border border-border p-4">
           <h3 className="font-display font-semibold [overflow-wrap:anywhere]">{step.name}</h3>
           <p className="flex flex-wrap items-center gap-2 text-sm">
             <span>{step.type}</span>
@@ -200,7 +200,7 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
           </dl>
         </section>
       ))}
-      <details className="rounded border p-3">
+      <details className="rounded-lg border border-border p-3">
         <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
           Verification details
         </summary>

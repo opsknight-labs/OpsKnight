@@ -1,4 +1,4 @@
-import SettingsPageSkeleton from '@/components/settings/layout/SettingsPageSkeleton';
+import { SettingsPageSkeleton } from '@/components/patterns';
 
 export default function LoadingMcp() {
   return (

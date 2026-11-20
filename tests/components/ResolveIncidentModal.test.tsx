@@ -9,11 +9,9 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-const mockShowToast = vi.fn();
-vi.mock('@/hooks/use-product-notification', () => ({
-  useToast: () => ({
-    showToast: mockShowToast,
-  }),
+const mockNotifySuccess = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/toast', () => ({
+  notify: { success: mockNotifySuccess, error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock('@/app/(app)/incidents/actions', () => ({
@@ -85,9 +83,8 @@ describe('ResolveIncidentModal', () => {
         'inc-1234567890',
         'Scaled worker pool replicas to resolve CPU saturation.'
       );
-      expect(mockShowToast).toHaveBeenCalledWith(
-        expect.stringContaining('resolved successfully'),
-        'success'
+      expect(mockNotifySuccess).toHaveBeenCalledWith(
+        expect.stringContaining('resolved successfully')
       );
       expect(onOpenChange).toHaveBeenCalledWith(false);
       expect(onSuccess).toHaveBeenCalledWith('inc-1234567890');

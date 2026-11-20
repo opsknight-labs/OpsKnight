@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
@@ -42,7 +42,6 @@ export default function TeamMemberForm({
   teamId,
 }: TeamMemberFormProps) {
   const [isPending, startTransition] = useTransition();
-  const { showToast } = useToast();
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string>('MEMBER');
   const [search, setSearch] = useState('');
@@ -65,7 +64,7 @@ export default function TeamMemberForm({
         setHasMore(Boolean(data.hasMore));
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          showToast('Unable to search the user directory', 'error');
+          notify.error('Unable to search the user directory');
         }
       } finally {
         if (!controller.signal.aborted) setIsSearching(false);
@@ -76,7 +75,7 @@ export default function TeamMemberForm({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [search, showToast, teamId]);
+  }, [search, teamId]);
 
   const selectableUsers = useMemo(() => {
     const selected = availableUsers.find(user => user.id === selectedUserId);
@@ -97,9 +96,9 @@ export default function TeamMemberForm({
     startTransition(async () => {
       const result = await addMember(formData);
       if (result?.error) {
-        showToast(result.error, 'error');
+        notify.error(result.error);
       } else {
-        showToast(`${userName} added as ${selectedRole}`, 'success');
+        notify.success(`${userName} added as ${selectedRole}`);
         setSearchResults(current => current.filter(user => user.id !== selectedUserId));
         setSelectedUserId('');
         setSelectedRole('MEMBER');
@@ -154,7 +153,13 @@ export default function TeamMemberForm({
             {selectableUsers.map(user => (
               <SelectItem key={user.id} value={user.id}>
                 <div className="flex items-center gap-2">
-                  <UserAvatar userId={user.id} name={user.name} gender={user.gender} size="xs" />
+                  <UserAvatar
+                    userId={user.id}
+                    name={user.name}
+                    gender={user.gender}
+                    size="xs"
+                    aria-hidden
+                  />
                   <span className="truncate">{user.name}</span>
                   {user.status === 'DISABLED' && (
                     <Badge variant="secondary" size="xs">

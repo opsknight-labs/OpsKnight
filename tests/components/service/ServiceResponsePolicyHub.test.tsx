@@ -62,9 +62,9 @@ describe('ServiceResponsePolicyHub', () => {
     expect(screen.getByText('Workspace SLA')).toBeInTheDocument();
     expect(screen.getByText('24×7 Coverage')).toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: /sla targets & deadlines/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /alert classification/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /support hours & coverage/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /sla targets & deadlines/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /alert classification/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /support hours & coverage/i })).toBeInTheDocument();
   });
 
   it('renders SLA targets by default and allows switching to Alert Classification and Support Hours', () => {
@@ -84,15 +84,15 @@ describe('ServiceResponsePolicyHub', () => {
     expect(screen.getByText(/priority-specific overrides/i)).toBeInTheDocument();
 
     // Switch to Alert Classification
-    const classTab = screen.getByRole('button', { name: /alert classification/i });
-    fireEvent.click(classTab);
+    const classTab = screen.getByRole('tab', { name: /alert classification/i });
+    fireEvent.mouseDown(classTab, { button: 0 });
 
     expect(screen.getByText(/inbound alert severity/i)).toBeInTheDocument();
     expect(screen.getByText(/urgency fallback behavior/i)).toBeInTheDocument();
 
     // Switch to Support Hours
-    const hoursTab = screen.getByRole('button', { name: /support hours & coverage/i });
-    fireEvent.click(hoursTab);
+    const hoursTab = screen.getByRole('tab', { name: /support hours & coverage/i });
+    fireEvent.mouseDown(hoursTab, { button: 0 });
 
     expect(screen.getByText(/operational coverage mode/i)).toBeInTheDocument();
     expect(screen.getByText(/24×7 continuous/i)).toBeInTheDocument();

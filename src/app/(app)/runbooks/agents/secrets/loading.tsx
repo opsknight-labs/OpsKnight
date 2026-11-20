@@ -1,5 +1,5 @@
-import { RunbookPageSkeleton } from '@/components/runbooks/skeletons';
+import { ListPageSkeleton } from '@/components/patterns';
 
-export default function RunbookSecretsLoading() {
-  return <RunbookPageSkeleton variant="secrets" />;
+export default function AgentSecretsLoading() {
+  return <ListPageSkeleton label="Loading scoped secrets" stats={3} rows={5} columns={4} />;
 }
