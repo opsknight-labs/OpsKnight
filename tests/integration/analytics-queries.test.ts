@@ -290,3 +290,32 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
     });
   });
 });
+
+describeIfRealDB('responder load timezone', { timeout: 60_000 }, () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  }, 60_000);
+
+  it("bands each responder's incidents in that responder's own timezone", async () => {
+    const service = await testPrisma.service.create({ data: { name: 'tz-responders' } });
+    const india = await testPrisma.user.create({
+      data: { email: 'in@example.com', name: 'India', status: 'ACTIVE', timeZone: 'Asia/Kolkata' },
+    });
+    const bogus = await testPrisma.user.create({
+      data: { email: 'x@example.com', name: 'Bogus tz', status: 'ACTIVE', timeZone: 'Not/AZone' },
+    });
+    // 20:00 UTC Wednesday: 01:30 Thursday in India (overnight), evening in UTC.
+    const createdAt = new Date('2026-01-14T20:00:00Z');
+    await testPrisma.incident.createMany({
+      data: [
+        { title: 'a', serviceId: service.id, assigneeId: india.id, createdAt },
+        { title: 'b', serviceId: service.id, assigneeId: bogus.id, createdAt },
+      ],
+    });
+    const { scope, window } = context();
+    const rows = await queryResponders(scope, window);
+    expect(rows.find(row => row.id === india.id)).toMatchObject({ overnight: 1, evening: 0 });
+    // Unknown timezone names fall back to UTC instead of failing the query.
+    expect(rows.find(row => row.id === bogus.id)).toMatchObject({ evening: 1, overnight: 0 });
+  });
+});

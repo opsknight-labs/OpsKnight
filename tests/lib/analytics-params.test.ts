@@ -46,7 +46,7 @@ describe('parseAnalyticsParams', () => {
     expect(parseAnalyticsParams({ window: '7' }).range).toBe('7d');
     expect(parseAnalyticsParams({ window: '14' }).range).toBe('30d');
     expect(parseAnalyticsParams({ range: '1' }).range).toBe('24h');
-    expect(parseAnalyticsParams({ range: '9999' }).range).toBe('365d');
+    expect(parseAnalyticsParams({ range: '9999' }).range).toBe('1095d');
   });
 
   it('drops junk, injection attempts and unknown enum values', () => {
@@ -79,7 +79,7 @@ describe('parseAnalyticsParams', () => {
     expect(custom.range).toBe('custom');
     expect(custom.to!.getTime() - custom.from!.getTime()).toBe(86_400_000);
     expect(parseAnalyticsParams({ from: '2026-02-01', to: '2026-01-01' }).range).toBe('30d');
-    expect(parseAnalyticsParams({ from: '2020-01-01', to: '2026-01-01' }).range).toBe('30d');
+    expect(parseAnalyticsParams({ from: '2020-01-01', to: '2026-01-01' }).range).toBe('30d'); // > 3 years
   });
 });
 
@@ -99,6 +99,23 @@ describe('resolveAnalyticsWindow', () => {
     const window = resolveAnalyticsWindow({ params: parseAnalyticsParams({ range: '365d' }), policy, now });
     expect(window.isClipped).toBe(true);
     expect(window.start).toEqual(new Date(now.getTime() - 90 * 86_400_000));
+  });
+
+  it("runs custom ranges midnight-to-midnight in the viewer's timezone", () => {
+    const params = parseAnalyticsParams({ from: '2026-01-01', to: '2026-01-02' });
+    const ny = resolveAnalyticsWindow({ params, policy: { ...policy, incidentRetentionDays: 730 }, userTimeZone: 'America/New_York', now });
+    expect(ny.start).toEqual(new Date('2026-01-01T05:00:00Z'));
+    expect(ny.end).toEqual(new Date('2026-01-03T05:00:00Z'));
+    const tokyo = resolveAnalyticsWindow({ params, policy: { ...policy, incidentRetentionDays: 730 }, userTimeZone: 'Asia/Tokyo', now });
+    expect(tokyo.start).toEqual(new Date('2025-12-31T15:00:00Z'));
+  });
+
+  it('supports 3-year ranges with monthly buckets, still clipped by retention', () => {
+    const params = parseAnalyticsParams({ range: '1095d' });
+    const long = resolveAnalyticsWindow({ params, policy: { ...policy, incidentRetentionDays: 1095 }, now });
+    expect(long.bucket).toBe('month');
+    expect(long.isClipped).toBe(false);
+    expect(resolveAnalyticsWindow({ params, policy, now }).isClipped).toBe(true);
   });
 
   it('falls back to UTC for invalid timezones', () => {

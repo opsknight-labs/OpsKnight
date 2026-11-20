@@ -6,7 +6,7 @@ import { z } from 'zod';
  * everywhere and unknown values are dropped instead of trusted.
  */
 
-export const ANALYTICS_RANGES = ['24h', '7d', '30d', '90d', '180d', '365d'] as const;
+export const ANALYTICS_RANGES = ['24h', '7d', '30d', '90d', '180d', '365d', '730d', '1095d'] as const;
 export type AnalyticsRange = (typeof ANALYTICS_RANGES)[number] | 'custom';
 export const DEFAULT_ANALYTICS_RANGE: AnalyticsRange = '30d';
 
@@ -22,7 +22,7 @@ export const ANALYTICS_STATUSES = [
 export const UNASSIGNED = 'unassigned';
 
 const MAX_IDS = 50;
-const MAX_CUSTOM_DAYS = 366;
+const MAX_CUSTOM_DAYS = 1096; // 3 years
 const DAY_MS = 86_400_000;
 
 export type AnalyticsParams = {
@@ -85,7 +85,7 @@ function legacyRange(value: string | undefined): AnalyticsRange | undefined {
   const days = Number(value);
   if (!Number.isInteger(days) || days <= 0) return undefined;
   if (days <= 1) return '24h';
-  return ANALYTICS_RANGES.find(range => range !== '24h' && parseInt(range, 10) >= days) ?? '365d';
+  return ANALYTICS_RANGES.find(range => range !== '24h' && parseInt(range, 10) >= days) ?? '1095d';
 }
 
 export function parseAnalyticsParams(raw: RawParams): AnalyticsParams {

@@ -4,12 +4,13 @@ import {
   normalizeContractTimeZone,
   resolveReportingWindow,
 } from '@/lib/time-retention-contract';
+import { startOfDayFromDateKey } from '@/lib/timezone';
 import type { AnalyticsParams } from './params';
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-export type AnalyticsBucket = 'hour' | 'day' | 'week';
+export type AnalyticsBucket = 'hour' | 'day' | 'week' | 'month';
 
 /**
  * Every analytics window is half-open: [start, end). The previous window has
@@ -41,7 +42,8 @@ function rangeMs(params: AnalyticsParams): number {
 export function bucketFor(lengthMs: number): AnalyticsBucket {
   if (lengthMs <= 2 * DAY_MS) return 'hour';
   if (lengthMs <= 92 * DAY_MS) return 'day';
-  return 'week';
+  if (lengthMs <= 400 * DAY_MS) return 'week';
+  return 'month';
 }
 
 export function resolveAnalyticsWindow(input: {
@@ -55,9 +57,15 @@ export function resolveAnalyticsWindow(input: {
     userTimeZone: input.userTimeZone,
     businessTimeZone: input.policy.businessHoursTimeZone,
   });
-  const custom = input.params.range === 'custom';
-  const requestedEnd = custom ? input.params.to : context.now;
-  const requestedStart = new Date((requestedEnd ?? context.now).getTime() - rangeMs(input.params));
+  const timeZone = normalizeContractTimeZone(input.userTimeZone);
+  const { from, to } = input.params;
+  const custom = input.params.range === 'custom' && from && to;
+  // Custom ranges are calendar days in the viewer's timezone: midnight to midnight local.
+  const dayKey = (date: Date) => date.toISOString().slice(0, 10);
+  const requestedEnd = custom ? startOfDayFromDateKey(dayKey(to), timeZone) : context.now;
+  const requestedStart = custom
+    ? startOfDayFromDateKey(dayKey(from), timeZone)
+    : new Date(requestedEnd.getTime() - rangeMs(input.params));
   const resolved = resolveReportingWindow({
     context,
     policy: input.policy,
@@ -72,7 +80,7 @@ export function resolveAnalyticsWindow(input: {
     previousStart: new Date(start.getTime() - length),
     previousEnd: start,
     bucket: bucketFor(length),
-    timeZone: normalizeContractTimeZone(input.userTimeZone),
+    timeZone,
     businessTimeZone: context.businessTimeZone,
     isClipped: resolved.isClipped,
   };

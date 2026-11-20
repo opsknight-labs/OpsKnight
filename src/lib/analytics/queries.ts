@@ -22,6 +22,17 @@ const HOUR_MS = 3_600_000;
 const tz = (date: Date) => Prisma.sql`${date.toISOString()}::timestamptz`;
 const n = (value: unknown) => Number(value ?? 0);
 
+// The correlated SLA-pause subqueries inflate cost estimates past the JIT threshold, and
+// Postgres then spends seconds compiling a query that runs in milliseconds. Turn JIT
+// off for analytics statements only (SET LOCAL ends with the transaction).
+async function run<T>(query: Prisma.Sql): Promise<T> {
+  const [, rows] = await prisma.$transaction([
+    prisma.$executeRaw`SET LOCAL jit = off`,
+    prisma.$queryRaw<T>(query),
+  ]);
+  return rows;
+}
+
 // ---------------------------------------------------------------- KPIs
 
 export type KpiSection = {
@@ -32,11 +43,11 @@ export type KpiSection = {
 
 export async function queryKpis(scope: AnalyticsScope, window: AnalyticsWindow): Promise<KpiSection> {
   const [rows, open] = await Promise.all([
-    prisma.$queryRaw<Array<AggregateRow & { in_current: boolean }>>(Prisma.sql`
+    run<Array<AggregateRow & { in_current: boolean }>>(Prisma.sql`
       WITH ${metricRowsCte(scope, window, { includePrevious: true })}
       SELECT in_current, ${metricAggregates()}
       FROM metric_rows GROUP BY in_current`),
-    prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+    run<Array<{ count: number }>>(Prisma.sql`
       SELECT COUNT(*)::int AS count FROM "Incident" ${Prisma.raw(INCIDENT_ALIAS)}
       WHERE ${Prisma.raw(INCIDENT_ALIAS)}."status" = ANY(${activeIncidentStatuses()}::"IncidentStatus"[])
       ${scope.incidentSql}`),
@@ -68,7 +79,7 @@ export async function queryTrend(
 ): Promise<TrendPoint[]> {
   const unit = window.bucket;
   const localTs = (date: Date) => Prisma.sql`timezone(${window.timeZone}, ${tz(date)})`;
-  const rows = await prisma.$queryRaw<
+  const rows = await run<
     Array<{
       bucket: string;
       high: number;
@@ -132,7 +143,7 @@ export async function queryServices(
   scope: AnalyticsScope,
   window: AnalyticsWindow
 ): Promise<ServiceRow[]> {
-  const rows = await prisma.$queryRaw<
+  const rows = await run<
     Array<AggregateRow & { id: string; name: string; previous_incidents: number; alerts: number }>
   >(Prisma.sql`
     WITH ${metricRowsCte(scope, window, { includePrevious: true })},
@@ -168,7 +179,7 @@ export type ResponderRow = {
   name: string;
   avatarUrl: string | null;
   incidents: number;
-  /** Incidents created in business hours (Mon–Fri 08–18, business tz). */
+  /** Bands are in the responder's own timezone preference. Mon–Fri 08:00–18:00. */
   working: number;
   /** 18:00–22:00, or weekend daytime. */
   evening: number;
@@ -184,18 +195,29 @@ export async function queryResponders(
   window: AnalyticsWindow
 ): Promise<ResponderRow[]> {
   const [rows, shifts] = await Promise.all([
-    prisma.$queryRaw<
+    run<
       Array<{ id: string; incidents: number; working: number; evening: number; overnight: number }>
     >(Prisma.sql`
       WITH ${metricRowsCte(scope, window)},
+      -- Each responder's own preferred timezone (unknown names fall back to UTC):
+      -- "overnight" means their night, wherever they are.
+      responder_tz AS (
+        SELECT u.id, COALESCE(tz.name, 'UTC') AS tz
+        FROM "User" u LEFT JOIN pg_timezone_names tz ON tz.name = u."timeZone"
+        WHERE u.id IN (SELECT "assigneeId" FROM metric_rows)
+      ),
+      local AS (
+        SELECT m."assigneeId", timezone(r.tz, timezone('UTC', m."createdAt")) AS at
+        FROM metric_rows m JOIN responder_tz r ON r.id = m."assigneeId"
+      ),
       banded AS (
         SELECT "assigneeId",
           CASE
-            WHEN EXTRACT(HOUR FROM business_at) >= 22 OR EXTRACT(HOUR FROM business_at) < 8 THEN 'overnight'
-            WHEN NOT after_hours THEN 'working'
-            ELSE 'evening'
+            WHEN EXTRACT(HOUR FROM at) >= 22 OR EXTRACT(HOUR FROM at) < 8 THEN 'overnight'
+            WHEN EXTRACT(ISODOW FROM at) IN (6, 7) OR EXTRACT(HOUR FROM at) >= 18 THEN 'evening'
+            ELSE 'working'
           END AS band
-        FROM metric_rows WHERE "assigneeId" IS NOT NULL
+        FROM local
       )
       SELECT "assigneeId" AS id, COUNT(*)::int AS incidents,
         COUNT(*) FILTER (WHERE band = 'working')::int AS working,
@@ -250,7 +272,7 @@ export async function queryTiming(
   scope: AnalyticsScope,
   window: AnalyticsWindow
 ): Promise<TimingSection> {
-  const rows = await prisma.$queryRaw<Array<{ dow: number; hour: number; count: number }>>(Prisma.sql`
+  const rows = await run<Array<{ dow: number; hour: number; count: number }>>(Prisma.sql`
     WITH ${metricRowsCte(scope, window)}
     SELECT EXTRACT(ISODOW FROM local_at)::int AS dow, EXTRACT(HOUR FROM local_at)::int AS hour,
       COUNT(*)::int AS count
@@ -284,7 +306,7 @@ export async function queryNoise(
 ): Promise<NoiseSection> {
   const cte = metricRowsCte(scope, window);
   const [totals, services, titles] = await Promise.all([
-    prisma.$queryRaw<Array<{ incidents: number; resolved: number; auto_resolved: number; alerts: number }>>(
+    run<Array<{ incidents: number; resolved: number; auto_resolved: number; alerts: number }>>(
       Prisma.sql`
         WITH ${cte}
         SELECT COUNT(*)::int AS incidents,
@@ -293,14 +315,14 @@ export async function queryNoise(
           (SELECT COUNT(*) FROM "Alert" a WHERE a."incidentId" IN (SELECT id FROM metric_rows))::int AS alerts
         FROM metric_rows`
     ),
-    prisma.$queryRaw<Array<{ id: string; name: string; alerts: number; incidents: number }>>(Prisma.sql`
+    run<Array<{ id: string; name: string; alerts: number; incidents: number }>>(Prisma.sql`
       WITH ${cte}
       SELECT m."serviceId" AS id, s.name, COUNT(DISTINCT m.id)::int AS incidents, COUNT(a.id)::int AS alerts
       FROM metric_rows m
       JOIN "Service" s ON s.id = m."serviceId"
       LEFT JOIN "Alert" a ON a."incidentId" = m.id
       GROUP BY 1, 2 ORDER BY alerts DESC, incidents DESC LIMIT 5`),
-    prisma.$queryRaw<Array<{ title: string; count: number; last_seen: Date }>>(Prisma.sql`
+    run<Array<{ title: string; count: number; last_seen: Date }>>(Prisma.sql`
       WITH ${cte}
       SELECT MIN(title) AS title, COUNT(*)::int AS count, MAX("createdAt") AS last_seen
       FROM metric_rows GROUP BY lower(btrim(title))
@@ -345,7 +367,7 @@ export async function queryFollowThrough(
   scope: AnalyticsScope,
   window: AnalyticsWindow
 ): Promise<FollowThroughSection> {
-  const rows = await prisma.$queryRaw<
+  const rows = await run<
     Array<{
       high_resolved: number;
       published: number;
