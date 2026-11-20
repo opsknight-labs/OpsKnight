@@ -7,7 +7,7 @@ audience: [administrator, responder]
 verification:
   level: source
   verified_at: 2026-09-27
-  evidence: [src/app/(app)/analytics/, src/lib/reports/]
+  evidence: [src/app/(app)/insights/, src/lib/reports/]
 ---
 
 # Analytics
