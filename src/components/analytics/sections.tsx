@@ -174,7 +174,7 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
                 <IncidentDrillSheet
                   drill={tile.drill.kind}
                   title={tile.drill.title}
-                  label={`${definition.label}: show ${tile.drill.title.toLowerCase()}`}
+                  label={`${definition.label}: show ${tile.drill.title.charAt(0).toLowerCase()}${tile.drill.title.slice(1)}`}
                   className="absolute inset-0 rounded-lg"
                 />
               )}

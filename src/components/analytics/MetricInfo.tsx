@@ -12,14 +12,17 @@ import { METRICS, type MetricId } from '@/lib/analytics/definitions';
 /** Definition tooltip; the text comes from the metric registry, never inline copy. */
 export default function MetricInfo({ metrics }: { metrics: MetricId[] }) {
   const definitions = metrics.map(id => METRICS[id]);
-  const label = definitions.length === 1 ? definitions[0].label : 'these metrics';
+  const label =
+    definitions.length === 1
+      ? `How ${definitions[0].label} is calculated`
+      : 'How these metrics are calculated';
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label={`How ${label} is calculated`}
+            aria-label={label}
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Info className="h-3.5 w-3.5" aria-hidden />

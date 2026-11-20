@@ -30,10 +30,13 @@ export function SectionCard({
     >
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b px-4 py-3 sm:px-5">
         <div className="min-w-0">
-          <h2 id={id} className="flex items-center gap-1.5 text-base font-semibold">
-            {title}
+          {/* The info button sits beside the heading, not inside it, so the section name stays clean. */}
+          <div className="flex items-center gap-1.5">
+            <h2 id={id} className="text-base font-semibold">
+              {title}
+            </h2>
             {info}
-          </h2>
+          </div>
           {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
         </div>
         {actions}
