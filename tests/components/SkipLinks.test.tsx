@@ -17,11 +17,10 @@ describe('SkipLinks', () => {
     expect(navLink).toHaveAttribute('href', '#navigation');
   });
 
-  it('should have proper styling for accessibility', () => {
+  it('stays visually hidden until keyboard focus reveals it', () => {
     render(<SkipLinks />);
-    const mainLink = screen.getByText('Skip to main content');
-    const styles = window.getComputedStyle(mainLink);
-    expect(styles.position).toBe('absolute');
+    for (const text of ['Skip to main content', 'Skip to navigation']) {
+      expect(screen.getByText(text)).toHaveClass('sr-only', 'focus:not-sr-only', 'focus:fixed');
+    }
   });
 });
-
