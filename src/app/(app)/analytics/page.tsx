@@ -5,6 +5,8 @@ import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import prisma from '@/lib/prisma';
 import AnalyticsFilters from '@/components/analytics/AnalyticsFilters';
+import AnalyticsAsk from '@/components/analytics/AnalyticsAsk';
+import { opsHelpersOn } from '@/lib/intelligence/helpers/on-demand';
 import FilterChips from '@/components/analytics/FilterChips';
 import AnalyticsContent from '@/components/analytics/AnalyticsContent';
 import AnalyticsSkeleton from '@/components/analytics/AnalyticsSkeleton';
@@ -79,7 +81,7 @@ export default async function AnalyticsV2Page({
   const windowCandidate = Number(params?.window ?? 7);
   const windowDays = allowedWindows.has(windowCandidate) ? windowCandidate : 7;
 
-  const [teams, services, users] = await Promise.all([
+  const [teams, services, users, helpersOn] = await Promise.all([
     prisma.team.findMany({ where: teamReadWhere(actor), select: { id: true, name: true } }),
     prisma.service.findMany({
       where: serviceReadWhere(actor),
@@ -89,6 +91,8 @@ export default async function AnalyticsV2Page({
       where: dashboardUserReadWhere(actor),
       select: { id: true, name: true, email: true },
     }),
+    // The plain-words box sits behind the small-helpers switch (off by default).
+    opsHelpersOn().catch(() => false),
   ]);
 
   const servicesForFilter = teamId ? services.filter(s => s.teamId === teamId) : services;
@@ -190,6 +194,8 @@ export default async function AnalyticsV2Page({
           </span>
         </div>
       )}
+
+      {helpersOn && <AnalyticsAsk />}
 
       {/* Filter bar — fast queries, renders before heavy metrics */}
       <AnalyticsFilters
