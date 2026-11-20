@@ -22,10 +22,9 @@ test('2.1.0 retains every baseline documentation file and asset', () => {
   }
 });
 
-test('2.1.0 is released in docs/versions.json', () => {
+test('2.1.0 stays released in docs/versions.json after 2.2.0 became current', () => {
   const versions = JSON.parse(readFileSync('docs/versions.json', 'utf8'));
-  assert.equal(versions.currentRelease, 'v2.1.0');
-  assert.equal(versions.upcomingVersion, 'v2.2.0');
+  assert.equal(versions.currentRelease, 'v2.2.0');
   assert.ok(versions.releasedVersions.includes('v2.1.0'));
 });
 
