@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import LineChart from '@/components/analytics/LineChart';
+import LineChart from '@/components/charts/LineChart';
 
 describe('LineChart no-data semantics', () => {
   it('renders null points as gaps instead of zero-valued points', () => {

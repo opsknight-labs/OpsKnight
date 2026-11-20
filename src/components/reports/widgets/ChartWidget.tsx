@@ -13,10 +13,10 @@ function useIsMounted() {
 }
 
 // Import chart components directly
-import LineChart from '@/components/analytics/LineChart';
-import BarChart from '@/components/analytics/BarChart';
-import PieChart from '@/components/analytics/PieChart';
-import HeatmapCalendar from '@/components/analytics/HeatmapCalendar';
+import LineChart from '@/components/charts/LineChart';
+import BarChart from '@/components/charts/BarChart';
+import PieChart from '@/components/charts/PieChart';
+import HeatmapCalendar from '@/components/charts/HeatmapCalendar';
 
 export type ChartType = 'line' | 'bar' | 'area' | 'pie' | 'mttaVsMttr' | 'slaCompliance' | 'heatmap';
 export type ChartDatum = Record<string, string | number | null | undefined>;

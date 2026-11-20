@@ -1,4 +1,4 @@
-import LineChart from '@/components/analytics/LineChart';
+import LineChart from '@/components/charts/LineChart';
 import { STATUS_PALETTE } from '@/lib/design/status-palette';
 import type { McpUsage } from '@/app/(app)/settings/integrations/mcp/usage';
 

@@ -10,7 +10,7 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
 import MetricCard from '@/components/analytics/MetricCard';
 import MetricIcon from '@/components/analytics/MetricIcon';
 import GaugeChart from '@/components/analytics/GaugeChart';
-import LineChart from '@/components/analytics/LineChart';
+import LineChart from '@/components/charts/LineChart';
 import { IncidentHeatmapWidget } from '@/components/dashboard/widgets/IncidentHeatmapWidget';
 import ServiceHealthTable from '@/components/analytics/ServiceHealthTable';
 import {

@@ -1,0 +1,210 @@
+/* Shared legacy chart styles (Bar/Pie/Line/HeatmapCalendar). Loaded globally so
+   postmortems, reports and MCP settings render styled without visiting /analytics. */
+@media (max-width: 768px) {
+
+  .analytics-pie-chart-container {
+    margin-bottom: 1rem;
+  }
+}
+
+.analytics-bar-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.1;
+}
+
+.analytics-bar-chart-enhanced {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(16px, 1fr);
+  align-items: end;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  position: relative;
+}
+
+.analytics-bar-enhanced {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.analytics-bar-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+}
+
+.analytics-bar-fill-enhanced {
+  width: 100%;
+  min-height: 8px;
+  border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+  transition: all 0.3s ease;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.25);
+}
+
+.analytics-bar-fill-enhanced:hover {
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.35);
+  transform: scaleY(1.05);
+}
+
+.analytics-bar-value {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.analytics-bar-enhanced:hover .analytics-bar-value {
+  opacity: 1;
+}
+.analytics-pie-chart-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.analytics-pie-chart {
+  display: block;
+}
+
+.analytics-pie-segment {
+  transition: opacity 0.2s ease;
+  cursor: pointer;
+}
+
+.analytics-pie-segment:hover {
+  opacity: 0.8;
+}
+
+.analytics-pie-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.analytics-pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.analytics-pie-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.analytics-pie-legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.analytics-pie-legend-label {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.analytics-pie-legend-value {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 960px) {
+
+  .analytics-bar-chart-enhanced {
+    grid-auto-columns: minmax(12px, 1fr);
+    gap: 0.35rem;
+  }
+}
+
+.heatmap-calendar-container {
+    display: inline-block;
+    min-width: 100%;
+}
+
+.heatmap-calendar-container svg {
+    display: block;
+}
+
+.analytics-line-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    color: var(--text-muted);
+}
+
+.analytics-line-chart-surface {
+    position: relative;
+    border-radius: 18px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: linear-gradient(180deg, rgb(var(--ink-50) / 0.45), rgb(var(--ink-100) / 0.6));
+    padding: 0.5rem 0.75rem 1.5rem;
+}
+
+.analytics-line-chart-axis {
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.4rem;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+}
+
+[data-theme='dark'] .analytics-line-chart-surface {
+    background: linear-gradient(180deg, rgba(24, 24, 27, 0.9), rgba(39, 39, 42, 0.75));
+    border-color: rgba(148, 163, 184, 0.2);
+}
+.heatmap-calendar-container {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.heatmap-calendar-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.heatmap-calendar-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.heatmap-calendar-container::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.3);
+    border-radius: 3px;
+}
+
+.heatmap-calendar-container::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(148, 163, 184, 0.5);
+}

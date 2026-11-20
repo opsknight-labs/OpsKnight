@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import BarChart from '@/components/analytics/BarChart';
+import BarChart from '@/components/charts/BarChart';
 
 describe('BarChart', () => {
   it('preserves missing values instead of rendering a zero bar', () => {
