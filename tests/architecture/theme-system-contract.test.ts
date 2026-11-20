@@ -117,7 +117,7 @@ describe('application theme contract', () => {
 
   it('pairs inverse foregrounds with dark backgrounds for inline chrome controls', () => {
     const inverse = sources.styles.split('.ok-inverse-surface {')[1].split('}')[0];
-    const dark = sources.styles.split("[data-theme='dark'] {")[1].split('}')[0];
+    const dark = sources.tokens.split("[data-theme='dark'] {")[1].split('}')[0];
     const tokens = (css: string) =>
       Object.fromEntries([...css.matchAll(/(--ui-[\w-]+):\s*([^;]+);/g)].map(m => [m[1], m[2]]));
     const inverseTokens = tokens(inverse);
