@@ -664,7 +664,7 @@ describe('deployment configuration invariants', () => {
 
   it('keeps documentation capability coverage in CI', () => {
     expect(read('package.json')).toContain('scripts/check-docs-capabilities.cjs');
-    expect(read('.github/workflows/docs-links.yml')).toContain('npm run docs:lint');
+    expect(read('.github/workflows/tests.yml')).toContain('npm run docs:lint');
     expect(read('scripts/docs/certify.mjs')).toContain('scripts/check-docs-capabilities.cjs');
     expect(read('docs/RELEASE_QUALITY_CONTRACT.md')).toContain(
       'Upgrade from the previous stable release'
@@ -724,13 +724,16 @@ describe('deployment configuration invariants', () => {
     );
   });
 
-  it('keeps documentation checks lightweight and never generates docs in CI', () => {
-    const workflow = read('.github/workflows/docs-links.yml');
+  it('runs documentation checks in the PR gate and never generates docs in CI', () => {
+    const docsWorkflow = read('.github/workflows/docs-links.yml');
+    const gate = read('.github/workflows/tests.yml');
 
-    expect(workflow).toContain('npm run docs:lint');
-    expect(workflow).not.toMatch(/^\s{2}push:/m);
+    expect(gate).toContain('npm run docs:lint');
+    expect(gate).toContain('npm run docs:impact');
+    expect(docsWorkflow).toContain('workflow_dispatch:');
+    expect(docsWorkflow).not.toMatch(/^\s{2}(pull_request|push):/m);
     for (const generator of ['docs:reference', 'docs:integrations', 'docs:routes', 'docs:certify'])
-      expect(workflow).not.toContain(generator);
+      expect(docsWorkflow).not.toContain(generator);
   });
 
   it('certifies a single migration owner before multi-replica startup', () => {

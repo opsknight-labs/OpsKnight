@@ -61,8 +61,9 @@ Read each change below and decide whether it needs action before you upgrade.
 
 ### Database migrations
 
-2.2.0 adds 63 migrations since 2.1.2 (durable event ingestion, MCP, single sign-on, access control,
-theme preference, maintenance windows, and the two release fixes below). They add tables, columns, and
+2.2.0 adds 68 migrations since 2.1.2 (durable event ingestion, MCP, single sign-on, access control,
+SCIM group roles, Analytics views and weekly digest, theme preference, maintenance windows, live views
+after renames, and the two release fixes below). They add tables, columns, and
 indexes and backfill values; none drops or renames a table or column. One index,
 `Incident_maintenanceWindowId_status_idx`, is built with `CREATE INDEX CONCURRENTLY` in its own
 migration so alert ingestion is not blocked while it builds; on a large `Incident` table allow extra

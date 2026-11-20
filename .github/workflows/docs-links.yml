@@ -3,13 +3,7 @@ name: Documentation quality
 # Lightweight checks only: documentation is written by hand (each release copies the
 # previous version's pages and adds pages for new features). Nothing here generates docs.
 on:
-  pull_request:
-    paths:
-      - 'docs/**'
-      - 'README.md'
-      - 'SECURITY.md'
-      - 'SUPPORT.md'
-      - 'deploy/**/README.md'
+  # The PR gate (tests.yml static validation) runs docs:lint and docs:impact; this is manual-only.
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,9 +23,3 @@ jobs:
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - name: Check frontmatter, links, capabilities and evidence
         run: npm run docs:lint
-      - name: Flag features changed without their documentation
-        if: github.event_name == 'pull_request'
-        env:
-          DOCS_IMPACT_BASE: origin/${{ github.base_ref }}
-          DOCS_IMPACT_STRICT: 'true'
-        run: npm run docs:impact
