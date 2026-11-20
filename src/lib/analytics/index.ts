@@ -93,6 +93,7 @@ export function getAnalyticsSectionWithTime<K extends AnalyticsSectionKey>(
   context: AnalyticsContext,
   section: K
 ): Promise<Cached<AnalyticsSectionData<K>>> {
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   const query = SECTIONS[section] as unknown as (
     scope: AnalyticsScope,
     window: AnalyticsWindow,

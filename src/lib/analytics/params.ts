@@ -61,6 +61,7 @@ const isoDay = z
 function all(raw: RawParams, key: string): string[] {
   if (!raw) return [];
   if (raw instanceof URLSearchParams) return raw.getAll(key).flatMap(v => v.split(','));
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   const value = raw[key];
   if (value === undefined) return [];
   return (Array.isArray(value) ? value : [value]).flatMap(v => v.split(','));

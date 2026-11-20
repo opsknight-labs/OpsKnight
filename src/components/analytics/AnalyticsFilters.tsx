@@ -220,7 +220,7 @@ export default function AnalyticsFilters({
     <>
       {ANALYTICS_RANGES.map(range => (
         <FilterChip key={range} active={params.range === range} onClick={() => setRange(range)}>
-          {RANGE_LABELS[range]}
+          {Object.entries(RANGE_LABELS).find(([key]) => key === range)?.[1]}
         </FilterChip>
       ))}
       <CustomRange

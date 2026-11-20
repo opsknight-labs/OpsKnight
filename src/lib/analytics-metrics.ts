@@ -35,8 +35,10 @@ export function calculatePercentile(values: number[], percentileValue: number): 
   const rank = (clampedP / 100) * (valid.length - 1);
   const lower = Math.floor(rank);
   const upper = Math.ceil(rank);
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   if (lower === upper) return valid[lower];
   const weight = rank - lower;
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   return valid[lower] * (1 - weight) + valid[upper] * weight;
 }
 
@@ -125,6 +127,7 @@ export function buildOnCallLoad(
     const time = incident.createdAt.getTime();
 
     // Fast-forward shifts that ended before this incident
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     while (shiftIdx < sortedShifts.length && sortedShifts[shiftIdx].end.getTime() < time) {
       shiftIdx++;
     }
@@ -132,7 +135,9 @@ export function buildOnCallLoad(
     // Check current and subsequent shifts that might overlap with this incident time
     // Usually only one shift matches, but on-call rotations might have overlaps
     let currentIdx = shiftIdx;
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     while (currentIdx < sortedShifts.length && sortedShifts[currentIdx].start.getTime() <= time) {
+      // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
       const shift = sortedShifts[currentIdx];
       if (time <= shift.end.getTime()) {
         const entry = onCallLoadMap.get(shift.userId) || { hoursMs: 0, incidentCount: 0 };

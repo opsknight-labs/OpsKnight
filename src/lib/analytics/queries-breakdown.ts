@@ -50,6 +50,7 @@ export async function queryBreakdown(
   window: AnalyticsWindow,
   dimension: BreakdownDimension
 ): Promise<BreakdownRow[]> {
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   const spec = DIMENSIONS[dimension];
   const rows = await run<
     Array<AggregateRow & { key: string | null; label: string; previous_incidents: number }>

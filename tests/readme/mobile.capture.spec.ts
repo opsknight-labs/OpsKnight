@@ -17,6 +17,7 @@ async function capture(page: Page, scheme: string, name: string) {
 
 test('captures current mobile PWA surfaces in WebKit', async ({ page }, testInfo) => {
   const scheme = testInfo.project.use.colorScheme === 'dark' ? 'dark' : 'light';
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- writes to a fixed test output directory
   await mkdir(resolve('generated/readme-captures/mobile', scheme), { recursive: true });
 
   await page.goto('/m');

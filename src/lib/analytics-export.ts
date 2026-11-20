@@ -61,6 +61,7 @@ export function escapeCsvCell(value: Cell): string {
 const UNIT_SUFFIX = { count: '', duration: ' (min)', percent: ' (%)', ratio: '', hours: ' (h)' };
 
 /** Column header for a metric, from the registry. */
+// eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
 export const metricHeader = (id: MetricId) => `${METRICS[id].label}${UNIT_SUFFIX[METRICS[id].unit]}`;
 
 const round = (value: number, digits: number) => Number(value.toFixed(digits));
@@ -68,6 +69,7 @@ const round = (value: number, digits: number) => Number(value.toFixed(digits));
 /** Spreadsheet-friendly value: durations in minutes, percents 0-100; null stays empty. */
 export function metricValue(id: MetricId, value: number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   switch (METRICS[id].unit) {
     case 'duration':
       return round(value / 60_000, 1);
@@ -111,9 +113,11 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
 
   section('Summary', ['Metric', 'Current', 'Previous period', 'Definition']);
   const kpi = (id: MetricId, current: number | null, previous: number | null) =>
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     rows.push([metricHeader(id), metricValue(id, current), metricValue(id, previous), METRICS[id].description]);
   kpi('incidents', kpis.current.incidents, kpis.previous.incidents);
   kpi('openNow', kpis.openNow, null);
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   for (const id of AGGREGATE_IDS) kpi(id, kpis.current[id], kpis.previous[id]);
 
   section('Services', [
@@ -129,6 +133,7 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
       s.incidents,
       s.previousIncidents,
       s.alerts,
+      // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
       ...AGGREGATE_IDS.map(id => metricValue(id, s[id])),
     ]);
   }

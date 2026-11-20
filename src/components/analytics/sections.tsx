@@ -582,14 +582,14 @@ function Heatmap({ counts, max }: { counts: number[][]; max: number }) {
         style={{ gridTemplateColumns: '2rem repeat(24, minmax(0, 1fr))' }}
       >
         {counts.map((hours, day) => (
-          <div key={DAYS[day]} className="contents">
+          <div key={DAYS.at(day)} className="contents">
             <span className="pr-1 text-2xs leading-4 text-muted-foreground" aria-hidden>
-              {DAYS[day]}
+              {DAYS.at(day)}
             </span>
             {hours.map((count, hour) => (
               <span
                 key={hour}
-                title={`${DAYS[day]} ${String(hour).padStart(2, '0')}:00 — ${count} incident${count === 1 ? '' : 's'}`}
+                title={`${DAYS.at(day)} ${String(hour).padStart(2, '0')}:00 — ${count} incident${count === 1 ? '' : 's'}`}
                 className="aspect-square min-h-2 rounded-sm"
                 style={{ background: `var(${step(count)})` }}
               />

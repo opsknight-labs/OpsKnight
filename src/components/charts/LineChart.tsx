@@ -16,6 +16,7 @@ function buildSmoothPath(points: Array<{ x: number; y: number }>) {
 
   const d: string[] = [];
   for (let i = 0; i < points.length; i += 1) {
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     const point = points[i];
     if (i === 0) {
       d.push(`M ${point.x},${point.y}`);
@@ -34,7 +35,6 @@ export default function LineChart({
   data,
   lines,
   height = 200,
-  valueFormatter = v => v.toString(),
   showLegend = false,
 }: LineChartProps) {
   if (!data.length)

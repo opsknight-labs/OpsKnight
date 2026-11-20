@@ -11,6 +11,7 @@ import { METRICS, type MetricId } from '@/lib/analytics/definitions';
 
 /** Definition tooltip; the text comes from the metric registry, never inline copy. */
 export default function MetricInfo({ metrics }: { metrics: MetricId[] }) {
+  // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
   const definitions = metrics.map(id => METRICS[id]);
   const label =
     definitions.length === 1

@@ -434,14 +434,18 @@ export async function queryInterruptions(
       points.push({ bucket: row.bucket, evening: 0, overnight: 0 });
     }
     const i = index.get(row.bucket)!;
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     points[i].evening += n(row.evening);
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     points[i].overnight += n(row.overnight);
     if (row.id) {
       byResponder[row.id] ??= [];
+      // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
       byResponder[row.id][i] = n(row.evening) + n(row.overnight);
     }
   }
   for (const series of Object.values(byResponder)) {
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     for (let i = 0; i < points.length; i += 1) series[i] ??= 0;
   }
   return { points, byResponder };

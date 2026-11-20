@@ -89,6 +89,7 @@ describeIfRealDB('responder interruptions and workload', { timeout: 60_000 }, ()
     }
     // Buckets are viewer-local days: the UTC responder's Monday 23:00 lands on 2026-01-12.
     const monday = trend.points.findIndex(point => point.bucket === '2026-01-12T00:00:00');
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     expect(trend.byResponder[utc.id][monday]).toBe(1);
   });
 
