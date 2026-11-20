@@ -533,8 +533,10 @@
         "12 weight fits moved to the daily lane job"
       ],
       "gaps": [
-        "SUPPRESSION-rule (automation suppression rule) suppressions are not lifted by the sweep; only noise-control and legacy flapping holds are",
-        "Storm cascade has shortcuts: parents resolved more than 24h ago are not cascaded and storm links older than 7 days are not probed"
+        "SUPPRESSION-rule (automation suppression rule) suppressions are not lifted by the sweep; only noise-control holds are (legacy flapping holds are released by releaseStableFlappingHolds)",
+        "Storm cascade shortcut: parents resolved more than 24h ago are not cascaded",
+        "Appended-key resolve lookup follows the live content-dedup switch: keys appended while it was on stop holding their incident open once it is switched off",
+        "Alert(incidentId, dedupKey, createdAt, id) INCLUDE (status) index not added: the open-other-keys count now runs only on resolves for content-dedup services; add it if that count shows up in profiles"
       ]
     },
     "M2": {
@@ -555,6 +557,30 @@
       "gaps": [
         "Target (-50-70% input tokens per turn) not met: scripted eval median -1.2%, representative incident turn -26.5%",
         "Provider prompt-cache savings unmeasured (needs a live Anthropic/Bedrock eval run)"
+      ]
+    },
+    "review_fixes": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "C1 flapping quiet measured from the key's latest resolve, so a re-sending hard-down alert is unsuppressed",
+        "C2 storm cascade resolves as SYSTEM/AUTOMATION, isolates each row, falls back to paging an unpaged child whose resolve failed; un-suppress rows isolated too",
+        "C3 storm parent never an unpaged storm child (live, prefetched, simulated)",
+        "C4 STORM_CHILD runbook skip only for prepaging_storm links",
+        "C5 appended key with a newer incident of its own no longer holds the original open",
+        "C6 reversed GROUP_CHILD children are not re-paged by the cascade",
+        "C7 sweep leaves legacy flapping-suppression holds to releaseStableFlappingHolds",
+        "C8 Terraform startedAt is the apply start or absent",
+        "P1 appended-key resolve lookup gated on content dedup via the noise snapshot; branch 2 only on a branch 1 miss",
+        "P2/P3 sweep probes on partial indexes idx_sla_pause_open_noise and idx_incident_relationship_storm_open; closed-child links marked",
+        "P4 rule rate lock before the incident row lock",
+        "P6 storm parent: own-service probe UNION ALL scope, LIMIT 1",
+        "P8 weight proposal refits under withDbBudget",
+        "P9 chat brief reuses the read incident and reads only BRIEFING notes",
+        "S1 refused top-up stops the tool loop without another model call",
+        "S2 volatile Squire context wrapped as untrusted data"
+      ],
+      "gaps": [
+        "Ingestion A/B (processEvent p50/p99 vs OFF) not re-benchmarked after the resolve-path change"
       ]
     }
   }
