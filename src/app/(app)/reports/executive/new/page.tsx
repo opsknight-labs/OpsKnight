@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import {
-  ChevronLeft,
   LayoutDashboard,
   Sparkles,
   Terminal,
@@ -23,6 +22,7 @@ import {
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
 import CreateBlankDashboardButton from './CreateBlankDashboardButton';
 import { requirePageAccess } from '@/lib/access/server';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,29 +48,21 @@ export default async function NewDashboardPage() {
 
   return (
     <div className="w-full px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex items-start gap-4">
-          <Link
-            href="/reports"
-            className="mt-1 p-2 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700/80 transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Link>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-              Executive Dashboards
-            </p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-              Create New Dashboard
-            </h1>
-            <p className="mt-1 text-xs md:text-sm text-zinc-300">
-              Start from a template or build from scratch
-            </p>
+      <DetailHeroBanner
+        breadcrumb={{ label: 'Reports', href: '/reports', current: 'Create New Dashboard' }}
+        tag="Executive Dashboards"
+        title="Create New Dashboard"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <LayoutDashboard className="h-6 w-6" aria-hidden="true" />
           </div>
-        </div>
-      </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Start from a template or build from scratch
+          </p>
+        }
+      />
 
       {/* Start from blank */}
       <section>

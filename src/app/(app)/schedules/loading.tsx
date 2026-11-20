@@ -1,23 +1,11 @@
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { TableRowsSkeleton } from '@/components/patterns';
+import { DetailHeroBannerSkeleton } from '@/components/ui/DetailHeroBanner';
 
 export default function SchedulesLoading() {
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6 animate-pulse">
-      {/* Header Banner Skeleton */}
-      <div className="rounded-lg bg-primary/20 p-6 md:p-8">
-        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <Skeleton className="h-12 w-12 rounded-xl bg-primary-foreground/20" />
-            <div className="space-y-2">
-              <Skeleton className="h-3 w-32 bg-primary-foreground/20" />
-              <Skeleton className="h-7 w-48 bg-primary-foreground/30" />
-              <Skeleton className="h-4 w-72 bg-primary-foreground/20" />
-            </div>
-          </div>
-          <Skeleton className="h-16 w-80 rounded-lg bg-primary-foreground/20" />
-        </div>
-      </div>
+      <DetailHeroBannerSkeleton statsCount={3} hasActions={false} />
 
       {/* Dashed Create Button Skeleton */}
       <div className="h-24 w-full rounded-lg border-2 border-dashed border-border/60 bg-muted/20 flex flex-col items-center justify-center gap-2 p-4">
