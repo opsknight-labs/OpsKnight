@@ -19,19 +19,27 @@ verification:
 
 Vendor documentation: [Model Context Protocol (MCP)](https://cursor.com/docs/context/mcp) (fetched 12 November 2026).
 
+## Before you begin
+
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [MCP setup](../self-hosted-setup.md)).
+- Copy the **MCP server URL** from the **Connect** tab on that page; the examples below use `https://ops.your-company.com/mcp`.
+- You have your own OpsKnight account and Cursor installed.
+
 ## Connect with OAuth (recommended)
 
-Use **Add to Cursor** on OpsKnight's **Connect** tab, or add the entry to `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project), merging it with any servers already there:
+1. Use **Add to Cursor** on OpsKnight's **Connect** tab, or add the entry to `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project), merging it with any servers already there:
 
-```json
-{
-  "mcpServers": {
-    "opsknight": { "url": "https://ops.your-company.com/mcp" }
-  }
-}
-```
+   ```json
+   {
+     "mcpServers": {
+       "opsknight": { "url": "https://ops.your-company.com/mcp" }
+     }
+   }
+   ```
 
-Cursor discovers OpsKnight's authorization server, registers itself and opens the browser to sign in. It uses refresh tokens, so you sign in again only when the connection ends.
+2. Cursor discovers OpsKnight's authorization server, registers itself and opens the browser. Sign in to OpsKnight and approve the connection.
+
+Cursor uses refresh tokens, so you sign in again only when the connection ends.
 
 If **Automatic connections** is off, an administrator registers a manual client with Cursor's redirect URIs `https://www.cursor.com/agents/mcp/oauth/callback` and `http://localhost:8787/callback`, and you add `"auth": { "CLIENT_ID": "<client id>" }` to the entry.
 
@@ -49,6 +57,11 @@ If **Automatic connections** is off, an administrator registers a manual client 
 ```
 
 `${env:NAME}` reads an environment variable visible to Cursor. Do not paste the token itself into a project file that is committed.
+
+## Verify the connection
+
+1. Ask Cursor "Who am I in OpsKnight, and what can you do for me?". It calls `whoami` and answers with your role, teams and enabled tools.
+2. In OpsKnight, select **Check connection** on the **Connect** tab to see the connection you just made.
 
 ## Known limits
 

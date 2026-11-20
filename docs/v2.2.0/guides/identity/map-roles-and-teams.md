@@ -32,7 +32,20 @@ teams by hand.
 
 ![Roles & teams with a role rule](../../assets/sso-roles.png)
 
-## Roles
+## Before you begin
+
+- You need the OpsKnight Administrator role.
+- Connect your identity provider first, in **1 · Connect provider**. See
+  [configure single sign-on](./configure-oidc/).
+- Make sure your provider sends the groups or roles you want to use. For
+  Microsoft Entra, App roles (`roles`) avoid the 200-group limit.
+- Create the teams you want to fill in **Teams** before you add team rules.
+
+## Open Roles & teams
+
+Open **Settings → System → SSO / Authentication → 3 · Roles & teams**.
+
+## Configure role rules
 
 | Role | What it allows |
 | --- | --- |
@@ -76,6 +89,28 @@ your provider has two groups that differ only by case.
   shows the person "Your account is not assigned to OpsKnight". People whose role an
   administrator set by hand are never refused this way.
 
+## Configure team rules
+
+Team rules put people on teams from their groups at each sign-in.
+
+1. Create the team first in **Teams**.
+2. In **Team rules**, select **Add team rule**, choose the claim and group value, and pick the
+   team.
+
+What happens at each sign-in:
+
+- People matching a rule are added to the team as members.
+- People who no longer match are removed, but only from memberships a team rule created.
+  Members you added by hand, members SCIM added, and anyone whose team role you changed (for
+  example to owner) are never removed.
+- If the provider reports an incomplete group list, nobody is removed.
+- Deleting every team rule removes the memberships those rules created, at each person's next
+  sign-in.
+
+The team roster labels these members **SSO group** (or **Directory** for SCIM).
+
+## Understand role ownership and safety rules
+
 ### Who owns a role
 
 Every account's role is **set by an administrator**, **from SSO**, or **from SCIM**. The
@@ -109,27 +144,9 @@ people directory and the console show which.
 - **Your own test.** The administrator test in step 4 fails if your rules would remove your own
   Administrator role.
 
-## Teams
+## Verify
 
-Team rules put people on teams from their groups at each sign-in.
-
-1. Create the team first in **Teams**.
-2. In **Team rules**, select **Add team rule**, choose the claim and group value, and pick the
-   team.
-
-What happens at each sign-in:
-
-- People matching a rule are added to the team as members.
-- People who no longer match are removed, but only from memberships a team rule created.
-  Members you added by hand, members SCIM added, and anyone whose team role you changed (for
-  example to owner) are never removed.
-- If the provider reports an incomplete group list, nobody is removed.
-- Deleting every team rule removes the memberships those rules created, at each person's next
-  sign-in.
-
-The team roster labels these members **SSO group** (or **Directory** for SCIM).
-
-## Try your rules
+### Try your rules
 
 **Try your rules** checks sample claims against your current rules, including changes you have
 not saved yet. Paste the decoded ID token payload (not the token itself), for example:
@@ -149,7 +166,7 @@ and any warning such as a missing claim.
 
 ![Try your rules result](../../assets/sso-try-rules.png)
 
-## See the impact before you turn it on
+### See the impact before you turn it on
 
 **Preview what will change** in step 4 uses the values people sent at their last SSO sign-in to
 show how many people would get a different role, who would be refused, and how many team
@@ -157,3 +174,36 @@ memberships would be added or removed.
 
 OpsKnight stores only the values of the claims your rules use, never the token. They are
 included in privacy exports and erased with the account.
+
+After people sign in, the account list in **2 · Who can sign in** shows each person's role and
+whether it is **Role set by hand** or **Role from SSO**. Team rosters label rule-created members
+**SSO group**.
+
+## Remove or change rules
+
+- Remove a role rule or team rule with the remove button next to it.
+- Removing every team rule removes the memberships those rules created, at each person's next
+  sign-in. Members you added by hand or through SCIM stay.
+- To keep a person's role whatever the rules say, set their role by hand. Single sign-on never
+  changes a role set by an administrator.
+- Changing role rules needs a new administrator test before you turn the change on. Changing
+  only team rules does not. See [test and turn on single sign-on](./test-and-enforce-sso/).
+
+## Troubleshooting
+
+- **A person sees *"Your account is not assigned to OpsKnight"*.** No rule matched and **When
+  no rule matches** is set to refuse sign-in. Add them to a group a rule matches, or change the
+  setting. See [sign-in problems with single sign-on](../../troubleshooting/login/oidc-access/).
+- **A person sees *"OpsKnight could not read your groups"*, or a role was lowered to the
+  default.** The provider sent an incomplete group list. Switch Microsoft Entra to App roles.
+- **A rule never matches.** Check the claim name and value with **Try your rules**. For
+  Microsoft Entra `groups`, use the group's Object ID.
+- **Your administrator test fails because of role rules.** Your rules would remove your own
+  Administrator role. See
+  [administrator test failures](../../troubleshooting/login/admin-test-failures/).
+
+## Next steps
+
+- [Link existing accounts](./link-existing-accounts/)
+- [Test and turn on single sign-on](./test-and-enforce-sso/)
+- [Roles, permissions and access requests](./roles-and-access/)

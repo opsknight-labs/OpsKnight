@@ -1,24 +1,77 @@
 ---
-title: MCP certification status
+title: MCP release status and certification
 order: 2
-description: What has and has not been certified for MCP, and how to collect release evidence.
+description: What has been verified for MCP in OpsKnight 2.2.0, what has not, and how release evidence is collected.
 type: reference
 product_area: mcp
 audience: [operator, developer]
 verification:
   level: source
-  verified_at: 2026-11-09
+  verified_at: 2026-11-20
   evidence:
     - .github/workflows/mcp-certification.yml
     - scripts/mcp/certify.cjs
     - scripts/mcp/conformance.ts
     - scripts/mcp/certify-replicas.ts
     - tests/e2e/mcp-lifecycle.spec.ts
+    - scripts/mcp/conformance-baseline.yml
+    - .github/workflows/mcp-mixed-load.yml
 ---
 
-# MCP certification status
+# MCP release status and certification
 
-Baseline source: `f9f772a1fb43798bf45400c8e2ec7a0a823fa43f`. Branch: `feat/enterprise-mcp-2.2`. This is a development candidate; local results below were collected from the development worktree, without final-SHA certification or a released image.
+## Release status for 2.2.0
+
+MCP **ships in OpsKnight 2.2.0 and is off by default**; an administrator turns it on under
+**Settings → Integrations & ChatOps → MCP (AI Assistants)**. The formal release-certification manifest (the 15
+gates under [Running the release-only gate](#running-the-release-only-gate)) has **not** been signed for
+2.2.0. Nothing on this page is a signed certification; it records what was observed.
+
+Verified for this release:
+
+- **MCP PR validation in CI** (`mcp-certification.yml`): protocol and security tests, PostgreSQL install
+  and replay tests, contract drift, typecheck, production build, browser flows, and the pinned
+  [official conformance suite](#official-conformance-suite) against the production build, with known
+  fixture-only failures listed in `scripts/mcp/conformance-baseline.yml`.
+- **Mixed load**: the `mcp-mixed-load.yml` workflow (MCP reads alongside event ingestion) passed on
+  `main` on 20 November 2026.
+- **Two replicas**: the local [two-replica check](#two-replica-check) passed 8 of 8 checks after the
+  approval-confirmation fix (#991).
+- **A real client**: Claude Code CLI 2.1.316 read, write, and approval flows passed locally against a
+  production build on 20 November 2026 (see [Release check, 20 November 2026](#release-check-20-november-2026)).
+
+Not yet verified:
+
+- The real ChatGPT, Cursor, and VS Code applications (their behaviour has only been
+  [emulated](#client-profile-emulation)); the [compatibility table](../../guides/mcp/self-hosted-setup.md#client-compatibility)
+  lists them as expected, not tested.
+- Multi-node high availability, failover, and long soak runs.
+- Signed private-key client assertions. Assistants sign in as public clients with PKCE; a key URL in
+  client metadata is checked but never fetched, and no signed-assertion flow has been tested with a real
+  client.
+- The signed release manifest for 2.2.0.
+
+If you enable MCP in production, follow [monitoring](monitoring.md), keep the
+`MCP_FORCE_DISABLED` emergency stop available, and see [security and data](../../guides/mcp/security-and-data.md).
+
+## Release check, 20 November 2026
+
+- Server: a local production build of `main` on 20 November 2026, after the approval-confirmation fix
+  (#991).
+- Client: the real Claude Code CLI 2.1.316.
+- Result: read flows, a direct write, and a change that needed human approval (prepared by the
+  assistant, approved on the review page, then committed) all passed.
+- Two-replica check: 8 of 8 passed on the same day after the same fix.
+- Mixed-load workflow: passed on `main` the same day.
+- Not covered by this run: other vendor applications, multi-node failover, soak, and signed client
+  assertions. The full server commit SHA and negotiated protocol revision were not recorded, so this is
+  not a "Verified" compatibility entry.
+
+## Development history
+
+The sections below are the dated development record, kept as written.
+
+Baseline source: `f9f772a1fb43798bf45400c8e2ec7a0a823fa43f`. Branch: `feat/enterprise-mcp-2.2`. These were development-candidate results collected from the development worktree, without final-SHA certification or a released image.
 
 Observed locally on 27 October 2026:
 
@@ -63,7 +116,7 @@ Source: `main` at `f934c9907` plus the follow-up fixes branch. Evidence (JSON re
 
 `npm run mcp:conformance -- --url=http://localhost:3042` runs the official [MCP conformance suite](https://github.com/modelcontextprotocol/conformance) (`@modelcontextprotocol/conformance`, pinned in `scripts/mcp/conformance.ts`) in server mode against a running OpsKnight on a local `*_test` database, and MCP PR validation runs it against the production build. The suite has no way to authenticate in server mode, so the harness turns MCP and personal access tokens on in that disposable database, mints a one-day personal token for the first active administrator through the production token code, and puts a local proxy in front of `/mcp` that adds the bearer header to requests carrying none. The proxy rewrites Host only when it names the proxy, so the suite's DNS-rebinding probes reach the server unchanged. The token is revoked when the run ends. The suite needs Node 22 or later.
 
-Known failures belong in `scripts/mcp/conformance-baseline.yml` (passed with `--expected-failures` when present), one entry per scenario or `scenario:check-id` with the reason; the suite then fails the run on any new failure and on a baselined check that starts passing. No baseline is committed yet: the suite has not been run against this branch, so the first run on a quiet machine records it. Many server scenarios call fixture tools, prompts and resources that only the suite's reference server has (for example `test_simple_text`); OpsKnight is a domain server and does not ship them, so those failures say nothing about protocol conformance. The `conformance` gate in the release manifest links that run's evidence.
+Known failures belong in `scripts/mcp/conformance-baseline.yml` (passed with `--expected-failures` when present), one entry per scenario or `scenario:check-id` with the reason; the suite then fails the run on any new failure and on a baselined check that starts passing. The baseline is committed and MCP PR validation runs the suite against the production build with it. Many server scenarios call fixture tools, prompts and resources that only the suite's reference server has (for example `test_simple_text`); OpsKnight is a domain server and does not ship them, so those failures say nothing about protocol conformance. The `conformance` gate in the release manifest links that run's evidence.
 
 ## Two-replica check
 

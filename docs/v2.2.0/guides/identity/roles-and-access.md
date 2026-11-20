@@ -7,6 +7,16 @@ audience: [administrator, responder, viewer]
 reader:
   status: SOURCE_VERIFIED
   task: Understand who can do what in OpsKnight, and get or grant the access someone needs.
+  evidence:
+    - src/lib/authorization.ts
+    - src/lib/authorization-policy.ts
+    - src/lib/access/pages.ts
+    - src/lib/access/effective.ts
+    - src/lib/access/requests.ts
+    - src/lib/access/grants.ts
+    - src/lib/access/admin.ts
+    - src/lib/teams/administration.ts
+    - prisma/migrations/20261112000200_access_control_overhaul/migration.sql
 keywords:
   [
     roles,

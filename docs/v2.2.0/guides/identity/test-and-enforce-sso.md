@@ -20,9 +20,23 @@ verification:
 
 # Test and turn on single sign-on
 
+## Before you begin
+
+- You need the OpsKnight Administrator role. Changing these settings needs an administrator
+  sign-in from the last two hours (see [authentication modes](./authentication-modes/)).
+- Connect your provider in **1 · Connect provider** and set up **2 · Who can sign in**. See
+  [configure single sign-on](./configure-oidc/) and
+  [link existing accounts](./link-existing-accounts/).
+- Your own OpsKnight administrator account must use the same verified email as your account at
+  the identity provider.
+
+## Open Test & activate
+
 Open **Settings → System → SSO / Authentication → 4 · Test & activate**.
 
-## Step 1 · Test your own sign-in
+## Configure and turn on single sign-on
+
+### Step 1 · Test your own sign-in
 
 You sign in once through your identity provider. This proves the whole setup works, and that you
 will still be an administrator afterwards, before anyone else is affected.
@@ -42,11 +56,7 @@ the step where you fix it. See [administrator test failures](../../troubleshooti
 
 ![A failed administrator test that names the cause and shows the claims received](../../assets/sso-test-failed.png)
 
-A passing test stays valid for seven days. It stays valid if you only change session limits, the
-button label, profile details or team rules. Changing the provider, client, secret, scopes,
-allowed domains, linking policy or role rules needs a new test.
-
-## Step 2 · Preview and turn it on
+### Step 2 · Preview and turn it on
 
 1. Choose **How people sign in**: **SSO Optional** to start.
 2. Select **Preview what will change**. It shows:
@@ -65,7 +75,7 @@ allowed domains, linking policy or role rules needs a new test.
 People now see **Continue with …** on the sign-in page. Nothing else changes for people who keep
 using their password under SSO Optional.
 
-## Requiring single sign-on
+### Requiring single sign-on
 
 When everyone has signed in with SSO:
 
@@ -77,8 +87,46 @@ When everyone has signed in with SSO:
 Password sessions end and people sign in again with SSO. The preview lists anything still
 missing.
 
-## Session limits
+### Session limits
 
 **Session limits** (optional) set how long an SSO session lasts and how long it can be idle.
 Defaults: 12 hours, 4 hours idle. People are asked to sign in again with the provider when their
 session reaches its limit, and see why on the sign-in page.
+
+## How the administrator test works
+
+The test is one real sign-in, as yourself, through your provider. It checks that sign-in works
+and that you stay an Administrator afterwards. The result page shows the claims OpsKnight
+received, never the token.
+
+A passing test stays valid for seven days. It stays valid if you only change session limits, the
+button label, profile details or team rules. Changing the provider, client, secret, scopes,
+allowed domains, linking policy or role rules needs a new test.
+
+## Verify
+
+- After **Test my sign-in**, the result page says **Administrator sign-in verified**.
+- After you turn on single sign-on, the sign-in page shows **Continue with …**.
+- Every change of sign-in mode is audited and alerts administrators.
+
+## Change or undo
+
+To go back from SSO Required, or to stop using single sign-on, open
+**4 · Test & activate → Change to Password Only or SSO Optional**. Choosing Password Only needs
+your current password. See [authentication modes](./authentication-modes/) for what changes
+when you switch.
+
+## Troubleshooting
+
+- **The administrator test fails.** The result page names the cause and links to the step
+  where you fix it. See [administrator test failures](../../troubleshooting/login/admin-test-failures/).
+- **People cannot sign in after you turn it on.** See
+  [sign-in problems with single sign-on](../../troubleshooting/login/oidc-access/).
+- **Nobody can sign in under SSO Required.** Use an emergency recovery identity. See
+  [recover from SSO lockout](./sso-lockout-recovery/).
+
+## Next steps
+
+- [Configure emergency access](./configure-emergency-access/)
+- [Map groups to roles and teams](./map-roles-and-teams/)
+- [Authentication modes](./authentication-modes/)
