@@ -1,3 +1,8 @@
+vi.mock('@/app/(app)/settings/system/scim-role-actions', () => ({
+  getScimRoleMappingAction: vi.fn(),
+  previewScimRoleMappingAction: vi.fn(),
+  saveScimRoleMappingAction: vi.fn(),
+}));
 import { beforeEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';

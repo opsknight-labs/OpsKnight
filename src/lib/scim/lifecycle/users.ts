@@ -17,10 +17,11 @@ import {
   userSchema,
 } from '../protocol/validation';
 import { patchUser, type UserDocument } from '../protocol/patch';
-import { json } from '../protocol/http';
+import { json, scimRequestId } from '../protocol/http';
 import { resolveScimPublicOrigin } from '../protocol/origin';
 import { event } from './events';
 import { reconcileTeam } from './membership';
+import { reconcileScimRoles } from './roles';
 import { applyProfileAuthority, requestedProfileFields } from './profile';
 
 function profile(document: UserDocument): {
@@ -327,6 +328,7 @@ export async function users(request: NextRequest, id?: string) {
         });
       for (const teamId of new Set(affected.map(binding => binding.teamId)))
         await reconcileTeam(tx, teamId, [], [id]);
+      await reconcileScimRoles(tx, principal.connectorId, [id], scimRequestId());
     }
     const teamCount = !active ? await tx.teamMember.count({ where: { userId: id } }) : 0;
     const directEscalationRules = !active

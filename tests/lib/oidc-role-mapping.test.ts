@@ -142,11 +142,13 @@ describe('resolving the role a person ends up with', () => {
     });
   });
 
-  it('lets a matching rule take over a SCIM role but never falls back over one', () => {
-    expect(resolveSignInRole(matched, { role: 'USER', roleSource: 'SCIM' })).toEqual({
-      role: 'ADMIN',
-      roleSource: 'OIDC',
-      changed: true,
+  it('preserves SCIM authority for matching, unmatched and first-link sign-ins', () => {
+    expect(
+      resolveSignInRole(matched, { role: 'USER', roleSource: 'SCIM' }, { firstLink: true })
+    ).toEqual({
+      role: 'USER',
+      roleSource: 'SCIM',
+      changed: false,
     });
     expect(resolveSignInRole(unmatched, { role: 'ADMIN', roleSource: 'SCIM' })).toEqual({
       role: 'ADMIN',

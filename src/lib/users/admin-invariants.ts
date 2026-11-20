@@ -92,10 +92,11 @@ export async function bulkUpdateUserSecurityState(
   userIds: string[],
   mutation: UserSecurityMutation,
   additionalData: Prisma.UserUpdateManyMutationInput = {},
-  sideEffects?: SecurityMutationSideEffects
+  sideEffects?: SecurityMutationSideEffects,
+  client?: Prisma.TransactionClient
 ) {
   const ids = [...new Set(userIds)];
-  const updated = await runSerializableTransaction(async tx => {
+  const command = async (tx: Prisma.TransactionClient) => {
     await acquireAdvisoryLock(tx, LOCK_KEYS.USER_ADMIN_INVARIANT);
     const targets = await tx.user.findMany({
       where: { id: { in: ids } },
@@ -135,8 +136,9 @@ export async function bulkUpdateUserSecurityState(
       await tx.user.updateMany({ where: { id: { in: revoked } }, data: MCP_REVOCATION_BUMP });
     await sideEffects?.(tx);
     return updated;
-  });
-  invalidateSessionSecurityProjections(ids);
+  };
+  const updated = client ? await command(client) : await runSerializableTransaction(command);
+  if (!client) invalidateSessionSecurityProjections(ids);
   return updated;
 }
 

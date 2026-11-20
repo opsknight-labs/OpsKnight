@@ -213,3 +213,12 @@ the deployment ingress during an IdP outage and after database recovery, and ver
 ordinary User password login remains denied under Required. Never resume older binaries
 against a database with newer authentication writes; restore the tested backup and
 release together if rollback is required.
+
+## SCIM group role authority
+
+SCIM group role mappings are opt-in. Upgrading creates no mappings and changes no roles.
+New SCIM users remain User until mapped or assigned a role by another supported method.
+Roles already marked **SCIM** now remain under provisioning authority during OIDC sign-in;
+a matching OIDC rule no longer takes them over. To use OIDC instead, remove the account's
+mapped SCIM memberships first, then choose **Let role rules manage this role**. See
+[SCIM role setup](./configure-scim/#assign-system-roles-from-microsoft-entra-groups).

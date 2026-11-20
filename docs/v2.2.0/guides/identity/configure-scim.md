@@ -39,6 +39,9 @@ verification:
     - src/lib/scim/lifecycle/groups.ts
     - src/lib/scim/protocol/validation.ts
     - src/lib/oidc/role-mapping.ts
+    - src/lib/scim/lifecycle/roles.ts
+    - src/app/(app)/settings/system/scim-role-actions.ts
+    - tests/integration/scim-group-roles.test.ts
     - src/lib/microsoft-teams/identity.ts
 ---
 
@@ -65,12 +68,96 @@ team, the group's members join that team as **Member**; leaving the group remove
 the memberships that binding created. One group can be bound to several teams, and a
 team can have several bound groups.
 
-SCIM cannot assign roles. The User and Group schemas have no role or entitlement
-attributes, and requests that send them are rejected. Groups never grant a system role
-or a team Owner or Admin role. New SCIM users start with the **User** role under
-administrator authority. A role rule moves the role under SSO control at the account's
-first SSO sign-in; otherwise an administrator sets it. See
-[map groups to roles and teams](./map-roles-and-teams/).
+SCIM can assign system roles through **administrator-approved group role mappings**.
+In **Users & Groups**, select **Groups**, find a synced group, and select **Map system role**.
+Choose Admin, Responder, Auditor or User, preview the affected accounts, then apply.
+This is independent of team bindings: a system role mapping never grants a team Owner
+or Admin role. Groups without mappings grant no system role on their own.
+
+New SCIM users still start as **User** under administrator authority. Without a group
+role mapping, use OIDC rules or manual role assignment as before. The SCIM User and
+Group wire schemas still reject role and entitlement attributes; the provider cannot
+create or change the local mapping. See [Entra role setup](#assign-system-roles-from-microsoft-entra-groups).
+
+## Assign system roles from Microsoft Entra groups
+
+Example: Alice belongs to `OpsKnight-Responders`. Once Entra synchronizes that group's
+membership and you map it to **Responder**, Alice becomes a Responder without signing in.
+
+### In Microsoft Entra
+
+1. Create security groups such as `OpsKnight-Admins`, `OpsKnight-Responders` and
+   `OpsKnight-Auditors`. Add users directly to these groups; nested memberships are
+   not provisioned recursively.
+2. Open **Enterprise applications → your OpsKnight application → Users and groups**.
+   Assign the groups to the application. Use **Provisioning → Settings → Scope →
+   Sync only assigned users and groups**. Group assignment requires the appropriate
+   Microsoft Entra license.
+3. Configure **Provisioning → Automatic** with your OpsKnight **Tenant URL** and
+   connection credential as described below. The credential needs all four user/group
+   read/write scopes. Select **Test Connection** and save.
+4. Under **Mappings**, enable both **Provision Microsoft Entra ID Users** and
+   **Provision Microsoft Entra ID Groups**. Keep group `displayName` and `members`
+   mappings; map the group's immutable `objectId` to `externalId`. Keep the user
+   `objectId → externalId` mapping described below. Do not add a `roles` mapping.
+5. Start provisioning. Confirm users, groups **and group members** appear in OpsKnight
+   before mapping roles. Assigning a group to the enterprise application alone does
+   not prove its group membership has been provisioned. Check Entra provisioning logs
+   for successful group creation and membership updates.
+
+Microsoft documents the [SCIM provisioning setup and attribute mappings](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)
+and [provisioning limitations](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/known-issues).
+
+### In OpsKnight
+
+Deploy the 2.2.0 migration and application to every replica before enabling mappings.
+A role mapping supports up to 10,000 direct group members; split larger groups.
+
+1. Open **Settings → System → SCIM → Users & Groups** and select the correct connection.
+2. Select **Groups**, search for `OpsKnight-Responders`, then select **Map system role**.
+3. Select **Responder → Preview role mapping**. Review the member count, accounts that
+   will change, accounts moving from manual/OIDC authority and administrator demotions.
+4. Select **Apply role mapping**. Existing members update immediately. Repeat for the
+   Admin and Auditor groups. Future additions and removals update on successful SCIM
+   group synchronization; no user sign-in is required.
+5. Select **Users** to verify the role and `SCIM` source. **Activity** records mapping
+   changes and each account's previous/new role and authority.
+
+### Predictable role changes
+
+- Each mapping belongs to the specific synced group on its connection, not its name.
+  Renaming a group keeps its mapping. Deleting and recreating a group requires a new mapping.
+- If several mapped groups match, precedence is **Admin → Responder → Auditor → User**.
+  Removing a membership uses the remaining groups. Removing the last mapped membership,
+  deleting its group or selecting **No role mapping** returns an account whose role is
+  SCIM-managed to **User**, still under SCIM authority. Unmapped manual/OIDC accounts
+  retain their role.
+- Applying a mapping explicitly gives SCIM authority over the group's members, including
+  existing manual/OIDC roles and future members. OIDC sign-in cannot overwrite SCIM
+  roles, including on first link. Manual role edits can be reasserted by the next group
+  sync; manage these roles in Entra. To return an account to local/OIDC control, first
+  remove its mapped memberships or mappings, then assign the local role or choose
+  **Let role rules manage this role** in the authentication workspace.
+- OIDC still controls authentication and sign-in admission. SCIM role mappings do not
+  bypass the configured sign-in policy or approve SSO identity linking.
+- A changed role or authority revokes existing sessions. Administrator demotions also
+  revoke MCP grants. Repeated sync with no changes does neither. Roles, memberships and
+  audit events commit together; the preview must be repeated if its inputs changed.
+- A sync that would remove the last active administrator fails with **409** and rolls
+  back. Assign another administrator, then retry provisioning. The same protection
+  applies when changing or removing a mapping in the UI.
+- Disabling an account blocks access. Deleting a SCIM user also clears group intent and
+  returns SCIM-managed roles to User; rehire requires approved restoration and fresh
+  group synchronization. Keep a separate administrator/recovery account for rollout.
+
+### Verify the Entra rollout
+
+Use a pilot account before broad rollout. Add it to the Responder group, wait for a
+successful Entra group sync and confirm **Responder (SCIM)** in OpsKnight. Add it to
+an Auditor group too: it stays Responder. Remove the Responder membership: it becomes
+Auditor. Remove the Auditor membership: it becomes User. Sign in with OIDC and confirm
+that the SCIM role stays unchanged. Verify **Activity** and Entra logs after each step.
+Entra provisioning is asynchronous; group changes do not take effect until delivered.
 
 ## Prerequisites
 
@@ -111,7 +198,7 @@ Okta or Generic, and enable provisioning. Select **Save as a new connection** fo
 separate directory authority. Users, groups and credentials are isolated by
 connection; knowing another connector's internal resource ID grants no access.
 
-Choose which profile attributes the connection owns (name, email, title, department, photos). Updates to fields owned elsewhere are rejected; omitted fields owned elsewhere are preserved. Account status is owned by the approved lifecycle connection, while roles remain OIDC or manual.
+Choose which profile attributes the connection owns (name, email, title, department, photos). Updates to fields owned elsewhere are rejected; omitted fields owned elsewhere are preserved. Account status is owned by the approved lifecycle connection, while roles come from approved SCIM group mappings, OIDC rules or manual administration.
 
 Use the displayed base URL:
 

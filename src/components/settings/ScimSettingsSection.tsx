@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import ScimRoleMapping from './ScimRoleMapping';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   AlertDialog,
@@ -102,6 +103,11 @@ export default function ScimSettingsSection({
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [groupId, setGroupId] = useState('');
+  const [roleSelection, setRoleSelection] = useState<{
+    connectorId: string;
+    groupId: string;
+  } | null>(null);
+  const roleGroupId = roleSelection?.connectorId === selected ? roleSelection.groupId : '';
   const [teamId, setTeamId] = useState('');
   const [teamQuery, setTeamQuery] = useState('');
   const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
@@ -642,9 +648,9 @@ export default function ScimSettingsSection({
             </p>
             <p>
               Map displayName, name.givenName, name.familyName, active, title and the enterprise
-              extension department as needed. Keep system roles in your explicit OIDC or manual role
-              policy. Providers without immutable OIDC correspondence require existing-account
-              linking approval.
+              extension department as needed. Assign system roles with group role mappings below, or
+              keep OIDC or manual role policy. Providers without immutable OIDC correspondence
+              require existing-account linking approval.
             </p>
           </div>
         </div>
@@ -716,6 +722,19 @@ export default function ScimSettingsSection({
                       type="button"
                       variant="outline"
                       size="sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setRoleSelection({ connectorId: selected, groupId: row.id });
+                      }}
+                    >
+                      Map system role
+                    </Button>
+                  )}
+                  {tab === 'Users & Groups' && kind === 'groups' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
                       onClick={() => {
                         setGroupId(row.id);
                         setAdoptMemberIds([]);
@@ -767,6 +786,14 @@ export default function ScimSettingsSection({
               Next
             </Button>
           </div>
+          {roleGroupId && tab === 'Users & Groups' && kind === 'groups' && (
+            <ScimRoleMapping
+              key={`${selected}:${roleGroupId}`}
+              connectorId={selected}
+              groupId={roleGroupId}
+              onSaved={() => setReload(value => value + 1)}
+            />
+          )}
           {groupId && tab === 'Users & Groups' && (
             <div className="rounded-lg border p-4 space-y-3">
               <h4 className="font-semibold">Provisioning impact preview</h4>

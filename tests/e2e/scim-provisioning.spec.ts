@@ -74,6 +74,19 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   await section.getByLabel('Resource', { exact: true }).selectOption('groups');
   await section.getByLabel('Search', { exact: true }).fill(groupName);
   await expect(section.getByText(groupName, { exact: true })).toBeVisible();
+  await section.getByRole('button', { name: 'Map system role', exact: true }).click();
+  await section.getByLabel('OpsKnight system role', { exact: true }).selectOption('RESPONDER');
+  await section.getByRole('button', { name: 'Preview role mapping', exact: true }).click();
+  await expect(section.getByText(/1 group members; 1 accounts change/)).toBeVisible();
+  await section.getByRole('button', { name: 'Apply role mapping', exact: true }).click();
+  await expect(section.getByText('Role mapping saved. 1 accounts updated.')).toBeVisible();
+  await expect(section.getByRole('listitem').filter({ hasText: groupName })).toContainText(
+    'System role: RESPONDER'
+  );
+  expect(await db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
+    role: 'RESPONDER',
+    roleSource: 'SCIM',
+  });
   await section.getByRole('button', { name: 'Review team binding', exact: true }).click();
   await section
     .getByLabel('Find an operational team', { exact: true })
