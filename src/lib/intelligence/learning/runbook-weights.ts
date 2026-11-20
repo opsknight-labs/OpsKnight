@@ -5,6 +5,7 @@ import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { DEFAULT_RUNBOOK_WEIGHTS, runbookWeightsSchema, type RunbookWeights } from '../contract';
+import { withDbBudget } from '../jobs/db-budget';
 import { stableAnalysisHash } from '../jobs/input-hash';
 import { enqueueWorkItems, WORK_KINDS, type ClaimedWorkItem } from '../jobs/work-queue';
 import { scoreRunbook, type RunbookScoreFeatures } from '../recommendations/wilson';
@@ -305,11 +306,13 @@ export type RunbookWeightFitOutcome = 'unchanged' | 'fitted' | 'stale';
  */
 export async function runRunbookWeightFit(
   item: Pick<ClaimedWorkItem, 'generation' | 'force'>,
-  client: typeof prisma = prisma
+  client: typeof prisma = prisma,
+  budget: { maxDbMs: number } = { maxDbMs: 30_000 }
 ): Promise<RunbookWeightFitOutcome> {
-  // The same daily job refits the similarity and cause proposals the settings page shows.
-  await refreshScoringWeightProposal();
-  await refreshResponseWeightProposal();
+  // The same daily job refits the similarity and cause proposals the settings page shows, each under the
+  // lane's statement budget.
+  await withDbBudget(budget, tx => refreshScoringWeightProposal(tx), client);
+  await withDbBudget(budget, tx => refreshResponseWeightProposal(tx), client);
   const examples = await loadRunbookExamples(client);
   const inputHash = stableAnalysisHash(['runbook-weights:v1', RUNBOOK_FIT_LIMITS, examples]);
   const stored = await client.intelligencePattern.findUnique({

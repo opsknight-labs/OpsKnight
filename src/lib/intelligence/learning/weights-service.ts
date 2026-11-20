@@ -15,8 +15,10 @@ import {
   type IntelligenceActor,
 } from '../settings/service';
 
-export async function suggestScoringWeights() {
-  const rows = await prisma.$queryRaw<
+export async function suggestScoringWeights(
+  client: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma
+) {
+  const rows = await client.$queryRaw<
     Array<{ pair: string; evidence: Prisma.JsonValue; helpful: boolean }>
   >`
     SELECT DISTINCT ON (f."incidentId", f."subjectRef")
@@ -62,9 +64,9 @@ export async function suggestScoringWeights() {
 type ScoringWeightsProposal = NonNullable<Awaited<ReturnType<typeof suggestScoringWeights>>>;
 
 /** Fits now and stores the result for the settings page (null when there is no supported improvement). */
-export async function refreshScoringWeightProposal() {
-  const proposal = await suggestScoringWeights();
-  await storeWeightProposal('SCORING_WEIGHTS_PROPOSAL', proposal);
+export async function refreshScoringWeightProposal(client: Prisma.TransactionClient = prisma) {
+  const proposal = await suggestScoringWeights(client);
+  await storeWeightProposal('SCORING_WEIGHTS_PROPOSAL', proposal, client);
   return proposal;
 }
 

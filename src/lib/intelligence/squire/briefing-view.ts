@@ -6,7 +6,7 @@ import { getAiSettings } from '../ai/settings';
 import { getProactiveNotesForActor } from '../memory/proactive-view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
-import { readIncidentForActor } from './deterministic';
+import { readIncidentForActor, type ReadableIncident } from './deterministic';
 
 /** How many rows of each kind the pinned briefing carries; the same cut the chat briefing uses. */
 export const PINNED_BRIEFING_ROWS = 3;
@@ -59,7 +59,9 @@ const short = (text: string, max = 160) => {
 export async function getPinnedBriefingForActor(
   actor: AuthorizationActor,
   incidentId: string,
-  client: typeof prisma = prisma
+  client: typeof prisma = prisma,
+  /** The incident the caller already read through `actor`'s visibility (skips the re-read). */
+  readable?: ReadableIncident
 ): Promise<PinnedBriefing | null> {
   if (
     actor.apiKey ||
@@ -69,7 +71,9 @@ export async function getPinnedBriefingForActor(
     return null;
   const [settings, incident] = await Promise.all([
     getAiSettings(client).catch(() => null),
-    readIncidentForActor(actor, incidentId, client).catch(() => null),
+    readable?.id === incidentId
+      ? readable
+      : readIncidentForActor(actor, incidentId, client).catch(() => null),
   ]);
   if (!settings?.squireEnabled || !incident) return null;
 
@@ -77,7 +81,9 @@ export async function getPinnedBriefingForActor(
     getSimilarIncidentsForActor(incident.id, actor, client).catch(() => null),
     getResponseIntelligenceForActor(incident.id, actor, client).catch(() => null),
     // Already scoped: its AI text is shown only to a viewer who may read every input it was written from.
-    getProactiveNotesForActor(incident.id, actor).catch(() => null),
+    getProactiveNotesForActor(incident.id, actor, { incident, kinds: ['BRIEFING'] }).catch(
+      () => null
+    ),
   ]);
   const ai = proactive?.briefing?.ai;
   const briefing: PinnedBriefing = {

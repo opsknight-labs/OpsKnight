@@ -114,8 +114,10 @@ const evidenceSchema = z.object({
   components: z.object({ proximity: z.number() }),
 });
 
-export async function suggestResponseWeights() {
-  const rows = await prisma.$queryRaw<
+export async function suggestResponseWeights(
+  client: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma
+) {
+  const rows = await client.$queryRaw<
     Array<{ id: string; kind: string; evidence: Prisma.JsonValue; helpful: boolean }>
   >`
     SELECT DISTINCT ON (f."id") f."id", f."kind", f."evidence", fb."verdict" IN ('HELPFUL', 'CORRECT') AS helpful
@@ -152,9 +154,9 @@ export async function suggestResponseWeights() {
 type StoredResponseWeightsProposal = ResponseWeightsProposal & { id: string };
 
 /** Fits now and stores the result for the settings page (null when there is no supported improvement). */
-export async function refreshResponseWeightProposal() {
-  const proposal = await suggestResponseWeights();
-  await storeWeightProposal('RESPONSE_WEIGHTS_PROPOSAL', proposal);
+export async function refreshResponseWeightProposal(client: Prisma.TransactionClient = prisma) {
+  const proposal = await suggestResponseWeights(client);
+  await storeWeightProposal('RESPONSE_WEIGHTS_PROPOSAL', proposal, client);
   return proposal;
 }
 

@@ -550,7 +550,7 @@ async function brief(
 ): Promise<IncidentBriefing> {
   // The pinned briefing is the panel's view of the same findings, with the incident's one shared AI summary.
   const [pinned, events, analysis] = await Promise.all([
-    getPinnedBriefingForActor(actor, incident.id).catch(() => null),
+    getPinnedBriefingForActor(actor, incident.id, undefined, incident).catch(() => null),
     prisma.incidentEvent
       .findMany({
         where: { incidentId: incident.id },

@@ -17,11 +17,12 @@ const row = (kind: StoredProposalKind) => ({ scopeKey: 'global', kind, key: 'lat
 
 export async function storeWeightProposal(
   kind: StoredProposalKind,
-  proposal: { support: number } | null
+  proposal: { support: number } | null,
+  client: Pick<Prisma.TransactionClient, 'intelligencePattern'> = prisma
 ) {
   const stats = { proposal } as unknown as Prisma.InputJsonValue;
   const support = proposal?.support ?? 0;
-  await prisma.intelligencePattern.upsert({
+  await client.intelligencePattern.upsert({
     where: { scopeKey_kind_key: row(kind) },
     create: { ...row(kind), stats, support },
     update: { stats, support, lastSeenAt: new Date() },

@@ -220,8 +220,8 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   ...SQUIRE_MEMORY_HANDLERS,
   // Operations insights (Workstream J): opt-in, one scope per item, see ops-insights/handlers.ts.
   ...OPS_INSIGHT_HANDLERS,
-  [WORK_KINDS.FIT_RUNBOOK_WEIGHTS]: async item => {
-    await runRunbookWeightFit(item);
+  [WORK_KINDS.FIT_RUNBOOK_WEIGHTS]: async (item, { settings }) => {
+    await runRunbookWeightFit(item, undefined, settings);
   },
   [WORK_KINDS.NOISE_SWEEP]: async (item, { settings, signal }) => {
     await runNoiseSweep(item, settings, signal);

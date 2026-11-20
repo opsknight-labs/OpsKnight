@@ -73,7 +73,9 @@ async function ids<T extends { id: string }>(load: () => Promise<T[]>): Promise<
  */
 export async function getProactiveNotesForActor(
   incidentId: string,
-  actor: AuthorizationActor
+  actor: AuthorizationActor,
+  /** The incident the caller already read through `actor`'s visibility, and only the note kinds it needs. */
+  options: { incident?: { id: string; status: string }; kinds?: string[] } = {}
 ): Promise<ProactiveNotesView | null> {
   if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)) return null;
   let readable;
@@ -82,13 +84,16 @@ export async function getProactiveNotesForActor(
   } catch {
     return null;
   }
-  const incident = await prisma.incident.findFirst({
-    where: { AND: [{ id: incidentId }, readable] },
-    select: { id: true, status: true },
-  });
+  const incident =
+    options.incident?.id === incidentId
+      ? options.incident
+      : await prisma.incident.findFirst({
+          where: { AND: [{ id: incidentId }, readable] },
+          select: { id: true, status: true },
+        });
   if (!incident) return null;
   const notes = await prisma.squireProactiveNote.findMany({
-    where: { incidentId },
+    where: { incidentId, ...(options.kinds ? { kind: { in: options.kinds } } : {}) },
     select: { kind: true, mode: true, content: true, createdAt: true, updatedAt: true },
   });
   if (notes.length === 0) return null;
