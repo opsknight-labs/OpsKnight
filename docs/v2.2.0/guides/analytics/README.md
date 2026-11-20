@@ -25,8 +25,8 @@ there is no separate mobile Analytics screen any more; `/m` links open `/analyti
 
 - [Use Analytics](./use-analytics.md): filters, ranges, comparison, timezones, metric definitions
   and the CSV export.
-- Unchanged since 2.1.0: [Reports and dashboards](../../../v2.1.0/guides/reports/README.md) and the
-  [metrics reference](../../../v2.1.0/reference/metrics.md).
+- Unchanged in 2.2.0: [Reports and dashboards](../reports/README.md) and the
+  [metrics reference](../../reference/metrics.md).
 
 ## Sections
 

@@ -19,13 +19,22 @@ verification:
 
 Vendor documentation: [Connect Claude Code to tools via MCP](https://code.claude.com/docs/en/mcp) (fetched 12 November 2026).
 
+## Before you begin
+
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [MCP setup](../self-hosted-setup.md)).
+- Copy the **MCP server URL** from the **Connect** tab on that page; the examples below use `https://ops.your-company.com/mcp`.
+- You have your own OpsKnight account and the Claude Code CLI installed.
+
 ## Connect with OAuth (recommended)
 
-```bash
-claude mcp add --scope user --transport http opsknight 'https://ops.your-company.com/mcp'
-```
+1. Add the server:
 
-Then inside Claude Code run `/mcp`, select `opsknight` and sign in in the browser. From a shell, `claude mcp login opsknight` does the same.
+   ```bash
+   claude mcp add --scope user --transport http opsknight 'https://ops.your-company.com/mcp'
+   ```
+
+2. Inside Claude Code run `/mcp`, select `opsknight` and sign in in the browser. From a shell, `claude mcp login opsknight` does the same.
+3. Approve the connection on the OpsKnight consent page.
 
 `--scope user` makes it available in every project. `--scope project` writes `.mcp.json` in the repository for the team; each person still signs in as themselves.
 
@@ -52,6 +61,12 @@ Or in `.mcp.json`:
 ```
 
 Claude Code expands `${VAR}` and `${VAR:-default}`. An unset variable without a default is sent literally and `claude mcp list` warns about it; an empty one is sent empty. Keep the token in the environment, not in a committed file.
+
+## Verify the connection
+
+1. Run `claude mcp list`; `opsknight` shows **Connected**.
+2. Ask Claude Code "Who am I in OpsKnight, and what can you do for me?". It calls `whoami` and answers with your role, teams and enabled tools.
+3. In OpsKnight, select **Check connection** on the **Connect** tab to see the connection you just made.
 
 ## Known limits
 

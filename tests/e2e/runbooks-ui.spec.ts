@@ -783,7 +783,10 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
   await page
     .getByRole('button', { name: 'Validate configuration · No execution', exact: true })
     .click();
-  await expect(page.getByRole('status')).toContainText('This check does not activate the rule');
+  // Scoped to main: the global status bar has its own realtime live region.
+  await expect(page.getByRole('main').getByRole('status')).toContainText(
+    'This check does not activate the rule'
+  );
   await expect(page.getByRole('button', { name: 'Run now · Preview plan' })).not.toBeVisible();
   expect(
     (await prisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: rule.id } })).enabled

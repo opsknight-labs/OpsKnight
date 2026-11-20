@@ -25,8 +25,9 @@ Desktop assistants sign in through the browser and refresh their own tokens. An 
 
 Both act as one person, with that person's current permissions. Neither can approve its own changes.
 
-## Before you start
+## Before you begin
 
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [Self-hosted setup](self-hosted-setup.md)). Personal access tokens also need the administrator to allow them (Option 2).
 - The server must be reachable from the agent platform at a public HTTPS address with a publicly trusted certificate (see [Self-hosted setup](self-hosted-setup.md#reverse-proxies-and-private-installations)). An API-hosted agent connects from the provider's network, not from your laptop.
 - The MCP address is `<origin>/mcp`, where `<origin>` is your OpsKnight App URL.
 
@@ -86,6 +87,11 @@ What a personal token can and cannot do:
 - Turning personal tokens off in the access policy revokes every token immediately. Turning them back on does not restore them.
 
 Prefer OAuth with a refresh loop wherever the platform supports it: its access tokens expire in minutes, and a leaked refresh token is detected on reuse.
+
+## Verify the connection
+
+1. Have the agent call `whoami` first. It returns the user id, role, teams, effective scopes and enabled tools of the person the agent acts for; confirm they are the person and permissions you expect.
+2. In OpsKnight, open **Connections** and check that the connection is listed; a personal token shows its **Personal token** badge, its expiry and its last call.
 
 ## View-only connections
 

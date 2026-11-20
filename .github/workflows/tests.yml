@@ -55,6 +55,16 @@ jobs:
             xargs -a changed-source.txt -n 60 npx eslint --max-warnings 0 --no-warn-ignored
           fi
 
+      - name: Documentation checks (frontmatter, links, capabilities, evidence)
+        run: npm run docs:lint
+
+      - name: Flag features changed without their documentation
+        if: github.event_name == 'pull_request'
+        env:
+          DOCS_IMPACT_BASE: origin/${{ github.base_ref }}
+          DOCS_IMPACT_STRICT: 'true'
+        run: npm run docs:impact
+
       - name: TypeScript typecheck
         run: NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit
 

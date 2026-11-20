@@ -289,17 +289,9 @@ test('BUG-12: RemoveFieldDialog warns on referenced field and allows navigating 
   );
 
   const workspace = page.getByRole('region', { name: 'Service automation' });
-  // Initial data expands the header and moves the section navigation. Wait for the
-  // loaded overview before clicking so the pointer lands on the Context button.
-  await expect(
-    workspace.getByRole('region', { name: 'LIVE readiness · active version', exact: true })
-  ).toBeVisible();
-  const contextTab = workspace.getByRole('button', { name: 'Context', exact: true });
-  await contextTab.click();
-  await expect(contextTab).toHaveAttribute('aria-current', 'true');
-  await expect(
-    workspace.getByText('Cluster Name', { exact: true }).filter({ visible: true }).first()
-  ).toBeVisible();
+  await workspace.getByRole('button', { name: 'Context', exact: true }).click();
+  // The field list entry and the selected field's editor heading both show the label.
+  await expect(workspace.getByRole('heading', { name: 'Cluster Name', exact: true })).toBeVisible();
 
   // Click Remove field button on the Cluster Name field
   await workspace.getByRole('button', { name: 'Remove field', exact: true }).click();

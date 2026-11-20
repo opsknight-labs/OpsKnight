@@ -31,6 +31,12 @@ The same setup applies to Docker, Compose, Swarm, Kubernetes and virtual machine
 
 Everything below lives on one page: **Settings → Integrations & ChatOps → MCP (AI Assistants)**. Its tabs are **Overview**, **Connect**, **Connections** (people other than administrators see **Your connections**), **Assistants**, **Approvals** (runbook approvers who are not administrators see **Runbook approvals**), **Access policy**, **Exposed capabilities** and **Usage**. Assistants, Access policy, Exposed capabilities and Usage are for administrators only.
 
+## Before you begin
+
+- Turning MCP on and changing the access policy needs an OpsKnight administrator who signed in within the last two hours.
+- Users need their own OpsKnight account and an MCP-capable assistant; each signs in as themselves.
+- OpsKnight must be served from an HTTPS origin that users (and any cloud-hosted assistant) can reach. That origin becomes the **App URL**.
+
 ## Administrator: turn it on (about two minutes)
 
 1. Deploy the application and its packaged database migrations through your normal upgrade process. Update every replica before turning MCP on.

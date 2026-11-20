@@ -19,21 +19,28 @@ verification:
 
 Vendor documentation (fetched 12 November 2026): [Cascade MCP](https://docs.devin.ai/windsurf/plugins/cascade/mcp) (docs.windsurf.com now redirects there) and [Devin Desktop MCP](https://docs.devin.ai/desktop/cascade/mcp). Windsurf has been renamed Devin Desktop; the vendor pages disagree on the configuration path, so both are listed below.
 
+## Before you begin
+
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [MCP setup](../self-hosted-setup.md)).
+- Copy the **MCP server URL** from the **Connect** tab on that page; the examples below use `https://ops.your-company.com/mcp`.
+- You have your own OpsKnight account and Windsurf (Devin Desktop) installed. On Teams and Enterprise, its administrator must allow MCP (see Known limits).
+
 ## Connect with OAuth (recommended)
 
-Add OpsKnight to the MCP configuration file and press refresh in Cascade's MCP panel:
+1. Add OpsKnight to the MCP configuration file:
 
-```json
-{
-  "mcpServers": {
-    "opsknight": { "serverUrl": "https://ops.your-company.com/mcp" }
-  }
-}
-```
+   ```json
+   {
+     "mcpServers": {
+       "opsknight": { "serverUrl": "https://ops.your-company.com/mcp" }
+     }
+   }
+   ```
 
-The file is `~/.codeium/windsurf/mcp_config.json` in Windsurf, and `~/.config/devin/mcp_config.json` (or `.devin/mcp_config.json` in a project) in Devin Desktop, which still reads the legacy Windsurf paths. `url` is accepted in place of `serverUrl`.
+   The file is `~/.codeium/windsurf/mcp_config.json` in Windsurf, and `~/.config/devin/mcp_config.json` (or `.devin/mcp_config.json` in a project) in Devin Desktop, which still reads the legacy Windsurf paths. `url` is accepted in place of `serverUrl`.
 
-When the server shows **Needs authentication**, select **Authenticate**, sign in to OpsKnight and approve.
+2. Press refresh in Cascade's MCP panel.
+3. When the server shows **Needs authentication**, select **Authenticate**, sign in to OpsKnight and approve.
 
 ## Personal access token (alternative)
 
@@ -49,6 +56,12 @@ When the server shows **Needs authentication**, select **Authenticate**, sign in
 ```
 
 `${env:NAME}` is expanded in `serverUrl`, `url` and `headers`.
+
+## Verify the connection
+
+1. In Cascade's MCP panel, `opsknight` no longer shows **Needs authentication**.
+2. Ask Cascade "Who am I in OpsKnight, and what can you do for me?". It calls `whoami` and answers with your role, teams and enabled tools.
+3. In OpsKnight, select **Check connection** on the **Connect** tab to see the connection you just made.
 
 ## Known limits
 

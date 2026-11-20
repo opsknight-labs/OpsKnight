@@ -1,20 +1,17 @@
 name: Documentation quality
 
+# Lightweight checks only: documentation is written by hand (each release copies the
+# previous version's pages and adds pages for new features). Nothing here generates docs.
 on:
-  # Temporarily manual-only while the documentation quality suite is improved.
+  # The PR gate (tests.yml static validation) runs docs:lint and docs:impact; this is manual-only.
   workflow_dispatch:
-    inputs:
-      release_certification:
-        description: Enforce automated reader, feature, legacy-parity, runtime, and rendered-site release gates
-        required: false
-        default: false
-        type: boolean
 permissions:
   contents: read
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -24,115 +21,5 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci --ignore-scripts --legacy-peer-deps
-      - name: Test documentation tooling
-        run: npm run docs:test
-      - name: Regenerate documentation artifacts
-        run: |
-          npm run docs:discover:write
-          npm run docs:reference
-          npm run docs:integrations
-          npm run docs:capacity
-          npm run docs:routes
-          npm run docs:v15-parity
-          npm run docs:claims
-          npm run docs:surface-parity
-      - name: Reject generated and published-reference drift
-        env:
-          # Commit-bound provenance changes after both an ordinary artifact
-          # commit and a squash merge. Compare generated semantics strictly and
-          # validate revision provenance separately in certification evidence.
-          DOCS_ALLOW_REVISION_ONLY_DRIFT: 'true'
-        run: node scripts/docs/check-generated-drift.mjs
-      - name: Validate 2.0.0 documentation contracts
-        run: npm run docs:certify:static
-      - name: Preserve revision-bound static certificate
-        uses: actions/upload-artifact@v6
-        with:
-          name: docs-static-certification-${{ github.sha }}
-          path: generated/docs-certification/static.json
-          if-no-files-found: error
-      - name: Detect documentation impact
-        if: github.event_name == 'pull_request'
-        env:
-          DOCS_IMPACT_BASE: origin/${{ github.base_ref }}
-          DOCS_IMPACT_STRICT: 'true'
-        run: npm run docs:impact
-
-  runtime-certification:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci --ignore-scripts --legacy-peer-deps
-      - name: Generate Prisma client required by source-level runtime tests
-        run: npx prisma generate
-      - run: npx playwright install --with-deps chromium
-      - name: Build revision-bound OpsKnight image
-        run: |
-          docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-runtime:${{ github.sha }} .
-          echo "DOCS_OPSKNIGHT_IMAGE=$(docker image inspect --format '{{.Id}}' opsknight-docs-runtime:${{ github.sha }})" >> "$GITHUB_ENV"
-      - name: Run full documentation certification
-        env:
-          DOCS_IMAGE_PULL_POLICY: never
-        run: npm run docs:certify
-
-  release-certification:
-    if: github.event_name == 'workflow_dispatch' && inputs.release_certification
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci --ignore-scripts --legacy-peer-deps
-      - name: Generate Prisma client required by source-level runtime tests
-        run: npx prisma generate
-      - run: npx playwright install --with-deps chromium
-      - name: Build revision-bound OpsKnight image
-        run: |
-          docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-release:${{ github.sha }} .
-          echo "DOCS_OPSKNIGHT_IMAGE=$(docker image inspect --format '{{.Id}}' opsknight-docs-release:${{ github.sha }})" >> "$GITHUB_ENV"
-      - name: Checkout website renderer
-        uses: actions/checkout@v7
-        with:
-          repository: opsknight-labs/OpsKnight-website
-          path: opsknight-website
-      - name: Build the rendered documentation site from this revision
-        run: |
-          ./scripts/sync-docs-to-website.sh ./opsknight-website
-          npm ci --ignore-scripts --prefix ./opsknight-website
-          npm run build --prefix ./opsknight-website
-          python3 -m http.server 15000 --directory ./opsknight-website/out > /tmp/opsknight-docs-site.log 2>&1 &
-          echo $! > /tmp/opsknight-docs-site.pid
-          CURRENT_VERSION=$(node -p 'require("./docs/versions.json").currentRelease || "v2.0.0"')
-          for attempt in {1..30}; do
-            curl --fail --silent "http://127.0.0.1:15000/docs/${CURRENT_VERSION}/" >/dev/null && exit 0
-            sleep 1
-          done
-          cat /tmp/opsknight-docs-site.log
-          exit 1
-      - name: Enforce final release evidence
-        env:
-          DOCS_IMAGE_PULL_POLICY: never
-          DOCS_EXPECTED_PRODUCT_REVISION: ${{ github.sha }}
-          DOCS_WEBSITE_DIR: ${{ github.workspace }}/opsknight-website
-          DOCS_SITE_BASE_URL: http://127.0.0.1:15000
-        run: npm run docs:certify:release
-      - name: Preserve exact release certificate and evidence
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: docs-release-certification-${{ github.sha }}
-          path: |
-            generated/docs-certification/
-            generated/docs-evidence/current/
-          if-no-files-found: error
+      - name: Check frontmatter, links, capabilities and evidence
+        run: npm run docs:lint
