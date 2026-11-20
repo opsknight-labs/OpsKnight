@@ -217,19 +217,18 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
           <dd className={DD_CLASS}>{preview.planDigest}</dd>
         </dl>
       </details>
-      {!decided && (
-        <ReviewForm
-          action={reviewPreparedRunbook}
-          hidden={{ id: preview.id, planDigest: preview.planDigest }}
-          noun="runbook run"
-          approveLabel="Approve frozen plan"
-          rejectLabel="Reject plan"
-          reviewPath={`/settings/integrations/mcp/approvals/${preview.id}`}
-          selfReview={selfReview}
-        >
-          {selfReview && <SelfApprovalConfirm />}
-        </ReviewForm>
-      )}
+      <ReviewForm
+        closed={decided}
+        action={reviewPreparedRunbook}
+        hidden={{ id: preview.id, planDigest: preview.planDigest }}
+        noun="runbook run"
+        approveLabel="Approve frozen plan"
+        rejectLabel="Reject plan"
+        reviewPath={`/settings/integrations/mcp/approvals/${preview.id}`}
+        selfReview={selfReview}
+      >
+        {selfReview && <SelfApprovalConfirm />}
+      </ReviewForm>
     </div>
   );
 }

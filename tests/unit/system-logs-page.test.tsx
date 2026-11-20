@@ -20,6 +20,9 @@ vi.mock('next/navigation', () => ({
   forbidden: vi.fn(() => {
     throw new Error('NEXT_FORBIDDEN');
   }),
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => '/system-logs',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const permissions = (role: 'ADMIN' | 'RESPONDER' | null) =>
@@ -117,6 +120,44 @@ describe('SystemLogsPage & SystemLogsError', () => {
     expect(screen.getByText('Unexpected crash report')).toBeDefined();
     expect(screen.getByText('(no message)')).toBeDefined();
     expect(screen.getByText('bootstrap')).toBeDefined();
+    expect(screen.getByText('Unknown time')).toBeDefined();
+    expect(screen.getByRole('navigation', { name: 'System log pages' })).toBeDefined();
+  });
+
+  it('expands an entry to show its stack trace', async () => {
+    vi.mocked(rbac.getUserPermissions).mockResolvedValueOnce(permissions('ADMIN'));
+    vi.mocked(loggerModule.getLogBuffer).mockReturnValueOnce([
+      {
+        level: 'error',
+        message: 'Queue worker crashed',
+        timestamp: '2026-10-01T12:00:00.000Z',
+        error: { message: 'boom', stack: 'at worker.run()' },
+      },
+    ] as unknown as ReturnType<typeof loggerModule.getLogBuffer>);
+
+    render(await SystemLogsPage({ searchParams: Promise.resolve({}) }));
+
+    const toggle = screen.getByRole('button', { name: 'Show details for Queue worker crashed' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('at worker.run()')).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('at worker.run()')).toBeDefined();
+  });
+
+  it('teaches the filtered-empty state with a clear action', async () => {
+    vi.mocked(rbac.getUserPermissions).mockResolvedValueOnce(permissions('ADMIN'));
+    vi.mocked(loggerModule.getLogBuffer).mockReturnValueOnce([
+      { level: 'info', message: 'ok', timestamp: '2026-10-01T12:00:00.000Z' },
+    ] as unknown as ReturnType<typeof loggerModule.getLogBuffer>);
+
+    render(await SystemLogsPage({ searchParams: Promise.resolve({ level: 'error' }) }));
+
+    expect(screen.getByText('No log entries match these filters')).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Clear filters' })).toHaveAttribute(
+      'href',
+      '/system-logs'
+    );
   });
 
   it('filters by search keyword safely even when error message or component are missing', async () => {

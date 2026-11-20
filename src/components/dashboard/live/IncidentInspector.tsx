@@ -12,10 +12,12 @@ import {
   Workflow,
   X,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import PriorityBadge from '@/components/incident/PriorityBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { formatIncidentAge, type LiveIncident } from '@/lib/dashboard/live-incidents-shared';
+import { type LiveIncident } from '@/lib/dashboard/live-incidents-shared';
+import StatusBadge from '@/components/patterns/StatusBadge';
+import SeverityBadge from '@/components/patterns/SeverityBadge';
+import RelativeTime from '@/components/patterns/RelativeTime';
 import { SlaChip } from './LiveIncidentRow';
 
 export function IncidentInspector({
@@ -106,37 +108,10 @@ export function IncidentInspector({
                 P—
               </Badge>
             )}
-            <span
-              className={cn(
-                'rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase',
-                incident.urgency === 'HIGH'
-                  ? 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400'
-                  : incident.urgency === 'MEDIUM'
-                    ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                    : 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-              )}
-            >
-              {incident.urgency} urgency
-            </span>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums',
-                isTriggered
-                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
-              )}
-            >
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  isTriggered ? 'bg-rose-500' : 'bg-amber-500'
-                )}
-                aria-hidden
-              />
-              {isTriggered ? 'Triggered' : 'Acknowledged'}
-            </span>
-            <span className="text-[11px] text-muted-foreground tabular-nums">
-              {formatIncidentAge(incident.createdAt, now)} ago
+            <SeverityBadge urgency={incident.urgency} size="xs" />
+            <StatusBadge status={incident.status} size="xs" live={isTriggered} />
+            <span className="text-[11px] text-muted-foreground">
+              <RelativeTime date={incident.createdAt} now={now} />
             </span>
           </div>
           <h2 className="mt-1.5 text-sm font-semibold leading-snug text-foreground break-words">
@@ -235,18 +210,7 @@ export function IncidentInspector({
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">Urgency</span>
-            <span
-              className={cn(
-                'rounded border px-1.5 py-0.2 font-mono text-[10px] font-semibold uppercase',
-                incident.urgency === 'HIGH'
-                  ? 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400'
-                  : incident.urgency === 'MEDIUM'
-                    ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                    : 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-              )}
-            >
-              {incident.urgency}
-            </span>
+            <SeverityBadge urgency={incident.urgency} size="xs" />
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">Assignee</span>

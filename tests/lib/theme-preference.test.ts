@@ -4,6 +4,7 @@ import {
   THEME_STORAGE_KEY,
   ACCOUNT_THEME_SYNC_SCRIPT,
   CHROME_THEME_BOOTSTRAP_SCRIPT,
+  FORCE_LIGHT_THEME_SCRIPT,
   THEME_CHROME_COLORS,
   preferenceFromThemeChoice,
   themeChoiceFromPreference,
@@ -119,6 +120,26 @@ describe('pre-paint scripts', () => {
     document.documentElement.className = 'light';
     account('<img src=x>');
     expect(document.documentElement.className).toBe('light');
+  });
+
+  it('forces a rewritten light-only surface back to light', () => {
+    const root = document.documentElement;
+    root.className = 'dark';
+    root.setAttribute('data-theme', 'dark');
+    root.style.colorScheme = 'dark';
+    document
+      .getElementById('opsknight-runtime-theme-color')
+      ?.setAttribute('content', THEME_CHROME_COLORS.dark);
+
+    run(FORCE_LIGHT_THEME_SCRIPT, {});
+
+    expect(root.classList.contains('dark')).toBe(false);
+    expect(root.classList.contains('light')).toBe(true);
+    expect(root.getAttribute('data-theme')).toBe('light');
+    expect(root.style.colorScheme).toBe('light');
+    expect(document.getElementById('opsknight-runtime-theme-color')?.getAttribute('content')).toBe(
+      '#f8fafc'
+    );
   });
 
   it('keeps the inline scripts in sync with the shared constants', () => {

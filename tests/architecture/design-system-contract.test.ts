@@ -49,11 +49,9 @@ describe('design system contract: typography', () => {
   });
 
   it('defines one font token per role and wires Tailwind to it', () => {
-    const variables = read('src/styles/foundation/variables.css');
-    expect(variables).toMatch(/--font-family-sans: var\(--font-inter\), 'Inter'/);
-    expect(variables).toMatch(
-      /--font-family-display: var\(--font-space-grotesk\), 'Space Grotesk'/
-    );
+    const tokens = read('src/styles/foundation/tokens.css');
+    expect(tokens).toMatch(/--font-family-sans: var\(--font-inter\), 'Inter'/);
+    expect(tokens).toMatch(/--font-family-display: var\(--font-space-grotesk\), 'Space Grotesk'/);
 
     const tailwind = read('tailwind.config.ts');
     expect(tailwind).toContain("sans: ['var(--font-family-sans)']");

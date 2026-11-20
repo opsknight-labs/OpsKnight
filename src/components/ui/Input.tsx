@@ -1,6 +1,9 @@
 'use client';
 
-import { InputHTMLAttributes, ReactNode, useId } from 'react';
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode } from 'react';
+import { AlertCircle } from 'lucide-react';
+import { Input as ShadcnInput } from './shadcn/input';
+import { cn } from '@/lib/utils';
 
 type InputSize = 'sm' | 'md' | 'lg';
 type InputVariant = 'default' | 'error' | 'success';
@@ -16,203 +19,135 @@ interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'>
   fullWidth?: boolean;
 }
 
-export default function Input({
-  label,
-  helperText,
-  error,
-  leftIcon,
-  rightIcon,
-  size = 'md',
-  variant = 'default',
-  fullWidth = false,
-  className = '',
-  id,
-  ...props
-}: InputProps) {
+/** Field geometry shared by the legacy Input and Select wrappers (32 / 40 / 48px). */
+export function legacyFieldSizeClass(size: InputSize): string {
+  switch (size) {
+    case 'sm':
+      return 'h-8 px-3 text-sm md:text-sm';
+    case 'lg':
+      return 'h-12 px-5 text-lg md:text-lg';
+    default:
+      return 'h-10 px-4 text-base md:text-base';
+  }
+}
+
+export function legacyIconInsetClass(size: InputSize, side: 'left' | 'right'): string {
+  if (side === 'left') return size === 'sm' ? 'left-3' : size === 'lg' ? 'left-5' : 'left-4';
+  return size === 'sm' ? 'right-3' : size === 'lg' ? 'right-5' : 'right-4';
+}
+
+function iconPaddingClass(size: InputSize, side: 'left' | 'right'): string {
+  if (side === 'left') return size === 'sm' ? 'pl-10' : size === 'lg' ? 'pl-14' : 'pl-12';
+  return size === 'sm' ? 'pr-10' : size === 'lg' ? 'pr-14' : 'pr-12';
+}
+
+/** Border/ring for the validation variants; shared with the legacy Select. */
+export function legacyFieldStateClass(state: InputVariant): string {
+  switch (state) {
+    case 'error':
+      return 'border-destructive hover:border-destructive focus-visible:ring-destructive';
+    case 'success':
+      return 'border-status-ok hover:border-status-ok focus-visible:ring-status-ok';
+    default:
+      return 'hover:border-ink-300';
+  }
+}
+
+/**
+ * Compatibility wrapper over the canonical shadcn `Input`
+ * (`@/components/ui/shadcn/input`) that adds label, helper/error text and icons.
+ */
+const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  {
+    label,
+    helperText,
+    error,
+    leftIcon,
+    rightIcon,
+    size = 'md',
+    variant = 'default',
+    fullWidth = false,
+    className,
+    id,
+    ...props
+  },
+  ref
+) {
   const generatedId = useId();
   const inputId = id || generatedId;
   const hasError = !!error || variant === 'error';
-  const hasSuccess = variant === 'success';
-
-  const sizeStyles = {
-    sm: {
-      padding: '0.5rem 0.75rem',
-      paddingLeft: '0.75rem',
-      paddingRight: '0.75rem',
-      fontSize: 'var(--font-size-sm)',
-      height: '32px',
-    },
-    md: {
-      padding: '0.75rem 1rem',
-      paddingLeft: '1rem',
-      paddingRight: '1rem',
-      fontSize: 'var(--font-size-base)',
-      height: '40px',
-    },
-    lg: {
-      padding: '1rem 1.25rem',
-      paddingLeft: '1.25rem',
-      paddingRight: '1.25rem',
-      fontSize: 'var(--font-size-lg)',
-      height: '48px',
-    },
-  };
-
-  const variantStyles = {
-    default: {
-      borderColor: 'hsl(var(--border, 214.3 28% 86%))',
-    },
-    error: {
-      borderColor: 'var(--color-error, #ef4444)',
-    },
-    success: {
-      borderColor: 'var(--color-success, #22c55e)',
-    },
-  };
+  const state: InputVariant = hasError ? 'error' : variant === 'success' ? 'success' : 'default';
+  const describedBy = error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined;
 
   return (
-    <div
-      className={`ui-input-wrapper ${fullWidth ? 'ui-input-full-width' : ''}`}
-      style={{ width: fullWidth ? '100%' : 'auto' }}
-    >
+    <div className={cn('ui-input-wrapper', fullWidth ? 'ui-input-full-width w-full' : 'w-auto')}>
       {label && (
         <label
           htmlFor={inputId}
-          className="ui-input-label"
-          style={{
-            display: 'block',
-            marginBottom: '0.5rem',
-            fontSize: 'var(--font-size-sm)',
-            fontWeight: 500,
-            color: 'var(--text-primary)',
-          }}
+          className="ui-input-label mb-2 block text-sm font-medium text-foreground"
         >
           {label}
           {props.required && (
-            <span style={{ color: 'var(--color-error)', marginLeft: '0.25rem' }}>*</span>
+            <span className="ml-1 text-destructive" aria-hidden="true">
+              *
+            </span>
           )}
         </label>
       )}
-      <div
-        className="ui-input-container"
-        style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
+      <div className="ui-input-container relative flex items-center">
         {leftIcon && (
           <span
-            className="ui-input-icon-left"
-            style={{
-              position: 'absolute',
-              left: size === 'sm' ? '0.75rem' : size === 'md' ? '1rem' : '1.25rem',
-              color: 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              zIndex: 1,
-            }}
+            className={cn(
+              'ui-input-icon-left absolute z-[1] flex items-center text-muted-foreground',
+              legacyIconInsetClass(size, 'left')
+            )}
           >
             {leftIcon}
           </span>
         )}
-        <input
+        <ShadcnInput
+          ref={ref}
           id={inputId}
-          className={`ui-input ui-input-${size} ui-input-${variant} ${className}`}
-          style={{
-            ...sizeStyles[size],
-            width: '100%',
-            border: `1px solid ${variantStyles[hasError ? 'error' : hasSuccess ? 'success' : 'default'].borderColor}`,
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            fontFamily: 'inherit',
-            transition: 'all var(--transition-base) var(--ease-out)',
-            paddingLeft: leftIcon
-              ? size === 'sm'
-                ? '2.5rem'
-                : size === 'md'
-                  ? '3rem'
-                  : '3.5rem'
-              : sizeStyles[size].paddingLeft,
-            paddingRight: rightIcon
-              ? size === 'sm'
-                ? '2.5rem'
-                : size === 'md'
-                  ? '3rem'
-                  : '3.5rem'
-              : sizeStyles[size].paddingRight,
-          }}
-          onFocus={e => {
-            e.currentTarget.style.borderColor = hasError
-              ? 'var(--color-error, #ef4444)'
-              : hasSuccess
-                ? 'var(--color-success, #22c55e)'
-                : 'hsl(var(--primary))';
-            e.currentTarget.style.boxShadow = hasError
-              ? '0 0 0 3px rgba(239, 68, 68, 0.15)'
-              : hasSuccess
-                ? '0 0 0 3px rgba(34, 197, 94, 0.15)'
-                : '0 0 0 3px rgba(99, 102, 241, 0.18)';
-          }}
-          onBlur={e => {
-            e.currentTarget.style.borderColor = variantStyles[
-              hasError ? 'error' : hasSuccess ? 'success' : 'default'
-            ].borderColor as string;
-            e.currentTarget.style.boxShadow = 'none';
-          }}
+          className={cn(
+            'ui-input bg-card transition-colors duration-150',
+            `ui-input-${size} ui-input-${variant}`,
+            legacyFieldSizeClass(size),
+            legacyFieldStateClass(state),
+            leftIcon && iconPaddingClass(size, 'left'),
+            rightIcon && iconPaddingClass(size, 'right'),
+            className
+          )}
           aria-invalid={hasError}
-          aria-describedby={
-            error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined
-          }
+          aria-describedby={describedBy}
           {...props}
         />
         {rightIcon && (
           <span
-            className="ui-input-icon-right"
-            style={{
-              position: 'absolute',
-              right: size === 'sm' ? '0.75rem' : size === 'md' ? '1rem' : '1.25rem',
-              color: 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              zIndex: 1,
-            }}
+            className={cn(
+              'ui-input-icon-right absolute z-[1] flex items-center text-muted-foreground',
+              legacyIconInsetClass(size, 'right')
+            )}
           >
             {rightIcon}
           </span>
         )}
       </div>
       {error && (
-        <div
+        <p
           id={`${inputId}-error`}
-          className="ui-input-error"
-          style={{
-            marginTop: '0.5rem',
-            fontSize: 'var(--font-size-sm)',
-            color: 'var(--color-error)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-          }}
+          className="ui-input-error mt-2 flex items-center gap-1 text-sm text-destructive"
         >
-          <span>⚠️</span>
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{error}</span>
-        </div>
+        </p>
       )}
       {helperText && !error && (
-        <div
-          id={`${inputId}-helper`}
-          className="ui-input-helper"
-          style={{
-            marginTop: '0.5rem',
-            fontSize: 'var(--font-size-sm)',
-            color: 'var(--text-muted)',
-          }}
-        >
+        <p id={`${inputId}-helper`} className="ui-input-helper mt-2 text-sm text-muted-foreground">
           {helperText}
-        </div>
+        </p>
       )}
     </div>
   );
-}
+});
+
+export default Input;

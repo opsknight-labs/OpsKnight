@@ -1,6 +1,9 @@
 'use client';
 
-import { SelectHTMLAttributes, ReactNode, useId } from 'react';
+import { forwardRef, useId, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { AlertCircle, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { legacyFieldSizeClass, legacyFieldStateClass, legacyIconInsetClass } from './Input';
 
 type SelectSize = 'sm' | 'md' | 'lg';
 type SelectVariant = 'default' | 'error' | 'success';
@@ -24,166 +27,79 @@ interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'siz
   rightIcon?: ReactNode;
 }
 
+function leftPaddingClass(size: SelectSize): string {
+  return size === 'sm' ? 'pl-10' : size === 'lg' ? 'pl-14' : 'pl-12';
+}
+
 /**
- * Select component for dropdowns
- *
- * @example
- * <Select
- *   label="Choose option"
- *   options={[
- *     { value: '1', label: 'Option 1' },
- *     { value: '2', label: 'Option 2' }
- *   ]}
- *   error={errors.option}
- * />
+ * Native `<select>` with the canonical shadcn field styling (same border, radius,
+ * focus ring and disabled state as `@/components/ui/shadcn/select`'s trigger). It stays
+ * native so existing `onChange(event)` callers keep working; use the shadcn Select for
+ * new code.
  */
-export default function Select({
-  label,
-  helperText,
-  error,
-  options,
-  placeholder,
-  size = 'md',
-  variant = 'default',
-  fullWidth = false,
-  leftIcon,
-  rightIcon,
-  className = '',
-  id,
-  ...props
-}: SelectProps) {
+const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
+  {
+    label,
+    helperText,
+    error,
+    options,
+    placeholder,
+    size = 'md',
+    variant = 'default',
+    fullWidth = false,
+    leftIcon,
+    rightIcon,
+    className,
+    id,
+    ...props
+  },
+  ref
+) {
   const generatedId = useId();
   const selectId = id || generatedId;
   const hasError = !!error || variant === 'error';
-  const hasSuccess = variant === 'success';
-
-  const sizeStyles = {
-    sm: {
-      padding: '0.5rem 0.75rem',
-      paddingLeft: leftIcon ? '2.5rem' : '0.75rem',
-      paddingRight: rightIcon ? '2.5rem' : '2.5rem',
-      fontSize: 'var(--font-size-sm)',
-      height: '32px',
-      lineHeight: '1.5',
-    },
-    md: {
-      padding: '0.75rem 1rem',
-      paddingLeft: leftIcon ? '3rem' : '1rem',
-      paddingRight: rightIcon ? '3rem' : '2.5rem',
-      fontSize: 'var(--font-size-base)',
-      height: '40px',
-      lineHeight: '1.5',
-    },
-    lg: {
-      padding: '1rem 1.25rem',
-      paddingLeft: leftIcon ? '3.5rem' : '1.25rem',
-      paddingRight: rightIcon ? '3.5rem' : '2.75rem',
-      fontSize: 'var(--font-size-lg)',
-      height: '48px',
-      lineHeight: '1.5',
-    },
-  };
-
-  const variantStyles = {
-    default: {
-      borderColor: 'hsl(var(--border, 214.3 28% 86%))',
-    },
-    error: {
-      borderColor: 'var(--color-error, #ef4444)',
-    },
-    success: {
-      borderColor: 'var(--color-success, #22c55e)',
-    },
-  };
+  const state: SelectVariant = hasError ? 'error' : variant === 'success' ? 'success' : 'default';
 
   return (
-    <div
-      className={`ui-select-wrapper ${fullWidth ? 'ui-select-full-width' : ''}`}
-      style={{ width: fullWidth ? '100%' : 'auto' }}
-    >
+    <div className={cn('ui-select-wrapper', fullWidth ? 'ui-select-full-width w-full' : 'w-auto')}>
       {label && (
         <label
           htmlFor={selectId}
-          className="ui-select-label"
-          style={{
-            display: 'block',
-            marginBottom: 'var(--spacing-2)',
-            fontSize: 'var(--font-size-sm)',
-            fontWeight: 'var(--font-weight-medium)',
-            color: 'var(--text-primary)',
-          }}
+          className="ui-select-label mb-2 block text-sm font-medium text-foreground"
         >
           {label}
           {props.required && (
-            <span style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}>*</span>
+            <span className="ml-1 text-destructive" aria-hidden="true">
+              *
+            </span>
           )}
         </label>
       )}
-      <div
-        className="ui-select-container"
-        style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
+      <div className="ui-select-container relative flex items-center">
         {leftIcon && (
           <span
-            className="ui-select-icon-left"
-            style={{
-              position: 'absolute',
-              left: size === 'sm' ? '0.75rem' : size === 'md' ? '1rem' : '1.25rem',
-              color: 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              zIndex: 1,
-              pointerEvents: 'none',
-            }}
+            className={cn(
+              'ui-select-icon-left pointer-events-none absolute z-[1] flex items-center text-muted-foreground',
+              legacyIconInsetClass(size, 'left')
+            )}
           >
             {leftIcon}
           </span>
         )}
         <select
+          ref={ref}
           id={selectId}
-          className={`ui-select ui-select-${size} ui-select-${variant} ${className}`}
-          style={{
-            ...sizeStyles[size],
-            width: '100%',
-            border: `1px solid ${variantStyles[hasError ? 'error' : hasSuccess ? 'success' : 'default'].borderColor}`,
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            fontFamily: 'inherit',
-            transition: 'all var(--transition-base) var(--ease-out)',
-            appearance: 'none',
-            backgroundImage: rightIcon
-              ? 'none'
-              : `url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'right 0.75rem center',
-            cursor: 'pointer',
-            lineHeight: sizeStyles[size].lineHeight,
-            boxSizing: 'border-box',
-            verticalAlign: 'middle',
-          }}
-          onFocus={e => {
-            e.currentTarget.style.borderColor = hasError
-              ? 'var(--color-error, #ef4444)'
-              : hasSuccess
-                ? 'var(--color-success, #22c55e)'
-                : 'hsl(var(--primary))';
-            e.currentTarget.style.boxShadow = hasError
-              ? '0 0 0 3px rgba(239, 68, 68, 0.15)'
-              : hasSuccess
-                ? '0 0 0 3px rgba(34, 197, 94, 0.15)'
-                : '0 0 0 3px rgba(99, 102, 241, 0.18)';
-          }}
-          onBlur={e => {
-            e.currentTarget.style.borderColor = variantStyles[
-              hasError ? 'error' : hasSuccess ? 'success' : 'default'
-            ].borderColor as string;
-            e.currentTarget.style.boxShadow = 'none';
-          }}
+          className={cn(
+            'ui-select flex w-full cursor-pointer appearance-none rounded-md border border-input bg-card text-foreground ring-offset-background transition-colors duration-150',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            `ui-select-${size} ui-select-${variant}`,
+            legacyFieldSizeClass(size),
+            legacyFieldStateClass(state),
+            leftIcon && leftPaddingClass(size),
+            size === 'sm' ? 'pr-9' : 'pr-10',
+            className
+          )}
           aria-invalid={hasError}
           aria-describedby={
             error ? `${selectId}-error` : helperText ? `${selectId}-helper` : undefined
@@ -201,53 +117,34 @@ export default function Select({
             </option>
           ))}
         </select>
-        {rightIcon && (
-          <span
-            className="ui-select-icon-right"
-            style={{
-              position: 'absolute',
-              right: size === 'sm' ? '0.75rem' : size === 'md' ? '1rem' : '1.25rem',
-              color: 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              zIndex: 1,
-              pointerEvents: 'none',
-            }}
-          >
-            {rightIcon}
-          </span>
-        )}
+        <span
+          className={cn(
+            'ui-select-icon-right pointer-events-none absolute z-[1] flex items-center text-muted-foreground',
+            rightIcon ? legacyIconInsetClass(size, 'right') : 'right-3'
+          )}
+        >
+          {rightIcon ?? <ChevronDown className="h-4 w-4 opacity-70" aria-hidden="true" />}
+        </span>
       </div>
       {error && (
-        <div
+        <p
           id={`${selectId}-error`}
-          className="ui-select-error"
-          style={{
-            marginTop: 'var(--spacing-2)',
-            fontSize: 'var(--font-size-sm)',
-            color: 'var(--color-error)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--spacing-1)',
-          }}
+          className="ui-select-error mt-2 flex items-center gap-1 text-sm text-destructive"
         >
-          <span>⚠️</span>
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{error}</span>
-        </div>
+        </p>
       )}
       {helperText && !error && (
-        <div
+        <p
           id={`${selectId}-helper`}
-          className="ui-select-helper"
-          style={{
-            marginTop: 'var(--spacing-2)',
-            fontSize: 'var(--font-size-sm)',
-            color: 'var(--text-muted)',
-          }}
+          className="ui-select-helper mt-2 text-sm text-muted-foreground"
         >
           {helperText}
-        </div>
+        </p>
       )}
     </div>
   );
-}
+});
+
+export default Select;

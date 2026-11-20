@@ -24,6 +24,7 @@ vi.mock('@/lib/rbac', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/settings/notifications',
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
   redirect: vi.fn(),
 }));
@@ -138,7 +139,7 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
       render(jsx);
 
       // Hero banner badge should indicate at least 1 channel is available
-      expect(screen.getByText(/1\/4 Channels Available/i)).toBeDefined();
+      expect(screen.getByText(/1 of 4 channels available/i)).toBeDefined();
       // SMS Provider runtime card shows Amazon SNS
       expect(screen.getByText('Amazon SNS')).toBeDefined();
     });
@@ -536,7 +537,7 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
   });
 
   describe('13. Hero Banner & Runtime Overview Strip', () => {
-    it('renders Outbound Delivery tag, My Delivery History link, and runtime metrics', async () => {
+    it('renders channel badges, My Delivery History link, and runtime metrics', async () => {
       mockProvidersList = [
         {
           id: 'prov-resend',
@@ -581,11 +582,12 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
       render(jsx);
 
       // 1. Hero tag and title
-      expect(screen.getAllByText('Outbound Delivery').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Notification Providers')).toBeDefined();
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Notification Providers' })
+      ).toBeDefined();
 
-      // 2. Badges: 4/4 Channels Available
-      expect(screen.getByText(/4\/4 Channels Available/i)).toBeDefined();
+      // 2. Badges: 4 of 4 channels available
+      expect(screen.getByText(/4 of 4 channels available/i)).toBeDefined();
 
       // 3. Action button: My Delivery History
       const historyLink = screen.getByRole('link', { name: /My Delivery History/i });
