@@ -95,6 +95,7 @@ it does not acknowledge, suppress, or resolve the incident.
 
 - **Open:** acknowledgement changes the incident to **Acknowledged** and completes active escalation work.
 - **Snoozed:** acknowledgement accepts the response and leaves the incident acknowledged rather than waiting for the snooze to expire.
+  A snooze always ends: when no end time is given (for example a mobile swipe, a bulk action or a REST status update), it lasts 60 minutes, and snoozing an already-snoozed incident without an end time keeps its current end.
 - **Suppressed:** the normal UI does not offer acknowledgement while suppressed. Unsuppress it first if it requires an active response.
 - **Resolved:** a resolved incident cannot be acknowledged; the Web UI shows a terminal resolved state without interactive response buttons. Reviving response requires reporting a matching manual incident within the 30-minute deduplication window or submitting an authorized REST API status update.
 - **Already acknowledged:** refresh before retrying. Repeating an already-applied command is unnecessary even where the lifecycle treats an identical transition safely.
