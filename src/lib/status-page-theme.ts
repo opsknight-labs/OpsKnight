@@ -23,7 +23,8 @@ export const STATUS_PAGE_FONTS: StatusPageFontOption[] = [
   {
     id: 'inter',
     name: 'Inter / Clean Sans',
-    fontFamily: 'var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontFamily:
+      'var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     category: 'sans',
     previewText: 'Aa Bb Cc 123',
   },
@@ -77,15 +78,13 @@ export function mixHex(colorHex: string, otherHex: string, weight: number): stri
     const num = parseInt(full, 16);
     return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
   };
-  const a = rgb(colorHex);
-  const b = rgb(otherHex);
-  return `#${a
-    .map((channel, i) =>
-      Math.round(channel * weight + b[i] * (1 - weight))
-        .toString(16)
-        .padStart(2, '0')
-    )
-    .join('')}`;
+  const [r1, g1, b1] = rgb(colorHex);
+  const [r2, g2, b2] = rgb(otherHex);
+  const mix = (x: number, y: number) =>
+    Math.round(x * weight + y * (1 - weight))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${mix(r1, r2)}${mix(g1, g2)}${mix(b1, b2)}`;
 }
 
 export function isDarkHex(colorHex?: string | null): boolean {

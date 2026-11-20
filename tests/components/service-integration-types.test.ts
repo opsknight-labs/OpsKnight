@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { INTEGRATION_TYPES, IntegrationType } from '@/components/service/integration-types';
+import { INTEGRATION_TYPES } from '@/components/service/integration-types';
 
 describe('Service Integration Types UI Registry', () => {
   it('should include all 28 integration types', () => {

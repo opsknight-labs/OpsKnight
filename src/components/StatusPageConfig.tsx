@@ -182,13 +182,12 @@ type StatusPageConfigProps = {
   liveSnapshot?: any;
 };
 
-const ANNOUNCEMENT_TYPES = [
-  { value: 'INCIDENT', label: 'Incident', color: '#ef4444', background: '#fee2e2' },
-  { value: 'MAINTENANCE', label: 'Maintenance', color: '#2563eb', background: '#dbeafe' },
-  { value: 'UPDATE', label: 'Update', color: '#10b981', background: '#dcfce7' },
-  { value: 'WARNING', label: 'Warning', color: '#f59e0b', background: '#fef3c7' },
-  { value: 'INFO', label: 'Information', color: '#64748b', background: '#f1f5f9' },
-];
+const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(id => id.trim()).filter(Boolean);
+};
 
 export default function StatusPageConfig({
   statusPage,
@@ -334,13 +333,6 @@ export default function StatusPageConfig({
 
   const serviceLookup = new Map(allServices.map(service => [service.id, service] as const));
 
-  const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-    return value.map(id => id.trim()).filter(Boolean);
-  };
-
   const buildAnnouncementAffectedServices = (value?: string[] | null) => {
     const ids = normalizeAnnouncementServiceIds(value);
     return ids
@@ -351,19 +343,6 @@ export default function StatusPageConfig({
         name: service!.name,
         region: service!.region ?? null,
       }));
-  };
-
-  const getAnnouncementRegions = (services: Array<{ region?: string | null }>) => {
-    const regionSet = new Set<string>();
-    services.forEach(service => {
-      if (!service.region) return;
-      service.region
-        .split(',')
-        .map(entry => entry.trim())
-        .filter(Boolean)
-        .forEach(region => regionSet.add(region));
-    });
-    return Array.from(regionSet.values());
   };
 
   // Privacy settings - with defaults if not in statusPage
@@ -838,7 +817,8 @@ export default function StatusPageConfig({
     return statusPage.slug ? `status-${statusPage.slug}.opsknight.com` : 'status.opsknight.com';
   }, [formData.customDomain, formData.subdomain, formData.slug, statusPage.slug]);
 
-  const previewData = useMemo(() => {
+  // Inputs (branding, services, privacy) are rebuilt each render, so a memo here never cached.
+  const previewData = (() => {
     if (!showPreview) return null;
     return {
       statusPage: {
@@ -901,20 +881,7 @@ export default function StatusPageConfig({
       uptimeExcellentThreshold: formData.uptimeExcellentThreshold,
       uptimeGoodThreshold: formData.uptimeGoodThreshold,
     };
-  }, [
-    showPreview,
-    formData,
-    previewBranding,
-    previewServices,
-    previewStatusPageServices,
-    previewAnnouncements,
-    previewUptime90,
-    previewPrivacySettings,
-    statusPage.slug,
-    statusPage.subdomain,
-    statusPage.customDomain,
-    liveSnapshot,
-  ]);
+  })();
 
   return (
     <div className="status-page-config-root w-full">

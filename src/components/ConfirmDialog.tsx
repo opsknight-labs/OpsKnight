@@ -54,7 +54,8 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const { Icon, icon, action } = VARIANTS[variant];
+  const { Icon, icon, action } =
+    variant === 'warning' ? VARIANTS.warning : variant === 'info' ? VARIANTS.info : VARIANTS.danger;
 
   return (
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
