@@ -131,8 +131,8 @@ function useStatusBarStats(initialCounts: MyIncidentCounts, initialHealth: Works
 
   const refresh = useCallback(async () => {
     try {
-      // Same cached endpoint as the sidebar (private, max-age=10, swr=30).
-      const res = await fetch('/api/sidebar-stats');
+      // Small cached endpoint (private, max-age=10, swr=30); the shell never calls sidebar-stats.
+      const res = await fetch('/api/status-bar');
       if (!res.ok) return;
       const body = await res.json();
       const data = body?.data ?? body;

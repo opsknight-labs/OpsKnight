@@ -317,7 +317,7 @@ describe('StatusBar', () => {
       vi.advanceTimersByTime(600);
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('/api/sidebar-stats');
+    expect(fetchMock).toHaveBeenCalledWith('/api/status-bar');
     expect(screen.getByText(/5 assigned/)).toBeTruthy();
     expect(screen.getByText('7 awaiting ack')).toBeTruthy();
     expect(screen.getByText('2 SLA at risk')).toBeTruthy();

@@ -6,7 +6,7 @@ const statusBar = readFileSync('src/components/layout/StatusBar.tsx', 'utf8');
 const sidebar = readFileSync('src/components/Sidebar.tsx', 'utf8');
 const mobileLayout = readFileSync('src/app/(mobile)/m/layout.tsx', 'utf8');
 const kioskLayout = readFileSync('src/app/(kiosk)/layout.tsx', 'utf8');
-const statsRoute = readFileSync('src/app/api/sidebar-stats/route.ts', 'utf8');
+const statsRoute = readFileSync('src/app/api/status-bar/route.ts', 'utf8');
 const baseCss = readFileSync('src/styles/foundation/base.css', 'utf8');
 const occurrences = (source: string, needle: string) => source.split(needle).length - 1;
 
@@ -44,10 +44,10 @@ describe('desktop status bar contract', () => {
     expect(kioskLayout).not.toContain('StatusBar');
   });
 
-  it('reuses the single realtime stream and the cached stats endpoint', () => {
+  it('reuses the single realtime stream and its own cached endpoint', () => {
     expect(statusBar).not.toContain('new EventSource');
     expect(statusBar).toContain('useOptionalRealtime');
-    expect(statusBar).toContain("fetch('/api/sidebar-stats')");
+    expect(statusBar).toContain("fetch('/api/status-bar')");
     expect(statsRoute).toContain(
       "'Cache-Control': 'private, max-age=10, stale-while-revalidate=30'"
     );
