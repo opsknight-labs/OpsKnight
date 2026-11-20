@@ -26,6 +26,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import SidebarThemeMenu from '@/components/theme/SidebarThemeMenu';
+import AppearanceControl from '@/components/theme/AppearanceControl';
 import UserAvatar from '@/components/UserAvatar';
 import BrandLockup from '@/components/layout/BrandLockup';
 import { APP_VERSION } from '@/lib/constants';
@@ -747,6 +749,7 @@ export default function Sidebar({
           {/* Quick Action Bar (Collapsed) */}
           {isDesktopCollapsed && (
             <div className="mt-2 flex flex-col gap-1.5 items-center pt-2 border-t border-white/10">
+              <SidebarThemeMenu side="right" className="h-8 w-8 [&_svg]:h-4 [&_svg]:w-4" />
               <Tooltip delayDuration={150}>
                 <TooltipTrigger asChild>
                   <Link
@@ -784,6 +787,14 @@ export default function Sidebar({
                   Sign Out
                 </TooltipContent>
               </Tooltip>
+            </div>
+          )}
+
+          {/* Theme */}
+          {!isDesktopCollapsed && (
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/5 pt-2">
+              <span className="text-2xs font-medium text-ink-400">Theme</span>
+              <AppearanceControl size="xs" />
             </div>
           )}
 
